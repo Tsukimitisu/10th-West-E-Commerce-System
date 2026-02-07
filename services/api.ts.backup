@@ -1,0 +1,815 @@
+import { User, Product, Category, Role, AuthResponse, Order, OrderStatus, CartItem, DashboardStats, Address, ReturnRequest, ReturnStatus, SupportTicket, FAQ, WishlistItem, Review, Discount, Promotion, Supplier, PurchaseOrder, StockAdjustment, AdjustmentReason } from '../types';
+
+// Mock Data - Updated to Motor Models
+const MOCK_CATEGORIES: Category[] = [
+  { id: 1, name: 'NMAX V1' },
+  { id: 2, name: 'NMAX V2' },
+  { id: 3, name: 'AEROX V1' },
+  { id: 4, name: 'AEROX V2' },
+  { id: 5, name: 'M3 MIO' },
+  { id: 6, name: 'CLICK 150' },
+  { id: 7, name: 'CLICK 125' },
+  { id: 8, name: 'BEAT V2' },
+  { id: 9, name: 'Universal Parts' },
+];
+
+let MOCK_PRODUCTS: Product[] = [
+  {
+    id: 1,
+    partNumber: '2DP-H2129-00',
+    name: 'Battery Cover',
+    description: 'Original Yamaha Battery Cover for NMAX V1.',
+    price: 150.00,
+    buyingPrice: 104.00,
+    image: 'https://images.unsplash.com/photo-1558564175-99645903c7bb?auto=format&fit=crop&q=80&w=400', // Placeholder
+    category_id: 1,
+    category_name: 'NMAX V1',
+    stock_quantity: 2,
+    boxNumber: '2F STAIRS',
+    low_stock_threshold: 2,
+    brand: 'Yamaha',
+    rating: 4.5,
+    reviewCount: 12,
+    sku: 'SKU-001',
+    barcode: '123456789012'
+  },
+  {
+    id: 2,
+    partNumber: '2DP-F8351-00-P1',
+    name: 'Body Cowling Pearl White (46)',
+    description: 'Side body cowling in Pearl White finish.',
+    price: 800.00,
+    buyingPrice: 448.00,
+    image: 'https://images.unsplash.com/photo-1598616345941-86560965a3d7?auto=format&fit=crop&q=80&w=400',
+    category_id: 1,
+    category_name: 'NMAX V1',
+    stock_quantity: 4,
+    boxNumber: '46',
+    low_stock_threshold: 3,
+    brand: 'Yamaha',
+    rating: 5.0,
+    reviewCount: 5,
+    sale_price: 750.00,
+    is_on_sale: true,
+    sku: 'SKU-002',
+    barcode: '123456789013'
+  },
+  {
+    id: 3,
+    partNumber: '2DP-F8351-00-P5',
+    name: 'Body Cowling Matte Red (37)',
+    description: 'Side body cowling in Matte Red finish.',
+    price: 600.00,
+    buyingPrice: 560.00,
+    image: 'https://images.unsplash.com/photo-1578844251758-2f71da645217?auto=format&fit=crop&q=80&w=400',
+    category_id: 1,
+    category_name: 'NMAX V1',
+    stock_quantity: 7,
+    boxNumber: '37',
+    low_stock_threshold: 3,
+    brand: 'Yamaha',
+    rating: 4.0,
+    reviewCount: 8,
+    sku: 'SKU-003',
+    barcode: '123456789014'
+  },
+  {
+    id: 4,
+    partNumber: '2DP-E4412-00',
+    name: 'Cap Cleaner Case Outer',
+    description: 'Outer casing for air cleaner.',
+    price: 500.00,
+    buyingPrice: 343.00,
+    image: 'https://images.unsplash.com/photo-1591561954557-26941169b49e?auto=format&fit=crop&q=80&w=400',
+    category_id: 1,
+    category_name: 'NMAX V1',
+    stock_quantity: 5,
+    boxNumber: '2F STAIRS',
+    low_stock_threshold: 2,
+    brand: 'Yamaha',
+    rating: 3.5,
+    reviewCount: 2,
+    sku: 'SKU-004',
+    barcode: '123456789015'
+  },
+  {
+    id: 5,
+    partNumber: '2DP-F2865-00-P7',
+    name: 'Cover Front Matte Black (43)',
+    description: 'Front cover panel matte black.',
+    price: 700.00,
+    buyingPrice: 509.00,
+    image: 'https://images.unsplash.com/photo-1622185135505-2d795043906a?auto=format&fit=crop&q=80&w=400',
+    category_id: 1,
+    category_name: 'NMAX V1',
+    stock_quantity: 6,
+    boxNumber: '43',
+    low_stock_threshold: 3,
+    brand: 'Yamaha',
+    rating: 4.8,
+    reviewCount: 20,
+    sku: 'SKU-005',
+    barcode: '123456789016'
+  },
+  {
+    id: 6,
+    partNumber: 'UNIV-OIL-1040',
+    name: 'Motul 7100 4T 10W-40',
+    description: '100% synthetic 4-stroke lubricant.',
+    price: 650.00,
+    buyingPrice: 450.00,
+    image: 'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?auto=format&fit=crop&q=80&w=400',
+    category_id: 9,
+    category_name: 'Universal Parts',
+    stock_quantity: 45,
+    boxNumber: 'SHELF A1',
+    low_stock_threshold: 10,
+    brand: 'Motul',
+    rating: 5.0,
+    reviewCount: 150,
+    sale_price: 600.00,
+    is_on_sale: true,
+    sku: 'SKU-006',
+    barcode: '123456789017'
+  }
+];
+
+let MOCK_ORDERS: Order[] = [
+  {
+    id: 1001,
+    user_id: 2,
+    items: [
+      { productId: 1, quantity: 1, product: MOCK_PRODUCTS[0] },
+      { productId: 3, quantity: 2, product: MOCK_PRODUCTS[2] }
+    ],
+    total_amount: 1350.00,
+    status: OrderStatus.PAID,
+    shipping_address: '123 Rider Way, Moto City, MC 12345',
+    created_at: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+    source: 'online',
+    payment_method: 'card'
+  },
+  {
+    id: 1002,
+    user_id: 2,
+    items: [
+        { productId: 6, quantity: 3, product: MOCK_PRODUCTS[5] }
+    ],
+    total_amount: 1800.00, // 3 * 600
+    status: OrderStatus.COMPLETED,
+    shipping_address: 'Store Pickup',
+    created_at: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+    source: 'pos',
+    payment_method: 'cash',
+    cashier_id: 3
+  }
+];
+
+let MOCK_DISCOUNTS: Discount[] = [
+    { id: 1, code: 'WELCOME10', type: 'percentage', value: 10, used_count: 5, is_active: true },
+    { id: 2, code: 'SAVE50', type: 'fixed', value: 50, min_purchase: 500, used_count: 2, is_active: true },
+    { id: 3, code: 'SUMMER25', type: 'percentage', value: 25, used_count: 0, is_active: false }
+];
+
+let MOCK_PROMOTIONS: Promotion[] = [
+    { id: 1, name: 'Free Shipping > $1000', type: 'free_shipping', threshold_amount: 1000, discount_value: 0, is_active: true }
+];
+
+let MOCK_ADDRESSES: Address[] = [
+  {
+    id: 1,
+    user_id: 2,
+    recipient_name: 'Moto Rider',
+    phone: '555-0101',
+    street: '123 Rider Way',
+    city: 'Moto City',
+    state: 'MC',
+    postal_code: '12345',
+    is_default: true
+  }
+];
+
+let MOCK_RETURNS: ReturnRequest[] = [];
+let MOCK_TICKETS: SupportTicket[] = [];
+let MOCK_FAQS: FAQ[] = [
+    { id: 1, question: "What is your return policy?", answer: "Items can be returned within 30 days of purchase if they are unused and in original packaging." },
+    { id: 2, question: "Do you ship internationally?", answer: "Currently, we only ship within the country." },
+    { id: 3, question: "How can I track my order?", answer: "You can track your order status in the 'My Orders' section of your profile." }
+];
+
+let MOCK_WISHLIST: WishlistItem[] = [];
+let MOCK_REVIEWS: Review[] = [
+    { id: 1, product_id: 6, user_name: "SpeedDemon99", rating: 5, comment: "Best oil for my track days!", created_at: "2023-10-01" },
+    { id: 2, product_id: 6, user_name: "CommuterGuy", rating: 5, comment: "Smooth shifting instantly.", created_at: "2023-10-05" },
+    { id: 3, product_id: 1, user_name: "NmaxLover", rating: 4, comment: "Fits perfectly, but shipping was slow.", created_at: "2023-09-15" }
+];
+
+// Sprint 9 Mock Data
+let MOCK_SUPPLIERS: Supplier[] = [
+    { id: 1, name: 'Yamaha Genuine Parts', contact_person: 'John Doe', email: 'sales@yamaha.com', phone: '555-1234', address: '123 Factory Rd' },
+    { id: 2, name: 'Motul Distributors', contact_person: 'Jane Smith', email: 'orders@motul.com', phone: '555-5678', address: '456 Oil Ave' }
+];
+
+let MOCK_POS: PurchaseOrder[] = [
+    { id: 101, supplier_id: 1, supplier_name: 'Yamaha Genuine Parts', status: 'sent', items: [{product_id: 1, product_name: 'Battery Cover', quantity: 10, received_quantity: 0}], expected_date: '2023-11-01', created_at: '2023-10-25' }
+];
+
+let MOCK_ADJUSTMENTS: StockAdjustment[] = [];
+
+// Helper to simulate network delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- Auth Service ---
+
+export const login = async (email: string, password: string): Promise<AuthResponse> => {
+  await delay(800); // Simulate network request
+  
+  // Mock Admin Login
+  if (email === 'admin@10thwest.com' && password === 'admin123') {
+    return {
+      user: { id: 1, name: 'Admin User', email, role: Role.ADMIN },
+      token: 'mock-jwt-token-admin'
+    };
+  }
+
+  // Mock Cashier Login
+  if (email === 'cashier@10thwest.com' && password === 'cashier123') {
+    return {
+      user: { id: 3, name: 'Counter Staff', email, role: Role.CASHIER },
+      token: 'mock-jwt-token-cashier'
+    };
+  }
+
+  // Mock Customer Login
+  if (email === 'user@10thwest.com' && password === 'user123') {
+    return {
+      user: { id: 2, name: 'Moto Rider', email, role: Role.CUSTOMER, phone: '555-0101', store_credit: 0 },
+      token: 'mock-jwt-token-customer'
+    };
+  }
+
+  throw new Error('Invalid credentials');
+};
+
+export const register = async (name: string, email: string, password: string): Promise<AuthResponse> => {
+  await delay(800);
+  return {
+    user: { id: Math.floor(Math.random() * 1000), name, email, role: Role.CUSTOMER },
+    token: 'mock-jwt-token-new-user'
+  };
+};
+
+export const updateProfile = async (userId: number, data: Partial<User>): Promise<User> => {
+    await delay(600);
+    // In a real app, update DB. Here we just return the data merged.
+    return {
+        id: userId,
+        name: data.name || 'Updated User',
+        email: data.email || 'user@example.com',
+        role: Role.CUSTOMER,
+        phone: data.phone,
+        avatar: data.avatar
+    };
+};
+
+export const changePassword = async (userId: number, oldPass: string, newPass: string): Promise<void> => {
+    await delay(600);
+    if (oldPass === 'wrong') throw new Error("Incorrect current password");
+    return;
+}
+
+// --- Product Service ---
+
+export const getProducts = async (): Promise<Product[]> => {
+  await delay(500);
+  return [...MOCK_PRODUCTS];
+};
+
+export const getProductById = async (id: number): Promise<Product | undefined> => {
+  await delay(300);
+  return MOCK_PRODUCTS.find(p => p.id === id);
+};
+
+export const getCategories = async (): Promise<Category[]> => {
+  await delay(300);
+  return [...MOCK_CATEGORIES];
+};
+
+export const getRelatedProducts = async (productId: number): Promise<Product[]> => {
+    await delay(400);
+    const product = MOCK_PRODUCTS.find(p => p.id === productId);
+    if (!product) return [];
+    // Simple logic: same category, exclude self
+    return MOCK_PRODUCTS.filter(p => p.category_id === product.category_id && p.id !== productId).slice(0, 4);
+};
+
+export const recordProductView = async (userId: number | null, productId: number): Promise<void> => {
+    // In a real backend, this would log to DB.
+    // For MVP, we can rely on localStorage in component, but this is the API placeholder.
+    return;
+}
+
+// --- Reviews ---
+
+export const getProductReviews = async (productId: number): Promise<Review[]> => {
+    await delay(300);
+    return MOCK_REVIEWS.filter(r => r.product_id === productId);
+}
+
+// --- Discounts & Promotions ---
+
+export const getDiscounts = async (): Promise<Discount[]> => {
+    await delay(300);
+    return MOCK_DISCOUNTS;
+};
+
+export const createDiscount = async (discount: Omit<Discount, 'id' | 'used_count'>): Promise<Discount> => {
+    await delay(400);
+    const newDiscount = { ...discount, id: Math.random(), used_count: 0 };
+    MOCK_DISCOUNTS.push(newDiscount);
+    return newDiscount;
+};
+
+export const deleteDiscount = async (id: number): Promise<void> => {
+    await delay(300);
+    MOCK_DISCOUNTS = MOCK_DISCOUNTS.filter(d => d.id !== id);
+};
+
+export const validateDiscountCode = async (code: string, subtotal: number): Promise<Discount> => {
+    await delay(500);
+    const discount = MOCK_DISCOUNTS.find(d => d.code === code && d.is_active);
+    if (!discount) throw new Error("Invalid or expired discount code");
+    
+    if (discount.min_purchase && subtotal < discount.min_purchase) {
+        throw new Error(`Minimum purchase of $${discount.min_purchase} required`);
+    }
+    
+    return discount;
+};
+
+export const getPromotions = async (): Promise<Promotion[]> => {
+    await delay(300);
+    return MOCK_PROMOTIONS;
+};
+
+// --- Order Service & Inventory Logic ---
+
+export const createOrder = async (orderData: Omit<Order, 'id' | 'created_at' | 'status'>): Promise<Order> => {
+  await delay(1500); 
+  
+  // 1. Validate Stock
+  for (const item of orderData.items) {
+      const productIndex = MOCK_PRODUCTS.findIndex(p => p.id === item.productId);
+      if (productIndex === -1) throw new Error(`Product ${item.productId} not found`);
+      
+      if (MOCK_PRODUCTS[productIndex].stock_quantity < item.quantity) {
+          throw new Error(`Insufficient stock for ${MOCK_PRODUCTS[productIndex].name}. Only ${MOCK_PRODUCTS[productIndex].stock_quantity} remaining.`);
+      }
+  }
+
+  // 2. Simulate Payment Gateway Logic
+  const isPaymentSuccessful = true;
+  
+  if (!isPaymentSuccessful) {
+    throw new Error('Payment failed');
+  }
+
+  // 3. Deduct Stock
+  for (const item of orderData.items) {
+      const productIndex = MOCK_PRODUCTS.findIndex(p => p.id === item.productId);
+      if (productIndex !== -1) {
+          MOCK_PRODUCTS[productIndex].stock_quantity -= item.quantity;
+      }
+  }
+
+  const newOrder: Order = {
+    ...orderData,
+    id: Math.floor(100000 + Math.random() * 900000), // 6 digit order ID
+    status: OrderStatus.PAID,
+    created_at: new Date().toISOString()
+  };
+
+  MOCK_ORDERS.unshift(newOrder);
+
+  if (newOrder.source === 'pos') {
+    console.log(`[POS System] Transaction #${newOrder.id} logged. Cashier: ${newOrder.cashier_id}`);
+  }
+  
+  return newOrder;
+};
+
+export const getOrders = async (): Promise<Order[]> => {
+  await delay(600);
+  return [...MOCK_ORDERS];
+};
+
+export const getUserOrders = async (userId: number): Promise<Order[]> => {
+    await delay(400);
+    return MOCK_ORDERS.filter(o => o.user_id === userId);
+};
+
+export const getOrderById = async (orderId: number): Promise<Order | undefined> => {
+    await delay(300);
+    return MOCK_ORDERS.find(o => o.id === orderId);
+};
+
+export const updateOrderStatus = async (orderId: number, status: OrderStatus): Promise<Order> => {
+  await delay(500);
+  const index = MOCK_ORDERS.findIndex(o => o.id === orderId);
+  if (index === -1) throw new Error('Order not found');
+
+  MOCK_ORDERS[index] = { ...MOCK_ORDERS[index], status };
+  return MOCK_ORDERS[index];
+};
+
+
+// Admin Only Product Operations
+
+export const createProduct = async (product: Omit<Product, 'id'>): Promise<Product> => {
+  await delay(600);
+  const newProduct: Product = {
+    ...product,
+    id: Math.floor(Math.random() * 10000),
+    category_name: MOCK_CATEGORIES.find(c => c.id === Number(product.category_id))?.name,
+    stock_quantity: product.stock_quantity || 0,
+    low_stock_threshold: product.low_stock_threshold || 5,
+    brand: product.brand || 'Generic',
+    rating: 0,
+    reviewCount: 0,
+    is_on_sale: product.is_on_sale || false,
+    sale_price: product.sale_price,
+    sku: product.sku || `SKU-${Date.now()}`,
+    barcode: product.barcode || `${Math.floor(Math.random() * 1000000000000)}`
+  };
+  MOCK_PRODUCTS.push(newProduct);
+  return newProduct;
+};
+
+export const updateProduct = async (id: number, updates: Partial<Product>): Promise<Product> => {
+  await delay(600);
+  const index = MOCK_PRODUCTS.findIndex(p => p.id === id);
+  if (index === -1) throw new Error('Product not found');
+  
+  MOCK_PRODUCTS[index] = { 
+    ...MOCK_PRODUCTS[index], 
+    ...updates,
+    category_name: updates.category_id 
+      ? MOCK_CATEGORIES.find(c => c.id === Number(updates.category_id))?.name 
+      : MOCK_PRODUCTS[index].category_name
+  };
+  return MOCK_PRODUCTS[index];
+};
+
+export const deleteProduct = async (id: number): Promise<void> => {
+  await delay(600);
+  MOCK_PRODUCTS = MOCK_PRODUCTS.filter(p => p.id !== id);
+};
+
+// --- Address Service ---
+
+export const getAddresses = async (userId: number): Promise<Address[]> => {
+    await delay(400);
+    return MOCK_ADDRESSES.filter(a => a.user_id === userId);
+};
+
+export const saveAddress = async (address: Omit<Address, 'id'>): Promise<Address> => {
+    await delay(500);
+    const newAddr = { ...address, id: Math.floor(Math.random() * 10000) };
+    if (newAddr.is_default) {
+        MOCK_ADDRESSES.forEach(a => {
+            if (a.user_id === address.user_id) a.is_default = false;
+        });
+    }
+    MOCK_ADDRESSES.push(newAddr);
+    return newAddr;
+};
+
+export const updateAddress = async (id: number, updates: Partial<Address>): Promise<Address> => {
+    await delay(500);
+    const idx = MOCK_ADDRESSES.findIndex(a => a.id === id);
+    if (idx === -1) throw new Error("Address not found");
+    
+    if (updates.is_default) {
+        MOCK_ADDRESSES.forEach(a => {
+            if (a.user_id === MOCK_ADDRESSES[idx].user_id) a.is_default = false;
+        });
+    }
+
+    MOCK_ADDRESSES[idx] = { ...MOCK_ADDRESSES[idx], ...updates };
+    return MOCK_ADDRESSES[idx];
+}
+
+export const deleteAddress = async (id: number): Promise<void> => {
+    await delay(400);
+    MOCK_ADDRESSES = MOCK_ADDRESSES.filter(a => a.id !== id);
+};
+
+// --- Returns Service ---
+
+export const createReturn = async (request: Omit<ReturnRequest, 'id' | 'created_at' | 'status'>): Promise<ReturnRequest> => {
+    await delay(800);
+    const newReturn: ReturnRequest = {
+        ...request,
+        id: Math.floor(Math.random() * 100000),
+        status: ReturnStatus.PENDING,
+        created_at: new Date().toISOString()
+    };
+    MOCK_RETURNS.push(newReturn);
+    return newReturn;
+};
+
+export const getReturns = async (userId?: number): Promise<ReturnRequest[]> => {
+    await delay(600);
+    if (userId) {
+        return MOCK_RETURNS.filter(r => r.user_id === userId);
+    }
+    return MOCK_RETURNS;
+};
+
+export const updateReturnStatus = async (returnId: number, status: ReturnStatus): Promise<ReturnRequest> => {
+    await delay(600);
+    const idx = MOCK_RETURNS.findIndex(r => r.id === returnId);
+    if (idx === -1) throw new Error("Return not found");
+
+    MOCK_RETURNS[idx].status = status;
+
+    // Logic: If approved or refunded, update stock
+    if (status === ReturnStatus.APPROVED || status === ReturnStatus.REFUNDED) {
+        MOCK_RETURNS[idx].items.forEach(item => {
+             const prodIdx = MOCK_PRODUCTS.findIndex(p => p.id === item.productId);
+             if (prodIdx !== -1) {
+                 MOCK_PRODUCTS[prodIdx].stock_quantity += item.quantity;
+                 console.log(`Restocked ${item.quantity} of ${MOCK_PRODUCTS[prodIdx].name}`);
+             }
+        });
+    }
+
+    return MOCK_RETURNS[idx];
+};
+
+// --- Support Service ---
+
+export const createTicket = async (ticket: Omit<SupportTicket, 'id' | 'created_at' | 'status'>): Promise<SupportTicket> => {
+    await delay(600);
+    const newTicket = {
+        ...ticket,
+        id: Math.floor(Math.random() * 50000),
+        status: 'open' as const,
+        created_at: new Date().toISOString()
+    };
+    MOCK_TICKETS.push(newTicket);
+    return newTicket;
+};
+
+export const getTickets = async (): Promise<SupportTicket[]> => {
+    await delay(600);
+    return MOCK_TICKETS;
+};
+
+export const updateTicketStatus = async (id: number, status: 'open' | 'closed'): Promise<void> => {
+    await delay(400);
+    const idx = MOCK_TICKETS.findIndex(t => t.id === id);
+    if (idx !== -1) MOCK_TICKETS[idx].status = status;
+};
+
+export const getFAQs = async (): Promise<FAQ[]> => {
+    await delay(300);
+    return MOCK_FAQS;
+};
+
+// --- Wishlist Service ---
+
+export const getWishlist = async (userId: number): Promise<WishlistItem[]> => {
+    await delay(400);
+    return MOCK_WISHLIST.filter(w => w.user_id === userId);
+};
+
+export const addToWishlist = async (userId: number, productId: number): Promise<WishlistItem> => {
+    await delay(300);
+    const product = MOCK_PRODUCTS.find(p => p.id === productId);
+    if (!product) throw new Error("Product not found");
+    
+    // Check duplicate
+    const exists = MOCK_WISHLIST.find(w => w.user_id === userId && w.product_id === productId);
+    if (exists) return exists;
+
+    const item: WishlistItem = {
+        id: Math.floor(Math.random() * 10000),
+        user_id: userId,
+        product_id: productId,
+        product: product
+    };
+    MOCK_WISHLIST.push(item);
+    return item;
+};
+
+export const removeFromWishlist = async (userId: number, productId: number): Promise<void> => {
+    await delay(300);
+    MOCK_WISHLIST = MOCK_WISHLIST.filter(w => !(w.user_id === userId && w.product_id === productId));
+};
+
+// --- Sprint 9: Inventory Management ---
+
+export const getSuppliers = async (): Promise<Supplier[]> => {
+    await delay(300);
+    return MOCK_SUPPLIERS;
+};
+
+export const createSupplier = async (supplier: Omit<Supplier, 'id'>): Promise<Supplier> => {
+    await delay(400);
+    const newSupplier = { ...supplier, id: Math.floor(Math.random() * 10000) };
+    MOCK_SUPPLIERS.push(newSupplier);
+    return newSupplier;
+};
+
+export const getPurchaseOrders = async (): Promise<PurchaseOrder[]> => {
+    await delay(300);
+    return MOCK_POS;
+};
+
+export const createPurchaseOrder = async (po: Omit<PurchaseOrder, 'id' | 'created_at' | 'status'>): Promise<PurchaseOrder> => {
+    await delay(500);
+    const newPO: PurchaseOrder = {
+        ...po,
+        id: Math.floor(Math.random() * 100000),
+        status: 'sent',
+        created_at: new Date().toISOString()
+    };
+    MOCK_POS.unshift(newPO);
+    return newPO;
+};
+
+export const receivePurchaseOrder = async (id: number): Promise<PurchaseOrder> => {
+    await delay(600);
+    const idx = MOCK_POS.findIndex(p => p.id === id);
+    if (idx === -1) throw new Error("PO not found");
+    
+    const po = MOCK_POS[idx];
+    if (po.status === 'received') return po;
+
+    // Update stock
+    po.items.forEach(item => {
+        const product = MOCK_PRODUCTS.find(p => p.id === item.product_id);
+        if (product) {
+            product.stock_quantity += item.quantity;
+            // Log adjustment
+            MOCK_ADJUSTMENTS.unshift({
+                id: Math.random(),
+                product_id: product.id,
+                product_name: product.name,
+                quantity_change: item.quantity,
+                reason: 'received',
+                note: `Received from PO #${po.id}`,
+                created_at: new Date().toISOString()
+            });
+        }
+    });
+
+    MOCK_POS[idx] = { ...po, status: 'received' };
+    return MOCK_POS[idx];
+};
+
+export const adjustStock = async (adjustment: Omit<StockAdjustment, 'id' | 'created_at' | 'product_name'>): Promise<StockAdjustment> => {
+    await delay(400);
+    const product = MOCK_PRODUCTS.find(p => p.id === adjustment.product_id);
+    if (!product) throw new Error("Product not found");
+
+    product.stock_quantity += adjustment.quantity_change;
+    
+    const newAdj = {
+        ...adjustment,
+        id: Math.random(),
+        product_name: product.name,
+        created_at: new Date().toISOString()
+    };
+    MOCK_ADJUSTMENTS.unshift(newAdj);
+    return newAdj;
+};
+
+export const getStockAdjustments = async (): Promise<StockAdjustment[]> => {
+    await delay(300);
+    return MOCK_ADJUSTMENTS;
+}
+
+// --- Sprint 10: Reports Service ---
+
+export const getDashboardStats = async (): Promise<DashboardStats> => {
+    await delay(600);
+
+    // Calculate Sales Stats
+    const totalSales = MOCK_ORDERS.filter(o => o.status !== OrderStatus.CANCELLED).reduce((acc, order) => acc + order.total_amount, 0);
+    const totalOrders = MOCK_ORDERS.length;
+    
+    // Calculate Profit (Approximation: Sales - (Cost * Qty))
+    let totalCost = 0;
+    MOCK_ORDERS.filter(o => o.status !== OrderStatus.CANCELLED).forEach(order => {
+        order.items.forEach(item => {
+            const product = MOCK_PRODUCTS.find(p => p.id === item.productId);
+            if (product) {
+                totalCost += product.buyingPrice * item.quantity;
+            }
+        });
+    });
+    const totalProfit = totalSales - totalCost;
+    const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+
+    // Inventory Stats
+    const lowStockCount = MOCK_PRODUCTS.filter(p => p.stock_quantity <= p.low_stock_threshold).length;
+    
+    // Sales Trend (Last 7 Days)
+    const salesTrend = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        // Randomize data for chart visual
+        const dailySales = Math.floor(Math.random() * 2000) + 500;
+        const dailyOrders = Math.floor(dailySales / 100);
+        return {
+            date: d.toLocaleDateString('en-US', { weekday: 'short' }),
+            amount: dailySales,
+            orders: dailyOrders,
+            profit: dailySales * 0.3 // Approx 30% margin
+        };
+    });
+
+    // Sales by Channel
+    const onlineSales = MOCK_ORDERS.filter(o => o.source === 'online').reduce((acc, o) => acc + o.total_amount, 0);
+    const posSales = MOCK_ORDERS.filter(o => o.source === 'pos').reduce((acc, o) => acc + o.total_amount, 0);
+
+    // Sales by Category
+    const categorySales: {[key: string]: number} = {};
+    MOCK_ORDERS.forEach(order => {
+        order.items.forEach(item => {
+            const cat = item.product.category_name || 'Uncategorized';
+            categorySales[cat] = (categorySales[cat] || 0) + (item.product.price * item.quantity);
+        });
+    });
+    const salesByCategory = Object.entries(categorySales).map(([name, value]) => ({ name, value }));
+
+    // Top Products
+    const productSales: {[key: string]: {qty: number, revenue: number}} = {};
+    MOCK_ORDERS.forEach(order => {
+        order.items.forEach(item => {
+            const name = item.product.name;
+            if (!productSales[name]) productSales[name] = { qty: 0, revenue: 0 };
+            productSales[name].qty += item.quantity;
+            productSales[name].revenue += item.product.price * item.quantity;
+        });
+    });
+    const topProducts = Object.entries(productSales)
+        .map(([name, data]) => ({ name, quantity: data.qty, revenue: data.revenue }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
+
+    // Inventory Valuation
+    const inventoryValuation = MOCK_CATEGORIES.map(cat => {
+        const productsInCat = MOCK_PRODUCTS.filter(p => p.category_id === cat.id);
+        const count = productsInCat.reduce((acc, p) => acc + p.stock_quantity, 0);
+        const value = productsInCat.reduce((acc, p) => acc + (p.stock_quantity * p.buyingPrice), 0);
+        return { category: cat.name, count, value };
+    });
+
+    // Customer Growth (Mock)
+    const customerGrowth = Array.from({ length: 6 }).map((_, i) => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - (5 - i));
+        return {
+            date: d.toLocaleDateString('en-US', { month: 'short' }),
+            newCustomers: Math.floor(Math.random() * 50) + 10
+        };
+    });
+
+    // Payment Methods
+    const paymentMethodsStats: {[key: string]: {count: number, total: number}} = {};
+    MOCK_ORDERS.forEach(order => {
+        const method = order.payment_method || 'unknown';
+        if (!paymentMethodsStats[method]) paymentMethodsStats[method] = { count: 0, total: 0 };
+        paymentMethodsStats[method].count += 1;
+        paymentMethodsStats[method].total += order.total_amount;
+    });
+    const paymentMethods = Object.entries(paymentMethodsStats).map(([method, data]) => ({
+        method, count: data.count, total: data.total
+    }));
+
+    const pendingReturns = MOCK_RETURNS.filter(r => r.status === ReturnStatus.PENDING).length;
+    const openTickets = MOCK_TICKETS.filter(t => t.status === 'open').length;
+
+    return {
+        totalSales,
+        totalProfit,
+        totalOrders,
+        avgOrderValue,
+        lowStockCount,
+        salesTrend,
+        salesByChannel: [
+            { name: 'Online Store', value: onlineSales },
+            { name: 'POS (In-Store)', value: posSales }
+        ],
+        salesByCategory,
+        topProducts,
+        inventoryValuation,
+        customerGrowth,
+        paymentMethods,
+        pendingReturns,
+        openTickets
+    };
+};
