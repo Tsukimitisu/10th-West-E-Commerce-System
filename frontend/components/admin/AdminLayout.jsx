@@ -27,6 +27,7 @@ const AdminLayout = ({ activeView, onNavigate, badges = {}, children }) => {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { connected } = useSocket();
   const userStr = localStorage.getItem('shopCoreUser');
   const user = userStr ? JSON.parse(userStr) : null;
@@ -39,8 +40,13 @@ const AdminLayout = ({ activeView, onNavigate, badges = {}, children }) => {
   };
 
   const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
     localStorage.removeItem('shopCoreUser');
     localStorage.removeItem('shopCoreToken');
+    setShowLogoutConfirm(false);
     navigate('/');
   };
 
@@ -158,6 +164,40 @@ const AdminLayout = ({ activeView, onNavigate, badges = {}, children }) => {
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white p-8 rounded-3xl shadow-2xl w-96 border border-gray-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="bg-red-50 p-3 rounded-2xl">
+                <LogOut className="w-8 h-8 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-gray-900">Sign Out?</h3>
+                <p className="text-gray-500 font-medium text-sm mt-1">Confirm to logout</p>
+              </div>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to sign out of your admin account?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-2xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="flex-1 py-3 bg-red-600 text-white rounded-2xl hover:bg-red-700 font-bold shadow-lg hover:shadow-xl transition-all"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

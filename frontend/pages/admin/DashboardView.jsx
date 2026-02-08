@@ -33,7 +33,7 @@ const DashboardView = () => {
 
   if (loading) return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
-      {[1,2,3,4].map(i => <div key={i} className="h-28 bg-white rounded-xl border border-gray-100" />)}
+      {[1, 2, 3, 4].map(i => <div key={i} className="h-28 bg-white rounded-xl border border-gray-100" />)}
       <div className="col-span-full h-72 bg-white rounded-xl border border-gray-100" />
     </div>
   );
@@ -69,10 +69,10 @@ const DashboardView = () => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={<DollarSign size={20} />} label="Today's Sales" value={`₱${todaySales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} change={12} changeLabel="vs yesterday" color="bg-green-50 text-green-600" />
-        <StatCard icon={<TrendingUp size={20} />} label="Total Revenue" value={`₱${(stats?.totalSales || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} change={8} changeLabel="this month" color="bg-blue-50 text-blue-600" />
-        <StatCard icon={<ShoppingCart size={20} />} label="Total Orders" value={stats?.totalOrders || orders.length} change={5} changeLabel="this month" color="bg-purple-50 text-purple-600" />
-        <StatCard icon={<AlertTriangle size={20} />} label="Low Stock Items" value={lowStock.length} color="bg-amber-50 text-amber-600" />
+        <StatCard icon={<DollarSign size={20} />} label="Today's Sales" value={`₱${todaySales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} change={12} changeLabel="vs yesterday" color="bg-green-50 text-green-600" className="bg-white/60 backdrop-blur-xl border-white/40 shadow-xl shadow-green-900/5" />
+        <StatCard icon={<TrendingUp size={20} />} label="Total Revenue" value={`₱${(stats?.totalSales || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} change={8} changeLabel="this month" color="bg-blue-50 text-blue-600" className="bg-white/60 backdrop-blur-xl border-white/40 shadow-xl shadow-blue-900/5" />
+        <StatCard icon={<ShoppingCart size={20} />} label="Total Orders" value={stats?.totalOrders || orders.length} change={5} changeLabel="this month" color="bg-purple-50 text-purple-600" className="bg-white/60 backdrop-blur-xl border-white/40 shadow-xl shadow-purple-900/5" />
+        <StatCard icon={<AlertTriangle size={20} />} label="Low Stock Items" value={lowStock.length} color="bg-amber-50 text-amber-600" className="bg-white/60 backdrop-blur-xl border-white/40 shadow-xl shadow-amber-900/5" />
       </div>
 
       {/* Secondary KPIs */}
@@ -104,7 +104,7 @@ const DashboardView = () => {
               <LineChart data={stats?.salesTrend || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={d => new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric' })} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `₱${(v/1000).toFixed(0)}k`} />
+                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v) => `₱${v.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} labelFormatter={d => new Date(d).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} />
                 <Line type="monotone" dataKey="amount" stroke="#dc2626" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} dot={false} strokeDasharray="4 4" />

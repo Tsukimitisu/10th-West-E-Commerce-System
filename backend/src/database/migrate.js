@@ -2,7 +2,7 @@ import pool from '../config/database.js';
 
 const createTables = async () => {
   const client = await pool.connect();
-  
+
   try {
     console.log('🔄 Starting database migration...');
 
@@ -94,7 +94,7 @@ const createTables = async () => {
         status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'shipped', 'completed', 'cancelled')),
         shipping_address TEXT NOT NULL,
         source VARCHAR(20) DEFAULT 'online' CHECK (source IN ('online', 'pos')),
-        payment_method VARCHAR(20) CHECK (payment_method IN ('cash', 'card', 'online', 'stripe')),
+        payment_method VARCHAR(20) CHECK (payment_method IN ('cash', 'card', 'cod', 'online', 'stripe')),
         amount_tendered DECIMAL(10, 2),
         change_due DECIMAL(10, 2),
         cashier_id INTEGER REFERENCES users(id) ON DELETE SET NULL,

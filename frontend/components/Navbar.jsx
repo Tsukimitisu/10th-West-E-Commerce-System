@@ -14,6 +14,7 @@ const Navbar = ({ user, onLogout }) => {
   const [catMenuOpen, setCatMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { itemCount } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,7 +22,7 @@ const Navbar = ({ user, onLogout }) => {
   const userMenuRef = useRef(null);
 
   useEffect(() => {
-    getCategories().then(setCategories).catch(() => {});
+    getCategories().then(setCategories).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -178,7 +179,7 @@ const Navbar = ({ user, onLogout }) => {
                       <Link to="/addresses" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-colors"><MapPin size={16} /> Addresses</Link>
                       <Link to="/my-returns" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-colors"><RotateCcw size={16} /> Returns</Link>
                       <div className="border-t border-gray-100 mt-1 pt-1">
-                        <button onClick={onLogout} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-colors w-full">
+                        <button onClick={() => setShowLogoutConfirm(true)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-colors w-full">
                           <LogOut size={16} /> Sign Out
                         </button>
                       </div>
@@ -287,8 +288,43 @@ const Navbar = ({ user, onLogout }) => {
         </div>
       )}
 
+
       {/* Cart Drawer */}
       <CartDrawer isOpen={cartOpen} onClose={() => setCartOpen(false)} />
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white p-8 rounded-3xl shadow-2xl w-96 border border-gray-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="bg-red-50 p-3 rounded-2xl">
+                <LogOut className="w-8 h-8 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-gray-900">Sign Out?</h3>
+                <p className="text-gray-500 font-medium text-sm mt-1">Confirm to logout</p>
+              </div>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to sign out of your account?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-2xl font-bold transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowLogoutConfirm(false); onLogout(); }}
+                className="flex-1 py-3 bg-red-600 text-white rounded-2xl hover:bg-red-700 font-bold shadow-lg hover:shadow-xl transition-all"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

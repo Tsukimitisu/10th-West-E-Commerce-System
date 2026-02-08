@@ -4,6 +4,12 @@ import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upl
 import Modal from '../../components/admin/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 
+const InputField = ({ label, required, children }) => (
+  <div><label className="block text-xs font-medium text-gray-600 mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>{children}</div>
+);
+
+const inputClass = "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-300";
+
 const ProductsView = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -38,7 +44,24 @@ const ProductsView = () => {
 
   const openAdd = () => {
     setEditing(null);
-    setForm({ partNumber: '', name: '', description: '', price: '', buyingPrice: '', category_id: categories[0]?.id.toString() || '', image: '', stock_quantity: '0', boxNumber: '', low_stock_threshold: '5', sale_price: '', is_on_sale: false, sku: '', barcode: '', brand: '' });
+    setForm(prev => ({
+      ...prev,
+      partNumber: '',
+      name: '',
+      description: '',
+      price: '',
+      buyingPrice: '',
+      category_id: categories[0]?.id?.toString() || '',
+      image: '',
+      stock_quantity: '0',
+      boxNumber: '',
+      low_stock_threshold: '5',
+      sale_price: '',
+      is_on_sale: false,
+      sku: '',
+      barcode: '',
+      brand: ''
+    }));
     setModalOpen(true);
   };
 
@@ -78,7 +101,8 @@ const ProductsView = () => {
     try {
       if (editing) await updateProduct(editing.id, payload);
       else await createProduct(payload);
-      setModalOpen(false); fetch();
+      fetch();
+      setTimeout(() => setModalOpen(false), 100);
     } catch (e) { console.error(e); }
   };
 
@@ -95,10 +119,7 @@ const ProductsView = () => {
     return matchesSearch && matchesCat && matchesStock;
   });
 
-  const InputField = ({ label, required, children }) => (
-    <div><label className="block text-xs font-medium text-gray-600 mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>{children}</div>
-  );
-  const inputClass = "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-300";
+
 
   return (
     <div className="space-y-4">
@@ -207,83 +228,85 @@ const ProductsView = () => {
       </div>
 
       {/* Product Modal */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Product' : 'Add Product'} size="2xl">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputField label="Product Name" required>
-              <input type="text" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} required className={inputClass} placeholder="Front Brake Pad Set" />
-            </InputField>
-            <InputField label="Part Number">
-              <input value={form.partNumber} onChange={e => setForm(f => ({...f, partNumber: e.target.value}))} className={inputClass} placeholder="PN-001234" />
-            </InputField>
-          </div>
+      {modalOpen && (
+        <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Product' : 'Add Product'} size="2xl">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <InputField label="Product Name" required>
+                <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className={inputClass} placeholder="Front Brake Pad Set" />
+              </InputField>
+              <InputField label="Part Number">
+                <input value={form.partNumber} onChange={e => setForm(f => ({ ...f, partNumber: e.target.value }))} className={inputClass} placeholder="PN-001234" />
+              </InputField>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InputField label="Category" required>
-              <select value={form.category_id} onChange={e => setForm(f => ({...f, category_id: e.target.value}))} required className={inputClass}>
-                <option value="">Select</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </InputField>
-            <InputField label="Brand">
-              <input value={form.brand} onChange={e => setForm(f => ({...f, brand: e.target.value}))} className={inputClass} placeholder="Honda" />
-            </InputField>
-            <InputField label="Box / Location">
-              <input value={form.boxNumber} onChange={e => setForm(f => ({...f, boxNumber: e.target.value}))} className={inputClass} placeholder="A-12" />
-            </InputField>
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <InputField label="Category" required>
+                <select value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))} required className={inputClass}>
+                  <option value="">Select</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </InputField>
+              <InputField label="Brand">
+                <input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className={inputClass} placeholder="Honda" />
+              </InputField>
+              <InputField label="Box / Location">
+                <input value={form.boxNumber} onChange={e => setForm(f => ({ ...f, boxNumber: e.target.value }))} className={inputClass} placeholder="A-12" />
+              </InputField>
+            </div>
 
-          <InputField label="Description">
-            <textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} rows={3} className={inputClass} placeholder="Product description..." />
-          </InputField>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <InputField label="Selling Price" required>
-              <input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({...f, price: e.target.value}))} required className={inputClass} />
+            <InputField label="Description">
+              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} className={inputClass} placeholder="Product description..." />
             </InputField>
-            <InputField label="Buying Price" required>
-              <input type="number" step="0.01" value={form.buyingPrice} onChange={e => setForm(f => ({...f, buyingPrice: e.target.value}))} required className={inputClass} />
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <InputField label="Selling Price" required>
+                <input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} required className={inputClass} />
+              </InputField>
+              <InputField label="Buying Price" required>
+                <input type="number" step="0.01" value={form.buyingPrice} onChange={e => setForm(f => ({ ...f, buyingPrice: e.target.value }))} required className={inputClass} />
+              </InputField>
+              <InputField label="Stock Quantity" required>
+                <input type="number" value={form.stock_quantity} onChange={e => setForm(f => ({ ...f, stock_quantity: e.target.value }))} required className={inputClass} />
+              </InputField>
+              <InputField label="Low Stock Alert">
+                <input type="number" value={form.low_stock_threshold} onChange={e => setForm(f => ({ ...f, low_stock_threshold: e.target.value }))} className={inputClass} />
+              </InputField>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <InputField label="SKU"><input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} className={inputClass} placeholder="Auto-generated if empty" /></InputField>
+              <InputField label="Barcode"><input value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className={inputClass} placeholder="Auto-generated if empty" /></InputField>
+            </div>
+
+            <InputField label="Image URL">
+              <input value={form.image} onChange={e => setForm(f => ({ ...f, image: e.target.value }))} className={inputClass} placeholder="https://..." />
             </InputField>
-            <InputField label="Stock Quantity" required>
-              <input type="number" value={form.stock_quantity} onChange={e => setForm(f => ({...f, stock_quantity: e.target.value}))} required className={inputClass} />
-            </InputField>
-            <InputField label="Low Stock Alert">
-              <input type="number" value={form.low_stock_threshold} onChange={e => setForm(f => ({...f, low_stock_threshold: e.target.value}))} className={inputClass} />
-            </InputField>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputField label="SKU"><input value={form.sku} onChange={e => setForm(f => ({...f, sku: e.target.value}))} className={inputClass} placeholder="Auto-generated if empty" /></InputField>
-            <InputField label="Barcode"><input value={form.barcode} onChange={e => setForm(f => ({...f, barcode: e.target.value}))} className={inputClass} placeholder="Auto-generated if empty" /></InputField>
-          </div>
+            {/* Sale */}
+            <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+              <label className="flex items-center gap-2 font-medium text-sm cursor-pointer">
+                <input type="checkbox" checked={form.is_on_sale} onChange={e => setForm(f => ({ ...f, is_on_sale: e.target.checked }))} className="w-4 h-4 text-red-600 rounded focus:ring-red-500" />
+                Put on Sale
+              </label>
+              {form.is_on_sale && (
+                <div className="mt-3">
+                  <InputField label="Sale Price">
+                    <input type="number" step="0.01" value={form.sale_price} onChange={e => setForm(f => ({ ...f, sale_price: e.target.value }))} className={inputClass} />
+                  </InputField>
+                </div>
+              )}
+            </div>
 
-          <InputField label="Image URL">
-            <input value={form.image} onChange={e => setForm(f => ({...f, image: e.target.value}))} className={inputClass} placeholder="https://..." />
-          </InputField>
-
-          {/* Sale */}
-          <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-            <label className="flex items-center gap-2 font-medium text-sm cursor-pointer">
-              <input type="checkbox" checked={form.is_on_sale} onChange={e => setForm(f => ({...f, is_on_sale: e.target.checked}))} className="w-4 h-4 text-red-600 rounded focus:ring-red-500" />
-              Put on Sale
-            </label>
-            {form.is_on_sale && (
-              <div className="mt-3">
-                <InputField label="Sale Price">
-                  <input type="number" step="0.01" value={form.sale_price} onChange={e => setForm(f => ({...f, sale_price: e.target.value}))} className={inputClass} />
-                </InputField>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
-            <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-            <button type="submit" className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
-              {editing ? 'Update Product' : 'Add Product'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+            <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+              <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+              <button type="submit" className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
+                {editing ? 'Update Product' : 'Add Product'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

@@ -55,7 +55,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
           <Route path="/oauth-callback" element={<OAuthCallback onLogin={onLogin} />} />
           <Route path="/products/:id" element={<ProductDetail />} />
           <Route path="/cart" element={<Cart />} />
-          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/checkout" element={user ? <Checkout /> : <Navigate to="/login?redirect=/checkout" />} />
           <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/faq" element={<FAQ />} />
@@ -84,88 +84,53 @@ const App = () => {
     const initAuth = async () => {
       if (USE_SUPABASE && supabase) {
         try {
-        // Check Supabase session
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from('users')
-            .select('*')
-            .eq('email', session.user.email)
-            .single();
-          
-          if (profile) {
-            const userData = {
-              id: profile.id,
-              name: profile.name || session.user.email?.split('@')[0] || 'User',
-              email: session.user.email || '',
-              role: profile.role || Role.CUSTOMER,
-              phone: profile.phone,
-              avatar: profile.avatar,
-              store_credit: profile.store_credit || 0,
-              is_active: profile.is_active ?? true,
-              two_factor_enabled: profile.two_factor_enabled || false,
-              oauth_provider: session.user.app_metadata?.provider || null,
-              last_login: session.user.last_sign_in_at,
-              email_verified: session.user.email_confirmed_at != null,
-            };
-            setUser(userData);
-            localStorage.setItem('shopCoreUser', JSON.stringify(userData));
-            localStorage.setItem('shopCoreToken', session.access_token);
+          // Check Supabase session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            const { data: profile } = await supabase
+              .from('users')
+              .select('*')
+              .eq('email', session.user.email)
+              .single();
+            if (profile) {
+              const userData = {
+                id: profile.id,
+                name: profile.name || session.user.email?.split('@')[0] || 'User',
+                email: session.user.email || '',
+                role: profile.role || Role.CUSTOMER,
+                phone: profile.phone,
+                avatar: profile.avatar,
+                store_credit: profile.store_credit || 0,
+                is_active: profile.is_active ?? true,
+                two_factor_enabled: profile.two_factor_enabled || false,
+                oauth_provider: session.user.app_metadata?.provider || null,
+                last_login: session.user.last_sign_in_at,
+                email_verified: session.user.email_confirmed_at != null,
+              };
+              setUser(userData);
+              localStorage.setItem('shopCoreUser', JSON.stringify(userData));
+            }
           }
-        }
         } catch (e) {
-          console.warn('Supabase auth failed, falling back to localStorage:', e.message);
-          const savedUser = localStorage.getItem('shopCoreUser');
-          if (savedUser) setUser(JSON.parse(savedUser));
+          console.error('Supabase auth init error:', e);
         }
-      } else {
-        // Fallback to localStorage
-        const savedUser = localStorage.getItem('shopCoreUser');
-        if (savedUser) setUser(JSON.parse(savedUser));
+      }
+
+      // Restore user from localStorage as secondary fallback or standard method
+      const savedUser = localStorage.getItem('shopCoreUser');
+      if (savedUser) {
+        try {
+          const parsed = JSON.parse(savedUser);
+          if (parsed && parsed.id) {
+            setUser(parsed);
+          }
+        } catch (e) {
+          console.error('Failed to parse saved user:', e);
+        }
       }
       setLoading(false);
     };
-
     initAuth();
-
-    // Subscribe to auth state changes (Supabase)
-    if (USE_SUPABASE && supabase) {
-      const { data: { subscription } } = onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          const { data: profile } = await supabase
-            .from('users')
-            .select('*')
-            .eq('email', session.user.email)
-            .single();
-          
-          if (profile) {
-            const userData = {
-              id: profile.id,
-              name: profile.name || session.user.email?.split('@')[0] || 'User',
-              email: session.user.email || '',
-              role: profile.role || Role.CUSTOMER,
-              phone: profile.phone,
-              avatar: profile.avatar,
-              store_credit: profile.store_credit || 0,
-              is_active: profile.is_active ?? true,
-              two_factor_enabled: profile.two_factor_enabled || false,
-              oauth_provider: session.user.app_metadata?.provider || null,
-              last_login: session.user.last_sign_in_at,
-              email_verified: session.user.email_confirmed_at != null,
-            };
-            setUser(userData);
-            localStorage.setItem('shopCoreUser', JSON.stringify(userData));
-            localStorage.setItem('shopCoreToken', session.access_token);
-          }
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-          localStorage.removeItem('shopCoreUser');
-          localStorage.removeItem('shopCoreToken');
-        }
-      });
-
-      return () => subscription.unsubscribe();
-    }
   }, []);
 
   const handleLogin = (userData, token) => {

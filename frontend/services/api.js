@@ -10,7 +10,7 @@ const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK === 'true';
 
 // Helper function to get auth token
-const getAuthToken = ()  => {
+const getAuthToken = () => {
   return localStorage.getItem('shopCoreToken');
 };
 
@@ -375,9 +375,9 @@ export const getProducts = async () => {
       .from('products')
       .select('*, categories(name)')
       .order('id');
-    
+
     if (error) throw new Error(error.message);
-    
+
     return (data || []).map((p) => ({
       ...mapProductFromSupabase(p),
       category_name: p.categories?.name,
@@ -404,9 +404,9 @@ export const getProductById = async (id) => {
       .select('*, categories(name)')
       .eq('id', id)
       .single();
-    
+
     if (error) throw new Error(error.message);
-    
+
     return {
       ...mapProductFromSupabase(data),
       category_name: data.categories?.name,
@@ -433,9 +433,9 @@ export const addProduct = async (product) => {
       .insert(mapProductToSupabase(product))
       .select('*, categories(name)')
       .single();
-    
+
     if (error) throw new Error(error.message);
-    
+
     return {
       ...mapProductFromSupabase(data),
       category_name: data.categories?.name,
@@ -484,9 +484,9 @@ export const updateProduct = async (id, product) => {
       .eq('id', id)
       .select('*, categories(name)')
       .single();
-    
+
     if (error) throw new Error(error.message);
-    
+
     return {
       ...mapProductFromSupabase(data),
       category_name: data.categories?.name,
@@ -534,7 +534,7 @@ export const deleteProduct = async (id) => {
       .from('products')
       .delete()
       .eq('id', id);
-    
+
     if (error) throw new Error(error.message);
     return;
   }
@@ -556,7 +556,7 @@ export const getCategories = async () => {
       .from('categories')
       .select('*')
       .order('id');
-    
+
     if (error) throw new Error(error.message);
     return data || [];
   }
@@ -575,7 +575,7 @@ export const addCategory = async (name) => {
       .insert({ name })
       .select()
       .single();
-    
+
     if (error) throw new Error(error.message);
     return data;
   }
@@ -600,7 +600,7 @@ export const updateCategory = async (id, name) => {
       .eq('id', id)
       .select()
       .single();
-    
+
     if (error) throw new Error(error.message);
     return data;
   }
@@ -623,7 +623,7 @@ export const deleteCategory = async (id) => {
       .from('categories')
       .delete()
       .eq('id', id);
-    
+
     if (error) throw new Error(error.message);
     return;
   }
@@ -679,10 +679,10 @@ const MOCK_USERS = [
 // Mock authentication functions
 const loginMock = async (email, password) => {
   await new Promise(resolve => setTimeout(resolve, 500));
-  
+
   const user = MOCK_USERS.find(u => u.email === email);
   if (!user) throw new Error('Invalid credentials');
-  
+
   if (
     (email === 'admin@10thwest.com' && password === 'admin123') ||
     (email === 'cashier@10thwest.com' && password === 'cashier123') ||
@@ -691,23 +691,23 @@ const loginMock = async (email, password) => {
     const token = 'mock-jwt-token-' + Math.random();
     return { user, token };
   }
-  
+
   throw new Error('Invalid credentials');
 };
 
 const registerMock = async (name, email, password) => {
   await new Promise(resolve => setTimeout(resolve, 500));
-  
+
   const newUser = {
     id: MOCK_USERS.length + 1,
     name,
     email,
     role: Role.CUSTOMER
   };
-  
+
   MOCK_USERS.push(newUser);
   const token = 'mock-jwt-token-' + Math.random();
-  
+
   return { user: newUser, token };
 };
 
@@ -841,9 +841,9 @@ export const getOrders = async () => {
       .from('orders')
       .select('*, order_items(*, products(*))')
       .order('created_at', { ascending: false });
-    
+
     if (error) throw new Error(error.message);
-    
+
     return (data || []).map((order) => ({
       ...mapOrderFromApi(order),
       items: (order.order_items || []).map((item) => mapOrderItemToCartItem({
@@ -866,15 +866,15 @@ export const getUserOrders = async (userId) => {
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
-    
+
     const { data: ordersData, error } = await supabase
       .from('orders')
       .select('*, order_items(*, products(*))')
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw new Error(error.message);
-    
+
     return (ordersData || []).map((order) => ({
       ...mapOrderFromApi(order),
       items: (order.order_items || []).map((item) => mapOrderItemToCartItem({
@@ -902,9 +902,9 @@ export const getOrderById = async (id) => {
       .select('*, order_items(*, products(*))')
       .eq('id', id)
       .single();
-    
+
     if (error) throw new Error(error.message);
-    
+
     return {
       ...mapOrderFromApi(data),
       items: (data.order_items || []).map((item) => mapOrderItemToCartItem({
@@ -953,25 +953,27 @@ export const createOrder = async (order) => {
       })
       .select()
       .single();
-    
+
     if (orderError) throw new Error(orderError.message);
-    
-    // Create order items
+
+    // Create order items with all required fields
     const orderItems = (order.items || []).map(item => ({
       order_id: orderData.id,
       product_id: (item).productId ?? (item).product_id,
       quantity: (item).quantity ?? (item).quantity,
       price: (item).product?.price || 0,
+      product_name: (item).product?.name || 'Unknown Product',
+      product_price: (item).product?.price || 0,
     }));
-    
+
     if (orderItems.length > 0) {
       const { error: itemsError } = await supabase
         .from('order_items')
         .insert(orderItems);
-      
+
       if (itemsError) throw new Error(itemsError.message);
     }
-    
+
     const mapped = mapOrderFromApi(orderData);
     if (order.items && order.items.length > 0) {
       mapped.items = order.items;
@@ -1017,7 +1019,7 @@ export const updateOrderStatus = async (id, status) => {
       .eq('id', id)
       .select()
       .single();
-    
+
     if (error) throw new Error(error.message);
     return mapOrderFromApi(data);
   }
@@ -1030,6 +1032,18 @@ export const updateOrderStatus = async (id, status) => {
   return mapOrderFromApi(data.order ?? data);
 };
 
+export const createPaymentIntent = async (amount, items, currency = 'php') => {
+  if (USE_MOCK_DATA) {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return { clientSecret: 'mock_secret_' + Math.random() };
+  }
+
+  return authenticatedFetch(`${API_URL}/checkout/create-payment-intent`, {
+    method: 'POST',
+    body: JSON.stringify({ amount, items, currency }),
+  });
+};
+
 // ==================== DASHBOARD STATS ====================
 
 export const getDashboardStats = async () => {
@@ -1038,24 +1052,24 @@ export const getDashboardStats = async () => {
     const { data: orders } = await supabase
       .from('orders')
       .select('id, total_amount, status, created_at');
-    
+
     // Get products
     const { data: products } = await supabase
       .from('products')
       .select('id, stock_quantity, low_stock_threshold');
-    
+
     const totalRevenue = (orders || []).reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
     const totalOrders = orders?.length || 0;
     const totalProducts = products?.length || 0;
     const lowStockProducts = (products || []).filter(p => p.stock_quantity <= p.low_stock_threshold).length;
-    
+
     // Get recent orders with items
     const { data: recentOrders } = await supabase
       .from('orders')
       .select('*, order_items(*, products(*))')
       .order('created_at', { ascending: false })
       .limit(5);
-    
+
     return {
       totalRevenue,
       totalOrders,
@@ -1072,12 +1086,12 @@ export const getDashboardStats = async () => {
   }
 
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   const totalRevenue = MOCK_ORDERS.reduce((sum, order) => sum + order.total_amount, 0);
   const totalOrders = MOCK_ORDERS.length;
   const totalProducts = MOCK_PRODUCTS.length;
   const lowStockProducts = MOCK_PRODUCTS.filter(p => p.stock_quantity <= p.low_stock_threshold).length;
-  
+
   return {
     totalRevenue,
     totalOrders,
@@ -1089,17 +1103,17 @@ export const getDashboardStats = async () => {
 
 // ==================== ADDRESSES ====================
 
-export const getUserAddresses = async (userId) => {
+export const getAddresses = async (userId) => {
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
-    
+
     const { data: addressData, error } = await supabase
       .from('addresses')
       .select('*')
       .eq('user_id', currentUser.id)
       .order('is_default', { ascending: false });
-    
+
     if (error) throw new Error(error.message);
     return addressData || [];
   }
@@ -1115,7 +1129,7 @@ export const addAddress = async (address) => {
       .insert(address)
       .select()
       .single();
-    
+
     if (error) throw new Error(error.message);
     return data;
   }
@@ -1135,7 +1149,7 @@ export const updateAddress = async (id, updates) => {
       .eq('id', id)
       .select()
       .single();
-    
+
     if (error) throw new Error(error.message);
     return data;
   }
@@ -1153,7 +1167,7 @@ export const deleteAddress = async (id) => {
       .from('addresses')
       .delete()
       .eq('id', id);
-    
+
     if (error) throw new Error(error.message);
     return;
   }
@@ -1281,7 +1295,7 @@ export const updatePolicy = async (type, title, content) => {
 
 export const getWishlist = async (userId) => [];
 export const addToWishlist = async (userId, productId) => ({});
-export const removeFromWishlist = async (userId, productId) => {};
+export const removeFromWishlist = async (userId, productId) => { };
 
 export const getReviews = async (productId) => [];
 export const getProductReviews = getReviews; // Alias
@@ -1291,7 +1305,7 @@ export const getDiscounts = async () => [];
 export const validateDiscount = async (code, amount) => ({});
 export const validateDiscountCode = validateDiscount; // Alias
 export const createDiscount = async (discount) => ({});
-export const deleteDiscount = async (id) => {};
+export const deleteDiscount = async (id) => { };
 
 export const getPromotions = async () => [];
 
@@ -1308,7 +1322,6 @@ export const createStockAdjustment = async (adjustment) => ({});
 export const adjustStock = createStockAdjustment; // Alias
 
 // Address aliases
-export const getAddresses = getUserAddresses;
 export const saveAddress = async (address) => {
   if (address.id) {
     return updateAddress(address.id, address);
@@ -1362,7 +1375,7 @@ export const getLowStockProducts = async () => {
   };
 };
 
-export const updateStock = async(productId, quantity, adjustmentType = 'set') => {
+export const updateStock = async (productId, quantity, adjustmentType = 'set') => {
   const data = await authenticatedFetch(`${API_URL}/inventory/${productId}`, {
     method: 'PUT',
     body: JSON.stringify({ quantity, adjustment_type: adjustmentType }),

@@ -38,7 +38,7 @@ const PaymentModal = ({ total, onComplete, onCancel }) => {
           <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-900">
-                Payment Due: ${total.toFixed(2)}
+                Payment Due: ₱{total.toFixed(2)}
               </h3>
               <button onClick={onCancel} className="text-gray-400 hover:text-gray-500">
                 <X className="h-6 w-6" />
@@ -49,16 +49,16 @@ const PaymentModal = ({ total, onComplete, onCancel }) => {
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={() => setMethod('cash')}
-                  className="flex flex-col items-center justify-center p-8 border-2 border-gray-200 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-colors"
+                  className="flex flex-col items-center justify-center p-8 border-2 border-gray-100 rounded-2xl hover:border-red-500 hover:bg-red-50 transition-all group"
                 >
-                  <Banknote className="h-12 w-12 text-green-600 mb-4" />
+                  <Banknote className="h-12 w-12 text-green-600 mb-4 group-hover:scale-110 transition-transform" />
                   <span className="text-lg font-bold text-gray-900">Cash</span>
                 </button>
                 <button
                   onClick={() => setMethod('card')}
-                  className="flex flex-col items-center justify-center p-8 border-2 border-gray-200 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-colors"
+                  className="flex flex-col items-center justify-center p-8 border-2 border-gray-100 rounded-2xl hover:border-red-500 hover:bg-red-50 transition-all group"
                 >
-                  <CreditCard className="h-12 w-12 text-indigo-600 mb-4" />
+                  <CreditCard className="h-12 w-12 text-red-600 mb-4 group-hover:scale-110 transition-transform" />
                   <span className="text-lg font-bold text-gray-900">Card</span>
                 </button>
               </div>
@@ -68,30 +68,30 @@ const PaymentModal = ({ total, onComplete, onCancel }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Amount Tendered</label>
                   <div className="relative rounded-md shadow-sm">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 sm:text-lg">$</span>
+                      <span className="text-gray-500 sm:text-lg">₱</span>
                     </div>
                     <input
                       type="number"
                       step="0.01"
                       autoFocus
                       required
-                      className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-8 pr-12 sm:text-2xl border-gray-300 rounded-md py-4"
+                      className="focus:ring-red-500 focus:border-red-500 block w-full pl-8 pr-12 sm:text-2xl border-gray-200 rounded-xl py-4"
                       placeholder="0.00"
                       value={tendered}
                       onChange={(e) => setTendered(e.target.value)}
                     />
                   </div>
                 </div>
-                
+
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex justify-between text-lg font-medium">
                     <span className="text-gray-600">Total:</span>
-                    <span className="text-gray-900">${total.toFixed(2)}</span>
+                    <span className="text-gray-900">₱{total.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-lg font-medium mt-2">
                     <span className="text-gray-600">Change Due:</span>
-                    <span className={`text-xl ${changeDue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      ${changeDue >= 0 ? changeDue.toFixed(2) : '0.00'}
+                    <span className={`text-xl font-bold ${changeDue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ₱{changeDue >= 0 ? changeDue.toFixed(2) : '0.00'}
                     </span>
                   </div>
                 </div>
@@ -107,7 +107,7 @@ const PaymentModal = ({ total, onComplete, onCancel }) => {
                   <button
                     type="submit"
                     disabled={changeDue < 0}
-                    className="flex-1 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 py-3 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     Complete Transaction
                   </button>
@@ -129,11 +129,11 @@ const PaymentModal = ({ total, onComplete, onCancel }) => {
                 ) : (
                   <div className="space-y-6">
                     <div className="bg-indigo-50 p-6 rounded-full inline-block">
-                        <CreditCard className="h-12 w-12 text-indigo-600" />
+                      <CreditCard className="h-12 w-12 text-indigo-600" />
                     </div>
                     <p className="text-lg text-gray-600">Ready to charge <strong>${total.toFixed(2)}</strong></p>
                     <div className="flex space-x-3">
-                       <button
+                      <button
                         type="button"
                         onClick={() => setMethod(null)}
                         className="flex-1 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -142,7 +142,7 @@ const PaymentModal = ({ total, onComplete, onCancel }) => {
                       </button>
                       <button
                         onClick={handleCardProcess}
-                        className="flex-1 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                        className="flex-1 py-3 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-all"
                       >
                         Charge Card
                       </button>

@@ -1,5 +1,6 @@
 ﻿import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
+import { ToastContainer } from '../components/Toast';
 
 // Build socket URL dynamically: same host as the page, port 5000
 function getSocketUrl() {
@@ -17,8 +18,9 @@ function getSocketUrl() {
 const SocketContext = createContext({
   socket: null,
   connected: false,
-  on: () => {},
-  off: () => {},
+  on: () => { },
+  off: () => { },
+  toast: () => { },
 });
 
 export const useSocket = () => useContext(SocketContext);
@@ -40,6 +42,16 @@ export function useSocketEvent(event, handler) {
 export const SocketProvider = ({ children }) => {
   const socketRef = useRef(null);
   const [connected, setConnected] = useState(false);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
 
   useEffect(() => {
     const url = getSocketUrl();
@@ -71,7 +83,7 @@ export const SocketProvider = ({ children }) => {
             isPOS: window.location.hash?.includes('/pos'),
           });
         }
-      } catch {}
+      } catch { }
     });
 
     s.on('disconnect', () => {
@@ -81,6 +93,19 @@ export const SocketProvider = ({ children }) => {
 
     s.on('connect_error', (err) => {
       console.warn('ðŸ”Œ Socket connection error:', err.message);
+    });
+
+    // Default listeners for global notifications
+    s.on('order:new', (order) => {
+      addToast(`New order placed! #${order.id?.toString().padStart(4, '0')}`, 'order');
+    });
+
+    s.on('order:updated', (order) => {
+      addToast(`Order #${order.id?.toString().padStart(4, '0')} status updated to ${order.status}`, 'info');
+    });
+
+    s.on('inventory:low-stock', (product) => {
+      addToast(`Low stock alert: ${product.name} (${product.stock_quantity} left)`, 'error');
     });
 
     return () => {
@@ -98,8 +123,9 @@ export const SocketProvider = ({ children }) => {
   };
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, connected, on, off }}>
+    <SocketContext.Provider value={{ socket: socketRef.current, connected, on, off, toast: addToast }}>
       {children}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </SocketContext.Provider>
   );
 };

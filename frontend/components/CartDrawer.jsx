@@ -1,11 +1,12 @@
-﻿import React from 'react';
+﻿import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
+import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, LogIn } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
 const CartDrawer = ({ isOpen, onClose }) => {
   const { items, updateQuantity, removeFromCart, subtotal, itemCount } = useCart();
   const navigate = useNavigate();
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const formatPrice = (p) => `â‚±${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
@@ -86,13 +87,54 @@ const CartDrawer = ({ isOpen, onClose }) => {
                 View Cart
               </button>
               <button
-                onClick={() => { onClose(); navigate('/checkout'); }}
+                onClick={() => {
+                  const user = localStorage.getItem('shopCoreUser');
+                  if (!user) {
+                    setShowLoginModal(true);
+                  } else {
+                    onClose();
+                    navigate('/checkout');
+                  }
+                }}
                 className="w-full py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 Checkout <ArrowRight size={16} />
               </button>
             </div>
           </>
+        )}
+
+        {/* Login Required Modal */}
+        {showLoginModal && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/30" onClick={() => setShowLoginModal(false)} />
+            <div className="relative bg-white rounded-2xl shadow-2xl max-w-xs w-full mx-4 p-6">
+              <button onClick={() => setShowLoginModal(false)} className="absolute top-3 right-3 p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+                <X size={18} />
+              </button>
+              <div className="text-center">
+                <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <LogIn size={24} className="text-red-600" />
+                </div>
+                <h3 className="font-display font-bold text-base text-gray-900 mb-1">Login Required</h3>
+                <p className="text-sm text-gray-500 mb-5">You need to sign in to proceed to checkout.</p>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => { setShowLoginModal(false); onClose(); navigate('/login?redirect=/checkout'); }}
+                    className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    <LogIn size={16} /> Sign In
+                  </button>
+                  <button
+                    onClick={() => setShowLoginModal(false)}
+                    className="w-full py-2.5 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield, Check } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { getAddresses } from '../services/api';
-
-const API_URL = 'http://localhost:5000/api';
+import { getAddresses, createOrder, createPaymentIntent } from '../services/api';
 
 const Checkout = () => {
   const { items, subtotal, total, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
@@ -28,16 +26,18 @@ const Checkout = () => {
 
   useEffect(() => {
     const user = localStorage.getItem('shopCoreUser');
-    if (user) {
-      const u = JSON.parse(user);
-      setForm(f => ({ ...f, name: u.name || '', email: u.email || '' }));
-      getAddresses(u.id).then(addrs => {
-        setAddresses(addrs);
-        const def = addrs.find(a => a.is_default);
-        if (def) setSelectedAddress(def.id);
-      }).catch(() => {});
+    if (!user) {
+      // Guest Checkout is allowed
+      return;
     }
-  }, []);
+    const u = JSON.parse(user);
+    setForm(f => ({ ...f, name: u.name || '', email: u.email || '' }));
+    getAddresses(u.id).then(addrs => {
+      setAddresses(addrs);
+      const def = addrs.find(a => a.is_default);
+      if (def) setSelectedAddress(def.id);
+    }).catch(() => { });
+  }, [navigate]);
 
   const shippingCost = shippingMethod === 'express' ? 300 : subtotal >= 2500 ? 0 : 150;
   const grandTotal = total + shippingCost;
@@ -56,39 +56,40 @@ const Checkout = () => {
     setError('');
 
     try {
-      const token = localStorage.getItem('shopCoreToken');
+      const user = localStorage.getItem('shopCoreUser');
+      const u = user ? JSON.parse(user) : null;
+
       const selectedAddr = addresses.find(a => a.id === selectedAddress);
       const shippingAddress = selectedAddr
         ? `${selectedAddr.recipient_name}, ${selectedAddr.street}, ${selectedAddr.city}, ${selectedAddr.state} ${selectedAddr.postal_code}`
         : `${form.name}, ${form.street}, ${form.city}, ${form.state} ${form.postal_code}`;
 
       if (paymentMethod === 'card') {
-        const piRes = await fetch(`${API_URL}/checkout/create-payment-intent`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ amount: Math.round(grandTotal * 100), currency: 'php' }),
-        });
-        if (!piRes.ok) throw new Error('Payment failed');
+        const piData = await createPaymentIntent(Math.round(grandTotal * 100), items.map(i => ({
+          product_id: i.productId,
+          quantity: i.quantity
+        })), 'php');
+        // In a professional integration, we would confirm the payment with Stripe Elements here.
       }
 
-      const orderRes = await fetch(`${API_URL}/orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
-        body: JSON.stringify({
-          items: items.map(i => ({ productId: i.productId, quantity: i.quantity, price: i.product.is_on_sale && i.product.sale_price ? i.product.sale_price : i.product.price })),
-          shipping_address: shippingAddress,
-          total_amount: grandTotal,
-          payment_method: paymentMethod,
-          guest_info: !token ? { name: form.name, email: form.email } : undefined,
-          discount_amount: discountAmount,
-          promo_code_used: discount?.code,
-        }),
-      });
+      const orderData = {
+        user_id: u?.id,
+        items: items.map(i => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          price: i.product.is_on_sale && i.product.sale_price ? i.product.sale_price : i.product.price
+        })),
+        shipping_address: shippingAddress,
+        total_amount: grandTotal,
+        payment_method: paymentMethod,
+        guest_info: !u ? { name: form.name, email: form.email } : undefined,
+        discount_amount: discountAmount,
+        promo_code_used: discount?.code,
+      };
 
-      if (!orderRes.ok) throw new Error('Failed to create order');
-      const order = await orderRes.json();
+      const order = await createOrder(orderData);
       await clearCart();
-      navigate(`/order-confirmation/${order.id || order.order?.id}`);
+      navigate(`/order-confirmation/${order.id}`);
     } catch (err) {
       setError(err.message || 'Something went wrong');
     } finally {
@@ -128,9 +129,9 @@ const Checkout = () => {
               {/* Contact */}
               <Section title="Contact Information" icon={<MapPin size={18} />}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input label="Full Name" value={form.name} onChange={v => setForm(f => ({...f, name: v}))} required />
-                  <Input label="Email" type="email" value={form.email} onChange={v => setForm(f => ({...f, email: v}))} required />
-                  <Input label="Phone" type="tel" value={form.phone} onChange={v => setForm(f => ({...f, phone: v}))} className="md:col-span-2" />
+                  <Input label="Full Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} required />
+                  <Input label="Email" type="email" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} required />
+                  <Input label="Phone" type="tel" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} className="md:col-span-2" />
                 </div>
               </Section>
 
@@ -155,10 +156,10 @@ const Checkout = () => {
                 )}
                 {(addresses.length === 0 || showNewAddress) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input label="Street Address" value={form.street} onChange={v => setForm(f => ({...f, street: v}))} required={!selectedAddress} className="md:col-span-2" />
-                    <Input label="City" value={form.city} onChange={v => setForm(f => ({...f, city: v}))} required={!selectedAddress} />
-                    <Input label="State/Province" value={form.state} onChange={v => setForm(f => ({...f, state: v}))} required={!selectedAddress} />
-                    <Input label="Postal Code" value={form.postal_code} onChange={v => setForm(f => ({...f, postal_code: v}))} required={!selectedAddress} />
+                    <Input label="Street Address" value={form.street} onChange={v => setForm(f => ({ ...f, street: v }))} required={!selectedAddress} className="md:col-span-2" />
+                    <Input label="City" value={form.city} onChange={v => setForm(f => ({ ...f, city: v }))} required={!selectedAddress} />
+                    <Input label="State/Province" value={form.state} onChange={v => setForm(f => ({ ...f, state: v }))} required={!selectedAddress} />
+                    <Input label="Postal Code" value={form.postal_code} onChange={v => setForm(f => ({ ...f, postal_code: v }))} required={!selectedAddress} />
                   </div>
                 )}
               </Section>
@@ -202,10 +203,10 @@ const Checkout = () => {
                 </div>
                 {paymentMethod === 'card' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
-                    <Input label="Name on Card" value={form.cardName} onChange={v => setForm(f => ({...f, cardName: v}))} className="md:col-span-2" />
-                    <Input label="Card Number" value={form.cardNumber} onChange={v => setForm(f => ({...f, cardNumber: v}))} placeholder="4242 4242 4242 4242" className="md:col-span-2" />
-                    <Input label="Expiry" value={form.cardExpiry} onChange={v => setForm(f => ({...f, cardExpiry: v}))} placeholder="MM/YY" />
-                    <Input label="CVV" value={form.cardCvv} onChange={v => setForm(f => ({...f, cardCvv: v}))} placeholder="123" />
+                    <Input label="Name on Card" value={form.cardName} onChange={v => setForm(f => ({ ...f, cardName: v }))} className="md:col-span-2" />
+                    <Input label="Card Number" value={form.cardNumber} onChange={v => setForm(f => ({ ...f, cardNumber: v }))} placeholder="4242 4242 4242 4242" className="md:col-span-2" />
+                    <Input label="Expiry" value={form.cardExpiry} onChange={v => setForm(f => ({ ...f, cardExpiry: v }))} placeholder="MM/YY" />
+                    <Input label="CVV" value={form.cardCvv} onChange={v => setForm(f => ({ ...f, cardCvv: v }))} placeholder="123" />
                   </div>
                 )}
               </Section>

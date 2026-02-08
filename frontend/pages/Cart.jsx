@@ -1,18 +1,19 @@
-﻿import React from 'react';
+﻿import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Minus, Plus, Trash2, Heart, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Minus, Plus, Trash2, Heart, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft, LogIn, X } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
 const Cart = () => {
   const { items, updateQuantity, removeFromCart, clearCart, subtotal, discount, discountAmount, total } = useCart();
   const navigate = useNavigate();
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const formatPrice = (p) => `â‚±${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
   const handleCheckout = () => {
     const user = localStorage.getItem('shopCoreUser');
     if (!user) {
-      navigate('/login?redirect=/checkout');
+      setShowLoginModal(true);
       return;
     }
     navigate('/checkout');
@@ -153,6 +154,51 @@ const Cart = () => {
             </div>
           </div>
         )}
+      </div>
+
+      <LoginRequiredModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onLogin={() => {
+          setShowLoginModal(false);
+          navigate('/login?redirect=/checkout');
+        }}
+      />
+    </div>
+  );
+};
+
+// Login Required Modal
+const LoginRequiredModal = ({ isOpen, onClose, onLogin }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 animate-fade-in">
+        <button onClick={onClose} className="absolute top-4 right-4 p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+          <X size={20} />
+        </button>
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <LogIn size={28} className="text-red-600" />
+          </div>
+          <h3 className="font-display font-bold text-lg text-gray-900 mb-2">Login Required</h3>
+          <p className="text-sm text-gray-500 mb-6">You need to be logged in to proceed to checkout. Please sign in or create an account to continue.</p>
+          <div className="space-y-3">
+            <button
+              onClick={onLogin}
+              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+            >
+              <LogIn size={16} /> Sign In
+            </button>
+            <button
+              onClick={onClose}
+              className="w-full py-3 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
+            >
+              Continue Shopping
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

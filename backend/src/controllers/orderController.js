@@ -125,7 +125,7 @@ export const updateOrderStatus = async (req, res) => {
   const { status } = req.body;
 
   const validStatuses = ['pending', 'paid', 'shipped', 'completed', 'cancelled'];
-  
+
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: 'Invalid status' });
   }
@@ -170,7 +170,7 @@ export const createOrder = async (req, res) => {
   } = req.body;
 
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
 
@@ -185,7 +185,26 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ message: 'Invalid items payload' });
     }
 
-    const resolvedPaymentMethod = source === 'pos' ? (payment_method || 'cash') : 'stripe';
+    // Check stock levels first
+    for (const item of normalizedItems) {
+      const stockCheck = await client.query(
+        'SELECT name, stock_quantity FROM products WHERE id = $1 FOR UPDATE',
+        [item.product_id]
+      );
+
+      const product = stockCheck.rows[0];
+      if (!product || product.stock_quantity < item.quantity) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `Insufficient stock for ${product?.name || 'Product #' + item.product_id}`
+        });
+      }
+    }
+
+    // Respect the payment method from the frontend for online orders
+    const resolvedPaymentMethod = source === 'pos'
+      ? (payment_method || 'cash')
+      : (payment_method || 'stripe');
     const resolvedCashierId = source === 'pos' ? (cashier_id || req.user?.id || null) : null;
 
     // Create order
@@ -239,7 +258,7 @@ export const createOrder = async (req, res) => {
         'SELECT id FROM carts WHERE user_id = $1',
         [userId]
       );
-      
+
       if (cartResult.rows.length > 0) {
         await client.query(
           'DELETE FROM cart_items WHERE cart_id = $1',
@@ -415,29 +434,29 @@ export const getOrderInvoice = async (req, res) => {
               <tr>
                 <td class="item-description">${item.product_name || 'Product'}</td>
                 <td>${item.part_number || '-'}</td>
-                <td class="text-right">$${parseFloat(item.product_price).toFixed(2)}</td>
+                <td class="text-right">₱${parseFloat(item.product_price).toFixed(2)}</td>
                 <td class="text-right">${item.quantity}</td>
-                <td class="text-right">$${(parseFloat(item.product_price) * item.quantity).toFixed(2)}</td>
+                <td class="text-right">₱${(parseFloat(item.product_price) * item.quantity).toFixed(2)}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
-
+ 
         <div class="totals">
           <table>
             <tr>
               <td>Subtotal:</td>
-              <td class="text-right">$${parseFloat(order.total_amount).toFixed(2)}</td>
+              <td class="text-right">₱${parseFloat(order.total_amount).toFixed(2)}</td>
             </tr>
             ${order.discount_amount && parseFloat(order.discount_amount) > 0 ? `
             <tr>
               <td>Discount:</td>
-              <td class="text-right">-$${parseFloat(order.discount_amount).toFixed(2)}</td>
+              <td class="text-right">-₱${parseFloat(order.discount_amount).toFixed(2)}</td>
             </tr>
             ` : ''}
             <tr class="grand-total">
               <td><strong>TOTAL:</strong></td>
-              <td class="text-right"><strong>$${parseFloat(order.total_amount).toFixed(2)}</strong></td>
+              <td class="text-right"><strong>₱${parseFloat(order.total_amount).toFixed(2)}</strong></td>
             </tr>
           </table>
         </div>

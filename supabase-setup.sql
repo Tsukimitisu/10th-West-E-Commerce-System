@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS orders (
   guest_name VARCHAR(255),
   guest_email VARCHAR(255),
   total_amount DECIMAL(10, 2) NOT NULL,
-  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'shipped', 'completed', 'cancelled')),
+  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'preparing', 'ready', 'shipped', 'completed', 'cancelled')),
   shipping_address TEXT NOT NULL,
   source VARCHAR(20) DEFAULT 'online' CHECK (source IN ('online', 'pos')),
   payment_method VARCHAR(20) CHECK (payment_method IN ('cash', 'card', 'online', 'stripe')),

@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import { ShoppingBag, Package, Truck, Check, Ban } from 'lucide-react';
+import { ShoppingBag, Package, Truck, Check, Ban, CheckCircle } from 'lucide-react';
 
 const OrderTracker = ({ status }) => {
   const steps = [
@@ -49,18 +49,16 @@ const OrderTracker = ({ status }) => {
               const isCurrent = idx === currentStep;
               return (
                 <div key={step.id} className="flex flex-col items-center z-10" style={{ width: '120px' }}>
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    isCompleted
-                      ? isCurrent
-                        ? 'bg-orange-600 ring-4 ring-orange-200 shadow-lg'
-                        : 'bg-green-500'
-                      : 'bg-gray-200'
-                  }`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${isCompleted
+                    ? isCurrent
+                      ? 'bg-orange-600 ring-4 ring-orange-200 shadow-lg'
+                      : 'bg-green-500'
+                    : 'bg-gray-200'
+                    }`}>
                     <step.icon className={`w-5 h-5 ${isCompleted ? 'text-white' : 'text-gray-400'}`} />
                   </div>
-                  <span className={`mt-3 text-xs font-bold text-center leading-tight ${
-                    isCompleted ? (isCurrent ? 'text-orange-600' : 'text-green-600') : 'text-gray-400'
-                  }`}>
+                  <span className={`mt-3 text-xs font-bold text-center leading-tight ${isCompleted ? (isCurrent ? 'text-orange-600' : 'text-green-600') : 'text-gray-400'
+                    }`}>
                     {step.name}
                   </span>
                   {isCurrent && (
@@ -82,9 +80,8 @@ const OrderTracker = ({ status }) => {
           return (
             <div key={step.id} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  isCompleted ? (isCurrent ? 'bg-orange-600 ring-2 ring-orange-200' : 'bg-green-500') : 'bg-gray-200'
-                }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${isCompleted ? (isCurrent ? 'bg-orange-600 ring-2 ring-orange-200' : 'bg-green-500') : 'bg-gray-200'
+                  }`}>
                   <step.icon className={`w-4 h-4 ${isCompleted ? 'text-white' : 'text-gray-400'}`} />
                 </div>
                 {!isLast && (

@@ -2,7 +2,7 @@
 import { Printer, X, Bike } from 'lucide-react';
 
 const ReceiptModal = ({ order, onClose, onNewSale }) => {
-  
+
   const handlePrint = () => {
     window.print();
   };
@@ -29,7 +29,7 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
           <div className="p-8 bg-white" id="receipt-content">
             <div className="text-center mb-6">
               <div className="flex justify-center mb-2">
-                  <Bike className="w-8 h-8 text-black" />
+                <Bike className="w-8 h-8 text-black" />
               </div>
               <h1 className="text-xl font-black uppercase tracking-widest text-black leading-none">10TH WEST</h1>
               <h2 className="text-xs font-bold uppercase tracking-widest text-black mb-2">Motorcycle Parts & Accessories</h2>
@@ -50,29 +50,29 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
 
             <div className="space-y-2 mb-6 font-mono">
               {order.items.map((item, idx) => {
-                  const price = (item.product.is_on_sale && item.product.sale_price) ? item.product.sale_price : item.product.price;
-                  return (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <div className="flex-1 pr-4">
-                        <span className="text-black block font-bold">{item.product.name}</span>
-                        <span className="text-gray-500 text-xs">{item.quantity} x ${price.toFixed(2)}</span>
-                      </div>
-                      <span className="text-black font-bold">${(item.quantity * price).toFixed(2)}</span>
+                const price = (item.product.is_on_sale && item.product.sale_price) ? item.product.sale_price : item.product.price;
+                return (
+                  <div key={idx} className="flex justify-between text-sm">
+                    <div className="flex-1 pr-4">
+                      <span className="text-black block font-bold">{item.product.name}</span>
+                      <span className="text-gray-500 text-xs">{item.quantity} x ₱{price.toFixed(2)}</span>
                     </div>
-                  );
+                    <span className="text-black font-bold">₱{(item.quantity * price).toFixed(2)}</span>
+                  </div>
+                );
               })}
             </div>
 
             <div className="border-t border-dashed border-gray-300 pt-4 space-y-1 text-sm font-mono">
               {order.discount_amount && order.discount_amount > 0 && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Discount</span>
-                    <span>-${order.discount_amount.toFixed(2)}</span>
-                  </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>Discount</span>
+                  <span>-₱{order.discount_amount.toFixed(2)}</span>
+                </div>
               )}
               <div className="flex justify-between font-black text-black text-lg">
                 <span>TOTAL</span>
-                <span>${order.total_amount.toFixed(2)}</span>
+                <span>₱{order.total_amount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-gray-600 text-xs mt-2 uppercase">
                 <span>Method</span>
@@ -82,11 +82,11 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
                 <>
                   <div className="flex justify-between text-gray-600 text-xs">
                     <span>Tendered</span>
-                    <span>${order.amount_tendered?.toFixed(2)}</span>
+                    <span>₱{order.amount_tendered?.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-gray-600 text-xs">
                     <span>Change</span>
-                    <span>${order.change_due?.toFixed(2)}</span>
+                    <span>₱{order.change_due?.toFixed(2)}</span>
                   </div>
                 </>
               )}

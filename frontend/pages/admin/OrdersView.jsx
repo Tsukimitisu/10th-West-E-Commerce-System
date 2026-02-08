@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getOrders, getOrderById, updateOrderStatus } from '../../services/api';
+import { OrderStatus } from '../../types.js';
 import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock, Filter, ChevronDown, ChevronUp, ArrowLeft, Printer, DollarSign, MapPin, User, Calendar, CreditCard, AlertCircle } from 'lucide-react';
 import Modal from '../../components/admin/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
@@ -173,11 +174,14 @@ const OrdersView = () => {
         {detailOrder && (
           <div className="space-y-5">
             {/* Status + Date */}
-            <div className="flex items-center justify-between">
-              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border capitalize ${statusColors[detailOrder.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+            <div className="flex items-center justify-between p-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/20 shadow-sm">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase border tracking-wider ${statusColors[detailOrder.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
                 {statusIcons[detailOrder.status]} {detailOrder.status}
               </span>
-              <div className="flex items-center gap-1 text-xs text-gray-500"><Calendar size={12} /> {new Date(detailOrder.created_at).toLocaleString()}</div>
+              <div className="flex flex-col items-end">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Order Date</p>
+                <div className="flex items-center gap-1 text-xs font-bold text-gray-900"><Calendar size={12} className="text-red-500" /> {new Date(detailOrder.created_at).toLocaleString()}</div>
+              </div>
             </div>
 
             {/* Customer & Shipping */}
@@ -224,9 +228,19 @@ const OrdersView = () => {
             </div>
 
             {/* Actions */}
-            <div className="flex flex-wrap gap-2 pt-2">
-              <button onClick={() => { setDetailOpen(false); openStatusChange(detailOrder); }} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors">Update Status</button>
-              <button className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-medium rounded-lg transition-colors flex items-center gap-1"><Printer size={12} /> Print</button>
+            <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-100">
+              <button
+                onClick={() => { setDetailOpen(false); openStatusChange(detailOrder); }}
+                className="flex-1 min-w-[140px] px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-100 flex items-center justify-center gap-2"
+              >
+                Update Status
+              </button>
+              <button
+                onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/orders/${detailOrder.id}/invoice`, '_blank')}
+                className="flex-1 min-w-[140px] px-4 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                <Printer size={14} /> Print Invoice
+              </button>
             </div>
           </div>
         )}
