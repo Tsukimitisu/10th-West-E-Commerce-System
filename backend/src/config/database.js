@@ -15,17 +15,30 @@ dotenv.config({ path: envPath });
 
 const { Pool } = pg;
 
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-});
+// Support both Supabase connection string and traditional config
+const pool = process.env.DATABASE_URL
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false // Required for Supabase
+      }
+    })
+  : new Pool({
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+    });
 
 // Test connection
 pool.on('connect', () => {
   console.log('✅ Database connected successfully');
+  if (process.env.DATABASE_URL) {
+    console.log('🔗 Using Supabase connection');
+  } else {
+    console.log('🔗 Using local PostgreSQL connection');
+  }
 });
 
 pool.on('error', (err) => {
