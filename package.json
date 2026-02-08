@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
+    "postinstall": "cd frontend && npm install --legacy-peer-deps",
     "dev": "cd frontend && npx vite --port 3010 --host",
     "dev:frontend": "cd frontend && npx vite --port 3010 --host",
     "dev:backend": "cd backend && node src/server.js",
