@@ -2,30 +2,14 @@
   "name": "10th-west-moto",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\" --names \"FRONTEND,BACKEND\" --prefix-colors \"cyan,yellow\"",
-    "dev:frontend": "vite",
-    "dev:backend": "cd backend && npm run dev",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@stripe/react-stripe-js": "^3.1.1",
-    "@stripe/stripe-js": "^4.5.0",
-    "@supabase/supabase-js": "^2.95.3",
-    "lucide-react": "^0.563.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "react-router-dom": "^7.13.0",
-    "recharts": "2.12.0",
-    "socket.io-client": "^4.8.3"
-  },
-  "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "concurrently": "^9.2.1",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "dev": "cd frontend && npx vite --port 3010 --host",
+    "dev:frontend": "cd frontend && npx vite --port 3010 --host",
+    "dev:backend": "cd backend && node src/server.js",
+    "build": "cd frontend && npx vite build",
+    "install:frontend": "cd frontend && npm install --legacy-peer-deps",
+    "install:backend": "cd backend && npm install",
+    "install:all": "npm run install:frontend && npm run install:backend",
+    "start": "cd backend && node src/server.js"
   }
 }
