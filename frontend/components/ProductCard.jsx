@@ -23,7 +23,7 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
     } catch {}
   };
 
-  const formatPrice = (p) => `â‚±${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const formatPrice = (p) => `₱${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
   if (view === 'list') {
     return (

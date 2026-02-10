@@ -105,7 +105,7 @@ const OrderDetail = () => {
                   {item.sku && <p className="text-xs text-gray-400">SKU: {item.sku}</p>}
                   <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                 </div>
-                <p className="text-sm font-semibold text-gray-900">â‚±{(Number(item.price) * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                <p className="text-sm font-semibold text-gray-900">₱{(Number(item.price) * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
               </div>
             ))}
           </div>
@@ -117,11 +117,11 @@ const OrderDetail = () => {
           <div className="bg-white rounded-xl border border-gray-100 p-4">
             <h3 className="font-semibold text-gray-900 text-sm mb-3">Order Summary</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>â‚±{Number(order.subtotal || order.total || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-              {Number(order.discount || 0) > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-â‚±{Number(order.discount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-              <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{Number(order.shipping || 0) === 0 ? 'Free' : `â‚±${Number(order.shipping).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}</span></div>
+              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>₱{Number(order.subtotal || order.total || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+              {Number(order.discount || 0) > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-₱{Number(order.discount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+              <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{Number(order.shipping || 0) === 0 ? 'Free' : `₱${Number(order.shipping).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}</span></div>
               <div className="border-t border-gray-100 pt-2 flex justify-between font-semibold text-gray-900">
-                <span>Total</span><span>â‚±{Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                <span>Total</span><span>₱{Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>

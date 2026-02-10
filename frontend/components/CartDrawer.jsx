@@ -8,7 +8,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  const formatPrice = (p) => `â‚±${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const formatPrice = (p) => `₱${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
   if (!isOpen) return null;
 

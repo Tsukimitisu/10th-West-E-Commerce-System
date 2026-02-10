@@ -198,8 +198,8 @@ const ProductsView = () => {
                       <td className="px-4 py-3"><span className="text-xs text-gray-600">{cat?.name || 'â€”'}</span></td>
                       <td className="px-4 py-3 text-right">
                         {p.is_on_sale ? (
-                          <div><span className="text-xs text-gray-400 line-through">â‚±{p.price}</span><br /><span className="text-red-600 font-medium">â‚±{p.sale_price}</span></div>
-                        ) : <span className="font-medium text-gray-900">â‚±{p.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>}
+                          <div><span className="text-xs text-gray-400 line-through">₱{p.price}</span><br /><span className="text-red-600 font-medium">₱{p.sale_price}</span></div>
+                        ) : <span className="font-medium text-gray-900">₱{p.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <span className={`font-bold text-sm ${p.stock_quantity === 0 ? 'text-red-600' : p.stock_quantity <= p.low_stock_threshold ? 'text-amber-600' : 'text-gray-900'}`}>

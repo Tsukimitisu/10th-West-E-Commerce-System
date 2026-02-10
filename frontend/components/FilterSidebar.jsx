@@ -85,7 +85,7 @@ const FilterSidebar = ({
         <div className="px-2 space-y-3">
           <div className="flex gap-3">
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Min (â‚±)</label>
+              <label className="text-xs text-gray-500 mb-1 block">Min (₱)</label>
               <input
                 type="number" min={0} value={priceRange[0]}
                 onChange={e => onPriceChange([Number(e.target.value), priceRange[1]])}
@@ -93,7 +93,7 @@ const FilterSidebar = ({
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Max (â‚±)</label>
+              <label className="text-xs text-gray-500 mb-1 block">Max (₱)</label>
               <input
                 type="number" min={0} value={priceRange[1]}
                 onChange={e => onPriceChange([priceRange[0], Number(e.target.value)])}

@@ -70,13 +70,13 @@ const OrderConfirmation = () => {
                     <p className="text-sm text-gray-900 truncate">{item.name || item.product_name}</p>
                     <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                   </div>
-                  <p className="text-sm font-medium text-gray-900">â‚±{(Number(item.price) * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-sm font-medium text-gray-900">₱{(Number(item.price) * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
                 </div>
               ))}
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between font-semibold text-gray-900">
               <span>Total</span>
-              <span>â‚±{Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+              <span>₱{Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
         </div>
