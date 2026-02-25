@@ -961,7 +961,6 @@ export const createOrder = async (order) => {
       order_id: orderData.id,
       product_id: (item).productId ?? (item).product_id,
       quantity: (item).quantity ?? (item).quantity,
-      price: (item).product?.price || 0,
       product_name: (item).product?.name || 'Unknown Product',
       product_price: (item).product?.price || 0,
     }));
