@@ -14,7 +14,7 @@ Backend REST API for the 10th West Moto E-Commerce System.
 ## Prerequisites
 
 - Node.js (v16 or higher)
-- PostgreSQL (v12 or higher)
+- Supabase project
 - npm or yarn
 
 ## Installation
@@ -29,29 +29,25 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` and update with your database credentials:
+Edit `.env` and update with your Supabase credentials:
 ```
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=tenthwest_moto
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
+DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+SUPABASE_URL=https://[PROJECT-REF].supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 JWT_SECRET=your-super-secret-jwt-key
 ```
 
-3. Create PostgreSQL database:
-```sql
-CREATE DATABASE tenthwest_moto;
+3. Create schema in Supabase:
+```bash
+# Run backend/supabase-setup.sql in Supabase SQL Editor
 ```
 
-4. Run database migrations:
+4. Optional: run Node migrations/seeds against Supabase:
 ```bash
 npm run migrate
-```
-
-5. Seed initial data (optional):
-```bash
+node src/database/migrate-auth.js
 node src/database/seed.js
+node src/database/seed-sprint6.js
 ```
 
 ## Running the Server

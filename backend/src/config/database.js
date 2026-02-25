@@ -10,39 +10,31 @@ const __dirname = dirname(__filename);
 
 // Load environment variables from backend/.env
 const envPath = path.join(__dirname, '..', '..', '.env');
-console.log('📍 [DB Config] Loading .env from:', envPath);
+console.log('[DB Config] Loading .env from:', envPath);
 dotenv.config({ path: envPath });
 
 const { Pool } = pg;
+const connectionString = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
 
-// Support both Supabase connection string and traditional config
-const pool = process.env.DATABASE_URL
-  ? new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false // Required for Supabase
-      }
-    })
-  : new Pool({
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-    });
+if (!connectionString) {
+  throw new Error(
+    'Missing Supabase Postgres connection string. Set SUPABASE_DB_URL or DATABASE_URL in backend/.env.'
+  );
+}
+
+const pool = new Pool({
+  connectionString,
+  ssl: { rejectUnauthorized: false },
+});
 
 // Test connection
 pool.on('connect', () => {
-  console.log('✅ Database connected successfully');
-  if (process.env.DATABASE_URL) {
-    console.log('🔗 Using Supabase connection');
-  } else {
-    console.log('🔗 Using local PostgreSQL connection');
-  }
+  console.log('Database connected successfully');
+  console.log('Using Supabase Postgres connection');
 });
 
 pool.on('error', (err) => {
-  console.error('❌ Unexpected database error:', err);
+  console.error('Unexpected database error:', err);
   process.exit(-1);
 });
 

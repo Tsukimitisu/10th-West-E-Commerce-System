@@ -9,9 +9,17 @@ const seedData = async () => {
 
     // Check if data already exists
     const userCheck = await client.query('SELECT COUNT(*) FROM users');
-    if (parseInt(userCheck.rows[0].count) > 0) {
-      console.log('⚠️  Database already contains data. Skipping seed.');
+    const existingCount = parseInt(userCheck.rows[0].count);
+    const force = process.argv.includes('--force') || process.env.FORCE_SEED === 'true';
+
+    if (existingCount > 0 && !force) {
+      console.log('⚠️  Database already contains data. Skipping seed. Use --force to reseed (destructive).');
       return;
+    }
+
+    if (existingCount > 0 && force) {
+      console.log('⚠️  Force seeding enabled. Truncating seeded tables (this is destructive) ...');
+      await client.query(`TRUNCATE users, categories, products, orders, order_items, cart_items, carts, addresses CASCADE;`);
     }
 
     // Seed Users
