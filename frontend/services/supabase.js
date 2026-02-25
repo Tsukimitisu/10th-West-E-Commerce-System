@@ -3,16 +3,22 @@ import { createClient } from '@supabase/supabase-js';
 // Supabase Configuration
 // Get these from: Supabase Dashboard > Project Settings > API
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabasePublishableKey =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  '';
 
-const hasCredentials = supabaseUrl && supabaseAnonKey && supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY_HERE';
+const hasCredentials =
+  supabaseUrl &&
+  supabasePublishableKey &&
+  supabasePublishableKey !== 'YOUR_SUPABASE_ANON_KEY_HERE';
 
 if (!hasCredentials) {
   console.warn('Missing Supabase environment variables. Using fallback mode. Please check your .env.local file.');
 }
 
 export const supabase = hasCredentials
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabasePublishableKey)
   : null;
 
 // Auth helpers
