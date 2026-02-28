@@ -80,3 +80,4 @@ const AccountLayout = ({ children }) => {
 };
 
 export default AccountLayout;
+
