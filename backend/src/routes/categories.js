@@ -18,11 +18,11 @@ const categoryValidation = [
 // Public routes
 router.get('/', getCategories);
 
-// Protected routes (Admin only)
+// Protected routes (Admin, Super Admin, Owner)
 router.post(
   '/',
   authenticateToken,
-  requireRole('admin'),
+  requireRole('admin', 'super_admin', 'owner'),
   categoryValidation,
   validate,
   createCategory
@@ -31,7 +31,7 @@ router.post(
 router.put(
   '/:id',
   authenticateToken,
-  requireRole('admin'),
+  requireRole('admin', 'super_admin', 'owner'),
   categoryValidation,
   validate,
   updateCategory
@@ -40,7 +40,7 @@ router.put(
 router.delete(
   '/:id',
   authenticateToken,
-  requireRole('admin'),
+  requireRole('admin', 'super_admin', 'owner'),
   deleteCategory
 );
 

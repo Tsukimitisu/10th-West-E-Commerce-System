@@ -3,11 +3,12 @@ import { body } from 'express-validator';
 import passport from '../config/passport.js';
 import {
   register, login, logout, getProfile,
-  forgotPassword, resetPassword, changePassword,
+  forgotPassword, resetPassword, verifyResetToken, changePassword,
   setup2FA, verify2FA, disable2FA,
   oauthCallback,
   getActiveSessions, revokeSession,
   getActivityLogs,
+  deleteAccountHandler, resendVerification,
 } from '../controllers/authController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
@@ -30,9 +31,9 @@ const loginValidation = [
 router.post('/register', registerValidation, validate, register);
 router.post('/login', loginValidation, validate, login);
 router.post('/forgot-password', body('email').isEmail(), validate, forgotPassword);
+router.post('/verify-reset-token', body('token').notEmpty(), validate, verifyResetToken);
 router.post('/reset-password',
   body('token').notEmpty(),
-  body('email').isEmail(),
   body('newPassword').isLength({ min: 8 }),
   validate,
   resetPassword
@@ -74,7 +75,13 @@ router.delete('/2fa', authenticateToken, body('password').notEmpty(), validate, 
 router.get('/sessions', authenticateToken, getActiveSessions);
 router.delete('/sessions/:sessionId', authenticateToken, revokeSession);
 
-// ─── Activity logs (admin only) ────────────────────────────────────
-router.get('/activity-logs', authenticateToken, requireRole('admin'), getActivityLogs);
+// ─── Activity logs (admin, super_admin, owner) ────────────────────────────────
+router.get('/activity-logs', authenticateToken, requireRole('admin', 'super_admin', 'owner'), getActivityLogs);
+
+// ─── Account deletion (Right to be Forgotten - RA 10173) ────────────────────
+router.delete('/account', authenticateToken, deleteAccountHandler);
+
+// ─── Email verification ────────────────────────────────────────────
+router.post('/resend-verification', authenticateToken, resendVerification);
 
 export default router;

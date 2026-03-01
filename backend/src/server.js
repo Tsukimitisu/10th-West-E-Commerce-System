@@ -25,6 +25,15 @@ import supportRoutes from './routes/support.js';
 import faqRoutes from './routes/faqs.js';
 import policyRoutes from './routes/policies.js';
 import staffRoutes from './routes/staff.js';
+import notificationRoutes from './routes/notifications.js';
+import bannerRoutes from './routes/banners.js';
+import supplierRoutes from './routes/suppliers.js';
+import variantRoutes from './routes/variants.js';
+import subcategoryRoutes from './routes/subcategories.js';
+import shippingRoutes from './routes/shipping.js';
+import adminRoutes from './routes/admin.js';
+import { apiLimiter, authLimiter } from './middleware/rateLimiter.js';
+import { errorLogger } from './middleware/errorLogger.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -109,6 +118,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 app.use(activityLogger);
+app.use('/api', apiLimiter);
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -142,11 +152,21 @@ app.use('/api/support', supportRoutes);
 app.use('/api/faqs', faqRoutes);
 app.use('/api/policies', policyRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/banners', bannerRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/variants', variantRoutes);
+app.use('/api/subcategories', subcategoryRoutes);
+app.use('/api/shipping', shippingRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
+
+// Error logging middleware (logs to error_logs table)
+app.use(errorLogger);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

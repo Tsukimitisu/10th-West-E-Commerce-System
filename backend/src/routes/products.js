@@ -23,11 +23,11 @@ const productValidation = [
 router.get('/', getProducts);
 router.get('/:id', getProductById);
 
-// Protected routes (Admin only)
+// Protected routes (Admin, Super Admin, Owner)
 router.post(
   '/',
   authenticateToken,
-  requireRole('admin'),
+  requireRole('admin', 'super_admin', 'owner'),
   productValidation,
   validate,
   createProduct
@@ -36,14 +36,14 @@ router.post(
 router.put(
   '/:id',
   authenticateToken,
-  requireRole('admin'),
+  requireRole('admin', 'super_admin', 'owner'),
   updateProduct
 );
 
 router.delete(
   '/:id',
   authenticateToken,
-  requireRole('admin'),
+  requireRole('admin', 'super_admin', 'owner'),
   deleteProduct
 );
 

@@ -38,7 +38,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
             <p className="text-sm text-gray-500 mb-6">Looks like you haven't added anything yet.</p>
             <button
               onClick={() => { onClose(); navigate('/shop'); }}
-              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+              className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors"
             >
               Browse Products
             </button>
@@ -52,10 +52,10 @@ const CartDrawer = ({ isOpen, onClose }) => {
                     <img src={item.product.image || 'https://via.placeholder.com/80'} alt={item.product.name} className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <Link to={`/products/${item.productId}`} onClick={onClose} className="text-sm font-medium text-gray-900 hover:text-red-600 transition-colors line-clamp-2">
+                    <Link to={`/products/${item.productId}`} onClick={onClose} className="text-sm font-medium text-gray-900 hover:text-orange-500 transition-colors line-clamp-2">
                       {item.product.name}
                     </Link>
-                    <p className="text-sm font-bold text-red-600 mt-1">
+                    <p className="text-sm font-bold text-orange-500 mt-1">
                       {formatPrice((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity)}
                     </p>
                     <div className="flex items-center justify-between mt-2">
@@ -64,7 +64,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
                         <span className="px-3 py-1 text-sm font-medium min-w-[2rem] text-center">{item.quantity}</span>
                         <button onClick={() => updateQuantity(item.productId, item.quantity + 1)} className="px-2 py-1 text-gray-500 hover:bg-gray-50 transition-colors"><Plus size={14} /></button>
                       </div>
-                      <button onClick={() => removeFromCart(item.productId)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                      <button onClick={() => removeFromCart(item.productId)} className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors">
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -96,7 +96,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
                     navigate('/checkout');
                   }
                 }}
-                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 Checkout <ArrowRight size={16} />
               </button>
@@ -113,15 +113,15 @@ const CartDrawer = ({ isOpen, onClose }) => {
                 <X size={18} />
               </button>
               <div className="text-center">
-                <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <LogIn size={24} className="text-red-600" />
+                <div className="w-14 h-14 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <LogIn size={24} className="text-orange-500" />
                 </div>
                 <h3 className="font-display font-bold text-base text-gray-900 mb-1">Login Required</h3>
                 <p className="text-sm text-gray-500 mb-5">You need to sign in to proceed to checkout.</p>
                 <div className="space-y-2">
                   <button
                     onClick={() => { setShowLoginModal(false); onClose(); navigate('/login?redirect=/checkout'); }}
-                    className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+                    className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
                   >
                     <LogIn size={16} /> Sign In
                   </button>

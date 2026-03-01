@@ -30,9 +30,9 @@ const Footer = () => {
                 <input
                   type="email" value={email} onChange={e => setEmail(e.target.value)} required
                   placeholder="Enter your email"
-                  className="flex-1 md:w-72 px-4 py-3 bg-gray-800 border border-gray-700 rounded-l-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
+                  className="flex-1 md:w-72 px-4 py-3 bg-gray-800 border border-gray-700 rounded-l-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
                 />
-                <button type="submit" className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-r-lg transition-colors flex items-center gap-2">
+                <button type="submit" className="px-5 py-3 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-r-lg transition-colors flex items-center gap-2">
                   <Send size={16} /> Subscribe
                 </button>
               </form>
@@ -47,12 +47,12 @@ const Footer = () => {
           {/* Brand */}
           <div>
             <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm font-display">10</span>
               </div>
               <div>
                 <span className="font-display font-bold text-white text-lg leading-none">10TH WEST</span>
-                <span className="block text-[10px] font-semibold tracking-[0.2em] text-red-500 uppercase">Moto Parts</span>
+                <span className="block text-[10px] font-semibold tracking-[0.2em] text-orange-500 uppercase">Moto Parts</span>
               </div>
             </Link>
             <p className="text-sm text-gray-400 mb-4 leading-relaxed">
@@ -95,9 +95,9 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-semibold text-white mb-4">Connect With Us</h4>
             <div className="flex gap-3 mb-6">
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"><Facebook size={18} /></a>
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"><Instagram size={18} /></a>
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"><Youtube size={18} /></a>
+              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-orange-500 rounded-lg flex items-center justify-center transition-colors"><Facebook size={18} /></a>
+              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-orange-500 rounded-lg flex items-center justify-center transition-colors"><Instagram size={18} /></a>
+              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-orange-500 rounded-lg flex items-center justify-center transition-colors"><Youtube size={18} /></a>
             </div>
             <h4 className="font-display font-semibold text-white mb-3">We Accept</h4>
             <div className="flex flex-wrap gap-2">
@@ -113,14 +113,21 @@ const Footer = () => {
         </div>
       </div>
 
-      {/* Bottom bar */}
+      {/* Legal / Business Info */}
       <div className="border-t border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-500">
-          <p>&copy; {new Date().getFullYear()} 10th West Moto Parts. All rights reserved.</p>
-          <div className="flex gap-4">
-            <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-white transition-colors">Return Policy</a>
+        <div className="max-w-7xl mx-auto px-4 py-4 space-y-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-500">
+            <p>&copy; {new Date().getFullYear()} 10th West Moto Parts. All rights reserved.</p>
+            <div className="flex gap-4">
+              <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+              <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+              <Link to="/return-policy" className="hover:text-white transition-colors">Return Policy</Link>
+            </div>
+          </div>
+          <div className="text-center text-[10px] text-gray-600 leading-relaxed">
+            <p>10th West Moto Parts | DTI Business Name Registration No. 3217456 | BIR TIN: 123-456-789-000</p>
+            <p>Registered Address: Unit 10, West Avenue Commercial Center, Quezon City, Metro Manila 1104, Philippines</p>
+            <p className="mt-1">Data Protection Officer: <a href="mailto:dpo@10thwestmoto.com" className="text-gray-400 hover:text-white">dpo@10thwestmoto.com</a> | NPC Registration No. PIC-001-2025-0001</p>
           </div>
         </div>
       </div>

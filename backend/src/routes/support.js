@@ -18,9 +18,9 @@ router.post('/', createTicket); // Allow both authenticated and guest submission
 router.get('/my-tickets', authenticateToken, getUserTickets);
 
 // Admin routes
-router.get('/', authenticateToken, requireRole('admin'), getAllTickets);
+router.get('/', authenticateToken, requireRole('admin', 'super_admin', 'owner'), getAllTickets);
 router.get('/:id', authenticateToken, getTicketById);
-router.put('/:id/status', authenticateToken, requireRole('admin'), updateTicketStatus);
-router.delete('/:id', authenticateToken, requireRole('admin'), deleteTicket);
+router.put('/:id/status', authenticateToken, requireRole('admin', 'super_admin', 'owner'), updateTicketStatus);
+router.delete('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner'), deleteTicket);
 
 export default router;

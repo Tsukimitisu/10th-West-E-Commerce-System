@@ -13,8 +13,8 @@ const router = express.Router();
 router.get('/:type', getPolicyByType);
 
 // Admin routes
-router.get('/', authenticateToken, requireRole('admin'), getAllPolicies);
-router.put('/:type', authenticateToken, requireRole('admin'), upsertPolicy);
-router.delete('/:type', authenticateToken, requireRole('admin'), deletePolicy);
+router.get('/', authenticateToken, requireRole('admin', 'super_admin', 'owner'), getAllPolicies);
+router.put('/:type', authenticateToken, requireRole('admin', 'super_admin', 'owner'), upsertPolicy);
+router.delete('/:type', authenticateToken, requireRole('admin', 'super_admin', 'owner'), deletePolicy);
 
 export default router;

@@ -9,14 +9,14 @@ const Toast = ({ message, type = 'info', duration = 5000, onClose }) => {
 
     const icons = {
         success: <CheckCircle className="text-green-500" size={18} />,
-        error: <AlertCircle className="text-red-500" size={18} />,
+        error: <AlertCircle className="text-orange-500" size={18} />,
         info: <Info className="text-blue-500" size={18} />,
         order: <Bell className="text-purple-500" size={18} />,
     };
 
     const bgColors = {
         success: 'bg-green-50 border-green-100',
-        error: 'bg-red-50 border-red-100',
+        error: 'bg-orange-50 border-orange-100',
         info: 'bg-blue-50 border-blue-100',
         order: 'bg-purple-50 border-purple-100',
     };

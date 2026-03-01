@@ -63,8 +63,8 @@ export const requirePermission = (permissionName) => {
   return async (req, res, next) => {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    // Admin always has all permissions
-    if (req.user.role === 'admin') return next();
+    // Admin, super_admin, owner always have all permissions
+    if (['admin', 'super_admin', 'owner'].includes(req.user.role)) return next();
 
     try {
       // Check role permissions + user-specific overrides

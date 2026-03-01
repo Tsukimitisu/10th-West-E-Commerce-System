@@ -23,11 +23,11 @@ const FilterSidebar = ({
           <SlidersHorizontal size={18} className="text-gray-600" />
           <span className="font-display font-semibold text-gray-900">Filters</span>
           {activeFilterCount > 0 && (
-            <span className="bg-red-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>
+            <span className="bg-orange-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>
           )}
         </div>
         {activeFilterCount > 0 && (
-          <button onClick={onClearAll} className="text-xs text-red-600 hover:text-red-700 font-medium">Clear All</button>
+          <button onClick={onClearAll} className="text-xs text-orange-500 hover:text-orange-600 font-medium">Clear All</button>
         )}
         {onMobileClose && (
           <button onClick={onMobileClose} className="p-1 text-gray-400 hover:text-gray-600 lg:hidden">
@@ -41,7 +41,7 @@ const FilterSidebar = ({
         <div className="space-y-1">
           <button
             onClick={() => onCategoryChange('')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!selectedCategory ? 'bg-red-50 text-red-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!selectedCategory ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
           >
             All Categories
           </button>
@@ -49,7 +49,7 @@ const FilterSidebar = ({
             <button
               key={cat.id}
               onClick={() => onCategoryChange(String(cat.id))}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedCategory === String(cat.id) ? 'bg-red-50 text-red-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedCategory === String(cat.id) ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               {cat.name}
             </button>
@@ -63,7 +63,7 @@ const FilterSidebar = ({
           <div className="space-y-1">
             <button
               onClick={() => onBrandChange('')}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!selectedBrand ? 'bg-red-50 text-red-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!selectedBrand ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
             >
               All Brands
             </button>
@@ -71,7 +71,7 @@ const FilterSidebar = ({
               <button
                 key={brand}
                 onClick={() => onBrandChange(brand)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedBrand === brand ? 'bg-red-50 text-red-600 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedBrand === brand ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
               >
                 {brand}
               </button>
@@ -89,7 +89,7 @@ const FilterSidebar = ({
               <input
                 type="number" min={0} value={priceRange[0]}
                 onChange={e => onPriceChange([Number(e.target.value), priceRange[1]])}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -97,7 +97,7 @@ const FilterSidebar = ({
               <input
                 type="number" min={0} value={priceRange[1]}
                 onChange={e => onPriceChange([priceRange[0], Number(e.target.value)])}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -109,7 +109,7 @@ const FilterSidebar = ({
         <label className="flex items-center gap-3 px-2 cursor-pointer">
           <input
             type="checkbox" checked={inStockOnly} onChange={e => onStockChange(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+            className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
           />
           <span className="text-sm text-gray-600">In stock only</span>
         </label>

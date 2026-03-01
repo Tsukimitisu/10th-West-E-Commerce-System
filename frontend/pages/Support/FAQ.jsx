@@ -51,14 +51,14 @@ const FAQ = () => {
       <div className="relative mb-6">
         <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
         <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search questions..."
-          className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+          className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
       </div>
 
       {/* Categories */}
       <div className="flex gap-2 mb-6 flex-wrap">
         {categories.map(cat => (
           <button key={cat} onClick={() => { setActiveCategory(cat); setOpenIndex(null); }}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${activeCategory === cat ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${activeCategory === cat ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
             {cat}
           </button>
         ))}
@@ -73,17 +73,17 @@ const FAQ = () => {
       ) : (
         <div className="space-y-2">
           {filtered.map((faq, i) => (
-            <div key={i} className={`bg-white rounded-xl border transition-all ${openIndex === i ? 'border-red-200 shadow-sm' : 'border-gray-100'}`}>
+            <div key={i} className={`bg-white rounded-xl border transition-all ${openIndex === i ? 'border-orange-200 shadow-sm' : 'border-gray-100'}`}>
               <button onClick={() => setOpenIndex(openIndex === i ? null : i)}
                 className="w-full flex items-center justify-between p-4 text-left">
                 <div className="flex items-start gap-3 flex-1">
-                  <HelpCircle size={16} className={`mt-0.5 flex-shrink-0 ${openIndex === i ? 'text-red-500' : 'text-gray-400'}`} />
+                  <HelpCircle size={16} className={`mt-0.5 flex-shrink-0 ${openIndex === i ? 'text-orange-500' : 'text-gray-400'}`} />
                   <div>
                     <p className={`text-sm font-medium ${openIndex === i ? 'text-gray-900' : 'text-gray-700'}`}>{faq.question}</p>
                     <span className="text-xs text-gray-400 mt-0.5">{faq.category}</span>
                   </div>
                 </div>
-                {openIndex === i ? <ChevronUp size={16} className="text-red-500" /> : <ChevronDown size={16} className="text-gray-400" />}
+                {openIndex === i ? <ChevronUp size={16} className="text-orange-500" /> : <ChevronDown size={16} className="text-gray-400" />}
               </button>
               {openIndex === i && (
                 <div className="px-4 pb-4 pl-11">
@@ -99,7 +99,7 @@ const FAQ = () => {
       <div className="mt-10 bg-gray-50 rounded-xl p-6 text-center">
         <h3 className="font-semibold text-gray-900 mb-1">Still need help?</h3>
         <p className="text-sm text-gray-500 mb-4">Our support team is ready to assist you.</p>
-        <Link to="/contact" className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
+        <Link to="/contact" className="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">
           <MessageSquare size={16} /> Contact Support
         </Link>
       </div>

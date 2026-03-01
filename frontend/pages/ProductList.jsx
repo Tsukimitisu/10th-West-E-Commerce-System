@@ -101,7 +101,7 @@ const ProductList = () => {
       <div className="bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
-            <Link to="/" className="hover:text-red-600 transition-colors">Home</Link>
+            <Link to="/" className="hover:text-orange-500 transition-colors">Home</Link>
             <ChevronRight size={14} />
             <span className="text-gray-900 font-medium">{categoryName || 'Shop'}</span>
           </div>
@@ -118,7 +118,7 @@ const ProductList = () => {
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search products..."
-                  className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
                 {searchQuery && (
                   <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
@@ -129,7 +129,7 @@ const ProductList = () => {
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 hidden md:block"
+                className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 hidden md:block"
               >
                 <option value="newest">Newest</option>
                 <option value="price-asc">Price: Low to High</option>
@@ -143,7 +143,7 @@ const ProductList = () => {
               </div>
               <button onClick={() => setMobileFiltersOpen(true)} className="lg:hidden p-2 border border-gray-200 rounded-lg text-gray-600 relative">
                 <SlidersHorizontal size={18} />
-                {activeFilterCount > 0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{activeFilterCount}</span>}
+                {activeFilterCount > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{activeFilterCount}</span>}
               </button>
             </div>
           </div>
@@ -195,7 +195,7 @@ const ProductList = () => {
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-2">No products found</h3>
                 <p className="text-sm text-gray-500 mb-4">Try adjusting your filters or search query.</p>
-                <button onClick={clearAllFilters} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
+                <button onClick={clearAllFilters} className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">
                   Clear All Filters
                 </button>
               </div>

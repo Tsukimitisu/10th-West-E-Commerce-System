@@ -141,6 +141,28 @@ const migrateAuth = async () => {
         ON CONFLICT DO NOTHING;
       `, [perm]);
     }
+
+    // Assign owner all permissions (like admin)
+    await client.query(`
+      INSERT INTO role_permissions (role, permission_id)
+      SELECT 'owner', id FROM permissions
+      ON CONFLICT DO NOTHING;
+    `);
+
+    // Assign store_staff permissions
+    const storeStaffPerms = [
+      'products.view', 'orders.view', 'orders.edit',
+      'pos.access', 'returns.view', 'returns.process',
+      'customers.view', 'inventory.view', 'inventory.manage'
+    ];
+    for (const perm of storeStaffPerms) {
+      await client.query(`
+        INSERT INTO role_permissions (role, permission_id)
+        SELECT 'store_staff', id FROM permissions WHERE name = $1
+        ON CONFLICT DO NOTHING;
+      `, [perm]);
+    }
+
     console.log('✅ Role permissions assigned');
 
     // ── 6. Sessions table (for session management) ─────────────────

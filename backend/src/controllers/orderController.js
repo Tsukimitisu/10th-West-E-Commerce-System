@@ -124,7 +124,7 @@ export const updateOrderStatus = async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  const validStatuses = ['pending', 'paid', 'shipped', 'completed', 'cancelled'];
+  const validStatuses = ['pending', 'paid', 'preparing', 'shipped', 'completed', 'cancelled'];
 
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: 'Invalid status' });
@@ -149,6 +149,47 @@ export const updateOrderStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('Update order status error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Cancel order (customer - only if not yet shipped/preparing)
+export const cancelOrder = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  try {
+    const orderResult = await pool.query('SELECT * FROM orders WHERE id = $1', [id]);
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const order = orderResult.rows[0];
+
+    // Customers can only cancel their own orders
+    if (order.user_id !== userId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Only allow cancellation if not yet shipped
+    if (order.status !== 'pending' && order.status !== 'paid') {
+      return res.status(400).json({ message: 'Order cannot be cancelled once it is being prepared or shipped' });
+    }
+
+    const result = await pool.query(
+      'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      ['cancelled', id]
+    );
+
+    const updatedOrder = result.rows[0];
+    emitOrderStatusUpdate(updatedOrder);
+
+    res.json({
+      message: 'Order cancelled successfully',
+      order: updatedOrder
+    });
+  } catch (error) {
+    console.error('Cancel order error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -359,7 +400,14 @@ export const getOrderInvoice = async (req, res) => {
 
     const items = itemsResult.rows;
 
-    // Generate invoice HTML
+    // Generate invoice HTML (BIR RR 18-2012 compliant)
+    const subtotal = items.reduce((sum, item) => sum + parseFloat(item.product_price) * item.quantity, 0);
+    const discount = parseFloat(order.discount_amount || 0);
+    const totalAmount = parseFloat(order.total_amount);
+    const vatRate = 0.12;
+    const vatableSales = totalAmount / (1 + vatRate);
+    const vatAmount = totalAmount - vatableSales;
+
     const invoiceHTML = `
       <!DOCTYPE html>
       <html>
@@ -369,15 +417,17 @@ export const getOrderInvoice = async (req, res) => {
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
-          .invoice-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #4F46E5; padding-bottom: 20px; }
-          .company-name { font-size: 28px; font-weight: bold; color: #4F46E5; }
+          .invoice-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #F97316; padding-bottom: 20px; }
+          .company-name { font-size: 28px; font-weight: bold; color: #F97316; }
+          .company-info { font-size: 11px; color: #666; margin-top: 6px; line-height: 1.6; }
           .invoice-title { font-size: 20px; margin-top: 10px; }
+          .or-number { font-size: 13px; color: #F97316; font-weight: bold; margin-top: 4px; }
           .info-section { display: flex; justify-content: space-between; margin: 30px 0; }
           .info-block { flex: 1; }
           .info-block h3 { font-size: 14px; color: #666; margin-bottom: 10px; }
           .info-block p { font-size: 14px; line-height: 1.6; }
           table { width: 100%; border-collapse: collapse; margin: 30px 0; }
-          thead { background-color: #4F46E5; color: white; }
+          thead { background-color: #F97316; color: white; }
           th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
           th { font-weight: bold; }
           .item-description { max-width: 300px; }
@@ -385,8 +435,10 @@ export const getOrderInvoice = async (req, res) => {
           .totals { margin-top: 20px; text-align: right; }
           .totals table { width: 300px; margin-left: auto; }
           .totals td { padding: 8px; }
-          .totals .grand-total { font-size: 18px; font-weight: bold; background-color: #f5f5f5; }
-          .footer { margin-top: 50px; text-align: center; color: #666; font-size: 12px; padding-top: 20px; border-top: 1px solid #ddd; }
+          .totals .grand-total { font-size: 18px; font-weight: bold; background-color: #FFF7ED; }
+          .vat-section { font-size: 12px; color: #666; }
+          .footer { margin-top: 50px; text-align: center; color: #666; font-size: 11px; padding-top: 20px; border-top: 1px solid #ddd; line-height: 1.8; }
+          .legal-note { margin-top: 20px; font-size: 10px; color: #999; text-align: center; border-top: 1px dashed #ddd; padding-top: 15px; }
           @media print {
             body { padding: 20px; }
             .no-print { display: none; }
@@ -396,12 +448,18 @@ export const getOrderInvoice = async (req, res) => {
       <body>
         <div class="invoice-header">
           <div class="company-name">10TH WEST MOTO</div>
-          <div class="invoice-title">INVOICE</div>
+          <div class="company-info">
+            Motorcycle Parts &amp; Accessories<br>
+            Unit 10, West Avenue Commercial Center, Quezon City, Metro Manila 1104, Philippines<br>
+            DTI Reg. No.: 3217456 &nbsp;|&nbsp; BIR TIN: 123-456-789-000 (VAT Registered)
+          </div>
+          <div class="invoice-title">OFFICIAL RECEIPT / INVOICE</div>
+          <div class="or-number">OR No.: OR-${String(order.id).padStart(8, '0')}</div>
         </div>
 
         <div class="info-section">
           <div class="info-block">
-            <h3>INVOICE TO:</h3>
+            <h3>SOLD TO:</h3>
             <p>
               <strong>${order.customer_name || 'Customer'}</strong><br>
               ${order.customer_email || ''}<br>
@@ -412,7 +470,8 @@ export const getOrderInvoice = async (req, res) => {
             <h3>INVOICE DETAILS:</h3>
             <p>
               <strong>Invoice #:</strong> ${order.id}<br>
-              <strong>Order Date:</strong> ${new Date(order.created_at).toLocaleDateString()}<br>
+              <strong>OR No.:</strong> OR-${String(order.id).padStart(8, '0')}<br>
+              <strong>Date:</strong> ${new Date(order.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
               <strong>Payment Method:</strong> ${order.payment_method || 'N/A'}<br>
               <strong>Status:</strong> ${order.status.toUpperCase()}
             </p>
@@ -444,31 +503,48 @@ export const getOrderInvoice = async (req, res) => {
  
         <div class="totals">
           <table>
-            <tr>
-              <td>Subtotal:</td>
-              <td class="text-right">₱${parseFloat(order.total_amount).toFixed(2)}</td>
+            <tr class="vat-section">
+              <td>VATable Sales:</td>
+              <td class="text-right">₱${vatableSales.toFixed(2)}</td>
             </tr>
-            ${order.discount_amount && parseFloat(order.discount_amount) > 0 ? `
+            <tr class="vat-section">
+              <td>VAT (12%):</td>
+              <td class="text-right">₱${vatAmount.toFixed(2)}</td>
+            </tr>
+            ${discount > 0 ? `
             <tr>
               <td>Discount:</td>
-              <td class="text-right">-₱${parseFloat(order.discount_amount).toFixed(2)}</td>
+              <td class="text-right">-₱${discount.toFixed(2)}</td>
             </tr>
             ` : ''}
             <tr class="grand-total">
-              <td><strong>TOTAL:</strong></td>
-              <td class="text-right"><strong>₱${parseFloat(order.total_amount).toFixed(2)}</strong></td>
+              <td><strong>TOTAL (VAT Inclusive):</strong></td>
+              <td class="text-right"><strong>₱${totalAmount.toFixed(2)}</strong></td>
             </tr>
           </table>
         </div>
 
         <div class="footer">
-          <p>10th West Moto - Motorcycle Parts & Accessories</p>
+          <p><strong>10th West Moto Parts</strong></p>
+          <p>Unit 10, West Avenue Commercial Center, Quezon City, Metro Manila 1104</p>
+          <p>BIR TIN: 123-456-789-000 &nbsp;|&nbsp; DTI Reg. No.: 3217456</p>
+          <p>Phone: (02) 8888-1234 &nbsp;|&nbsp; Email: support@10thwestmoto.com</p>
           <p>Thank you for your business!</p>
+        </div>
+
+        <div class="legal-note">
+          <p>This document serves as an Official Receipt per BIR Revenue Regulations No. 18-2012.</p>
+          <p>For returns, you may return products within 7 days of delivery per DTI DAO 21-01.</p>
+          <p>For questions, contact returns@10thwestmoto.com or call (02) 8888-1234.</p>
         </div>
       </body>
       </html>
     `;
-
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+ 
     // Set content type to HTML
     res.setHeader('Content-Type', 'text/html');
     res.send(invoiceHTML);

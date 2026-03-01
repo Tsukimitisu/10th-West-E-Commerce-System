@@ -22,17 +22,19 @@ const seedData = async () => {
       await client.query(`TRUNCATE users, categories, products, orders, order_items, cart_items, carts, addresses CASCADE;`);
     }
 
-    // Seed Users
-    const hashedAdminPassword = await bcrypt.hash('admin123', 10);
-    const hashedCashierPassword = await bcrypt.hash('cashier123', 10);
-    const hashedCustomerPassword = await bcrypt.hash('customer123', 10);
+    // Seed Users (4 roles only)
+    const hashedSuperAdminPassword = await bcrypt.hash('Admin@123', 10);
+    const hashedOwnerPassword = await bcrypt.hash('Admin@123', 10);
+    const hashedStaffPassword = await bcrypt.hash('Staff@123', 10);
+    const hashedCustomerPassword = await bcrypt.hash('Customer@123', 10);
 
     await client.query(`
       INSERT INTO users (name, email, password_hash, role, phone) VALUES
-      ('Admin User', 'admin@10thwest.com', $1, 'admin', '555-0001'),
-      ('Cashier Staff', 'cashier@10thwest.com', $2, 'cashier', '555-0002'),
-      ('Moto Rider', 'customer@10thwest.com', $3, 'customer', '555-0101');
-    `, [hashedAdminPassword, hashedCashierPassword, hashedCustomerPassword]);
+      ('Super Admin', 'superadmin@10thwest.com', $1, 'super_admin', '555-0001'),
+      ('Store Owner', 'owner@10thwest.com', $2, 'owner', '555-0002'),
+      ('Store Staff', 'staff@10thwest.com', $3, 'store_staff', '555-0003'),
+      ('Moto Rider', 'customer@10thwest.com', $4, 'customer', '555-0101');
+    `, [hashedSuperAdminPassword, hashedOwnerPassword, hashedStaffPassword, hashedCustomerPassword]);
     console.log('✅ Users seeded');
 
     // Seed Categories

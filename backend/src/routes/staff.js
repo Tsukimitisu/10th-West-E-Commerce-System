@@ -11,8 +11,8 @@ import { validate } from '../middleware/validator.js';
 
 const router = express.Router();
 
-// All staff routes require admin
-router.use(authenticateToken, requireRole('admin'));
+// All staff routes require super_admin, admin, or owner
+router.use(authenticateToken, requireRole('super_admin', 'admin', 'owner'));
 
 // Staff CRUD
 router.get('/', listStaff);
@@ -22,14 +22,14 @@ router.post('/',
   body('name').trim().notEmpty(),
   body('email').isEmail(),
   body('password').isLength({ min: 8 }),
-  body('role').isIn(['admin', 'cashier']),
+  body('role').isIn(['admin', 'cashier', 'store_staff', 'owner']),
   validate,
   addStaff
 );
 router.put('/:id',
   body('name').trim().notEmpty(),
   body('email').isEmail(),
-  body('role').isIn(['admin', 'cashier']),
+  body('role').isIn(['admin', 'cashier', 'store_staff', 'owner']),
   validate,
   editStaff
 );
