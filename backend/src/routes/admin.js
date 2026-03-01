@@ -133,6 +133,36 @@ router.patch('/users/:id/role', async (req, res) => {
   }
 });
 
+// Delete user (any role)
+router.delete('/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Can't delete yourself
+    if (parseInt(id) === req.user.id) {
+      return res.status(400).json({ message: 'Cannot delete your own account' });
+    }
+    const result = await pool.query('SELECT id, name, email, role FROM users WHERE id = $1', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
+
+    const user = result.rows[0];
+    // Invalidate sessions
+    await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [id]);
+    // Remove permissions
+    try { await pool.query('DELETE FROM user_permissions WHERE user_id = $1', [id]); } catch {}
+    // Delete user
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    // Log
+    await pool.query(
+      'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
+      [req.user.id, 'admin_delete_user', JSON.stringify({ deleted_user_id: parseInt(id), name: user.name, email: user.email, role: user.role }), req.ip]
+    );
+    res.json({ message: 'User deleted successfully' });
+  } catch (err) {
+    console.error('Delete user error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // ==================== SYSTEM SETTINGS ====================
 
 // Get all settings or by category

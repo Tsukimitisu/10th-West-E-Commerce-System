@@ -14,6 +14,7 @@ const OrderDetail = () => {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelError, setCancelError] = useState('');
 
   const loadOrder = async () => {
     try { const data = await getOrderById(Number(id)); setOrder(data); } catch {}
@@ -31,7 +32,8 @@ const OrderDetail = () => {
       await loadOrder();
       setShowCancelConfirm(false);
     } catch (err) {
-      alert('Failed to cancel order: ' + (err.message || 'Unknown error'));
+      setCancelError('Failed to cancel order: ' + (err.message || 'Unknown error'));
+      setTimeout(() => setCancelError(''), 5000);
     }
     setCancelling(false);
   };
@@ -108,6 +110,11 @@ const OrderDetail = () => {
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-5">Are you sure you want to cancel Order #{order.order_number || order.id}?</p>
+            {cancelError && (
+              <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+                <AlertTriangle size={14} /> {cancelError}
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowCancelConfirm(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Keep Order</button>
               <button onClick={handleCancel} disabled={cancelling}

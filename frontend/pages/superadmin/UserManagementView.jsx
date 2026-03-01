@@ -7,7 +7,7 @@ import {
 import {
   adminGetAllUsers, adminLockUser, adminUnlockUser,
   adminResetUserPassword, adminUpdateUserRole,
-  addStaff, editStaff, deleteStaff
+  addStaff, editStaff, adminDeleteUser
 } from '../../services/api';
 
 const ROLES = [
@@ -32,6 +32,7 @@ const UserManagementView = () => {
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'store_staff', password: '' });
   const [resetPwForm, setResetPwForm] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const currentUser = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
 
@@ -122,11 +123,16 @@ const UserManagementView = () => {
 
   const handleDeleteUser = async (user) => {
     if (user.id === currentUser.id) return showMessage('error', 'Cannot delete your own account');
-    if (!confirm(`Delete ${user.name}? This cannot be undone.`)) return;
-    setActionLoading(`del-${user.id}`);
+    setDeleteTarget(user);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!deleteTarget) return;
+    setActionLoading(`del-${deleteTarget.id}`);
     try {
-      await deleteStaff(user.id);
-      showMessage('success', `${user.name} deleted`);
+      await adminDeleteUser(deleteTarget.id);
+      showMessage('success', `${deleteTarget.name} deleted`);
+      setDeleteTarget(null);
       loadUsers();
     } catch (e) { showMessage('error', e.message); }
     setActionLoading('');
@@ -435,6 +441,37 @@ const UserManagementView = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle size={20} className="text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Delete User</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-1">Are you sure you want to delete:</p>
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 mb-4">
+              <p className="text-sm font-semibold text-gray-900">{deleteTarget.name}</p>
+              <p className="text-xs text-gray-400">{deleteTarget.email}</p>
+              <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-600">{deleteTarget.role}</span>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle size={12} /> This action cannot be undone. All user data will be permanently removed.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
+              <button onClick={confirmDeleteUser} disabled={actionLoading === `del-${deleteTarget.id}`}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2">
+                {actionLoading === `del-${deleteTarget.id}` && <Loader2 size={14} className="animate-spin" />}
+                Delete User
+              </button>
+            </div>
           </div>
         </div>
       )}

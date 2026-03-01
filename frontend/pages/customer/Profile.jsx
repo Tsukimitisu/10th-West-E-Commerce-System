@@ -24,6 +24,7 @@ const Profile = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
@@ -113,7 +114,8 @@ const Profile = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert(err.message || 'Failed to export data');
+      setExportError(err.message || 'Failed to export data');
+      setTimeout(() => setExportError(''), 5000);
     } finally {
       setExportLoading(false);
     }
@@ -267,6 +269,11 @@ const Profile = () => {
             {exportLoading ? <div className="w-4 h-4 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin" /> : <Download size={14} />}
             {exportLoading ? 'Preparing...' : 'Download My Data'}
           </button>
+          {exportError && (
+            <div className="mt-3 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+              <AlertCircle size={14} /> {exportError}
+            </div>
+          )}
         </div>
 
         {/* Delete Account - Right to be Forgotten (RA 10173 §18) */}

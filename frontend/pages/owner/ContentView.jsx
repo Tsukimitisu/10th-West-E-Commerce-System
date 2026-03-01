@@ -126,7 +126,7 @@ const ContentView = () => {
       await loadFaqs();
     } catch (err) {
       console.error('Failed to save FAQ:', err);
-      alert('Failed to save FAQ. Please try again.');
+      setFaqError('Failed to save FAQ. Please try again.');
     }
     setFaqSaving(false);
   };
@@ -138,7 +138,7 @@ const ContentView = () => {
       await loadFaqs();
     } catch (err) {
       console.error('Failed to delete FAQ:', err);
-      alert('Failed to delete FAQ.');
+      setFaqError('Failed to delete FAQ.');
     }
   };
 

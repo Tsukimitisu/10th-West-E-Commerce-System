@@ -22,7 +22,7 @@ import FAQ from './pages/Support/FAQ';
 import PrivacyPolicy from './pages/Support/PrivacyPolicy';
 import TermsOfService from './pages/Support/TermsOfService';
 import ReturnPolicy from './pages/Support/ReturnPolicy';
-import CookieConsent from './components/CookieConsent';
+import PrivacyBanner from './components/PrivacyBanner';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
 import RequestReturn from './pages/customer/RequestReturn';
 import MyReturns from './pages/customer/MyReturns';
@@ -82,7 +82,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
         </Routes>
       </div>
       {!hideChrome && !isSuperAdmin && <Footer />}
-      <CookieConsent />
+      <PrivacyBanner />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getProducts, getCategories, createOrder, getOrderById } from '../../services/api';
-import { Loader2, Search, Trash2, Plus, Minus, LogOut, RotateCcw, Monitor, ShoppingBag, Bike, Box, ArrowLeftCircle, Tag, Check, Clock, DollarSign, Receipt } from 'lucide-react';
+import { Loader2, Search, Trash2, Plus, Minus, LogOut, RotateCcw, Monitor, ShoppingBag, Bike, Box, ArrowLeftCircle, Tag, Check, Clock, DollarSign, Receipt, AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
 import PaymentModal from './PaymentModal';
 import ReceiptModal from './ReceiptModal';
 import { useSocketEvent } from '../../context/SocketContext';
@@ -35,6 +35,16 @@ const PosTerminal = () => {
 
     // Logout Confirmation
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+    // Toast notification
+    const [posToast, setPosToast] = useState(null);
+    const toastTimerRef = useRef(null);
+
+    const showToast = (type, text, duration = 3000) => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setPosToast({ type, text });
+        toastTimerRef.current = setTimeout(() => setPosToast(null), duration);
+    };
 
     // Shift Summary State
     const [shiftStartTime] = useState(() => new Date());
@@ -80,7 +90,7 @@ const PosTerminal = () => {
 
             // Check stock before adding
             if (existing && existing.quantity >= product.stock_quantity) {
-                alert("Insufficient Stock!");
+                showToast('error', 'Insufficient Stock!');
                 return current;
             }
 
@@ -133,9 +143,9 @@ const PosTerminal = () => {
         try {
             const order = await getOrderById(Number(returnOrderId));
             if (order) setReturnOrder(order);
-            else alert("Order not found");
+            else showToast('error', 'Order not found');
         } catch (e) {
-            alert("Error finding order");
+            showToast('error', 'Error finding order');
         }
     };
 
@@ -148,7 +158,7 @@ const PosTerminal = () => {
     };
 
     const processReturn = () => {
-        alert("Return Processed & Inventory Updated!");
+        showToast('success', 'Return Processed & Inventory Updated!');
         setReturnMode(false);
         setReturnOrder(null);
         setReturnItems({});
@@ -235,7 +245,7 @@ const PosTerminal = () => {
             // Refresh inventory after sale
             fetchData();
         } catch (e) {
-            alert(`Transaction failed: ${e.message}`);
+            showToast('error', `Transaction failed: ${e.message}`);
         }
     };
 
@@ -684,6 +694,21 @@ const PosTerminal = () => {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Toast Notification */}
+            {posToast && (
+                <div className={`fixed top-6 right-6 z-[100] flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium animate-in slide-in-from-right ${
+                    posToast.type === 'error' ? 'bg-red-600 text-white' :
+                    posToast.type === 'success' ? 'bg-green-600 text-white' :
+                    'bg-blue-600 text-white'
+                }`}>
+                    {posToast.type === 'error' && <AlertTriangle size={16} />}
+                    {posToast.type === 'success' && <CheckCircle size={16} />}
+                    {posToast.type === 'info' && <Info size={16} />}
+                    <span>{posToast.text}</span>
+                    <button onClick={() => setPosToast(null)} className="ml-2 hover:opacity-70"><X size={14} /></button>
                 </div>
             )}
         </div>

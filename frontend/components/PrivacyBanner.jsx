@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, X } from 'lucide-react';
 
-const CookieConsent = () => {
+const PrivacyBanner = () => {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -72,4 +72,4 @@ const CookieConsent = () => {
   );
 };
 
-export default CookieConsent;
+export default PrivacyBanner;

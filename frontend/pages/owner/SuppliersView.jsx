@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, Plus, Edit3, Trash2, Search, Phone, Mail, MapPin, X, Check, AlertCircle } from 'lucide-react';
+import { Truck, Plus, Edit3, Trash2, Search, Phone, Mail, MapPin, X, Check, AlertCircle, AlertTriangle } from 'lucide-react';
 import { getSuppliers, addSupplier, updateSupplier, deleteSupplier } from '../../services/api';
 
 const SuppliersView = () => {
@@ -11,6 +11,7 @@ const SuppliersView = () => {
   const [form, setForm] = useState({ name: '', contact_person: '', email: '', phone: '', address: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => { loadSuppliers(); }, []);
 
@@ -62,12 +63,17 @@ const SuppliersView = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this supplier?')) return;
+  const handleDelete = async (supplier) => {
+    setDeleteTarget(supplier);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteSupplier(id);
-      setSuppliers(suppliers.filter(s => s.id !== id));
+      await deleteSupplier(deleteTarget.id);
+      setSuppliers(suppliers.filter(s => s.id !== deleteTarget.id));
     } catch (e) { console.error(e); }
+    setDeleteTarget(null);
   };
 
   const filtered = suppliers.filter(s =>
@@ -152,7 +158,7 @@ const SuppliersView = () => {
                   className="flex-1 py-1.5 text-xs font-medium text-gray-600 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors flex items-center justify-center gap-1">
                   <Edit3 size={12} /> Edit
                 </button>
-                <button onClick={() => handleDelete(supplier.id)}
+                <button onClick={() => handleDelete(supplier)}
                   className="flex-1 py-1.5 text-xs font-medium text-gray-600 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center gap-1">
                   <Trash2 size={12} /> Delete
                 </button>
@@ -222,6 +228,23 @@ const SuppliersView = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
+              <h3 className="text-lg font-bold text-gray-900">Delete Supplier</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete <strong>{deleteTarget.name}</strong>? This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
+              <button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl">Delete</button>
+            </div>
           </div>
         </div>
       )}

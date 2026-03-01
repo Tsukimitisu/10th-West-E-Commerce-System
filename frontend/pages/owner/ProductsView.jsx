@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { getProducts, getCategories, createProduct, updateProduct, deleteProduct } from '../../services/api';
-import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 
@@ -19,6 +19,7 @@ const ProductsView = () => {
   const [filterStock, setFilterStock] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [form, setForm] = useState({
     partNumber: '', name: '', description: '', price: '', buyingPrice: '',
     category_id: '', image: '', stock_quantity: '0', boxNumber: '',
@@ -106,9 +107,14 @@ const ProductsView = () => {
     } catch (e) { console.error(e); }
   };
 
-  const handleDelete = async (p) => {
-    if (!confirm(`Delete "${p.name}"?`)) return;
-    try { await deleteProduct(p.id); fetch(); } catch (e) { console.error(e); }
+  const handleDelete = (p) => {
+    setDeleteTarget(p);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try { await deleteProduct(deleteTarget.id); fetch(); } catch (e) { console.error(e); }
+    setDeleteTarget(null);
   };
 
   const filtered = products.filter(p => {
@@ -306,6 +312,23 @@ const ProductsView = () => {
             </div>
           </form>
         </Modal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
+              <h3 className="text-lg font-bold text-gray-900">Delete Product</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete <strong>"{deleteTarget.name}"</strong>? This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
+              <button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl">Delete</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

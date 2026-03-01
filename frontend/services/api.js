@@ -2037,6 +2037,17 @@ export const adminUpdateUserRole = async (id, role) => {
   });
 };
 
+export const adminDeleteUser = async (id) => {
+  if (USE_SUPABASE) {
+    await supabase.from('sessions').update({ is_active: false }).eq('user_id', id);
+    try { await supabase.from('user_permissions').delete().eq('user_id', id); } catch {}
+    const { error } = await supabase.from('users').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return { message: 'User deleted' };
+  }
+  return authenticatedFetch(`${API_URL}/admin/users/${id}`, { method: 'DELETE' });
+};
+
 // System Settings
 export const getSystemSettings = async (category) => {
   if (USE_SUPABASE) {

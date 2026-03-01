@@ -28,6 +28,7 @@ const OrdersView = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [refundError, setRefundError] = useState('');
   const [detailOrder, setDetailOrder] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
@@ -87,7 +88,8 @@ const OrdersView = () => {
       fetchOrders();
     } catch (err) {
       console.error('Refund failed:', err);
-      alert('Refund failed: ' + (err.message || 'Unknown error'));
+      setRefundError('Refund failed: ' + (err.message || 'Unknown error'));
+      setTimeout(() => setRefundError(''), 5000);
     }
     setRefunding(false);
   };
@@ -336,6 +338,11 @@ const OrdersView = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Process Refund - Order #{refundOrder?.id}</h3>
+            {refundError && (
+              <div className="mb-3 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+                <AlertCircle size={14} /> {refundError}
+              </div>
+            )}
             <div className="space-y-3">
               <div>
                 <label className="text-sm text-gray-600">Refund Amount ({'\u20B1'})</label>

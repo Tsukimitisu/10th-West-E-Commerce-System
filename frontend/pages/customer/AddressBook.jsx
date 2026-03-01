@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { MapPin, Plus, Trash2, Edit3, Check, X, Home, Building2, Star } from 'lucide-react';
+import { MapPin, Plus, Trash2, Edit3, Check, X, Home, Building2, Star, AlertTriangle } from 'lucide-react';
 import { getAddresses, saveAddress, deleteAddress, updateAddress } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
 
@@ -9,6 +9,7 @@ const AddressBook = () => {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ label: 'Home', name: '', phone: '', street: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false });
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false }); setEditing(null); setShowForm(false); };
 
@@ -39,9 +40,14 @@ const AddressBook = () => {
     } catch {}
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this address?')) return;
-    try { await deleteAddress(id); setAddresses(addresses.filter(a => a.id !== id)); } catch {}
+  const handleDelete = (addr) => {
+    setDeleteTarget(addr);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try { await deleteAddress(deleteTarget.id); setAddresses(addresses.filter(a => a.id !== deleteTarget.id)); } catch {}
+    setDeleteTarget(null);
   };
 
   const startEdit = (addr) => {
@@ -163,10 +169,31 @@ const AddressBook = () => {
                 </p>
                 <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
                   <button onClick={() => startEdit(addr)} className="text-sm text-gray-500 hover:text-orange-500 flex items-center gap-1 transition-colors"><Edit3 size={13} /> Edit</button>
-                  <button onClick={() => handleDelete(addr.id)} className="text-sm text-gray-500 hover:text-orange-500 flex items-center gap-1 transition-colors"><Trash2 size={13} /> Delete</button>
+                  <button onClick={() => handleDelete(addr)} className="text-sm text-gray-500 hover:text-orange-500 flex items-center gap-1 transition-colors"><Trash2 size={13} /> Delete</button>
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteTarget && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
+                <h3 className="text-lg font-bold text-gray-900">Delete Address</h3>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete this address?</p>
+              <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 mb-4">
+                <p className="text-sm font-semibold text-gray-900">{deleteTarget.name}</p>
+                <p className="text-xs text-gray-400">{deleteTarget.street}, {deleteTarget.city}</p>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
+                <button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl">Delete</button>
+              </div>
+            </div>
           </div>
         )}
       </div>

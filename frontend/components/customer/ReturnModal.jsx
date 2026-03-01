@@ -19,6 +19,7 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
   const [resolution, setResolution] = useState('refund');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const user = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
 
   const toggleItem = (productId, maxQty) => {
@@ -70,7 +71,8 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
       onSuccess();
       handleReset();
     } catch (e) {
-      alert('Failed to submit return request.');
+      setSubmitError('Failed to submit return request.');
+      setTimeout(() => setSubmitError(''), 5000);
     } finally {
       setSubmitting(false);
     }
@@ -259,6 +261,12 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
                   Return requests are reviewed within 1-2 business days. You'll receive an email with shipping instructions once approved.
                 </p>
               </div>
+
+              {submitError && (
+                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> {submitError}
+                </div>
+              )}
             </div>
           )}
         </div>

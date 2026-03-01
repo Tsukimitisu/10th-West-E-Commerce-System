@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Tag, Plus, Trash2, X, Gift, Percent, DollarSign, Calendar, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Tag, Plus, Trash2, X, Gift, Percent, DollarSign, Calendar, CheckCircle2, XCircle, AlertCircle, AlertTriangle } from 'lucide-react';
 import { getDiscounts, createDiscount, deleteDiscount } from '../../services/api';
 
 const InputField = ({ label, required, children }) => (
@@ -33,6 +33,7 @@ const PromotionsView = () => {
     expires_at: '',
     is_active: true,
   });
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const fetchDiscounts = async () => {
     try {
@@ -86,14 +87,19 @@ const PromotionsView = () => {
     }
   };
 
-  const handleDelete = async (discount) => {
-    if (!confirm(`Delete discount code "${discount.code}"?`)) return;
+  const handleDelete = (discount) => {
+    setDeleteTarget(discount);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteDiscount(discount.id);
+      await deleteDiscount(deleteTarget.id);
       fetchDiscounts();
     } catch (e) {
       console.error(e);
     }
+    setDeleteTarget(null);
   };
 
   return (
@@ -372,6 +378,23 @@ const PromotionsView = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
+              <h3 className="text-lg font-bold text-gray-900">Delete Discount</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete discount code <strong>"{deleteTarget.code}"</strong>?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
+              <button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl">Delete</button>
+            </div>
           </div>
         </div>
       )}

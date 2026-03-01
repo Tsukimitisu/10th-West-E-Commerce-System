@@ -18,7 +18,7 @@ const ProductDetail = () => {
   const [activeTab, setActiveTab] = useState('description');
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState({ color: '', size: '' });
+  const [selectedVariant, setSelectedVariant] = useState({ color: '' });
   const { addToCart } = useCart();
 
   useEffect(() => {
@@ -96,7 +96,6 @@ const ProductDetail = () => {
   const currentPrice = hasDiscount ? product.sale_price : product.price;
 
   const colors = ['Black', 'Silver', 'Red'];
-  const sizes = ['S', 'M', 'L', 'XL'];
 
   const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : product.rating || 0;
   const ratingDist = [5, 4, 3, 2, 1].map(star => ({
@@ -204,16 +203,7 @@ const ProductDetail = () => {
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-900 mb-2 block">Size</label>
-                <div className="flex gap-2">
-                  {sizes.map(s => (
-                    <button key={s} onClick={() => setSelectedVariant(prev => ({...prev, size: s}))}
-                      className={`w-11 h-11 border rounded-lg text-sm font-medium transition-colors ${selectedVariant.size === s ? 'border-orange-500 bg-orange-50 text-orange-500' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
-                    >{s}</button>
-                  ))}
-                </div>
-              </div>
+
             </div>
 
             {/* Quantity & Actions */}

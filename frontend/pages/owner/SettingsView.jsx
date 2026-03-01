@@ -5,6 +5,7 @@ import { getSystemSettings, updateSystemSettings } from '../../services/api';
 const SettingsView = () => {
   const [tab, setTab] = useState('store');
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -107,11 +108,13 @@ const SettingsView = () => {
           break;
       }
       await updateSystemSettings(tab, settingsMap);
+      setSaveError('');
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error('Save failed:', err);
-      alert('Failed to save settings');
+      setSaveError('Failed to save settings');
+      setTimeout(() => setSaveError(''), 4000);
     }
     setSaving(false);
   };
@@ -147,6 +150,12 @@ const SettingsView = () => {
           {saving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : saved ? <><Save size={14} /> Saved!</> : <><Save size={14} /> Save Changes</>}
         </button>
       </div>
+
+      {saveError && (
+        <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+          <span>⚠</span> {saveError}
+        </div>
+      )}
 
       <div className="flex gap-1 bg-white rounded-lg border border-gray-100 p-1 w-fit flex-wrap">
         {tabs.map(t => (

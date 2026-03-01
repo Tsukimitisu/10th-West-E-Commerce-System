@@ -7,7 +7,7 @@ import {
 import {
   Loader2, Plus, Pencil, Trash2, X, Save, Search, Shield, ShieldOff,
   UserPlus, Eye, Activity, Lock, ChevronDown, ChevronUp, ToggleLeft, ToggleRight,
-  UserCheck, UserX, Clock, FileText, BarChart3, Unlock, Key,
+  UserCheck, UserX, Clock, FileText, BarChart3, Unlock, Key, AlertTriangle,
 } from 'lucide-react';
 
 const StaffManagement = () => {
@@ -32,6 +32,9 @@ const StaffManagement = () => {
   const [globalLogs, setGlobalLogs] = useState([]);
   const [logPage, setLogPage] = useState(1);
   const [logTotal, setLogTotal] = useState(0);
+
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Lock/Unlock & Password Reset state
   const [showResetModal, setShowResetModal] = useState(false);
@@ -127,14 +130,19 @@ const StaffManagement = () => {
     } catch (err) { setError(err.message); }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure? This will permanently delete this staff member.')) return;
+  const handleDelete = (staffMember) => {
+    setDeleteTarget(staffMember);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteStaff(id);
+      await deleteStaff(deleteTarget.id);
       setSuccess('Staff member deleted');
+      setDeleteTarget(null);
       setView('list');
       loadStaff();
-    } catch (err) { setError(err.message); }
+    } catch (err) { setError(err.message); setDeleteTarget(null); }
   };
 
   const handlePermissionChange = async (permId, granted) => {
@@ -532,7 +540,7 @@ const StaffManagement = () => {
                       <button onClick={() => handleToggle(s.id)} className="p-1.5 text-slate-400 hover:text-amber-500" title={s.is_active ? 'Deactivate' : 'Activate'}>
                         {s.is_active ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4 text-orange-400" />}
                       </button>
-                      <button onClick={() => handleDelete(s.id)} className="p-1.5 text-slate-400 hover:text-orange-500" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => handleDelete(s)} className="p-1.5 text-slate-400 hover:text-orange-500" title="Delete"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -542,6 +550,35 @@ const StaffManagement = () => {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle size={20} className="text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Delete Staff Member</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-2">Are you sure you want to permanently delete:</p>
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 mb-4">
+              <p className="text-sm font-semibold text-gray-900">{deleteTarget.name}</p>
+              <p className="text-xs text-gray-400">{deleteTarget.email}</p>
+              <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-600">{deleteTarget.role}</span>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle size={12} /> This action cannot be undone.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
+              <button onClick={confirmDelete}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2">
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

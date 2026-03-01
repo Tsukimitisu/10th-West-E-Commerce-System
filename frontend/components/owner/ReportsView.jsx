@@ -8,8 +8,11 @@ const ReportsView = ({ stats }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [dateRange, setDateRange] = useState('30days');
 
+  const [exportMsg, setExportMsg] = useState('');
+
   const handleExport = () => {
-      alert("Generating report PDF... (Simulation)");
+      setExportMsg('Generating report PDF... (Simulation)');
+      setTimeout(() => setExportMsg(''), 3000);
   };
 
   const KPICard = ({ title, value, subtext, icon: Icon, color }) => (
@@ -56,6 +59,9 @@ const ReportsView = ({ stats }) => {
                 <button onClick={handleExport} className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 text-gray-700">
                     <Download className="w-4 h-4 mr-2" /> Export
                 </button>
+                {exportMsg && (
+                    <span className="text-sm text-green-600 font-medium ml-2">{exportMsg}</span>
+                )}
             </div>
         </div>
 

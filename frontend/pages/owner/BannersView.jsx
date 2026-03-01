@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Image, Plus, Edit3, Trash2, Eye, EyeOff, X, Check, AlertCircle, GripVertical, Megaphone, ArrowUp, ArrowDown } from 'lucide-react';
+import { Image, Plus, Edit3, Trash2, Eye, EyeOff, X, Check, AlertCircle, GripVertical, Megaphone, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
 import { getAllBanners, createBanner, updateBanner, deleteBanner, getAllAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '../../services/api';
 
 const BannersView = () => {
@@ -12,6 +12,8 @@ const BannersView = () => {
   const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', image_url: '', link_url: '', is_active: true, display_order: 0 });
   const [announcementForm, setAnnouncementForm] = useState({ title: '', content: '', is_published: false });
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteType, setDeleteType] = useState('banner');
 
   useEffect(() => { loadData(); }, []);
 
@@ -65,14 +67,28 @@ const BannersView = () => {
     setSaving(false);
   };
 
-  const handleDeleteBanner = async (id) => {
-    if (!confirm('Delete this banner?')) return;
-    try { await deleteBanner(id); setBanners(banners.filter(b => b.id !== id)); } catch (e) { console.error(e); }
+  const handleDeleteBanner = (banner) => {
+    setDeleteTarget(banner);
+    setDeleteType('banner');
   };
 
-  const handleDeleteAnnouncement = async (id) => {
-    if (!confirm('Delete this announcement?')) return;
-    try { await deleteAnnouncement(id); setAnnouncements(announcements.filter(a => a.id !== id)); } catch (e) { console.error(e); }
+  const handleDeleteAnnouncement = (announcement) => {
+    setDeleteTarget(announcement);
+    setDeleteType('announcement');
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      if (deleteType === 'banner') {
+        await deleteBanner(deleteTarget.id);
+        setBanners(banners.filter(b => b.id !== deleteTarget.id));
+      } else {
+        await deleteAnnouncement(deleteTarget.id);
+        setAnnouncements(announcements.filter(a => a.id !== deleteTarget.id));
+      }
+    } catch (e) { console.error(e); }
+    setDeleteTarget(null);
   };
 
   const toggleBannerActive = async (banner) => {
@@ -142,7 +158,7 @@ const BannersView = () => {
                   </button>
                   <button onClick={() => { setBannerForm({ title: banner.title || '', subtitle: banner.subtitle || '', image_url: banner.image_url || '', link_url: banner.link_url || '', is_active: banner.is_active, display_order: banner.display_order || 0 }); setEditing(banner); setShowModal(true); }}
                     className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors"><Edit3 size={14} /></button>
-                  <button onClick={() => handleDeleteBanner(banner.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
+                  <button onClick={() => handleDeleteBanner(banner)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}
@@ -174,7 +190,7 @@ const BannersView = () => {
                   <div className="flex items-center gap-1 ml-4">
                     <button onClick={() => { setAnnouncementForm({ title: ann.title || '', content: ann.content || '', is_published: ann.is_published }); setEditing(ann); setShowModal(true); }}
                       className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors"><Edit3 size={14} /></button>
-                    <button onClick={() => handleDeleteAnnouncement(ann.id)}
+                    <button onClick={() => handleDeleteAnnouncement(ann)}
                       className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                   </div>
                 </div>
@@ -263,6 +279,23 @@ const BannersView = () => {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
+              <h3 className="text-lg font-bold text-gray-900">Delete {deleteType === 'banner' ? 'Banner' : 'Announcement'}</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete this {deleteType}? This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
+              <button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl">Delete</button>
+            </div>
           </div>
         </div>
       )}
