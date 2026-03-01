@@ -85,10 +85,10 @@ export const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const result = await pool.query(
-      `INSERT INTO users (name, email, password_hash, role, email_verified, consent_given_at)
-       VALUES ($1, $2, $3, $4, false, $5)
+      `INSERT INTO users (name, email, password_hash, role, email_verified, consent_given_at, age_confirmed_at)
+       VALUES ($1, $2, $3, $4, false, $5, $6)
        RETURNING id, name, email, role, phone, avatar, store_credit, is_active, two_factor_enabled, last_login, email_verified`,
-      [name, email, hashedPassword, role, consent_given ? new Date() : null]
+      [name, email, hashedPassword, role, consent_given ? new Date() : null, age_confirmed ? new Date() : null]
     );
 
     const user = result.rows[0];
@@ -500,7 +500,8 @@ export const oauthCallback = async (req, res) => {
     await logActivity({ userId: user.id, action: 'oauth_login', details: { provider }, ipAddress: ip, userAgent: ua });
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.redirect(`${frontendUrl}/#/oauth-callback?token=${token}&user=${encodeURIComponent(JSON.stringify(sanitizeUser(user)))}`);
+    // Only pass token in URL — never expose PII (name, email, phone) in query params
+    res.redirect(`${frontendUrl}/#/oauth-callback?token=${token}`);
   } catch (error) {
     console.error('OAuth callback error:', error);
     res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/#/login?error=oauth_failed`);
@@ -608,13 +609,140 @@ export const resendVerification = async (req, res) => {
       return res.json({ message: 'Email is already verified' });
     }
 
-    // In production, this would send an actual verification email
-    // For now, just mark as verified (placeholder for email service integration)
-    await pool.query('UPDATE users SET email_verified = true WHERE id = $1', [userId]);
+    // Generate a verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
 
-    res.json({ message: 'Verification email sent successfully' });
+    // Store token with 24h expiry
+    await pool.query(
+      `UPDATE users SET reset_token = $1, reset_token_expires = NOW() + INTERVAL '24 hours' WHERE id = $2`,
+      [tokenHash, userId]
+    );
+
+    // Send verification email
+    try {
+      const transporter = createTransporter();
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const verifyUrl = `${frontendUrl}/#/verify-email?token=${verificationToken}`;
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
+        to: user.email,
+        subject: 'Verify Your Email - 10th West Moto',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #f97316; padding: 20px; text-align: center;">
+              <h1 style="color: white; margin: 0;">10th West Moto</h1>
+            </div>
+            <div style="padding: 30px; background: #fff;">
+              <h2>Verify Your Email Address</h2>
+              <p>Click the button below to verify your email. This link expires in 24 hours.</p>
+              <a href="${verifyUrl}" style="display: inline-block; padding: 12px 30px; background: #f97316; color: white; text-decoration: none; border-radius: 8px; margin: 20px 0;">Verify Email</a>
+              <p style="color: #666; font-size: 12px;">If you did not create an account, please ignore this email.</p>
+            </div>
+          </div>
+        `,
+      });
+    } catch (emailErr) {
+      console.error('Email send failed (verification will still work via token):', emailErr.message);
+    }
+
+    res.json({ message: 'Verification email sent. Please check your inbox.' });
   } catch (error) {
     console.error('Resend verification error:', error);
     res.status(500).json({ message: 'Failed to send verification email' });
+  }
+};
+
+// ─── VERIFY EMAIL TOKEN ────────────────────────────────────────────
+export const verifyEmailToken = async (req, res) => {
+  const { token } = req.body;
+
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const result = await pool.query(
+      `SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()`,
+      [tokenHash]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: 'Invalid or expired verification link' });
+    }
+
+    await pool.query(
+      `UPDATE users SET email_verified = true, reset_token = NULL, reset_token_expires = NULL WHERE id = $1`,
+      [result.rows[0].id]
+    );
+
+    res.json({ message: 'Email verified successfully' });
+  } catch (error) {
+    console.error('Verify email error:', error);
+    res.status(500).json({ message: 'Failed to verify email' });
+  }
+};
+
+// ─── DATA EXPORT / PORTABILITY (RA 10173 §18 - Right to Data Portability) ───
+export const exportUserData = async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    // Gather all user data
+    const userResult = await pool.query(
+      `SELECT id, name, email, phone, role, avatar, store_credit, is_active, email_verified, 
+              consent_given_at, age_confirmed_at, created_at, last_login, oauth_provider
+       FROM users WHERE id = $1`, [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const userData = userResult.rows[0];
+
+    // Orders
+    const ordersResult = await pool.query(
+      `SELECT id, status, total_amount, shipping_address, shipping_method, payment_method, created_at, updated_at
+       FROM orders WHERE user_id = $1 ORDER BY created_at DESC`, [userId]
+    );
+
+    // Addresses
+    const addressResult = await pool.query(
+      `SELECT recipient_name, street, city, state, postal_code, phone, is_default, created_at
+       FROM addresses WHERE user_id = $1`, [userId]
+    );
+
+    // Activity logs
+    const activityResult = await pool.query(
+      `SELECT action, details, ip_address, created_at
+       FROM activity_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 200`, [userId]
+    );
+
+    // Reviews
+    let reviewsData = [];
+    try {
+      const reviewsResult = await pool.query(
+        `SELECT product_id, rating, comment, created_at
+         FROM reviews WHERE user_id = $1 ORDER BY created_at DESC`, [userId]
+      );
+      reviewsData = reviewsResult.rows;
+    } catch { /* reviews table may not exist */ }
+
+    const exportData = {
+      exported_at: new Date().toISOString(),
+      legal_basis: 'RA 10173 §18 - Right to Data Portability',
+      personal_information: userData,
+      orders: ordersResult.rows,
+      addresses: addressResult.rows,
+      activity_logs: activityResult.rows,
+      reviews: reviewsData,
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="10thwest-data-export-${userId}-${Date.now()}.json"`);
+    res.json(exportData);
+  } catch (error) {
+    console.error('Data export error:', error);
+    res.status(500).json({ message: 'Failed to export data' });
   }
 };

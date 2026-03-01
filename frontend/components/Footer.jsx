@@ -5,10 +5,11 @@ import { Phone, Mail, MapPin, Facebook, Instagram, Youtube, Send, CreditCard, Sh
 const Footer = () => {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [newsletterConsent, setNewsletterConsent] = useState(false);
 
   const handleSubscribe = (e) => {
     e.preventDefault();
-    if (email.trim()) { setSubscribed(true); setEmail(''); }
+    if (email.trim() && newsletterConsent) { setSubscribed(true); setEmail(''); setNewsletterConsent(false); }
   };
 
   return (
@@ -26,15 +27,22 @@ const Footer = () => {
                 <Shield size={18} /> Thanks for subscribing!
               </div>
             ) : (
-              <form onSubmit={handleSubscribe} className="flex w-full md:w-auto">
-                <input
-                  type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                  placeholder="Enter your email"
-                  className="flex-1 md:w-72 px-4 py-3 bg-gray-800 border border-gray-700 rounded-l-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
-                />
-                <button type="submit" className="px-5 py-3 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-r-lg transition-colors flex items-center gap-2">
-                  <Send size={16} /> Subscribe
-                </button>
+              <form onSubmit={handleSubscribe} className="w-full md:w-auto">
+                <div className="flex">
+                  <input
+                    type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                    placeholder="Enter your email"
+                    className="flex-1 md:w-72 px-4 py-3 bg-gray-800 border border-gray-700 rounded-l-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                  />
+                  <button type="submit" disabled={!newsletterConsent} className="px-5 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-r-lg transition-colors flex items-center gap-2">
+                    <Send size={16} /> Subscribe
+                  </button>
+                </div>
+                <label className="flex items-start gap-2 mt-2 cursor-pointer">
+                  <input type="checkbox" checked={newsletterConsent} onChange={e => setNewsletterConsent(e.target.checked)}
+                    className="mt-0.5 text-orange-500 focus:ring-orange-500 rounded" />
+                  <span className="text-[11px] text-gray-500">I consent to receive marketing emails and agree to the <Link to="/privacy" className="text-gray-400 hover:text-white">Privacy Policy</Link> per RA 10173.</span>
+                </label>
               </form>
             )}
           </div>

@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import path from 'path';
 import os from 'os';
@@ -34,6 +35,7 @@ import shippingRoutes from './routes/shipping.js';
 import adminRoutes from './routes/admin.js';
 import { apiLimiter, authLimiter } from './middleware/rateLimiter.js';
 import { errorLogger } from './middleware/errorLogger.js';
+import { generateCsrfToken, validateCsrf } from './middleware/csrf.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -61,12 +63,12 @@ if (missingVars.length > 0) {
   process.exit(1);
 }
 
-// Log configuration on startup
+// Log configuration on startup (no sensitive values)
 console.log('\n🔐 Configuration loaded:');
-console.log('   Stripe Secret:', process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.substring(0, 20) + '...' : '❌ NOT SET');
-console.log('   Stripe Public:', process.env.STRIPE_PUBLISHABLE_KEY ? process.env.STRIPE_PUBLISHABLE_KEY.substring(0, 20) + '...' : '❌ NOT SET');
-console.log('   Email User:', process.env.EMAIL_USER || '❌ NOT SET');
-console.log('   Email Password:', process.env.EMAIL_PASSWORD ? '***SET***' : '❌ NOT SET');
+console.log('   Stripe Secret:', process.env.STRIPE_SECRET_KEY ? '✅ SET' : '❌ NOT SET');
+console.log('   Stripe Public:', process.env.STRIPE_PUBLISHABLE_KEY ? '✅ SET' : '❌ NOT SET');
+console.log('   Email User:', process.env.EMAIL_USER ? '✅ SET' : '❌ NOT SET');
+console.log('   Email Password:', process.env.EMAIL_PASSWORD ? '✅ SET' : '❌ NOT SET');
 console.log('');
 
 const app = express();
@@ -95,12 +97,45 @@ function getAllowedOrigins() {
 const allowedOrigins = getAllowedOrigins();
 
 // Middleware
+
+// C8: Security headers via Helmet (CSP, X-Frame-Options, HSTS, etc.)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://js.stripe.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      connectSrc: ["'self'", ...allowedOrigins, "https://api.stripe.com"],
+      frameSrc: ["'self'", "https://js.stripe.com"],
+    },
+  },
+  // C9: HSTS — enforce HTTPS in production
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true,
+  },
+  crossOriginEmbedderPolicy: false, // allow loading external images
+}));
+
+// C9: HTTPS redirect in production
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.headers['x-forwarded-proto'] !== 'https') {
+      return res.redirect(301, `https://${req.headers.host}${req.url}`);
+    }
+    next();
+  });
+}
+
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    // Also allow any same-network request (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    // Allow same-network LAN requests (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
     try {
       const url = new URL(origin);
       const host = url.hostname;
@@ -110,7 +145,8 @@ app.use(cors({
         return callback(null, true);
       }
     } catch {}
-    callback(null, true); // In dev, allow all
+    // C5: Reject unknown origins instead of allowing all
+    callback(new Error('CORS not allowed'), false);
   },
   credentials: true
 }));
@@ -119,6 +155,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 app.use(activityLogger);
 app.use('/api', apiLimiter);
+// C12: Apply CSRF protection for non-Bearer state-changing requests
+app.use('/api', validateCsrf);
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -135,8 +173,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// CSRF token endpoint (C12)
+app.get('/api/csrf-token', generateCsrfToken, (req, res) => {
+  res.json({ csrfToken: req.csrfToken });
+});
+
 // API Routes
-app.use('/api/auth', authRoutes);
+// C6: Apply stricter rate limiting to auth endpoints (20 req / 15 min)
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/cart', cartRoutes);
@@ -170,10 +214,11 @@ app.use(errorLogger);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  // Log full error server-side only
+  console.error('Error:', err.message);
+  // C11: Never expose stack traces to clients, even in development
   res.status(err.status || 500).json({
     message: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
 

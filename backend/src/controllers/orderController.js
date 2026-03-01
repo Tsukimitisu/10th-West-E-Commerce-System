@@ -540,11 +540,7 @@ export const getOrderInvoice = async (req, res) => {
       </body>
       </html>
     `;
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
- 
+
     // Set content type to HTML
     res.setHeader('Content-Type', 'text/html');
     res.send(invoiceHTML);

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
   last_login TIMESTAMP,
   email_verified BOOLEAN DEFAULT FALSE,
   consent_given_at TIMESTAMP,
+  age_confirmed_at TIMESTAMP,
   deleted_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Lock, Eye, EyeOff, Save, Check, AlertCircle, Shield, Camera, Trash2, AlertTriangle } from 'lucide-react';
-import { updateProfile, changePassword, setup2FA, verify2FA, disable2FA, deleteAccount } from '../../services/api';
+import { User, Mail, Phone, Lock, Eye, EyeOff, Save, Check, AlertCircle, Shield, Camera, Trash2, AlertTriangle, Download } from 'lucide-react';
+import { updateProfile, changePassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
 
 const Profile = () => {
@@ -23,6 +23,7 @@ const Profile = () => {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
@@ -95,6 +96,26 @@ const Profile = () => {
       setDeleteError(err.message || 'Failed to delete account');
     } finally {
       setDeleteLoading(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    setExportLoading(true);
+    try {
+      const data = await exportMyData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `10thwest-my-data-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.message || 'Failed to export data');
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -229,6 +250,23 @@ const Profile = () => {
               <button onClick={handle2FASetup} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors">Enable 2FA</button>
             </div>
           )}
+        </div>
+
+        {/* Data Portability - RA 10173 §18 (Right to Data Portability) */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="font-display font-semibold text-lg text-gray-900 mb-4 flex items-center gap-2"><Download size={20} /> Download My Data</h2>
+          <p className="text-sm text-gray-600 mb-3">
+            Under the Data Privacy Act of 2012 (RA 10173 §18), you have the right to obtain a copy of your personal data in a portable format.
+          </p>
+          <ul className="text-xs text-gray-500 mb-4 space-y-1 list-disc pl-4">
+            <li>Includes your profile information, order history, saved addresses, and activity logs</li>
+            <li>Downloaded as a JSON file you can save or transfer</li>
+          </ul>
+          <button onClick={handleExportData} disabled={exportLoading}
+            className="px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 border border-orange-300 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50">
+            {exportLoading ? <div className="w-4 h-4 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin" /> : <Download size={14} />}
+            {exportLoading ? 'Preparing...' : 'Download My Data'}
+          </button>
         </div>
 
         {/* Delete Account - Right to be Forgotten (RA 10173 §18) */}

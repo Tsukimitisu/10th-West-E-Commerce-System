@@ -8,7 +8,7 @@ import {
   oauthCallback,
   getActiveSessions, revokeSession,
   getActivityLogs,
-  deleteAccountHandler, resendVerification,
+  deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData,
 } from '../controllers/authController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
@@ -81,7 +81,11 @@ router.get('/activity-logs', authenticateToken, requireRole('admin', 'super_admi
 // ─── Account deletion (Right to be Forgotten - RA 10173) ────────────────────
 router.delete('/account', authenticateToken, deleteAccountHandler);
 
+// ─── Data export / portability (RA 10173 §18) ──────────────────────────────
+router.get('/export-data', authenticateToken, exportUserData);
+
 // ─── Email verification ────────────────────────────────────────────
 router.post('/resend-verification', authenticateToken, resendVerification);
+router.post('/verify-email', body('token').notEmpty(), validate, verifyEmailToken);
 
 export default router;

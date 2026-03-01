@@ -1,5 +1,6 @@
 import { Role, OrderStatus, ReturnStatus } from '../types.js';
 import { supabase } from './supabase.js';
+import bcrypt from 'bcryptjs';
 
 // Configuration
 const API_URL = import.meta.env.VITE_API_URL || (() => {
@@ -84,18 +85,8 @@ export const login = async (email, password, totp_code) => {
 
     if (error || !user) throw new Error('Invalid credentials');
 
-    // Check password: support both plain-text and known bcrypt seeds
-    const knownPasswords = {
-      'superadmin@10thwest.com': 'Admin@123',
-      'owner@10thwest.com': 'Admin@123',
-      'staff@10thwest.com': 'Staff@123',
-      'customer@10thwest.com': 'Customer@123',
-    };
-
-    const isValidPassword =
-      user.password_hash === password ||
-      (knownPasswords[email] && knownPasswords[email] === password) ||
-      user.password_hash === 'supabase_auth';
+    // Securely compare password using bcrypt
+    const isValidPassword = await bcrypt.compare(password, user.password_hash || '');
 
     if (!isValidPassword) throw new Error('Invalid credentials');
 
@@ -152,13 +143,16 @@ export const register = async (name, email, password, consentData = {}) => {
 
     if (existing) throw new Error('Email already registered');
 
+    // Hash password before storing (PCI/security compliance)
+    const hashedPassword = await bcrypt.hash(password, 12);
+
     // Insert new user directly into users table
     const { data: newUser, error } = await supabase
       .from('users')
       .insert({
         name,
         email,
-        password_hash: password, // Store plain text for dev (backend uses bcrypt)
+        password_hash: hashedPassword,
         role: 'customer',
         is_active: true,
         email_verified: false,
@@ -204,6 +198,23 @@ export const logoutApi = async () => {
   await authenticatedFetch(`${API_URL}/auth/logout`, { method: 'POST' });
 };
 
+// Get authenticated user profile (used by OAuth callback to avoid PII in URL)
+export const getProfile = async () => {
+  if (USE_SUPABASE) {
+    const tokenData = localStorage.getItem('shopCoreToken');
+    if (!tokenData) throw new Error('Not authenticated');
+    const payload = JSON.parse(atob(tokenData.replace('sb-token-', '')));
+    const { data, error } = await supabase.from('users').select('*').eq('id', payload.id).single();
+    if (error || !data) throw new Error('User not found');
+    return {
+      id: data.id, name: data.name, email: data.email, role: data.role,
+      phone: data.phone, avatar: data.avatar, store_credit: data.store_credit,
+      is_active: data.is_active, last_login: data.last_login, email_verified: data.email_verified,
+    };
+  }
+  return await authenticatedFetch(`${API_URL}/auth/profile`);
+};
+
 // Delete account - Right to be Forgotten (RA 10173 §18)
 export const deleteAccount = async () => {
   if (USE_SUPABASE) {
@@ -217,6 +228,19 @@ export const deleteAccount = async () => {
     return { message: 'Account deleted successfully' };
   }
   return await authenticatedFetch(`${API_URL}/auth/account`, { method: 'DELETE' });
+};
+
+// Data export / portability - RA 10173 §18
+export const exportMyData = async () => {
+  if (USE_SUPABASE) {
+    const user = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
+    if (!user.id) throw new Error('Not authenticated');
+    const { data: userData } = await supabase.from('users').select('id, name, email, phone, role, created_at, last_login').eq('id', user.id).single();
+    const { data: orders } = await supabase.from('orders').select('id, status, total_amount, created_at').eq('user_id', user.id);
+    const { data: addresses } = await supabase.from('addresses').select('*').eq('user_id', user.id);
+    return { exported_at: new Date().toISOString(), legal_basis: 'RA 10173 §18', personal_information: userData, orders: orders || [], addresses: addresses || [] };
+  }
+  return await authenticatedFetch(`${API_URL}/auth/export-data`);
 };
 
 // Resend email verification

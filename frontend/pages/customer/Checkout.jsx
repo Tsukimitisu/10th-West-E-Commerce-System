@@ -21,7 +21,6 @@ const Checkout = () => {
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
     street: '', city: '', state: '', postal_code: '',
-    cardName: '', cardNumber: '', cardExpiry: '', cardCvv: '',
   });
 
   useEffect(() => {
@@ -206,11 +205,20 @@ const Checkout = () => {
                   ))}
                 </div>
                 {paymentMethod === 'card' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
-                    <Input label="Name on Card" value={form.cardName} onChange={v => setForm(f => ({ ...f, cardName: v }))} className="md:col-span-2" />
-                    <Input label="Card Number" value={form.cardNumber} onChange={v => setForm(f => ({ ...f, cardNumber: v }))} placeholder="4242 4242 4242 4242" className="md:col-span-2" />
-                    <Input label="Expiry" value={form.cardExpiry} onChange={v => setForm(f => ({ ...f, cardExpiry: v }))} placeholder="MM/YY" />
-                    <Input label="CVV" value={form.cardCvv} onChange={v => setForm(f => ({ ...f, cardCvv: v }))} placeholder="123" />
+                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Shield size={16} className="text-green-600" />
+                      <p className="text-sm font-medium text-gray-700">Secure Card Payment via Stripe</p>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Your card details are collected and processed securely by Stripe. Card numbers never touch our servers — fully PCI-DSS compliant.
+                    </p>
+                    {/* Stripe Elements placeholder — in production, mount CardElement here via @stripe/react-stripe-js */}
+                    <div className="bg-white border border-gray-300 rounded-lg p-4 text-center text-sm text-gray-400" id="stripe-card-element">
+                      <CreditCard size={24} className="mx-auto mb-2 text-gray-300" />
+                      Stripe Card Element loads here
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-2 text-center">Protected by Stripe — 256-bit SSL encryption</p>
                   </div>
                 )}
                 {paymentMethod === 'gcash' && (
@@ -223,12 +231,7 @@ const Checkout = () => {
                 {paymentMethod === 'bank_transfer' && (
                   <div className="p-4 bg-green-50 rounded-xl border border-green-200">
                     <p className="text-sm font-medium text-green-700 mb-2">Bank Transfer</p>
-                    <p className="text-xs text-green-600 mb-3">After placing your order, transfer the total amount to one of our bank accounts. Your order will be processed once payment is confirmed.</p>
-                    <div className="space-y-1 text-xs text-green-700">
-                      <p><strong>BDO:</strong> 1234-5678-9012</p>
-                      <p><strong>BPI:</strong> 9876-5432-1098</p>
-                      <p><strong>UnionBank:</strong> 1111-2222-3333</p>
-                    </div>
+                    <p className="text-xs text-green-600 mb-3">After placing your order, bank account details for payment will be emailed to you along with your order confirmation. Your order will be processed once payment is confirmed.</p>
                   </div>
                 )}
               </Section>
@@ -282,13 +285,14 @@ const Checkout = () => {
                   <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
                   {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(discountAmount)}</span></div>}
                   <div className="flex justify-between text-gray-600"><span>Shipping</span><span className={shippingCost === 0 ? 'text-green-600 font-medium' : ''}>{shippingCost === 0 ? 'Free' : formatPrice(shippingCost)}</span></div>
+                  <div className="flex justify-between text-gray-500 text-xs"><span>VAT (12% included)</span><span>{formatPrice((grandTotal / 1.12) * 0.12)}</span></div>
                   <div className="border-t border-gray-100 pt-2 flex justify-between"><span className="font-semibold text-gray-900">Total</span><span className="font-bold text-xl text-gray-900">{formatPrice(grandTotal)}</span></div>
                 </div>
 
                 {/* Terms */}
                 <label className="flex items-start gap-2 mt-4 cursor-pointer">
                   <input type="checkbox" checked={agreeTerms} onChange={e => setAgreeTerms(e.target.checked)} className="mt-0.5 text-orange-500 focus:ring-orange-500 rounded" />
-                  <span className="text-xs text-gray-500">I agree to the <a href="#" className="text-orange-500 hover:underline">Terms & Conditions</a> and <a href="#" className="text-orange-500 hover:underline">Privacy Policy</a></span>
+                  <span className="text-xs text-gray-500">I agree to the <Link to="/terms" className="text-orange-500 hover:underline">Terms & Conditions</Link> and <Link to="/privacy" className="text-orange-500 hover:underline">Privacy Policy</Link></span>
                 </label>
 
                 {error && <p className="text-sm text-orange-500 mt-3">{error}</p>}
