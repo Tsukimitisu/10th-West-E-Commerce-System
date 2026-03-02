@@ -228,7 +228,6 @@ const StaffManagement = () => {
               <option value="cashier">Cashier</option>
               <option value="admin">Admin</option>
               <option value="store_staff">Store Staff</option>
-              <option value="super_admin">Super Admin</option>
               <option value="owner">Owner</option>
             </select>
           </div>
@@ -469,7 +468,6 @@ const StaffManagement = () => {
         </div>
         <select className="border border-slate-300 rounded-lg px-3 py-2 text-sm" value={filterRole} onChange={e => setFilterRole(e.target.value)}>
           <option value="">All Roles</option>
-          <option value="super_admin">Super Admin</option>
           <option value="admin">Admin</option>
           <option value="owner">Owner</option>
           <option value="store_staff">Store Staff</option>

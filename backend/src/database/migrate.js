@@ -28,6 +28,8 @@ const createTables = async () => {
         two_factor_enabled BOOLEAN DEFAULT FALSE,
         two_factor_secret VARCHAR(255),
         email_verified BOOLEAN DEFAULT FALSE,
+        consent_given_at TIMESTAMP,
+        age_confirmed_at TIMESTAMP,
         last_login TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

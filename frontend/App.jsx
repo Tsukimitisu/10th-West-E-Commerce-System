@@ -76,7 +76,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
           <Route path="/my-returns" element={user ? <MyReturns /> : <Navigate to="/login" />} />
           <Route path="/addresses" element={user ? <AddressBook /> : <Navigate to="/login" />} />
           <Route path="/wishlist" element={user ? <Wishlist /> : <Navigate to="/login" />} />
-          <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF ? <AdminDashboard /> : <Navigate to="/login" replace />} />
+          <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF ? <AdminDashboard onLogout={onLogout} /> : <Navigate to="/login" replace />} />
           <Route path="/super-admin" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard /> : <Navigate to="/login" replace />} />
           <Route path="/pos" element={(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) ? <PosTerminal /> : <Navigate to="/login" replace />} />
         </Routes>
@@ -160,6 +160,7 @@ const App = () => {
     setUser(null);
     localStorage.removeItem('shopCoreUser');
     localStorage.removeItem('shopCoreToken');
+    // Navigation to /login handled by route guards (user is null)
   };
 
   if (loading) {

@@ -72,7 +72,7 @@ const PromotionsView = () => {
       code: form.code.toUpperCase().trim(),
       type: form.type,
       value: parseFloat(form.value),
-      min_purchase: form.min_purchase ? parseFloat(form.min_purchase) : null,
+      min_purchase: form.min_purchase ? parseFloat(form.min_purchase) : 0,
       max_uses: parseInt(form.max_uses) || 0,
       starts_at: form.starts_at || null,
       expires_at: form.expires_at || null,
@@ -298,13 +298,14 @@ const PromotionsView = () => {
                 <InputField label="Minimum Purchase (₱)">
                   <input
                     type="number"
-                    step="0.01"
+                    step="1"
                     min="0"
                     value={form.min_purchase}
                     onChange={e => setForm(f => ({ ...f, min_purchase: e.target.value }))}
-                    placeholder="No minimum"
+                    placeholder="0 = no minimum"
                     className={inputClass}
                   />
+                  <p className="text-[10px] text-gray-400 mt-1">Set to 0 or leave empty for no minimum requirement</p>
                 </InputField>
                 <InputField label="Maximum Uses">
                   <input

@@ -156,7 +156,8 @@ export const register = async (name, email, password, consentData = {}) => {
         role: 'customer',
         is_active: true,
         email_verified: false,
-        consent_given_at: new Date().toISOString(),
+        consent_given_at: consentData?.consent_given ? new Date().toISOString() : null,
+        age_confirmed_at: consentData?.age_confirmed ? new Date().toISOString() : null,
       })
       .select()
       .single();
@@ -1351,7 +1352,11 @@ export const updateTicketStatus = async (id, status) => {
 
 // ==================== FAQs ====================
 
-export const getFAQs = async () => {
+export const getFAQs = async (adminMode = false) => {
+  if (adminMode) {
+    // Admin: get all FAQs including inactive
+    return authenticatedFetch(`${API_URL}/faqs/admin/all`);
+  }
   const data = await fetch(`${API_URL}/faqs`);
   if (!data.ok) {
     throw new Error('Failed to fetch FAQs');
@@ -1385,6 +1390,10 @@ export const deleteFAQ = async (id) => {
 
 export const getPolicy = async (type) => {
   const data = await fetch(`${API_URL}/policies/${type}`);
+  if (data.status === 404) {
+    // Policy doesn't exist yet — return empty for initial creation
+    return { title: '', content: '' };
+  }
   if (!data.ok) {
     throw new Error('Failed to fetch policy');
   }
@@ -1477,7 +1486,7 @@ export const addReview = async (review) => {
 
 export const getDiscounts = async () => {
   if (USE_SUPABASE) {
-    const { data } = await supabase.from('discounts').select('*').eq('is_active', true);
+    const { data } = await supabase.from('discounts').select('*').order('created_at', { ascending: false });
     return data || [];
   }
   return authenticatedFetch(`${API_URL}/discounts`).catch(() => []);
@@ -1492,11 +1501,15 @@ export const validateDiscount = async (code, amount) => {
       .eq('is_active', true)
       .single();
     if (!data) throw new Error('Invalid discount code');
-    if (data.min_purchase && amount < data.min_purchase) throw new Error(`Minimum purchase of ₱${data.min_purchase} required`);
-    if (data.max_uses && data.used_count >= data.max_uses) throw new Error('Discount code has expired');
+    // Only enforce min_purchase if it's set and greater than 0
+    if (data.min_purchase && parseFloat(data.min_purchase) > 0 && amount < parseFloat(data.min_purchase)) {
+      throw new Error(`Minimum purchase of ₱${parseFloat(data.min_purchase).toLocaleString()} required`);
+    }
+    if (data.max_uses && data.max_uses > 0 && data.used_count >= data.max_uses) throw new Error('Discount code usage limit reached');
     if (data.expires_at && new Date(data.expires_at) < new Date()) throw new Error('Discount code has expired');
-    const discountAmount = data.type === 'percentage' ? (amount * data.value / 100) : data.value;
-    return { valid: true, discount: data, discountAmount };
+    if (data.starts_at && new Date(data.starts_at) > new Date()) throw new Error('Discount code is not yet active');
+    const discountAmount = data.type === 'percentage' ? (amount * parseFloat(data.value) / 100) : parseFloat(data.value);
+    return { valid: true, discount: data, discountAmount: Math.min(discountAmount, amount) };
   }
   return authenticatedFetch(`${API_URL}/discounts/validate`, {
     method: 'POST',

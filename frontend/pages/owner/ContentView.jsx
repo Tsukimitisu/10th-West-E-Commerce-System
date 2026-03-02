@@ -70,7 +70,7 @@ const ContentView = () => {
     setFaqLoading(true);
     setFaqError('');
     try {
-      const data = await getFAQs();
+      const data = await getFAQs(true);
       setFaqs(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load FAQs:', err);
@@ -116,6 +116,7 @@ const ContentView = () => {
     e.preventDefault();
     if (!faqForm.question.trim() || !faqForm.answer.trim()) return;
     setFaqSaving(true);
+    setFaqError('');
     try {
       if (editingFaq) {
         await updateFAQ(editingFaq.id, faqForm);
@@ -126,7 +127,7 @@ const ContentView = () => {
       await loadFaqs();
     } catch (err) {
       console.error('Failed to save FAQ:', err);
-      setFaqError('Failed to save FAQ. Please try again.');
+      setFaqError(err.message || 'Failed to save FAQ. Please try again.');
     }
     setFaqSaving(false);
   };

@@ -14,7 +14,7 @@ export const listStaff = async (req, res) => {
              u.failed_login_attempts, u.oauth_provider,
              (SELECT COUNT(*) FROM activity_logs WHERE user_id = u.id) as action_count,
              (SELECT MAX(created_at) FROM activity_logs WHERE user_id = u.id) as last_activity
-      FROM users u WHERE u.role IN ('admin','cashier','super_admin','owner','store_staff')
+      FROM users u WHERE u.role IN ('admin','cashier','owner','store_staff')
     `;
     const params = [];
     let idx = 1;
@@ -30,7 +30,7 @@ export const listStaff = async (req, res) => {
     const result = await pool.query(query, params);
 
     // Count
-    let countQuery = `SELECT COUNT(*) FROM users WHERE role IN ('admin','cashier','super_admin','owner','store_staff')`;
+    let countQuery = `SELECT COUNT(*) FROM users WHERE role IN ('admin','cashier','owner','store_staff')`;
     const cp = [];
     let ci = 1;
     if (role) { countQuery += ` AND role = $${ci++}`; cp.push(role); }
@@ -58,7 +58,7 @@ export const getStaff = async (req, res) => {
     const result = await pool.query(
       `SELECT id, name, email, role, phone, avatar, is_active, last_login, created_at,
               two_factor_enabled, oauth_provider, failed_login_attempts
-       FROM users WHERE id = $1 AND role IN ('admin','cashier','super_admin','owner','store_staff')`,
+       FROM users WHERE id = $1 AND role IN ('admin','cashier','owner','store_staff')`,
       [req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
@@ -95,8 +95,7 @@ export const addStaff = async (req, res) => {
     if (existing.rows.length > 0) return res.status(400).json({ message: 'Email already registered' });
 
     const validRoles = ['store_staff', 'owner', 'customer'];
-    // Only super_admin can create super_admin users
-    if (req.user.role === 'super_admin') validRoles.push('super_admin');
+    // super_admin cannot be created through Staff Management
     if (!validRoles.includes(role)) {
       return res.status(400).json({ message: `Invalid role. Allowed: ${validRoles.join(', ')}` });
     }
@@ -131,7 +130,7 @@ export const editStaff = async (req, res) => {
   const { name, email, role, phone, password } = req.body;
 
   try {
-    const existing = await pool.query('SELECT * FROM users WHERE id = $1 AND role IN (\'admin\',\'cashier\',\'super_admin\',\'owner\',\'store_staff\')', [req.params.id]);
+    const existing = await pool.query('SELECT * FROM users WHERE id = $1 AND role IN (\'admin\',\'cashier\',\'owner\',\'store_staff\')', [req.params.id]);
     if (existing.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
 
     let query = 'UPDATE users SET name = $1, email = $2, role = $3, phone = $4, updated_at = NOW()';
@@ -171,13 +170,18 @@ export const toggleStaffStatus = async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE users SET is_active = NOT is_active, updated_at = NOW()
-       WHERE id = $1 AND role IN ('admin','cashier','super_admin','owner','store_staff')
+       WHERE id = $1 AND role IN ('admin','cashier','owner','store_staff')
        RETURNING id, name, email, role, is_active`,
       [req.params.id]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
     const staff = result.rows[0];
+
+    // Prevent toggling super_admin status from staff management
+    if (staff.role === 'super_admin') {
+      return res.status(403).json({ message: 'Cannot modify Super Admin from Staff Management' });
+    }
 
     // Invalidate sessions if deactivated
     if (!staff.is_active) {
@@ -205,7 +209,7 @@ export const toggleStaffStatus = async (req, res) => {
 export const deleteStaff = async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, email FROM users WHERE id = $1 AND role IN ('admin','cashier','super_admin','owner','store_staff')`,
+      `SELECT id, name, email FROM users WHERE id = $1 AND role IN ('admin','cashier','owner','store_staff')`,
       [req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
@@ -267,7 +271,7 @@ export const updateStaffPermissions = async (req, res) => {
 
   try {
     const staffResult = await pool.query(
-      `SELECT id, name, role FROM users WHERE id = $1 AND role IN ('admin','cashier','super_admin','owner','store_staff')`,
+      `SELECT id, name, role FROM users WHERE id = $1 AND role IN ('admin','cashier','owner','store_staff')`,
       [req.params.id]
     );
     if (staffResult.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });

@@ -18,7 +18,10 @@ const InventoryView = () => {
   const fetchData = async () => {
     try {
       const [p, a, ls] = await Promise.all([getProducts(), getStockAdjustments(), getLowStockProducts()]);
-      setProducts(p); setAdjustments(a); setLowStock(ls);
+      setProducts(Array.isArray(p) ? p : []);
+      setAdjustments(Array.isArray(a) ? a : []);
+      // getLowStockProducts returns { count, products } or an array
+      setLowStock(Array.isArray(ls) ? ls : (ls?.products || []));
     } catch (e) { console.error(e); }
     setLoading(false);
   };

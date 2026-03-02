@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
 
+import { logoutApi } from '../../services/api';
+
 const createNavItems = (badges = {}) => [
   // Core
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -39,7 +41,7 @@ const OWNER_NAV = [
 // Super admin sees the same business nav as owner in admin panel
 // (system-level features are in the separate /super-admin dashboard)
 
-const AdminLayout = ({ activeView, onNavigate, badges = {}, children }) => {
+const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = {}, children }) => {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -62,11 +64,20 @@ const AdminLayout = ({ activeView, onNavigate, badges = {}, children }) => {
     setShowLogoutConfirm(true);
   };
 
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
+    try {
+      await logoutApi();
+    } catch (e) {
+      // Ignore logout API errors
+    }
     localStorage.removeItem('shopCoreUser');
     localStorage.removeItem('shopCoreToken');
     setShowLogoutConfirm(false);
-    navigate('/');
+    // Call parent logout handler to clear React user state
+    if (parentLogout) {
+      parentLogout();
+    }
+    navigate('/login');
   };
 
   const SidebarContent = ({ mobile = false }) => (

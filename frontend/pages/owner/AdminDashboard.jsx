@@ -11,7 +11,7 @@ import BannersView from './BannersView';
 import PromotionsView from './PromotionsView';
 import ContentView from './ContentView';
 
-const AdminDashboard = () => {
+const AdminDashboard = ({ onLogout }) => {
   const userStr = localStorage.getItem('shopCoreUser');
   const user = userStr ? JSON.parse(userStr) : null;
   const isStaff = user?.role === 'store_staff';
@@ -34,7 +34,7 @@ const AdminDashboard = () => {
   };
 
   return (
-    <AdminLayout activeView={activeView} onNavigate={setActiveView}>
+    <AdminLayout activeView={activeView} onNavigate={setActiveView} onLogout={onLogout}>
       {renderView()}
     </AdminLayout>
   );

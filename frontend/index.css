@@ -1,5 +1,11 @@
 /* 10th West Moto - Global Styles */
 
+/* Hide browser-native password reveal icons to avoid duplicating our custom eye toggle */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;

@@ -19,7 +19,9 @@ const migrateAuth = async () => {
         ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255),
         ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP,
         ADD COLUMN IF NOT EXISTS last_login TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+        ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS consent_given_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS age_confirmed_at TIMESTAMP;
     `);
     // Make password_hash nullable for OAuth-only users
     await client.query(`

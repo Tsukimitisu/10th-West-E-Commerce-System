@@ -153,6 +153,94 @@ export const updateStock = async (req, res) => {
   }
 };
 
+// Get stock adjustment history
+export const getStockAdjustments = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT sa.*, p.name as product_name
+      FROM stock_adjustments sa
+      LEFT JOIN products p ON sa.product_id = p.id
+      ORDER BY sa.created_at DESC
+      LIMIT 200
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get stock adjustments error:', error);
+    // If table doesn't exist, return empty array
+    res.json([]);
+  }
+};
+
+// Create a stock adjustment (add/remove stock with reason)
+export const createStockAdjustment = async (req, res) => {
+  const { product_id, quantity_change, reason, note } = req.body;
+
+  if (!product_id || typeof quantity_change !== 'number') {
+    return res.status(400).json({ message: 'product_id and quantity_change are required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Get current stock
+    const productResult = await client.query(
+      'SELECT id, name, stock_quantity, low_stock_threshold FROM products WHERE id = $1',
+      [product_id]
+    );
+
+    if (productResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const product = productResult.rows[0];
+    const currentStock = parseInt(product.stock_quantity);
+    const newStock = currentStock + quantity_change;
+
+    if (newStock < 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Stock cannot go below zero' });
+    }
+
+    // Update product stock
+    await client.query(
+      'UPDATE products SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newStock, product_id]
+    );
+
+    // Record adjustment
+    try {
+      await client.query(
+        `INSERT INTO stock_adjustments (product_id, quantity, previous_quantity, new_quantity, reason, note, adjusted_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [product_id, quantity_change, currentStock, newStock, reason || 'manual', note || '', req.user.id]
+      );
+    } catch (adjErr) {
+      // stock_adjustments table may not exist yet — continue without recording
+      console.warn('Could not record stock adjustment (table may not exist):', adjErr.message);
+    }
+
+    await client.query('COMMIT');
+
+    // Emit real-time updates
+    const stockData = { product_id, name: product.name, stock_quantity: newStock, previous_stock: currentStock, adjustment: quantity_change };
+    emitStockUpdate(stockData);
+
+    if (newStock <= parseInt(product.low_stock_threshold || 5)) {
+      emitLowStockAlert({ id: product_id, name: product.name, stock_quantity: newStock, low_stock_threshold: parseInt(product.low_stock_threshold || 5) });
+    }
+
+    res.json({ message: 'Stock adjusted successfully', product: { id: product_id, name: product.name, stock_quantity: newStock, previous_stock: currentStock, adjustment: quantity_change } });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Create stock adjustment error:', error);
+    res.status(500).json({ message: 'Failed to adjust stock' });
+  } finally {
+    client.release();
+  }
+};
+
 // Bulk stock update
 export const bulkUpdateStock = async (req, res) => {
   const { updates } = req.body; // Array of { product_id, quantity, adjustment_type }
