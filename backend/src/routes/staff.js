@@ -22,14 +22,14 @@ router.post('/',
   body('name').trim().notEmpty(),
   body('email').isEmail(),
   body('password').isLength({ min: 8 }),
-  body('role').isIn(['admin', 'cashier', 'store_staff', 'owner']),
+  body('role').isIn(['store_staff', 'owner']),
   validate,
   addStaff
 );
 router.put('/:id',
   body('name').trim().notEmpty(),
   body('email').isEmail(),
-  body('role').isIn(['admin', 'cashier', 'store_staff', 'owner']),
+  body('role').isIn(['store_staff', 'owner']),
   validate,
   editStaff
 );

@@ -36,7 +36,7 @@ const ReportsView = ({ stats }) => {
                 {['overview', 'sales', 'inventory', 'financial', 'customers'].map(tab => (
                     <button
                         key={tab}
-                        onClick={() => setActiveTabtab}
+                        onClick={() => setActiveTab(tab)}
                         className={`px-4 py-2 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-colors ${
                             activeTab === tab ? 'bg-slate-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}

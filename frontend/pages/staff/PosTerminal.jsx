@@ -266,13 +266,13 @@ const PosTerminal = () => {
         if (cartItems.length > 0) {
             setShowLogoutConfirm(true);
         } else {
-            navigate('/');
+            navigate('/admin');
         }
     };
 
     const confirmLogout = () => {
         setShowLogoutConfirm(false);
-        navigate('/');
+        navigate('/admin');
     };
 
     if (loading && products.length === 0) return <div className="h-screen flex items-center justify-center bg-slate-100"><Loader2 className="animate-spin h-10 w-10 text-orange-600" /></div>;

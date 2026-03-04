@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, Phone, Mail, HelpCircle, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell } from 'lucide-react';
+import { Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell } from 'lucide-react';
 import { getCategories, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
@@ -98,21 +98,6 @@ const Navbar = ({ user, onLogout }) => {
 
   return (
     <>
-      {/* Top utility bar */}
-      <div className="bg-gray-900 text-gray-300 text-xs hidden md:block">
-        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-8">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1"><Phone size={12} /> (02) 8888-1234</span>
-            <span className="flex items-center gap-1"><Mail size={12} /> support@10thwestmoto.com</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span>Free shipping on orders over â‚±2,500</span>
-            <Link to="/faq" className="hover:text-white transition-colors flex items-center gap-1"><HelpCircle size={12} /> Help</Link>
-            <Link to="/contact" className="hover:text-white transition-colors">Contact</Link>
-          </div>
-        </div>
-      </div>
-
       {/* Main navbar */}
       <header className={`sticky top-0 z-50 bg-white transition-shadow duration-300 ${scrolled ? 'shadow-md' : 'shadow-sm'}`}>
         <div className="max-w-7xl mx-auto px-4">

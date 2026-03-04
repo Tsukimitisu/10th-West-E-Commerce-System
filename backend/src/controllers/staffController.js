@@ -2,6 +2,8 @@ import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { logActivity } from '../middleware/activityLogger.js';
 
+const STAFF_ROLES = ['owner', 'store_staff'];
+
 // ─── LIST STAFF ────────────────────────────────────────────────────
 export const listStaff = async (req, res) => {
   const { page = 1, limit = 20, role, status, search } = req.query;
@@ -10,14 +12,14 @@ export const listStaff = async (req, res) => {
   try {
     let query = `
       SELECT u.id, u.name, u.email, u.role, u.phone, u.avatar, u.is_active,
-             u.last_login, u.created_at, u.two_factor_enabled,
+             u.last_login, u.created_at, u.two_factor_enabled, u.locked_until,
              u.failed_login_attempts, u.oauth_provider,
              (SELECT COUNT(*) FROM activity_logs WHERE user_id = u.id) as action_count,
              (SELECT MAX(created_at) FROM activity_logs WHERE user_id = u.id) as last_activity
-      FROM users u WHERE u.role IN ('admin','cashier','owner','store_staff')
+      FROM users u WHERE u.role = ANY($1::text[])
     `;
-    const params = [];
-    let idx = 1;
+    const params = [STAFF_ROLES];
+    let idx = 2;
 
     if (role) { query += ` AND u.role = $${idx++}`; params.push(role); }
     if (status === 'active') { query += ` AND u.is_active = true`; }
@@ -30,9 +32,9 @@ export const listStaff = async (req, res) => {
     const result = await pool.query(query, params);
 
     // Count
-    let countQuery = `SELECT COUNT(*) FROM users WHERE role IN ('admin','cashier','owner','store_staff')`;
-    const cp = [];
-    let ci = 1;
+    let countQuery = `SELECT COUNT(*) FROM users WHERE role = ANY($1::text[])`;
+    const cp = [STAFF_ROLES];
+    let ci = 2;
     if (role) { countQuery += ` AND role = $${ci++}`; cp.push(role); }
     if (status === 'active') countQuery += ` AND is_active = true`;
     if (status === 'inactive') countQuery += ` AND is_active = false`;
@@ -57,9 +59,10 @@ export const getStaff = async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, name, email, role, phone, avatar, is_active, last_login, created_at,
-              two_factor_enabled, oauth_provider, failed_login_attempts
-       FROM users WHERE id = $1 AND role IN ('admin','cashier','owner','store_staff')`,
-      [req.params.id]
+              two_factor_enabled, oauth_provider, failed_login_attempts, locked_until
+       FROM users
+       WHERE id = $1 AND role = ANY($2::text[])`,
+      [req.params.id, STAFF_ROLES]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
 
@@ -94,7 +97,7 @@ export const addStaff = async (req, res) => {
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) return res.status(400).json({ message: 'Email already registered' });
 
-    const validRoles = ['store_staff', 'owner', 'customer'];
+    const validRoles = STAFF_ROLES;
     // super_admin cannot be created through Staff Management
     if (!validRoles.includes(role)) {
       return res.status(400).json({ message: `Invalid role. Allowed: ${validRoles.join(', ')}` });
@@ -130,7 +133,16 @@ export const editStaff = async (req, res) => {
   const { name, email, role, phone, password } = req.body;
 
   try {
-    const existing = await pool.query('SELECT * FROM users WHERE id = $1 AND role IN (\'admin\',\'cashier\',\'owner\',\'store_staff\')', [req.params.id]);
+    if (!STAFF_ROLES.includes(role)) {
+      return res.status(400).json({ message: `Invalid role. Allowed: ${STAFF_ROLES.join(', ')}` });
+    }
+
+    const existing = await pool.query(
+      `SELECT *
+       FROM users
+       WHERE id = $1 AND role = ANY($2::text[])`,
+      [req.params.id, STAFF_ROLES]
+    );
     if (existing.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
 
     let query = 'UPDATE users SET name = $1, email = $2, role = $3, phone = $4, updated_at = NOW()';
@@ -170,9 +182,9 @@ export const toggleStaffStatus = async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE users SET is_active = NOT is_active, updated_at = NOW()
-       WHERE id = $1 AND role IN ('admin','cashier','owner','store_staff')
+       WHERE id = $1 AND role = ANY($2::text[])
        RETURNING id, name, email, role, is_active`,
-      [req.params.id]
+      [req.params.id, STAFF_ROLES]
     );
 
     if (result.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
@@ -209,8 +221,10 @@ export const toggleStaffStatus = async (req, res) => {
 export const deleteStaff = async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, email FROM users WHERE id = $1 AND role IN ('admin','cashier','owner','store_staff')`,
-      [req.params.id]
+      `SELECT id, name, email
+       FROM users
+       WHERE id = $1 AND role = ANY($2::text[])`,
+      [req.params.id, STAFF_ROLES]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
 
@@ -271,8 +285,10 @@ export const updateStaffPermissions = async (req, res) => {
 
   try {
     const staffResult = await pool.query(
-      `SELECT id, name, role FROM users WHERE id = $1 AND role IN ('admin','cashier','owner','store_staff')`,
-      [req.params.id]
+      `SELECT id, name, role
+       FROM users
+       WHERE id = $1 AND role = ANY($2::text[])`,
+      [req.params.id, STAFF_ROLES]
     );
     if (staffResult.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
 
@@ -321,44 +337,59 @@ export const getStaffPerformance = async (req, res) => {
 
   try {
     const staffId = req.params.id;
+    const days = Number.parseInt(period, 10);
+    const lookbackDays = Number.isFinite(days) && days > 0 ? days : 30;
+    const staffResult = await pool.query(
+      `SELECT id
+       FROM users
+       WHERE id = $1 AND role = ANY($2::text[])`,
+      [staffId, STAFF_ROLES]
+    );
+    if (staffResult.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
 
     // Orders processed
     const ordersResult = await pool.query(
       `SELECT COUNT(*) as total_orders,
-              COALESCE(SUM(total), 0) as total_revenue,
-              COALESCE(AVG(total), 0) as avg_order_value
+              COALESCE(SUM(total_amount), 0) as total_revenue,
+              COALESCE(AVG(total_amount), 0) as avg_order_value
        FROM orders
-       WHERE created_by = $1 AND created_at > NOW() - INTERVAL '${parseInt(period)} days'`,
-      [staffId]
+       WHERE (cashier_id = $1 OR assigned_staff_id = $1)
+         AND created_at > NOW() - ($2::int * INTERVAL '1 day')`,
+      [staffId, lookbackDays]
     );
 
     // Login activity
     const loginsResult = await pool.query(
       `SELECT COUNT(*) as login_count
        FROM activity_logs
-       WHERE user_id = $1 AND action = 'login' AND created_at > NOW() - INTERVAL '${parseInt(period)} days'`,
-      [staffId]
+       WHERE user_id = $1
+         AND action = 'login'
+         AND created_at > NOW() - ($2::int * INTERVAL '1 day')`,
+      [staffId, lookbackDays]
     );
 
     // Actions performed
     const actionsResult = await pool.query(
       `SELECT action, COUNT(*) as count
        FROM activity_logs
-       WHERE user_id = $1 AND created_at > NOW() - INTERVAL '${parseInt(period)} days'
+       WHERE user_id = $1
+         AND created_at > NOW() - ($2::int * INTERVAL '1 day')
        GROUP BY action ORDER BY count DESC LIMIT 10`,
-      [staffId]
+      [staffId, lookbackDays]
     );
 
-    // Returns processed
+    // Returns processed (derived from activity logs; returns table has no processed_by column)
     const returnsResult = await pool.query(
       `SELECT COUNT(*) as total_returns
-       FROM returns
-       WHERE processed_by = $1 AND created_at > NOW() - INTERVAL '${parseInt(period)} days'`,
-      [staffId]
+       FROM activity_logs
+       WHERE user_id = $1
+         AND action IN ('return_approved', 'return_rejected', 'return_refunded', 'returns_processed')
+         AND created_at > NOW() - ($2::int * INTERVAL '1 day')`,
+      [staffId, lookbackDays]
     );
 
     res.json({
-      period: parseInt(period),
+      period: lookbackDays,
       orders: {
         totalOrders: parseInt(ordersResult.rows[0].total_orders),
         totalRevenue: parseFloat(ordersResult.rows[0].total_revenue),

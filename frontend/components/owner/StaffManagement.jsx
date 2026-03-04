@@ -26,7 +26,7 @@ const StaffManagement = () => {
   const [success, setSuccess] = useState('');
 
   // Form state
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'cashier', phone: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'store_staff', phone: '' });
 
   // Global activity log state
   const [globalLogs, setGlobalLogs] = useState([]);
@@ -71,7 +71,7 @@ const StaffManagement = () => {
   };
 
   const openAdd = () => {
-    setForm({ name: '', email: '', password: '', role: 'cashier', phone: '' });
+    setForm({ name: '', email: '', password: '', role: 'store_staff', phone: '' });
     setView('add');
   };
 
@@ -225,8 +225,6 @@ const StaffManagement = () => {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
             <select className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-              <option value="cashier">Cashier</option>
-              <option value="admin">Admin</option>
               <option value="store_staff">Store Staff</option>
               <option value="owner">Owner</option>
             </select>
@@ -261,7 +259,7 @@ const StaffManagement = () => {
           <button onClick={() => { setView('list'); setSelected(null); }} className="text-sm text-orange-600 font-medium hover:text-orange-500">&larr; Back to Staff</button>
           <div className="flex gap-2">
             <button onClick={() => openEdit(selected)} className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm flex items-center gap-1"><Pencil className="h-3.5 w-3.5" /> Edit</button>
-            <button onClick={() => handleDelete(selected.id)} className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm flex items-center gap-1"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
+            <button onClick={() => handleDelete(selected)} className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm flex items-center gap-1"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
           </div>
         </div>
 
@@ -468,10 +466,8 @@ const StaffManagement = () => {
         </div>
         <select className="border border-slate-300 rounded-lg px-3 py-2 text-sm" value={filterRole} onChange={e => setFilterRole(e.target.value)}>
           <option value="">All Roles</option>
-          <option value="admin">Admin</option>
           <option value="owner">Owner</option>
           <option value="store_staff">Store Staff</option>
-          <option value="cashier">Cashier</option>
         </select>
         <select className="border border-slate-300 rounded-lg px-3 py-2 text-sm" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="">All Status</option>

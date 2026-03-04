@@ -1,4 +1,5 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import AdminLayout from '../../components/owner/AdminLayout';
 import DashboardView from './DashboardView';
 import ProductsView from './ProductsView';
@@ -14,6 +15,12 @@ import ContentView from './ContentView';
 const AdminDashboard = ({ onLogout }) => {
   const userStr = localStorage.getItem('shopCoreUser');
   const user = userStr ? JSON.parse(userStr) : null;
+  const canAccessAdmin = user?.role === 'owner' || user?.role === 'store_staff';
+
+  if (!canAccessAdmin) {
+    return <Navigate to="/login" replace />;
+  }
+
   const isStaff = user?.role === 'store_staff';
   const [activeView, setActiveView] = useState(isStaff ? 'orders' : 'dashboard');
 

@@ -19,7 +19,7 @@ import OrderDetail from './pages/customer/OrderDetail';
 import AddressBook from './pages/customer/AddressBook';
 import Contact from './pages/Support/Contact';
 import FAQ from './pages/Support/FAQ';
-import PrivacyPolicy from './pages/Support/PrivacyPolicy';
+import PrivacyPolicy from './pages/Support/PolicyPrivacy';
 import TermsOfService from './pages/Support/TermsOfService';
 import ReturnPolicy from './pages/Support/ReturnPolicy';
 import PrivacyBanner from './components/PrivacyBanner';
@@ -181,3 +181,4 @@ const App = () => {
 };
 
 export default App;
+

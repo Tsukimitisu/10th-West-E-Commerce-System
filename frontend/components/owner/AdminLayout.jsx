@@ -38,8 +38,7 @@ const OWNER_NAV = [
   'promotions', 'banners', 'content'
 ];
 
-// Super admin sees the same business nav as owner in admin panel
-// (system-level features are in the separate /super-admin dashboard)
+// Only owner/store_staff should render admin navigation here.
 
 const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = {}, children }) => {
   const navigate = useNavigate();
@@ -52,7 +51,9 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   const allNavItems = createNavItems(badges);
   const navItems = user?.role === 'store_staff'
     ? allNavItems.filter(item => STORE_STAFF_NAV.includes(item.id))
-    : allNavItems.filter(item => OWNER_NAV.includes(item.id)); // owner, admin, super_admin all see business nav
+    : user?.role === 'owner'
+      ? allNavItems.filter(item => OWNER_NAV.includes(item.id))
+      : [];
 
   const handleNav = (item) => {
     if (item.external) { window.open(item.external, '_blank'); }
@@ -189,7 +190,6 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
               <Bell size={18} />
               <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full" />
             </button>
-            <a href="#/" className="text-xs text-gray-400 hover:text-orange-500 font-medium hidden sm:block">View Store â†’</a>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
