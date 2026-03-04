@@ -1,6 +1,6 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell } from 'lucide-react';
 import { getCategories, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
@@ -9,8 +9,6 @@ import CartDrawer from './CartDrawer';
 const Navbar = ({ user, onLogout }) => {
   const [categories, setCategories] = useState([]);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [catMenuOpen, setCatMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
@@ -20,9 +18,7 @@ const Navbar = ({ user, onLogout }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
   const { itemCount } = useCart();
-  const navigate = useNavigate();
   const location = useLocation();
-  const searchRef = useRef(null);
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
 
@@ -83,15 +79,6 @@ const Navbar = ({ user, onLogout }) => {
       setUnreadCount(prev => Math.max(0, prev - 1));
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     } catch (e) { console.error(e); }
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
-      setSearchOpen(false);
-      setSearchQuery('');
-    }
   };
 
   if (location.pathname === '/pos') return null;
@@ -160,10 +147,6 @@ const Navbar = ({ user, onLogout }) => {
 
             {/* Right actions */}
             <div className="flex items-center gap-1">
-              {/* Search */}
-              <button onClick={() => { setSearchOpen(!searchOpen); setTimeout(() => searchRef.current?.focus(), 100); }} className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors">
-                <Search size={20} />
-              </button>
 
               {/* Notifications */}
               {user && (
@@ -255,28 +238,6 @@ const Navbar = ({ user, onLogout }) => {
             </div>
           </div>
         </div>
-
-        {/* Search bar dropdown */}
-        {searchOpen && (
-          <div className="border-t border-gray-100 bg-white animate-fade-in">
-            <div className="max-w-7xl mx-auto px-4 py-3">
-              <form onSubmit={handleSearch} className="flex gap-2">
-                <div className="flex-1 relative">
-                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    ref={searchRef}
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search for motorcycle parts, accessories, gear..."
-                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  />
-                </div>
-                <button type="submit" className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">Search</button>
-                <button type="button" onClick={() => setSearchOpen(false)} className="p-2.5 text-gray-400 hover:text-gray-600"><X size={20} /></button>
-              </form>
-            </div>
-          </div>
-        )}
       </header>
 
       {/* Mobile drawer */}
