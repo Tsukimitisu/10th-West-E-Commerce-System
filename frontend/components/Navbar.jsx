@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell } from 'lucide-react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
 import { getCategories, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
@@ -19,6 +19,7 @@ const Navbar = ({ user, onLogout }) => {
   const [notifOpen, setNotifOpen] = useState(false);
   const { itemCount } = useCart();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
 
@@ -79,6 +80,20 @@ const Navbar = ({ user, onLogout }) => {
       setUnreadCount(prev => Math.max(0, prev - 1));
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     } catch (e) { console.error(e); }
+  };
+
+  const isShopRoute = location.pathname === '/shop';
+  const shopSearch = searchParams.get('search') || '';
+  const shopSort = searchParams.get('sort') || 'newest';
+  const shopView = searchParams.get('view') === 'list' ? 'list' : 'grid';
+
+  const updateShopParams = (updates) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === '' || value === null || value === undefined) next.delete(key);
+      else next.set(key, value);
+    });
+    setSearchParams(next, { replace: true });
   };
 
   if (location.pathname === '/pos') return null;
@@ -147,6 +162,52 @@ const Navbar = ({ user, onLogout }) => {
 
             {/* Right actions */}
             <div className="flex items-center gap-1">
+              {isShopRoute && (
+                <div className="hidden lg:flex items-center gap-2 mr-1">
+                  <div className="relative w-56">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      value={shopSearch}
+                      onChange={(e) => updateShopParams({ search: e.target.value })}
+                      placeholder="Search products..."
+                      className="w-full h-9 pl-8 pr-3 rounded-lg border border-gray-200 bg-white text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                  <select
+                    value={shopSort}
+                    onChange={(e) => updateShopParams({ sort: e.target.value })}
+                    className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="price-asc">Price: Low to High</option>
+                    <option value="price-desc">Price: High to Low</option>
+                    <option value="best-selling">Best Selling</option>
+                    <option value="top-rated">Top Rated</option>
+                  </select>
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('shop:open-filters'))}
+                    className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors flex items-center gap-1.5"
+                  >
+                    <SlidersHorizontal size={14} /> Filter
+                  </button>
+                  <div className="h-9 inline-flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
+                    <button
+                      onClick={() => updateShopParams({ view: 'grid' })}
+                      className={`h-full px-2.5 ${shopView === 'grid' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+                      title="Grid view"
+                    >
+                      <Grid3X3 size={14} />
+                    </button>
+                    <button
+                      onClick={() => updateShopParams({ view: 'list' })}
+                      className={`h-full px-2.5 ${shopView === 'list' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+                      title="List view"
+                    >
+                      <List size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Notifications */}
               {user && (
@@ -238,6 +299,7 @@ const Navbar = ({ user, onLogout }) => {
             </div>
           </div>
         </div>
+
       </header>
 
       {/* Mobile drawer */}

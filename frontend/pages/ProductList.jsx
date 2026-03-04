@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { Grid3X3, List, SlidersHorizontal, ChevronRight, Search, X } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import { getProducts, getCategories } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
@@ -10,7 +10,8 @@ const ProductList = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('grid');
+  const [view, setView] = useState(searchParams.get('view') === 'list' ? 'list' : 'grid');
+  const [showDesktopFilters, setShowDesktopFilters] = useState(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // Filter state
@@ -32,10 +33,21 @@ const ProductList = () => {
     const cat = searchParams.get('category');
     const search = searchParams.get('search');
     const sort = searchParams.get('sort');
-    if (cat) setSelectedCategory(cat);
-    if (search) setSearchQuery(search);
+    const viewMode = searchParams.get('view');
+    setSelectedCategory(cat || '');
+    setSearchQuery(search || '');
     if (sort) setSortBy(sort);
+    setView(viewMode === 'list' ? 'list' : 'grid');
   }, [searchParams]);
+
+  useEffect(() => {
+    const openFilters = () => {
+      if (window.innerWidth >= 1024) setShowDesktopFilters((prev) => !prev);
+      else setMobileFiltersOpen(true);
+    };
+    window.addEventListener('shop:open-filters', openFilters);
+    return () => window.removeEventListener('shop:open-filters', openFilters);
+  }, []);
 
   const brands = useMemo(() => {
     const b = new Set();
@@ -74,8 +86,6 @@ const ProductList = () => {
     setSearchParams({});
   };
 
-  const categoryName = categories.find(c => String(c.id) === selectedCategory)?.name;
-
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-12">
@@ -97,59 +107,6 @@ const ProductList = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Breadcrumb & Header */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
-            <Link to="/" className="hover:text-orange-500 transition-colors">Home</Link>
-            <ChevronRight size={14} />
-            <span className="text-gray-900 font-medium">{categoryName || 'Shop'}</span>
-          </div>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="font-display font-bold text-2xl text-gray-900">{categoryName || 'All Products'}</h1>
-              <p className="text-sm text-gray-500 mt-1">{filtered.length} product{filtered.length !== 1 ? 's' : ''} found</p>
-            </div>
-            {/* Search & Controls */}
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1 md:w-64">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search products..."
-                  className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-              <select
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value)}
-                className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 hidden md:block"
-              >
-                <option value="newest">Newest</option>
-                <option value="price-asc">Price: Low to High</option>
-                <option value="price-desc">Price: High to Low</option>
-                <option value="best-selling">Best Selling</option>
-                <option value="top-rated">Top Rated</option>
-              </select>
-              <div className="hidden md:flex items-center border border-gray-200 rounded-lg overflow-hidden">
-                <button onClick={() => setView('grid')} className={`p-2 ${view === 'grid' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}><Grid3X3 size={18} /></button>
-                <button onClick={() => setView('list')} className={`p-2 ${view === 'list' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}><List size={18} /></button>
-              </div>
-              <button onClick={() => setMobileFiltersOpen(true)} className="lg:hidden p-2 border border-gray-200 rounded-lg text-gray-600 relative">
-                <SlidersHorizontal size={18} />
-                {activeFilterCount > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{activeFilterCount}</span>}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="flex gap-6">
@@ -169,6 +126,7 @@ const ProductList = () => {
             activeFilterCount={activeFilterCount}
             isMobileOpen={mobileFiltersOpen}
             onMobileClose={() => setMobileFiltersOpen(false)}
+            showDesktop={showDesktopFilters}
           />
 
           {/* Products */}

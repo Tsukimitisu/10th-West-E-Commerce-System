@@ -7,7 +7,8 @@ const FilterSidebar = ({
   priceRange, onPriceChange,
   inStockOnly, onStockChange,
   onClearAll, activeFilterCount,
-  isMobileOpen, onMobileClose
+  isMobileOpen, onMobileClose,
+  showDesktop = true,
 }) => {
   const [openSections, setOpenSections] = React.useState({ category: true, brand: true, price: true, stock: true });
 
@@ -122,7 +123,7 @@ const FilterSidebar = ({
     return (
       <>
         {/* Desktop sidebar */}
-        <div className="hidden lg:block w-64 flex-shrink-0">
+        <div className={`${showDesktop ? 'hidden lg:block' : 'hidden'} w-64 flex-shrink-0`}>
           <div className="bg-white border border-gray-100 rounded-xl p-4 sticky top-24">{content}</div>
         </div>
         {/* Mobile overlay */}
