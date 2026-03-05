@@ -112,6 +112,7 @@ const Wishlist = () => {
                     <Link to={`/products/${productId}`} className="block">
                       <h3 className="text-sm font-medium text-gray-900 hover:text-orange-500 line-clamp-2 transition-colors">{name}</h3>
                     </Link>
+                    <p className="text-xs text-gray-500">Stock: {stockQuantity}</p>
                     <div className="flex items-center gap-2">
                       {salePrice ? (
                         <>

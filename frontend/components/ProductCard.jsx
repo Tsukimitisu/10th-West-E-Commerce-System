@@ -6,8 +6,9 @@ import { useCart } from '../context/CartContext';
 
 const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'grid' }) => {
   const isWishlisted = wishlistedIds.includes(product.id);
-  const isOutOfStock = product.stock_quantity <= 0;
-  const isLowStock = product.stock_quantity > 0 && product.stock_quantity <= (product.low_stock_threshold || 5);
+  const stockLevel = Math.max(0, Number(product.stock_quantity ?? 0));
+  const isOutOfStock = stockLevel <= 0;
+  const isLowStock = stockLevel > 0 && stockLevel <= (product.low_stock_threshold || 5);
   const hasDiscount = product.is_on_sale && product.sale_price;
   const discountPercent = hasDiscount ? Math.round((1 - (product.sale_price / product.price)) * 100) : 0;
   const { addToCart } = useCart();
@@ -66,6 +67,7 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
           <div className="flex items-center gap-2 mt-2">
             {product.rating && <div className="flex items-center gap-1"><Star size={14} className="text-yellow-400 fill-yellow-400" /><span className="text-sm font-medium">{product.rating}</span></div>}
             {product.brand && <span className="text-xs text-gray-400">- {product.brand}</span>}
+            <span className="text-xs text-gray-500">Stock: {stockLevel}</span>
             {isLowStock && <span className="text-xs text-amber-600 flex items-center gap-1"><AlertTriangle size={12} /> Low stock</span>}
           </div>
           <div className="flex items-center gap-2 mt-2">
@@ -142,6 +144,7 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
             {product.reviewCount !== undefined && <span className="text-xs text-gray-400">({product.reviewCount})</span>}
           </div>
         )}
+        <p className="text-xs text-gray-500 mt-1">Stock: {stockLevel}</p>
         <div className="flex items-center justify-between mt-2.5">
           <div className="flex items-center gap-2">
             {hasDiscount ? (
