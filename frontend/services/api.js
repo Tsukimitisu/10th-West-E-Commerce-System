@@ -9,6 +9,13 @@ const API_URL = import.meta.env.VITE_API_URL || (() => {
 })();
 const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK === 'true';
+const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
+
+const toNullableString = (value) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+};
 
 // Helper function to get auth token
 const getAuthToken = () => {
@@ -30,9 +37,15 @@ const getCurrentUserFromToken = () => {
 const authenticatedFetch = async (url, options = {}) => {
   const token = getAuthToken();
   const headers = {
-    'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
+  const hasContentTypeHeader = Object.keys(headers).some((key) => key.toLowerCase() === 'content-type');
+  const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const isBlobBody = typeof Blob !== 'undefined' && options.body instanceof Blob;
+
+  if (!hasContentTypeHeader && !isFormDataBody && !isBlobBody) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -423,19 +436,19 @@ const mapProductFromSupabase = (p) => ({
 });
 
 const mapProductToSupabase = (product) => ({
-  part_number: product.partNumber,
+  part_number: toNullableString(product.partNumber),
   name: product.name,
   description: product.description,
   price: product.price,
   buying_price: product.buyingPrice,
-  image: product.image,
+  image: toNullableString(product.image),
   category_id: product.category_id,
   stock_quantity: product.stock_quantity,
-  box_number: product.boxNumber,
+  box_number: toNullableString(product.boxNumber),
   low_stock_threshold: product.low_stock_threshold,
-  brand: product.brand,
-  sku: product.sku,
-  barcode: product.barcode,
+  brand: toNullableString(product.brand),
+  sku: toNullableString(product.sku),
+  barcode: toNullableString(product.barcode),
   sale_price: product.sale_price,
   is_on_sale: product.is_on_sale,
 });
@@ -521,19 +534,21 @@ export const addProduct = async (product) => {
 
   // Map frontend fields to backend fields
   const backendProduct = {
-    part_number: product.partNumber,
+    part_number: toNullableString(product.partNumber),
     name: product.name,
     description: product.description,
     price: product.price,
     buying_price: product.buyingPrice,
-    image: product.image,
+    image: toNullableString(product.image),
     category_id: product.category_id,
     stock_quantity: product.stock_quantity,
-    box_number: product.boxNumber,
+    box_number: toNullableString(product.boxNumber),
     low_stock_threshold: product.low_stock_threshold,
-    brand: product.brand,
-    sku: product.sku,
-    barcode: product.barcode,
+    brand: toNullableString(product.brand),
+    sku: toNullableString(product.sku),
+    barcode: toNullableString(product.barcode),
+    sale_price: product.sale_price,
+    is_on_sale: product.is_on_sale,
   };
 
   const data = await authenticatedFetch(`${API_URL}/products`, {
@@ -571,19 +586,19 @@ export const updateProduct = async (id, product) => {
   }
 
   const backendProduct = {
-    part_number: product.partNumber,
+    part_number: toNullableString(product.partNumber),
     name: product.name,
     description: product.description,
     price: product.price,
     buying_price: product.buyingPrice,
-    image: product.image,
+    image: toNullableString(product.image),
     category_id: product.category_id,
     stock_quantity: product.stock_quantity,
-    box_number: product.boxNumber,
+    box_number: toNullableString(product.boxNumber),
     low_stock_threshold: product.low_stock_threshold,
-    brand: product.brand,
-    sku: product.sku,
-    barcode: product.barcode,
+    brand: toNullableString(product.brand),
+    sku: toNullableString(product.sku),
+    barcode: toNullableString(product.barcode),
     sale_price: product.sale_price,
     is_on_sale: product.is_on_sale,
   };
@@ -619,6 +634,37 @@ export const deleteProduct = async (id) => {
   await authenticatedFetch(`${API_URL}/products/${id}`, {
     method: 'DELETE',
   });
+};
+
+export const uploadProductImage = async (file) => {
+  if (!file) throw new Error('Image file is required');
+  if (USE_SUPABASE) throw new Error('Image upload is only available in backend API mode');
+
+  const token = getAuthToken();
+  if (!token) throw new Error('You must be logged in to upload images');
+
+  const response = await fetch(`${API_URL}/products/upload-image`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': file.type || 'application/octet-stream',
+    },
+    body: file,
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Image upload failed');
+  }
+
+  const imageUrl = data.imageUrl || '';
+  if (!imageUrl) throw new Error('Image upload failed');
+
+  if (imageUrl.startsWith('/')) {
+    return `${API_ORIGIN}${imageUrl}`;
+  }
+
+  return imageUrl;
 };
 
 // ==================== CATEGORIES ====================

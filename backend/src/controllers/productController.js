@@ -1,5 +1,32 @@
 import pool from '../config/database.js';
 import { emitProductCreated, emitProductUpdated, emitProductDeleted } from '../socket.js';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'products');
+
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const MIME_EXTENSION_MAP = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif'
+};
+
+const toNullableString = (value) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+};
+
+const toNullableNumber = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
 
 // Get all products
 export const getProducts = async (req, res) => {
@@ -79,21 +106,33 @@ export const createProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
     image, category_id, stock_quantity, box_number,
-    low_stock_threshold, brand, sku, barcode
+    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale
   } = req.body;
 
   try {
+    const cleanPartNumber = toNullableString(part_number);
+    const cleanSku = toNullableString(sku);
+    const cleanBarcode = toNullableString(barcode);
+    const cleanImage = toNullableString(image);
+    const cleanBrand = toNullableString(brand);
+    const cleanBoxNumber = toNullableString(box_number);
+    const cleanCategoryId = toNullableNumber(category_id);
+    const cleanStockQuantity = toNullableNumber(stock_quantity);
+    const cleanLowStockThreshold = toNullableNumber(low_stock_threshold);
+    const cleanSalePrice = toNullableNumber(sale_price);
+    const cleanIsOnSale = typeof is_on_sale === 'boolean' ? is_on_sale : null;
+
     const result = await pool.query(
       `INSERT INTO products (
         part_number, name, description, price, buying_price, 
         image, category_id, stock_quantity, box_number, 
-        low_stock_threshold, brand, sku, barcode
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15, false))
       RETURNING *`,
       [
-        part_number, name, description, price, buying_price,
-        image, category_id, stock_quantity || 0, box_number,
-        low_stock_threshold || 5, brand, sku, barcode
+        cleanPartNumber, name, description, price, buying_price,
+        cleanImage, cleanCategoryId, cleanStockQuantity ?? 0, cleanBoxNumber,
+        cleanLowStockThreshold ?? 5, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale
       ]
     );
 
@@ -123,6 +162,18 @@ export const updateProduct = async (req, res) => {
   } = req.body;
 
   try {
+    const cleanPartNumber = toNullableString(part_number);
+    const cleanSku = toNullableString(sku);
+    const cleanBarcode = toNullableString(barcode);
+    const cleanImage = toNullableString(image);
+    const cleanBrand = toNullableString(brand);
+    const cleanBoxNumber = toNullableString(box_number);
+    const cleanCategoryId = toNullableNumber(category_id);
+    const cleanStockQuantity = toNullableNumber(stock_quantity);
+    const cleanLowStockThreshold = toNullableNumber(low_stock_threshold);
+    const cleanSalePrice = toNullableNumber(sale_price);
+    const cleanIsOnSale = typeof is_on_sale === 'boolean' ? is_on_sale : null;
+
     const result = await pool.query(
       `UPDATE products SET
         part_number = COALESCE($1, part_number),
@@ -144,9 +195,9 @@ export const updateProduct = async (req, res) => {
       WHERE id = $16
       RETURNING *`,
       [
-        part_number, name, description, price, buying_price,
-        image, category_id, stock_quantity, box_number,
-        low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, id
+        cleanPartNumber, name, description, price, buying_price,
+        cleanImage, cleanCategoryId, cleanStockQuantity, cleanBoxNumber,
+        cleanLowStockThreshold, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, id
       ]
     );
 
@@ -163,6 +214,39 @@ export const updateProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('Update product error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Upload product image
+export const uploadProductImage = async (req, res) => {
+  try {
+    const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(contentType)) {
+      return res.status(400).json({ message: 'Unsupported file type. Use JPG, PNG, WEBP, or GIF.' });
+    }
+
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ message: 'Image file is required' });
+    }
+
+    await fs.mkdir(uploadsDir, { recursive: true });
+
+    const ext = MIME_EXTENSION_MAP[contentType] || 'bin';
+    const filename = `product-${Date.now()}-${Math.floor(Math.random() * 1_000_000_000)}.${ext}`;
+    const filepath = path.join(uploadsDir, filename);
+
+    await fs.writeFile(filepath, req.body);
+
+    const imageUrl = `${req.protocol}://${req.get('host')}/uploads/products/${filename}`;
+
+    res.status(201).json({
+      message: 'Image uploaded successfully',
+      imageUrl
+    });
+  } catch (error) {
+    console.error('Upload product image error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

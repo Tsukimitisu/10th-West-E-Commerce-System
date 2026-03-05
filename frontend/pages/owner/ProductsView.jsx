@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { getProducts, getCategories, createProduct, updateProduct, deleteProduct } from '../../services/api';
+import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, uploadProductImage } from '../../services/api';
 import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
@@ -20,6 +20,10 @@ const ProductsView = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
   const [form, setForm] = useState({
     partNumber: '', name: '', description: '', price: '', buyingPrice: '',
     category_id: '', image: '', stock_quantity: '0', boxNumber: '',
@@ -43,8 +47,19 @@ const ProductsView = () => {
   useSocketEvent('product:deleted', fetch);
   useSocketEvent('inventory:updated', fetch);
 
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
+
   const openAdd = () => {
     setEditing(null);
+    setSelectedImageFile(null);
+    setImagePreviewUrl('');
+    setFormError('');
     setForm(prev => ({
       ...prev,
       partNumber: '',
@@ -68,6 +83,9 @@ const ProductsView = () => {
 
   const openEdit = (p) => {
     setEditing(p);
+    setSelectedImageFile(null);
+    setImagePreviewUrl('');
+    setFormError('');
     setForm({
       partNumber: p.partNumber || '', name: p.name, description: p.description || '', price: p.price.toString(),
       buyingPrice: p.buyingPrice.toString(), category_id: p.category_id.toString(), image: p.image || '',
@@ -80,6 +98,9 @@ const ProductsView = () => {
 
   const handleDuplicate = (p) => {
     setEditing(null);
+    setSelectedImageFile(null);
+    setImagePreviewUrl('');
+    setFormError('');
     setForm({
       partNumber: '', name: `${p.name} (Copy)`, description: p.description || '', price: p.price.toString(),
       buyingPrice: p.buyingPrice.toString(), category_id: p.category_id.toString(), image: p.image || '',
@@ -91,20 +112,64 @@ const ProductsView = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const payload = {
-      partNumber: form.partNumber, name: form.name, description: form.description,
-      price: parseFloat(form.price), buyingPrice: parseFloat(form.buyingPrice),
-      category_id: parseInt(form.category_id), image: form.image, stock_quantity: parseInt(form.stock_quantity),
-      boxNumber: form.boxNumber, low_stock_threshold: parseInt(form.low_stock_threshold),
-      sale_price: form.sale_price ? parseFloat(form.sale_price) : undefined,
-      is_on_sale: form.is_on_sale, sku: form.sku, barcode: form.barcode, brand: form.brand
-    };
     try {
+      setSubmitting(true);
+      setFormError('');
+
+      let finalImage = form.image || '';
+      if (selectedImageFile) {
+        finalImage = await uploadProductImage(selectedImageFile);
+      }
+
+      const payload = {
+        partNumber: form.partNumber,
+        name: form.name,
+        description: form.description,
+        price: parseFloat(form.price),
+        buyingPrice: parseFloat(form.buyingPrice),
+        category_id: parseInt(form.category_id, 10),
+        image: finalImage,
+        stock_quantity: parseInt(form.stock_quantity, 10),
+        boxNumber: form.boxNumber,
+        low_stock_threshold: form.low_stock_threshold === '' ? undefined : parseInt(form.low_stock_threshold, 10),
+        sale_price: form.sale_price ? parseFloat(form.sale_price) : undefined,
+        is_on_sale: form.is_on_sale,
+        sku: form.sku,
+        barcode: form.barcode,
+        brand: form.brand
+      };
+
       if (editing) await updateProduct(editing.id, payload);
       else await createProduct(payload);
       fetch();
       setTimeout(() => setModalOpen(false), 100);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      setFormError(e.message || 'Failed to save product');
+      console.error(e);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleImageFileChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (imagePreviewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+
+    const preview = URL.createObjectURL(file);
+    setSelectedImageFile(file);
+    setImagePreviewUrl(preview);
+  };
+
+  const clearSelectedImage = () => {
+    if (imagePreviewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+    setSelectedImageFile(null);
+    setImagePreviewUrl('');
   };
 
   const handleDelete = (p) => {
@@ -285,8 +350,19 @@ const ProductsView = () => {
               <InputField label="Barcode"><input value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className={inputClass} placeholder="Auto-generated if empty" /></InputField>
             </div>
 
-            <InputField label="Image URL">
-              <input value={form.image} onChange={e => setForm(f => ({ ...f, image: e.target.value }))} className={inputClass} placeholder="https://..." />
+            <InputField label="Product Image">
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleImageFileChange} className={inputClass} />
+              <p className="text-[11px] text-gray-400 mt-1">PNG, JPG, WEBP, GIF (max 5MB)</p>
+              {(imagePreviewUrl || form.image) && (
+                <div className="mt-2 flex items-start gap-3">
+                  <img src={imagePreviewUrl || form.image} alt="Preview" className="w-20 h-20 rounded-lg object-cover border border-gray-200" />
+                  {selectedImageFile && (
+                    <button type="button" onClick={clearSelectedImage} className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg">
+                      Remove Selected
+                    </button>
+                  )}
+                </div>
+              )}
             </InputField>
 
             {/* Sale */}
@@ -304,10 +380,16 @@ const ProductsView = () => {
               )}
             </div>
 
+            {formError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {formError}
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
               <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-              <button type="submit" className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">
-                {editing ? 'Update Product' : 'Add Product'}
+              <button type="submit" disabled={submitting} className="px-5 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors">
+                {submitting ? 'Saving...' : editing ? 'Update Product' : 'Add Product'}
               </button>
             </div>
           </form>

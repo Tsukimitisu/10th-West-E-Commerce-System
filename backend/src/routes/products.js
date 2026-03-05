@@ -5,7 +5,8 @@ import {
   getProductById,
   createProduct,
   updateProduct,
-  deleteProduct
+  deleteProduct,
+  uploadProductImage
 } from '../controllers/productController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
@@ -21,6 +22,13 @@ const productValidation = [
 
 // Public routes
 router.get('/', getProducts);
+router.post(
+  '/upload-image',
+  authenticateToken,
+  requireRole('admin', 'super_admin', 'owner'),
+  express.raw({ type: 'image/*', limit: '5mb' }),
+  uploadProductImage
+);
 router.get('/:id', getProductById);
 
 // Protected routes (Admin, Super Admin, Owner)
