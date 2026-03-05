@@ -149,6 +149,7 @@ const App = () => {
     setUser(userData);
     localStorage.setItem('shopCoreUser', JSON.stringify(userData));
     localStorage.setItem('shopCoreToken', token);
+    window.dispatchEvent(new Event('auth:changed'));
   };
 
   const handleLogout = async () => {
@@ -160,6 +161,7 @@ const App = () => {
     setUser(null);
     localStorage.removeItem('shopCoreUser');
     localStorage.removeItem('shopCoreToken');
+    window.dispatchEvent(new Event('auth:changed'));
     // Navigation to /login handled by route guards (user is null)
   };
 

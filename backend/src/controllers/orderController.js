@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+const STAFF_ROLES = new Set(['admin', 'super_admin', 'owner', 'store_staff', 'cashier', 'manager']);
 
 // Get all orders (admin)
 export const getAllOrders = async (req, res) => {
@@ -62,7 +63,7 @@ export const getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
-    const isStaff = req.user?.role === 'admin' || req.user?.role === 'cashier';
+    const isStaff = STAFF_ROLES.has(req.user?.role);
 
     // Get order
     const orderResult = await pool.query(
@@ -370,7 +371,7 @@ export const getOrderInvoice = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
-    const isStaff = req.user?.role === 'admin' || req.user?.role === 'cashier';
+    const isStaff = STAFF_ROLES.has(req.user?.role);
 
     // Get order
     const orderResult = await pool.query(
