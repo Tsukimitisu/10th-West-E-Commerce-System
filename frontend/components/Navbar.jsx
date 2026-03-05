@@ -17,11 +17,15 @@ const Navbar = ({ user, onLogout }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [shopToolsOpen, setShopToolsOpen] = useState(false);
   const { itemCount } = useCart();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
+  const moreMenuRef = useRef(null);
+  const shopToolsRef = useRef(null);
 
   useEffect(() => {
     getCategories().then(setCategories).catch(() => { });
@@ -37,6 +41,8 @@ const Navbar = ({ user, onLogout }) => {
     setMobileOpen(false);
     setUserMenuOpen(false);
     setCatMenuOpen(false);
+    setMoreMenuOpen(false);
+    setShopToolsOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -61,10 +67,13 @@ const Navbar = ({ user, onLogout }) => {
   useEffect(() => {
     const notifHandler = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false);
+      if (shopToolsRef.current && !shopToolsRef.current.contains(e.target)) setShopToolsOpen(false);
+      if (catMenuOpen && !e.target.closest('[data-cat-menu]')) setCatMenuOpen(false);
     };
     document.addEventListener('mousedown', notifHandler);
     return () => document.removeEventListener('mousedown', notifHandler);
-  }, []);
+  }, [catMenuOpen]);
 
   const handleMarkAllRead = async () => {
     try {
@@ -128,8 +137,11 @@ const Navbar = ({ user, onLogout }) => {
               <Link to="/shop" className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/shop' ? 'text-orange-500 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
                 Shop
               </Link>
-              <div className="relative" onMouseEnter={() => setCatMenuOpen(true)} onMouseLeave={() => setCatMenuOpen(false)}>
-                <button className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors flex items-center gap-1">
+              <div className="relative" data-cat-menu>
+                <button
+                  onClick={() => setCatMenuOpen(!catMenuOpen)}
+                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors flex items-center gap-1"
+                >
                   Categories <ChevronDown size={14} className={`transition-transform ${catMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {catMenuOpen && (
@@ -142,70 +154,88 @@ const Navbar = ({ user, onLogout }) => {
                   </div>
                 )}
               </div>
-              <Link to="/faq" className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/faq' ? 'text-orange-500 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
-                FAQ
-              </Link>
-              <Link to="/contact" className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/contact' ? 'text-orange-500 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
-                Contact
-              </Link>
-              {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
-                <Link to="/admin" className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors flex items-center gap-1">
-                  <Shield size={14} /> Admin
-                </Link>
-              )}
-              {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
-                <Link to="/pos" className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors flex items-center gap-1">
-                  <Monitor size={14} /> POS
-                </Link>
-              )}
+              <div ref={moreMenuRef} className="relative">
+                <button
+                  onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${location.pathname === '/faq' || location.pathname === '/contact' ? 'text-orange-500 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
+                >
+                  More <ChevronDown size={14} className={`transition-transform ${moreMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {moreMenuOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-2 animate-fade-in">
+                    <Link to="/faq" className="block px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors">
+                      FAQ
+                    </Link>
+                    <Link to="/contact" className="block px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors">
+                      Contact
+                    </Link>
+                  </div>
+                )}
+              </div>
             </nav>
 
             {/* Right actions */}
             <div className="flex items-center gap-1">
               {isShopRoute && (
-                <div className="hidden lg:flex items-center gap-2 mr-1">
-                  <div className="relative w-56">
-                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      value={shopSearch}
-                      onChange={(e) => updateShopParams({ search: e.target.value })}
-                      placeholder="Search products..."
-                      className="w-full h-9 pl-8 pr-3 rounded-lg border border-gray-200 bg-white text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    />
-                  </div>
-                  <select
-                    value={shopSort}
-                    onChange={(e) => updateShopParams({ sort: e.target.value })}
-                    className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  >
-                    <option value="newest">Newest</option>
-                    <option value="price-asc">Price: Low to High</option>
-                    <option value="price-desc">Price: High to Low</option>
-                    <option value="best-selling">Best Selling</option>
-                    <option value="top-rated">Top Rated</option>
-                  </select>
+                <div ref={shopToolsRef} className="hidden lg:block relative mr-1">
                   <button
-                    onClick={() => window.dispatchEvent(new CustomEvent('shop:open-filters'))}
-                    className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors flex items-center gap-1.5"
+                    onClick={() => setShopToolsOpen(!shopToolsOpen)}
+                    className={`h-9 px-3 rounded-lg border text-xs font-semibold transition-colors flex items-center gap-1.5 ${shopToolsOpen ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-white border-gray-200 text-gray-600 hover:text-orange-500 hover:bg-orange-50'}`}
                   >
-                    <SlidersHorizontal size={14} /> Filter
+                    <SlidersHorizontal size={14} />
+                    Shop Tools
+                    <ChevronDown size={13} className={`transition-transform ${shopToolsOpen ? 'rotate-180' : ''}`} />
                   </button>
-                  <div className="h-9 inline-flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
-                    <button
-                      onClick={() => updateShopParams({ view: 'grid' })}
-                      className={`h-full px-2.5 ${shopView === 'grid' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
-                      title="Grid view"
-                    >
-                      <Grid3X3 size={14} />
-                    </button>
-                    <button
-                      onClick={() => updateShopParams({ view: 'list' })}
-                      className={`h-full px-2.5 ${shopView === 'list' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
-                      title="List view"
-                    >
-                      <List size={14} />
-                    </button>
-                  </div>
+                  {shopToolsOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-[360px] bg-white rounded-xl shadow-lg border border-gray-100 p-3 space-y-3 animate-fade-in z-50">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          value={shopSearch}
+                          onChange={(e) => updateShopParams({ search: e.target.value })}
+                          placeholder="Search products..."
+                          className="w-full h-9 pl-8 pr-3 rounded-lg border border-gray-200 bg-white text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={shopSort}
+                          onChange={(e) => updateShopParams({ sort: e.target.value })}
+                          className="h-9 flex-1 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        >
+                          <option value="newest">Newest</option>
+                          <option value="price-asc">Price: Low to High</option>
+                          <option value="price-desc">Price: High to Low</option>
+                          <option value="best-selling">Best Selling</option>
+                          <option value="top-rated">Top Rated</option>
+                        </select>
+                        <button
+                          onClick={() => window.dispatchEvent(new CustomEvent('shop:open-filters'))}
+                          className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors flex items-center gap-1.5"
+                        >
+                          <SlidersHorizontal size={14} /> Filter
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-end">
+                        <div className="h-9 inline-flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
+                          <button
+                            onClick={() => updateShopParams({ view: 'grid' })}
+                            className={`h-full px-2.5 ${shopView === 'grid' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+                            title="Grid view"
+                          >
+                            <Grid3X3 size={14} />
+                          </button>
+                          <button
+                            onClick={() => updateShopParams({ view: 'list' })}
+                            className={`h-full px-2.5 ${shopView === 'list' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+                            title="List view"
+                          >
+                            <List size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -283,6 +313,13 @@ const Navbar = ({ user, onLogout }) => {
                       <Link to="/wishlist" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><Heart size={16} /> Wishlist</Link>
                       <Link to="/addresses" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><MapPin size={16} /> Addresses</Link>
                       <Link to="/my-returns" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><RotateCcw size={16} /> Returns</Link>
+                      {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
+                        <>
+                          <div className="border-t border-gray-100 mt-1 pt-1" />
+                          <Link to="/admin" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><Shield size={16} /> Admin Panel</Link>
+                          <Link to="/pos" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><Monitor size={16} /> POS Terminal</Link>
+                        </>
+                      )}
                       <div className="border-t border-gray-100 mt-1 pt-1">
                         <button onClick={() => setShowLogoutConfirm(true)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors w-full">
                           <LogOut size={16} /> Sign Out
