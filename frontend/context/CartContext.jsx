@@ -128,10 +128,22 @@ export const CartProvider = ({ children }) => {
   const addToCartLocal = (product, quantity) => {
     setItems(currentItems => {
       const existingItem = currentItems.find(item => item.productId === product.id);
+      const maxStock = Number(product.stock_quantity ?? Infinity);
+
+      if (Number.isFinite(maxStock) && maxStock <= 0) {
+        setError('This item is out of stock.');
+        return currentItems;
+      }
+
       if (existingItem) {
+        const nextQuantity = existingItem.quantity + quantity;
+        if (Number.isFinite(maxStock) && nextQuantity > maxStock) {
+          setError(`Cannot exceed available stock (${maxStock}).`);
+          return currentItems;
+        }
         return currentItems.map(item =>
           item.productId === product.id
-            ? { ...item, quantity: item.quantity + quantity }
+            ? { ...item, quantity: nextQuantity }
             : item
         );
       }
@@ -212,11 +224,18 @@ export const CartProvider = ({ children }) => {
   };
 
   const updateQuantityLocal = (productId, quantity) => {
-    setItems(currentItems =>
-      currentItems.map(item =>
+    setItems(currentItems => {
+      const target = currentItems.find((item) => item.productId === productId);
+      const maxStock = Number(target?.product?.stock_quantity ?? Infinity);
+      if (target && Number.isFinite(maxStock) && quantity > maxStock) {
+        setError(`Cannot exceed available stock (${maxStock}).`);
+        return currentItems;
+      }
+
+      return currentItems.map(item =>
         item.productId === productId ? { ...item, quantity } : item
-      )
-    );
+      );
+    });
   };
 
   const clearCart = async () => {
