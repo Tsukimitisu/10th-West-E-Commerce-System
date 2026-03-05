@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
 import { getCategories, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
+import { useSocket } from '../context/SocketContext';
 import CartDrawer from './CartDrawer';
 
 const Navbar = ({ user, onLogout }) => {
@@ -20,6 +21,7 @@ const Navbar = ({ user, onLogout }) => {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [shopToolsOpen, setShopToolsOpen] = useState(false);
   const { itemCount } = useCart();
+  const { on, off, connected } = useSocket();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const userMenuRef = useRef(null);
@@ -53,16 +55,53 @@ const Navbar = ({ user, onLogout }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      getUnreadNotificationCount().then(setUnreadCount).catch(() => {});
-      getNotifications().then(n => setNotifications(n.slice(0, 10))).catch(() => {});
-      const interval = setInterval(() => {
-        getUnreadNotificationCount().then(setUnreadCount).catch(() => {});
-      }, 30000);
-      return () => clearInterval(interval);
-    }
+  const refreshNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [count, list] = await Promise.all([
+        getUnreadNotificationCount().catch(() => 0),
+        getNotifications().catch(() => []),
+      ]);
+      setUnreadCount(count || 0);
+      setNotifications((list || []).slice(0, 10));
+    } catch {}
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    refreshNotifications();
+    const interval = setInterval(refreshNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [user, refreshNotifications]);
+
+  useEffect(() => {
+    if (!user || !connected) return;
+
+    const handleNotification = (notification) => {
+      if (!notification) {
+        refreshNotifications();
+        return;
+      }
+      setNotifications((prev) => [notification, ...prev].slice(0, 10));
+      if (notification.is_read === false || notification.is_read == null) {
+        setUnreadCount((prev) => prev + 1);
+      }
+    };
+
+    const handleOrderEvent = () => {
+      refreshNotifications();
+    };
+
+    on('notification', handleNotification);
+    on('order:new', handleOrderEvent);
+    on('order:updated', handleOrderEvent);
+
+    return () => {
+      off('notification', handleNotification);
+      off('order:new', handleOrderEvent);
+      off('order:updated', handleOrderEvent);
+    };
+  }, [user, connected, on, off, refreshNotifications]);
 
   useEffect(() => {
     const notifHandler = (e) => {

@@ -10,8 +10,10 @@ const AddressBook = () => {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ label: 'Home', name: '', phone: '', street: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false });
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [saveError, setSaveError] = useState('');
 
-  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false }); setEditing(null); setShowForm(false); };
+  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false }); setEditing(null); setShowForm(false); setSaveError(''); };
+  const digitsOnly = (value) => value.replace(/\D/g, '');
 
   useEffect(() => {
     const load = async () => {
@@ -28,16 +30,19 @@ const AddressBook = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    setSaveError('');
     try {
       if (editing) {
         const updated = await updateAddress(editing.id, form);
-        setAddresses(addresses.map(a => a.id === editing.id ? updated : a));
+        setAddresses(prev => prev.map(a => a.id === editing.id ? updated : a));
       } else {
         const created = await saveAddress(form);
-        setAddresses([...addresses, created]);
+        setAddresses(prev => [created, ...prev]);
       }
       resetForm();
-    } catch {}
+    } catch (err) {
+      setSaveError(err?.message || 'Failed to save address');
+    }
   };
 
   const handleDelete = (addr) => {
@@ -51,7 +56,17 @@ const AddressBook = () => {
   };
 
   const startEdit = (addr) => {
-    setForm({ label: addr.label || 'Home', name: addr.name || '', phone: addr.phone || '', street: addr.street || '', city: addr.city || '', state: addr.state || '', zip: addr.zip || '', country: addr.country || 'Philippines', is_default: addr.is_default || false });
+    setForm({
+      label: addr.label || 'Home',
+      name: addr.name || addr.recipient_name || '',
+      phone: addr.phone || '',
+      street: addr.street || '',
+      city: addr.city || '',
+      state: addr.state || '',
+      zip: addr.zip || addr.postal_code || '',
+      country: 'Philippines',
+      is_default: addr.is_default || false
+    });
     setEditing(addr);
     setShowForm(true);
   };
@@ -91,7 +106,7 @@ const AddressBook = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input type="tel" value={form.phone} onChange={e => setForm(f => ({...f, phone: e.target.value}))} required
+                  <input type="tel" value={form.phone} onChange={e => setForm(f => ({...f, phone: digitsOnly(e.target.value)}))} inputMode="numeric" pattern="[0-9]*" required
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
                 </div>
               </div>
@@ -113,15 +128,17 @@ const AddressBook = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
-                  <input type="text" value={form.zip} onChange={e => setForm(f => ({...f, zip: e.target.value}))} required
+                  <input type="text" value={form.zip} onChange={e => setForm(f => ({...f, zip: digitsOnly(e.target.value)}))} inputMode="numeric" pattern="[0-9]*" required
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
-                  <input type="text" value={form.country} onChange={e => setForm(f => ({...f, country: e.target.value}))}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                  <div className="w-full px-3 py-2.5 border border-gray-100 rounded-lg text-sm bg-gray-50 text-gray-600">
+                    Philippines
+                  </div>
                 </div>
               </div>
+              {saveError && <p className="text-sm text-orange-500">{saveError}</p>}
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={form.is_default} onChange={e => setForm(f => ({...f, is_default: e.target.checked}))}
                   className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500" />
@@ -161,10 +178,10 @@ const AddressBook = () => {
                   {addr.label === 'Home' ? <Home size={14} className="text-gray-400" /> : addr.label === 'Office' ? <Building2 size={14} className="text-gray-400" /> : <MapPin size={14} className="text-gray-400" />}
                   <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">{addr.label || 'Address'}</span>
                 </div>
-                <p className="font-medium text-gray-900 text-sm">{addr.name}</p>
+                <p className="font-medium text-gray-900 text-sm">{addr.name || addr.recipient_name}</p>
                 <p className="text-sm text-gray-600 mt-1 leading-relaxed">
                   {addr.street}<br />
-                  {addr.city}{addr.state ? `, ${addr.state}` : ''} {addr.zip}<br />
+                  {addr.city}{addr.state ? `, ${addr.state}` : ''} {addr.zip || addr.postal_code}<br />
                   {addr.phone}
                 </p>
                 <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">

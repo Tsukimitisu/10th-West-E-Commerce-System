@@ -40,10 +40,10 @@ const Contact = () => {
         {/* Contact info cards */}
         <div className="space-y-4">
           {[
-            { icon: Phone, label: 'Call Us', value: '+63 917 123 4567', sub: 'Monâ€“Fri 9AMâ€“6PM' },
+            { icon: Phone, label: 'Call Us', value: '+63 917 123 4567', sub: 'Mon-Fri 9AM-6PM' },
             { icon: Mail, label: 'Email', value: 'support@10thwestmoto.com', sub: 'We reply within 24 hours' },
             { icon: MapPin, label: 'Visit Us', value: '10th West Ave, Quezon City', sub: 'Manila, Philippines 1100' },
-            { icon: Clock, label: 'Business Hours', value: 'Monday â€“ Saturday', sub: '9:00 AM â€“ 6:00 PM' },
+            { icon: Clock, label: 'Business Hours', value: 'Monday - Saturday', sub: '9:00 AM - 6:00 PM' },
           ].map(item => (
             <div key={item.label} className="bg-white rounded-xl border border-gray-100 p-4 flex items-start gap-3">
               <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center flex-shrink-0">

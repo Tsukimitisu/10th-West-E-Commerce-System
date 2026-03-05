@@ -911,7 +911,7 @@ const mapOrderItemToCartItem = (item) => {
     partNumber: item.product_part_number ?? item.product?.partNumber ?? item.product?.part_number ?? '',
     name: item.product_name ?? item.product?.name ?? 'Unknown Item',
     description: item.product?.description ?? '',
-    price: Number(item.product_price ?? item.product_price_current ?? item.product?.price ?? 0),
+    price: Number(item.product_price ?? item.price ?? item.product_price_current ?? item.product?.price ?? 0),
     buyingPrice: Number(item.product_buying_price ?? item.product?.buyingPrice ?? item.product?.buying_price ?? 0),
     image: item.product_image ?? item.product?.image ?? '',
     category_id: item.product_category_id ?? item.product?.category_id ?? 0,
@@ -1079,21 +1079,57 @@ export const createOrder = async (order) => {
 
     if (orderError) throw new Error(orderError.message);
 
-    // Create order items with all required fields
-    const orderItems = (order.items || []).map(item => ({
-      order_id: orderData.id,
-      product_id: (item).productId ?? (item).product_id,
-      quantity: (item).quantity ?? (item).quantity,
-      product_name: (item).product?.name || 'Unknown Product',
-      product_price: (item).product?.price || 0,
-    }));
+    const normalizedItems = (order.items || []).map((item) => {
+      const productId = item.productId ?? item.product_id;
+      const quantity = item.quantity ?? 1;
+      const productName = item.name ?? item.product_name ?? item.product?.name ?? 'Unknown Product';
+      const productPrice = Number(item.price ?? item.product_price ?? item.product?.price ?? 0);
+      return {
+        order_id: orderData.id,
+        product_id: productId,
+        quantity,
+        productName,
+        productPrice,
+      };
+    });
 
-    if (orderItems.length > 0) {
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
+    // Handle schema variations in Supabase projects (price/product_price, name/product_name).
+    const orderItemInsertVariants = [
+      { nameField: 'product_name', priceField: 'product_price' },
+      { nameField: 'product_name', priceField: 'price' },
+      { nameField: 'name', priceField: 'price' },
+      { nameField: 'name', priceField: 'product_price' },
+    ];
 
-      if (itemsError) throw new Error(itemsError.message);
+    if (normalizedItems.length > 0) {
+      let inserted = false;
+      let lastError = null;
+
+      for (const variant of orderItemInsertVariants) {
+        const orderItems = normalizedItems.map((item) => ({
+          order_id: item.order_id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          [variant.nameField]: item.productName,
+          [variant.priceField]: item.productPrice,
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(orderItems);
+
+        if (!itemsError) {
+          inserted = true;
+          break;
+        }
+
+        lastError = itemsError;
+      }
+
+      if (!inserted) {
+        await supabase.from('orders').delete().eq('id', orderData.id);
+        throw new Error(lastError?.message || 'Failed to create order items');
+      }
     }
 
     const mapped = mapOrderFromApi(orderData);
@@ -1259,6 +1295,16 @@ export const getDashboardStats = async () => {
 // ==================== ADDRESSES ====================
 
 export const getAddresses = async (userId) => {
+  const mapAddress = (address) => ({
+    ...address,
+    recipient_name: address?.recipient_name ?? address?.name ?? '',
+    name: address?.name ?? address?.recipient_name ?? '',
+    postal_code: address?.postal_code ?? address?.zip ?? '',
+    zip: address?.zip ?? address?.postal_code ?? '',
+    country: address?.country || 'Philippines',
+    label: address?.label || 'Home',
+  });
+
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
@@ -1270,50 +1316,116 @@ export const getAddresses = async (userId) => {
       .order('is_default', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return addressData || [];
+    return (addressData || []).map(mapAddress);
   }
 
   const data = await authenticatedFetch(`${API_URL}/addresses`);
-  return data;
+  return (data || []).map(mapAddress);
 };
 
 export const addAddress = async (address) => {
+  const payload = {
+    recipient_name: address.recipient_name ?? address.name,
+    phone: address.phone,
+    street: address.street,
+    city: address.city,
+    state: address.state,
+    postal_code: address.postal_code ?? address.zip,
+    is_default: !!address.is_default,
+  };
+
   if (USE_SUPABASE) {
+    const currentUser = getCurrentUserFromToken();
+    if (!currentUser) throw new Error('Not authenticated');
+
+    if (payload.is_default) {
+      await supabase
+        .from('addresses')
+        .update({ is_default: false })
+        .eq('user_id', currentUser.id);
+    }
+
     const { data, error } = await supabase
       .from('addresses')
-      .insert(address)
+      .insert({ ...payload, user_id: currentUser.id })
       .select()
       .single();
 
     if (error) throw new Error(error.message);
-    return data;
+    return {
+      ...data,
+      name: data.recipient_name ?? '',
+      zip: data.postal_code ?? '',
+      country: data.country || 'Philippines',
+      label: data.label || 'Home',
+    };
   }
 
   const data = await authenticatedFetch(`${API_URL}/addresses`, {
     method: 'POST',
-    body: JSON.stringify(address),
+    body: JSON.stringify(payload),
   });
-  return data.address;
+  return {
+    ...data.address,
+    name: data.address?.recipient_name ?? '',
+    zip: data.address?.postal_code ?? '',
+    country: data.address?.country || 'Philippines',
+    label: data.address?.label || 'Home',
+  };
 };
 
 export const updateAddress = async (id, updates) => {
+  const payload = {
+    recipient_name: updates.recipient_name ?? updates.name,
+    phone: updates.phone,
+    street: updates.street,
+    city: updates.city,
+    state: updates.state,
+    postal_code: updates.postal_code ?? updates.zip,
+    is_default: updates.is_default,
+  };
+
   if (USE_SUPABASE) {
+    const currentUser = getCurrentUserFromToken();
+    if (!currentUser) throw new Error('Not authenticated');
+
+    if (payload.is_default) {
+      await supabase
+        .from('addresses')
+        .update({ is_default: false })
+        .eq('user_id', currentUser.id)
+        .neq('id', id);
+    }
+
     const { data, error } = await supabase
       .from('addresses')
-      .update(updates)
+      .update(payload)
       .eq('id', id)
+      .eq('user_id', currentUser.id)
       .select()
       .single();
 
     if (error) throw new Error(error.message);
-    return data;
+    return {
+      ...data,
+      name: data.recipient_name ?? '',
+      zip: data.postal_code ?? '',
+      country: data.country || 'Philippines',
+      label: data.label || 'Home',
+    };
   }
 
   const data = await authenticatedFetch(`${API_URL}/addresses/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(updates),
+    body: JSON.stringify(payload),
   });
-  return data.address;
+  return {
+    ...data.address,
+    name: data.address?.recipient_name ?? '',
+    zip: data.address?.postal_code ?? '',
+    country: data.address?.country || 'Philippines',
+    label: data.address?.label || 'Home',
+  };
 };
 
 export const deleteAddress = async (id) => {
@@ -1457,6 +1569,28 @@ export const updatePolicy = async (type, title, content) => {
 // ==================== Additional Mock Functions (Future sprints) ====================
 
 export const getWishlist = async (userId) => {
+  const normalizeWishlistItem = (item) => {
+    const product = item.product || item.products || {};
+    const productId = item.product_id ?? product.id ?? item.id;
+    const price = Number(item.price ?? product.price ?? 0);
+    const salePrice = item.sale_price ?? product.sale_price ?? null;
+    const stockQuantity = item.stock_quantity ?? product.stock_quantity ?? 0;
+
+    return {
+      ...item,
+      id: productId,
+      product,
+      product_id: productId,
+      name: item.name ?? item.product_name ?? product.name ?? 'Unknown Product',
+      product_name: item.product_name ?? item.name ?? product.name ?? 'Unknown Product',
+      price,
+      sale_price: salePrice,
+      image_url: item.image_url ?? product.image_url ?? product.image ?? '',
+      stock_quantity: stockQuantity,
+      in_stock: item.in_stock ?? stockQuantity > 0,
+    };
+  };
+
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) return [];
@@ -1465,9 +1599,10 @@ export const getWishlist = async (userId) => {
       .select('*, products(*)')
       .eq('user_id', currentUser.id);
     if (error) return [];
-    return (data || []).map(w => ({ ...w, product: w.products }));
+    return (data || []).map((w) => normalizeWishlistItem({ ...w, product: w.products }));
   }
-  return authenticatedFetch(`${API_URL}/wishlist`).catch(() => []);
+  const rows = await authenticatedFetch(`${API_URL}/wishlist`).catch(() => []);
+  return (rows || []).map(normalizeWishlistItem);
 };
 
 export const addToWishlist = async (userId, productId) => {

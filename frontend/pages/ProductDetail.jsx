@@ -19,6 +19,7 @@ const ProductDetail = () => {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState({ color: '' });
+  const [variantError, setVariantError] = useState('');
   const { addToCart } = useCart();
 
   useEffect(() => {
@@ -58,8 +59,13 @@ const ProductDetail = () => {
 
   const handleAddToCart = async () => {
     if (!product) return;
+    if (!selectedVariant.color) {
+      setVariantError('Please select a color before adding this item to cart.');
+      return;
+    }
     await addToCart(product, quantity);
     setAddedToCart(true);
+    setVariantError('');
     setTimeout(() => setAddedToCart(false), 2000);
   };
 
@@ -194,14 +200,15 @@ const ProductDetail = () => {
             {/* Variants */}
             <div className="space-y-4 mb-6">
               <div>
-                <label className="text-sm font-medium text-gray-900 mb-2 block">Color</label>
+                <label className="text-sm font-medium text-gray-900 mb-2 block">Color <span className="text-orange-500">*</span></label>
                 <div className="flex gap-2">
                   {colors.map(c => (
-                    <button key={c} onClick={() => setSelectedVariant(prev => ({...prev, color: c}))}
+                    <button key={c} onClick={() => { setSelectedVariant(prev => ({...prev, color: c})); setVariantError(''); }}
                       className={`px-4 py-2 border rounded-lg text-sm transition-colors ${selectedVariant.color === c ? 'border-orange-500 bg-orange-50 text-orange-500' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
                     >{c}</button>
                   ))}
                 </div>
+                {variantError && <p className="text-xs text-orange-500 mt-2">{variantError}</p>}
               </div>
 
             </div>

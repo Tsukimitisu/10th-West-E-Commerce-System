@@ -13,9 +13,20 @@ export const CartProvider = ({ children }) => {
   const [initialized, setInitialized] = useState(false);
 
   const getToken = () => {
-    const userString = localStorage.getItem('shopCoreUser');
-    const user = userString ? JSON.parse(userString) : null;
-    return user?.token || null;
+    return localStorage.getItem('shopCoreToken');
+  };
+
+  const mapCartItemsFromBackend = (rows = []) => {
+    return rows.map((item) => ({
+      cartItemId: item.id,
+      productId: item.product_id ?? item.product?.id,
+      quantity: item.quantity,
+      product: {
+        ...(item.product || {}),
+        id: item.product_id ?? item.product?.id,
+        image: item.product?.image || item.product?.image_url || '',
+      },
+    }));
   };
 
   // Sync cart from backend when user logs in
@@ -38,9 +49,10 @@ export const CartProvider = ({ children }) => {
       
       if (response.ok) {
         const data = await response.json();
-        setItems(data.items || []);
+        const mappedItems = mapCartItemsFromBackend(data.items || []);
+        setItems(mappedItems);
         // Save to localStorage as backup
-        localStorage.setItem('shopCoreCart', JSON.stringify(data.items || []));
+        localStorage.setItem('shopCoreCart', JSON.stringify(mappedItems));
       } else {
         // Fall back to localStorage
         const savedCart = localStorage.getItem('shopCoreCart');
@@ -133,7 +145,9 @@ export const CartProvider = ({ children }) => {
     if (token) {
       try {
         setLoading(true);
-        const response = await fetch(`${API_URL}/cart/remove/${productId}`, {
+        const targetItem = items.find((item) => item.productId === productId);
+        const cartItemId = targetItem?.cartItemId ?? productId;
+        const response = await fetch(`${API_URL}/cart/remove/${cartItemId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -169,7 +183,9 @@ export const CartProvider = ({ children }) => {
     if (token) {
       try {
         setLoading(true);
-        const response = await fetch(`${API_URL}/cart/update/${productId}`, {
+        const targetItem = items.find((item) => item.productId === productId);
+        const cartItemId = targetItem?.cartItemId ?? productId;
+        const response = await fetch(`${API_URL}/cart/update/${cartItemId}`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
