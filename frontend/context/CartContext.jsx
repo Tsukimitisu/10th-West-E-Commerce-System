@@ -87,7 +87,35 @@ export const CartProvider = ({ children }) => {
     }
   }, [items, initialized]);
 
+  const resolveMaxStock = (product) => {
+    const rawStock = Number(product?.stock_quantity);
+    if (!Number.isFinite(rawStock)) return Infinity;
+    return Math.max(0, rawStock);
+  };
+
   const addToCart = async (product, quantity = 1) => {
+    const requestedQty = Number(quantity);
+    if (!Number.isFinite(requestedQty) || requestedQty < 1) {
+      setError('Invalid quantity.');
+      return false;
+    }
+
+    const existingItem = items.find((item) => item.productId === product.id);
+    const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
+    const currentQty = existingItem?.quantity || 0;
+    const nextQty = currentQty + requestedQty;
+
+    if (Number.isFinite(maxStock) && maxStock <= 0) {
+      setError('This item is out of stock.');
+      return false;
+    }
+
+    if (Number.isFinite(maxStock) && nextQty > maxStock) {
+      setError(`Cannot exceed available stock (${maxStock}).`);
+      return false;
+    }
+
+    setError(null);
     const token = getToken();
     
     if (token) {
@@ -102,12 +130,13 @@ export const CartProvider = ({ children }) => {
           },
           body: JSON.stringify({
             product_id: product.id,
-            quantity
+            quantity: requestedQty
           })
         });
 
         if (response.ok) {
           await syncCart();
+          return true;
         } else {
           throw new Error('Failed to add item to cart');
         }
@@ -115,20 +144,27 @@ export const CartProvider = ({ children }) => {
         console.error('Error adding to cart:', err);
         setError('Failed to add item to cart');
         // Fall back to local cart
-        addToCartLocal(product, quantity);
+        addToCartLocal(product, requestedQty);
+        return false;
       } finally {
         setLoading(false);
       }
     } else {
       // Use local storage if not logged in
-      addToCartLocal(product, quantity);
+      addToCartLocal(product, requestedQty);
+      return true;
     }
   };
 
   const addToCartLocal = (product, quantity) => {
     setItems(currentItems => {
       const existingItem = currentItems.find(item => item.productId === product.id);
-      const maxStock = Number(product.stock_quantity ?? Infinity);
+      const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
+      const requestedQty = Number(quantity);
+      if (!Number.isFinite(requestedQty) || requestedQty < 1) {
+        setError('Invalid quantity.');
+        return currentItems;
+      }
 
       if (Number.isFinite(maxStock) && maxStock <= 0) {
         setError('This item is out of stock.');
@@ -136,18 +172,24 @@ export const CartProvider = ({ children }) => {
       }
 
       if (existingItem) {
-        const nextQuantity = existingItem.quantity + quantity;
+        const nextQuantity = existingItem.quantity + requestedQty;
         if (Number.isFinite(maxStock) && nextQuantity > maxStock) {
           setError(`Cannot exceed available stock (${maxStock}).`);
           return currentItems;
         }
+        setError(null);
         return currentItems.map(item =>
           item.productId === product.id
             ? { ...item, quantity: nextQuantity }
             : item
         );
       }
-      return [...currentItems, { productId: product.id, product, quantity }];
+      if (Number.isFinite(maxStock) && requestedQty > maxStock) {
+        setError(`Cannot exceed available stock (${maxStock}).`);
+        return currentItems;
+      }
+      setError(null);
+      return [...currentItems, { productId: product.id, product, quantity: requestedQty }];
     });
   };
 
@@ -189,13 +231,20 @@ export const CartProvider = ({ children }) => {
 
   const updateQuantity = async (productId, quantity) => {
     if (quantity < 1) return;
+
+    const targetItem = items.find((item) => item.productId === productId);
+    const maxStock = resolveMaxStock(targetItem?.product);
+    if (targetItem && Number.isFinite(maxStock) && quantity > maxStock) {
+      setError(`Cannot exceed available stock (${maxStock}).`);
+      return;
+    }
+    setError(null);
     
     const token = getToken();
 
     if (token) {
       try {
         setLoading(true);
-        const targetItem = items.find((item) => item.productId === productId);
         const cartItemId = targetItem?.cartItemId ?? productId;
         const response = await fetch(`${API_URL}/cart/update/${cartItemId}`, {
           method: 'PUT',
@@ -226,11 +275,12 @@ export const CartProvider = ({ children }) => {
   const updateQuantityLocal = (productId, quantity) => {
     setItems(currentItems => {
       const target = currentItems.find((item) => item.productId === productId);
-      const maxStock = Number(target?.product?.stock_quantity ?? Infinity);
+      const maxStock = resolveMaxStock(target?.product);
       if (target && Number.isFinite(maxStock) && quantity > maxStock) {
         setError(`Cannot exceed available stock (${maxStock}).`);
         return currentItems;
       }
+      setError(null);
 
       return currentItems.map(item =>
         item.productId === productId ? { ...item, quantity } : item

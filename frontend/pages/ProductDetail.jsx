@@ -20,6 +20,7 @@ const ProductDetail = () => {
   const [addedToCart, setAddedToCart] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState({ color: '' });
   const [variantError, setVariantError] = useState('');
+  const [quantityError, setQuantityError] = useState('');
   const { addToCart } = useCart();
 
   useEffect(() => {
@@ -63,9 +64,15 @@ const ProductDetail = () => {
       setVariantError('Please select a color before adding this item to cart.');
       return;
     }
+    const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
+    if (quantity > maxStock) {
+      setQuantityError(`Maximum available quantity is ${maxStock}.`);
+      return;
+    }
     await addToCart(product, quantity);
     setAddedToCart(true);
     setVariantError('');
+    setQuantityError('');
     setTimeout(() => setAddedToCart(false), 2000);
   };
 
@@ -97,7 +104,8 @@ const ProductDetail = () => {
   if (!product) return <div className="text-center py-20 text-gray-500">Product not found.</div>;
 
   const images = [product.image || 'https://via.placeholder.com/600?text=No+Image'];
-  const isOutOfStock = product.stock_quantity <= 0;
+  const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
+  const isOutOfStock = maxStock <= 0;
   const hasDiscount = product.is_on_sale && product.sale_price;
   const currentPrice = hasDiscount ? product.sale_price : product.price;
 
@@ -217,9 +225,23 @@ const ProductDetail = () => {
             {/* Quantity & Actions */}
             <div className="flex flex-wrap gap-3 mb-6">
               <div className="flex items-center border border-gray-200 rounded-lg">
-                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="px-3 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"><Minus size={16} /></button>
+                <button onClick={() => { setQuantity(q => Math.max(1, q - 1)); setQuantityError(''); }} className="px-3 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"><Minus size={16} /></button>
                 <span className="w-12 text-center font-medium">{quantity}</span>
-                <button onClick={() => setQuantity(q => q + 1)} className="px-3 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"><Plus size={16} /></button>
+                <button
+                  onClick={() => {
+                    setQuantity((q) => {
+                      if (q >= maxStock) {
+                        setQuantityError(`Maximum available quantity is ${maxStock}.`);
+                        return q;
+                      }
+                      setQuantityError('');
+                      return q + 1;
+                    });
+                  }}
+                  className="px-3 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Plus size={16} />
+                </button>
               </div>
               <button
                 onClick={handleAddToCart}
@@ -235,6 +257,7 @@ const ProductDetail = () => {
                 <Share2 size={20} />
               </button>
             </div>
+            {quantityError && <p className="text-xs text-orange-500 -mt-4 mb-6">{quantityError}</p>}
 
             {/* Benefits */}
             <div className="grid grid-cols-3 gap-3 p-4 bg-gray-50 rounded-xl">
