@@ -22,6 +22,12 @@ const getAuthToken = () => {
   return localStorage.getItem('shopCoreToken');
 };
 
+const clearAuthSession = () => {
+  localStorage.removeItem('shopCoreUser');
+  localStorage.removeItem('shopCoreToken');
+  window.dispatchEvent(new Event('auth:changed'));
+};
+
 // Helper: get current user info from token (for Supabase custom auth)
 const getCurrentUserFromToken = () => {
   const token = getAuthToken();
@@ -57,6 +63,9 @@ const authenticatedFetch = async (url, options = {}) => {
   });
 
   if (!response.ok) {
+    if (token && (response.status === 401 || response.status === 403)) {
+      clearAuthSession();
+    }
     const error = await response.json().catch(() => ({ message: 'Request failed' }));
     throw new Error(error.message || 'Request failed');
   }

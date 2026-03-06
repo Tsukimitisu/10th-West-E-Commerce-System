@@ -30,7 +30,7 @@ import Wishlist from './pages/customer/Wishlist';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import OAuthCallback from './pages/OAuthCallback';
-import { logoutApi } from './services/api.js';
+import { getProfile, logoutApi } from './services/api.js';
 import { supabase, onAuthStateChange } from './services/supabase.js';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { Role } from './types.js';
@@ -92,6 +92,36 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const clearLocalSession = () => {
+      localStorage.removeItem('shopCoreUser');
+      localStorage.removeItem('shopCoreToken');
+      if (isMounted) setUser(null);
+    };
+
+    const buildLocalTokenFromUser = (profile) =>
+      `sb-token-${btoa(JSON.stringify({ id: profile.id, email: profile.email, role: profile.role }))}`;
+
+    const syncUserFromStorage = () => {
+      const token = localStorage.getItem('shopCoreToken');
+      if (!token) {
+        localStorage.removeItem('shopCoreUser');
+        if (isMounted) setUser(null);
+        return;
+      }
+      const savedUser = localStorage.getItem('shopCoreUser');
+      if (!savedUser) return;
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.id && isMounted) {
+          setUser(parsed);
+        }
+      } catch {
+        clearLocalSession();
+      }
+    };
+
     // Check for existing session
     const initAuth = async () => {
       if (USE_SUPABASE && supabase) {
@@ -119,8 +149,10 @@ const App = () => {
                 last_login: session.user.last_sign_in_at,
                 email_verified: session.user.email_confirmed_at != null,
               };
-              setUser(userData);
+              const token = buildLocalTokenFromUser(userData);
+              if (isMounted) setUser(userData);
               localStorage.setItem('shopCoreUser', JSON.stringify(userData));
+              localStorage.setItem('shopCoreToken', token);
             }
           }
         } catch (e) {
@@ -128,21 +160,65 @@ const App = () => {
         }
       }
 
-      // Restore user from localStorage as secondary fallback or standard method
+      // Restore user from localStorage only if token exists.
+      const token = localStorage.getItem('shopCoreToken');
       const savedUser = localStorage.getItem('shopCoreUser');
-      if (savedUser) {
+      if (!token) {
+        clearLocalSession();
+      } else if (savedUser) {
         try {
           const parsed = JSON.parse(savedUser);
-          if (parsed && parsed.id) {
+          if (parsed && parsed.id && isMounted) {
             setUser(parsed);
           }
         } catch (e) {
           console.error('Failed to parse saved user:', e);
+          clearLocalSession();
         }
       }
+
+      // Validate active token and refresh profile to avoid stale/broken sessions.
+      if (localStorage.getItem('shopCoreToken')) {
+        try {
+          const profile = await getProfile();
+          if (isMounted) setUser(profile);
+          localStorage.setItem('shopCoreUser', JSON.stringify(profile));
+        } catch {
+          clearLocalSession();
+        }
+      }
+
+      const handleAuthChanged = () => {
+        syncUserFromStorage();
+      };
+      const handleStorage = (event) => {
+        if (!event.key || event.key === 'shopCoreUser' || event.key === 'shopCoreToken') {
+          syncUserFromStorage();
+        }
+      };
+      window.addEventListener('auth:changed', handleAuthChanged);
+      window.addEventListener('storage', handleStorage);
+      const supabaseSubscription = USE_SUPABASE && supabase
+        ? onAuthStateChange(() => syncUserFromStorage())
+        : null;
+
       setLoading(false);
+
+      return () => {
+        window.removeEventListener('auth:changed', handleAuthChanged);
+        window.removeEventListener('storage', handleStorage);
+        supabaseSubscription?.data?.subscription?.unsubscribe?.();
+      };
     };
-    initAuth();
+    let cleanup = () => {};
+    initAuth().then((dispose) => {
+      cleanup = typeof dispose === 'function' ? dispose : () => {};
+    });
+
+    return () => {
+      isMounted = false;
+      cleanup();
+    };
   }, []);
 
   const handleLogin = (userData, token) => {
