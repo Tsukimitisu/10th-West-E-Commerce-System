@@ -142,21 +142,23 @@ export const CartProvider = ({ children }) => {
         }
       } catch (err) {
         console.error('Error adding to cart:', err);
-        setError('Failed to add item to cart');
         // Fall back to local cart
-        addToCartLocal(product, requestedQty);
-        return false;
+        const fallbackAdded = addToCartLocal(product, requestedQty);
+        if (!fallbackAdded) {
+          setError('Failed to add item to cart');
+        }
+        return fallbackAdded;
       } finally {
         setLoading(false);
       }
     } else {
       // Use local storage if not logged in
-      addToCartLocal(product, requestedQty);
-      return true;
+      return addToCartLocal(product, requestedQty);
     }
   };
 
   const addToCartLocal = (product, quantity) => {
+    let added = false;
     setItems(currentItems => {
       const existingItem = currentItems.find(item => item.productId === product.id);
       const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
@@ -178,6 +180,7 @@ export const CartProvider = ({ children }) => {
           return currentItems;
         }
         setError(null);
+        added = true;
         return currentItems.map(item =>
           item.productId === product.id
             ? { ...item, quantity: nextQuantity }
@@ -189,8 +192,10 @@ export const CartProvider = ({ children }) => {
         return currentItems;
       }
       setError(null);
+      added = true;
       return [...currentItems, { productId: product.id, product, quantity: requestedQty }];
     });
+    return added;
   };
 
   const removeFromCart = async (productId) => {
