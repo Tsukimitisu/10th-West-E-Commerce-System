@@ -158,44 +158,45 @@ export const CartProvider = ({ children }) => {
   };
 
   const addToCartLocal = (product, quantity) => {
-    let added = false;
+    const requestedQty = Number(quantity);
+    if (!Number.isFinite(requestedQty) || requestedQty < 1) {
+      setError('Invalid quantity.');
+      return false;
+    }
+
+    const existingItem = items.find(item => item.productId === product.id);
+    const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
+
+    if (Number.isFinite(maxStock) && maxStock <= 0) {
+      setError('This item is out of stock.');
+      return false;
+    }
+
+    if (existingItem) {
+      const nextQuantity = existingItem.quantity + requestedQty;
+      if (Number.isFinite(maxStock) && nextQuantity > maxStock) {
+        setError(`Cannot exceed available stock (${maxStock}).`);
+        return false;
+      }
+    } else if (Number.isFinite(maxStock) && requestedQty > maxStock) {
+      setError(`Cannot exceed available stock (${maxStock}).`);
+      return false;
+    }
+
+    setError(null);
+
     setItems(currentItems => {
-      const existingItem = currentItems.find(item => item.productId === product.id);
-      const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
-      const requestedQty = Number(quantity);
-      if (!Number.isFinite(requestedQty) || requestedQty < 1) {
-        setError('Invalid quantity.');
-        return currentItems;
-      }
-
-      if (Number.isFinite(maxStock) && maxStock <= 0) {
-        setError('This item is out of stock.');
-        return currentItems;
-      }
-
-      if (existingItem) {
-        const nextQuantity = existingItem.quantity + requestedQty;
-        if (Number.isFinite(maxStock) && nextQuantity > maxStock) {
-          setError(`Cannot exceed available stock (${maxStock}).`);
-          return currentItems;
-        }
-        setError(null);
-        added = true;
+      const existing = currentItems.find(item => item.productId === product.id);
+      if (existing) {
         return currentItems.map(item =>
           item.productId === product.id
-            ? { ...item, quantity: nextQuantity }
+            ? { ...item, quantity: item.quantity + requestedQty }
             : item
         );
       }
-      if (Number.isFinite(maxStock) && requestedQty > maxStock) {
-        setError(`Cannot exceed available stock (${maxStock}).`);
-        return currentItems;
-      }
-      setError(null);
-      added = true;
       return [...currentItems, { productId: product.id, product, quantity: requestedQty }];
     });
-    return added;
+    return true;
   };
 
   const removeFromCart = async (productId) => {
