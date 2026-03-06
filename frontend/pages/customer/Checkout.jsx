@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { getAddresses, createOrder, createPaymentIntent } from '../../services/api';
+import { getAddresses, createOrder, createPaymentIntent, getProductById } from '../../services/api';
 
 const Checkout = () => {
   const { items, subtotal, total, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
@@ -51,6 +51,33 @@ const Checkout = () => {
     }
   };
 
+  const validateStockBeforeCheckout = async () => {
+    const validations = await Promise.all(items.map(async (item) => {
+      const fallbackStock = Math.max(0, Number(item.product?.stock_quantity ?? 0));
+      const fallbackName = item.product?.name || `Product #${item.productId}`;
+
+      try {
+        const latest = await getProductById(item.productId);
+        return {
+          requested: item.quantity,
+          available: Math.max(0, Number(latest?.stock_quantity ?? fallbackStock)),
+          name: latest?.name || fallbackName,
+        };
+      } catch {
+        return {
+          requested: item.quantity,
+          available: fallbackStock,
+          name: fallbackName,
+        };
+      }
+    }));
+
+    const exceeded = validations.find((v) => v.requested > v.available);
+    if (!exceeded) return null;
+
+    return `${exceeded.name}: You requested ${exceeded.requested}, but the maximum available quantity is ${exceeded.available}.`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!agreeTerms) {
@@ -69,6 +96,13 @@ const Checkout = () => {
       const shippingAddress = selectedAddr
         ? `${selectedAddr.recipient_name}, ${selectedAddr.street}, ${selectedAddr.city}, ${selectedAddr.state} ${selectedAddr.postal_code}`
         : `${form.name}, ${form.street}, ${form.city}, ${form.state} ${form.postal_code}`;
+
+      const stockError = await validateStockBeforeCheckout();
+      if (stockError) {
+        setError(stockError);
+        setProcessing(false);
+        return;
+      }
 
       if (paymentMethod === 'card') {
         await createPaymentIntent(Math.round(grandTotal), items.map((i) => ({

@@ -235,10 +235,17 @@ export const createOrder = async (req, res) => {
       );
 
       const product = stockCheck.rows[0];
-      if (!product || product.stock_quantity < item.quantity) {
+      if (!product) {
         await client.query('ROLLBACK');
         return res.status(400).json({
-          message: `Insufficient stock for ${product?.name || 'Product #' + item.product_id}`
+          message: `Product #${item.product_id} is no longer available.`
+        });
+      }
+
+      if (product.stock_quantity < item.quantity) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `${product.name}: Maximum available quantity is ${product.stock_quantity}.`
         });
       }
     }
