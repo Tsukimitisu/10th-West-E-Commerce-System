@@ -32,6 +32,7 @@ export function useSocketEvent(event, handler) {
 export const SocketProvider = ({ children }) => {
   const socketRef = useRef(null);
   const joinedSignatureRef = useRef('');
+  const lastSessionToastAtRef = useRef(0);
   const [connected, setConnected] = useState(false);
   const [toasts, setToasts] = useState([]);
 
@@ -117,6 +118,12 @@ export const SocketProvider = ({ children }) => {
     });
 
     const onAuthChanged = () => emitJoinFromStorage(true);
+    const onSessionExpired = () => {
+      const now = Date.now();
+      if (now - lastSessionToastAtRef.current < 2000) return;
+      lastSessionToastAtRef.current = now;
+      addToast('Your session expired. Please sign in again.', 'error');
+    };
     const onFocus = () => emitJoinFromStorage(false);
     const onStorage = (event) => {
       if (event.key === 'shopCoreUser' || event.key === 'shopCoreToken') {
@@ -126,12 +133,14 @@ export const SocketProvider = ({ children }) => {
     const syncInterval = setInterval(() => emitJoinFromStorage(false), 5000);
 
     window.addEventListener('auth:changed', onAuthChanged);
+    window.addEventListener('auth:session-expired', onSessionExpired);
     window.addEventListener('focus', onFocus);
     window.addEventListener('storage', onStorage);
 
     return () => {
       clearInterval(syncInterval);
       window.removeEventListener('auth:changed', onAuthChanged);
+      window.removeEventListener('auth:session-expired', onSessionExpired);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('storage', onStorage);
       s.disconnect();

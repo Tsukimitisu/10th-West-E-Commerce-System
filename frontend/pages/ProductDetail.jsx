@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, ChevronDown } from 'lucide-react';
 import { getProductById, getRelatedProducts, getProductReviews, addToWishlist, removeFromWishlist, getWishlist, recordProductView } from '../services/api';
 import { useCart } from '../context/CartContext';
@@ -9,6 +9,7 @@ import ReviewCard from '../components/ReviewCard';
 
 const ProductDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -58,22 +59,46 @@ const ProductDetail = () => {
     }
   }, [id]);
 
-  const handleAddToCart = async () => {
-    if (!product) return;
+  const validateSelection = () => {
+    if (!product) return false;
     if (!selectedVariant.color) {
       setVariantError('Please select a color before adding this item to cart.');
-      return;
+      return false;
     }
     const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
     if (quantity > maxStock) {
       setQuantityError(`Maximum available quantity is ${maxStock}.`);
-      return;
+      return false;
     }
-    await addToCart(product, quantity);
-    setAddedToCart(true);
     setVariantError('');
     setQuantityError('');
-    setTimeout(() => setAddedToCart(false), 2000);
+    return true;
+  };
+
+  const addCurrentSelectionToCart = async (showAddedState = true) => {
+    if (!product) return false;
+    if (!validateSelection()) return false;
+
+    const added = await addToCart(product, quantity);
+    if (added === false) return false;
+
+    if (showAddedState) {
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 2000);
+    }
+    return true;
+  };
+
+  const handleAddToCart = async () => {
+    await addCurrentSelectionToCart(true);
+  };
+
+  const handleBuyNow = async () => {
+    const added = await addCurrentSelectionToCart(false);
+    if (!added) return;
+    const user = localStorage.getItem('shopCoreUser');
+    if (!user) navigate('/login?redirect=/checkout');
+    else navigate('/checkout');
   };
 
   const handleWishlist = async () => {
@@ -246,9 +271,17 @@ const ProductDetail = () => {
               <button
                 onClick={handleAddToCart}
                 disabled={isOutOfStock}
-                className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
+                className="h-12 w-12 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-all flex items-center justify-center"
+                title="Add to cart"
               >
-                {addedToCart ? <><Check size={18} /> Added!</> : <><ShoppingCart size={18} /> Add to Cart</>}
+                {addedToCart ? <Check size={18} /> : <ShoppingCart size={18} />}
+              </button>
+              <button
+                onClick={handleBuyNow}
+                disabled={isOutOfStock}
+                className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-gray-900 font-semibold rounded-lg transition-all"
+              >
+                Buy Now
               </button>
               <button onClick={handleWishlist} className={`p-3 border rounded-lg transition-colors ${isWishlisted ? 'border-orange-200 bg-orange-50 text-orange-500' : 'border-gray-200 text-gray-400 hover:text-orange-500 hover:border-orange-200'}`}>
                 <Heart size={20} className={isWishlisted ? 'fill-orange-500' : ''} />

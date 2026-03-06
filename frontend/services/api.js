@@ -65,6 +65,7 @@ const authenticatedFetch = async (url, options = {}) => {
   if (!response.ok) {
     if (token && (response.status === 401 || response.status === 403)) {
       clearAuthSession();
+      window.dispatchEvent(new Event('auth:session-expired'));
     }
     const error = await response.json().catch(() => ({ message: 'Request failed' }));
     throw new Error(error.message || 'Request failed');

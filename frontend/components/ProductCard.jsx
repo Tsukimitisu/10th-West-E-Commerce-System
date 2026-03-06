@@ -1,8 +1,7 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Heart, Star, ShoppingCart, Tag, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Heart, Star, Tag, AlertTriangle } from 'lucide-react';
 import { addToWishlist, removeFromWishlist } from '../services/api';
-import { useCart } from '../context/CartContext';
 
 const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'grid' }) => {
   const isWishlisted = wishlistedIds.includes(product.id);
@@ -11,8 +10,6 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
   const isLowStock = stockLevel > 0 && stockLevel <= (product.low_stock_threshold || 5);
   const hasDiscount = product.is_on_sale && product.sale_price;
   const discountPercent = hasDiscount ? Math.round((1 - (product.sale_price / product.price)) * 100) : 0;
-  const { addToCart } = useCart();
-  const navigate = useNavigate();
 
   const handleWishlist = async (e) => {
     e.preventDefault();
@@ -27,24 +24,7 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
     } catch {}
   };
 
-  const handleQuickAdd = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isOutOfStock) return;
-    await addToCart(product, 1);
-  };
-
-  const handleBuyNow = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isOutOfStock) return;
-    await addToCart(product, 1);
-    const user = localStorage.getItem('shopCoreUser');
-    if (!user) navigate('/login?redirect=/checkout');
-    else navigate('/checkout');
-  };
-
-  const formatPrice = (p) => `₱${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const formatPrice = (p) => `${'\u20B1'}${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
   if (view === 'list') {
     return (
@@ -80,25 +60,6 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
             ) : (
               <span className="font-bold text-gray-900">{formatPrice(product.price)}</span>
             )}
-          </div>
-          <div className="flex items-center gap-2 mt-3">
-            <button
-              type="button"
-              onClick={handleQuickAdd}
-              disabled={isOutOfStock}
-              className="h-8 w-8 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white flex items-center justify-center transition-colors"
-              title="Add to cart"
-            >
-              <ShoppingCart size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={handleBuyNow}
-              disabled={isOutOfStock}
-              className="px-3 h-8 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:text-gray-400 disabled:bg-gray-100 transition-colors"
-            >
-              Buy Now
-            </button>
           </div>
         </div>
       </Link>
@@ -156,25 +117,7 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
               <span className="font-bold text-gray-900">{formatPrice(product.price)}</span>
             )}
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={handleBuyNow}
-              disabled={isOutOfStock}
-              className="px-2.5 h-8 rounded-lg border border-gray-200 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:text-gray-400 disabled:bg-gray-100 transition-colors"
-            >
-              Buy
-            </button>
-            <button
-              type="button"
-              onClick={handleQuickAdd}
-              disabled={isOutOfStock}
-              className="w-8 h-8 bg-gray-50 group-hover:bg-orange-500 disabled:bg-gray-100 rounded-lg flex items-center justify-center transition-colors"
-              title="Add to cart"
-            >
-              <ShoppingCart size={14} className="text-gray-400 group-hover:text-white" />
-            </button>
-          </div>
+          {isLowStock && <span className="text-[11px] text-amber-600 font-medium">Low stock</span>}
         </div>
       </div>
     </Link>
