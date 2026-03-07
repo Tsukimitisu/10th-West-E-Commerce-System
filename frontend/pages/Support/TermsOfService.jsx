@@ -23,14 +23,13 @@ const TermsOfService = () => {
 
           <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-6">
             <p>
-              Welcome to 10th West Moto Parts. These Terms of Service ("Terms") govern your access to and use of our
-              website, products, and services. By using our platform, you agree to be bound by these Terms.
+              Welcome to 10th West Moto Parts. These Terms of Service govern your access to and use of our
+              website, products, and services. By using our platform, you agree to be bound by these terms.
             </p>
             <p>
-              This agreement is entered into between you ("Customer", "you") and <strong>10th West Moto Parts</strong>,
-              a business registered under the DTI (Registration No. 3217456), operating from Quezon City, Metro Manila,
-              Philippines, in compliance with the <strong>Consumer Act of the Philippines (RA 7394)</strong> and
-              <strong> DTI Department Administrative Order No. 21-01</strong> (E-Commerce).
+              This agreement is entered into between you and 10th West Moto Parts,
+              a business registered under the Department of Trade and Industry (DTI), operating from Quezon City, Metro Manila,
+              Philippines, in compliance with the Consumer Act of the Philippines (RA 7394) and direct Department Administrative Orders.
             </p>
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">1. Eligibility</h2>
@@ -62,8 +61,8 @@ const TermsOfService = () => {
               <li>Placing an order constitutes an offer to purchase. Acceptance occurs when we confirm your order.</li>
               <li>We accept the following payment methods: <strong>Credit/Debit Card (via Stripe), GCash, Bank Transfer, and Cash on Delivery (COD)</strong>.</li>
               <li>Orders may be cancelled before the status changes to "Preparing".</li>
-              <li>We do not store credit or debit card numbers on our systems. All card payments are processed by our payment processor (Stripe) in compliance with PCI-DSS standards.</li>
-              <li>All transactions are issued an official receipt or invoice per <strong>BIR Revenue Regulations No. 18-2012</strong>.</li>
+              <li>We do not store credit or debit card numbers on our systems. All card payments are securely processed by our payment processor.</li>
+              <li>All transactions are issued an official receipt or invoice per government regulations.</li>
             </ul>
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">5. Shipping & Delivery</h2>
@@ -107,9 +106,9 @@ const TermsOfService = () => {
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">9. Intellectual Property</h2>
             <p>
-              All content on this website — including text, graphics, logos, images, and software — is the property of
-              10th West Moto Parts or its content suppliers and is protected by Philippine intellectual property laws
-              (RA 8293). Unauthorized use, reproduction, or distribution is prohibited.
+              All content on this website—including text, graphics, logos, images, and software—is the property of
+              10th West Moto Parts or its content suppliers and is protected by Philippine intellectual property laws.
+              Unauthorized use, reproduction, or distribution is strictly prohibited.
             </p>
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">10. Prohibited Activities</h2>
@@ -126,15 +125,15 @@ const TermsOfService = () => {
             <p>
               To the maximum extent permitted by Philippine law, 10th West Moto Parts shall not be liable for any
               indirect, incidental, special, or consequential damages arising from or related to your use of our
-              services or products, except as required by the Consumer Act (RA 7394).
+              services or products, except as required by the Consumer Act.
             </p>
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">12. Dispute Resolution</h2>
             <ul className="list-disc pl-6 space-y-1">
               <li>Any disputes shall first be settled through good faith negotiation.</li>
-              <li>If unresolved, disputes may be filed with the <strong>DTI Fair Trade Enforcement Bureau</strong> or the appropriate court in Quezon City, Philippines.</li>
+              <li>If unresolved, disputes may be filed with the appropriate government agency or court in Quezon City, Philippines.</li>
               <li>These Terms are governed by the laws of the Republic of the Philippines.</li>
-              <li>Nothing in these Terms limits your rights under the Consumer Act (RA 7394) or DTI DAO 21-01.</li>
+              <li>Nothing in these Terms limits your legal consumer rights.</li>
             </ul>
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">13. Account Termination</h2>
