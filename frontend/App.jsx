@@ -39,6 +39,11 @@ const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
 
 const AppLayout = ({ user, onLogout, onLogin }) => {
   const location = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
   const isSuperAdmin = user?.role === Role.SUPER_ADMIN;
   const hideChrome = location.pathname === '/pos' || location.pathname === '/admin' || location.pathname === '/super-admin';
 
@@ -210,9 +215,9 @@ const App = () => {
         supabaseSubscription?.data?.subscription?.unsubscribe?.();
       };
     };
-    let cleanup = () => {};
+    let cleanup = () => { };
     initAuth().then((dispose) => {
-      cleanup = typeof dispose === 'function' ? dispose : () => {};
+      cleanup = typeof dispose === 'function' ? dispose : () => { };
     });
 
     return () => {
