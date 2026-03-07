@@ -160,15 +160,15 @@ const OrderDetail = () => {
             {items.map((item, i) => (
               <div key={i} className="flex items-center gap-4 p-4">
                 <div className="w-16 h-16 bg-gray-50 rounded-lg border border-gray-100 overflow-hidden flex-shrink-0">
-                  {item.image_url ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" /> :
+                  {(item.image_url || item.product?.image) ? <img src={item.image_url || item.product?.image} alt={item.name || item.product?.name} className="w-full h-full object-cover" /> :
                     <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{item.name || item.product_name}</p>
-                  {item.sku && <p className="text-xs text-gray-400">SKU: {item.sku}</p>}
+                  <p className="text-sm font-medium text-gray-900 truncate">{item.name || item.product_name || item.product?.name}</p>
+                  {(item.sku || item.product?.sku) && <p className="text-xs text-gray-400">SKU: {item.sku || item.product?.sku}</p>}
                   <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                 </div>
-                <p className="text-sm font-semibold text-gray-900">₱{(Number(item.price) * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                <p className="text-sm font-semibold text-gray-900">₱{(Number(item.price ?? item.product?.price ?? 0) * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
               </div>
             ))}
           </div>
@@ -193,7 +193,7 @@ const OrderDetail = () => {
           <div className="bg-white rounded-xl border border-gray-100 p-4">
             <h3 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5"><MapPin size={14} /> Shipping Address</h3>
             <p className="text-sm text-gray-600 leading-relaxed">
-              {order.shipping_name || order.address?.name || 'â€”'}<br />
+              {order.shipping_name || order.address?.name || 'N/A'}<br />
               {order.shipping_address || order.address?.street || ''}<br />
               {order.shipping_city || order.address?.city || ''}{order.shipping_state ? `, ${order.shipping_state}` : ''} {order.shipping_zip || order.address?.zip || ''}<br />
               {order.shipping_phone || order.address?.phone || ''}

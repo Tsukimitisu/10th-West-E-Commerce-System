@@ -83,13 +83,14 @@ const PosTerminal = () => {
     // --- Cart Logic ---
 
     const addToCart = (product) => {
-        if (product.stock_quantity === 0) return;
+        const stock = Number(product.stock_quantity ?? 0);
+        if (stock <= 0) return;
 
         setCartItems(current => {
             const existing = current.find(item => item.productId === product.id);
 
             // Check stock before adding
-            if (existing && existing.quantity >= product.stock_quantity) {
+            if (existing && existing.quantity >= stock) {
                 showToast('error', 'Insufficient Stock!');
                 return current;
             }
@@ -111,12 +112,13 @@ const PosTerminal = () => {
     const updateQuantity = (productId, delta) => {
         const product = products.find(p => p.id === productId);
         if (!product) return;
+        const stock = Number(product.stock_quantity ?? 0);
 
         setCartItems(current =>
             current.map(item => {
                 if (item.productId === productId) {
                     const newQty = item.quantity + delta;
-                    if (newQty > product.stock_quantity) {
+                    if (newQty > stock) {
                         return item; // Max stock reached
                     }
                     const validQty = Math.max(1, newQty);
@@ -170,11 +172,16 @@ const PosTerminal = () => {
 
     const filteredProducts = products.filter(product => {
         const term = searchTerm.toLowerCase();
-        const matchesSearch = product.name.toLowerCase().includes(term) ||
-            product.partNumber.toLowerCase().includes(term) ||
-            (product.barcode && product.barcode.toLowerCase().includes(term)) ||
-            (product.sku && product.sku.toLowerCase().includes(term));
-        const matchesCategory = selectedCategory === 'all' || product.category_id === selectedCategory;
+        const productName = String(product.name || '').toLowerCase();
+        const partNumber = String(product.partNumber || '').toLowerCase();
+        const barcode = String(product.barcode || '').toLowerCase();
+        const sku = String(product.sku || '').toLowerCase();
+
+        const matchesSearch = productName.includes(term) ||
+            partNumber.includes(term) ||
+            barcode.includes(term) ||
+            sku.includes(term);
+        const matchesCategory = selectedCategory === 'all' || String(product.category_id) === String(selectedCategory);
         return matchesSearch && matchesCategory;
     });
 

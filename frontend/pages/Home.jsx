@@ -14,10 +14,10 @@ const Home = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    getProducts().then(setProducts).catch(() => {});
-    getCategories().then(setCategories).catch(() => {});
-    getBanners().then(setBanners).catch(() => {});
-    getAnnouncements().then(setAnnouncements).catch(() => {});
+    getProducts().then(setProducts).catch(() => { });
+    getCategories().then(setCategories).catch(() => { });
+    getBanners().then(setBanners).catch(() => { });
+    getAnnouncements().then(setAnnouncements).catch(() => { });
 
     const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
     if (viewed.length > 0) setRecentlyViewed(viewed.slice(0, 6));
@@ -36,18 +36,6 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Announcements Bar */}
-      {announcements.length > 0 && (
-        <div className="bg-orange-50 border-b border-orange-100">
-          <div className="max-w-7xl mx-auto px-4 py-2.5">
-            <div className="flex items-center justify-center gap-2">
-              <Zap size={14} className="text-orange-500 flex-shrink-0" />
-              <p className="text-sm text-orange-700 font-medium text-center">{announcements[0].title}: {announcements[0].content}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Hero Banner */}
       {banners.length > 0 ? (
         <section className="relative bg-gray-900 overflow-hidden">

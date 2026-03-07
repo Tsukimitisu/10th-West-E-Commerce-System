@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, ChevronDown } from 'lucide-react';
 import { getProductById, getRelatedProducts, getProductReviews, addToWishlist, removeFromWishlist, getWishlist, recordProductView } from '../services/api';
 import { useCart } from '../context/CartContext';
@@ -9,6 +9,7 @@ import ReviewCard from '../components/ReviewCard';
 
 const ProductDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -19,6 +20,8 @@ const ProductDetail = () => {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState({ color: '' });
+  const [variantError, setVariantError] = useState('');
+  const [quantityError, setQuantityError] = useState('');
   const { addToCart } = useCart();
 
   useEffect(() => {
@@ -56,11 +59,46 @@ const ProductDetail = () => {
     }
   }, [id]);
 
+  const validateSelection = () => {
+    if (!product) return false;
+    if (!selectedVariant.color) {
+      setVariantError('Please select a color before adding this item to cart.');
+      return false;
+    }
+    const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
+    if (quantity > maxStock) {
+      setQuantityError(`Maximum available quantity is ${maxStock}.`);
+      return false;
+    }
+    setVariantError('');
+    setQuantityError('');
+    return true;
+  };
+
+  const addCurrentSelectionToCart = async (showAddedState = true) => {
+    if (!product) return false;
+    if (!validateSelection()) return false;
+
+    const added = await addToCart(product, quantity);
+    if (added === false) return false;
+
+    if (showAddedState) {
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 2000);
+    }
+    return true;
+  };
+
   const handleAddToCart = async () => {
-    if (!product) return;
-    await addToCart(product, quantity);
-    setAddedToCart(true);
-    setTimeout(() => setAddedToCart(false), 2000);
+    await addCurrentSelectionToCart(true);
+  };
+
+  const handleBuyNow = async () => {
+    const added = await addCurrentSelectionToCart(false);
+    if (!added) return;
+    const user = localStorage.getItem('shopCoreUser');
+    if (!user) navigate('/login?redirect=/checkout');
+    else navigate('/checkout');
   };
 
   const handleWishlist = async () => {
@@ -91,7 +129,8 @@ const ProductDetail = () => {
   if (!product) return <div className="text-center py-20 text-gray-500">Product not found.</div>;
 
   const images = [product.image || 'https://via.placeholder.com/600?text=No+Image'];
-  const isOutOfStock = product.stock_quantity <= 0;
+  const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
+  const isOutOfStock = maxStock <= 0;
   const hasDiscount = product.is_on_sale && product.sale_price;
   const currentPrice = hasDiscount ? product.sale_price : product.price;
 
@@ -180,6 +219,7 @@ const ProductDetail = () => {
                 <span className="flex items-center gap-1.5 text-sm text-green-600 font-medium"><Check size={16} /> In Stock</span>
               )}
             </div>
+            <p className="text-xs text-gray-500 -mt-4 mb-6">Stock level: {Math.max(0, Number(product.stock_quantity ?? 0))}</p>
 
             {/* SKU / Barcode */}
             {(product.sku || product.barcode || product.partNumber) && (
@@ -194,14 +234,15 @@ const ProductDetail = () => {
             {/* Variants */}
             <div className="space-y-4 mb-6">
               <div>
-                <label className="text-sm font-medium text-gray-900 mb-2 block">Color</label>
+                <label className="text-sm font-medium text-gray-900 mb-2 block">Color <span className="text-orange-500">*</span></label>
                 <div className="flex gap-2">
                   {colors.map(c => (
-                    <button key={c} onClick={() => setSelectedVariant(prev => ({...prev, color: c}))}
+                    <button key={c} onClick={() => { setSelectedVariant(prev => ({...prev, color: c})); setVariantError(''); }}
                       className={`px-4 py-2 border rounded-lg text-sm transition-colors ${selectedVariant.color === c ? 'border-orange-500 bg-orange-50 text-orange-500' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
                     >{c}</button>
                   ))}
                 </div>
+                {variantError && <p className="text-xs text-orange-500 mt-2">{variantError}</p>}
               </div>
 
             </div>
@@ -209,16 +250,38 @@ const ProductDetail = () => {
             {/* Quantity & Actions */}
             <div className="flex flex-wrap gap-3 mb-6">
               <div className="flex items-center border border-gray-200 rounded-lg">
-                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="px-3 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"><Minus size={16} /></button>
+                <button onClick={() => { setQuantity(q => Math.max(1, q - 1)); setQuantityError(''); }} className="px-3 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"><Minus size={16} /></button>
                 <span className="w-12 text-center font-medium">{quantity}</span>
-                <button onClick={() => setQuantity(q => q + 1)} className="px-3 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"><Plus size={16} /></button>
+                <button
+                  onClick={() => {
+                    setQuantity((q) => {
+                      if (q >= maxStock) {
+                        setQuantityError(`Maximum available quantity is ${maxStock}.`);
+                        return q;
+                      }
+                      setQuantityError('');
+                      return q + 1;
+                    });
+                  }}
+                  className="px-3 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Plus size={16} />
+                </button>
               </div>
               <button
                 onClick={handleAddToCart}
                 disabled={isOutOfStock}
-                className="flex-1 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
+                className="h-12 w-12 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-all flex items-center justify-center"
+                title="Add to cart"
               >
-                {addedToCart ? <><Check size={18} /> Added!</> : <><ShoppingCart size={18} /> Add to Cart</>}
+                {addedToCart ? <Check size={18} /> : <ShoppingCart size={18} />}
+              </button>
+              <button
+                onClick={handleBuyNow}
+                disabled={isOutOfStock}
+                className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-gray-900 font-semibold rounded-lg transition-all"
+              >
+                Buy Now
               </button>
               <button onClick={handleWishlist} className={`p-3 border rounded-lg transition-colors ${isWishlisted ? 'border-orange-200 bg-orange-50 text-orange-500' : 'border-gray-200 text-gray-400 hover:text-orange-500 hover:border-orange-200'}`}>
                 <Heart size={20} className={isWishlisted ? 'fill-orange-500' : ''} />
@@ -227,6 +290,7 @@ const ProductDetail = () => {
                 <Share2 size={20} />
               </button>
             </div>
+            {quantityError && <p className="text-xs text-orange-500 -mt-4 mb-6">{quantityError}</p>}
 
             {/* Benefits */}
             <div className="grid grid-cols-3 gap-3 p-4 bg-gray-50 rounded-xl">

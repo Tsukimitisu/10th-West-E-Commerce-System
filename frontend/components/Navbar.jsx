@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
-import { getCategories, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from '../services/api';
+import { getCategories, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
+import { useSocket } from '../context/SocketContext';
 import CartDrawer from './CartDrawer';
 
 const Navbar = ({ user, onLogout }) => {
@@ -20,6 +21,7 @@ const Navbar = ({ user, onLogout }) => {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [shopToolsOpen, setShopToolsOpen] = useState(false);
   const { itemCount } = useCart();
+  const { on, off, connected } = useSocket();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const userMenuRef = useRef(null);
@@ -53,16 +55,68 @@ const Navbar = ({ user, onLogout }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      getUnreadNotificationCount().then(setUnreadCount).catch(() => {});
-      getNotifications().then(n => setNotifications(n.slice(0, 10))).catch(() => {});
-      const interval = setInterval(() => {
-        getUnreadNotificationCount().then(setUnreadCount).catch(() => {});
-      }, 30000);
-      return () => clearInterval(interval);
-    }
+  const refreshNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [count, list, anns] = await Promise.all([
+        getUnreadNotificationCount().catch(() => 0),
+        getNotifications().catch(() => []),
+        getAnnouncements().catch(() => []),
+      ]);
+      setUnreadCount(count || 0);
+
+      const mappedAnns = (anns || []).map(a => ({
+        ...a,
+        is_read: true,
+        type: 'announcement',
+        message: a.content
+      }));
+
+      const combined = [...(list || []), ...mappedAnns].sort((a, b) => {
+        const dateA = new Date(a.created_at || a.published_at || 0);
+        const dateB = new Date(b.created_at || b.published_at || 0);
+        return dateB - dateA;
+      }).slice(0, 20);
+
+      setNotifications(combined);
+    } catch { }
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    refreshNotifications();
+    const interval = setInterval(refreshNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [user, refreshNotifications]);
+
+  useEffect(() => {
+    if (!user || !connected) return;
+
+    const handleNotification = (notification) => {
+      if (!notification) {
+        refreshNotifications();
+        return;
+      }
+      setNotifications((prev) => [notification, ...prev].slice(0, 10));
+      if (notification.is_read === false || notification.is_read == null) {
+        setUnreadCount((prev) => prev + 1);
+      }
+    };
+
+    const handleOrderEvent = () => {
+      refreshNotifications();
+    };
+
+    on('notification', handleNotification);
+    on('order:new', handleOrderEvent);
+    on('order:updated', handleOrderEvent);
+
+    return () => {
+      off('notification', handleNotification);
+      off('order:new', handleOrderEvent);
+      off('order:updated', handleOrderEvent);
+    };
+  }, [user, connected, on, off, refreshNotifications]);
 
   useEffect(() => {
     const notifHandler = (e) => {
@@ -83,7 +137,8 @@ const Navbar = ({ user, onLogout }) => {
     } catch (e) { console.error(e); }
   };
 
-  const handleMarkRead = async (id) => {
+  const handleMarkRead = async (id, type) => {
+    if (type === 'announcement') return;
     try {
       await markNotificationRead(id);
       setUnreadCount(prev => Math.max(0, prev - 1));
@@ -262,10 +317,26 @@ const Navbar = ({ user, onLogout }) => {
                         {notifications.length === 0 ? (
                           <div className="p-6 text-center text-gray-400 text-sm">No notifications</div>
                         ) : (
-                          notifications.map(n => (
-                            <button key={n.id} onClick={() => { handleMarkRead(n.id); setNotifOpen(false); }} className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${!n.is_read ? 'bg-orange-50/50' : ''}`}>
-                              <p className={`text-sm ${!n.is_read ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{n.title || n.message}</p>
-                              <p className="text-xs text-gray-400 mt-1">{n.created_at ? new Date(n.created_at).toLocaleDateString() : ''}</p>
+                          notifications.map((n, i) => (
+                            <button key={`${n.id || n.title}-${i}`} onClick={() => { handleMarkRead(n.id, n.type); setNotifOpen(false); }} className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${!n.is_read ? 'bg-orange-50/50' : ''}`}>
+                              <div className="flex gap-3">
+                                <div className="mt-0.5 shrink-0">
+                                  {n.type === 'announcement' ? (
+                                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                    </div>
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center">
+                                      <Bell size={16} />
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className={`text-sm ${!n.is_read ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{n.title || n.message}</p>
+                                  {n.type === 'announcement' && <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>}
+                                  <p className="text-xs text-gray-400 mt-1">{n.created_at || n.published_at ? new Date(n.created_at || n.published_at).toLocaleDateString() : ''}</p>
+                                </div>
+                              </div>
                             </button>
                           ))
                         )}
