@@ -1988,7 +1988,7 @@ export const deleteAnnouncement = async (id) => {
 export const getPurchaseOrders = async () => {
   if (USE_SUPABASE) {
     const { data } = await supabase.from('stock_adjustments').select('*, products(name), users!stock_adjustments_adjusted_by_fkey(name)').order('created_at', { ascending: false });
-    return data || [];
+    return (data || []).map(a => ({ ...a, product_name: a.products?.name, quantity: a.quantity_change }));
   }
   return authenticatedFetch(`${API_URL}/inventory/adjustments`).catch(() => []);
 };
@@ -1996,7 +1996,17 @@ export const getPurchaseOrders = async () => {
 export const createPurchaseOrder = async (po) => {
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
-    const { data, error } = await supabase.from('stock_adjustments').insert({ ...po, adjusted_by: currentUser?.id }).select().single();
+    // Get current product stock
+    const { data: product, error: prodErr } = await supabase.from('products').select('stock_quantity').eq('id', po.product_id).single();
+    if (prodErr) throw new Error(prodErr.message);
+    const currentStock = parseInt(product.stock_quantity);
+    const newStock = currentStock + po.quantity_change;
+    if (newStock < 0) throw new Error('Stock cannot go below zero');
+    // Update product stock
+    const { error: updateErr } = await supabase.from('products').update({ stock_quantity: newStock, updated_at: new Date().toISOString() }).eq('id', po.product_id);
+    if (updateErr) throw new Error(updateErr.message);
+    // Record adjustment
+    const { data, error } = await supabase.from('stock_adjustments').insert({ product_id: po.product_id, quantity_change: po.quantity_change, reason: po.reason || 'correction', notes: po.note || '', adjusted_by: currentUser?.id, status: 'approved' }).select().single();
     if (error) throw new Error(error.message);
     return data;
   }
@@ -2097,6 +2107,26 @@ export const updateProfile = async (userId, updates) => {
 // ==================== INVENTORY ====================
 
 export const getInventory = async () => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, categories(name)')
+      .order('stock_quantity', { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []).map((p) => ({
+      ...p,
+      partNumber: p.part_number,
+      buyingPrice: p.buying_price,
+      boxNumber: p.box_number,
+      category_name: p.categories?.name,
+      stock_quantity: parseInt(p.stock_quantity),
+      low_stock_threshold: parseInt(p.low_stock_threshold),
+      price: parseFloat(p.price),
+      buying_price: parseFloat(p.buying_price || 0),
+      sale_price: p.sale_price ? parseFloat(p.sale_price) : null,
+      stock_status: p.stock_quantity === 0 ? 'out_of_stock' : p.stock_quantity <= p.low_stock_threshold ? 'low_stock' : 'in_stock',
+    }));
+  }
   const data = await authenticatedFetch(`${API_URL}/inventory`);
   return data.map((p) => ({
     ...p,
@@ -2107,6 +2137,25 @@ export const getInventory = async () => {
 };
 
 export const getLowStockProducts = async () => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, categories(name)')
+      .order('stock_quantity', { ascending: true });
+    if (error) throw new Error(error.message);
+    const lowItems = (data || []).filter(p => parseInt(p.stock_quantity) <= parseInt(p.low_stock_threshold)).map((p) => ({
+      ...p,
+      partNumber: p.part_number,
+      buyingPrice: p.buying_price,
+      boxNumber: p.box_number,
+      category_name: p.categories?.name,
+      stock_quantity: parseInt(p.stock_quantity),
+      low_stock_threshold: parseInt(p.low_stock_threshold),
+      price: parseFloat(p.price),
+      buying_price: parseFloat(p.buying_price || 0),
+    }));
+    return { count: lowItems.length, products: lowItems };
+  }
   const data = await authenticatedFetch(`${API_URL}/inventory/low-stock`);
   return {
     count: data.count,

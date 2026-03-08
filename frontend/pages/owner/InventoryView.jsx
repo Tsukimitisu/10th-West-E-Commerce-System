@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getProducts, getStockAdjustments, getLowStockProducts, adjustStock } from '../../services/api';
+import { getInventory, getStockAdjustments, getLowStockProducts, adjustStock } from '../../services/api';
 import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, TrendingDown, History, Plus, Minus } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
@@ -17,7 +17,7 @@ const InventoryView = () => {
 
   const fetchData = async () => {
     try {
-      const [p, a, ls] = await Promise.all([getProducts(), getStockAdjustments(), getLowStockProducts()]);
+      const [p, a, ls] = await Promise.all([getInventory(), getStockAdjustments(), getLowStockProducts()]);
       setProducts(Array.isArray(p) ? p : []);
       setAdjustments(Array.isArray(a) ? a : []);
       // getLowStockProducts returns { count, products } or an array
@@ -183,12 +183,13 @@ const InventoryView = () => {
               <tbody className="divide-y divide-gray-50">
                 {adjustments.slice(0, 50).map((a, i) => {
                   const prod = products.find(p => p.id === a.product_id);
-                  const isAdd = a.quantity > 0;
+                  const qty = a.quantity_change ?? a.quantity ?? 0;
+                  const isAdd = qty > 0;
                   return (
                     <tr key={i} className="hover:bg-gray-50/50">
                       <td className="px-4 py-3 text-xs text-gray-500">{new Date(a.created_at).toLocaleDateString()}</td>
                       <td className="px-4 py-3">
-                        <p className="font-medium text-gray-900 text-sm">{prod?.name || `Product #${a.product_id}`}</p>
+                        <p className="font-medium text-gray-900 text-sm">{a.product_name || prod?.name || `Product #${a.product_id}`}</p>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${isAdd ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-500'}`}>
@@ -196,7 +197,7 @@ const InventoryView = () => {
                           {isAdd ? 'Added' : 'Removed'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right font-bold text-sm">{isAdd ? '+' : ''}{a.quantity}</td>
+                      <td className="px-4 py-3 text-right font-bold text-sm">{isAdd ? '+' : ''}{qty}</td>
                       <td className="px-4 py-3 text-xs text-gray-500 capitalize">{a.reason || '—'}</td>
                     </tr>
                   );
