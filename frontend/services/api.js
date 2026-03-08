@@ -2191,6 +2191,13 @@ export const bulkUpdateStock = async (updates) => {
   });
 };
 
+export const batchReceiveStock = async (items, notes) => {
+  return await authenticatedFetch(`${API_URL}/inventory/batch-receive`, {
+    method: 'POST',
+    body: JSON.stringify({ items, notes }),
+  });
+};
+
 // ==================== REPORTS ====================
 
 export const getSalesReport = async (range = 'daily', startDate, endDate) => {
