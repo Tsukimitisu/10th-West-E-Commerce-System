@@ -218,7 +218,7 @@ export const createStockAdjustment = async (req, res) => {
       await client.query(
         `INSERT INTO stock_adjustments (product_id, quantity_change, reason, notes, adjusted_by, status)
          VALUES ($1, $2, $3, $4, $5, 'approved')`,
-        [product_id, quantity_change, reason || 'correction', note || '', req.user.id]
+        [product_id, quantity_change, dbReason, note || '', req.user.id]
       );
     } catch (adjErr) {
       // stock_adjustments table may not exist yet — continue without recording
