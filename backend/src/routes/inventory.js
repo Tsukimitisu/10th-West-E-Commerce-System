@@ -5,7 +5,8 @@ import {
   updateStock,
   bulkUpdateStock,
   getStockAdjustments,
-  createStockAdjustment
+  createStockAdjustment,
+  batchReceiveStock
 } from '../controllers/inventoryController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 

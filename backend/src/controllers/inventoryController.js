@@ -316,3 +316,94 @@ export const bulkUpdateStock = async (req, res) => {
     client.release();
   }
 };
+
+// Batch receive stock (barcode scanning workflow)
+export const batchReceiveStock = async (req, res) => {
+  const { items, notes } = req.body; // items: [{ product_id, quantity }]
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Items array is required and cannot be empty' });
+  }
+
+  for (const item of items) {
+    if (!item.product_id || !item.quantity || item.quantity < 1) {
+      return res.status(400).json({ message: 'Each item must have a valid product_id and quantity >= 1' });
+    }
+  }
+
+  const client = await pool.connect();
+  const results = [];
+
+  try {
+    await client.query('BEGIN');
+
+    for (const item of items) {
+      const { product_id, quantity } = item;
+
+      const productResult = await client.query(
+        'SELECT id, name, stock_quantity, low_stock_threshold FROM products WHERE id = $1',
+        [product_id]
+      );
+
+      if (productResult.rows.length === 0) {
+        results.push({ product_id, success: false, error: 'Product not found' });
+        continue;
+      }
+
+      const product = productResult.rows[0];
+      const currentStock = parseInt(product.stock_quantity);
+      const newStock = currentStock + quantity;
+
+      await client.query(
+        'UPDATE products SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [newStock, product_id]
+      );
+
+      try {
+        await client.query(
+          `INSERT INTO stock_adjustments (product_id, quantity_change, reason, notes, adjusted_by, status)
+           VALUES ($1, $2, 'received', $3, $4, 'approved')`,
+          [product_id, quantity, notes || 'Batch receive via barcode scan', req.user.id]
+        );
+      } catch (adjErr) {
+        console.warn('Could not record stock adjustment:', adjErr.message);
+      }
+
+      results.push({
+        product_id,
+        name: product.name,
+        success: true,
+        previous_stock: currentStock,
+        new_stock: newStock,
+        quantity_added: quantity
+      });
+    }
+
+    await client.query('COMMIT');
+
+    // Emit real-time updates
+    for (const r of results.filter(r => r.success)) {
+      emitStockUpdate({ product_id: r.product_id, name: r.name, stock_quantity: r.new_stock, previous_stock: r.previous_stock, adjustment: r.quantity_added });
+
+      const productCheck = await pool.query('SELECT low_stock_threshold FROM products WHERE id = $1', [r.product_id]);
+      const threshold = parseInt(productCheck.rows[0]?.low_stock_threshold || 5);
+      if (r.new_stock <= threshold) {
+        emitLowStockAlert({ id: r.product_id, name: r.name, stock_quantity: r.new_stock, low_stock_threshold: threshold });
+      }
+    }
+
+    res.json({
+      message: 'Stock received successfully',
+      results,
+      total_items: items.length,
+      success_count: results.filter(r => r.success).length,
+      failed_count: results.filter(r => !r.success).length
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Batch receive stock error:', error);
+    res.status(500).json({ message: 'Failed to receive stock' });
+  } finally {
+    client.release();
+  }
+};
