@@ -15,6 +15,9 @@ const InventoryView = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [adjForm, setAdjForm] = useState({ type: 'add', quantity: '', reason: 'restock', notes: '' });
 
+  const [adjLoading, setAdjLoading] = useState(false);
+  const [adjError, setAdjError] = useState('');
+
   const fetchData = async () => {
     try {
       const [p, a, ls] = await Promise.all([getInventory(), getStockAdjustments(), getLowStockProducts()]);
@@ -34,20 +37,27 @@ const InventoryView = () => {
   useSocketEvent('product:created', fetchData);
   useSocketEvent('product:deleted', fetchData);
 
-  const openAdjust = (p) => { setSelectedProduct(p); setAdjForm({ type: 'add', quantity: '', reason: 'restock', notes: '' }); setAdjustModal(true); };
+  const openAdjust = (p) => { setSelectedProduct(p); setAdjForm({ type: 'add', quantity: '', reason: 'restock', notes: '' }); setAdjError(''); setAdjustModal(true); };
 
   const handleAdjust = async (e) => {
     e.preventDefault();
-    if (!selectedProduct) return;
+    if (!selectedProduct || adjLoading) return;
+    setAdjLoading(true);
+    setAdjError('');
     try {
       await adjustStock({
         product_id: selectedProduct.id,
         quantity_change: adjForm.type === 'add' ? parseInt(adjForm.quantity) : -parseInt(adjForm.quantity),
-        reason: adjForm.reason ,
+        reason: adjForm.reason,
         note: adjForm.notes
       });
       setAdjustModal(false); fetchData();
-    } catch (e) { console.error(e); }
+    } catch (err) {
+      console.error(err);
+      setAdjError(err?.message || 'Failed to adjust stock. Please try again.');
+    } finally {
+      setAdjLoading(false);
+    }
   };
 
   const totalStock = products.reduce((s, p) => s + p.stock_quantity, 0);
@@ -288,10 +298,14 @@ const InventoryView = () => {
             </div>
           )}
 
+          {adjError && (
+            <div className="p-3 rounded-lg text-sm bg-red-50 text-red-600 border border-red-200">{adjError}</div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setAdjustModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-            <button type="submit" className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${adjForm.type === 'add' ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-500 hover:bg-orange-600'}`}>
-              {adjForm.type === 'add' ? 'Add Stock' : 'Remove Stock'}
+            <button type="submit" disabled={adjLoading} className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${adjForm.type === 'add' ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-500 hover:bg-orange-600'}`}>
+              {adjLoading ? 'Processing...' : adjForm.type === 'add' ? 'Add Stock' : 'Remove Stock'}
             </button>
           </div>
         </form>

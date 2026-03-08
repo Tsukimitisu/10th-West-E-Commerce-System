@@ -179,6 +179,10 @@ export const createStockAdjustment = async (req, res) => {
     return res.status(400).json({ message: 'product_id and quantity_change are required' });
   }
 
+  // Map frontend reasons to DB-valid values for legacy constraints
+  const reasonMap = { restock: 'received', returned: 'correction', shrinkage: 'lost', other: 'correction', manual: 'correction' };
+  const dbReason = reasonMap[reason] || reason || 'correction';
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

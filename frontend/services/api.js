@@ -1996,6 +1996,9 @@ export const getPurchaseOrders = async () => {
 export const createPurchaseOrder = async (po) => {
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
+    // Map frontend reasons to DB-valid values
+    const reasonMap = { restock: 'received', returned: 'correction', shrinkage: 'lost', other: 'correction' };
+    const dbReason = reasonMap[po.reason] || po.reason || 'correction';
     // Get current product stock
     const { data: product, error: prodErr } = await supabase.from('products').select('stock_quantity').eq('id', po.product_id).single();
     if (prodErr) throw new Error(prodErr.message);
@@ -2006,7 +2009,7 @@ export const createPurchaseOrder = async (po) => {
     const { error: updateErr } = await supabase.from('products').update({ stock_quantity: newStock, updated_at: new Date().toISOString() }).eq('id', po.product_id);
     if (updateErr) throw new Error(updateErr.message);
     // Record adjustment
-    const { data, error } = await supabase.from('stock_adjustments').insert({ product_id: po.product_id, quantity_change: po.quantity_change, reason: po.reason || 'correction', notes: po.note || '', adjusted_by: currentUser?.id, status: 'approved' }).select().single();
+    const { data, error } = await supabase.from('stock_adjustments').insert({ product_id: po.product_id, quantity_change: po.quantity_change, reason: dbReason, notes: po.note || '', adjusted_by: currentUser?.id, status: 'approved' }).select().single();
     if (error) throw new Error(error.message);
     return data;
   }
