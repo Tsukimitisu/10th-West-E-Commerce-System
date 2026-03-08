@@ -115,6 +115,15 @@ const InventoryView = () => {
         ))}
       </div>
 
+      {/* Receive Items Tab */}
+      {tab === 'receive' && (
+        <ReceiveStock
+          products={products}
+          onComplete={fetchData}
+          onBack={() => setTab('stock')}
+        />
+      )}
+
       {/* Stock Levels Tab */}
       {tab === 'stock' && (
         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
