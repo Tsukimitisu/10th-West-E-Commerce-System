@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { getInventory, getStockAdjustments, getLowStockProducts, adjustStock } from '../../services/api';
-import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, TrendingDown, History, Plus, Minus } from 'lucide-react';
+import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, TrendingDown, History, Plus, Minus, ScanBarcode } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
+import ReceiveStock from '../../components/owner/ReceiveStock';
 import { useSocketEvent } from '../../context/SocketContext';
 
 const InventoryView = () => {
@@ -71,6 +72,7 @@ const InventoryView = () => {
 
   const tabs = [
     { id: 'stock', label: 'Stock Levels', icon: Boxes, count: products.length },
+    { id: 'receive', label: 'Receive Items', icon: ScanBarcode },
     { id: 'adjustments', label: 'Adjustment History', icon: History, count: adjustments.length },
     { id: 'alerts', label: 'Low Stock Alerts', icon: AlertTriangle, count: lowStock.length },
   ];
@@ -108,7 +110,7 @@ const InventoryView = () => {
           <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-orange-50 text-orange-500' : 'text-gray-500 hover:text-gray-700'}`}>
             <t.icon size={14} />
             {t.label}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-orange-100 text-orange-500' : 'bg-gray-100 text-gray-500'}`}>{t.count}</span>
+            {t.count != null && <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-orange-100 text-orange-500' : 'bg-gray-100 text-gray-500'}`}>{t.count}</span>}
           </button>
         ))}
       </div>
