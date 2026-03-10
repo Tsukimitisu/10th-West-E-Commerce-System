@@ -114,7 +114,7 @@ const ReceiptsView = () => {
                       <td className="px-4 py-3"><span className="font-medium text-gray-900 font-mono">RCT-{o.id.toString().padStart(4, '0')}</span></td>
                       <td className="px-4 py-3 text-gray-600 hidden sm:table-cell">{o.customer_name || o.shipping_name || `User ${o.user_id}`}</td>
                       <td className="px-4 py-3 text-xs text-gray-500">{new Date(o.created_at).toLocaleDateString()}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 capitalize hidden md:table-cell">{o.payment_method || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500 capitalize hidden md:table-cell">{o.payment_method || '-'}</td>
                       <td className="px-4 py-3 text-right font-bold text-gray-900">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -200,7 +200,7 @@ const ReceiptsView = () => {
       )}
 
       {/* Receipt Preview Modal */}
-      <Modal isOpen={!!previewOrder} onClose={() => setPreviewOrder(null)} title={`Receipt Preview — #${previewOrder?.id.toString().padStart(4, '0') || ''}`} size="md">
+      <Modal isOpen={!!previewOrder} onClose={() => setPreviewOrder(null)} title={`Receipt Preview - #${previewOrder?.id.toString().padStart(4, '0') || ''}`} size="md">
         {previewOrder && (
           <div className="space-y-4">
             <div className="bg-gray-50 rounded-lg p-6 font-mono text-xs max-w-[300px] mx-auto border border-dashed border-gray-300">
@@ -212,7 +212,7 @@ const ReceiptsView = () => {
               <p>Customer: {previewOrder.customer_name || 'Walk-in'}</p>
               <div className="border-t border-dashed border-gray-400 my-3" />
               {previewOrder.items?.map((it, i) => (
-                <p key={i}>{it.name || it.product_name} x{it.quantity} — ₱{((it.price || 0) * (it.quantity || 1)).toFixed(2)}</p>
+                <p key={i}>{it.name || it.product_name} x{it.quantity} - \u20b1{((it.price || 0) * (it.quantity || 1)).toFixed(2)}</p>
               )) || <p>Items unavailable</p>}
               <div className="border-t border-dashed border-gray-400 my-3" />
               <p className="font-bold text-base">TOTAL: ₱{(previewOrder.total_amount || 0).toFixed(2)}</p>

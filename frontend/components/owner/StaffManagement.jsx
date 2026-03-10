@@ -420,12 +420,12 @@ const StaffManagement = () => {
               {globalLogs.map(log => (
                 <tr key={log.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2 text-xs text-slate-500">{new Date(log.created_at).toLocaleString()}</td>
-                  <td className="px-4 py-2 text-sm text-slate-700">{log.user_name || log.user_email || '—'}</td>
+                  <td className="px-4 py-2 text-sm text-slate-700">{log.user_name || log.user_email || '-'}</td>
                   <td className="px-4 py-2">
                     <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-mono">{log.action}</span>
                   </td>
-                  <td className="px-4 py-2 text-xs text-slate-400 font-mono">{log.ip_address || '—'}</td>
-                  <td className="px-4 py-2 text-xs text-slate-500 max-w-xs truncate">{log.details ? JSON.stringify(log.details) : '—'}</td>
+                  <td className="px-4 py-2 text-xs text-slate-400 font-mono">{log.ip_address || '-'}</td>
+                  <td className="px-4 py-2 text-xs text-slate-500 max-w-xs truncate">{log.details ? JSON.stringify(log.details) : '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -524,7 +524,7 @@ const StaffManagement = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 text-xs text-slate-500">
-                    {s.last_activity ? new Date(s.last_activity).toLocaleString() : '—'}
+                    {s.last_activity ? new Date(s.last_activity).toLocaleString() : '-'}
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">{s.action_count || 0}</td>
                   <td className="px-6 py-4 text-right">

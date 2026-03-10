@@ -240,7 +240,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
                       <div>
                         <p className="font-medium text-gray-900 text-sm">{item.product.name}</p>
                         <p className="text-[10px] text-gray-400 font-mono">
-                          {item.product.partNumber || item.product.part_number || item.product.sku || item.product.barcode || '—'}
+                          {item.product.partNumber || item.product.part_number || item.product.sku || item.product.barcode || '-'}
                         </p>
                       </div>
                     </div>
