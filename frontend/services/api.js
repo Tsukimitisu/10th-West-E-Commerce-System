@@ -1217,13 +1217,17 @@ export const createOrder = async (order) => {
 
     if (orderError) throw new Error(orderError.message);
 
-    const orderItems = (order.items || []).map((item) => ({
-      order_id: orderData.id,
-      product_id: item.productId ?? item.product_id ?? item.product?.id ?? null,
-      quantity: item.quantity ?? 1,
-      product_name: item.product_name ?? item.name ?? item.product?.name ?? 'Unknown Product',
-      product_price: Number(item.product_price ?? item.price ?? item.product?.price ?? 0),
-    }));
+    const orderItems = (order.items || []).map((item) => {
+      const resolvedPrice = Number(item.product_price ?? item.price ?? item.product?.price ?? 0);
+      return {
+        order_id: orderData.id,
+        product_id: item.productId ?? item.product_id ?? item.product?.id ?? null,
+        quantity: item.quantity ?? 1,
+        product_name: item.product_name ?? item.name ?? item.product?.name ?? 'Unknown Product',
+        product_price: resolvedPrice,
+        price: resolvedPrice,
+      };
+    });
 
     if (orderItems.length > 0) {
       const { error: itemsError } = await supabase
