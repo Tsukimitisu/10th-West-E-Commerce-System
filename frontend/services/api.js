@@ -1500,7 +1500,7 @@ export const getTickets = async () => {
 export const createTicket = async (ticket) => {
   const data = await fetch(`${API_URL}/support`, {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(ticket),
   });
   if (!data.ok) {
