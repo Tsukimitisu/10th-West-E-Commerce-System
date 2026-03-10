@@ -63,11 +63,17 @@ const authenticatedFetch = async (url, options = {}) => {
   });
 
   if (!response.ok) {
-    if (token && (response.status === 401 || response.status === 403)) {
+    const error = await response.json().catch(() => ({ message: 'Request failed' }));
+    if (token && response.status === 401) {
       clearAuthSession();
       window.dispatchEvent(new Event('auth:session-expired'));
+    } else if (token && response.status === 403) {
+      const msg = (error.message || '').toLowerCase();
+      if (msg.includes('session') || msg.includes('expired') || msg.includes('invalid') || msg.includes('deactivated') || msg.includes('log in')) {
+        clearAuthSession();
+        window.dispatchEvent(new Event('auth:session-expired'));
+      }
     }
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
     throw new Error(error.message || 'Request failed');
   }
 
@@ -2201,6 +2207,41 @@ export const batchReceiveStock = async (items, notes) => {
 // ==================== REPORTS ====================
 
 export const getSalesReport = async (range = 'daily', startDate, endDate) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('orders').select('*').in('status', ['paid', 'completed']);
+    const now = new Date();
+    if (range === 'daily') {
+      query = query.gte('created_at', new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString());
+    } else if (range === 'weekly' || range === '7d') {
+      const d = new Date(); d.setDate(d.getDate() - 7);
+      query = query.gte('created_at', d.toISOString());
+    } else if (range === 'monthly' || range === '30d') {
+      const d = new Date(); d.setDate(d.getDate() - 30);
+      query = query.gte('created_at', d.toISOString());
+    } else if (range === '90d') {
+      const d = new Date(); d.setDate(d.getDate() - 90);
+      query = query.gte('created_at', d.toISOString());
+    } else if (startDate && endDate) {
+      query = query.gte('created_at', startDate).lte('created_at', endDate);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const orders = data || [];
+    const onlineOrders = orders.filter(o => o.source === 'online');
+    const posOrders = orders.filter(o => o.source === 'pos');
+    const totalRevenue = orders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+    return {
+      range,
+      total_orders: orders.length,
+      total_revenue: totalRevenue,
+      average_order_value: orders.length ? totalRevenue / orders.length : 0,
+      total_discounts: orders.reduce((s, o) => s + Number(o.discount_amount || 0), 0),
+      online_orders: onlineOrders.length,
+      pos_orders: posOrders.length,
+      online_revenue: onlineOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0),
+      pos_revenue: posOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0),
+    };
+  }
   const params = new URLSearchParams({ range });
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
@@ -2208,6 +2249,25 @@ export const getSalesReport = async (range = 'daily', startDate, endDate) => {
 };
 
 export const getSalesByChannel = async (startDate, endDate) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('orders').select('source, total_amount').in('status', ['paid', 'completed']);
+    if (startDate && endDate) {
+      query = query.gte('created_at', startDate).lte('created_at', endDate);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const channels = {};
+    (data || []).forEach(o => {
+      const ch = o.source || 'unknown';
+      if (!channels[ch]) channels[ch] = { channel: ch, order_count: 0, total_revenue: 0 };
+      channels[ch].order_count++;
+      channels[ch].total_revenue += Number(o.total_amount || 0);
+    });
+    return Object.values(channels).map(c => ({
+      ...c,
+      avg_order_value: c.order_count ? c.total_revenue / c.order_count : 0,
+    }));
+  }
   const params = new URLSearchParams();
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
@@ -2215,10 +2275,63 @@ export const getSalesByChannel = async (startDate, endDate) => {
 };
 
 export const getStockLevelsReport = async () => {
+  if (USE_SUPABASE) {
+    const { data: products, error } = await supabase.from('products').select('*, categories(name)');
+    if (error) throw new Error(error.message);
+    const prods = products || [];
+    const overview = {
+      total_products: prods.length,
+      total_stock: prods.reduce((s, p) => s + (p.stock_quantity || 0), 0),
+      out_of_stock_count: prods.filter(p => (p.stock_quantity || 0) === 0).length,
+      low_stock_count: prods.filter(p => p.stock_quantity > 0 && p.stock_quantity <= (p.low_stock_threshold || 5)).length,
+      in_stock_count: prods.filter(p => p.stock_quantity > (p.low_stock_threshold || 5)).length,
+      total_inventory_value: prods.reduce((s, p) => s + (p.stock_quantity || 0) * Number(p.buying_price || 0), 0),
+      potential_revenue: prods.reduce((s, p) => s + (p.stock_quantity || 0) * Number(p.price || 0), 0),
+    };
+    const catMap = {};
+    prods.forEach(p => {
+      const cat = p.categories?.name || 'Uncategorized';
+      if (!catMap[cat]) catMap[cat] = { category: cat, product_count: 0, total_stock: 0, low_stock_items: 0 };
+      catMap[cat].product_count++;
+      catMap[cat].total_stock += p.stock_quantity || 0;
+      if (p.stock_quantity <= (p.low_stock_threshold || 5)) catMap[cat].low_stock_items++;
+    });
+    return { overview, by_category: Object.values(catMap).sort((a, b) => b.total_stock - a.total_stock) };
+  }
   return await authenticatedFetch(`${API_URL}/reports/stock-levels`);
 };
 
 export const getTopProducts = async (limit = 10, startDate, endDate) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('orders').select('id, created_at, status, order_items(quantity, product_price, product_id, products(id, name, part_number, image, price, stock_quantity, categories(name)))').in('status', ['paid', 'completed']);
+    if (startDate && endDate) {
+      query = query.gte('created_at', startDate).lte('created_at', endDate);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const productMap = {};
+    (data || []).forEach(order => {
+      (order.order_items || []).forEach(item => {
+        const pid = item.product_id;
+        if (!productMap[pid]) {
+          productMap[pid] = {
+            id: pid, name: item.products?.name || 'Unknown', part_number: item.products?.part_number,
+            image: item.products?.image, price: Number(item.products?.price || 0),
+            stock_quantity: item.products?.stock_quantity || 0,
+            category_name: item.products?.categories?.name || null,
+            order_count: 0, total_sold: 0, total_revenue: 0, _orders: new Set(),
+          };
+        }
+        productMap[pid]._orders.add(order.id);
+        productMap[pid].total_sold += item.quantity || 0;
+        productMap[pid].total_revenue += (Number(item.product_price || 0)) * (item.quantity || 0);
+      });
+    });
+    return Object.values(productMap)
+      .map(p => ({ ...p, order_count: p._orders.size, _orders: undefined }))
+      .sort((a, b) => b.total_sold - a.total_sold)
+      .slice(0, limit);
+  }
   const params = new URLSearchParams({ limit: limit.toString() });
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
@@ -2226,10 +2339,54 @@ export const getTopProducts = async (limit = 10, startDate, endDate) => {
 };
 
 export const getDailySalesTrend = async (days = 30) => {
+  if (USE_SUPABASE) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    const { data, error } = await supabase.from('orders').select('created_at, total_amount, source').in('status', ['paid', 'completed']).gte('created_at', since.toISOString());
+    if (error) throw new Error(error.message);
+    const dayMap = {};
+    (data || []).forEach(o => {
+      const date = o.created_at?.split('T')[0];
+      if (!date) return;
+      if (!dayMap[date]) dayMap[date] = { date, order_count: 0, revenue: 0, online_orders: 0, pos_orders: 0 };
+      dayMap[date].order_count++;
+      dayMap[date].revenue += Number(o.total_amount || 0);
+      if (o.source === 'online') dayMap[date].online_orders++;
+      if (o.source === 'pos') dayMap[date].pos_orders++;
+    });
+    return Object.values(dayMap).sort((a, b) => a.date.localeCompare(b.date));
+  }
   return await authenticatedFetch(`${API_URL}/reports/daily-trend?days=${days}`);
 };
 
 export const getProfitReport = async (startDate, endDate) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('orders').select('total_amount, discount_amount, order_items(quantity, product_price, products(buying_price))').in('status', ['paid', 'completed']);
+    if (startDate && endDate) {
+      query = query.gte('created_at', startDate).lte('created_at', endDate);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const orders = data || [];
+    let totalRevenue = 0, totalCost = 0, totalDiscounts = 0;
+    orders.forEach(o => {
+      totalRevenue += Number(o.total_amount || 0);
+      totalDiscounts += Number(o.discount_amount || 0);
+      (o.order_items || []).forEach(item => {
+        totalCost += (item.quantity || 0) * Number(item.products?.buying_price || 0);
+      });
+    });
+    const profit = totalRevenue - totalCost;
+    return {
+      total_orders: orders.length,
+      total_revenue: totalRevenue,
+      total_cost: totalCost,
+      gross_profit: profit,
+      profit_margin: totalRevenue > 0 ? parseFloat(((profit / totalRevenue) * 100).toFixed(2)) : 0,
+      total_discounts: totalDiscounts,
+      net_profit: profit - totalDiscounts,
+    };
+  }
   const params = new URLSearchParams();
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
