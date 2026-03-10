@@ -378,6 +378,20 @@ export const revokeSession = async (sessionId) => {
 
 // Activity Logs (admin)
 export const getActivityLogs = async (params = {}) => {
+  if (USE_SUPABASE) {
+    const limit = parseInt(params.limit) || 50;
+    const page = parseInt(params.page) || 1;
+    let query = supabase.from('activity_logs').select('*, users:user_id(name, email)', { count: 'exact' });
+    if (params.userId) query = query.eq('user_id', params.userId);
+    if (params.action) query = query.eq('action', params.action);
+    query = query.order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1);
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+    return {
+      logs: (data || []).map(l => ({ ...l, user_name: l.users?.name, user_email: l.users?.email })),
+      total: count || 0, page, totalPages: Math.ceil((count || 0) / limit),
+    };
+  }
   const qs = new URLSearchParams();
   if (params.page) qs.set('page', String(params.page));
   if (params.limit) qs.set('limit', String(params.limit));
@@ -389,6 +403,19 @@ export const getActivityLogs = async (params = {}) => {
 // ==================== STAFF MANAGEMENT ====================
 
 export const getStaffList = async (params = {}) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('users').select('id, name, email, role, phone, is_active, login_attempts, locked_until, last_login, created_at, last_activity, action_count', { count: 'exact' }).in('role', ['store_staff', 'owner']);
+    if (params.role) query = query.eq('role', params.role);
+    if (params.status === 'active') query = query.eq('is_active', true);
+    if (params.status === 'inactive') query = query.eq('is_active', false);
+    if (params.search) query = query.or(`name.ilike.%${params.search}%,email.ilike.%${params.search}%`);
+    const page = parseInt(params.page) || 1;
+    const limit = 20;
+    query = query.range((page - 1) * limit, page * limit - 1).order('created_at', { ascending: false });
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+    return { staff: data || [], total: count || 0, page, totalPages: Math.ceil((count || 0) / limit) };
+  }
   const qs = new URLSearchParams();
   if (params.page) qs.set('page', String(params.page));
   if (params.role) qs.set('role', params.role);
@@ -398,10 +425,26 @@ export const getStaffList = async (params = {}) => {
 };
 
 export const getStaffById = async (id) => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('users').select('*').eq('id', id).single();
+    if (error) throw new Error(error.message);
+    return data;
+  }
   return authenticatedFetch(`${API_URL}/staff/${id}`);
 };
 
 export const addStaff = async (data) => {
+  if (USE_SUPABASE) {
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const { data: existing } = await supabase.from('users').select('id').eq('email', data.email).single();
+    if (existing) throw new Error('Email already exists');
+    const { data: created, error } = await supabase.from('users').insert({
+      name: data.name, email: data.email, password: hashedPassword,
+      role: data.role || 'store_staff', phone: data.phone || null, is_active: true,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    return created;
+  }
   return authenticatedFetch(`${API_URL}/staff`, {
     method: 'POST',
     body: JSON.stringify(data),
@@ -409,6 +452,12 @@ export const addStaff = async (data) => {
 };
 
 export const editStaff = async (id, data) => {
+  if (USE_SUPABASE) {
+    const updates = { name: data.name, email: data.email, role: data.role, phone: data.phone || null };
+    const { data: updated, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
+    if (error) throw new Error(error.message);
+    return updated;
+  }
   return authenticatedFetch(`${API_URL}/staff/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -416,18 +465,46 @@ export const editStaff = async (id, data) => {
 };
 
 export const toggleStaffStatus = async (id) => {
+  if (USE_SUPABASE) {
+    const { data: user, error: fetchErr } = await supabase.from('users').select('is_active').eq('id', id).single();
+    if (fetchErr) throw new Error(fetchErr.message);
+    const { data: updated, error } = await supabase.from('users').update({ is_active: !user.is_active }).eq('id', id).select().single();
+    if (error) throw new Error(error.message);
+    return updated;
+  }
   return authenticatedFetch(`${API_URL}/staff/${id}/status`, { method: 'PATCH' });
 };
 
 export const deleteStaff = async (id) => {
+  if (USE_SUPABASE) {
+    const { error } = await supabase.from('users').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return;
+  }
   await authenticatedFetch(`${API_URL}/staff/${id}`, { method: 'DELETE' });
 };
 
 export const getStaffActivity = async (id, page = 1) => {
+  if (USE_SUPABASE) {
+    const limit = 20;
+    const { data, error, count } = await supabase.from('activity_logs').select('*', { count: 'exact' }).eq('user_id', id).order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1);
+    if (error) throw new Error(error.message);
+    return { logs: data || [], total: count || 0, page, totalPages: Math.ceil((count || 0) / limit) };
+  }
   return authenticatedFetch(`${API_URL}/staff/${id}/activity?page=${page}`);
 };
 
 export const updateStaffPermissions = async (id, permissions) => {
+  if (USE_SUPABASE) {
+    // Delete existing and insert new
+    await supabase.from('user_permissions').delete().eq('user_id', id);
+    if (permissions && permissions.length > 0) {
+      const rows = permissions.map(p => ({ user_id: id, permission_id: p.permission_id, granted: p.granted }));
+      const { error } = await supabase.from('user_permissions').insert(rows);
+      if (error) throw new Error(error.message);
+    }
+    return;
+  }
   await authenticatedFetch(`${API_URL}/staff/${id}/permissions`, {
     method: 'PUT',
     body: JSON.stringify({ permissions }),
@@ -435,10 +512,27 @@ export const updateStaffPermissions = async (id, permissions) => {
 };
 
 export const getAllPermissions = async () => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('permissions').select('*').order('name');
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
   return authenticatedFetch(`${API_URL}/staff/permissions`);
 };
 
 export const getStaffPerformance = async (id, period = 30) => {
+  if (USE_SUPABASE) {
+    const since = new Date();
+    since.setDate(since.getDate() - period);
+    const { data: logs } = await supabase.from('activity_logs').select('action, created_at').eq('user_id', id).gte('created_at', since.toISOString());
+    const actions = logs || [];
+    return {
+      total_actions: actions.length,
+      period_days: period,
+      actions_per_day: period > 0 ? parseFloat((actions.length / period).toFixed(1)) : 0,
+      action_breakdown: actions.reduce((acc, l) => { acc[l.action] = (acc[l.action] || 0) + 1; return acc; }, {}),
+    };
+  }
   return authenticatedFetch(`${API_URL}/staff/${id}/performance?period=${period}`);
 };
 
@@ -2441,6 +2535,12 @@ export const adminUnlockUser = async (id) => {
 };
 
 export const adminResetUserPassword = async (id, newPassword) => {
+  if (USE_SUPABASE) {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const { error } = await supabase.from('users').update({ password: hashedPassword }).eq('id', id);
+    if (error) throw new Error(error.message);
+    return { message: 'Password reset successfully' };
+  }
   return authenticatedFetch(`${API_URL}/admin/users/${id}/reset-password`, {
     method: 'POST', body: JSON.stringify({ newPassword }),
   });
