@@ -106,7 +106,7 @@ const TermsOfService = () => {
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">9. Intellectual Property</h2>
             <p>
-              All content on this website—including text, graphics, logos, images, and software—is the property of
+              All content on this website - including text, graphics, logos, images, and software - is the property of
               10th West Moto Parts or its content suppliers and is protected by Philippine intellectual property laws.
               Unauthorized use, reproduction, or distribution is strictly prohibited.
             </p>
