@@ -1217,56 +1217,22 @@ export const createOrder = async (order) => {
 
     if (orderError) throw new Error(orderError.message);
 
-    const normalizedItems = (order.items || []).map((item) => {
-      const productId = item.productId ?? item.product_id;
-      const quantity = item.quantity ?? 1;
-      const productName = item.name ?? item.product_name ?? item.product?.name ?? 'Unknown Product';
-      const productPrice = Number(item.price ?? item.product_price ?? item.product?.price ?? 0);
-      return {
-        order_id: orderData.id,
-        product_id: productId,
-        quantity,
-        productName,
-        productPrice,
-      };
-    });
+    const orderItems = (order.items || []).map((item) => ({
+      order_id: orderData.id,
+      product_id: item.productId ?? item.product_id ?? item.product?.id ?? null,
+      quantity: item.quantity ?? 1,
+      product_name: item.product_name ?? item.name ?? item.product?.name ?? 'Unknown Product',
+      product_price: Number(item.product_price ?? item.price ?? item.product?.price ?? 0),
+    }));
 
-    // Handle schema variations in Supabase projects (price/product_price, name/product_name).
-    const orderItemInsertVariants = [
-      { nameField: 'product_name', priceField: 'product_price' },
-      { nameField: 'product_name', priceField: 'price' },
-      { nameField: 'name', priceField: 'price' },
-      { nameField: 'name', priceField: 'product_price' },
-    ];
+    if (orderItems.length > 0) {
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
 
-    if (normalizedItems.length > 0) {
-      let inserted = false;
-      let lastError = null;
-
-      for (const variant of orderItemInsertVariants) {
-        const orderItems = normalizedItems.map((item) => ({
-          order_id: item.order_id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          [variant.nameField]: item.productName,
-          [variant.priceField]: item.productPrice,
-        }));
-
-        const { error: itemsError } = await supabase
-          .from('order_items')
-          .insert(orderItems);
-
-        if (!itemsError) {
-          inserted = true;
-          break;
-        }
-
-        lastError = itemsError;
-      }
-
-      if (!inserted) {
+      if (itemsError) {
         await supabase.from('orders').delete().eq('id', orderData.id);
-        throw new Error(lastError?.message || 'Failed to create order items');
+        throw new Error(itemsError.message);
       }
     }
 
