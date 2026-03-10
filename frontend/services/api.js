@@ -404,7 +404,7 @@ export const getActivityLogs = async (params = {}) => {
 
 export const getStaffList = async (params = {}) => {
   if (USE_SUPABASE) {
-    let query = supabase.from('users').select('id, name, email, role, phone, is_active, login_attempts, locked_until, last_login, created_at, last_activity, action_count', { count: 'exact' }).in('role', ['store_staff', 'owner']);
+    let query = supabase.from('users').select('id, name, email, role, phone, is_active, login_attempts, locked_until, last_login, created_at', { count: 'exact' }).in('role', ['store_staff', 'owner']);
     if (params.role) query = query.eq('role', params.role);
     if (params.status === 'active') query = query.eq('is_active', true);
     if (params.status === 'inactive') query = query.eq('is_active', false);
@@ -439,8 +439,8 @@ export const addStaff = async (data) => {
     const { data: existing } = await supabase.from('users').select('id').eq('email', data.email).single();
     if (existing) throw new Error('Email already exists');
     const { data: created, error } = await supabase.from('users').insert({
-      name: data.name, email: data.email, password: hashedPassword,
-      role: data.role || 'store_staff', phone: data.phone || null, is_active: true,
+      name: data.name, email: data.email, password_hash: hashedPassword,
+      role: data.role || 'store_staff', phone: data.phone || null, is_active: true, email_verified: true,
     }).select().single();
     if (error) throw new Error(error.message);
     return created;
