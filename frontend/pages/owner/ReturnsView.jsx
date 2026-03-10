@@ -139,7 +139,7 @@ const ReturnsView = () => {
                 <tr key={r.id} className="hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-medium text-gray-900 font-mono">RET-{r.id.toString().padStart(4, '0')}</td>
                   <td className="px-4 py-3 text-gray-600">#{r.order_id?.toString().padStart(4, '0') || r.id}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell max-w-[200px] truncate">{r.reason || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell max-w-[200px] truncate">{r.reason || '-'}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize ${statusColors[r.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>{r.status}</span>
                   </td>
@@ -176,7 +176,7 @@ const ReturnsView = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500 mb-1">Order ID</p>
-                <p className="text-sm font-medium text-gray-900">#{detailReturn.order_id?.toString().padStart(4, '0') || '—'}</p>
+                <p className="text-sm font-medium text-gray-900">#{detailReturn.order_id?.toString().padStart(4, '0') || '-'}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500 mb-1">Customer</p>

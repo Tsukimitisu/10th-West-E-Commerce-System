@@ -112,7 +112,7 @@ const CustomersView = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{c.email || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{c.email || '-'}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900">{c.orderCount}</td>
                   <td className="px-4 py-3 text-right font-bold text-gray-900">₱{c.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 hidden sm:table-cell">{new Date(c.lastOrder).toLocaleDateString()}</td>

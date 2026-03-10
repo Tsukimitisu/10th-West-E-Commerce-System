@@ -186,7 +186,7 @@ const PromotionsView = () => {
                         {d.type === 'percentage' ? `${d.value}%` : `₱${parseFloat(d.value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
                       </td>
                       <td className="px-4 py-3 text-right text-gray-500 hidden md:table-cell">
-                        {d.min_purchase ? `₱${parseFloat(d.min_purchase).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                        {d.min_purchase ? `₱${parseFloat(d.min_purchase).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '-'}
                       </td>
                       <td className="px-4 py-3 text-center hidden sm:table-cell">
                         <span className="text-xs text-gray-600">
@@ -202,10 +202,10 @@ const PromotionsView = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell">
-                        {d.starts_at ? new Date(d.starts_at).toLocaleDateString() : '—'}
+                        {d.starts_at ? new Date(d.starts_at).toLocaleDateString() : '-'}
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell">
-                        {d.expires_at ? new Date(d.expires_at).toLocaleDateString() : '—'}
+                        {d.expires_at ? new Date(d.expires_at).toLocaleDateString() : '-'}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
@@ -357,7 +357,7 @@ const PromotionsView = () => {
                   />
                   Active
                   <span className="text-xs font-normal text-gray-500 ml-1">
-                    {form.is_active ? '— This code can be used immediately' : '— This code is disabled'}
+                    {form.is_active ? '- This code can be used immediately' : '- This code is disabled'}
                   </span>
                 </label>
               </div>

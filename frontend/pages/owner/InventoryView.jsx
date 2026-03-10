@@ -157,7 +157,7 @@ const InventoryView = () => {
                           <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200">
                             {p.image ? <img src={p.image} alt="" className="w-full h-full object-cover" /> : <Package size={14} className="m-auto text-gray-400 mt-1.5" />}
                           </div>
-                          <div><p className="font-medium text-gray-900 text-sm">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.sku || p.partNumber || '—'}</p></div>
+                          <div><p className="font-medium text-gray-900 text-sm">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.sku || p.partNumber || '-'}</p></div>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -219,7 +219,7 @@ const InventoryView = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-bold text-sm">{isAdd ? '+' : ''}{qty}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 capitalize">{a.reason || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500 capitalize">{a.reason || '-'}</td>
                     </tr>
                   );
                 })}
@@ -258,7 +258,7 @@ const InventoryView = () => {
       )}
 
       {/* Adjust Stock Modal */}
-      <Modal isOpen={adjustModal} onClose={() => setAdjustModal(false)} title={`Adjust Stock — ${selectedProduct?.name || ''}`} size="md">
+      <Modal isOpen={adjustModal} onClose={() => setAdjustModal(false)} title={`Adjust Stock - ${selectedProduct?.name || ''}`} size="md">
         <form onSubmit={handleAdjust} className="space-y-4">
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
             <div className="w-10 h-10 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">

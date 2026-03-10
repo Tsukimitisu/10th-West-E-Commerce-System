@@ -172,7 +172,7 @@ const OrdersView = () => {
                 <tr key={o.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">#{o.id.toString().padStart(4, '0')}</p>
-                    <p className="text-[10px] text-gray-400">{o.items?.length || '—'} items</p>
+                    <p className="text-[10px] text-gray-400">{o.items?.length || '-'} items</p>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
                     <p className="text-sm text-gray-700">{o.customer_name || o.shipping_name || `User ${o.user_id}`}</p>
@@ -185,7 +185,7 @@ const OrdersView = () => {
                     </button>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
-                    <span className="text-xs text-gray-500 capitalize">{o.payment_method || '—'}</span>
+                    <span className="text-xs text-gray-500 capitalize">{o.payment_method || '-'}</span>
                   </td>
                   <td className="px-4 py-3 text-right font-bold text-gray-900">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-right">
@@ -224,7 +224,7 @@ const OrdersView = () => {
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2"><MapPin size={12} /> Shipping Address</div>
-                <p className="text-sm text-gray-700">{detailOrder.shipping_address || detailOrder.shipping_line1 || '—'}</p>
+                <p className="text-sm text-gray-700">{detailOrder.shipping_address || detailOrder.shipping_line1 || '-'}</p>
                 <p className="text-xs text-gray-500">{detailOrder.shipping_city ? `${detailOrder.shipping_city}, ${detailOrder.shipping_state || ''} ${detailOrder.shipping_zip || ''}` : ''}</p>
               </div>
             </div>
@@ -233,15 +233,15 @@ const OrdersView = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2"><Truck size={12} /> Shipping Method</div>
-                <p className="text-sm font-medium text-gray-900 capitalize">{detailOrder.shipping_method || '—'}</p>
+                <p className="text-sm font-medium text-gray-900 capitalize">{detailOrder.shipping_method || '-'}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2"><Package size={12} /> Tracking Number</div>
-                <p className="text-sm font-medium text-gray-900">{detailOrder.tracking_number || '—'}</p>
+                <p className="text-sm font-medium text-gray-900">{detailOrder.tracking_number || '-'}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2"><User size={12} /> Assigned Staff</div>
-                <p className="text-sm font-medium text-gray-900">{detailOrder.assigned_staff_id ? `Staff #${detailOrder.assigned_staff_id}` : '—'}</p>
+                <p className="text-sm font-medium text-gray-900">{detailOrder.assigned_staff_id ? `Staff #${detailOrder.assigned_staff_id}` : '-'}</p>
               </div>
             </div>
 
@@ -304,7 +304,7 @@ const OrdersView = () => {
         <div className="space-y-4">
           <div className="p-3 bg-gray-50 rounded-lg text-sm">
             <span className="text-gray-500">Order </span><span className="font-bold text-gray-900">#{statusTarget?.id.toString().padStart(4, '0')}</span>
-            <span className="text-gray-500"> — Current: </span><span className={`font-semibold capitalize ${statusTarget?.status === 'completed' ? 'text-green-600' : 'text-gray-900'}`}>{statusTarget?.status}</span>
+            <span className="text-gray-500"> - Current: </span><span className={`font-semibold capitalize ${statusTarget?.status === 'completed' ? 'text-green-600' : 'text-gray-900'}`}>{statusTarget?.status}</span>
           </div>
           <div className="space-y-1.5">
             {statuses.map(s => (
