@@ -39,6 +39,23 @@ const getCurrentUserFromToken = () => {
   }
 };
 
+// Helper: log staff activity to activity_logs table via Supabase
+const logSupabaseActivity = async (action, entityType = null, entityId = null, details = null) => {
+  try {
+    const currentUser = getCurrentUserFromToken();
+    if (!currentUser) return;
+    await supabase.from('activity_logs').insert({
+      user_id: currentUser.id,
+      action,
+      entity_type: entityType,
+      entity_id: entityId ? String(entityId) : null,
+      details: details ? JSON.stringify(details) : null,
+    });
+  } catch (err) {
+    console.error('Activity log error:', err.message);
+  }
+};
+
 // Helper function to make authenticated requests (for backend API fallback)
 const authenticatedFetch = async (url, options = {}) => {
   const token = getAuthToken();
@@ -443,6 +460,7 @@ export const addStaff = async (data) => {
       role: data.role || 'store_staff', phone: data.phone || null, is_active: true, email_verified: true,
     }).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('staff.add', 'user', created.id, { name: data.name, email: data.email, role: data.role });
     return created;
   }
   return authenticatedFetch(`${API_URL}/staff`, {
@@ -456,6 +474,7 @@ export const editStaff = async (id, data) => {
     const updates = { name: data.name, email: data.email, role: data.role, phone: data.phone || null };
     const { data: updated, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('staff.edit', 'user', id, { updates });
     return updated;
   }
   return authenticatedFetch(`${API_URL}/staff/${id}`, {
@@ -470,6 +489,7 @@ export const toggleStaffStatus = async (id) => {
     if (fetchErr) throw new Error(fetchErr.message);
     const { data: updated, error } = await supabase.from('users').update({ is_active: !user.is_active }).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('staff.toggle_status', 'user', id, { is_active: updated.is_active });
     return updated;
   }
   return authenticatedFetch(`${API_URL}/staff/${id}/status`, { method: 'PATCH' });
@@ -479,6 +499,7 @@ export const deleteStaff = async (id) => {
   if (USE_SUPABASE) {
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('staff.delete', 'user', id);
     return;
   }
   await authenticatedFetch(`${API_URL}/staff/${id}`, { method: 'DELETE' });
@@ -503,6 +524,7 @@ export const updateStaffPermissions = async (id, permissions) => {
       const { error } = await supabase.from('user_permissions').insert(rows);
       if (error) throw new Error(error.message);
     }
+    await logSupabaseActivity('staff.update_permissions', 'user', id, { permissions });
     return;
   }
   await authenticatedFetch(`${API_URL}/staff/${id}/permissions`, {
@@ -636,6 +658,7 @@ export const addProduct = async (product) => {
 
     if (error) throw new Error(error.message);
 
+    await logSupabaseActivity('product.create', 'product', data.id, { name: product.name });
     return {
       ...mapProductFromSupabase(data),
       category_name: data.categories?.name,
@@ -689,6 +712,7 @@ export const updateProduct = async (id, product) => {
 
     if (error) throw new Error(error.message);
 
+    await logSupabaseActivity('product.update', 'product', id, { name: product.name });
     return {
       ...mapProductFromSupabase(data),
       category_name: data.categories?.name,
@@ -738,6 +762,7 @@ export const deleteProduct = async (id) => {
       .eq('id', id);
 
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('product.delete', 'product', id);
     return;
   }
 
@@ -810,6 +835,7 @@ export const addCategory = async (name) => {
       .single();
 
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('category.create', 'category', data.id, { name });
     return data;
   }
 
@@ -835,6 +861,7 @@ export const updateCategory = async (id, name) => {
       .single();
 
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('category.update', 'category', id, { name });
     return data;
   }
 
@@ -858,6 +885,7 @@ export const deleteCategory = async (id) => {
       .eq('id', id);
 
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('category.delete', 'category', id);
     return;
   }
 
@@ -1289,6 +1317,7 @@ export const updateOrderStatus = async (id, status) => {
       .single();
 
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('order.update_status', 'order', id, { status });
     return mapOrderFromApi(data);
   }
 
@@ -1621,8 +1650,15 @@ export const updateTicketStatus = async (id, status) => {
 // ==================== FAQs ====================
 
 export const getFAQs = async (adminMode = false) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('faqs').select('*');
+    if (!adminMode) query = query.eq('is_active', true);
+    query = query.order('display_order', { ascending: true }).order('created_at', { ascending: true });
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
   if (adminMode) {
-    // Admin: get all FAQs including inactive
     return authenticatedFetch(`${API_URL}/faqs/admin/all`);
   }
   const data = await fetch(`${API_URL}/faqs`);
@@ -1633,6 +1669,17 @@ export const getFAQs = async (adminMode = false) => {
 };
 
 export const createFAQ = async (faq) => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('faqs').insert({
+      question: faq.question,
+      answer: faq.answer,
+      is_active: faq.is_active !== undefined ? faq.is_active : true,
+      display_order: faq.display_order || 0,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('faq.create', 'faq', data.id, { question: faq.question });
+    return data;
+  }
   const data = await authenticatedFetch(`${API_URL}/faqs`, {
     method: 'POST',
     body: JSON.stringify(faq),
@@ -1641,6 +1688,15 @@ export const createFAQ = async (faq) => {
 };
 
 export const updateFAQ = async (id, updates) => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('faqs').update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id).select().single();
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('faq.update', 'faq', id, { updates });
+    return data;
+  }
   const data = await authenticatedFetch(`${API_URL}/faqs/${id}`, {
     method: 'PUT',
     body: JSON.stringify(updates),
@@ -1649,6 +1705,12 @@ export const updateFAQ = async (id, updates) => {
 };
 
 export const deleteFAQ = async (id) => {
+  if (USE_SUPABASE) {
+    const { error } = await supabase.from('faqs').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('faq.delete', 'faq', id);
+    return;
+  }
   await authenticatedFetch(`${API_URL}/faqs/${id}`, {
     method: 'DELETE',
   });
@@ -1669,6 +1731,21 @@ export const getPolicy = async (type) => {
 };
 
 export const updatePolicy = async (type, title, content) => {
+  if (USE_SUPABASE) {
+    const { data: existing } = await supabase.from('policies').select('id').eq('type', type).single();
+    let result;
+    if (existing) {
+      const { data, error } = await supabase.from('policies').update({ title, content, updated_at: new Date().toISOString() }).eq('type', type).select().single();
+      if (error) throw new Error(error.message);
+      result = data;
+    } else {
+      const { data, error } = await supabase.from('policies').insert({ type, title, content }).select().single();
+      if (error) throw new Error(error.message);
+      result = data;
+    }
+    await logSupabaseActivity('policy.update', 'policy', result.id, { type, title });
+    return result;
+  }
   const data = await authenticatedFetch(`${API_URL}/policies/${type}`, {
     method: 'PUT',
     body: JSON.stringify({ title, content }),
@@ -1813,6 +1890,7 @@ export const createDiscount = async (discount) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('discounts').insert(discount).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('discount.create', 'discount', data.id, { code: discount.code });
     return data;
   }
   return authenticatedFetch(`${API_URL}/discounts`, { method: 'POST', body: JSON.stringify(discount) });
@@ -1821,6 +1899,7 @@ export const createDiscount = async (discount) => {
 export const deleteDiscount = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('discounts').delete().eq('id', id);
+    await logSupabaseActivity('discount.delete', 'discount', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/discounts/${id}`, { method: 'DELETE' });
@@ -1848,6 +1927,7 @@ export const addSupplier = async (supplier) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('suppliers').insert(supplier).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('supplier.create', 'supplier', data.id, { name: supplier.name });
     return data;
   }
   return authenticatedFetch(`${API_URL}/suppliers`, { method: 'POST', body: JSON.stringify(supplier) });
@@ -1858,6 +1938,7 @@ export const updateSupplier = async (id, updates) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('suppliers').update(updates).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('supplier.update', 'supplier', id, { updates });
     return data;
   }
   return authenticatedFetch(`${API_URL}/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
@@ -1866,6 +1947,7 @@ export const updateSupplier = async (id, updates) => {
 export const deleteSupplier = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('suppliers').delete().eq('id', id);
+    await logSupabaseActivity('supplier.delete', 'supplier', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/suppliers/${id}`, { method: 'DELETE' });
@@ -1888,6 +1970,7 @@ export const addSubcategory = async (subcategory) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('subcategories').insert(subcategory).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('subcategory.create', 'subcategory', data.id, { name: subcategory.name });
     return data;
   }
   return authenticatedFetch(`${API_URL}/subcategories`, { method: 'POST', body: JSON.stringify(subcategory) });
@@ -1896,6 +1979,7 @@ export const addSubcategory = async (subcategory) => {
 export const deleteSubcategory = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('subcategories').delete().eq('id', id);
+    await logSupabaseActivity('subcategory.delete', 'subcategory', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/subcategories/${id}`, { method: 'DELETE' });
@@ -1915,6 +1999,7 @@ export const addVariant = async (variant) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('product_variants').insert(variant).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('variant.create', 'product_variant', data.id, { product_id: variant.product_id });
     return data;
   }
   return authenticatedFetch(`${API_URL}/variants`, { method: 'POST', body: JSON.stringify(variant) });
@@ -1924,6 +2009,7 @@ export const updateVariant = async (id, updates) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('product_variants').update(updates).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('variant.update', 'product_variant', id, { updates });
     return data;
   }
   return authenticatedFetch(`${API_URL}/variants/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
@@ -1932,6 +2018,7 @@ export const updateVariant = async (id, updates) => {
 export const deleteVariant = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('product_variants').delete().eq('id', id);
+    await logSupabaseActivity('variant.delete', 'product_variant', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/variants/${id}`, { method: 'DELETE' });
@@ -2017,6 +2104,7 @@ export const createBanner = async (banner) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('banners').insert(banner).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('banner.create', 'banner', data.id, { title: banner.title });
     return data;
   }
   return authenticatedFetch(`${API_URL}/banners`, { method: 'POST', body: JSON.stringify(banner) });
@@ -2026,6 +2114,7 @@ export const updateBanner = async (id, updates) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('banners').update(updates).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('banner.update', 'banner', id, { updates });
     return data;
   }
   return authenticatedFetch(`${API_URL}/banners/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
@@ -2034,6 +2123,7 @@ export const updateBanner = async (id, updates) => {
 export const deleteBanner = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('banners').delete().eq('id', id);
+    await logSupabaseActivity('banner.delete', 'banner', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/banners/${id}`, { method: 'DELETE' });
@@ -2061,6 +2151,7 @@ export const createAnnouncement = async (announcement) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('announcements').insert(announcement).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('announcement.create', 'announcement', data.id, { title: announcement.title });
     return data;
   }
   return authenticatedFetch(`${API_URL}/announcements`, { method: 'POST', body: JSON.stringify(announcement) });
@@ -2070,6 +2161,7 @@ export const updateAnnouncement = async (id, updates) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('announcements').update(updates).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('announcement.update', 'announcement', id, { updates });
     return data;
   }
   return authenticatedFetch(`${API_URL}/announcements/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
@@ -2078,6 +2170,7 @@ export const updateAnnouncement = async (id, updates) => {
 export const deleteAnnouncement = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('announcements').delete().eq('id', id);
+    await logSupabaseActivity('announcement.delete', 'announcement', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/announcements/${id}`, { method: 'DELETE' });
@@ -2111,6 +2204,7 @@ export const createPurchaseOrder = async (po) => {
     // Record adjustment
     const { data, error } = await supabase.from('stock_adjustments').insert({ product_id: po.product_id, quantity_change: po.quantity_change, reason: dbReason, notes: po.note || '', adjusted_by: currentUser?.id, status: 'approved' }).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('inventory.adjust', 'product', po.product_id, { quantity_change: po.quantity_change, reason: dbReason });
     return data;
   }
   return authenticatedFetch(`${API_URL}/inventory/adjustments`, { method: 'POST', body: JSON.stringify(po) });
@@ -2121,6 +2215,7 @@ export const receivePurchaseOrder = async (id) => {
     const currentUser = getCurrentUserFromToken();
     const { data, error } = await supabase.from('stock_adjustments').update({ status: 'approved', approved_by: currentUser?.id }).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('inventory.approve', 'stock_adjustment', id);
     return data;
   }
   return authenticatedFetch(`${API_URL}/inventory/adjustments/${id}/approve`, { method: 'PUT' });
@@ -2148,6 +2243,7 @@ export const updateTrackingNumber = async (orderId, trackingData) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('orders').update(trackingData).eq('id', orderId).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('order.update_tracking', 'order', orderId, trackingData);
     return data;
   }
   return authenticatedFetch(`${API_URL}/shipping/tracking/${orderId}`, { method: 'PUT', body: JSON.stringify(trackingData) });
@@ -2518,6 +2614,7 @@ export const adminLockUser = async (id) => {
       .eq('id', id);
     if (error) throw new Error(error.message);
     await supabase.from('sessions').update({ is_active: false }).eq('user_id', id);
+    await logSupabaseActivity('admin.lock_user', 'user', id);
     return { message: 'User locked' };
   }
   return authenticatedFetch(`${API_URL}/admin/users/${id}/lock`, { method: 'PATCH' });
@@ -2529,6 +2626,7 @@ export const adminUnlockUser = async (id) => {
       .update({ is_active: true, locked_until: null, login_attempts: 0 })
       .eq('id', id);
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('admin.unlock_user', 'user', id);
     return { message: 'User unlocked' };
   }
   return authenticatedFetch(`${API_URL}/admin/users/${id}/unlock`, { method: 'PATCH' });
@@ -2539,6 +2637,7 @@ export const adminResetUserPassword = async (id, newPassword) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     const { error } = await supabase.from('users').update({ password: hashedPassword }).eq('id', id);
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('admin.reset_password', 'user', id);
     return { message: 'Password reset successfully' };
   }
   return authenticatedFetch(`${API_URL}/admin/users/${id}/reset-password`, {
@@ -2550,6 +2649,7 @@ export const adminUpdateUserRole = async (id, role) => {
   if (USE_SUPABASE) {
     const { error } = await supabase.from('users').update({ role }).eq('id', id);
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('admin.update_role', 'user', id, { role });
     return { message: 'Role updated' };
   }
   return authenticatedFetch(`${API_URL}/admin/users/${id}/role`, {
@@ -2563,6 +2663,7 @@ export const adminDeleteUser = async (id) => {
     try { await supabase.from('user_permissions').delete().eq('user_id', id); } catch {}
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('admin.delete_user', 'user', id);
     return { message: 'User deleted' };
   }
   return authenticatedFetch(`${API_URL}/admin/users/${id}`, { method: 'DELETE' });
@@ -2589,6 +2690,7 @@ export const updateSystemSettings = async (category, settings) => {
           { onConflict: 'category,key' });
       if (error) throw new Error(error.message);
     }
+    await logSupabaseActivity('settings.update', 'system_settings', null, { category });
     return { message: 'Settings saved' };
   }
   return authenticatedFetch(`${API_URL}/admin/settings`, {
@@ -2615,6 +2717,7 @@ export const updateSecuritySettings = async (settings) => {
         .upsert({ category: 'security', key, value: String(value), updated_at: new Date().toISOString() },
           { onConflict: 'category,key' });
     }
+    await logSupabaseActivity('settings.update_security', 'system_settings', null, { keys: Object.keys(settings) });
     return { message: 'Security settings updated' };
   }
   return authenticatedFetch(`${API_URL}/admin/security/settings`, {
@@ -2690,6 +2793,7 @@ export const createBackup = async () => {
       .insert({ backup_type: 'manual', status: 'completed', file_name: `backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json` })
       .select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('backup.create', 'backup', data.id);
     return { message: 'Backup created', backup: data };
   }
   return authenticatedFetch(`${API_URL}/admin/backup`, { method: 'POST' });
