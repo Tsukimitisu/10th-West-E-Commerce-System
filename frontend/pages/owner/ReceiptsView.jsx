@@ -40,7 +40,7 @@ const ReceiptsView = () => {
         <p>Date: ${new Date(order.created_at).toLocaleString()}</p>
         <p>Customer: ${order.customer_name || order.shipping_name || 'Walk-in'}</p>
         <div class="line"></div>
-        ${order.items?.map((it) => `<p>${it.name || it.product_name} x${it.quantity} — ₱${((it.price || 0) * (it.quantity || 1)).toFixed(2)}</p>`).join('') || '<p>Items unavailable</p>'}
+        ${order.items?.map((it) => `<p>${it.name || it.product_name} x${it.quantity} - ₱${((it.price || 0) * (it.quantity || 1)).toFixed(2)}</p>`).join('') || '<p>Items unavailable</p>'}
         <div class="line"></div>
         <p class="total">TOTAL: ₱${(order.total_amount || 0).toFixed(2)}</p>
         <p>Payment: ${order.payment_method || 'N/A'}</p>
@@ -185,8 +185,8 @@ const ReceiptsView = () => {
               <p>Date: {new Date().toLocaleString()}</p>
               <p>Customer: Walk-in</p>
               <div className="border-t border-dashed border-gray-400 my-3" />
-              <p>Brake Pad Set x1 — ₱450.00</p>
-              <p>Oil Filter x2 — ₱300.00</p>
+              <p>Brake Pad Set x1 - ₱450.00</p>
+              <p>Oil Filter x2 - ₱300.00</p>
               <div className="border-t border-dashed border-gray-400 my-3" />
               <p className="font-bold text-base">TOTAL: ₱750.00</p>
               <p>Payment: Cash</p>
