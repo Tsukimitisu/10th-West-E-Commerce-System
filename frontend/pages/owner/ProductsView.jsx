@@ -347,7 +347,6 @@ const ProductsView = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <InputField label="SKU"><input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} className={inputClass} placeholder="Auto-generated if empty" /></InputField>
-              <InputField label="Barcode"><input value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className={inputClass} placeholder="Same as Part Number" readOnly /></InputField>
             </div>
 
             <InputField label="Product Image">
