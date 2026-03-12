@@ -59,9 +59,11 @@ const ProductDetail = () => {
     }
   }, [id]);
 
+  const hasVariants = product && Array.isArray(product.variants) && product.variants.length > 0;
+
   const validateSelection = () => {
     if (!product) return false;
-    if (!selectedVariant.color) {
+    if (hasVariants && !selectedVariant.color) {
       setVariantError('Please select a color before adding this item to cart.');
       return false;
     }
@@ -134,7 +136,7 @@ const ProductDetail = () => {
   const hasDiscount = product.is_on_sale && product.sale_price;
   const currentPrice = hasDiscount ? product.sale_price : product.price;
 
-  const colors = ['Black', 'Silver', 'Red'];
+  const colors = hasVariants ? product.variants.map(v => v.color || v.name).filter(Boolean) : [];
 
   const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : product.rating || 0;
   const ratingDist = [5, 4, 3, 2, 1].map(star => ({
@@ -232,6 +234,7 @@ const ProductDetail = () => {
             )}
 
             {/* Variants */}
+            {colors.length > 0 && (
             <div className="space-y-4 mb-6">
               <div>
                 <label className="text-sm font-medium text-gray-900 mb-2 block">Color <span className="text-orange-500">*</span></label>
@@ -244,8 +247,8 @@ const ProductDetail = () => {
                 </div>
                 {variantError && <p className="text-xs text-orange-500 mt-2">{variantError}</p>}
               </div>
-
             </div>
+            )}
 
             {/* Quantity & Actions */}
             <div className="flex flex-wrap gap-3 mb-6">
