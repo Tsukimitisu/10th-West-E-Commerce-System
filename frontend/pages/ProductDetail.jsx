@@ -96,8 +96,21 @@ const ProductDetail = () => {
   };
 
   const handleBuyNow = async () => {
-    const added = await addCurrentSelectionToCart(false);
-    if (!added) return;
+    if (!product) return;
+    if (!validateSelection()) return;
+
+    const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
+    if (quantity > maxStock) {
+      setQuantityError(`Maximum available quantity is ${maxStock}.`);
+      return;
+    }
+
+    try {
+      await addToCart(product, quantity);
+    } catch {
+      // item still gets added locally via fallback
+    }
+
     const user = localStorage.getItem('shopCoreUser');
     if (!user) navigate('/login?redirect=/checkout');
     else navigate('/checkout');
