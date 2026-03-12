@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -227,7 +228,7 @@ const App = () => {
   }, []);
 
   const handleLogin = (userData, token) => {
-    setUser(userData);
+    flushSync(() => setUser(userData));
     localStorage.setItem('shopCoreUser', JSON.stringify(userData));
     localStorage.setItem('shopCoreToken', token);
     window.dispatchEvent(new Event('auth:changed'));
