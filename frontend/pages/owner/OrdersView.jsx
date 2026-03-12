@@ -35,6 +35,7 @@ const OrdersView = () => {
   const [statusTarget, setStatusTarget] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundOrder, setRefundOrder] = useState(null);
   const [refundAmount, setRefundAmount] = useState('');
@@ -64,13 +65,20 @@ const OrdersView = () => {
     setStatusTarget(order);
     setNewStatus(order.status);
     setTrackingNumber(order.tracking_number || '');
+    setCancelReason('');
     setStatusModalOpen(true);
   };
 
   const handleStatusUpdate = async () => {
     if (!statusTarget || !newStatus) return;
+    if (newStatus === 'cancelled' && !cancelReason.trim()) return;
     try {
-      await updateOrderStatus(statusTarget.id, newStatus, trackingNumber || undefined);
+      if (newStatus === 'cancelled') {
+        const { cancelOrder } = await import('../../services/api');
+        await cancelOrder(statusTarget.id, cancelReason.trim());
+      } else {
+        await updateOrderStatus(statusTarget.id, newStatus, trackingNumber || undefined);
+      }
       setStatusModalOpen(false);
       fetchOrders();
     } catch (e) { console.error(e); }
@@ -245,6 +253,14 @@ const OrdersView = () => {
               </div>
             </div>
 
+            {/* Cancellation Reason */}
+            {detailOrder.status === 'cancelled' && detailOrder.cancellation_reason && (
+              <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                <div className="flex items-center gap-2 text-xs font-medium text-red-600 mb-1"><XCircle size={12} /> Cancellation Reason</div>
+                <p className="text-sm text-red-700">{detailOrder.cancellation_reason}</p>
+              </div>
+            )}
+
             {/* Items */}
             <div>
               <h4 className="text-xs font-medium text-gray-500 mb-2">Order Items</h4>
@@ -307,7 +323,11 @@ const OrdersView = () => {
             <span className="text-gray-500"> - Current: </span><span className={`font-semibold capitalize ${statusTarget?.status === 'completed' ? 'text-green-600' : 'text-gray-900'}`}>{statusTarget?.status}</span>
           </div>
           <div className="space-y-1.5">
-            {statuses.map(s => (
+            {statuses.filter(s => {
+              // Block cancelling shipped/completed orders
+              if (s === 'cancelled' && (statusTarget?.status === 'shipped' || statusTarget?.status === 'completed' || statusTarget?.status === 'delivered')) return false;
+              return true;
+            }).map(s => (
               <button key={s} onClick={() => setNewStatus(s)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium border transition-all capitalize ${newStatus === s ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-white border-gray-100 text-gray-600 hover:bg-gray-50'}`}>
                 {statusIcons[s]} {s}
@@ -326,9 +346,21 @@ const OrdersView = () => {
               />
             </div>
           )}
+          {newStatus === 'cancelled' && (
+            <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+              <label className="block text-xs font-medium text-red-700 mb-1.5">Cancellation Reason <span className="text-red-500">*</span></label>
+              <textarea
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                placeholder="Enter reason for cancellation..."
+                className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 bg-white resize-none"
+                rows={2}
+              />
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setStatusModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-            <button onClick={handleStatusUpdate} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">Update Status</button>
+            <button onClick={handleStatusUpdate} disabled={newStatus === 'cancelled' && !cancelReason.trim()} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors">Update Status</button>
           </div>
         </div>
       </Modal>

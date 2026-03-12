@@ -485,6 +485,7 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_amount DECIMAL(10,2) DEFAULT 0;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_method VARCHAR(50) DEFAULT 'standard';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_notes TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_delivery DATE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
 
 -- Users: extra columns
 ALTER TABLE users ADD COLUMN IF NOT EXISTS login_attempts INTEGER DEFAULT 0;

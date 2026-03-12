@@ -15,6 +15,9 @@ const OrderDetail = () => {
   const [cancelling, setCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  const [cancelReasonSelect, setCancelReasonSelect] = useState('');
+  const [cancelReasonOther, setCancelReasonOther] = useState('');
+  const [cancelReasonError, setCancelReasonError] = useState('');
 
   const loadOrder = async () => {
     try { const data = await getOrderById(Number(id)); setOrder(data); } catch {}
@@ -26,11 +29,19 @@ const OrderDetail = () => {
   const canCancel = order && (order.status === 'pending' || order.status === 'paid');
 
   const handleCancel = async () => {
+    const reason = cancelReasonSelect === 'Other' ? cancelReasonOther.trim() : cancelReasonSelect;
+    if (!reason) {
+      setCancelReasonError('Please provide a reason for cancellation.');
+      return;
+    }
+    setCancelReasonError('');
     setCancelling(true);
     try {
-      await cancelOrder(order.id);
+      await cancelOrder(order.id, reason);
       await loadOrder();
       setShowCancelConfirm(false);
+      setCancelReasonSelect('');
+      setCancelReasonOther('');
     } catch (err) {
       setCancelError('Failed to cancel order: ' + (err.message || 'Unknown error'));
       setTimeout(() => setCancelError(''), 5000);
@@ -109,7 +120,32 @@ const OrderDetail = () => {
                 <p className="text-sm text-gray-500">This action cannot be undone.</p>
               </div>
             </div>
-            <p className="text-sm text-gray-600 mb-5">Are you sure you want to cancel Order #{order.order_number || order.id}?</p>
+            <p className="text-sm text-gray-600 mb-4">Are you sure you want to cancel Order #{order.order_number || order.id}?</p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reason for cancellation <span className="text-red-500">*</span></label>
+              <select
+                value={cancelReasonSelect}
+                onChange={e => { setCancelReasonSelect(e.target.value); setCancelReasonError(''); }}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 mb-2"
+              >
+                <option value="">Select a reason...</option>
+                <option value="Changed my mind">Changed my mind</option>
+                <option value="Found a better price">Found a better price</option>
+                <option value="Ordered by mistake">Ordered by mistake</option>
+                <option value="Item no longer needed">Item no longer needed</option>
+                <option value="Other">Other</option>
+              </select>
+              {cancelReasonSelect === 'Other' && (
+                <textarea
+                  placeholder="Please describe your reason..."
+                  value={cancelReasonOther}
+                  onChange={e => { setCancelReasonOther(e.target.value); setCancelReasonError(''); }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none"
+                  rows={2}
+                />
+              )}
+              {cancelReasonError && <p className="text-xs text-red-500 mt-1">{cancelReasonError}</p>}
+            </div>
             {cancelError && (
               <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
                 <AlertTriangle size={14} /> {cancelError}
@@ -144,9 +180,14 @@ const OrderDetail = () => {
         </div>
       )}
       {order.status === 'cancelled' && (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex items-center gap-3">
-          <XCircle size={20} className="text-orange-500" />
-          <p className="text-sm text-orange-600 font-medium">This order has been cancelled.</p>
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <XCircle size={20} className="text-orange-500" />
+            <p className="text-sm text-orange-600 font-medium">This order has been cancelled.</p>
+          </div>
+          {order.cancellation_reason && (
+            <p className="text-sm text-orange-600 mt-2 ml-8">Reason: {order.cancellation_reason}</p>
+          )}
         </div>
       )}
 

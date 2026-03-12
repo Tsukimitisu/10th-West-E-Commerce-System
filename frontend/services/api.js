@@ -1327,13 +1327,14 @@ export const updateOrderStatus = async (id, status) => {
 };
 
 // Cancel order (customer - only if not yet shipped)
-export const cancelOrder = async (id) => {
+export const cancelOrder = async (id, reason = '') => {
   if (USE_MOCK_DATA) {
     await new Promise(resolve => setTimeout(resolve, 300));
     const order = MOCK_ORDERS.find(o => o.id === id);
     if (!order) throw new Error('Order not found');
     if (order.status !== 'pending' && order.status !== 'paid') throw new Error('Cannot cancel this order');
     order.status = 'cancelled';
+    order.cancellation_reason = reason;
     return order;
   }
 
@@ -1345,7 +1346,7 @@ export const cancelOrder = async (id) => {
     }
     const { data, error } = await supabase
       .from('orders')
-      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .update({ status: 'cancelled', cancellation_reason: reason, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
@@ -1355,7 +1356,7 @@ export const cancelOrder = async (id) => {
     notifyAdminStaff(
       'order.cancelled',
       'Order Cancelled',
-      `Order #${String(id).padStart(4, '0')} was cancelled by the customer`,
+      `Order #${String(id).padStart(4, '0')} was cancelled by the customer. Reason: ${reason || 'Not specified'}`,
       id,
       'order'
     );
@@ -1365,6 +1366,7 @@ export const cancelOrder = async (id) => {
 
   const data = await authenticatedFetch(`${API_URL}/orders/${id}/cancel`, {
     method: 'PUT',
+    body: JSON.stringify({ reason }),
   });
   return mapOrderFromApi(data.order ?? data);
 };
