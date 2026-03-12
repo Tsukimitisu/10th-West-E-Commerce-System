@@ -95,7 +95,7 @@ const ProductDetail = () => {
     await addCurrentSelectionToCart(true);
   };
 
-  const handleBuyNow = async () => {
+  const handleBuyNow = () => {
     if (!product) return;
     if (!validateSelection()) return;
 
@@ -105,15 +105,19 @@ const ProductDetail = () => {
       return;
     }
 
-    try {
-      await addToCart(product, quantity);
-    } catch {
-      // item still gets added locally via fallback
-    }
+    const buyNowItem = {
+      productId: product.id,
+      product,
+      quantity,
+    };
 
     const user = localStorage.getItem('shopCoreUser');
-    if (!user) navigate('/login?redirect=/checkout');
-    else navigate('/checkout');
+    if (!user) {
+      sessionStorage.setItem('buyNowItem', JSON.stringify(buyNowItem));
+      navigate('/login?redirect=/checkout&buyNow=1');
+    } else {
+      navigate('/checkout', { state: { buyNowItem } });
+    }
   };
 
   const handleWishlist = async () => {

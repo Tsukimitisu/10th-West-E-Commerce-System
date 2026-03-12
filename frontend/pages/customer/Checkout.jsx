@@ -1,12 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { getAddresses, createOrder, createPaymentIntent, getProductById } from '../../services/api';
 
 const Checkout = () => {
-  const { items, subtotal, total, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
+  const { items: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const isBuyNow = !!(location.state?.buyNowItem || sessionStorage.getItem('buyNowItem'));
+  const buyNowItem = useMemo(() => {
+    if (location.state?.buyNowItem) return location.state.buyNowItem;
+    const stored = sessionStorage.getItem('buyNowItem');
+    if (stored) {
+      sessionStorage.removeItem('buyNowItem');
+      return JSON.parse(stored);
+    }
+    return null;
+  }, [location.state]);
+
+  const items = isBuyNow && buyNowItem ? [buyNowItem] : cartItems;
+  const subtotal = isBuyNow && buyNowItem
+    ? ((buyNowItem.product.is_on_sale && buyNowItem.product.sale_price ? buyNowItem.product.sale_price : buyNowItem.product.price) * buyNowItem.quantity)
+    : cartSubtotal;
+  const total = isBuyNow ? subtotal - (discountAmount || 0) : cartTotal;
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showNewAddress, setShowNewAddress] = useState(false);
@@ -128,7 +146,7 @@ const Checkout = () => {
       };
 
       const order = await createOrder(orderData);
-      await clearCart();
+      if (!isBuyNow) await clearCart();
       navigate(`/order-confirmation/${order.id}`);
     } catch (err) {
       setError(err.message || 'Something went wrong');
