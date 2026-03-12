@@ -56,6 +56,9 @@ const logSupabaseActivity = async (action, entityType = null, entityId = null, d
   }
 };
 
+// Exported version for POS and other components
+export const logPosActivity = logSupabaseActivity;
+
 // Helper function to make authenticated requests (for backend API fallback)
 const authenticatedFetch = async (url, options = {}) => {
   const token = getAuthToken();
@@ -1244,6 +1247,7 @@ export const createOrder = async (order) => {
     if (order.items && order.items.length > 0) {
       mapped.items = order.items;
     }
+    await logSupabaseActivity('order.create', 'order', orderData.id, { source: order.source || 'online', total: order.total_amount, items: orderItems.length });
     return mapped;
   }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getProducts, getCategories, createOrder, getOrderById } from '../../services/api';
+import { getProducts, getCategories, createOrder, getOrderById, logPosActivity } from '../../services/api';
 import { Loader2, Search, Trash2, Plus, Minus, LogOut, RotateCcw, Monitor, ShoppingBag, Bike, Box, ArrowLeftCircle, Tag, Check, Clock, DollarSign, Receipt, AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
 import PaymentModal from './PaymentModal';
 import ReceiptModal from './ReceiptModal';
@@ -160,6 +160,8 @@ const PosTerminal = () => {
     };
 
     const processReturn = () => {
+        const returnedCount = Object.values(returnItems).reduce((sum, qty) => sum + qty, 0);
+        logPosActivity('pos.return', 'order', returnOrder?.id, { items_returned: returnedCount, cashier: user?.name });
         showToast('success', 'Return Processed & Inventory Updated!');
         setReturnMode(false);
         setReturnOrder(null);
@@ -245,6 +247,8 @@ const PosTerminal = () => {
             const newOrder = await createOrder(orderData);
             setLastOrder(newOrder);
             setShowPayment(false);
+            // Log POS sale activity
+            logPosActivity('pos.sale', 'order', newOrder.id, { total, items: cartItems.length, payment_method: method, cashier: user?.name });
             // Update shift summary
             setShiftTransactionCount(prev => prev + 1);
             setShiftTotalSales(prev => prev + total);
