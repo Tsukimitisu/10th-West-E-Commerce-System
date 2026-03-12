@@ -222,9 +222,9 @@ const PosTerminal = () => {
         }
     }
 
-    const taxRate = 0.12; // 12% VAT
-    const taxAmount = (subtotal - discountAmount) * taxRate;
-    const total = Math.max(0, subtotal - discountAmount + taxAmount);
+    const taxRate = 0.12; // 12% VAT (already included in price)
+    const total = Math.max(0, subtotal - discountAmount);
+    const taxAmount = (total / 1.12) * 0.12; // VAT portion already included
 
     // --- Payment & Order ---
 
@@ -581,7 +581,7 @@ const PosTerminal = () => {
                                     </div>
                                 )}
                                 <div className="flex justify-between text-gray-600 text-sm font-medium">
-                                    <span>VAT (12%)</span>
+                                    <span>VAT (12% included)</span>
                                     <span className="font-bold">₱{taxAmount.toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between text-3xl font-black text-gray-900 pt-4 border-t-2 border-gray-100">
