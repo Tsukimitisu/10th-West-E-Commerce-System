@@ -40,14 +40,12 @@ const OWNER_NAV = [
 
 // Only owner/store_staff should render admin navigation here.
 
-const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = {}, children }) => {
+const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = {}, user, children }) => {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { connected, on, off } = useSocket();
-  const userStr = localStorage.getItem('shopCoreUser');
-  const user = userStr ? JSON.parse(userStr) : null;
 
   // Notification state
   const [notifications, setNotifications] = useState([]);

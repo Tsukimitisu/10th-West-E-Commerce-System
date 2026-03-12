@@ -12,9 +12,7 @@ import BannersView from './BannersView';
 import PromotionsView from './PromotionsView';
 import ContentView from './ContentView';
 
-const AdminDashboard = ({ onLogout }) => {
-  const userStr = localStorage.getItem('shopCoreUser');
-  const user = userStr ? JSON.parse(userStr) : null;
+const AdminDashboard = ({ user, onLogout }) => {
   const canAccessAdmin = user?.role === 'owner' || user?.role === 'store_staff';
 
   if (!canAccessAdmin) {
@@ -41,7 +39,7 @@ const AdminDashboard = ({ onLogout }) => {
   };
 
   return (
-    <AdminLayout activeView={activeView} onNavigate={setActiveView} onLogout={onLogout}>
+    <AdminLayout activeView={activeView} onNavigate={setActiveView} onLogout={onLogout} user={user}>
       {renderView()}
     </AdminLayout>
   );

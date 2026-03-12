@@ -74,8 +74,18 @@ const OrdersView = () => {
     if (newStatus === 'cancelled' && !cancelReason.trim()) return;
     try {
       if (newStatus === 'cancelled') {
-        const { cancelOrder } = await import('../../services/api');
-        await cancelOrder(statusTarget.id, cancelReason.trim());
+        // Admin cancel: update status and store reason directly
+        const { supabase } = await import('../../services/supabase');
+        const USE_SUPABASE = (import.meta.env.VITE_USE_SUPABASE ?? 'true') === 'true';
+        if (USE_SUPABASE) {
+          await supabase.from('orders').update({
+            status: 'cancelled',
+            cancellation_reason: cancelReason.trim(),
+            updated_at: new Date().toISOString(),
+          }).eq('id', statusTarget.id);
+        } else {
+          await updateOrderStatus(statusTarget.id, 'cancelled');
+        }
       } else {
         await updateOrderStatus(statusTarget.id, newStatus, trackingNumber || undefined);
       }
