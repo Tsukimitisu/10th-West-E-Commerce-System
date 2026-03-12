@@ -5,6 +5,14 @@ import { Shield, Search, Lock, Eye, UserCog, Clock, AlertTriangle, CheckCircle2,
 const SecurityView = () => {
   const [tab, setTab] = useState('roles');
   const [permissions, setPermissions] = useState([]);
+
+  const formatLogDetails = (details) => {
+    let obj = details;
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
+    if (typeof obj !== 'object' || obj === null) return String(obj);
+    return Object.entries(obj).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(', ');
+  };
   const [activityLogs, setActivityLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchLogs, setSearchLogs] = useState('');
@@ -260,7 +268,7 @@ const SecurityView = () => {
                               <span className="font-medium">{log.user_name || `User #${log.user_id || '?'}`}</span>
                               <span className="text-gray-500"> — {action}</span>
                             </p>
-                            {log.details && <p className="text-xs text-gray-400 mt-0.5 truncate">{log.details}</p>}
+                            {log.details && <p className="text-xs text-gray-400 mt-0.5 truncate">{formatLogDetails(log.details)}</p>}
                             <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-400">
                               <span className="flex items-center gap-0.5"><Clock size={9} /> {new Date(log.created_at || log.timestamp).toLocaleString()}</span>
                               {log.ip_address && <span className="flex items-center gap-0.5"><Globe size={9} /> {log.ip_address}</span>}
@@ -360,7 +368,7 @@ const SecurityView = () => {
                               <span className="font-medium">{log.user_name || log.users?.name || `User #${log.user_id || '?'}`}</span>
                               <span className="text-gray-500"> - {action}</span>
                             </p>
-                            {log.details && <p className="text-xs text-gray-400 mt-0.5 truncate">{log.details}</p>}
+                            {log.details && <p className="text-xs text-gray-400 mt-0.5 truncate">{formatLogDetails(log.details)}</p>}
                             <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-400">
                               <span className="flex items-center gap-0.5"><Clock size={9} /> {new Date(log.created_at || log.timestamp).toLocaleString()}</span>
                               {log.ip_address && <span className="flex items-center gap-0.5"><Globe size={9} /> {log.ip_address}</span>}

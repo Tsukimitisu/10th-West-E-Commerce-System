@@ -11,6 +11,14 @@ import {
 const MonitoringView = () => {
   const [tab, setTab] = useState('activity');
   const [loading, setLoading] = useState(true);
+
+  const formatLogDetails = (details) => {
+    let obj = details;
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
+    if (typeof obj !== 'object' || obj === null) return String(obj);
+    return Object.entries(obj).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(', ');
+  };
   const [activityLogs, setActivityLogs] = useState([]);
   const [errorLogs, setErrorLogs] = useState([]);
   const [transactionLogs, setTransactionLogs] = useState([]);

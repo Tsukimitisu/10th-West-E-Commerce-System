@@ -13,6 +13,14 @@ import {
 const StaffManagement = () => {
   const [view, setView] = useState('list');
   const [staff, setStaff] = useState([]);
+
+  const formatLogDetails = (details) => {
+    let obj = details;
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
+    if (typeof obj !== 'object' || obj === null) return String(obj);
+    return Object.entries(obj).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(', ');
+  };
   const [selected, setSelected] = useState(null);
   const [allPermissions, setAllPermissions] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
