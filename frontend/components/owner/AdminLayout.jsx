@@ -1,14 +1,14 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Boxes, ShoppingCart, Monitor,
   RotateCcw, UserCog, BarChart3,
   LogOut, Bell, Search, Menu, X,
-  ChevronLeft, ExternalLink, Wifi, WifiOff, Image, Tag, Newspaper
+  ChevronLeft, ExternalLink, Wifi, WifiOff, Image, Tag, Newspaper,
+  AlertTriangle, CheckCircle
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
-
-import { logoutApi } from '../../services/api';
+import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, logoutApi } from '../../services/api';
 
 const createNavItems = (badges = {}) => [
   // Core
@@ -45,9 +45,89 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const { connected } = useSocket();
+  const { connected, on, off } = useSocket();
   const userStr = localStorage.getItem('shopCoreUser');
   const user = userStr ? JSON.parse(userStr) : null;
+
+  // Notification state
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef(null);
+
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const [count, list] = await Promise.all([
+        getUnreadNotificationCount().catch(() => 0),
+        getNotifications().catch(() => []),
+      ]);
+      setUnreadCount(count || 0);
+      setNotifications(list || []);
+    } catch {}
+  }, []);
+
+  // Poll notifications
+  useEffect(() => {
+    if (!user) return;
+    refreshNotifications();
+    const interval = setInterval(refreshNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [user, refreshNotifications]);
+
+  // Socket listeners for real-time
+  useEffect(() => {
+    if (!user || !connected) return;
+    const handleRefresh = () => refreshNotifications();
+    on('notification', handleRefresh);
+    on('order:new', handleRefresh);
+    on('order:updated', handleRefresh);
+    on('inventory:low-stock', handleRefresh);
+    return () => {
+      off('notification', handleRefresh);
+      off('order:new', handleRefresh);
+      off('order:updated', handleRefresh);
+      off('inventory:low-stock', handleRefresh);
+    };
+  }, [user, connected, on, off, refreshNotifications]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      setUnreadCount(0);
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch (e) { console.error(e); }
+  };
+
+  const handleMarkRead = async (id) => {
+    try {
+      await markNotificationRead(id);
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch (e) { console.error(e); }
+  };
+
+  const getNotifIcon = (type) => {
+    if (type?.includes('order')) return <ShoppingCart size={14} />;
+    if (type?.includes('stock') || type?.includes('inventory')) return <AlertTriangle size={14} />;
+    if (type?.includes('return')) return <RotateCcw size={14} />;
+    return <Bell size={14} />;
+  };
+
+  const getNotifColor = (type) => {
+    if (type?.includes('low_stock')) return 'bg-red-50 text-red-500';
+    if (type?.includes('order')) return 'bg-blue-50 text-blue-500';
+    if (type?.includes('return')) return 'bg-yellow-50 text-yellow-500';
+    return 'bg-orange-50 text-orange-500';
+  };
   const allNavItems = createNavItems(badges);
   const navItems = user?.role === 'store_staff'
     ? allNavItems.filter(item => STORE_STAFF_NAV.includes(item.id))
@@ -186,10 +266,55 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" placeholder="Search..." className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300 w-44" />
             </div>
-            <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+            <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors" onClick={() => setNotifOpen(!notifOpen)}>
               <Bell size={18} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-orange-500 text-white text-[9px] font-bold rounded-full w-[18px] h-[18px] flex items-center justify-center">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </button>
+            {/* Notification dropdown */}
+            {notifOpen && (
+              <div ref={notifRef} className="absolute right-4 top-12 w-96 bg-white rounded-xl shadow-2xl border border-gray-100 z-50">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900 text-sm">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <button onClick={handleMarkAllRead} className="text-xs text-orange-500 hover:text-orange-600 font-medium">Mark all read</button>
+                  )}
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 text-sm">
+                      <Bell size={24} className="mx-auto mb-2 opacity-30" />
+                      No notifications yet
+                    </div>
+                  ) : (
+                    notifications.map((n) => (
+                      <button
+                        key={n.id}
+                        onClick={() => { handleMarkRead(n.id); setNotifOpen(false); }}
+                        className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${!n.is_read ? 'bg-orange-50/40' : ''}`}
+                      >
+                        <div className="flex gap-3">
+                          <div className={`mt-0.5 shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${getNotifColor(n.type)}`}>
+                            {getNotifIcon(n.type)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-sm leading-snug ${!n.is_read ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{n.title}</p>
+                            {n.message && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>}
+                            <p className="text-[10px] text-gray-400 mt-1">
+                              {n.created_at ? new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
+                            </p>
+                          </div>
+                          {!n.is_read && <div className="mt-2 w-2 h-2 bg-orange-500 rounded-full shrink-0" />}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
