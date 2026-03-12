@@ -1302,6 +1302,19 @@ export const updateOrderStatus = async (id, status) => {
 
     if (error) throw new Error(error.message);
     await logSupabaseActivity('order.update_status', 'order', id, { status });
+
+    // Notify customer about their order status update
+    if (data.user_id) {
+      createNotification({
+        user_id: data.user_id,
+        type: 'order.status',
+        title: 'Order Status Updated',
+        message: `Your order #${String(id).padStart(4, '0')} is now ${status}`,
+        reference_id: id,
+        reference_type: 'order',
+      });
+    }
+
     return mapOrderFromApi(data);
   }
 
@@ -1337,6 +1350,16 @@ export const cancelOrder = async (id) => {
       .select()
       .single();
     if (error) throw new Error(error.message);
+
+    // Notify admin/staff about the cancellation
+    notifyAdminStaff(
+      'order.cancelled',
+      'Order Cancelled',
+      `Order #${String(id).padStart(4, '0')} was cancelled by the customer`,
+      id,
+      'order'
+    );
+
     return mapOrderFromApi(data);
   }
 
@@ -1579,6 +1602,16 @@ export const createReturn = async (returnRequest) => {
     method: 'POST',
     body: JSON.stringify(returnRequest),
   });
+
+  // Notify admin/staff about new return request
+  notifyAdminStaff(
+    'return.new',
+    'New Return Request',
+    `Return request for Order #${String(returnRequest.order_id).padStart(4, '0')} — ₱${Number(returnRequest.refund_amount || 0).toLocaleString()}`,
+    data.return?.id,
+    'return'
+  );
+
   return data.return;
 };
 
