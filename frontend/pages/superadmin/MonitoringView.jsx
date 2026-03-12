@@ -161,7 +161,7 @@ const MonitoringView = () => {
                       <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">{log.user_name || 'System'}</td>
                       <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell font-mono">{log.ip_address || '-'}</td>
                       <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell max-w-xs truncate">
-                        {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)).slice(0, 60) : '-'}
+                        {log.details ? formatLogDetails(log.details) : '-'}
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
                     </tr>

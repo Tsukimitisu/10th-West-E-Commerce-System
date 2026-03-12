@@ -49,7 +49,7 @@ const logSupabaseActivity = async (action, entityType = null, entityId = null, d
       action,
       entity_type: entityType,
       entity_id: entityId ? String(entityId) : null,
-      details: details ? JSON.stringify(details) : null,
+      details: details || null,
     });
   } catch (err) {
     console.error('Activity log error:', err.message);
