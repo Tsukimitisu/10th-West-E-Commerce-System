@@ -135,7 +135,7 @@ const ProductsView = () => {
         sale_price: form.sale_price ? parseFloat(form.sale_price) : undefined,
         is_on_sale: form.is_on_sale,
         sku: form.sku,
-        barcode: form.barcode,
+        barcode: form.partNumber || form.barcode,
         brand: form.brand
       };
 
@@ -307,7 +307,7 @@ const ProductsView = () => {
                 <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className={inputClass} placeholder="Front Brake Pad Set" />
               </InputField>
               <InputField label="Part Number">
-                <input value={form.partNumber} onChange={e => setForm(f => ({ ...f, partNumber: e.target.value }))} className={inputClass} placeholder="PN-001234" />
+                <input value={form.partNumber} onChange={e => setForm(f => ({ ...f, partNumber: e.target.value, barcode: e.target.value }))} className={inputClass} placeholder="PN-001234" />
               </InputField>
             </div>
 
@@ -347,7 +347,7 @@ const ProductsView = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <InputField label="SKU"><input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} className={inputClass} placeholder="Auto-generated if empty" /></InputField>
-              <InputField label="Barcode"><input value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className={inputClass} placeholder="Auto-generated if empty" /></InputField>
+              <InputField label="Barcode"><input value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className={inputClass} placeholder="Same as Part Number" readOnly /></InputField>
             </div>
 
             <InputField label="Product Image">
