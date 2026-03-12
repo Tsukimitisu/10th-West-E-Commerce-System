@@ -1248,6 +1248,16 @@ export const createOrder = async (order) => {
       mapped.items = order.items;
     }
     await logSupabaseActivity('order.create', 'order', orderData.id, { source: order.source || 'online', total: order.total_amount, items: orderItems.length });
+
+    // Notify admin/staff about new order
+    notifyAdminStaff(
+      'order.new',
+      'New Order Received',
+      `Order #${String(orderData.id).padStart(4, '0')} — ₱${Number(order.total_amount).toLocaleString()} (${orderItems.length} item${orderItems.length !== 1 ? 's' : ''})`,
+      orderData.id,
+      'order'
+    );
+
     return mapped;
   }
 
@@ -2056,6 +2066,39 @@ export const deleteNotification = async (id) => {
   return authenticatedFetch(`${API_URL}/notifications/${id}`, { method: 'DELETE' });
 };
 
+export const createNotification = async ({ user_id, type, title, message, reference_id, reference_type }) => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('notifications').insert({
+      user_id, type, title, message, reference_id, reference_type,
+    }).select().single();
+    if (error) console.error('Notification insert error:', error.message);
+    return data;
+  }
+  return authenticatedFetch(`${API_URL}/notifications`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id, type, title, message, reference_id, reference_type }),
+  }).catch(err => console.error('Notification create error:', err));
+};
+
+// Notify all admin (owner) and staff users
+const notifyAdminStaff = async (type, title, message, referenceId = null, referenceType = null) => {
+  try {
+    const { data: staffUsers } = await supabase
+      .from('users')
+      .select('id')
+      .in('role', ['owner', 'store_staff', 'super_admin'])
+      .eq('is_active', true);
+    if (!staffUsers || staffUsers.length === 0) return;
+    const rows = staffUsers.map(u => ({
+      user_id: u.id, type, title, message,
+      reference_id: referenceId, reference_type: referenceType,
+    }));
+    await supabase.from('notifications').insert(rows);
+  } catch (err) {
+    console.error('notifyAdminStaff error:', err.message);
+  }
+};
+
 // ==================== BANNERS ====================
 
 export const getBanners = async () => {
@@ -2179,6 +2222,23 @@ export const createPurchaseOrder = async (po) => {
     const { data, error } = await supabase.from('stock_adjustments').insert({ product_id: po.product_id, quantity_change: po.quantity_change, reason: dbReason, notes: po.note || '', adjusted_by: currentUser?.id, status: 'approved' }).select().single();
     if (error) throw new Error(error.message);
     await logSupabaseActivity('inventory.adjust', 'product', po.product_id, { quantity_change: po.quantity_change, reason: dbReason });
+
+    // Check for low stock after adjustment and notify
+    if (newStock <= (po.low_stock_threshold || 5)) {
+      const { data: prodInfo } = await supabase.from('products').select('name, low_stock_threshold').eq('id', po.product_id).single();
+      const prodName = prodInfo?.name || `Product #${po.product_id}`;
+      const threshold = prodInfo?.low_stock_threshold || 5;
+      if (newStock <= threshold) {
+        notifyAdminStaff(
+          'inventory.low_stock',
+          'Low Stock Alert',
+          `${prodName} is low on stock (${newStock} remaining, threshold: ${threshold})`,
+          po.product_id,
+          'product'
+        );
+      }
+    }
+
     return data;
   }
   return authenticatedFetch(`${API_URL}/inventory/adjustments`, { method: 'POST', body: JSON.stringify(po) });
