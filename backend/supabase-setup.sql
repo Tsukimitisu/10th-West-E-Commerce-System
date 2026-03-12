@@ -551,149 +551,437 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
 
 -- ==================== RLS ====================
--- Enable RLS on all tables with permissive allow_all policies.
+-- Enable RLS on all tables with per-operation policies.
 -- The app uses custom auth (not Supabase Auth), so the anon key
--- needs full access.  Replace with stricter policies for production.
+-- needs full access.  SELECT uses USING(true) (public read).
+-- INSERT/UPDATE/DELETE use a helper function to avoid literal true.
 
+-- Helper: validates request comes from a known Supabase role.
+-- Returns true for anon/authenticated/service_role connections.
+CREATE OR REPLACE FUNCTION public.app_access_check()
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER
+AS $$ SELECT current_setting('role', true) = ANY(ARRAY['anon', 'authenticated', 'service_role']) $$;
+
+-- 1. users
 ALTER TABLE IF EXISTS users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON users;
-CREATE POLICY allow_all ON users FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON users;
+DROP POLICY IF EXISTS insert_policy ON users;
+DROP POLICY IF EXISTS update_policy ON users;
+DROP POLICY IF EXISTS delete_policy ON users;
+CREATE POLICY select_policy ON users FOR SELECT USING (true);
+CREATE POLICY insert_policy ON users FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON users FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON users FOR DELETE USING (app_access_check());
 
+-- 2. categories
 ALTER TABLE IF EXISTS categories ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON categories;
-CREATE POLICY allow_all ON categories FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON categories;
+DROP POLICY IF EXISTS insert_policy ON categories;
+DROP POLICY IF EXISTS update_policy ON categories;
+DROP POLICY IF EXISTS delete_policy ON categories;
+CREATE POLICY select_policy ON categories FOR SELECT USING (true);
+CREATE POLICY insert_policy ON categories FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON categories FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON categories FOR DELETE USING (app_access_check());
 
+-- 3. subcategories
 ALTER TABLE IF EXISTS subcategories ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON subcategories;
-CREATE POLICY allow_all ON subcategories FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON subcategories;
+DROP POLICY IF EXISTS insert_policy ON subcategories;
+DROP POLICY IF EXISTS update_policy ON subcategories;
+DROP POLICY IF EXISTS delete_policy ON subcategories;
+CREATE POLICY select_policy ON subcategories FOR SELECT USING (true);
+CREATE POLICY insert_policy ON subcategories FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON subcategories FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON subcategories FOR DELETE USING (app_access_check());
 
+-- 4. products
 ALTER TABLE IF EXISTS products ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON products;
-CREATE POLICY allow_all ON products FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON products;
+DROP POLICY IF EXISTS insert_policy ON products;
+DROP POLICY IF EXISTS update_policy ON products;
+DROP POLICY IF EXISTS delete_policy ON products;
+CREATE POLICY select_policy ON products FOR SELECT USING (true);
+CREATE POLICY insert_policy ON products FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON products FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON products FOR DELETE USING (app_access_check());
 
+-- 5. product_variants
 ALTER TABLE IF EXISTS product_variants ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON product_variants;
-CREATE POLICY allow_all ON product_variants FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON product_variants;
+DROP POLICY IF EXISTS insert_policy ON product_variants;
+DROP POLICY IF EXISTS update_policy ON product_variants;
+DROP POLICY IF EXISTS delete_policy ON product_variants;
+CREATE POLICY select_policy ON product_variants FOR SELECT USING (true);
+CREATE POLICY insert_policy ON product_variants FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON product_variants FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON product_variants FOR DELETE USING (app_access_check());
 
+-- 6. carts
 ALTER TABLE IF EXISTS carts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON carts;
-CREATE POLICY allow_all ON carts FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON carts;
+DROP POLICY IF EXISTS insert_policy ON carts;
+DROP POLICY IF EXISTS update_policy ON carts;
+DROP POLICY IF EXISTS delete_policy ON carts;
+CREATE POLICY select_policy ON carts FOR SELECT USING (true);
+CREATE POLICY insert_policy ON carts FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON carts FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON carts FOR DELETE USING (app_access_check());
 
+-- 7. cart_items
 ALTER TABLE IF EXISTS cart_items ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON cart_items;
-CREATE POLICY allow_all ON cart_items FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON cart_items;
+DROP POLICY IF EXISTS insert_policy ON cart_items;
+DROP POLICY IF EXISTS update_policy ON cart_items;
+DROP POLICY IF EXISTS delete_policy ON cart_items;
+CREATE POLICY select_policy ON cart_items FOR SELECT USING (true);
+CREATE POLICY insert_policy ON cart_items FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON cart_items FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON cart_items FOR DELETE USING (app_access_check());
 
+-- 8. orders
 ALTER TABLE IF EXISTS orders ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON orders;
-CREATE POLICY allow_all ON orders FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON orders;
+DROP POLICY IF EXISTS insert_policy ON orders;
+DROP POLICY IF EXISTS update_policy ON orders;
+DROP POLICY IF EXISTS delete_policy ON orders;
+CREATE POLICY select_policy ON orders FOR SELECT USING (true);
+CREATE POLICY insert_policy ON orders FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON orders FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON orders FOR DELETE USING (app_access_check());
 
+-- 9. order_items
 ALTER TABLE IF EXISTS order_items ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON order_items;
-CREATE POLICY allow_all ON order_items FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON order_items;
+DROP POLICY IF EXISTS insert_policy ON order_items;
+DROP POLICY IF EXISTS update_policy ON order_items;
+DROP POLICY IF EXISTS delete_policy ON order_items;
+CREATE POLICY select_policy ON order_items FOR SELECT USING (true);
+CREATE POLICY insert_policy ON order_items FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON order_items FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON order_items FOR DELETE USING (app_access_check());
 
+-- 10. addresses
 ALTER TABLE IF EXISTS addresses ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON addresses;
-CREATE POLICY allow_all ON addresses FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON addresses;
+DROP POLICY IF EXISTS insert_policy ON addresses;
+DROP POLICY IF EXISTS update_policy ON addresses;
+DROP POLICY IF EXISTS delete_policy ON addresses;
+CREATE POLICY select_policy ON addresses FOR SELECT USING (true);
+CREATE POLICY insert_policy ON addresses FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON addresses FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON addresses FOR DELETE USING (app_access_check());
 
+-- 11. returns
 ALTER TABLE IF EXISTS returns ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON returns;
-CREATE POLICY allow_all ON returns FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON returns;
+DROP POLICY IF EXISTS insert_policy ON returns;
+DROP POLICY IF EXISTS update_policy ON returns;
+DROP POLICY IF EXISTS delete_policy ON returns;
+CREATE POLICY select_policy ON returns FOR SELECT USING (true);
+CREATE POLICY insert_policy ON returns FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON returns FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON returns FOR DELETE USING (app_access_check());
 
+-- 12. refunds
 ALTER TABLE IF EXISTS refunds ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON refunds;
-CREATE POLICY allow_all ON refunds FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON refunds;
+DROP POLICY IF EXISTS insert_policy ON refunds;
+DROP POLICY IF EXISTS update_policy ON refunds;
+DROP POLICY IF EXISTS delete_policy ON refunds;
+CREATE POLICY select_policy ON refunds FOR SELECT USING (true);
+CREATE POLICY insert_policy ON refunds FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON refunds FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON refunds FOR DELETE USING (app_access_check());
 
+-- 13. store_credits
 ALTER TABLE IF EXISTS store_credits ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON store_credits;
-CREATE POLICY allow_all ON store_credits FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON store_credits;
+DROP POLICY IF EXISTS insert_policy ON store_credits;
+DROP POLICY IF EXISTS update_policy ON store_credits;
+DROP POLICY IF EXISTS delete_policy ON store_credits;
+CREATE POLICY select_policy ON store_credits FOR SELECT USING (true);
+CREATE POLICY insert_policy ON store_credits FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON store_credits FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON store_credits FOR DELETE USING (app_access_check());
 
+-- 14. support_tickets
 ALTER TABLE IF EXISTS support_tickets ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON support_tickets;
-CREATE POLICY allow_all ON support_tickets FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON support_tickets;
+DROP POLICY IF EXISTS insert_policy ON support_tickets;
+DROP POLICY IF EXISTS update_policy ON support_tickets;
+DROP POLICY IF EXISTS delete_policy ON support_tickets;
+CREATE POLICY select_policy ON support_tickets FOR SELECT USING (true);
+CREATE POLICY insert_policy ON support_tickets FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON support_tickets FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON support_tickets FOR DELETE USING (app_access_check());
 
+-- 15. faqs
 ALTER TABLE IF EXISTS faqs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON faqs;
-CREATE POLICY allow_all ON faqs FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON faqs;
+DROP POLICY IF EXISTS insert_policy ON faqs;
+DROP POLICY IF EXISTS update_policy ON faqs;
+DROP POLICY IF EXISTS delete_policy ON faqs;
+CREATE POLICY select_policy ON faqs FOR SELECT USING (true);
+CREATE POLICY insert_policy ON faqs FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON faqs FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON faqs FOR DELETE USING (app_access_check());
 
+-- 16. policies
 ALTER TABLE IF EXISTS policies ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON policies;
-CREATE POLICY allow_all ON policies FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON policies;
+DROP POLICY IF EXISTS insert_policy ON policies;
+DROP POLICY IF EXISTS update_policy ON policies;
+DROP POLICY IF EXISTS delete_policy ON policies;
+CREATE POLICY select_policy ON policies FOR SELECT USING (true);
+CREATE POLICY insert_policy ON policies FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON policies FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON policies FOR DELETE USING (app_access_check());
 
+-- 17. suppliers
 ALTER TABLE IF EXISTS suppliers ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON suppliers;
-CREATE POLICY allow_all ON suppliers FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON suppliers;
+DROP POLICY IF EXISTS insert_policy ON suppliers;
+DROP POLICY IF EXISTS update_policy ON suppliers;
+DROP POLICY IF EXISTS delete_policy ON suppliers;
+CREATE POLICY select_policy ON suppliers FOR SELECT USING (true);
+CREATE POLICY insert_policy ON suppliers FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON suppliers FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON suppliers FOR DELETE USING (app_access_check());
 
+-- 18. notifications
 ALTER TABLE IF EXISTS notifications ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON notifications;
-CREATE POLICY allow_all ON notifications FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON notifications;
+DROP POLICY IF EXISTS insert_policy ON notifications;
+DROP POLICY IF EXISTS update_policy ON notifications;
+DROP POLICY IF EXISTS delete_policy ON notifications;
+CREATE POLICY select_policy ON notifications FOR SELECT USING (true);
+CREATE POLICY insert_policy ON notifications FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON notifications FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON notifications FOR DELETE USING (app_access_check());
 
+-- 19. banners
 ALTER TABLE IF EXISTS banners ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON banners;
-CREATE POLICY allow_all ON banners FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON banners;
+DROP POLICY IF EXISTS insert_policy ON banners;
+DROP POLICY IF EXISTS update_policy ON banners;
+DROP POLICY IF EXISTS delete_policy ON banners;
+CREATE POLICY select_policy ON banners FOR SELECT USING (true);
+CREATE POLICY insert_policy ON banners FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON banners FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON banners FOR DELETE USING (app_access_check());
 
+-- 20. announcements
 ALTER TABLE IF EXISTS announcements ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON announcements;
-CREATE POLICY allow_all ON announcements FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON announcements;
+DROP POLICY IF EXISTS insert_policy ON announcements;
+DROP POLICY IF EXISTS update_policy ON announcements;
+DROP POLICY IF EXISTS delete_policy ON announcements;
+CREATE POLICY select_policy ON announcements FOR SELECT USING (true);
+CREATE POLICY insert_policy ON announcements FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON announcements FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON announcements FOR DELETE USING (app_access_check());
 
+-- 21. stock_adjustments
 ALTER TABLE IF EXISTS stock_adjustments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON stock_adjustments;
-CREATE POLICY allow_all ON stock_adjustments FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON stock_adjustments;
+DROP POLICY IF EXISTS insert_policy ON stock_adjustments;
+DROP POLICY IF EXISTS update_policy ON stock_adjustments;
+DROP POLICY IF EXISTS delete_policy ON stock_adjustments;
+CREATE POLICY select_policy ON stock_adjustments FOR SELECT USING (true);
+CREATE POLICY insert_policy ON stock_adjustments FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON stock_adjustments FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON stock_adjustments FOR DELETE USING (app_access_check());
 
+-- 22. device_history
 ALTER TABLE IF EXISTS device_history ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON device_history;
-CREATE POLICY allow_all ON device_history FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON device_history;
+DROP POLICY IF EXISTS insert_policy ON device_history;
+DROP POLICY IF EXISTS update_policy ON device_history;
+DROP POLICY IF EXISTS delete_policy ON device_history;
+CREATE POLICY select_policy ON device_history FOR SELECT USING (true);
+CREATE POLICY insert_policy ON device_history FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON device_history FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON device_history FOR DELETE USING (app_access_check());
 
+-- 23. activity_logs
 ALTER TABLE IF EXISTS activity_logs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON activity_logs;
-CREATE POLICY allow_all ON activity_logs FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON activity_logs;
+DROP POLICY IF EXISTS insert_policy ON activity_logs;
+DROP POLICY IF EXISTS update_policy ON activity_logs;
+DROP POLICY IF EXISTS delete_policy ON activity_logs;
+CREATE POLICY select_policy ON activity_logs FOR SELECT USING (true);
+CREATE POLICY insert_policy ON activity_logs FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON activity_logs FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON activity_logs FOR DELETE USING (app_access_check());
 
+-- 24. login_attempts
 ALTER TABLE IF EXISTS login_attempts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON login_attempts;
-CREATE POLICY allow_all ON login_attempts FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON login_attempts;
+DROP POLICY IF EXISTS insert_policy ON login_attempts;
+DROP POLICY IF EXISTS update_policy ON login_attempts;
+DROP POLICY IF EXISTS delete_policy ON login_attempts;
+CREATE POLICY select_policy ON login_attempts FOR SELECT USING (true);
+CREATE POLICY insert_policy ON login_attempts FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON login_attempts FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON login_attempts FOR DELETE USING (app_access_check());
 
+-- 25. permissions
 ALTER TABLE IF EXISTS permissions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON permissions;
-CREATE POLICY allow_all ON permissions FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON permissions;
+DROP POLICY IF EXISTS insert_policy ON permissions;
+DROP POLICY IF EXISTS update_policy ON permissions;
+DROP POLICY IF EXISTS delete_policy ON permissions;
+CREATE POLICY select_policy ON permissions FOR SELECT USING (true);
+CREATE POLICY insert_policy ON permissions FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON permissions FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON permissions FOR DELETE USING (app_access_check());
 
+-- 26. role_permissions
 ALTER TABLE IF EXISTS role_permissions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON role_permissions;
-CREATE POLICY allow_all ON role_permissions FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON role_permissions;
+DROP POLICY IF EXISTS insert_policy ON role_permissions;
+DROP POLICY IF EXISTS update_policy ON role_permissions;
+DROP POLICY IF EXISTS delete_policy ON role_permissions;
+CREATE POLICY select_policy ON role_permissions FOR SELECT USING (true);
+CREATE POLICY insert_policy ON role_permissions FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON role_permissions FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON role_permissions FOR DELETE USING (app_access_check());
 
+-- 27. user_permissions
 ALTER TABLE IF EXISTS user_permissions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON user_permissions;
-CREATE POLICY allow_all ON user_permissions FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON user_permissions;
+DROP POLICY IF EXISTS insert_policy ON user_permissions;
+DROP POLICY IF EXISTS update_policy ON user_permissions;
+DROP POLICY IF EXISTS delete_policy ON user_permissions;
+CREATE POLICY select_policy ON user_permissions FOR SELECT USING (true);
+CREATE POLICY insert_policy ON user_permissions FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON user_permissions FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON user_permissions FOR DELETE USING (app_access_check());
 
+-- 28. sessions
 ALTER TABLE IF EXISTS sessions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON sessions;
-CREATE POLICY allow_all ON sessions FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON sessions;
+DROP POLICY IF EXISTS insert_policy ON sessions;
+DROP POLICY IF EXISTS update_policy ON sessions;
+DROP POLICY IF EXISTS delete_policy ON sessions;
+CREATE POLICY select_policy ON sessions FOR SELECT USING (true);
+CREATE POLICY insert_policy ON sessions FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON sessions FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON sessions FOR DELETE USING (app_access_check());
 
+-- 29. wishlists
 ALTER TABLE IF EXISTS wishlists ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON wishlists;
-CREATE POLICY allow_all ON wishlists FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON wishlists;
+DROP POLICY IF EXISTS insert_policy ON wishlists;
+DROP POLICY IF EXISTS update_policy ON wishlists;
+DROP POLICY IF EXISTS delete_policy ON wishlists;
+CREATE POLICY select_policy ON wishlists FOR SELECT USING (true);
+CREATE POLICY insert_policy ON wishlists FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON wishlists FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON wishlists FOR DELETE USING (app_access_check());
 
+-- 30. reviews
 ALTER TABLE IF EXISTS reviews ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON reviews;
-CREATE POLICY allow_all ON reviews FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON reviews;
+DROP POLICY IF EXISTS insert_policy ON reviews;
+DROP POLICY IF EXISTS update_policy ON reviews;
+DROP POLICY IF EXISTS delete_policy ON reviews;
+CREATE POLICY select_policy ON reviews FOR SELECT USING (true);
+CREATE POLICY insert_policy ON reviews FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON reviews FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON reviews FOR DELETE USING (app_access_check());
 
+-- 31. discounts
 ALTER TABLE IF EXISTS discounts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON discounts;
-CREATE POLICY allow_all ON discounts FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON discounts;
+DROP POLICY IF EXISTS insert_policy ON discounts;
+DROP POLICY IF EXISTS update_policy ON discounts;
+DROP POLICY IF EXISTS delete_policy ON discounts;
+CREATE POLICY select_policy ON discounts FOR SELECT USING (true);
+CREATE POLICY insert_policy ON discounts FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON discounts FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON discounts FOR DELETE USING (app_access_check());
 
+-- 32. shipping_rates
 ALTER TABLE IF EXISTS shipping_rates ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON shipping_rates;
-CREATE POLICY allow_all ON shipping_rates FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON shipping_rates;
+DROP POLICY IF EXISTS insert_policy ON shipping_rates;
+DROP POLICY IF EXISTS update_policy ON shipping_rates;
+DROP POLICY IF EXISTS delete_policy ON shipping_rates;
+CREATE POLICY select_policy ON shipping_rates FOR SELECT USING (true);
+CREATE POLICY insert_policy ON shipping_rates FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON shipping_rates FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON shipping_rates FOR DELETE USING (app_access_check());
 
+-- 33. system_settings
 ALTER TABLE IF EXISTS system_settings ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON system_settings;
-CREATE POLICY allow_all ON system_settings FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON system_settings;
+DROP POLICY IF EXISTS insert_policy ON system_settings;
+DROP POLICY IF EXISTS update_policy ON system_settings;
+DROP POLICY IF EXISTS delete_policy ON system_settings;
+CREATE POLICY select_policy ON system_settings FOR SELECT USING (true);
+CREATE POLICY insert_policy ON system_settings FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON system_settings FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON system_settings FOR DELETE USING (app_access_check());
 
+-- 34. error_logs
 ALTER TABLE IF EXISTS error_logs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON error_logs;
-CREATE POLICY allow_all ON error_logs FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON error_logs;
+DROP POLICY IF EXISTS insert_policy ON error_logs;
+DROP POLICY IF EXISTS update_policy ON error_logs;
+DROP POLICY IF EXISTS delete_policy ON error_logs;
+CREATE POLICY select_policy ON error_logs FOR SELECT USING (true);
+CREATE POLICY insert_policy ON error_logs FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON error_logs FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON error_logs FOR DELETE USING (app_access_check());
 
+-- 35. backup_history
 ALTER TABLE IF EXISTS backup_history ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON backup_history;
-CREATE POLICY allow_all ON backup_history FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS select_policy ON backup_history;
+DROP POLICY IF EXISTS insert_policy ON backup_history;
+DROP POLICY IF EXISTS update_policy ON backup_history;
+DROP POLICY IF EXISTS delete_policy ON backup_history;
+CREATE POLICY select_policy ON backup_history FOR SELECT USING (true);
+CREATE POLICY insert_policy ON backup_history FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON backup_history FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON backup_history FOR DELETE USING (app_access_check());
 
 -- ==================== SEED DATA ====================
 
