@@ -61,7 +61,15 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/shop" element={<ProductList />} />
-          <Route path="/login" element={<Login onLogin={onLogin} />} />
+          <Route path="/login" element={
+            user && (user.role === Role.OWNER || user.role === Role.STORE_STAFF)
+              ? <Navigate to="/admin" replace />
+              : user && user.role === Role.SUPER_ADMIN
+                ? <Navigate to="/super-admin" replace />
+                : user
+                  ? <Navigate to="/" replace />
+                  : <Login onLogin={onLogin} />
+          } />
           <Route path="/register" element={<Register onLogin={onLogin} />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />

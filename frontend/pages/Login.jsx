@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Shield } from 'lucide-react';
 import { login } from '../services/api';
@@ -14,17 +14,6 @@ const Login = ({ onLogin }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const defaultRedirect = searchParams.get('redirect') || '/';
-
-  // Redirect already-authenticated admin/staff away from login page
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('shopCoreUser');
-      if (!saved) return;
-      const role = JSON.parse(saved)?.role;
-      if (role === 'super_admin') navigate('/super-admin', { replace: true });
-      else if (role === 'owner' || role === 'store_staff') navigate('/admin', { replace: true });
-    } catch {}
-  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
