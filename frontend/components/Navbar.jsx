@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
-import { getCategories, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements } from '../services/api';
+import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
 import { useSocket } from '../context/SocketContext';
 import CartDrawer from './CartDrawer';
 
 const Navbar = ({ user, onLogout }) => {
-  const [categories, setCategories] = useState([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [catMenuOpen, setCatMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -30,10 +28,6 @@ const Navbar = ({ user, onLogout }) => {
   const shopToolsRef = useRef(null);
 
   useEffect(() => {
-    getCategories().then(setCategories).catch(() => { });
-  }, []);
-
-  useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
@@ -42,7 +36,6 @@ const Navbar = ({ user, onLogout }) => {
   useEffect(() => {
     setMobileOpen(false);
     setUserMenuOpen(false);
-    setCatMenuOpen(false);
     setMoreMenuOpen(false);
     setShopToolsOpen(false);
   }, [location.pathname]);
@@ -123,11 +116,10 @@ const Navbar = ({ user, onLogout }) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false);
       if (shopToolsRef.current && !shopToolsRef.current.contains(e.target)) setShopToolsOpen(false);
-      if (catMenuOpen && !e.target.closest('[data-cat-menu]')) setCatMenuOpen(false);
     };
     document.addEventListener('mousedown', notifHandler);
     return () => document.removeEventListener('mousedown', notifHandler);
-  }, [catMenuOpen]);
+  }, []);
 
   const handleMarkAllRead = async () => {
     try {
@@ -192,23 +184,6 @@ const Navbar = ({ user, onLogout }) => {
               <Link to="/shop" className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/shop' ? 'text-orange-500 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
                 Shop
               </Link>
-              <div className="relative" data-cat-menu>
-                <button
-                  onClick={() => setCatMenuOpen(!catMenuOpen)}
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors flex items-center gap-1"
-                >
-                  Categories <ChevronDown size={14} className={`transition-transform ${catMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {catMenuOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 animate-fade-in">
-                    {categories.map(cat => (
-                      <Link key={cat.id} to={`/shop?category=${cat.id}`} className="block px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors">
-                        {cat.name}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
               <div ref={moreMenuRef} className="relative">
                 <button
                   onClick={() => setMoreMenuOpen(!moreMenuOpen)}
@@ -438,12 +413,6 @@ const Navbar = ({ user, onLogout }) => {
             <nav className="p-4 space-y-1">
               <Link to="/" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Home</Link>
               <Link to="/shop" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Shop All</Link>
-              <div className="pt-2 pb-1 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Categories</div>
-              {categories.map(cat => (
-                <Link key={cat.id} to={`/shop?category=${cat.id}`} onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-orange-50 hover:text-orange-500 ml-2">
-                  {cat.name}
-                </Link>
-              ))}
               <div className="border-t border-gray-100 my-2" />
               <Link to="/faq" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">FAQ</Link>
               <Link to="/contact" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Contact</Link>
