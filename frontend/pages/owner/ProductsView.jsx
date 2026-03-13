@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, uploadProductImage } from '../../services/api';
+import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, uploadProductImage, addCategory } from '../../services/api';
 import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
@@ -24,6 +24,10 @@ const ProductsView = () => {
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState('');
+  const [categorySubmitting, setCategorySubmitting] = useState(false);
   const [form, setForm] = useState({
     partNumber: '', name: '', description: '', price: '', buyingPrice: '',
     category_id: '', image: '', stock_quantity: '0', boxNumber: '',
@@ -176,6 +180,34 @@ const ProductsView = () => {
     setDeleteTarget(p);
   };
 
+  const openCategoryModal = () => {
+    setCategoryError('');
+    setNewCategoryName('');
+    setCategoryModalOpen(true);
+  };
+
+  const handleCreateCategory = async (e) => {
+    e.preventDefault();
+    const name = newCategoryName.trim();
+    if (!name) {
+      setCategoryError('Category name is required');
+      return;
+    }
+
+    try {
+      setCategorySubmitting(true);
+      setCategoryError('');
+      const created = await addCategory(name);
+      setCategories(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setForm(prev => ({ ...prev, category_id: created.id.toString() }));
+      setCategoryModalOpen(false);
+    } catch (e) {
+      setCategoryError(e.message || 'Failed to create category');
+    } finally {
+      setCategorySubmitting(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try { await deleteProduct(deleteTarget.id); fetch(); } catch (e) { console.error(e); }
@@ -313,10 +345,19 @@ const ProductsView = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <InputField label="Category" required>
-                <select value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))} required className={inputClass}>
-                  <option value="">Select</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <div className="space-y-2">
+                  <select value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))} required className={inputClass}>
+                    <option value="">Select</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={openCategoryModal}
+                    className="text-xs font-medium text-orange-600 hover:text-orange-700"
+                  >
+                    + Add New Category
+                  </button>
+                </div>
               </InputField>
               <InputField label="Brand">
                 <input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className={inputClass} placeholder="Honda" />
@@ -389,6 +430,52 @@ const ProductsView = () => {
               <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
               <button type="submit" disabled={submitting} className="px-5 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors">
                 {submitting ? 'Saving...' : editing ? 'Update Product' : 'Add Product'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Category Management Modal */}
+      {categoryModalOpen && (
+        <Modal
+          isOpen={categoryModalOpen}
+          onClose={() => setCategoryModalOpen(false)}
+          title="Add Category"
+          size="md"
+        >
+          <form onSubmit={handleCreateCategory} className="space-y-4">
+            <InputField label="Category Name" required>
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={e => setNewCategoryName(e.target.value)}
+                className={inputClass}
+                placeholder="e.g. MIO I 125"
+                autoFocus
+              />
+            </InputField>
+
+            {categoryError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {categoryError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setCategoryModalOpen(false)}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={categorySubmitting}
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {categorySubmitting ? 'Adding...' : 'Add Category'}
               </button>
             </div>
           </form>
