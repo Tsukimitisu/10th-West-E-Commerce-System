@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import { X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, SlidersHorizontal, Shapes, Tag, WalletCards, Boxes, Sparkles } from 'lucide-react';
 
 const FilterSidebar = ({
   categories, selectedCategory, onCategoryChange,
@@ -9,40 +9,68 @@ const FilterSidebar = ({
   onClearAll, activeFilterCount,
   isMobileOpen, onMobileClose,
   showDesktop = true,
+  resultCount,
 }) => {
   const [openSections, setOpenSections] = React.useState({ category: true, brand: true, price: true, stock: true });
+
+  React.useEffect(() => {
+    if (isMobileOpen === undefined) return;
+    if (isMobileOpen) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileOpen]);
 
   const toggleSection = (section) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
+  const activePill = 'bg-[#1f2937] text-white border-[#1f2937] shadow-sm';
+  const idlePill = 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50';
+
   const content = (
-    <div className="space-y-1">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-3">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal size={18} className="text-gray-600" />
-          <span className="font-display font-semibold text-gray-900">Filters</span>
-          {activeFilterCount > 0 && (
-            <span className="bg-orange-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>
+      <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-[#fff8f0] via-white to-[#fff4eb] p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#f97316] text-white flex items-center justify-center">
+              <SlidersHorizontal size={16} />
+            </div>
+            <div>
+              <p className="font-display font-semibold text-gray-900 leading-tight">Filters</p>
+              <p className="text-[11px] text-gray-500">Refine your shop results</p>
+            </div>
+          </div>
+          {onMobileClose && (
+            <button onClick={onMobileClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white lg:hidden">
+              <X size={18} />
+            </button>
           )}
         </div>
-        {activeFilterCount > 0 && (
-          <button onClick={onClearAll} className="text-xs text-orange-500 hover:text-orange-600 font-medium">Clear All</button>
-        )}
-        {onMobileClose && (
-          <button onClick={onMobileClose} className="p-1 text-gray-400 hover:text-gray-600 lg:hidden">
-            <X size={20} />
+        <div className="mt-3 flex items-center justify-between">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white border border-orange-100 text-xs text-gray-600">
+            <Sparkles size={12} className="text-orange-500" />
+            <span>{activeFilterCount} active</span>
+          </div>
+          <button onClick={onClearAll} className="text-xs font-semibold text-orange-600 hover:text-orange-700 disabled:text-gray-300" disabled={activeFilterCount === 0}>
+            Clear all
           </button>
-        )}
+        </div>
       </div>
 
       {/* Category */}
-      <FilterSection title="Category" open={openSections.category} onToggle={() => toggleSection('category')}>
-        <div className="space-y-1">
+      <FilterSection
+        title="Category"
+        icon={<Shapes size={15} className="text-orange-500" />}
+        open={openSections.category}
+        onToggle={() => toggleSection('category')}
+      >
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => onCategoryChange('')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!selectedCategory ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${!selectedCategory ? activePill : idlePill}`}
           >
             All Categories
           </button>
@@ -50,7 +78,7 @@ const FilterSidebar = ({
             <button
               key={cat.id}
               onClick={() => onCategoryChange(String(cat.id))}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedCategory === String(cat.id) ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedCategory === String(cat.id) ? activePill : idlePill}`}
             >
               {cat.name}
             </button>
@@ -60,11 +88,16 @@ const FilterSidebar = ({
 
       {/* Brand */}
       {brands.length > 0 && (
-        <FilterSection title="Brand" open={openSections.brand} onToggle={() => toggleSection('brand')}>
-          <div className="space-y-1">
+        <FilterSection
+          title="Brand"
+          icon={<Tag size={15} className="text-orange-500" />}
+          open={openSections.brand}
+          onToggle={() => toggleSection('brand')}
+        >
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => onBrandChange('')}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!selectedBrand ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${!selectedBrand ? activePill : idlePill}`}
             >
               All Brands
             </button>
@@ -72,7 +105,7 @@ const FilterSidebar = ({
               <button
                 key={brand}
                 onClick={() => onBrandChange(brand)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedBrand === brand ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedBrand === brand ? activePill : idlePill}`}
               >
                 {brand}
               </button>
@@ -82,39 +115,71 @@ const FilterSidebar = ({
       )}
 
       {/* Price Range */}
-      <FilterSection title="Price Range" open={openSections.price} onToggle={() => toggleSection('price')}>
-        <div className="px-2 space-y-3">
-          <div className="flex gap-3">
+      <FilterSection
+        title="Price Range"
+        icon={<WalletCards size={15} className="text-orange-500" />}
+        open={openSections.price}
+        onToggle={() => toggleSection('price')}
+      >
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Min (₱)</label>
+              <label className="text-[11px] text-gray-500 mb-1 block">Min (PHP)</label>
               <input
                 type="number" min={0} value={priceRange[0]}
                 onChange={e => onPriceChange([Number(e.target.value), priceRange[1]])}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-200"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Max (₱)</label>
-              <input
+              <label className="text-[11px] text-gray-500 mb-1 block">Max (PHP)</label>
+          const FilterSection = ({ title, icon, open, onToggle, children }) => (
                 type="number" min={0} value={priceRange[1]}
                 onChange={e => onPriceChange([priceRange[0], Number(e.target.value)])}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-200"
+                  {icon}
               />
             </div>
           </div>
+          <p className="text-[11px] text-gray-500">Set your ideal budget range</p>
         </div>
       </FilterSection>
 
       {/* Stock */}
-      <FilterSection title="Availability" open={openSections.stock} onToggle={() => toggleSection('stock')}>
-        <label className="flex items-center gap-3 px-2 cursor-pointer">
+      <FilterSection
+        title="Availability"
+        icon={<Boxes size={15} className="text-orange-500" />}
+        open={openSections.stock}
+        onToggle={() => toggleSection('stock')}
+      >
+        <label className="flex items-center gap-3 px-1 cursor-pointer">
           <input
             type="checkbox" checked={inStockOnly} onChange={e => onStockChange(e.target.checked)}
             className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
           />
-          <span className="text-sm text-gray-600">In stock only</span>
+          <span className="text-sm text-gray-700">Show in-stock items only</span>
         </label>
       </FilterSection>
+
+      {onMobileClose && (
+        <div className="lg:hidden sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-200 -mx-4 px-4 pt-3 pb-4 mt-2">
+          <div className="flex gap-2">
+            <button
+              onClick={onClearAll}
+              disabled={activeFilterCount === 0}
+              className="flex-1 h-11 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:text-gray-300 disabled:bg-gray-50"
+            >
+              Reset
+            </button>
+            <button
+              onClick={onMobileClose}
+              className="flex-1 h-11 rounded-xl bg-[#f97316] text-white text-sm font-semibold hover:bg-[#ea580c]"
+            >
+              Show {resultCount ?? ''} Results
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -124,13 +189,14 @@ const FilterSidebar = ({
       <>
         {/* Desktop sidebar */}
         <div className={`${showDesktop ? 'hidden lg:block' : 'hidden'} w-64 flex-shrink-0`}>
-          <div className="bg-white border border-gray-100 rounded-xl p-4 sticky top-24">{content}</div>
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 sticky top-24 shadow-sm">{content}</div>
         </div>
         {/* Mobile overlay */}
         {isMobileOpen && (
           <div className="fixed inset-0 z-[100] lg:hidden">
-            <div className="absolute inset-0 bg-black/40" onClick={onMobileClose} />
-            <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white shadow-2xl p-4 overflow-y-auto animate-fade-in">
+            <div className="absolute inset-0 bg-black/45" onClick={onMobileClose} />
+            <div className="absolute inset-x-0 bottom-0 max-h-[88vh] bg-white rounded-t-3xl shadow-2xl p-4 overflow-y-auto animate-fade-in">
+              <div className="w-10 h-1.5 rounded-full bg-gray-300 mx-auto mb-3" />
               {content}
             </div>
           </div>
@@ -146,13 +212,16 @@ const FilterSidebar = ({
   );
 };
 
-const FilterSection = ({ title, open, onToggle, children }) => (
-  <div className="border-b border-gray-50 pb-3">
-    <button onClick={onToggle} className="flex items-center justify-between w-full py-2.5 text-sm font-semibold text-gray-900">
-      {title}
+const FilterSection = ({ title, icon, open, onToggle, children }) => (
+  <div className="rounded-2xl border border-gray-200 bg-white px-3 py-2.5">
+    <button onClick={onToggle} className="flex items-center justify-between w-full py-1.5 text-sm font-semibold text-gray-900">
+      <span className="inline-flex items-center gap-2">
+        {icon}
+        {title}
+      </span>
       {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
     </button>
-    {open && <div className="pb-1">{children}</div>}
+    {open && <div className="pt-2 pb-1">{children}</div>}
   </div>
 );
 
