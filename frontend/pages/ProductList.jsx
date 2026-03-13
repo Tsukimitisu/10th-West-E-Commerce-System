@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { getProducts, getCategories } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
@@ -109,6 +109,42 @@ const ProductList = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="mb-4 bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{filtered.length} products found</p>
+              <p className="text-xs text-gray-500">Use filters to narrow down your parts fast</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setMobileFiltersOpen(true)}
+                className="lg:hidden h-10 px-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2"
+              >
+                <SlidersHorizontal size={16} />
+                Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
+              </button>
+              <button
+                onClick={() => setShowDesktopFilters(prev => !prev)}
+                className="hidden lg:inline-flex h-10 px-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 items-center gap-2"
+              >
+                {showDesktopFilters ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+                {showDesktopFilters ? 'Hide Filters' : 'Show Filters'}
+              </button>
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                className="h-10 px-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              >
+                <option value="newest">Newest</option>
+                <option value="price-asc">Price Low to High</option>
+                <option value="price-desc">Price High to Low</option>
+                <option value="best-selling">Best Selling</option>
+                <option value="top-rated">Top Rated</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div className="flex gap-6">
           {/* Filter Sidebar */}
           <FilterSidebar
@@ -127,25 +163,11 @@ const ProductList = () => {
             isMobileOpen={mobileFiltersOpen}
             onMobileClose={() => setMobileFiltersOpen(false)}
             showDesktop={showDesktopFilters}
+            resultCount={filtered.length}
           />
 
           {/* Products */}
           <div className="flex-1 min-w-0">
-            {/* Mobile sort */}
-            <div className="lg:hidden mb-4">
-              <select
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm"
-              >
-                <option value="newest">Sort: Newest</option>
-                <option value="price-asc">Sort: Price Low to High</option>
-                <option value="price-desc">Sort: Price High to Low</option>
-                <option value="best-selling">Sort: Best Selling</option>
-                <option value="top-rated">Sort: Top Rated</option>
-              </select>
-            </div>
-
             {filtered.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
