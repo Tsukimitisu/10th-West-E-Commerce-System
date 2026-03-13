@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
 import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements } from '../services/api';
 import { Role } from '../types.js';
@@ -21,7 +21,9 @@ const Navbar = ({ user, onLogout }) => {
   const { itemCount } = useCart();
   const { on, off, connected } = useSocket();
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [globalSearch, setGlobalSearch] = useState(searchParams.get('search') || '');
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
   const moreMenuRef = useRef(null);
@@ -139,9 +141,19 @@ const Navbar = ({ user, onLogout }) => {
   };
 
   const isShopRoute = location.pathname === '/shop';
+  const isHomeRoute = location.pathname === '/';
+  const shouldShowGlobalSearch = isShopRoute || isHomeRoute;
   const shopSearch = searchParams.get('search') || '';
   const shopSort = searchParams.get('sort') || 'newest';
   const shopView = searchParams.get('view') === 'list' ? 'list' : 'grid';
+
+  useEffect(() => {
+    if (isShopRoute) {
+      setGlobalSearch(searchParams.get('search') || '');
+    } else if (isHomeRoute) {
+      setGlobalSearch('');
+    }
+  }, [isShopRoute, isHomeRoute, searchParams]);
 
   const updateShopParams = (updates) => {
     const next = new URLSearchParams(searchParams);
@@ -150,6 +162,23 @@ const Navbar = ({ user, onLogout }) => {
       else next.set(key, value);
     });
     setSearchParams(next, { replace: true });
+  };
+
+  const handleGlobalSearchSubmit = (e) => {
+    e.preventDefault();
+    const value = globalSearch.trim();
+
+    if (isShopRoute) {
+      updateShopParams({ search: value || null });
+      return;
+    }
+
+    if (!value) {
+      navigate('/shop');
+      return;
+    }
+
+    navigate(`/shop?search=${encodeURIComponent(value)}`);
   };
 
   if (location.pathname === '/pos') return null;
@@ -384,6 +413,30 @@ const Navbar = ({ user, onLogout }) => {
         </div>
 
       </header>
+
+      {shouldShowGlobalSearch && (
+        <div className="sticky top-16 z-40 bg-white/95 backdrop-blur border-b border-gray-100">
+          <div className="max-w-7xl mx-auto px-4 py-2.5">
+            <form onSubmit={handleGlobalSearchSubmit} className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={globalSearch}
+                  onChange={(e) => setGlobalSearch(e.target.value)}
+                  placeholder="Search motorcycle parts, brands, categories..."
+                  className="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-200"
+                />
+              </div>
+              <button
+                type="submit"
+                className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors"
+              >
+                Search
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Mobile drawer */}
       {mobileOpen && (
