@@ -4,6 +4,7 @@ import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield } from 'lucide-
 import { useCart } from '../../context/CartContext';
 import { getAddresses, createOrder, createPaymentIntent, getProductById } from '../../services/api';
 import AddressDropdowns from '../../components/AddressDropdowns';
+import MapPinPicker from '../../components/MapPinPicker';
 
 const Checkout = () => {
   const { items: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
@@ -41,6 +42,7 @@ const Checkout = () => {
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
     street: '', barangay: '', city: '', state: '', postal_code: '',
+    lat: null, lng: null,
   });
 
   useEffect(() => {
@@ -128,9 +130,16 @@ const Checkout = () => {
       const u = user ? JSON.parse(user) : null;
 
         const streetWithBarangay = form.barangay ? `${form.street}, ${form.barangay}` : form.street;
+        if (!usingSavedAddress && form.lat && form.lng) {
+          const key = `${streetWithBarangay}|${form.city}|${form.state}`;
+          const stored = JSON.parse(localStorage.getItem('addressGeo') || '{}');
+          stored[key] = { lat: form.lat, lng: form.lng };
+          localStorage.setItem('addressGeo', JSON.stringify(stored));
+        }
+        const coordLabel = !usingSavedAddress && form.lat && form.lng ? ` (lat:${form.lat}, lng:${form.lng})` : '';
         const shippingAddress = selectedAddr
           ? `${selectedAddr.recipient_name}, ${selectedAddr.street}, ${selectedAddr.city}, ${selectedAddr.state} ${selectedAddr.postal_code}, Philippines`
-          : `${form.name}, ${streetWithBarangay}, ${form.city}, ${form.state} ${form.postal_code}, Philippines`;
+          : `${form.name}, ${streetWithBarangay}, ${form.city}, ${form.state} ${form.postal_code}, Philippines${coordLabel}`;
 
       const stockError = await validateStockBeforeCheckout();
       if (stockError) {
@@ -247,11 +256,22 @@ const Checkout = () => {
                             state: province || '',
                             city: city || '',
                             barangay: barangay || '',
+                            lat: null,
+                            lng: null,
                           }));
                         }}
                       />
                     </div>
-                    <Input label="Street / House No." value={form.street} onChange={(v) => setForm((f) => ({ ...f, street: v }))} required={!selectedAddress} className="md:col-span-2" />
+                    <Input label="Street / House No." value={form.street} onChange={(v) => setForm((f) => ({ ...f, street: v, lat: null, lng: null }))} required={!selectedAddress} className="md:col-span-2" />
+                    <div className="md:col-span-2">
+                      <MapPinPicker
+                        street={form.street}
+                        barangay={form.barangay}
+                        city={form.city}
+                        state={form.state}
+                        onChange={({ lat, lng }) => setForm((f) => ({ ...f, lat, lng }))}
+                      />
+                    </div>
                     <Input
                       label="Postal Code"
                       value={form.postal_code}

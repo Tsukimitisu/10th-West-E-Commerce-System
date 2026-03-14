@@ -3,18 +3,19 @@ import { MapPin, Plus, Trash2, Edit3, Check, X, Home, Building2, Star, AlertTria
 import { getAddresses, saveAddress, deleteAddress, updateAddress } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
 import AddressDropdowns from '../../components/AddressDropdowns';
+import MapPinPicker from '../../components/MapPinPicker';
 
 const AddressBook = () => {
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false });
+  const [form, setForm] = useState({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false, lat: null, lng: null });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saveError, setSaveError] = useState('');
   const [zipError, setZipError] = useState('');
 
-  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false }); setEditing(null); setShowForm(false); setSaveError(''); setZipError(''); };
+  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false, lat: null, lng: null }); setEditing(null); setShowForm(false); setSaveError(''); setZipError(''); };
   const digitsOnly = (value) => value.replace(/\D/g, '');
   const validateZip = (zip) => /^\d{4}$/.test(zip);
 
@@ -46,6 +47,13 @@ const AddressBook = () => {
     try {
       const streetWithBarangay = form.barangay ? `${form.street}, ${form.barangay}` : form.street;
       const payload = { ...form, street: streetWithBarangay };
+      // Persist geolocation locally so users keep their pin position (backend schema has no lat/lng columns).
+      if (form.lat && form.lng) {
+        const key = `${streetWithBarangay}|${form.city}|${form.state}`;
+        const stored = JSON.parse(localStorage.getItem('addressGeo') || '{}');
+        stored[key] = { lat: form.lat, lng: form.lng };
+        localStorage.setItem('addressGeo', JSON.stringify(stored));
+      }
       if (editing) {
         const updated = await updateAddress(editing.id, payload);
         setAddresses(prev => prev.map(a => a.id === editing.id ? updated : a));
@@ -80,7 +88,9 @@ const AddressBook = () => {
       state: addr.state || '',
       zip: addr.zip || addr.postal_code || '',
       country: 'Philippines',
-      is_default: addr.is_default || false
+      is_default: addr.is_default || false,
+      lat: addr.lat || null,
+      lng: addr.lng || null,
     });
     setEditing(addr);
     setShowForm(true);
@@ -138,14 +148,23 @@ const AddressBook = () => {
                       state: province || '',
                       city: city || '',
                       barangay: barangay || '',
+                      lat: null,
+                      lng: null,
                     }));
                   }}
                 />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Street / House No.</label>
-                  <input type="text" value={form.street} onChange={e => setForm(f => ({...f, street: e.target.value}))} required
+                  <input type="text" value={form.street} onChange={e => setForm(f => ({...f, street: e.target.value, lat: null, lng: null }))} required
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
                 </div>
+                <MapPinPicker
+                  street={form.street}
+                  barangay={form.barangay}
+                  city={form.city}
+                  state={form.state}
+                  onChange={({ lat, lng }) => setForm(f => ({ ...f, lat, lng }))}
+                />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                 <div>
