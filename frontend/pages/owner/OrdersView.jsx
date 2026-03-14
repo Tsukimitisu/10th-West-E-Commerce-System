@@ -35,6 +35,7 @@ const OrdersView = () => {
   const [statusTarget, setStatusTarget] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundOrder, setRefundOrder] = useState(null);
   const [refundAmount, setRefundAmount] = useState('');
@@ -64,13 +65,30 @@ const OrdersView = () => {
     setStatusTarget(order);
     setNewStatus(order.status);
     setTrackingNumber(order.tracking_number || '');
+    setCancelReason('');
     setStatusModalOpen(true);
   };
 
   const handleStatusUpdate = async () => {
     if (!statusTarget || !newStatus) return;
+    if (newStatus === 'cancelled' && !cancelReason.trim()) return;
     try {
-      await updateOrderStatus(statusTarget.id, newStatus, trackingNumber || undefined);
+      if (newStatus === 'cancelled') {
+        // Admin cancel: update status and store reason directly
+        const { supabase } = await import('../../services/supabase');
+        const USE_SUPABASE = (import.meta.env.VITE_USE_SUPABASE ?? 'true') === 'true';
+        if (USE_SUPABASE) {
+          await supabase.from('orders').update({
+            status: 'cancelled',
+            cancellation_reason: cancelReason.trim(),
+            updated_at: new Date().toISOString(),
+          }).eq('id', statusTarget.id);
+        } else {
+          await updateOrderStatus(statusTarget.id, 'cancelled');
+        }
+      } else {
+        await updateOrderStatus(statusTarget.id, newStatus, trackingNumber || undefined);
+      }
       setStatusModalOpen(false);
       fetchOrders();
     } catch (e) { console.error(e); }
@@ -172,7 +190,7 @@ const OrdersView = () => {
                 <tr key={o.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">#{o.id.toString().padStart(4, '0')}</p>
-                    <p className="text-[10px] text-gray-400">{o.items?.length || '—'} items</p>
+                    <p className="text-[10px] text-gray-400">{o.items?.length || '-'} items</p>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
                     <p className="text-sm text-gray-700">{o.customer_name || o.shipping_name || `User ${o.user_id}`}</p>
@@ -185,7 +203,7 @@ const OrdersView = () => {
                     </button>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
-                    <span className="text-xs text-gray-500 capitalize">{o.payment_method || '—'}</span>
+                    <span className="text-xs text-gray-500 capitalize">{o.payment_method || '-'}</span>
                   </td>
                   <td className="px-4 py-3 text-right font-bold text-gray-900">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-right">
@@ -224,7 +242,7 @@ const OrdersView = () => {
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2"><MapPin size={12} /> Shipping Address</div>
-                <p className="text-sm text-gray-700">{detailOrder.shipping_address || detailOrder.shipping_line1 || '—'}</p>
+                <p className="text-sm text-gray-700">{detailOrder.shipping_address || detailOrder.shipping_line1 || '-'}</p>
                 <p className="text-xs text-gray-500">{detailOrder.shipping_city ? `${detailOrder.shipping_city}, ${detailOrder.shipping_state || ''} ${detailOrder.shipping_zip || ''}` : ''}</p>
               </div>
             </div>
@@ -233,17 +251,25 @@ const OrdersView = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2"><Truck size={12} /> Shipping Method</div>
-                <p className="text-sm font-medium text-gray-900 capitalize">{detailOrder.shipping_method || '—'}</p>
+                <p className="text-sm font-medium text-gray-900 capitalize">{detailOrder.shipping_method || '-'}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2"><Package size={12} /> Tracking Number</div>
-                <p className="text-sm font-medium text-gray-900">{detailOrder.tracking_number || '—'}</p>
+                <p className="text-sm font-medium text-gray-900">{detailOrder.tracking_number || '-'}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2"><User size={12} /> Assigned Staff</div>
-                <p className="text-sm font-medium text-gray-900">{detailOrder.assigned_staff_id ? `Staff #${detailOrder.assigned_staff_id}` : '—'}</p>
+                <p className="text-sm font-medium text-gray-900">{detailOrder.assigned_staff_id ? `Staff #${detailOrder.assigned_staff_id}` : '-'}</p>
               </div>
             </div>
+
+            {/* Cancellation Reason */}
+            {detailOrder.status === 'cancelled' && detailOrder.cancellation_reason && (
+              <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                <div className="flex items-center gap-2 text-xs font-medium text-red-600 mb-1"><XCircle size={12} /> Cancellation Reason</div>
+                <p className="text-sm text-red-700">{detailOrder.cancellation_reason}</p>
+              </div>
+            )}
 
             {/* Items */}
             <div>
@@ -304,10 +330,14 @@ const OrdersView = () => {
         <div className="space-y-4">
           <div className="p-3 bg-gray-50 rounded-lg text-sm">
             <span className="text-gray-500">Order </span><span className="font-bold text-gray-900">#{statusTarget?.id.toString().padStart(4, '0')}</span>
-            <span className="text-gray-500"> — Current: </span><span className={`font-semibold capitalize ${statusTarget?.status === 'completed' ? 'text-green-600' : 'text-gray-900'}`}>{statusTarget?.status}</span>
+            <span className="text-gray-500"> - Current: </span><span className={`font-semibold capitalize ${statusTarget?.status === 'completed' ? 'text-green-600' : 'text-gray-900'}`}>{statusTarget?.status}</span>
           </div>
           <div className="space-y-1.5">
-            {statuses.map(s => (
+            {statuses.filter(s => {
+              // Block cancelling shipped/completed orders
+              if (s === 'cancelled' && (statusTarget?.status === 'shipped' || statusTarget?.status === 'completed' || statusTarget?.status === 'delivered')) return false;
+              return true;
+            }).map(s => (
               <button key={s} onClick={() => setNewStatus(s)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium border transition-all capitalize ${newStatus === s ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-white border-gray-100 text-gray-600 hover:bg-gray-50'}`}>
                 {statusIcons[s]} {s}
@@ -326,9 +356,21 @@ const OrdersView = () => {
               />
             </div>
           )}
+          {newStatus === 'cancelled' && (
+            <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+              <label className="block text-xs font-medium text-red-700 mb-1.5">Cancellation Reason <span className="text-red-500">*</span></label>
+              <textarea
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                placeholder="Enter reason for cancellation..."
+                className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 bg-white resize-none"
+                rows={2}
+              />
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setStatusModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-            <button onClick={handleStatusUpdate} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">Update Status</button>
+            <button onClick={handleStatusUpdate} disabled={newStatus === 'cancelled' && !cancelReason.trim()} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors">Update Status</button>
           </div>
         </div>
       </Modal>

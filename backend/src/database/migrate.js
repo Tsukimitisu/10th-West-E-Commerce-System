@@ -182,6 +182,7 @@ const createTables = async () => {
         street TEXT NOT NULL,
         city VARCHAR(100) NOT NULL,
         state VARCHAR(100) NOT NULL,
+        country VARCHAR(100) DEFAULT 'Philippines',
         postal_code VARCHAR(20) NOT NULL,
         is_default BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -189,6 +190,13 @@ const createTables = async () => {
       );
     `);
     console.log('✅ Addresses table created');
+
+    // Backfill country column for existing deployments
+    await client.query(`
+      ALTER TABLE addresses
+      ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'Philippines';
+    `);
+    console.log('✅ Addresses table ensured country column');
 
     // Create Returns table
     await client.query(`
@@ -351,7 +359,7 @@ const createTables = async () => {
         product_id INTEGER REFERENCES products(id),
         adjusted_by INTEGER REFERENCES users(id),
         quantity_change INTEGER NOT NULL,
-        reason VARCHAR(50) CHECK (reason IN ('damaged', 'lost', 'correction', 'transfer', 'received', 'expired')),
+        reason VARCHAR(50) CHECK (reason IN ('restock', 'damaged', 'returned', 'lost', 'correction', 'shrinkage', 'transfer', 'received', 'expired', 'other')),
         notes TEXT,
         status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
         approved_by INTEGER REFERENCES users(id),

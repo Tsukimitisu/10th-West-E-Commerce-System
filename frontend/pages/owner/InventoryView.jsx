@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { getProducts, getStockAdjustments, getLowStockProducts, adjustStock } from '../../services/api';
-import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, TrendingDown, History, Plus, Minus } from 'lucide-react';
+import { getInventory, getStockAdjustments, getLowStockProducts, adjustStock } from '../../services/api';
+import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, TrendingDown, History, Plus, Minus, ScanBarcode } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
+import ReceiveStock from '../../components/owner/ReceiveStock';
 import { useSocketEvent } from '../../context/SocketContext';
 
 const InventoryView = () => {
@@ -15,9 +16,12 @@ const InventoryView = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [adjForm, setAdjForm] = useState({ type: 'add', quantity: '', reason: 'restock', notes: '' });
 
+  const [adjLoading, setAdjLoading] = useState(false);
+  const [adjError, setAdjError] = useState('');
+
   const fetchData = async () => {
     try {
-      const [p, a, ls] = await Promise.all([getProducts(), getStockAdjustments(), getLowStockProducts()]);
+      const [p, a, ls] = await Promise.all([getInventory(), getStockAdjustments(), getLowStockProducts()]);
       setProducts(Array.isArray(p) ? p : []);
       setAdjustments(Array.isArray(a) ? a : []);
       // getLowStockProducts returns { count, products } or an array
@@ -34,20 +38,27 @@ const InventoryView = () => {
   useSocketEvent('product:created', fetchData);
   useSocketEvent('product:deleted', fetchData);
 
-  const openAdjust = (p) => { setSelectedProduct(p); setAdjForm({ type: 'add', quantity: '', reason: 'restock', notes: '' }); setAdjustModal(true); };
+  const openAdjust = (p) => { setSelectedProduct(p); setAdjForm({ type: 'add', quantity: '', reason: 'restock', notes: '' }); setAdjError(''); setAdjustModal(true); };
 
   const handleAdjust = async (e) => {
     e.preventDefault();
-    if (!selectedProduct) return;
+    if (!selectedProduct || adjLoading) return;
+    setAdjLoading(true);
+    setAdjError('');
     try {
       await adjustStock({
         product_id: selectedProduct.id,
         quantity_change: adjForm.type === 'add' ? parseInt(adjForm.quantity) : -parseInt(adjForm.quantity),
-        reason: adjForm.reason ,
+        reason: adjForm.reason,
         note: adjForm.notes
       });
       setAdjustModal(false); fetchData();
-    } catch (e) { console.error(e); }
+    } catch (err) {
+      console.error(err);
+      setAdjError(err?.message || 'Failed to adjust stock. Please try again.');
+    } finally {
+      setAdjLoading(false);
+    }
   };
 
   const totalStock = products.reduce((s, p) => s + p.stock_quantity, 0);
@@ -61,6 +72,7 @@ const InventoryView = () => {
 
   const tabs = [
     { id: 'stock', label: 'Stock Levels', icon: Boxes, count: products.length },
+    { id: 'receive', label: 'Receive Items', icon: ScanBarcode },
     { id: 'adjustments', label: 'Adjustment History', icon: History, count: adjustments.length },
     { id: 'alerts', label: 'Low Stock Alerts', icon: AlertTriangle, count: lowStock.length },
   ];
@@ -98,10 +110,19 @@ const InventoryView = () => {
           <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-orange-50 text-orange-500' : 'text-gray-500 hover:text-gray-700'}`}>
             <t.icon size={14} />
             {t.label}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-orange-100 text-orange-500' : 'bg-gray-100 text-gray-500'}`}>{t.count}</span>
+            {t.count != null && <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-orange-100 text-orange-500' : 'bg-gray-100 text-gray-500'}`}>{t.count}</span>}
           </button>
         ))}
       </div>
+
+      {/* Receive Items Tab */}
+      {tab === 'receive' && (
+        <ReceiveStock
+          products={products}
+          onComplete={fetchData}
+          onBack={() => setTab('stock')}
+        />
+      )}
 
       {/* Stock Levels Tab */}
       {tab === 'stock' && (
@@ -136,7 +157,7 @@ const InventoryView = () => {
                           <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200">
                             {p.image ? <img src={p.image} alt="" className="w-full h-full object-cover" /> : <Package size={14} className="m-auto text-gray-400 mt-1.5" />}
                           </div>
-                          <div><p className="font-medium text-gray-900 text-sm">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.sku || p.partNumber || '—'}</p></div>
+                          <div><p className="font-medium text-gray-900 text-sm">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.sku || p.partNumber || '-'}</p></div>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -183,12 +204,13 @@ const InventoryView = () => {
               <tbody className="divide-y divide-gray-50">
                 {adjustments.slice(0, 50).map((a, i) => {
                   const prod = products.find(p => p.id === a.product_id);
-                  const isAdd = a.quantity > 0;
+                  const qty = a.quantity_change ?? a.quantity ?? 0;
+                  const isAdd = qty > 0;
                   return (
                     <tr key={i} className="hover:bg-gray-50/50">
                       <td className="px-4 py-3 text-xs text-gray-500">{new Date(a.created_at).toLocaleDateString()}</td>
                       <td className="px-4 py-3">
-                        <p className="font-medium text-gray-900 text-sm">{prod?.name || `Product #${a.product_id}`}</p>
+                        <p className="font-medium text-gray-900 text-sm">{a.product_name || prod?.name || `Product #${a.product_id}`}</p>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${isAdd ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-500'}`}>
@@ -196,8 +218,8 @@ const InventoryView = () => {
                           {isAdd ? 'Added' : 'Removed'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right font-bold text-sm">{isAdd ? '+' : ''}{a.quantity}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 capitalize">{a.reason || '—'}</td>
+                      <td className="px-4 py-3 text-right font-bold text-sm">{isAdd ? '+' : ''}{qty}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500 capitalize">{a.reason || '-'}</td>
                     </tr>
                   );
                 })}
@@ -236,7 +258,7 @@ const InventoryView = () => {
       )}
 
       {/* Adjust Stock Modal */}
-      <Modal isOpen={adjustModal} onClose={() => setAdjustModal(false)} title={`Adjust Stock — ${selectedProduct?.name || ''}`} size="md">
+      <Modal isOpen={adjustModal} onClose={() => setAdjustModal(false)} title={`Adjust Stock - ${selectedProduct?.name || ''}`} size="md">
         <form onSubmit={handleAdjust} className="space-y-4">
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
             <div className="w-10 h-10 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
@@ -287,10 +309,14 @@ const InventoryView = () => {
             </div>
           )}
 
+          {adjError && (
+            <div className="p-3 rounded-lg text-sm bg-red-50 text-red-600 border border-red-200">{adjError}</div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setAdjustModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-            <button type="submit" className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${adjForm.type === 'add' ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-500 hover:bg-orange-600'}`}>
-              {adjForm.type === 'add' ? 'Add Stock' : 'Remove Stock'}
+            <button type="submit" disabled={adjLoading} className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${adjForm.type === 'add' ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-500 hover:bg-orange-600'}`}>
+              {adjLoading ? 'Processing...' : adjForm.type === 'add' ? 'Add Stock' : 'Remove Stock'}
             </button>
           </div>
         </form>

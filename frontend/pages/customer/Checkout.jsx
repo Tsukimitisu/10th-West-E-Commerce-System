@@ -1,12 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield, Check } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { getAddresses, createOrder, createPaymentIntent } from '../../services/api';
+import { getAddresses, createOrder, createPaymentIntent, getProductById } from '../../services/api';
+import AddressDropdowns from '../../components/AddressDropdowns';
+import MapPinPicker from '../../components/MapPinPicker';
 
 const Checkout = () => {
-  const { items, subtotal, total, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
+  const { items: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const isBuyNow = !!(location.state?.buyNowItem || sessionStorage.getItem('buyNowItem'));
+  const buyNowItem = useMemo(() => {
+    if (location.state?.buyNowItem) return location.state.buyNowItem;
+    const stored = sessionStorage.getItem('buyNowItem');
+    if (stored) {
+      sessionStorage.removeItem('buyNowItem');
+      return JSON.parse(stored);
+    }
+    return null;
+  }, [location.state]);
+
+  const items = isBuyNow && buyNowItem ? [buyNowItem] : cartItems;
+  const subtotal = isBuyNow && buyNowItem
+    ? ((buyNowItem.product.is_on_sale && buyNowItem.product.sale_price ? buyNowItem.product.sale_price : buyNowItem.product.price) * buyNowItem.quantity)
+    : cartSubtotal;
+  const total = isBuyNow ? subtotal - (discountAmount || 0) : cartTotal;
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showNewAddress, setShowNewAddress] = useState(false);
@@ -17,40 +37,91 @@ const Checkout = () => {
   const [shippingMethod, setShippingMethod] = useState('standard');
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [zipError, setZipError] = useState('');
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
-    street: '', city: '', state: '', postal_code: '',
+    street: '', barangay: '', city: '', state: '', postal_code: '',
+    lat: null, lng: null,
   });
 
   useEffect(() => {
     const user = localStorage.getItem('shopCoreUser');
-    if (!user) {
-      // Guest Checkout is allowed
-      return;
-    }
+    if (!user) return;
+
     const u = JSON.parse(user);
-    setForm(f => ({ ...f, name: u.name || '', email: u.email || '' }));
-    getAddresses(u.id).then(addrs => {
+    setForm((f) => ({ ...f, name: u.name || '', email: u.email || '' }));
+    getAddresses(u.id).then((addrs) => {
       setAddresses(addrs);
-      const def = addrs.find(a => a.is_default);
+      const def = addrs.find((a) => a.is_default);
       if (def) setSelectedAddress(def.id);
-    }).catch(() => { });
-  }, [navigate]);
+    }).catch(() => {});
+  }, []);
 
   const shippingCost = shippingMethod === 'pickup' ? 0 : shippingMethod === 'express' ? 300 : subtotal >= 2500 ? 0 : 150;
   const grandTotal = total + shippingCost;
 
-  const formatPrice = (p) => `₱${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const formatPrice = (p) => `PHP ${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const digitsOnly = (value) => value.replace(/\D/g, '');
+  const validateZip = (zip) => /^\d{4}$/.test(zip);
 
   const handleApplyPromo = async () => {
     setPromoError('');
-    try { await applyDiscount(promoCode); } catch (e) { setPromoError(e.message || 'Invalid promo code'); }
+    try {
+      await applyDiscount(promoCode);
+    } catch (e) {
+      setPromoError(e.message || 'Invalid promo code');
+    }
+  };
+
+  const validateStockBeforeCheckout = async () => {
+    const validations = await Promise.all(items.map(async (item) => {
+      const fallbackStock = Math.max(0, Number(item.product?.stock_quantity ?? 0));
+      const fallbackName = item.product?.name || `Product #${item.productId}`;
+
+      try {
+        const latest = await getProductById(item.productId);
+        return {
+          requested: item.quantity,
+          available: Math.max(0, Number(latest?.stock_quantity ?? fallbackStock)),
+          name: latest?.name || fallbackName,
+        };
+      } catch {
+        return {
+          requested: item.quantity,
+          available: fallbackStock,
+          name: fallbackName,
+        };
+      }
+    }));
+
+    const exceeded = validations.find((v) => v.requested > v.available);
+    if (!exceeded) return null;
+
+    return `${exceeded.name}: You requested ${exceeded.requested}, but the maximum available quantity is ${exceeded.available}.`;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!agreeTerms) { setError('Please agree to the terms and conditions'); return; }
+    if (!agreeTerms) {
+      setError('Please agree to the terms and conditions');
+      return;
+    }
+
+    const usingSavedAddress = selectedAddress && !showNewAddress;
+    const selectedAddr = addresses.find((a) => a.id === selectedAddress);
+    if (usingSavedAddress && selectedAddr && selectedAddr.country && selectedAddr.country !== 'Philippines') {
+      setError('Only Philippine addresses are allowed.');
+      return;
+    }
+
+    const zipValid = usingSavedAddress ? true : validateZip(form.postal_code);
+    if (!zipValid) {
+      setError('Zip Code must contain exactly 4 digits.');
+      setZipError('Zip Code must contain exactly 4 digits.');
+      return;
+    }
+
     setProcessing(true);
     setError('');
 
@@ -58,22 +129,35 @@ const Checkout = () => {
       const user = localStorage.getItem('shopCoreUser');
       const u = user ? JSON.parse(user) : null;
 
-      const selectedAddr = addresses.find(a => a.id === selectedAddress);
-      const shippingAddress = selectedAddr
-        ? `${selectedAddr.recipient_name}, ${selectedAddr.street}, ${selectedAddr.city}, ${selectedAddr.state} ${selectedAddr.postal_code}`
-        : `${form.name}, ${form.street}, ${form.city}, ${form.state} ${form.postal_code}`;
+        const streetWithBarangay = form.barangay ? `${form.street}, ${form.barangay}` : form.street;
+        if (!usingSavedAddress && form.lat && form.lng) {
+          const key = `${streetWithBarangay}|${form.city}|${form.state}`;
+          const stored = JSON.parse(localStorage.getItem('addressGeo') || '{}');
+          stored[key] = { lat: form.lat, lng: form.lng };
+          localStorage.setItem('addressGeo', JSON.stringify(stored));
+        }
+        const coordLabel = !usingSavedAddress && form.lat && form.lng ? ` (lat:${form.lat}, lng:${form.lng})` : '';
+        const shippingAddress = selectedAddr
+          ? `${selectedAddr.recipient_name}, ${selectedAddr.street}, ${selectedAddr.city}, ${selectedAddr.state} ${selectedAddr.postal_code}, Philippines`
+          : `${form.name}, ${streetWithBarangay}, ${form.city}, ${form.state} ${form.postal_code}, Philippines${coordLabel}`;
+
+      const stockError = await validateStockBeforeCheckout();
+      if (stockError) {
+        setError(stockError);
+        setProcessing(false);
+        return;
+      }
 
       if (paymentMethod === 'card') {
-        const piData = await createPaymentIntent(Math.round(grandTotal * 100), items.map(i => ({
+        await createPaymentIntent(Math.round(grandTotal), items.map((i) => ({
           product_id: i.productId,
           quantity: i.quantity
         })), 'php');
-        // In a professional integration, we would confirm the payment with Stripe Elements here.
       }
 
       const orderData = {
         user_id: u?.id,
-        items: items.map(i => ({
+        items: items.map((i) => ({
           productId: i.productId,
           quantity: i.quantity,
           price: i.product.is_on_sale && i.product.sale_price ? i.product.sale_price : i.product.price
@@ -88,7 +172,7 @@ const Checkout = () => {
       };
 
       const order = await createOrder(orderData);
-      await clearCart();
+      if (!isBuyNow) await clearCart();
       navigate(`/order-confirmation/${order.id}`);
     } catch (err) {
       setError(err.message || 'Something went wrong');
@@ -111,7 +195,6 @@ const Checkout = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
           <Link to="/" className="hover:text-orange-500">Home</Link>
           <ChevronRight size={14} />
@@ -124,24 +207,29 @@ const Checkout = () => {
 
         <form onSubmit={handleSubmit}>
           <div className="flex flex-col lg:flex-row gap-8">
-            {/* Left column */}
             <div className="flex-1 space-y-6">
-              {/* Contact */}
               <Section title="Contact Information" icon={<MapPin size={18} />}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input label="Full Name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} required />
-                  <Input label="Email" type="email" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} required />
-                  <Input label="Phone" type="tel" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} className="md:col-span-2" />
+                  <Input label="Full Name" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} required />
+                  <Input label="Email" type="email" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} required />
+                  <Input
+                    label="Phone"
+                    type="tel"
+                    value={form.phone}
+                    onChange={(v) => setForm((f) => ({ ...f, phone: digitsOnly(v) }))}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    className="md:col-span-2"
+                  />
                 </div>
               </Section>
 
-              {/* Shipping Address */}
               <Section title="Shipping Address" icon={<MapPin size={18} />}>
                 {addresses.length > 0 && (
                   <div className="space-y-2 mb-4">
-                    {addresses.map(addr => (
+                    {addresses.map((addr) => (
                       <label key={addr.id} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${selectedAddress === addr.id ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <input type="radio" name="address" checked={selectedAddress === addr.id} onChange={() => { setSelectedAddress(addr.id); setShowNewAddress(false); }} className="mt-1 text-orange-500 focus:ring-orange-500" />
+                        <input type="radio" name="address" checked={selectedAddress === addr.id} onChange={() => { setSelectedAddress(addr.id); setShowNewAddress(false); setZipError(''); setError(''); }} className="mt-1 text-orange-500 focus:ring-orange-500" />
                         <div>
                           <p className="text-sm font-medium text-gray-900">{addr.recipient_name} {addr.is_default && <span className="text-xs text-orange-500 ml-1">Default</span>}</p>
                           <p className="text-sm text-gray-500">{addr.street}, {addr.city}, {addr.state} {addr.postal_code}</p>
@@ -149,29 +237,65 @@ const Checkout = () => {
                         </div>
                       </label>
                     ))}
-                    <button type="button" onClick={() => { setSelectedAddress(null); setShowNewAddress(true); }} className="text-sm text-orange-500 hover:text-orange-600 font-medium">
+                    <button type="button" onClick={() => { setSelectedAddress(null); setShowNewAddress(true); setZipError(''); }} className="text-sm text-orange-500 hover:text-orange-600 font-medium">
                       + Use a different address
                     </button>
                   </div>
                 )}
+
                 {(addresses.length === 0 || showNewAddress) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input label="Street Address" value={form.street} onChange={v => setForm(f => ({ ...f, street: v }))} required={!selectedAddress} className="md:col-span-2" />
-                    <Input label="City" value={form.city} onChange={v => setForm(f => ({ ...f, city: v }))} required={!selectedAddress} />
-                    <Input label="State/Province" value={form.state} onChange={v => setForm(f => ({ ...f, state: v }))} required={!selectedAddress} />
-                    <Input label="Postal Code" value={form.postal_code} onChange={v => setForm(f => ({ ...f, postal_code: v }))} required={!selectedAddress} />
+                    <div className="md:col-span-2">
+                      <AddressDropdowns
+                        province={form.state}
+                        city={form.city}
+                        barangay={form.barangay}
+                        onChange={({ province, city, barangay }) => {
+                          setForm((f) => ({
+                            ...f,
+                            state: province || '',
+                            city: city || '',
+                            barangay: barangay || '',
+                            lat: null,
+                            lng: null,
+                          }));
+                        }}
+                      />
+                    </div>
+                    <Input label="Street / House No." value={form.street} onChange={(v) => setForm((f) => ({ ...f, street: v, lat: null, lng: null }))} required={!selectedAddress} className="md:col-span-2" />
+                    <div className="md:col-span-2">
+                      <MapPinPicker
+                        street={form.street}
+                        barangay={form.barangay}
+                        city={form.city}
+                        state={form.state}
+                        onChange={({ lat, lng }) => setForm((f) => ({ ...f, lat, lng }))}
+                      />
+                    </div>
+                    <Input
+                      label="Postal Code"
+                      value={form.postal_code}
+                      onChange={(v) => {
+                        const val = digitsOnly(v);
+                        setForm((f) => ({ ...f, postal_code: val }));
+                        setZipError(val.length === 0 || validateZip(val) ? '' : 'Zip Code must contain exactly 4 digits.');
+                      }}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      error={zipError}
+                      required={!selectedAddress}
+                    />
                   </div>
                 )}
               </Section>
 
-              {/* Shipping Method */}
               <Section title="Shipping Method" icon={<Truck size={18} />}>
                 <div className="space-y-2">
                   {[
-                    { id: 'standard', label: 'Standard Shipping', desc: '3-5 business days', price: subtotal >= 2500 ? 'Free' : '₱150.00' },
-                    { id: 'express', label: 'Express Shipping', desc: '1-2 business days', price: '₱300.00' },
+                    { id: 'standard', label: 'Standard Shipping', desc: '3-5 business days', price: subtotal >= 2500 ? 'Free' : 'PHP 150.00' },
+                    { id: 'express', label: 'Express Shipping', desc: '1-2 business days', price: 'PHP 300.00' },
                     { id: 'pickup', label: 'Store Pickup', desc: 'Pick up at our store', price: 'Free' },
-                  ].map(method => (
+                  ].map((method) => (
                     <label key={method.id} className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-colors ${shippingMethod === method.id ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'}`}>
                       <div className="flex items-center gap-3">
                         <input type="radio" name="shipping" checked={shippingMethod === method.id} onChange={() => setShippingMethod(method.id)} className="text-orange-500 focus:ring-orange-500" />
@@ -186,7 +310,6 @@ const Checkout = () => {
                 </div>
               </Section>
 
-              {/* Payment */}
               <Section title="Payment Method" icon={<CreditCard size={18} />}>
                 <div className="space-y-2 mb-4">
                   {[
@@ -194,7 +317,7 @@ const Checkout = () => {
                     { id: 'gcash', label: 'GCash', desc: 'Pay via GCash e-wallet' },
                     { id: 'bank_transfer', label: 'Bank Transfer', desc: 'BDO, BPI, UnionBank, etc.' },
                     { id: 'cod', label: 'Cash on Delivery', desc: 'Pay when you receive' },
-                  ].map(method => (
+                  ].map((method) => (
                     <label key={method.id} className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${paymentMethod === method.id ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'}`}>
                       <input type="radio" name="payment" checked={paymentMethod === method.id} onChange={() => setPaymentMethod(method.id)} className="text-orange-500 focus:ring-orange-500" />
                       <div>
@@ -204,6 +327,7 @@ const Checkout = () => {
                     </label>
                   ))}
                 </div>
+
                 {paymentMethod === 'card' && (
                   <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                     <div className="flex items-center gap-2 mb-3">
@@ -211,23 +335,24 @@ const Checkout = () => {
                       <p className="text-sm font-medium text-gray-700">Secure Card Payment via Stripe</p>
                     </div>
                     <p className="text-xs text-gray-500 mb-3">
-                      Your card details are collected and processed securely by Stripe. Card numbers never touch our servers — fully PCI-DSS compliant.
+                      Your card details are collected and processed securely by Stripe. Card numbers never touch our servers - fully PCI-DSS compliant.
                     </p>
-                    {/* Stripe Elements placeholder — in production, mount CardElement here via @stripe/react-stripe-js */}
                     <div className="bg-white border border-gray-300 rounded-lg p-4 text-center text-sm text-gray-400" id="stripe-card-element">
                       <CreditCard size={24} className="mx-auto mb-2 text-gray-300" />
                       Stripe Card Element loads here
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-2 text-center">Protected by Stripe — 256-bit SSL encryption</p>
+                    <p className="text-[10px] text-gray-400 mt-2 text-center">Protected by Stripe - 256-bit SSL encryption</p>
                   </div>
                 )}
+
                 {paymentMethod === 'gcash' && (
                   <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
                     <p className="text-sm font-medium text-blue-700 mb-2">GCash Payment</p>
                     <p className="text-xs text-blue-600 mb-3">You will receive payment instructions after placing your order. Please send payment to our GCash number and upload your proof of payment.</p>
-                    <Input label="GCash Number" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} placeholder="09XX XXX XXXX" />
+                    <Input label="GCash Number" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: digitsOnly(v) }))} inputMode="numeric" pattern="[0-9]*" placeholder="09XX XXX XXXX" />
                   </div>
                 )}
+
                 {paymentMethod === 'bank_transfer' && (
                   <div className="p-4 bg-green-50 rounded-xl border border-green-200">
                     <p className="text-sm font-medium text-green-700 mb-2">Bank Transfer</p>
@@ -237,14 +362,12 @@ const Checkout = () => {
               </Section>
             </div>
 
-            {/* Order Summary */}
             <div className="lg:w-96">
               <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-24">
                 <h2 className="font-display font-semibold text-lg text-gray-900 mb-4">Order Summary</h2>
 
-                {/* Items */}
                 <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
-                  {items.map(item => (
+                  {items.map((item) => (
                     <div key={item.productId} className="flex gap-3">
                       <div className="w-14 h-14 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0">
                         <img src={item.product.image || 'https://via.placeholder.com/56'} alt="" className="w-full h-full object-cover" />
@@ -258,13 +381,13 @@ const Checkout = () => {
                   ))}
                 </div>
 
-                {/* Promo Code */}
                 <div className="mb-4 pb-4 border-b border-gray-100">
                   <div className="flex gap-2">
                     <div className="flex-1 relative">
                       <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
-                        value={promoCode} onChange={e => setPromoCode(e.target.value)}
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value)}
                         placeholder="Promo code"
                         className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                       />
@@ -280,7 +403,6 @@ const Checkout = () => {
                   )}
                 </div>
 
-                {/* Totals */}
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
                   {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(discountAmount)}</span></div>}
@@ -289,9 +411,8 @@ const Checkout = () => {
                   <div className="border-t border-gray-100 pt-2 flex justify-between"><span className="font-semibold text-gray-900">Total</span><span className="font-bold text-xl text-gray-900">{formatPrice(grandTotal)}</span></div>
                 </div>
 
-                {/* Terms */}
                 <label className="flex items-start gap-2 mt-4 cursor-pointer">
-                  <input type="checkbox" checked={agreeTerms} onChange={e => setAgreeTerms(e.target.checked)} className="mt-0.5 text-orange-500 focus:ring-orange-500 rounded" />
+                  <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} className="mt-0.5 text-orange-500 focus:ring-orange-500 rounded" />
                   <span className="text-xs text-gray-500">I agree to the <Link to="/terms" className="text-orange-500 hover:underline">Terms & Conditions</Link> and <Link to="/privacy" className="text-orange-500 hover:underline">Privacy Policy</Link></span>
                 </label>
 
@@ -305,7 +426,7 @@ const Checkout = () => {
                   {processing ? (
                     <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing...</span>
                   ) : (
-                    <span className="flex items-center gap-2"><Shield size={16} /> Place Order — {formatPrice(grandTotal)}</span>
+                    <span className="flex items-center gap-2"><Shield size={16} /> Place Order - {formatPrice(grandTotal)}</span>
                   )}
                 </button>
               </div>
@@ -324,13 +445,20 @@ const Section = ({ title, icon, children }) => (
   </div>
 );
 
-const Input = ({ label, value, onChange, type = 'text', required, placeholder, className = '' }) => (
+const Input = ({ label, value, onChange, type = 'text', required, placeholder, className = '', inputMode, pattern, error }) => (
   <div className={className}>
     <label className="block text-sm font-medium text-gray-700 mb-1">{label} {required && <span className="text-orange-500">*</span>}</label>
     <input
-      type={type} value={value} onChange={e => onChange(e.target.value)} required={required} placeholder={placeholder}
-      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      required={required}
+      placeholder={placeholder}
+      inputMode={inputMode}
+      pattern={pattern}
+      className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${error ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-orange-500'}`}
     />
+    {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
   </div>
 );
 

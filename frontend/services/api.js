@@ -22,6 +22,12 @@ const getAuthToken = () => {
   return localStorage.getItem('shopCoreToken');
 };
 
+const clearAuthSession = () => {
+  localStorage.removeItem('shopCoreUser');
+  localStorage.removeItem('shopCoreToken');
+  window.dispatchEvent(new Event('auth:changed'));
+};
+
 // Helper: get current user info from token (for Supabase custom auth)
 const getCurrentUserFromToken = () => {
   const token = getAuthToken();
@@ -32,6 +38,26 @@ const getCurrentUserFromToken = () => {
     return null;
   }
 };
+
+// Helper: log staff activity to activity_logs table via Supabase
+const logSupabaseActivity = async (action, entityType = null, entityId = null, details = null) => {
+  try {
+    const currentUser = getCurrentUserFromToken();
+    if (!currentUser) return;
+    await supabase.from('activity_logs').insert({
+      user_id: currentUser.id,
+      action,
+      entity_type: entityType,
+      entity_id: entityId ? String(entityId) : null,
+      details: details || null,
+    });
+  } catch (err) {
+    console.error('Activity log error:', err.message);
+  }
+};
+
+// Exported version for POS and other components
+export const logPosActivity = logSupabaseActivity;
 
 // Helper function to make authenticated requests (for backend API fallback)
 const authenticatedFetch = async (url, options = {}) => {
@@ -58,6 +84,16 @@ const authenticatedFetch = async (url, options = {}) => {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'Request failed' }));
+    if (token && response.status === 401) {
+      clearAuthSession();
+      window.dispatchEvent(new Event('auth:session-expired'));
+    } else if (token && response.status === 403) {
+      const msg = (error.message || '').toLowerCase();
+      if (msg.includes('session') || msg.includes('expired') || msg.includes('invalid') || msg.includes('deactivated') || msg.includes('log in')) {
+        clearAuthSession();
+        window.dispatchEvent(new Event('auth:session-expired'));
+      }
+    }
     throw new Error(error.message || 'Request failed');
   }
 
@@ -362,6 +398,20 @@ export const revokeSession = async (sessionId) => {
 
 // Activity Logs (admin)
 export const getActivityLogs = async (params = {}) => {
+  if (USE_SUPABASE) {
+    const limit = parseInt(params.limit) || 50;
+    const page = parseInt(params.page) || 1;
+    let query = supabase.from('activity_logs').select('*, users:user_id(name, email)', { count: 'exact' });
+    if (params.userId) query = query.eq('user_id', params.userId);
+    if (params.action) query = query.eq('action', params.action);
+    query = query.order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1);
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+    return {
+      logs: (data || []).map(l => ({ ...l, user_name: l.users?.name, user_email: l.users?.email })),
+      total: count || 0, page, totalPages: Math.ceil((count || 0) / limit),
+    };
+  }
   const qs = new URLSearchParams();
   if (params.page) qs.set('page', String(params.page));
   if (params.limit) qs.set('limit', String(params.limit));
@@ -373,6 +423,19 @@ export const getActivityLogs = async (params = {}) => {
 // ==================== STAFF MANAGEMENT ====================
 
 export const getStaffList = async (params = {}) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('users').select('id, name, email, role, phone, is_active, login_attempts, locked_until, last_login, created_at', { count: 'exact' }).in('role', ['store_staff', 'owner']);
+    if (params.role) query = query.eq('role', params.role);
+    if (params.status === 'active') query = query.eq('is_active', true);
+    if (params.status === 'inactive') query = query.eq('is_active', false);
+    if (params.search) query = query.or(`name.ilike.%${params.search}%,email.ilike.%${params.search}%`);
+    const page = parseInt(params.page) || 1;
+    const limit = 20;
+    query = query.range((page - 1) * limit, page * limit - 1).order('created_at', { ascending: false });
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+    return { staff: data || [], total: count || 0, page, totalPages: Math.ceil((count || 0) / limit) };
+  }
   const qs = new URLSearchParams();
   if (params.page) qs.set('page', String(params.page));
   if (params.role) qs.set('role', params.role);
@@ -382,10 +445,27 @@ export const getStaffList = async (params = {}) => {
 };
 
 export const getStaffById = async (id) => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('users').select('*').eq('id', id).single();
+    if (error) throw new Error(error.message);
+    return data;
+  }
   return authenticatedFetch(`${API_URL}/staff/${id}`);
 };
 
 export const addStaff = async (data) => {
+  if (USE_SUPABASE) {
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const { data: existing } = await supabase.from('users').select('id').eq('email', data.email).single();
+    if (existing) throw new Error('Email already exists');
+    const { data: created, error } = await supabase.from('users').insert({
+      name: data.name, email: data.email, password_hash: hashedPassword,
+      role: data.role || 'store_staff', phone: data.phone || null, is_active: true, email_verified: true,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('staff.add', 'user', created.id, { name: data.name, email: data.email, role: data.role });
+    return created;
+  }
   return authenticatedFetch(`${API_URL}/staff`, {
     method: 'POST',
     body: JSON.stringify(data),
@@ -393,6 +473,13 @@ export const addStaff = async (data) => {
 };
 
 export const editStaff = async (id, data) => {
+  if (USE_SUPABASE) {
+    const updates = { name: data.name, email: data.email, role: data.role, phone: data.phone || null };
+    const { data: updated, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('staff.edit', 'user', id, { updates });
+    return updated;
+  }
   return authenticatedFetch(`${API_URL}/staff/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -400,18 +487,49 @@ export const editStaff = async (id, data) => {
 };
 
 export const toggleStaffStatus = async (id) => {
+  if (USE_SUPABASE) {
+    const { data: user, error: fetchErr } = await supabase.from('users').select('is_active').eq('id', id).single();
+    if (fetchErr) throw new Error(fetchErr.message);
+    const { data: updated, error } = await supabase.from('users').update({ is_active: !user.is_active }).eq('id', id).select().single();
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('staff.toggle_status', 'user', id, { is_active: updated.is_active });
+    return updated;
+  }
   return authenticatedFetch(`${API_URL}/staff/${id}/status`, { method: 'PATCH' });
 };
 
 export const deleteStaff = async (id) => {
+  if (USE_SUPABASE) {
+    const { error } = await supabase.from('users').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('staff.delete', 'user', id);
+    return;
+  }
   await authenticatedFetch(`${API_URL}/staff/${id}`, { method: 'DELETE' });
 };
 
 export const getStaffActivity = async (id, page = 1) => {
+  if (USE_SUPABASE) {
+    const limit = 20;
+    const { data, error, count } = await supabase.from('activity_logs').select('*', { count: 'exact' }).eq('user_id', id).order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1);
+    if (error) throw new Error(error.message);
+    return { logs: data || [], total: count || 0, page, totalPages: Math.ceil((count || 0) / limit) };
+  }
   return authenticatedFetch(`${API_URL}/staff/${id}/activity?page=${page}`);
 };
 
 export const updateStaffPermissions = async (id, permissions) => {
+  if (USE_SUPABASE) {
+    // Delete existing and insert new
+    await supabase.from('user_permissions').delete().eq('user_id', id);
+    if (permissions && permissions.length > 0) {
+      const rows = permissions.map(p => ({ user_id: id, permission_id: p.permission_id, granted: p.granted }));
+      const { error } = await supabase.from('user_permissions').insert(rows);
+      if (error) throw new Error(error.message);
+    }
+    await logSupabaseActivity('staff.update_permissions', 'user', id, { permissions });
+    return;
+  }
   await authenticatedFetch(`${API_URL}/staff/${id}/permissions`, {
     method: 'PUT',
     body: JSON.stringify({ permissions }),
@@ -419,10 +537,27 @@ export const updateStaffPermissions = async (id, permissions) => {
 };
 
 export const getAllPermissions = async () => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('permissions').select('*').order('name');
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
   return authenticatedFetch(`${API_URL}/staff/permissions`);
 };
 
 export const getStaffPerformance = async (id, period = 30) => {
+  if (USE_SUPABASE) {
+    const since = new Date();
+    since.setDate(since.getDate() - period);
+    const { data: logs } = await supabase.from('activity_logs').select('action, created_at').eq('user_id', id).gte('created_at', since.toISOString());
+    const actions = logs || [];
+    return {
+      total_actions: actions.length,
+      period_days: period,
+      actions_per_day: period > 0 ? parseFloat((actions.length / period).toFixed(1)) : 0,
+      action_breakdown: actions.reduce((acc, l) => { acc[l.action] = (acc[l.action] || 0) + 1; return acc; }, {}),
+    };
+  }
   return authenticatedFetch(`${API_URL}/staff/${id}/performance?period=${period}`);
 };
 
@@ -526,6 +661,7 @@ export const addProduct = async (product) => {
 
     if (error) throw new Error(error.message);
 
+    await logSupabaseActivity('product.create', 'product', data.id, { name: product.name });
     return {
       ...mapProductFromSupabase(data),
       category_name: data.categories?.name,
@@ -579,6 +715,7 @@ export const updateProduct = async (id, product) => {
 
     if (error) throw new Error(error.message);
 
+    await logSupabaseActivity('product.update', 'product', id, { name: product.name });
     return {
       ...mapProductFromSupabase(data),
       category_name: data.categories?.name,
@@ -628,6 +765,7 @@ export const deleteProduct = async (id) => {
       .eq('id', id);
 
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('product.delete', 'product', id);
     return;
   }
 
@@ -700,6 +838,7 @@ export const addCategory = async (name) => {
       .single();
 
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('category.create', 'category', data.id, { name });
     return data;
   }
 
@@ -725,6 +864,7 @@ export const updateCategory = async (id, name) => {
       .single();
 
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('category.update', 'category', id, { name });
     return data;
   }
 
@@ -748,6 +888,7 @@ export const deleteCategory = async (id) => {
       .eq('id', id);
 
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('category.delete', 'category', id);
     return;
   }
 
@@ -911,7 +1052,7 @@ const mapOrderItemToCartItem = (item) => {
     partNumber: item.product_part_number ?? item.product?.partNumber ?? item.product?.part_number ?? '',
     name: item.product_name ?? item.product?.name ?? 'Unknown Item',
     description: item.product?.description ?? '',
-    price: Number(item.product_price ?? item.product_price_current ?? item.product?.price ?? 0),
+    price: Number(item.product_price ?? item.price ?? item.product_price_current ?? item.product?.price ?? 0),
     buyingPrice: Number(item.product_buying_price ?? item.product?.buyingPrice ?? item.product?.buying_price ?? 0),
     image: item.product_image ?? item.product?.image ?? '',
     category_id: item.product_category_id ?? item.product?.category_id ?? 0,
@@ -1079,27 +1220,44 @@ export const createOrder = async (order) => {
 
     if (orderError) throw new Error(orderError.message);
 
-    // Create order items with all required fields
-    const orderItems = (order.items || []).map(item => ({
-      order_id: orderData.id,
-      product_id: (item).productId ?? (item).product_id,
-      quantity: (item).quantity ?? (item).quantity,
-      product_name: (item).product?.name || 'Unknown Product',
-      product_price: (item).product?.price || 0,
-    }));
+    const orderItems = (order.items || []).map((item) => {
+      const resolvedPrice = Number(item.product_price ?? item.price ?? item.product?.price ?? 0);
+      return {
+        order_id: orderData.id,
+        product_id: item.productId ?? item.product_id ?? item.product?.id ?? null,
+        quantity: item.quantity ?? 1,
+        product_name: item.product_name ?? item.name ?? item.product?.name ?? 'Unknown Product',
+        product_price: resolvedPrice,
+        price: resolvedPrice,
+      };
+    });
 
     if (orderItems.length > 0) {
       const { error: itemsError } = await supabase
         .from('order_items')
         .insert(orderItems);
 
-      if (itemsError) throw new Error(itemsError.message);
+      if (itemsError) {
+        await supabase.from('orders').delete().eq('id', orderData.id);
+        throw new Error(itemsError.message);
+      }
     }
 
     const mapped = mapOrderFromApi(orderData);
     if (order.items && order.items.length > 0) {
       mapped.items = order.items;
     }
+    await logSupabaseActivity('order.create', 'order', orderData.id, { source: order.source || 'online', total: order.total_amount, items: orderItems.length });
+
+    // Notify admin/staff about new order
+    notifyAdminStaff(
+      'order.new',
+      'New Order Received',
+      `Order #${String(orderData.id).padStart(4, '0')} — ₱${Number(order.total_amount).toLocaleString()} (${orderItems.length} item${orderItems.length !== 1 ? 's' : ''})`,
+      orderData.id,
+      'order'
+    );
+
     return mapped;
   }
 
@@ -1143,6 +1301,20 @@ export const updateOrderStatus = async (id, status) => {
       .single();
 
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('order.update_status', 'order', id, { status });
+
+    // Notify customer about their order status update
+    if (data.user_id) {
+      createNotification({
+        user_id: data.user_id,
+        type: 'order.status',
+        title: 'Order Status Updated',
+        message: `Your order #${String(id).padStart(4, '0')} is now ${status}`,
+        reference_id: id,
+        reference_type: 'order',
+      });
+    }
+
     return mapOrderFromApi(data);
   }
 
@@ -1155,13 +1327,14 @@ export const updateOrderStatus = async (id, status) => {
 };
 
 // Cancel order (customer - only if not yet shipped)
-export const cancelOrder = async (id) => {
+export const cancelOrder = async (id, reason = '') => {
   if (USE_MOCK_DATA) {
     await new Promise(resolve => setTimeout(resolve, 300));
     const order = MOCK_ORDERS.find(o => o.id === id);
     if (!order) throw new Error('Order not found');
     if (order.status !== 'pending' && order.status !== 'paid') throw new Error('Cannot cancel this order');
     order.status = 'cancelled';
+    order.cancellation_reason = reason;
     return order;
   }
 
@@ -1173,16 +1346,27 @@ export const cancelOrder = async (id) => {
     }
     const { data, error } = await supabase
       .from('orders')
-      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .update({ status: 'cancelled', cancellation_reason: reason, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
     if (error) throw new Error(error.message);
+
+    // Notify admin/staff about the cancellation
+    notifyAdminStaff(
+      'order.cancelled',
+      'Order Cancelled',
+      `Order #${String(id).padStart(4, '0')} was cancelled by the customer. Reason: ${reason || 'Not specified'}`,
+      id,
+      'order'
+    );
+
     return mapOrderFromApi(data);
   }
 
   const data = await authenticatedFetch(`${API_URL}/orders/${id}/cancel`, {
     method: 'PUT',
+    body: JSON.stringify({ reason }),
   });
   return mapOrderFromApi(data.order ?? data);
 };
@@ -1259,6 +1443,16 @@ export const getDashboardStats = async () => {
 // ==================== ADDRESSES ====================
 
 export const getAddresses = async (userId) => {
+  const mapAddress = (address) => ({
+    ...address,
+    recipient_name: address?.recipient_name ?? address?.name ?? '',
+    name: address?.name ?? address?.recipient_name ?? '',
+    postal_code: address?.postal_code ?? address?.zip ?? '',
+    zip: address?.zip ?? address?.postal_code ?? '',
+    country: address?.country || 'Philippines',
+    label: address?.label || 'Home',
+  });
+
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
@@ -1270,50 +1464,118 @@ export const getAddresses = async (userId) => {
       .order('is_default', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return addressData || [];
+    return (addressData || []).map(mapAddress);
   }
 
   const data = await authenticatedFetch(`${API_URL}/addresses`);
-  return data;
+  return (data || []).map(mapAddress);
 };
 
 export const addAddress = async (address) => {
+  const payload = {
+    recipient_name: address.recipient_name ?? address.name,
+    phone: address.phone,
+    street: address.street,
+    city: address.city,
+    state: address.state,
+    postal_code: address.postal_code ?? address.zip,
+    country: 'Philippines',
+    is_default: !!address.is_default,
+  };
+
   if (USE_SUPABASE) {
+    const currentUser = getCurrentUserFromToken();
+    if (!currentUser) throw new Error('Not authenticated');
+
+    if (payload.is_default) {
+      await supabase
+        .from('addresses')
+        .update({ is_default: false })
+        .eq('user_id', currentUser.id);
+    }
+
     const { data, error } = await supabase
       .from('addresses')
-      .insert(address)
+      .insert({ ...payload, user_id: currentUser.id })
       .select()
       .single();
 
     if (error) throw new Error(error.message);
-    return data;
+    return {
+      ...data,
+      name: data.recipient_name ?? '',
+      zip: data.postal_code ?? '',
+      country: data.country || 'Philippines',
+      label: data.label || 'Home',
+    };
   }
 
   const data = await authenticatedFetch(`${API_URL}/addresses`, {
     method: 'POST',
-    body: JSON.stringify(address),
+    body: JSON.stringify(payload),
   });
-  return data.address;
+  return {
+    ...data.address,
+    name: data.address?.recipient_name ?? '',
+    zip: data.address?.postal_code ?? '',
+    country: data.address?.country || 'Philippines',
+    label: data.address?.label || 'Home',
+  };
 };
 
 export const updateAddress = async (id, updates) => {
+  const payload = {
+    recipient_name: updates.recipient_name ?? updates.name,
+    phone: updates.phone,
+    street: updates.street,
+    city: updates.city,
+    state: updates.state,
+    postal_code: updates.postal_code ?? updates.zip,
+    country: 'Philippines',
+    is_default: updates.is_default,
+  };
+
   if (USE_SUPABASE) {
+    const currentUser = getCurrentUserFromToken();
+    if (!currentUser) throw new Error('Not authenticated');
+
+    if (payload.is_default) {
+      await supabase
+        .from('addresses')
+        .update({ is_default: false })
+        .eq('user_id', currentUser.id)
+        .neq('id', id);
+    }
+
     const { data, error } = await supabase
       .from('addresses')
-      .update(updates)
+      .update(payload)
       .eq('id', id)
+      .eq('user_id', currentUser.id)
       .select()
       .single();
 
     if (error) throw new Error(error.message);
-    return data;
+    return {
+      ...data,
+      name: data.recipient_name ?? '',
+      zip: data.postal_code ?? '',
+      country: data.country || 'Philippines',
+      label: data.label || 'Home',
+    };
   }
 
   const data = await authenticatedFetch(`${API_URL}/addresses/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(updates),
+    body: JSON.stringify(payload),
   });
-  return data.address;
+  return {
+    ...data.address,
+    name: data.address?.recipient_name ?? '',
+    zip: data.address?.postal_code ?? '',
+    country: data.address?.country || 'Philippines',
+    label: data.address?.label || 'Home',
+  };
 };
 
 export const deleteAddress = async (id) => {
@@ -1344,6 +1606,16 @@ export const createReturn = async (returnRequest) => {
     method: 'POST',
     body: JSON.stringify(returnRequest),
   });
+
+  // Notify admin/staff about new return request
+  notifyAdminStaff(
+    'return.new',
+    'New Return Request',
+    `Return request for Order #${String(returnRequest.order_id).padStart(4, '0')} — ₱${Number(returnRequest.refund_amount || 0).toLocaleString()}`,
+    data.return?.id,
+    'return'
+  );
+
   return data.return;
 };
 
@@ -1378,7 +1650,7 @@ export const getTickets = async () => {
 export const createTicket = async (ticket) => {
   const data = await fetch(`${API_URL}/support`, {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(ticket),
   });
   if (!data.ok) {
@@ -1399,8 +1671,15 @@ export const updateTicketStatus = async (id, status) => {
 // ==================== FAQs ====================
 
 export const getFAQs = async (adminMode = false) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('faqs').select('*');
+    if (!adminMode) query = query.eq('is_active', true);
+    query = query.order('display_order', { ascending: true }).order('created_at', { ascending: true });
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
   if (adminMode) {
-    // Admin: get all FAQs including inactive
     return authenticatedFetch(`${API_URL}/faqs/admin/all`);
   }
   const data = await fetch(`${API_URL}/faqs`);
@@ -1411,6 +1690,17 @@ export const getFAQs = async (adminMode = false) => {
 };
 
 export const createFAQ = async (faq) => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('faqs').insert({
+      question: faq.question,
+      answer: faq.answer,
+      is_active: faq.is_active !== undefined ? faq.is_active : true,
+      display_order: faq.display_order || 0,
+    }).select().single();
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('faq.create', 'faq', data.id, { question: faq.question });
+    return data;
+  }
   const data = await authenticatedFetch(`${API_URL}/faqs`, {
     method: 'POST',
     body: JSON.stringify(faq),
@@ -1419,6 +1709,15 @@ export const createFAQ = async (faq) => {
 };
 
 export const updateFAQ = async (id, updates) => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('faqs').update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id).select().single();
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('faq.update', 'faq', id, { updates });
+    return data;
+  }
   const data = await authenticatedFetch(`${API_URL}/faqs/${id}`, {
     method: 'PUT',
     body: JSON.stringify(updates),
@@ -1427,6 +1726,12 @@ export const updateFAQ = async (id, updates) => {
 };
 
 export const deleteFAQ = async (id) => {
+  if (USE_SUPABASE) {
+    const { error } = await supabase.from('faqs').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('faq.delete', 'faq', id);
+    return;
+  }
   await authenticatedFetch(`${API_URL}/faqs/${id}`, {
     method: 'DELETE',
   });
@@ -1447,6 +1752,21 @@ export const getPolicy = async (type) => {
 };
 
 export const updatePolicy = async (type, title, content) => {
+  if (USE_SUPABASE) {
+    const { data: existing } = await supabase.from('policies').select('id').eq('type', type).single();
+    let result;
+    if (existing) {
+      const { data, error } = await supabase.from('policies').update({ title, content, updated_at: new Date().toISOString() }).eq('type', type).select().single();
+      if (error) throw new Error(error.message);
+      result = data;
+    } else {
+      const { data, error } = await supabase.from('policies').insert({ type, title, content }).select().single();
+      if (error) throw new Error(error.message);
+      result = data;
+    }
+    await logSupabaseActivity('policy.update', 'policy', result.id, { type, title });
+    return result;
+  }
   const data = await authenticatedFetch(`${API_URL}/policies/${type}`, {
     method: 'PUT',
     body: JSON.stringify({ title, content }),
@@ -1457,6 +1777,28 @@ export const updatePolicy = async (type, title, content) => {
 // ==================== Additional Mock Functions (Future sprints) ====================
 
 export const getWishlist = async (userId) => {
+  const normalizeWishlistItem = (item) => {
+    const product = item.product || item.products || {};
+    const productId = item.product_id ?? product.id ?? item.id;
+    const price = Number(item.price ?? product.price ?? 0);
+    const salePrice = item.sale_price ?? product.sale_price ?? null;
+    const stockQuantity = item.stock_quantity ?? product.stock_quantity ?? 0;
+
+    return {
+      ...item,
+      id: productId,
+      product,
+      product_id: productId,
+      name: item.name ?? item.product_name ?? product.name ?? 'Unknown Product',
+      product_name: item.product_name ?? item.name ?? product.name ?? 'Unknown Product',
+      price,
+      sale_price: salePrice,
+      image_url: item.image_url ?? product.image_url ?? product.image ?? '',
+      stock_quantity: stockQuantity,
+      in_stock: item.in_stock ?? stockQuantity > 0,
+    };
+  };
+
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) return [];
@@ -1465,9 +1807,10 @@ export const getWishlist = async (userId) => {
       .select('*, products(*)')
       .eq('user_id', currentUser.id);
     if (error) return [];
-    return (data || []).map(w => ({ ...w, product: w.products }));
+    return (data || []).map((w) => normalizeWishlistItem({ ...w, product: w.products }));
   }
-  return authenticatedFetch(`${API_URL}/wishlist`).catch(() => []);
+  const rows = await authenticatedFetch(`${API_URL}/wishlist`).catch(() => []);
+  return (rows || []).map(normalizeWishlistItem);
 };
 
 export const addToWishlist = async (userId, productId) => {
@@ -1568,6 +1911,7 @@ export const createDiscount = async (discount) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('discounts').insert(discount).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('discount.create', 'discount', data.id, { code: discount.code });
     return data;
   }
   return authenticatedFetch(`${API_URL}/discounts`, { method: 'POST', body: JSON.stringify(discount) });
@@ -1576,6 +1920,7 @@ export const createDiscount = async (discount) => {
 export const deleteDiscount = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('discounts').delete().eq('id', id);
+    await logSupabaseActivity('discount.delete', 'discount', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/discounts/${id}`, { method: 'DELETE' });
@@ -1603,6 +1948,7 @@ export const addSupplier = async (supplier) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('suppliers').insert(supplier).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('supplier.create', 'supplier', data.id, { name: supplier.name });
     return data;
   }
   return authenticatedFetch(`${API_URL}/suppliers`, { method: 'POST', body: JSON.stringify(supplier) });
@@ -1613,6 +1959,7 @@ export const updateSupplier = async (id, updates) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('suppliers').update(updates).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('supplier.update', 'supplier', id, { updates });
     return data;
   }
   return authenticatedFetch(`${API_URL}/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
@@ -1621,6 +1968,7 @@ export const updateSupplier = async (id, updates) => {
 export const deleteSupplier = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('suppliers').delete().eq('id', id);
+    await logSupabaseActivity('supplier.delete', 'supplier', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/suppliers/${id}`, { method: 'DELETE' });
@@ -1643,6 +1991,7 @@ export const addSubcategory = async (subcategory) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('subcategories').insert(subcategory).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('subcategory.create', 'subcategory', data.id, { name: subcategory.name });
     return data;
   }
   return authenticatedFetch(`${API_URL}/subcategories`, { method: 'POST', body: JSON.stringify(subcategory) });
@@ -1651,6 +2000,7 @@ export const addSubcategory = async (subcategory) => {
 export const deleteSubcategory = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('subcategories').delete().eq('id', id);
+    await logSupabaseActivity('subcategory.delete', 'subcategory', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/subcategories/${id}`, { method: 'DELETE' });
@@ -1670,6 +2020,7 @@ export const addVariant = async (variant) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('product_variants').insert(variant).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('variant.create', 'product_variant', data.id, { product_id: variant.product_id });
     return data;
   }
   return authenticatedFetch(`${API_URL}/variants`, { method: 'POST', body: JSON.stringify(variant) });
@@ -1679,6 +2030,7 @@ export const updateVariant = async (id, updates) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('product_variants').update(updates).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('variant.update', 'product_variant', id, { updates });
     return data;
   }
   return authenticatedFetch(`${API_URL}/variants/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
@@ -1687,6 +2039,7 @@ export const updateVariant = async (id, updates) => {
 export const deleteVariant = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('product_variants').delete().eq('id', id);
+    await logSupabaseActivity('variant.delete', 'product_variant', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/variants/${id}`, { method: 'DELETE' });
@@ -1750,6 +2103,39 @@ export const deleteNotification = async (id) => {
   return authenticatedFetch(`${API_URL}/notifications/${id}`, { method: 'DELETE' });
 };
 
+export const createNotification = async ({ user_id, type, title, message, reference_id, reference_type }) => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('notifications').insert({
+      user_id, type, title, message, reference_id, reference_type,
+    }).select().single();
+    if (error) console.error('Notification insert error:', error.message);
+    return data;
+  }
+  return authenticatedFetch(`${API_URL}/notifications`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id, type, title, message, reference_id, reference_type }),
+  }).catch(err => console.error('Notification create error:', err));
+};
+
+// Notify all admin (owner) and staff users
+const notifyAdminStaff = async (type, title, message, referenceId = null, referenceType = null) => {
+  try {
+    const { data: staffUsers } = await supabase
+      .from('users')
+      .select('id')
+      .in('role', ['owner', 'store_staff', 'super_admin'])
+      .eq('is_active', true);
+    if (!staffUsers || staffUsers.length === 0) return;
+    const rows = staffUsers.map(u => ({
+      user_id: u.id, type, title, message,
+      reference_id: referenceId, reference_type: referenceType,
+    }));
+    await supabase.from('notifications').insert(rows);
+  } catch (err) {
+    console.error('notifyAdminStaff error:', err.message);
+  }
+};
+
 // ==================== BANNERS ====================
 
 export const getBanners = async () => {
@@ -1772,6 +2158,7 @@ export const createBanner = async (banner) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('banners').insert(banner).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('banner.create', 'banner', data.id, { title: banner.title });
     return data;
   }
   return authenticatedFetch(`${API_URL}/banners`, { method: 'POST', body: JSON.stringify(banner) });
@@ -1781,6 +2168,7 @@ export const updateBanner = async (id, updates) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('banners').update(updates).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('banner.update', 'banner', id, { updates });
     return data;
   }
   return authenticatedFetch(`${API_URL}/banners/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
@@ -1789,6 +2177,7 @@ export const updateBanner = async (id, updates) => {
 export const deleteBanner = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('banners').delete().eq('id', id);
+    await logSupabaseActivity('banner.delete', 'banner', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/banners/${id}`, { method: 'DELETE' });
@@ -1816,6 +2205,7 @@ export const createAnnouncement = async (announcement) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('announcements').insert(announcement).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('announcement.create', 'announcement', data.id, { title: announcement.title });
     return data;
   }
   return authenticatedFetch(`${API_URL}/announcements`, { method: 'POST', body: JSON.stringify(announcement) });
@@ -1825,6 +2215,7 @@ export const updateAnnouncement = async (id, updates) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('announcements').update(updates).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('announcement.update', 'announcement', id, { updates });
     return data;
   }
   return authenticatedFetch(`${API_URL}/announcements/${id}`, { method: 'PUT', body: JSON.stringify(updates) });
@@ -1833,6 +2224,7 @@ export const updateAnnouncement = async (id, updates) => {
 export const deleteAnnouncement = async (id) => {
   if (USE_SUPABASE) {
     await supabase.from('announcements').delete().eq('id', id);
+    await logSupabaseActivity('announcement.delete', 'announcement', id);
     return;
   }
   return authenticatedFetch(`${API_URL}/announcements/${id}`, { method: 'DELETE' });
@@ -1843,7 +2235,7 @@ export const deleteAnnouncement = async (id) => {
 export const getPurchaseOrders = async () => {
   if (USE_SUPABASE) {
     const { data } = await supabase.from('stock_adjustments').select('*, products(name), users!stock_adjustments_adjusted_by_fkey(name)').order('created_at', { ascending: false });
-    return data || [];
+    return (data || []).map(a => ({ ...a, product_name: a.products?.name, quantity: a.quantity_change }));
   }
   return authenticatedFetch(`${API_URL}/inventory/adjustments`).catch(() => []);
 };
@@ -1851,8 +2243,39 @@ export const getPurchaseOrders = async () => {
 export const createPurchaseOrder = async (po) => {
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
-    const { data, error } = await supabase.from('stock_adjustments').insert({ ...po, adjusted_by: currentUser?.id }).select().single();
+    // Map frontend reasons to DB-valid values
+    const reasonMap = { restock: 'received', returned: 'correction', shrinkage: 'lost', other: 'correction' };
+    const dbReason = reasonMap[po.reason] || po.reason || 'correction';
+    // Get current product stock
+    const { data: product, error: prodErr } = await supabase.from('products').select('stock_quantity').eq('id', po.product_id).single();
+    if (prodErr) throw new Error(prodErr.message);
+    const currentStock = parseInt(product.stock_quantity);
+    const newStock = currentStock + po.quantity_change;
+    if (newStock < 0) throw new Error('Stock cannot go below zero');
+    // Update product stock
+    const { error: updateErr } = await supabase.from('products').update({ stock_quantity: newStock, updated_at: new Date().toISOString() }).eq('id', po.product_id);
+    if (updateErr) throw new Error(updateErr.message);
+    // Record adjustment
+    const { data, error } = await supabase.from('stock_adjustments').insert({ product_id: po.product_id, quantity_change: po.quantity_change, reason: dbReason, notes: po.note || '', adjusted_by: currentUser?.id, status: 'approved' }).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('inventory.adjust', 'product', po.product_id, { quantity_change: po.quantity_change, reason: dbReason });
+
+    // Check for low stock after adjustment and notify
+    if (newStock <= (po.low_stock_threshold || 5)) {
+      const { data: prodInfo } = await supabase.from('products').select('name, low_stock_threshold').eq('id', po.product_id).single();
+      const prodName = prodInfo?.name || `Product #${po.product_id}`;
+      const threshold = prodInfo?.low_stock_threshold || 5;
+      if (newStock <= threshold) {
+        notifyAdminStaff(
+          'inventory.low_stock',
+          'Low Stock Alert',
+          `${prodName} is low on stock (${newStock} remaining, threshold: ${threshold})`,
+          po.product_id,
+          'product'
+        );
+      }
+    }
+
     return data;
   }
   return authenticatedFetch(`${API_URL}/inventory/adjustments`, { method: 'POST', body: JSON.stringify(po) });
@@ -1863,6 +2286,7 @@ export const receivePurchaseOrder = async (id) => {
     const currentUser = getCurrentUserFromToken();
     const { data, error } = await supabase.from('stock_adjustments').update({ status: 'approved', approved_by: currentUser?.id }).eq('id', id).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('inventory.approve', 'stock_adjustment', id);
     return data;
   }
   return authenticatedFetch(`${API_URL}/inventory/adjustments/${id}/approve`, { method: 'PUT' });
@@ -1890,6 +2314,7 @@ export const updateTrackingNumber = async (orderId, trackingData) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('orders').update(trackingData).eq('id', orderId).select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('order.update_tracking', 'order', orderId, trackingData);
     return data;
   }
   return authenticatedFetch(`${API_URL}/shipping/tracking/${orderId}`, { method: 'PUT', body: JSON.stringify(trackingData) });
@@ -1952,6 +2377,26 @@ export const updateProfile = async (userId, updates) => {
 // ==================== INVENTORY ====================
 
 export const getInventory = async () => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, categories(name)')
+      .order('stock_quantity', { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []).map((p) => ({
+      ...p,
+      partNumber: p.part_number,
+      buyingPrice: p.buying_price,
+      boxNumber: p.box_number,
+      category_name: p.categories?.name,
+      stock_quantity: parseInt(p.stock_quantity),
+      low_stock_threshold: parseInt(p.low_stock_threshold),
+      price: parseFloat(p.price),
+      buying_price: parseFloat(p.buying_price || 0),
+      sale_price: p.sale_price ? parseFloat(p.sale_price) : null,
+      stock_status: p.stock_quantity === 0 ? 'out_of_stock' : p.stock_quantity <= p.low_stock_threshold ? 'low_stock' : 'in_stock',
+    }));
+  }
   const data = await authenticatedFetch(`${API_URL}/inventory`);
   return data.map((p) => ({
     ...p,
@@ -1962,6 +2407,25 @@ export const getInventory = async () => {
 };
 
 export const getLowStockProducts = async () => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, categories(name)')
+      .order('stock_quantity', { ascending: true });
+    if (error) throw new Error(error.message);
+    const lowItems = (data || []).filter(p => parseInt(p.stock_quantity) <= parseInt(p.low_stock_threshold)).map((p) => ({
+      ...p,
+      partNumber: p.part_number,
+      buyingPrice: p.buying_price,
+      boxNumber: p.box_number,
+      category_name: p.categories?.name,
+      stock_quantity: parseInt(p.stock_quantity),
+      low_stock_threshold: parseInt(p.low_stock_threshold),
+      price: parseFloat(p.price),
+      buying_price: parseFloat(p.buying_price || 0),
+    }));
+    return { count: lowItems.length, products: lowItems };
+  }
   const data = await authenticatedFetch(`${API_URL}/inventory/low-stock`);
   return {
     count: data.count,
@@ -1994,9 +2458,51 @@ export const bulkUpdateStock = async (updates) => {
   });
 };
 
+export const batchReceiveStock = async (items, notes) => {
+  return await authenticatedFetch(`${API_URL}/inventory/batch-receive`, {
+    method: 'POST',
+    body: JSON.stringify({ items, notes }),
+  });
+};
+
 // ==================== REPORTS ====================
 
 export const getSalesReport = async (range = 'daily', startDate, endDate) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('orders').select('*').in('status', ['paid', 'completed']);
+    const now = new Date();
+    if (range === 'daily') {
+      query = query.gte('created_at', new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString());
+    } else if (range === 'weekly' || range === '7d') {
+      const d = new Date(); d.setDate(d.getDate() - 7);
+      query = query.gte('created_at', d.toISOString());
+    } else if (range === 'monthly' || range === '30d') {
+      const d = new Date(); d.setDate(d.getDate() - 30);
+      query = query.gte('created_at', d.toISOString());
+    } else if (range === '90d') {
+      const d = new Date(); d.setDate(d.getDate() - 90);
+      query = query.gte('created_at', d.toISOString());
+    } else if (startDate && endDate) {
+      query = query.gte('created_at', startDate).lte('created_at', endDate);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const orders = data || [];
+    const onlineOrders = orders.filter(o => o.source === 'online');
+    const posOrders = orders.filter(o => o.source === 'pos');
+    const totalRevenue = orders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+    return {
+      range,
+      total_orders: orders.length,
+      total_revenue: totalRevenue,
+      average_order_value: orders.length ? totalRevenue / orders.length : 0,
+      total_discounts: orders.reduce((s, o) => s + Number(o.discount_amount || 0), 0),
+      online_orders: onlineOrders.length,
+      pos_orders: posOrders.length,
+      online_revenue: onlineOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0),
+      pos_revenue: posOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0),
+    };
+  }
   const params = new URLSearchParams({ range });
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
@@ -2004,6 +2510,25 @@ export const getSalesReport = async (range = 'daily', startDate, endDate) => {
 };
 
 export const getSalesByChannel = async (startDate, endDate) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('orders').select('source, total_amount').in('status', ['paid', 'completed']);
+    if (startDate && endDate) {
+      query = query.gte('created_at', startDate).lte('created_at', endDate);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const channels = {};
+    (data || []).forEach(o => {
+      const ch = o.source || 'unknown';
+      if (!channels[ch]) channels[ch] = { channel: ch, order_count: 0, total_revenue: 0 };
+      channels[ch].order_count++;
+      channels[ch].total_revenue += Number(o.total_amount || 0);
+    });
+    return Object.values(channels).map(c => ({
+      ...c,
+      avg_order_value: c.order_count ? c.total_revenue / c.order_count : 0,
+    }));
+  }
   const params = new URLSearchParams();
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
@@ -2011,10 +2536,63 @@ export const getSalesByChannel = async (startDate, endDate) => {
 };
 
 export const getStockLevelsReport = async () => {
+  if (USE_SUPABASE) {
+    const { data: products, error } = await supabase.from('products').select('*, categories(name)');
+    if (error) throw new Error(error.message);
+    const prods = products || [];
+    const overview = {
+      total_products: prods.length,
+      total_stock: prods.reduce((s, p) => s + (p.stock_quantity || 0), 0),
+      out_of_stock_count: prods.filter(p => (p.stock_quantity || 0) === 0).length,
+      low_stock_count: prods.filter(p => p.stock_quantity > 0 && p.stock_quantity <= (p.low_stock_threshold || 5)).length,
+      in_stock_count: prods.filter(p => p.stock_quantity > (p.low_stock_threshold || 5)).length,
+      total_inventory_value: prods.reduce((s, p) => s + (p.stock_quantity || 0) * Number(p.buying_price || 0), 0),
+      potential_revenue: prods.reduce((s, p) => s + (p.stock_quantity || 0) * Number(p.price || 0), 0),
+    };
+    const catMap = {};
+    prods.forEach(p => {
+      const cat = p.categories?.name || 'Uncategorized';
+      if (!catMap[cat]) catMap[cat] = { category: cat, product_count: 0, total_stock: 0, low_stock_items: 0 };
+      catMap[cat].product_count++;
+      catMap[cat].total_stock += p.stock_quantity || 0;
+      if (p.stock_quantity <= (p.low_stock_threshold || 5)) catMap[cat].low_stock_items++;
+    });
+    return { overview, by_category: Object.values(catMap).sort((a, b) => b.total_stock - a.total_stock) };
+  }
   return await authenticatedFetch(`${API_URL}/reports/stock-levels`);
 };
 
 export const getTopProducts = async (limit = 10, startDate, endDate) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('orders').select('id, created_at, status, order_items(quantity, product_price, product_id, products(id, name, part_number, image, price, stock_quantity, categories(name)))').in('status', ['paid', 'completed']);
+    if (startDate && endDate) {
+      query = query.gte('created_at', startDate).lte('created_at', endDate);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const productMap = {};
+    (data || []).forEach(order => {
+      (order.order_items || []).forEach(item => {
+        const pid = item.product_id;
+        if (!productMap[pid]) {
+          productMap[pid] = {
+            id: pid, name: item.products?.name || 'Unknown', part_number: item.products?.part_number,
+            image: item.products?.image, price: Number(item.products?.price || 0),
+            stock_quantity: item.products?.stock_quantity || 0,
+            category_name: item.products?.categories?.name || null,
+            order_count: 0, total_sold: 0, total_revenue: 0, _orders: new Set(),
+          };
+        }
+        productMap[pid]._orders.add(order.id);
+        productMap[pid].total_sold += item.quantity || 0;
+        productMap[pid].total_revenue += (Number(item.product_price || 0)) * (item.quantity || 0);
+      });
+    });
+    return Object.values(productMap)
+      .map(p => ({ ...p, order_count: p._orders.size, _orders: undefined }))
+      .sort((a, b) => b.total_sold - a.total_sold)
+      .slice(0, limit);
+  }
   const params = new URLSearchParams({ limit: limit.toString() });
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
@@ -2022,10 +2600,54 @@ export const getTopProducts = async (limit = 10, startDate, endDate) => {
 };
 
 export const getDailySalesTrend = async (days = 30) => {
+  if (USE_SUPABASE) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    const { data, error } = await supabase.from('orders').select('created_at, total_amount, source').in('status', ['paid', 'completed']).gte('created_at', since.toISOString());
+    if (error) throw new Error(error.message);
+    const dayMap = {};
+    (data || []).forEach(o => {
+      const date = o.created_at?.split('T')[0];
+      if (!date) return;
+      if (!dayMap[date]) dayMap[date] = { date, order_count: 0, revenue: 0, online_orders: 0, pos_orders: 0 };
+      dayMap[date].order_count++;
+      dayMap[date].revenue += Number(o.total_amount || 0);
+      if (o.source === 'online') dayMap[date].online_orders++;
+      if (o.source === 'pos') dayMap[date].pos_orders++;
+    });
+    return Object.values(dayMap).sort((a, b) => a.date.localeCompare(b.date));
+  }
   return await authenticatedFetch(`${API_URL}/reports/daily-trend?days=${days}`);
 };
 
 export const getProfitReport = async (startDate, endDate) => {
+  if (USE_SUPABASE) {
+    let query = supabase.from('orders').select('total_amount, discount_amount, order_items(quantity, product_price, products(buying_price))').in('status', ['paid', 'completed']);
+    if (startDate && endDate) {
+      query = query.gte('created_at', startDate).lte('created_at', endDate);
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const orders = data || [];
+    let totalRevenue = 0, totalCost = 0, totalDiscounts = 0;
+    orders.forEach(o => {
+      totalRevenue += Number(o.total_amount || 0);
+      totalDiscounts += Number(o.discount_amount || 0);
+      (o.order_items || []).forEach(item => {
+        totalCost += (item.quantity || 0) * Number(item.products?.buying_price || 0);
+      });
+    });
+    const profit = totalRevenue - totalCost;
+    return {
+      total_orders: orders.length,
+      total_revenue: totalRevenue,
+      total_cost: totalCost,
+      gross_profit: profit,
+      profit_margin: totalRevenue > 0 ? parseFloat(((profit / totalRevenue) * 100).toFixed(2)) : 0,
+      total_discounts: totalDiscounts,
+      net_profit: profit - totalDiscounts,
+    };
+  }
   const params = new URLSearchParams();
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
@@ -2063,6 +2685,7 @@ export const adminLockUser = async (id) => {
       .eq('id', id);
     if (error) throw new Error(error.message);
     await supabase.from('sessions').update({ is_active: false }).eq('user_id', id);
+    await logSupabaseActivity('admin.lock_user', 'user', id);
     return { message: 'User locked' };
   }
   return authenticatedFetch(`${API_URL}/admin/users/${id}/lock`, { method: 'PATCH' });
@@ -2074,12 +2697,20 @@ export const adminUnlockUser = async (id) => {
       .update({ is_active: true, locked_until: null, login_attempts: 0 })
       .eq('id', id);
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('admin.unlock_user', 'user', id);
     return { message: 'User unlocked' };
   }
   return authenticatedFetch(`${API_URL}/admin/users/${id}/unlock`, { method: 'PATCH' });
 };
 
 export const adminResetUserPassword = async (id, newPassword) => {
+  if (USE_SUPABASE) {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const { error } = await supabase.from('users').update({ password: hashedPassword }).eq('id', id);
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('admin.reset_password', 'user', id);
+    return { message: 'Password reset successfully' };
+  }
   return authenticatedFetch(`${API_URL}/admin/users/${id}/reset-password`, {
     method: 'POST', body: JSON.stringify({ newPassword }),
   });
@@ -2089,6 +2720,7 @@ export const adminUpdateUserRole = async (id, role) => {
   if (USE_SUPABASE) {
     const { error } = await supabase.from('users').update({ role }).eq('id', id);
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('admin.update_role', 'user', id, { role });
     return { message: 'Role updated' };
   }
   return authenticatedFetch(`${API_URL}/admin/users/${id}/role`, {
@@ -2102,6 +2734,7 @@ export const adminDeleteUser = async (id) => {
     try { await supabase.from('user_permissions').delete().eq('user_id', id); } catch {}
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('admin.delete_user', 'user', id);
     return { message: 'User deleted' };
   }
   return authenticatedFetch(`${API_URL}/admin/users/${id}`, { method: 'DELETE' });
@@ -2128,6 +2761,7 @@ export const updateSystemSettings = async (category, settings) => {
           { onConflict: 'category,key' });
       if (error) throw new Error(error.message);
     }
+    await logSupabaseActivity('settings.update', 'system_settings', null, { category });
     return { message: 'Settings saved' };
   }
   return authenticatedFetch(`${API_URL}/admin/settings`, {
@@ -2154,6 +2788,7 @@ export const updateSecuritySettings = async (settings) => {
         .upsert({ category: 'security', key, value: String(value), updated_at: new Date().toISOString() },
           { onConflict: 'category,key' });
     }
+    await logSupabaseActivity('settings.update_security', 'system_settings', null, { keys: Object.keys(settings) });
     return { message: 'Security settings updated' };
   }
   return authenticatedFetch(`${API_URL}/admin/security/settings`, {
@@ -2229,6 +2864,7 @@ export const createBackup = async () => {
       .insert({ backup_type: 'manual', status: 'completed', file_name: `backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json` })
       .select().single();
     if (error) throw new Error(error.message);
+    await logSupabaseActivity('backup.create', 'backup', data.id);
     return { message: 'Backup created', backup: data };
   }
   return authenticatedFetch(`${API_URL}/admin/backup`, { method: 'POST' });

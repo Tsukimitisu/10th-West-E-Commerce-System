@@ -1,6 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Image, Plus, Edit3, Trash2, Eye, EyeOff, X, Check, AlertCircle, GripVertical, Megaphone, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
-import { getAllBanners, createBanner, updateBanner, deleteBanner, getAllAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '../../services/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { Image, Plus, Edit3, Trash2, Eye, EyeOff, X, Check, AlertCircle, GripVertical, Megaphone, ArrowUp, ArrowDown, AlertTriangle, Upload, Link as LinkIcon } from 'lucide-react';
+import { getAllBanners, createBanner, updateBanner, deleteBanner, getAllAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, uploadProductImage } from '../../services/api';
+
+const LINK_OPTIONS = [
+  { value: '/shop', label: 'Shop - All Products' },
+  { value: '/', label: 'Home Page' },
+  { value: '/contact', label: 'Contact Us' },
+  { value: '/faq', label: 'FAQ' },
+  { value: '/privacy', label: 'Privacy Policy' },
+  { value: '/terms', label: 'Terms of Service' },
+  { value: '/return-policy', label: 'Return Policy' },
+];
 
 const BannersView = () => {
   const [tab, setTab] = useState('banners');
@@ -14,6 +24,11 @@ const BannersView = () => {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteType, setDeleteType] = useState('banner');
+  const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [linkMode, setLinkMode] = useState('page'); // 'page' or 'custom'
+  const fileInputRef = useRef(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -31,22 +46,57 @@ const BannersView = () => {
     setAnnouncementForm({ title: '', content: '', is_published: false });
     setEditing(null);
     setShowModal(false);
+    setSelectedImageFile(null);
+    setImagePreview('');
+    setLinkMode('page');
+  };
+
+  const handleImageFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (imagePreview?.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
+    setSelectedImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    if (imagePreview?.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
+    setSelectedImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const clearImage = () => {
+    if (imagePreview?.startsWith('blob:')) URL.revokeObjectURL(imagePreview);
+    setSelectedImageFile(null);
+    setImagePreview('');
+    setBannerForm({ ...bannerForm, image_url: '' });
   };
 
   const handleBannerSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
+      let finalImageUrl = bannerForm.image_url;
+      if (selectedImageFile) {
+        setUploading(true);
+        finalImageUrl = await uploadProductImage(selectedImageFile);
+        setUploading(false);
+      }
+      const payload = { ...bannerForm, image_url: finalImageUrl };
       if (editing) {
-        const updated = await updateBanner(editing.id, bannerForm);
+        const updated = await updateBanner(editing.id, payload);
         setBanners(banners.map(b => b.id === editing.id ? (updated.banner || updated) : b));
       } else {
-        const created = await createBanner(bannerForm);
+        const created = await createBanner(payload);
         setBanners([...banners, created.banner || created]);
       }
       resetForm();
     } catch (e) { console.error(e); }
     setSaving(false);
+    setUploading(false);
   };
 
   const handleAnnouncementSubmit = async (e) => {
@@ -156,7 +206,7 @@ const BannersView = () => {
                   <button onClick={() => toggleBannerActive(banner)} className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors" title={banner.is_active ? 'Hide' : 'Show'}>
                     {banner.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
                   </button>
-                  <button onClick={() => { setBannerForm({ title: banner.title || '', subtitle: banner.subtitle || '', image_url: banner.image_url || '', link_url: banner.link_url || '', is_active: banner.is_active, display_order: banner.display_order || 0 }); setEditing(banner); setShowModal(true); }}
+                  <button onClick={() => { setBannerForm({ title: banner.title || '', subtitle: banner.subtitle || '', image_url: banner.image_url || '', link_url: banner.link_url || '', is_active: banner.is_active, display_order: banner.display_order || 0 }); setEditing(banner); setImagePreview(banner.image_url || ''); setLinkMode(LINK_OPTIONS.some(o => o.value === banner.link_url) ? 'page' : (banner.link_url ? 'custom' : 'page')); setShowModal(true); }}
                     className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors"><Edit3 size={14} /></button>
                   <button onClick={() => handleDeleteBanner(banner)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                 </div>
@@ -221,16 +271,67 @@ const BannersView = () => {
                   <input type="text" value={bannerForm.subtitle} onChange={e => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300" />
                 </div>
+
+                {/* Image Upload */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Image URL</label>
-                  <input type="url" value={bannerForm.image_url} onChange={e => setBannerForm({ ...bannerForm, image_url: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300" placeholder="https://..." />
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Banner Image</label>
+                  {(imagePreview || bannerForm.image_url) ? (
+                    <div className="relative group">
+                      <img src={imagePreview || bannerForm.image_url} alt="Preview" className="w-full h-40 object-cover rounded-lg border border-gray-200" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+                        <button type="button" onClick={() => fileInputRef.current?.click()}
+                          className="px-3 py-1.5 bg-white text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-100">
+                          Change
+                        </button>
+                        <button type="button" onClick={clearImage}
+                          className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600">
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={handleDrop}
+                      className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-colors"
+                    >
+                      <Upload size={24} className="mx-auto text-gray-300 mb-2" />
+                      <p className="text-sm text-gray-500 font-medium">Click to upload or drag & drop</p>
+                      <p className="text-[11px] text-gray-400 mt-1">PNG, JPG, WEBP, GIF (max 5MB)</p>
+                    </div>
+                  )}
+                  <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleImageFileChange} className="hidden" />
                 </div>
+
+                {/* Link URL - Page Selector */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Link URL</label>
-                  <input type="url" value={bannerForm.link_url} onChange={e => setBannerForm({ ...bannerForm, link_url: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300" placeholder="https://..." />
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Link Destination</label>
+                  <div className="flex gap-1 mb-2">
+                    <button type="button" onClick={() => { setLinkMode('page'); setBannerForm({ ...bannerForm, link_url: LINK_OPTIONS[0].value }); }}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${linkMode === 'page' ? 'bg-orange-50 text-orange-600' : 'text-gray-500 hover:text-gray-700 bg-gray-50'}`}>
+                      <LinkIcon size={10} className="inline mr-1" />Store Page
+                    </button>
+                    <button type="button" onClick={() => { setLinkMode('custom'); setBannerForm({ ...bannerForm, link_url: '' }); }}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${linkMode === 'custom' ? 'bg-orange-50 text-orange-600' : 'text-gray-500 hover:text-gray-700 bg-gray-50'}`}>
+                      Custom URL
+                    </button>
+                  </div>
+                  {linkMode === 'page' ? (
+                    <select value={bannerForm.link_url} onChange={e => setBannerForm({ ...bannerForm, link_url: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300 bg-white">
+                      {LINK_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input type="text" value={bannerForm.link_url} onChange={e => setBannerForm({ ...bannerForm, link_url: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300"
+                      placeholder="/shop or https://example.com" />
+                  )}
+                  <p className="text-[11px] text-gray-400 mt-1">Where should the banner link to when clicked?</p>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Display Order</label>
@@ -246,9 +347,10 @@ const BannersView = () => {
                   </div>
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <button type="submit" disabled={saving}
-                    className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors">
-                    {saving ? 'Saving...' : (editing ? 'Update Banner' : 'Create Banner')}
+                  <button type="submit" disabled={saving || uploading}
+                    className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+                    {uploading ? (<><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Uploading image...</>) :
+                     saving ? 'Saving...' : (editing ? 'Update Banner' : 'Create Banner')}
                   </button>
                   <button type="button" onClick={resetForm} className="px-4 py-2.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50">Cancel</button>
                 </div>

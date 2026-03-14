@@ -7,6 +7,7 @@ const Cart = () => {
   const { items, updateQuantity, removeFromCart, clearCart, subtotal, discount, discountAmount, total } = useCart();
   const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [quantityErrors, setQuantityErrors] = useState({});
 
   const formatPrice = (p) => `₱${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
@@ -17,6 +18,30 @@ const Cart = () => {
       return;
     }
     navigate('/checkout');
+  };
+
+  const clearQuantityError = (productId) => {
+    setQuantityErrors((prev) => {
+      if (!prev[productId]) return prev;
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+  };
+
+  const handleIncreaseQty = (item) => {
+    const stock = Number(item.product.stock_quantity ?? Infinity);
+    if (Number.isFinite(stock) && item.quantity >= stock) {
+      setQuantityErrors((prev) => ({ ...prev, [item.productId]: `Cannot exceed stock (${stock}).` }));
+      return;
+    }
+    clearQuantityError(item.productId);
+    updateQuantity(item.productId, item.quantity + 1);
+  };
+
+  const handleDecreaseQty = (item) => {
+    clearQuantityError(item.productId);
+    updateQuantity(item.productId, item.quantity - 1);
   };
 
   return (
@@ -68,6 +93,9 @@ const Cart = () => {
                           <div className="min-w-0">
                             <Link to={`/products/${item.productId}`} className="font-medium text-gray-900 hover:text-orange-500 transition-colors text-sm line-clamp-2">{item.product.name}</Link>
                             {item.product.category_name && <p className="text-xs text-gray-500 mt-1">{item.product.category_name}</p>}
+                            {item.product.stock_quantity != null && (
+                              <p className="text-xs text-gray-400 mt-1">Stock: {item.product.stock_quantity}</p>
+                            )}
                             <div className="flex gap-3 mt-2 md:hidden">
                               <button onClick={() => removeFromCart(item.productId)} className="text-xs text-gray-400 hover:text-orange-500 transition-colors flex items-center gap-1"><Trash2 size={12} /> Remove</button>
                             </div>
@@ -85,11 +113,11 @@ const Cart = () => {
                         {/* Quantity */}
                         <div className="col-span-2 flex justify-center mt-3 md:mt-0">
                           <div className="flex items-center border border-gray-200 rounded-lg">
-                            <button onClick={() => updateQuantity(item.productId, item.quantity - 1)} className="px-2.5 py-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+                            <button onClick={() => handleDecreaseQty(item)} className="px-2.5 py-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
                               <Minus size={14} />
                             </button>
                             <span className="w-10 text-center text-sm font-medium">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.productId, item.quantity + 1)} className="px-2.5 py-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+                            <button onClick={() => handleIncreaseQty(item)} className="px-2.5 py-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
                               <Plus size={14} />
                             </button>
                           </div>
@@ -103,6 +131,9 @@ const Cart = () => {
                           </button>
                         </div>
                       </div>
+                      {quantityErrors[item.productId] && (
+                        <p className="text-xs text-orange-500 mt-2">{quantityErrors[item.productId]}</p>
+                      )}
                     </div>
                   );
                 })}
@@ -134,7 +165,7 @@ const Cart = () => {
                   )}
                   <div className="flex justify-between text-gray-600">
                     <span>Shipping</span>
-                    <span className="text-green-600 font-medium">{subtotal >= 2500 ? 'Free' : 'â‚±150.00'}</span>
+                    <span className="text-green-600 font-medium">{subtotal >= 2500 ? 'Free' : '₱150.00'}</span>
                   </div>
                   <div className="border-t border-gray-100 pt-3 flex justify-between">
                     <span className="font-semibold text-gray-900">Total</span>

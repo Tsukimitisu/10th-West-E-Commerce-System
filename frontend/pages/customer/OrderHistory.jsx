@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, ChevronRight, Search, Eye, RotateCcw, Calendar, Truck, CheckCircle2, Clock, XCircle, AlertTriangle } from 'lucide-react';
+import { Package, ChevronRight, Search, Calendar, Truck, CheckCircle2, Clock, XCircle, AlertTriangle } from 'lucide-react';
 import { getUserOrders } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
 
 const statusConfig = {
-  pending:    { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' },
-  paid:       { icon: CheckCircle2, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
-  preparing:  { icon: Package, color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' },
+  pending: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' },
+  paid: { icon: CheckCircle2, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
+  preparing: { icon: Package, color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' },
   processing: { icon: Package, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
-  shipped:    { icon: Truck, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' },
-  delivered:  { icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
-  completed:  { icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
-  cancelled:  { icon: XCircle, color: 'text-orange-500', bg: 'bg-orange-50 border-orange-200' },
-  refunded:   { icon: AlertTriangle, color: 'text-gray-600', bg: 'bg-gray-50 border-gray-200' },
+  shipped: { icon: Truck, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' },
+  delivered: { icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
+  completed: { icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
+  cancelled: { icon: XCircle, color: 'text-orange-500', bg: 'bg-orange-50 border-orange-200' },
+  refunded: { icon: AlertTriangle, color: 'text-gray-600', bg: 'bg-gray-50 border-gray-200' },
 };
 
 const OrderHistory = () => {
@@ -27,7 +27,10 @@ const OrderHistory = () => {
       try {
         const userData = localStorage.getItem('shopCoreUser');
         const user = userData ? JSON.parse(userData) : null;
-        if (!user) { setLoading(false); return; }
+        if (!user) {
+          setLoading(false);
+          return;
+        }
         const data = await getUserOrders(user.id);
         setOrders(data);
       } catch {}
@@ -36,7 +39,7 @@ const OrderHistory = () => {
     load();
   }, []);
 
-  const filtered = orders.filter(o => {
+  const filtered = orders.filter((o) => {
     const matchesSearch = !search || o.id?.toString().includes(search) || o.order_number?.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filter === 'all' || o.status === filter;
     return matchesSearch && matchesFilter;
@@ -50,11 +53,19 @@ const OrderHistory = () => {
           <div className="flex items-center gap-2">
             <div className="relative flex-1 sm:w-48">
               <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search orders..."
-                className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search orders..."
+                className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
             </div>
-            <select value={filter} onChange={e => setFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500">
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
               <option value="all">All Orders</option>
               <option value="pending">Pending</option>
               <option value="paid">Paid</option>
@@ -68,7 +79,7 @@ const OrderHistory = () => {
 
         {loading ? (
           <div className="space-y-3">
-            {[1,2,3].map(i => (
+            {[1, 2, 3].map((i) => (
               <div key={i} className="bg-white rounded-xl border border-gray-100 p-5 animate-pulse">
                 <div className="flex justify-between"><div className="h-4 bg-gray-200 rounded w-24" /><div className="h-4 bg-gray-200 rounded w-16" /></div>
                 <div className="h-3 bg-gray-200 rounded w-40 mt-3" />
@@ -86,13 +97,13 @@ const OrderHistory = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map(order => {
+            {filtered.map((order) => {
               const st = statusConfig[order.status] || statusConfig.pending;
               const StatusIcon = st.icon;
               const date = new Date(order.created_at || order.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+
               return (
-                <Link key={order.id} to={`/orders/${order.id}`}
-                  className="block bg-white rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm p-5 transition-all group">
+                <Link key={order.id} to={`/orders/${order.id}`} className="block bg-white rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm p-5 transition-all group">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-2 flex-1 min-w-0">
                       <div className="flex items-center gap-3 flex-wrap">
@@ -103,13 +114,13 @@ const OrderHistory = () => {
                       </div>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span className="flex items-center gap-1"><Calendar size={12} /> {date}</span>
-                        <span>{order.items?.length || order.item_count || '—'} items</span>
+                        <span>{order.items?.length || order.item_count || '-'} items</span>
                       </div>
                       {order.items && order.items.length > 0 && (
                         <div className="flex items-center gap-2 mt-2">
                           {order.items.slice(0, 4).map((item, i) => (
                             <div key={i} className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0">
-                              {item.image_url ? <img src={item.image_url} alt="" className="w-full h-full object-cover" /> :
+                              {(item.image_url || item.product?.image) ? <img src={item.image_url || item.product?.image} alt="" className="w-full h-full object-cover" /> :
                                 <div className="w-full h-full flex items-center justify-center"><Package size={14} className="text-gray-400" /></div>}
                             </div>
                           ))}
@@ -118,7 +129,7 @@ const OrderHistory = () => {
                       )}
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="font-semibold text-gray-900">₱{Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                      <p className="font-semibold text-gray-900">PHP {Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
                       <ChevronRight size={16} className="text-gray-300 group-hover:text-orange-500 ml-auto mt-1 transition-colors" />
                     </div>
                   </div>

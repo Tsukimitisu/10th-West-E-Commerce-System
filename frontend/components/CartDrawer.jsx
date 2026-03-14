@@ -7,8 +7,33 @@ const CartDrawer = ({ isOpen, onClose }) => {
   const { items, updateQuantity, removeFromCart, subtotal, itemCount } = useCart();
   const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [quantityErrors, setQuantityErrors] = useState({});
 
   const formatPrice = (p) => `₱${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+
+  const clearQuantityError = (productId) => {
+    setQuantityErrors((prev) => {
+      if (!prev[productId]) return prev;
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+  };
+
+  const handleIncreaseQty = (item) => {
+    const stock = Number(item.product.stock_quantity ?? Infinity);
+    if (Number.isFinite(stock) && item.quantity >= stock) {
+      setQuantityErrors((prev) => ({ ...prev, [item.productId]: `Cannot exceed stock (${stock}).` }));
+      return;
+    }
+    clearQuantityError(item.productId);
+    updateQuantity(item.productId, item.quantity + 1);
+  };
+
+  const handleDecreaseQty = (item) => {
+    clearQuantityError(item.productId);
+    updateQuantity(item.productId, item.quantity - 1);
+  };
 
   if (!isOpen) return null;
 
@@ -55,19 +80,25 @@ const CartDrawer = ({ isOpen, onClose }) => {
                     <Link to={`/products/${item.productId}`} onClick={onClose} className="text-sm font-medium text-gray-900 hover:text-orange-500 transition-colors line-clamp-2">
                       {item.product.name}
                     </Link>
+                    {item.product.stock_quantity != null && (
+                      <p className="text-xs text-gray-400 mt-0.5">Stock: {item.product.stock_quantity}</p>
+                    )}
                     <p className="text-sm font-bold text-orange-500 mt-1">
                       {formatPrice((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity)}
                     </p>
                     <div className="flex items-center justify-between mt-2">
                       <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
-                        <button onClick={() => updateQuantity(item.productId, item.quantity - 1)} className="px-2 py-1 text-gray-500 hover:bg-gray-50 transition-colors"><Minus size={14} /></button>
+                        <button onClick={() => handleDecreaseQty(item)} className="px-2 py-1 text-gray-500 hover:bg-gray-50 transition-colors"><Minus size={14} /></button>
                         <span className="px-3 py-1 text-sm font-medium min-w-[2rem] text-center">{item.quantity}</span>
-                        <button onClick={() => updateQuantity(item.productId, item.quantity + 1)} className="px-2 py-1 text-gray-500 hover:bg-gray-50 transition-colors"><Plus size={14} /></button>
+                        <button onClick={() => handleIncreaseQty(item)} className="px-2 py-1 text-gray-500 hover:bg-gray-50 transition-colors"><Plus size={14} /></button>
                       </div>
                       <button onClick={() => removeFromCart(item.productId)} className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors">
                         <Trash2 size={16} />
                       </button>
                     </div>
+                    {quantityErrors[item.productId] && (
+                      <p className="text-xs text-orange-500 mt-1">{quantityErrors[item.productId]}</p>
+                    )}
                   </div>
                 </div>
               ))}

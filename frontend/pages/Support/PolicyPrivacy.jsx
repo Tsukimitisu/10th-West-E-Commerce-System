@@ -39,7 +39,7 @@ const PrivacyPolicy = () => {
             </div>
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">2. Personal Data We Collect</h2>
-            <p>We collect the following categories of personal information:</p>
+            <p>We collect the following personal information when you use our services:</p>
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="bg-gray-50"><th className="text-left p-3 border border-gray-200 font-medium">Data Type</th><th className="text-left p-3 border border-gray-200 font-medium">Purpose</th></tr>
@@ -57,12 +57,12 @@ const PrivacyPolicy = () => {
             </table>
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">3. Legal Basis for Processing</h2>
-            <p>We process your personal data based on the following legal grounds under RA 10173:</p>
+            <p>We process your personal data based on the following legal grounds:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li><strong>Consent (§12a):</strong> When you create an account, you provide explicit consent for data processing.</li>
-              <li><strong>Contractual necessity (§12b):</strong> Processing necessary to fulfill orders and provide services.</li>
-              <li><strong>Legitimate interest (§12f):</strong> Fraud prevention, security monitoring, and service improvements.</li>
-              <li><strong>Legal obligation (§12c):</strong> Tax record retention per BIR regulations.</li>
+              <li><strong>Consent:</strong> When you create an account, you provide explicit consent for data processing.</li>
+              <li><strong>Contractual necessity:</strong> Processing necessary to fulfill orders and provide services.</li>
+              <li><strong>Legitimate interest:</strong> Fraud prevention, security monitoring, and service improvements.</li>
+              <li><strong>Legal obligation:</strong> Tax record retention per BIR regulations.</li>
             </ul>
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">4. Data Retention</h2>
@@ -79,16 +79,16 @@ const PrivacyPolicy = () => {
             </table>
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">5. Third-Party Sharing</h2>
-            <p>We may share your data with the following, strictly for the stated purposes:</p>
+            <p>We only share your data with the following parties when necessary:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li><strong>Payment processors</strong> (Stripe, GCash, Maya) — to process payments</li>
-              <li><strong>Shipping couriers</strong> (J&T, LBC, Grab) — to deliver your orders</li>
-              <li><strong>Cloud infrastructure</strong> (Supabase/AWS) — to host and secure data</li>
+              <li><strong>Payment processors</strong> (Stripe, GCash, Maya) - to process payments</li>
+              <li><strong>Shipping couriers</strong> (J&T, LBC, Grab) - to deliver your orders</li>
+              <li><strong>Cloud infrastructure</strong> (Supabase/AWS) - to host and secure data</li>
             </ul>
             <p className="font-medium text-gray-900">We never sell, rent, or trade your personal data to any third party for marketing purposes.</p>
 
-            <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">6. Your Rights (RA 10173 §§16–18)</h2>
-            <p>As a data subject, you have the following rights:</p>
+            <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">6. Your Rights</h2>
+            <p>As a data subject, you have the following rights under the law:</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
                 { title: 'Right to Access', desc: 'Request a copy of your personal data we hold.' },

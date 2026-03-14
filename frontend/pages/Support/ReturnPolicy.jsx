@@ -141,7 +141,7 @@ const ReturnPolicy = () => {
 
             <h2 className="font-display font-semibold text-lg text-gray-900 mt-8">9. Contact Us</h2>
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-sm space-y-1">
-              <p><strong>10th West Moto Parts — Returns Department</strong></p>
+              <p><strong>10th West Moto Parts - Returns Department</strong></p>
               <p><strong>Email:</strong> <a href="mailto:returns@10thwestmoto.com" className="text-orange-500">returns@10thwestmoto.com</a></p>
               <p><strong>Phone:</strong> (02) 8888-1234</p>
               <p><strong>Hours:</strong> Monday – Saturday, 9:00 AM – 6:00 PM</p>

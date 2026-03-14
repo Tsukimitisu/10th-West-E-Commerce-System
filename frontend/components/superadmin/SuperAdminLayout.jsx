@@ -16,14 +16,12 @@ const NAV_ITEMS = [
   { id: 'backup', label: 'Backup & Recovery', icon: Database },
 ];
 
-const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
+const SuperAdminLayout = ({ activeView, onNavigate, user, children }) => {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { connected } = useSocket();
-  const userStr = localStorage.getItem('shopCoreUser');
-  const user = userStr ? JSON.parse(userStr) : null;
 
   const handleNav = (item) => {
     onNavigate(item.id);

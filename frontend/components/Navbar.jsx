@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
-import { getCategories, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from '../services/api';
+import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
+import { useSocket } from '../context/SocketContext';
 import CartDrawer from './CartDrawer';
 
 const Navbar = ({ user, onLogout }) => {
-  const [categories, setCategories] = useState([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [catMenuOpen, setCatMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -20,16 +19,15 @@ const Navbar = ({ user, onLogout }) => {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [shopToolsOpen, setShopToolsOpen] = useState(false);
   const { itemCount } = useCart();
+  const { on, off, connected } = useSocket();
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [globalSearch, setGlobalSearch] = useState(searchParams.get('search') || '');
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
   const moreMenuRef = useRef(null);
   const shopToolsRef = useRef(null);
-
-  useEffect(() => {
-    getCategories().then(setCategories).catch(() => { });
-  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -40,7 +38,6 @@ const Navbar = ({ user, onLogout }) => {
   useEffect(() => {
     setMobileOpen(false);
     setUserMenuOpen(false);
-    setCatMenuOpen(false);
     setMoreMenuOpen(false);
     setShopToolsOpen(false);
   }, [location.pathname]);
@@ -53,27 +50,78 @@ const Navbar = ({ user, onLogout }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      getUnreadNotificationCount().then(setUnreadCount).catch(() => {});
-      getNotifications().then(n => setNotifications(n.slice(0, 10))).catch(() => {});
-      const interval = setInterval(() => {
-        getUnreadNotificationCount().then(setUnreadCount).catch(() => {});
-      }, 30000);
-      return () => clearInterval(interval);
-    }
+  const refreshNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [count, list, anns] = await Promise.all([
+        getUnreadNotificationCount().catch(() => 0),
+        getNotifications().catch(() => []),
+        getAnnouncements().catch(() => []),
+      ]);
+      setUnreadCount(count || 0);
+
+      const mappedAnns = (anns || []).map(a => ({
+        ...a,
+        is_read: true,
+        type: 'announcement',
+        message: a.content
+      }));
+
+      const combined = [...(list || []), ...mappedAnns].sort((a, b) => {
+        const dateA = new Date(a.created_at || a.published_at || 0);
+        const dateB = new Date(b.created_at || b.published_at || 0);
+        return dateB - dateA;
+      }).slice(0, 20);
+
+      setNotifications(combined);
+    } catch { }
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    refreshNotifications();
+    const interval = setInterval(refreshNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [user, refreshNotifications]);
+
+  useEffect(() => {
+    if (!user || !connected) return;
+
+    const handleNotification = (notification) => {
+      if (!notification) {
+        refreshNotifications();
+        return;
+      }
+      setNotifications((prev) => [notification, ...prev].slice(0, 10));
+      if (notification.is_read === false || notification.is_read == null) {
+        setUnreadCount((prev) => prev + 1);
+      }
+    };
+
+    const handleOrderEvent = () => {
+      refreshNotifications();
+    };
+
+    on('notification', handleNotification);
+    on('order:new', handleOrderEvent);
+    on('order:updated', handleOrderEvent);
+
+    return () => {
+      off('notification', handleNotification);
+      off('order:new', handleOrderEvent);
+      off('order:updated', handleOrderEvent);
+    };
+  }, [user, connected, on, off, refreshNotifications]);
 
   useEffect(() => {
     const notifHandler = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false);
       if (shopToolsRef.current && !shopToolsRef.current.contains(e.target)) setShopToolsOpen(false);
-      if (catMenuOpen && !e.target.closest('[data-cat-menu]')) setCatMenuOpen(false);
     };
     document.addEventListener('mousedown', notifHandler);
     return () => document.removeEventListener('mousedown', notifHandler);
-  }, [catMenuOpen]);
+  }, []);
 
   const handleMarkAllRead = async () => {
     try {
@@ -83,7 +131,8 @@ const Navbar = ({ user, onLogout }) => {
     } catch (e) { console.error(e); }
   };
 
-  const handleMarkRead = async (id) => {
+  const handleMarkRead = async (id, type) => {
+    if (type === 'announcement') return;
     try {
       await markNotificationRead(id);
       setUnreadCount(prev => Math.max(0, prev - 1));
@@ -92,9 +141,19 @@ const Navbar = ({ user, onLogout }) => {
   };
 
   const isShopRoute = location.pathname === '/shop';
+  const isHomeRoute = location.pathname === '/';
+  const shouldShowGlobalSearch = isShopRoute || isHomeRoute;
   const shopSearch = searchParams.get('search') || '';
   const shopSort = searchParams.get('sort') || 'newest';
   const shopView = searchParams.get('view') === 'list' ? 'list' : 'grid';
+
+  useEffect(() => {
+    if (isShopRoute) {
+      setGlobalSearch(searchParams.get('search') || '');
+    } else if (isHomeRoute) {
+      setGlobalSearch('');
+    }
+  }, [isShopRoute, isHomeRoute, searchParams]);
 
   const updateShopParams = (updates) => {
     const next = new URLSearchParams(searchParams);
@@ -103,6 +162,23 @@ const Navbar = ({ user, onLogout }) => {
       else next.set(key, value);
     });
     setSearchParams(next, { replace: true });
+  };
+
+  const handleGlobalSearchSubmit = (e) => {
+    e.preventDefault();
+    const value = globalSearch.trim();
+
+    if (isShopRoute) {
+      updateShopParams({ search: value || null });
+      return;
+    }
+
+    if (!value) {
+      navigate('/shop');
+      return;
+    }
+
+    navigate(`/shop?search=${encodeURIComponent(value)}`);
   };
 
   if (location.pathname === '/pos') return null;
@@ -137,23 +213,6 @@ const Navbar = ({ user, onLogout }) => {
               <Link to="/shop" className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/shop' ? 'text-orange-500 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
                 Shop
               </Link>
-              <div className="relative" data-cat-menu>
-                <button
-                  onClick={() => setCatMenuOpen(!catMenuOpen)}
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors flex items-center gap-1"
-                >
-                  Categories <ChevronDown size={14} className={`transition-transform ${catMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {catMenuOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 animate-fade-in">
-                    {categories.map(cat => (
-                      <Link key={cat.id} to={`/shop?category=${cat.id}`} className="block px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors">
-                        {cat.name}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
               <div ref={moreMenuRef} className="relative">
                 <button
                   onClick={() => setMoreMenuOpen(!moreMenuOpen)}
@@ -262,10 +321,26 @@ const Navbar = ({ user, onLogout }) => {
                         {notifications.length === 0 ? (
                           <div className="p-6 text-center text-gray-400 text-sm">No notifications</div>
                         ) : (
-                          notifications.map(n => (
-                            <button key={n.id} onClick={() => { handleMarkRead(n.id); setNotifOpen(false); }} className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${!n.is_read ? 'bg-orange-50/50' : ''}`}>
-                              <p className={`text-sm ${!n.is_read ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{n.title || n.message}</p>
-                              <p className="text-xs text-gray-400 mt-1">{n.created_at ? new Date(n.created_at).toLocaleDateString() : ''}</p>
+                          notifications.map((n, i) => (
+                            <button key={`${n.id || n.title}-${i}`} onClick={() => { handleMarkRead(n.id, n.type); setNotifOpen(false); }} className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${!n.is_read ? 'bg-orange-50/50' : ''}`}>
+                              <div className="flex gap-3">
+                                <div className="mt-0.5 shrink-0">
+                                  {n.type === 'announcement' ? (
+                                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                    </div>
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center">
+                                      <Bell size={16} />
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className={`text-sm ${!n.is_read ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{n.title || n.message}</p>
+                                  {n.type === 'announcement' && <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>}
+                                  <p className="text-xs text-gray-400 mt-1">{n.created_at || n.published_at ? new Date(n.created_at || n.published_at).toLocaleDateString() : ''}</p>
+                                </div>
+                              </div>
                             </button>
                           ))
                         )}
@@ -339,6 +414,30 @@ const Navbar = ({ user, onLogout }) => {
 
       </header>
 
+      {shouldShowGlobalSearch && (
+        <div className="sticky top-16 z-40 bg-white/95 backdrop-blur border-b border-gray-100">
+          <div className="max-w-7xl mx-auto px-4 py-2.5">
+            <form onSubmit={handleGlobalSearchSubmit} className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={globalSearch}
+                  onChange={(e) => setGlobalSearch(e.target.value)}
+                  placeholder="Search motorcycle parts, brands, categories..."
+                  className="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-200"
+                />
+              </div>
+              <button
+                type="submit"
+                className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors"
+              >
+                Search
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-[100] lg:hidden">
@@ -367,12 +466,6 @@ const Navbar = ({ user, onLogout }) => {
             <nav className="p-4 space-y-1">
               <Link to="/" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Home</Link>
               <Link to="/shop" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Shop All</Link>
-              <div className="pt-2 pb-1 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Categories</div>
-              {categories.map(cat => (
-                <Link key={cat.id} to={`/shop?category=${cat.id}`} onClick={() => setMobileOpen(false)} className="block px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-orange-50 hover:text-orange-500 ml-2">
-                  {cat.name}
-                </Link>
-              ))}
               <div className="border-t border-gray-100 my-2" />
               <Link to="/faq" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">FAQ</Link>
               <Link to="/contact" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Contact</Link>

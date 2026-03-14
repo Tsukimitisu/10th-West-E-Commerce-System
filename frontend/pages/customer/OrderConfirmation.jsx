@@ -53,7 +53,7 @@ const OrderConfirmation = () => {
           <div className="p-4 bg-gray-50 flex items-center justify-center gap-3 text-sm">
             <Truck size={18} className="text-gray-600" />
             <span className="text-gray-600">Estimated delivery:</span>
-            <span className="font-medium text-gray-900">3â€“7 business days</span>
+            <span className="font-medium text-gray-900">3-7 business days</span>
           </div>
 
           {/* Items */}

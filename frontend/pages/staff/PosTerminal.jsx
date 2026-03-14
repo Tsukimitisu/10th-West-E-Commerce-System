@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getProducts, getCategories, createOrder, getOrderById } from '../../services/api';
+import { getProducts, getCategories, createOrder, getOrderById, logPosActivity } from '../../services/api';
 import { Loader2, Search, Trash2, Plus, Minus, LogOut, RotateCcw, Monitor, ShoppingBag, Bike, Box, ArrowLeftCircle, Tag, Check, Clock, DollarSign, Receipt, AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
 import PaymentModal from './PaymentModal';
 import ReceiptModal from './ReceiptModal';
@@ -83,13 +83,14 @@ const PosTerminal = () => {
     // --- Cart Logic ---
 
     const addToCart = (product) => {
-        if (product.stock_quantity === 0) return;
+        const stock = Number(product.stock_quantity ?? 0);
+        if (stock <= 0) return;
 
         setCartItems(current => {
             const existing = current.find(item => item.productId === product.id);
 
             // Check stock before adding
-            if (existing && existing.quantity >= product.stock_quantity) {
+            if (existing && existing.quantity >= stock) {
                 showToast('error', 'Insufficient Stock!');
                 return current;
             }
@@ -111,12 +112,13 @@ const PosTerminal = () => {
     const updateQuantity = (productId, delta) => {
         const product = products.find(p => p.id === productId);
         if (!product) return;
+        const stock = Number(product.stock_quantity ?? 0);
 
         setCartItems(current =>
             current.map(item => {
                 if (item.productId === productId) {
                     const newQty = item.quantity + delta;
-                    if (newQty > product.stock_quantity) {
+                    if (newQty > stock) {
                         return item; // Max stock reached
                     }
                     const validQty = Math.max(1, newQty);
@@ -158,6 +160,8 @@ const PosTerminal = () => {
     };
 
     const processReturn = () => {
+        const returnedCount = Object.values(returnItems).reduce((sum, qty) => sum + qty, 0);
+        logPosActivity('pos.return', 'order', returnOrder?.id, { items_returned: returnedCount, cashier: user?.name });
         showToast('success', 'Return Processed & Inventory Updated!');
         setReturnMode(false);
         setReturnOrder(null);
@@ -170,11 +174,16 @@ const PosTerminal = () => {
 
     const filteredProducts = products.filter(product => {
         const term = searchTerm.toLowerCase();
-        const matchesSearch = product.name.toLowerCase().includes(term) ||
-            product.partNumber.toLowerCase().includes(term) ||
-            (product.barcode && product.barcode.toLowerCase().includes(term)) ||
-            (product.sku && product.sku.toLowerCase().includes(term));
-        const matchesCategory = selectedCategory === 'all' || product.category_id === selectedCategory;
+        const productName = String(product.name || '').toLowerCase();
+        const partNumber = String(product.partNumber || '').toLowerCase();
+        const barcode = String(product.barcode || '').toLowerCase();
+        const sku = String(product.sku || '').toLowerCase();
+
+        const matchesSearch = productName.includes(term) ||
+            partNumber.includes(term) ||
+            barcode.includes(term) ||
+            sku.includes(term);
+        const matchesCategory = selectedCategory === 'all' || String(product.category_id) === String(selectedCategory);
         return matchesSearch && matchesCategory;
     });
 
@@ -213,9 +222,9 @@ const PosTerminal = () => {
         }
     }
 
-    const taxRate = 0.12; // 12% VAT
-    const taxAmount = (subtotal - discountAmount) * taxRate;
-    const total = Math.max(0, subtotal - discountAmount + taxAmount);
+    const taxRate = 0.12; // 12% VAT (already included in price)
+    const total = Math.max(0, subtotal - discountAmount);
+    const taxAmount = (total / 1.12) * 0.12; // VAT portion already included
 
     // --- Payment & Order ---
 
@@ -238,6 +247,8 @@ const PosTerminal = () => {
             const newOrder = await createOrder(orderData);
             setLastOrder(newOrder);
             setShowPayment(false);
+            // Log POS sale activity
+            logPosActivity('pos.sale', 'order', newOrder.id, { total, items: cartItems.length, payment_method: method, cashier: user?.name });
             // Update shift summary
             setShiftTransactionCount(prev => prev + 1);
             setShiftTotalSales(prev => prev + total);
@@ -570,7 +581,7 @@ const PosTerminal = () => {
                                     </div>
                                 )}
                                 <div className="flex justify-between text-gray-600 text-sm font-medium">
-                                    <span>VAT (12%)</span>
+                                    <span>VAT (12% included)</span>
                                     <span className="font-bold">₱{taxAmount.toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between text-3xl font-black text-gray-900 pt-4 border-t-2 border-gray-100">

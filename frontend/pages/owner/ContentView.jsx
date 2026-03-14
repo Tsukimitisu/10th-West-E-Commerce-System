@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Newspaper, Save, Plus, Edit3, Trash2, X, FileText, HelpCircle, Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { getPolicy, updatePolicy, getFAQs, createFAQ, updateFAQ, deleteFAQ } from '../../services/api';
+import RichTextEditor from '../../components/owner/RichTextEditor';
 
 const POLICY_TYPES = [
   { key: 'return_policy', label: 'Return Policy' },
@@ -223,14 +224,14 @@ const ContentView = () => {
 
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Content</label>
-                  <textarea
+                  <RichTextEditor
                     value={policyContent}
-                    onChange={(e) => {
-                      setPolicyContent(e.target.value);
+                    onChange={(html) => {
+                      setPolicyContent(html);
                       setPolicySaved(false);
                     }}
                     placeholder="Enter policy content..."
-                    className={`${inputClass} min-h-[300px] resize-y`}
+                    minHeight="300px"
                   />
                 </div>
 
