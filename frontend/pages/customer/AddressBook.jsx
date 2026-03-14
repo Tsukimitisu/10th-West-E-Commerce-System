@@ -2,7 +2,7 @@
 import { MapPin, Plus, Trash2, Edit3, Check, X, Home, Building2, Star, AlertTriangle } from 'lucide-react';
 import { getAddresses, saveAddress, deleteAddress, updateAddress } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
-import AddressAutocomplete from '../../components/AddressAutocomplete';
+import AddressDropdowns from '../../components/AddressDropdowns';
 
 const AddressBook = () => {
   const [addresses, setAddresses] = useState([]);
@@ -127,48 +127,27 @@ const AddressBook = () => {
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-4">
+                <AddressDropdowns
+                  province={form.state}
+                  city={form.city}
+                  barangay={form.barangay}
+                  onChange={({ province, city, barangay }) => {
+                    setForm(f => ({
+                      ...f,
+                      state: province || '',
+                      city: city || '',
+                      barangay: barangay || '',
+                    }));
+                  }}
+                />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Search Address</label>
-                  <AddressAutocomplete
-                    value={form.street}
-                    onInputChange={(v) => setForm(f => ({ ...f, street: v }))}
-                    onSelect={(addr) => {
-                      setForm(f => ({
-                        ...f,
-                        street: addr.street,
-                        barangay: addr.barangay || '',
-                        city: addr.city || '',
-                        state: addr.state || '',
-                        zip: digitsOnly(addr.postal_code || ''),
-                        country: 'Philippines',
-                      }));
-                      setZipError(addr.postal_code && validateZip(digitsOnly(addr.postal_code)) ? '' : zipError);
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Street / House No.</label>
                   <input type="text" value={form.street} onChange={e => setForm(f => ({...f, street: e.target.value}))} required
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Barangay</label>
-                  <input type="text" value={form.barangay} onChange={e => setForm(f => ({...f, barangay: e.target.value}))}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                  <input type="text" value={form.city} onChange={e => setForm(f => ({...f, city: e.target.value}))} required
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">State/Province</label>
-                  <input type="text" value={form.state} onChange={e => setForm(f => ({...f, state: e.target.value}))}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                </div>
+              <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
                   <input

@@ -3,7 +3,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { getAddresses, createOrder, createPaymentIntent, getProductById } from '../../services/api';
-import AddressAutocomplete from '../../components/AddressAutocomplete';
+import AddressDropdowns from '../../components/AddressDropdowns';
 
 const Checkout = () => {
   const { items: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
@@ -236,30 +236,22 @@ const Checkout = () => {
 
                 {(addresses.length === 0 || showNewAddress) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="block text-sm font-medium text-gray-700">Search Address</label>
-                      <AddressAutocomplete
-                        value={form.street}
-                        onInputChange={(v) => setForm((f) => ({ ...f, street: v }))}
-                        onSelect={(addr) => {
+                    <div className="md:col-span-2">
+                      <AddressDropdowns
+                        province={form.state}
+                        city={form.city}
+                        barangay={form.barangay}
+                        onChange={({ province, city, barangay }) => {
                           setForm((f) => ({
                             ...f,
-                            street: addr.street,
-                            barangay: addr.barangay || '',
-                            city: addr.city || '',
-                            state: addr.state || '',
-                            postal_code: digitsOnly(addr.postal_code || ''),
-                            country: 'Philippines',
+                            state: province || '',
+                            city: city || '',
+                            barangay: barangay || '',
                           }));
-                          const val = digitsOnly(addr.postal_code || '');
-                          setZipError(val.length === 0 || validateZip(val) ? '' : 'Zip Code must contain exactly 4 digits.');
                         }}
                       />
                     </div>
-                    <Input label="Street Address" value={form.street} onChange={(v) => setForm((f) => ({ ...f, street: v }))} required={!selectedAddress} className="md:col-span-2" />
-                    <Input label="Barangay" value={form.barangay} onChange={(v) => setForm((f) => ({ ...f, barangay: v }))} required={!selectedAddress} />
-                    <Input label="City" value={form.city} onChange={(v) => setForm((f) => ({ ...f, city: v }))} required={!selectedAddress} />
-                    <Input label="State/Province" value={form.state} onChange={(v) => setForm((f) => ({ ...f, state: v }))} required={!selectedAddress} />
+                    <Input label="Street / House No." value={form.street} onChange={(v) => setForm((f) => ({ ...f, street: v }))} required={!selectedAddress} className="md:col-span-2" />
                     <Input
                       label="Postal Code"
                       value={form.postal_code}
