@@ -7,6 +7,7 @@ const AddressAutocomplete = ({ value, onSelect, onInputChange, placeholder = 'Se
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
   const abortRef = useRef(null);
 
@@ -17,6 +18,7 @@ const AddressAutocomplete = ({ value, onSelect, onInputChange, placeholder = 'Se
   useEffect(() => {
     if (query.trim().length < 3) {
       setSuggestions([]);
+      setOpen(false);
       setError('');
       if (abortRef.current) abortRef.current.abort();
       return;
@@ -39,7 +41,9 @@ const AddressAutocomplete = ({ value, onSelect, onInputChange, placeholder = 'Se
         });
         if (!res.ok) throw new Error('Failed to fetch suggestions');
         const data = await res.json();
-        setSuggestions(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        setSuggestions(list);
+        setOpen(list.length > 0);
       } catch (err) {
         if (controller.signal.aborted) return;
         setError('Could not load suggestions');
@@ -72,11 +76,13 @@ const AddressAutocomplete = ({ value, onSelect, onInputChange, placeholder = 'Se
     });
     setQuery(street);
     setSuggestions([]);
+    setOpen(false);
   };
 
   const handleOutsideClick = (event) => {
     if (containerRef.current && !containerRef.current.contains(event.target)) {
       setSuggestions([]);
+      setOpen(false);
     }
   };
 
@@ -84,6 +90,17 @@ const AddressAutocomplete = ({ value, onSelect, onInputChange, placeholder = 'Se
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
+
+  const renderLabel = (s) => {
+    const addr = s.address || {};
+    const primary = [addr.house_number, addr.road].filter(Boolean).join(' ').trim() || s.display_name;
+    const barangay = addr.suburb || addr.village || addr.neighbourhood || addr.hamlet || '';
+    const locality = addr.city || addr.town || addr.municipality || addr.county || '';
+    const province = addr.state || addr.region || '';
+    const zip = addr.postcode || '';
+    const secondary = [barangay, locality, province, zip].filter(Boolean).join(', ');
+    return { primary, secondary };
+  };
 
   return (
     <div className="relative" ref={containerRef}>
@@ -93,28 +110,43 @@ const AddressAutocomplete = ({ value, onSelect, onInputChange, placeholder = 'Se
         onChange={(e) => {
           setQuery(e.target.value);
           onInputChange?.(e.target.value);
+          setOpen(true);
         }}
         placeholder={placeholder}
         disabled={disabled}
         className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
         autoComplete="off"
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        aria-haspopup="listbox"
       />
       {loading && (
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">Loading...</div>
       )}
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-      {suggestions.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-          {suggestions.map((s) => (
-            <button
-              type="button"
-              key={s.place_id}
-              onClick={() => handleSelect(s)}
-              className="w-full text-left px-3 py-2 hover:bg-orange-50 text-sm text-gray-700"
-            >
-              {s.display_name}
-            </button>
-          ))}
+      {open && suggestions.length > 0 && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto" role="listbox">
+          {suggestions.map((s) => {
+            const label = renderLabel(s);
+            return (
+              <button
+                type="button"
+                key={s.place_id}
+                onClick={() => handleSelect(s)}
+                className="w-full text-left px-3 py-2 hover:bg-orange-50 text-sm text-gray-800"
+                role="option"
+              >
+                <div className="font-medium truncate">{label.primary}</div>
+                {label.secondary && <div className="text-xs text-gray-500 truncate">{label.secondary}</div>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {open && !loading && !error && suggestions.length === 0 && query.trim().length >= 3 && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg text-sm text-gray-500 px-3 py-2">
+          No suggestions found. Try refining your search.
         </div>
       )}
     </div>
