@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Truck, Shield, Clock, Headphones, ChevronLeft, ChevronRight, Zap, Star } from 'lucide-react';
-import { getProducts, getCategories, getBanners, getAnnouncements } from '../services/api';
+import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist } from '../services/api';
 import ProductCard from '../components/ProductCard';
 
 const Home = () => {
@@ -10,6 +10,7 @@ const Home = () => {
   const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [banners, setBanners] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [wishlistedIds, setWishlistedIds] = useState([]);
   const [currentBanner, setCurrentBanner] = useState(0);
   const navigate = useNavigate();
 
@@ -21,7 +22,30 @@ const Home = () => {
 
     const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
     if (viewed.length > 0) setRecentlyViewed(viewed.slice(0, 6));
+
+    const loadWishlist = async () => {
+      try {
+        const user = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+        if (!user?.id) return;
+        const wishlist = await getWishlist(user.id);
+        setWishlistedIds(wishlist.map(item => Number(item.product_id ?? item.product?.id ?? item.id)).filter(Boolean));
+      } catch {}
+    };
+
+    loadWishlist();
   }, []);
+
+  const handleWishlistToggle = (productId, shouldBeWishlisted) => {
+    const normalizedId = Number(productId);
+    if (!normalizedId) return;
+
+    setWishlistedIds(prev => {
+      const exists = prev.includes(normalizedId);
+      if (shouldBeWishlisted && !exists) return [...prev, normalizedId];
+      if (!shouldBeWishlisted && exists) return prev.filter(id => id !== normalizedId);
+      return prev;
+    });
+  };
 
   useEffect(() => {
     if (banners.length > 1) {
@@ -167,7 +191,7 @@ const Home = () => {
               </Link>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {featured.map(p => <ProductCard key={p.id} product={p} />)}
+              {featured.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />)}
             </div>
           </div>
         </section>
@@ -204,7 +228,7 @@ const Home = () => {
               </Link>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {bestSellers.map(p => <ProductCard key={p.id} product={p} />)}
+              {bestSellers.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />)}
             </div>
           </div>
         </section>
@@ -224,7 +248,7 @@ const Home = () => {
               </Link>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {newArrivals.map(p => <ProductCard key={p.id} product={p} />)}
+              {newArrivals.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />)}
             </div>
           </div>
         </section>
@@ -236,7 +260,7 @@ const Home = () => {
           <div className="max-w-7xl mx-auto px-4">
             <h2 className="font-display font-bold text-2xl text-gray-900 mb-8">Recently Viewed</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              {recentlyViewed.map(p => <ProductCard key={p.id} product={p} />)}
+              {recentlyViewed.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />)}
             </div>
           </div>
         </section>

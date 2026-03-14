@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { getProducts, getCategories } from '../services/api';
+import { getProducts, getCategories, getWishlist } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
 
@@ -10,6 +10,7 @@ const ProductList = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [wishlistedIds, setWishlistedIds] = useState([]);
   const [view, setView] = useState(searchParams.get('view') === 'list' ? 'list' : 'grid');
   const [showDesktopFilters, setShowDesktopFilters] = useState(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -28,6 +29,31 @@ const ProductList = () => {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const loadWishlist = async () => {
+      try {
+        const user = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+        if (!user?.id) return;
+        const wishlist = await getWishlist(user.id);
+        setWishlistedIds(wishlist.map(item => Number(item.product_id ?? item.product?.id ?? item.id)).filter(Boolean));
+      } catch {}
+    };
+
+    loadWishlist();
+  }, []);
+
+  const handleWishlistToggle = (productId, shouldBeWishlisted) => {
+    const normalizedId = Number(productId);
+    if (!normalizedId) return;
+
+    setWishlistedIds(prev => {
+      const exists = prev.includes(normalizedId);
+      if (shouldBeWishlisted && !exists) return [...prev, normalizedId];
+      if (!shouldBeWishlisted && exists) return prev.filter(id => id !== normalizedId);
+      return prev;
+    });
+  };
 
   useEffect(() => {
     const cat = searchParams.get('category');
@@ -181,11 +207,11 @@ const ProductList = () => {
               </div>
             ) : view === 'grid' ? (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filtered.map(p => <ProductCard key={p.id} product={p} view="grid" />)}
+                {filtered.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} view="grid" />)}
               </div>
             ) : (
               <div className="space-y-3">
-                {filtered.map(p => <ProductCard key={p.id} product={p} view="list" />)}
+                {filtered.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} view="list" />)}
               </div>
             )}
           </div>

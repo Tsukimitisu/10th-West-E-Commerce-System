@@ -20,7 +20,7 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
       const userId = JSON.parse(user).id;
       if (isWishlisted) await removeFromWishlist(userId, product.id);
       else await addToWishlist(userId, product.id);
-      onWishlistToggle?.();
+      onWishlistToggle?.(product.id, !isWishlisted);
     } catch {}
   };
 
