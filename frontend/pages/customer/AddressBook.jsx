@@ -2,18 +2,19 @@
 import { MapPin, Plus, Trash2, Edit3, Check, X, Home, Building2, Star, AlertTriangle } from 'lucide-react';
 import { getAddresses, saveAddress, deleteAddress, updateAddress } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
 
 const AddressBook = () => {
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ label: 'Home', name: '', phone: '', street: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false });
+  const [form, setForm] = useState({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saveError, setSaveError] = useState('');
   const [zipError, setZipError] = useState('');
 
-  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false }); setEditing(null); setShowForm(false); setSaveError(''); setZipError(''); };
+  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false }); setEditing(null); setShowForm(false); setSaveError(''); setZipError(''); };
   const digitsOnly = (value) => value.replace(/\D/g, '');
   const validateZip = (zip) => /^\d{4}$/.test(zip);
 
@@ -43,11 +44,13 @@ const AddressBook = () => {
       return;
     }
     try {
+      const streetWithBarangay = form.barangay ? `${form.street}, ${form.barangay}` : form.street;
+      const payload = { ...form, street: streetWithBarangay };
       if (editing) {
-        const updated = await updateAddress(editing.id, form);
+        const updated = await updateAddress(editing.id, payload);
         setAddresses(prev => prev.map(a => a.id === editing.id ? updated : a));
       } else {
-        const created = await saveAddress(form);
+        const created = await saveAddress(payload);
         setAddresses(prev => [created, ...prev]);
       }
       resetForm();
@@ -72,6 +75,7 @@ const AddressBook = () => {
       name: addr.name || addr.recipient_name || '',
       phone: addr.phone || '',
       street: addr.street || '',
+      barangay: addr.barangay || '',
       city: addr.city || '',
       state: addr.state || '',
       zip: addr.zip || addr.postal_code || '',
@@ -123,12 +127,38 @@ const AddressBook = () => {
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
-                <input type="text" value={form.street} onChange={e => setForm(f => ({...f, street: e.target.value}))} required
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Search Address</label>
+                  <AddressAutocomplete
+                    value={form.street}
+                    onInputChange={(v) => setForm(f => ({ ...f, street: v }))}
+                    onSelect={(addr) => {
+                      setForm(f => ({
+                        ...f,
+                        street: addr.street,
+                        barangay: addr.barangay || '',
+                        city: addr.city || '',
+                        state: addr.state || '',
+                        zip: digitsOnly(addr.postal_code || ''),
+                        country: 'Philippines',
+                      }));
+                      setZipError(addr.postal_code && validateZip(digitsOnly(addr.postal_code)) ? '' : zipError);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
+                  <input type="text" value={form.street} onChange={e => setForm(f => ({...f, street: e.target.value}))} required
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Barangay</label>
+                  <input type="text" value={form.barangay} onChange={e => setForm(f => ({...f, barangay: e.target.value}))}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
                   <input type="text" value={form.city} onChange={e => setForm(f => ({...f, city: e.target.value}))} required
@@ -205,7 +235,7 @@ const AddressBook = () => {
                 </div>
                 <p className="font-medium text-gray-900 text-sm">{addr.name || addr.recipient_name}</p>
                 <p className="text-sm text-gray-600 mt-1 leading-relaxed">
-                  {addr.street}<br />
+                  {addr.street}{addr.barangay ? `, ${addr.barangay}` : ''}<br />
                   {addr.city}{addr.state ? `, ${addr.state}` : ''} {addr.zip || addr.postal_code}<br />
                   {addr.phone}
                 </p>
