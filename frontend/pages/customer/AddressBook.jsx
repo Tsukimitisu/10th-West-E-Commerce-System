@@ -92,6 +92,13 @@ const AddressBook = () => {
       lat: addr.lat || null,
       lng: addr.lng || null,
     });
+    try {
+      const stored = JSON.parse(localStorage.getItem('addressGeo') || '{}');
+      const key = `${addr.street}|${addr.city}|${addr.state}`;
+      if (stored[key]) {
+        setForm(f => ({ ...f, lat: stored[key].lat, lng: stored[key].lng }));
+      }
+    } catch {}
     setEditing(addr);
     setShowForm(true);
     const existingZip = addr.zip || addr.postal_code || '';
