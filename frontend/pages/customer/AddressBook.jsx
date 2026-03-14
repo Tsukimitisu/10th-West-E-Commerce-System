@@ -11,9 +11,11 @@ const AddressBook = () => {
   const [form, setForm] = useState({ label: 'Home', name: '', phone: '', street: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saveError, setSaveError] = useState('');
+  const [zipError, setZipError] = useState('');
 
-  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false }); setEditing(null); setShowForm(false); setSaveError(''); };
+  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false }); setEditing(null); setShowForm(false); setSaveError(''); setZipError(''); };
   const digitsOnly = (value) => value.replace(/\D/g, '');
+  const validateZip = (zip) => /^\d{4}$/.test(zip);
 
   useEffect(() => {
     const load = async () => {
@@ -31,6 +33,11 @@ const AddressBook = () => {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaveError('');
+    const zipValid = validateZip(form.zip);
+    if (!zipValid) {
+      setZipError('Zip Code must contain exactly 4 digits.');
+      return;
+    }
     try {
       if (editing) {
         const updated = await updateAddress(editing.id, form);
@@ -69,6 +76,8 @@ const AddressBook = () => {
     });
     setEditing(addr);
     setShowForm(true);
+    const existingZip = addr.zip || addr.postal_code || '';
+    setZipError(existingZip.length === 0 || validateZip(existingZip) ? '' : 'Zip Code must contain exactly 4 digits.');
   };
 
   return (
@@ -128,8 +137,20 @@ const AddressBook = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
-                  <input type="text" value={form.zip} onChange={e => setForm(f => ({...f, zip: digitsOnly(e.target.value)}))} inputMode="numeric" pattern="[0-9]*" required
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                  <input
+                    type="text"
+                    value={form.zip}
+                    onChange={e => {
+                      const val = digitsOnly(e.target.value);
+                      setForm(f => ({...f, zip: val }));
+                      setZipError(val.length === 0 || validateZip(val) ? '' : 'Zip Code must contain exactly 4 digits.');
+                    }}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    required
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${zipError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200'}`}
+                  />
+                  {zipError && <p className="text-xs text-red-500 mt-1">{zipError}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
@@ -145,7 +166,7 @@ const AddressBook = () => {
                 Set as default address
               </label>
               <div className="flex gap-2">
-                <button type="submit" className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">
+                <button type="submit" disabled={!!zipError || !validateZip(form.zip)} className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors">
                   {editing ? 'Update Address' : 'Save Address'}
                 </button>
                 <button type="button" onClick={resetForm} className="px-5 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>

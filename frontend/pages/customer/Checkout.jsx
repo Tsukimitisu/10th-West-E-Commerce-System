@@ -35,6 +35,7 @@ const Checkout = () => {
   const [shippingMethod, setShippingMethod] = useState('standard');
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [zipError, setZipError] = useState('');
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
@@ -59,6 +60,7 @@ const Checkout = () => {
 
   const formatPrice = (p) => `PHP ${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
   const digitsOnly = (value) => value.replace(/\D/g, '');
+  const validateZip = (zip) => /^\d{4}$/.test(zip);
 
   const handleApplyPromo = async () => {
     setPromoError('');
@@ -100,6 +102,14 @@ const Checkout = () => {
     e.preventDefault();
     if (!agreeTerms) {
       setError('Please agree to the terms and conditions');
+      return;
+    }
+
+    const usingSavedAddress = selectedAddress && !showNewAddress;
+    const zipValid = usingSavedAddress ? true : validateZip(form.postal_code);
+    if (!zipValid) {
+      setError('Zip Code must contain exactly 4 digits.');
+      setZipError('Zip Code must contain exactly 4 digits.');
       return;
     }
 
@@ -225,9 +235,14 @@ const Checkout = () => {
                     <Input
                       label="Postal Code"
                       value={form.postal_code}
-                      onChange={(v) => setForm((f) => ({ ...f, postal_code: digitsOnly(v) }))}
+                      onChange={(v) => {
+                        const val = digitsOnly(v);
+                        setForm((f) => ({ ...f, postal_code: val }));
+                        setZipError(val.length === 0 || validateZip(val) ? '' : 'Zip Code must contain exactly 4 digits.');
+                      }}
                       inputMode="numeric"
                       pattern="[0-9]*"
+                      error={zipError}
                       required={!selectedAddress}
                     />
                   </div>
