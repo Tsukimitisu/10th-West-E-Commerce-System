@@ -33,6 +33,10 @@ const AddressBook = () => {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaveError('');
+    if (form.country && form.country !== 'Philippines') {
+      setSaveError('Only Philippine addresses are allowed.');
+      return;
+    }
     const zipValid = validateZip(form.zip);
     if (!zipValid) {
       setZipError('Zip Code must contain exactly 4 digits.');

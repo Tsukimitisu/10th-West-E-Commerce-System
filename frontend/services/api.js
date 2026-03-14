@@ -1479,6 +1479,7 @@ export const addAddress = async (address) => {
     city: address.city,
     state: address.state,
     postal_code: address.postal_code ?? address.zip,
+    country: 'Philippines',
     is_default: !!address.is_default,
   };
 
@@ -1530,6 +1531,7 @@ export const updateAddress = async (id, updates) => {
     city: updates.city,
     state: updates.state,
     postal_code: updates.postal_code ?? updates.zip,
+    country: 'Philippines',
     is_default: updates.is_default,
   };
 

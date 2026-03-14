@@ -106,6 +106,12 @@ const Checkout = () => {
     }
 
     const usingSavedAddress = selectedAddress && !showNewAddress;
+    const selectedAddr = addresses.find((a) => a.id === selectedAddress);
+    if (usingSavedAddress && selectedAddr && selectedAddr.country && selectedAddr.country !== 'Philippines') {
+      setError('Only Philippine addresses are allowed.');
+      return;
+    }
+
     const zipValid = usingSavedAddress ? true : validateZip(form.postal_code);
     if (!zipValid) {
       setError('Zip Code must contain exactly 4 digits.');
@@ -120,10 +126,9 @@ const Checkout = () => {
       const user = localStorage.getItem('shopCoreUser');
       const u = user ? JSON.parse(user) : null;
 
-      const selectedAddr = addresses.find((a) => a.id === selectedAddress);
       const shippingAddress = selectedAddr
-        ? `${selectedAddr.recipient_name}, ${selectedAddr.street}, ${selectedAddr.city}, ${selectedAddr.state} ${selectedAddr.postal_code}`
-        : `${form.name}, ${form.street}, ${form.city}, ${form.state} ${form.postal_code}`;
+        ? `${selectedAddr.recipient_name}, ${selectedAddr.street}, ${selectedAddr.city}, ${selectedAddr.state} ${selectedAddr.postal_code}, Philippines`
+        : `${form.name}, ${form.street}, ${form.city}, ${form.state} ${form.postal_code}, Philippines`;
 
       const stockError = await validateStockBeforeCheckout();
       if (stockError) {
