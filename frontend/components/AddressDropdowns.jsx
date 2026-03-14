@@ -25,6 +25,8 @@ const AddressDropdowns = ({
   const [error, setError] = useState('');
 
   const BASE = 'https://psgc.gitlab.io/api';
+  const NCR_REGION_CODE = '130000000';
+  const NCR_OPTION = { code: 'NCR', name: 'Metro Manila (NCR)', isNcr: true };
 
   const emitChange = (next) => {
     onChange?.({
@@ -46,7 +48,7 @@ const AddressDropdowns = ({
         if (!res.ok) throw new Error('Failed to load provinces');
         const data = await res.json();
         const sorted = Array.isArray(data) ? [...data].sort((a, b) => a.name.localeCompare(b.name)) : [];
-        setProvinces(sorted);
+        setProvinces([NCR_OPTION, ...sorted]);
       } catch (err) {
         setError('Unable to load provinces. Please try again.');
       } finally {
@@ -81,7 +83,10 @@ const AddressDropdowns = ({
       setLoadingCity(true);
       setError('');
       try {
-        const res = await fetch(`${BASE}/provinces/${selectedProvince.code}/cities-municipalities/?per_page=500`);
+        const url = selectedProvince.code === NCR_OPTION.code
+          ? `${BASE}/regions/${NCR_REGION_CODE}/cities-municipalities/?per_page=500`
+          : `${BASE}/provinces/${selectedProvince.code}/cities-municipalities/?per_page=500`;
+        const res = await fetch(url);
         if (!res.ok) throw new Error('Failed to load cities');
         const data = await res.json();
         const sorted = Array.isArray(data) ? [...data].sort((a, b) => a.name.localeCompare(b.name)) : [];
