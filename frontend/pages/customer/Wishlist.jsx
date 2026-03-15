@@ -8,6 +8,8 @@ import AccountLayout from '../../components/customer/AccountLayout';
 const Wishlist = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [quantities, setQuantities] = useState({});
+  const [quantityErrors, setQuantityErrors] = useState({});
   const { addToCart } = useCart();
 
   useEffect(() => {
@@ -37,7 +39,7 @@ const Wishlist = () => {
     } catch {}
   };
 
-  const handleAddToCart = (item) => {
+  const handleAddToCart = (item, quantity) => {
     const productId = item.product_id ?? item.product?.id ?? item.id;
     const name = item.name || item.product_name || item.product?.name;
     const price = Number(item.sale_price ?? item.price ?? item.product?.sale_price ?? item.product?.price ?? 0);
@@ -48,7 +50,7 @@ const Wishlist = () => {
       name,
       price,
       image,
-    }, 1);
+    }, quantity);
   };
 
   return (
@@ -86,6 +88,9 @@ const Wishlist = () => {
               const stockQuantity = item.stock_quantity ?? item.product?.stock_quantity ?? 0;
               const inStock = item.in_stock !== false && stockQuantity > 0;
               const imageUrl = item.image_url || item.product?.image_url || item.product?.image || '';
+              const selectedQty = quantities[productId] ?? 1;
+              const hasQtyError = !!quantityErrors[productId];
+              const canAdd = inStock && !hasQtyError;
 
               return (
                 <div key={productId} className="bg-white rounded-xl border border-gray-100 overflow-hidden group hover:shadow-md transition-all">
@@ -123,10 +128,37 @@ const Wishlist = () => {
                         <span className="font-semibold text-gray-900">PHP {price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] text-gray-500">Qty</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={Math.max(1, stockQuantity)}
+                          value={selectedQty}
+                          onChange={(e) => {
+                            const nextValue = Number(e.target.value);
+                            const safeValue = Number.isFinite(nextValue) && nextValue > 0 ? Math.floor(nextValue) : 1;
+                            setQuantities((prev) => ({ ...prev, [productId]: safeValue }));
+
+                            if (stockQuantity > 0 && safeValue > stockQuantity) {
+                              setQuantityErrors((prev) => ({
+                                ...prev,
+                                [productId]: `Only ${stockQuantity} left in stock.`
+                              }));
+                            } else {
+                              setQuantityErrors((prev) => ({
+                                ...prev,
+                                [productId]: null
+                              }));
+                            }
+                          }}
+                          className="w-16 px-2 py-1 border border-gray-200 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                        />
+                      </div>
                       <button
-                        onClick={() => handleAddToCart(item)}
-                        disabled={!inStock}
+                        onClick={() => handleAddToCart(item, selectedQty)}
+                        disabled={!canAdd}
                         className="flex-1 px-3 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1"
                       >
                         <ShoppingCart size={13} /> Add to Cart
@@ -135,6 +167,9 @@ const Wishlist = () => {
                         <Eye size={14} />
                       </Link>
                     </div>
+                    {hasQtyError && (
+                      <p className="text-[11px] text-red-500">{quantityErrors[productId]}</p>
+                    )}
                   </div>
                 </div>
               );

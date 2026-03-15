@@ -1,7 +1,9 @@
 ﻿import React, { createContext, useContext, useState, useEffect } from 'react';
 import { validateDiscountCode } from '../services/api';
+import { supabase } from '../services/supabase.js';
 
 const API_URL = 'http://localhost:5000/api';
+const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
 
 const CartContext = createContext(undefined);
 
@@ -14,6 +16,38 @@ export const CartProvider = ({ children }) => {
 
   const getToken = () => {
     return localStorage.getItem('shopCoreToken');
+  };
+
+  const getCurrentUserFromToken = () => {
+    const token = localStorage.getItem('shopCoreToken');
+    if (!token || !token.startsWith('sb-token-')) return null;
+    try {
+      return JSON.parse(atob(token.replace('sb-token-', '')));
+    } catch {
+      return null;
+    }
+  };
+
+  const getOrCreateSupabaseCartId = async (userId) => {
+    if (!supabase || !userId) return null;
+    const { data: existingCart, error: findError } = await supabase
+      .from('carts')
+      .select('id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .maybeSingle();
+
+    if (findError) throw new Error(findError.message);
+    if (existingCart?.id) return existingCart.id;
+
+    const { data: newCart, error: insertError } = await supabase
+      .from('carts')
+      .insert({ user_id: userId })
+      .select('id')
+      .single();
+
+    if (insertError) throw new Error(insertError.message);
+    return newCart?.id ?? null;
   };
 
   const mapCartItemsFromBackend = (rows = []) => {
@@ -36,6 +70,46 @@ export const CartProvider = ({ children }) => {
       // Load from localStorage if not logged in
       const savedCart = localStorage.getItem('shopCoreCart');
       setItems(savedCart ? JSON.parse(savedCart) : []);
+      setInitialized(true);
+      return;
+    }
+
+    if (USE_SUPABASE) {
+      try {
+        const currentUser = getCurrentUserFromToken();
+        if (!currentUser?.id) {
+          const savedCart = localStorage.getItem('shopCoreCart');
+          setItems(savedCart ? JSON.parse(savedCart) : []);
+          setInitialized(true);
+          return;
+        }
+
+        const cartId = await getOrCreateSupabaseCartId(currentUser.id);
+        if (!cartId) {
+          setItems([]);
+          setInitialized(true);
+          return;
+        }
+
+        const { data: rows, error: itemsError } = await supabase
+          .from('cart_items')
+          .select('id, product_id, quantity, products(*)')
+          .eq('cart_id', cartId);
+
+        if (itemsError) throw new Error(itemsError.message);
+
+        const mappedItems = mapCartItemsFromBackend((rows || []).map((item) => ({
+          ...item,
+          product: item.products
+        })));
+
+        setItems(mappedItems);
+        localStorage.setItem('shopCoreCart', JSON.stringify(mappedItems));
+      } catch (err) {
+        console.error('Error syncing cart (Supabase):', err);
+        const savedCart = localStorage.getItem('shopCoreCart');
+        setItems(savedCart ? JSON.parse(savedCart) : []);
+      }
       setInitialized(true);
       return;
     }
@@ -119,6 +193,51 @@ export const CartProvider = ({ children }) => {
     const token = getToken();
     
     if (token) {
+      if (USE_SUPABASE) {
+        try {
+          setLoading(true);
+          const currentUser = getCurrentUserFromToken();
+          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+          if (!cartId) throw new Error('Unable to access cart');
+
+          const { data: existingRows, error: existingError } = await supabase
+            .from('cart_items')
+            .select('id, quantity')
+            .eq('cart_id', cartId)
+            .eq('product_id', product.id)
+            .maybeSingle();
+
+          if (existingError) throw new Error(existingError.message);
+
+          if (existingRows?.id) {
+            const { error: updateError } = await supabase
+              .from('cart_items')
+              .update({ quantity: existingRows.quantity + requestedQty })
+              .eq('id', existingRows.id);
+
+            if (updateError) throw new Error(updateError.message);
+          } else {
+            const { error: insertError } = await supabase
+              .from('cart_items')
+              .insert({ cart_id: cartId, product_id: product.id, quantity: requestedQty });
+
+            if (insertError) throw new Error(insertError.message);
+          }
+
+          await syncCart();
+          return true;
+        } catch (err) {
+          console.error('Error adding to cart (Supabase):', err);
+          const fallbackAdded = addToCartLocal(product, requestedQty);
+          if (!fallbackAdded) {
+            setError('Failed to add item to cart');
+          }
+          return fallbackAdded;
+        } finally {
+          setLoading(false);
+        }
+      }
+
       // Add to backend if logged in
       try {
         setLoading(true);
@@ -203,6 +322,44 @@ export const CartProvider = ({ children }) => {
     const token = getToken();
 
     if (token) {
+      if (USE_SUPABASE) {
+        try {
+          setLoading(true);
+          const currentUser = getCurrentUserFromToken();
+          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+          if (!cartId) throw new Error('Unable to access cart');
+
+          const targetItem = items.find((item) => item.productId === productId);
+          const cartItemId = targetItem?.cartItemId ?? null;
+
+          if (cartItemId) {
+            const { error: deleteError } = await supabase
+              .from('cart_items')
+              .delete()
+              .eq('id', cartItemId);
+
+            if (deleteError) throw new Error(deleteError.message);
+          } else {
+            const { error: deleteError } = await supabase
+              .from('cart_items')
+              .delete()
+              .eq('cart_id', cartId)
+              .eq('product_id', productId);
+
+            if (deleteError) throw new Error(deleteError.message);
+          }
+
+          await syncCart();
+        } catch (err) {
+          console.error('Error removing from cart (Supabase):', err);
+          setError('Failed to remove item');
+          removeFromCartLocal(productId);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         setLoading(true);
         const targetItem = items.find((item) => item.productId === productId);
@@ -249,6 +406,44 @@ export const CartProvider = ({ children }) => {
     const token = getToken();
 
     if (token) {
+      if (USE_SUPABASE) {
+        try {
+          setLoading(true);
+          const currentUser = getCurrentUserFromToken();
+          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+          if (!cartId) throw new Error('Unable to access cart');
+
+          const targetItem = items.find((item) => item.productId === productId);
+          const cartItemId = targetItem?.cartItemId ?? null;
+
+          if (cartItemId) {
+            const { error: updateError } = await supabase
+              .from('cart_items')
+              .update({ quantity })
+              .eq('id', cartItemId);
+
+            if (updateError) throw new Error(updateError.message);
+          } else {
+            const { error: updateError } = await supabase
+              .from('cart_items')
+              .update({ quantity })
+              .eq('cart_id', cartId)
+              .eq('product_id', productId);
+
+            if (updateError) throw new Error(updateError.message);
+          }
+
+          await syncCart();
+        } catch (err) {
+          console.error('Error updating quantity (Supabase):', err);
+          setError('Failed to update quantity');
+          updateQuantityLocal(productId, quantity);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         setLoading(true);
         const cartItemId = targetItem?.cartItemId ?? productId;
@@ -298,6 +493,33 @@ export const CartProvider = ({ children }) => {
     const token = getToken();
 
     if (token) {
+      if (USE_SUPABASE) {
+        try {
+          setLoading(true);
+          const currentUser = getCurrentUserFromToken();
+          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+          if (!cartId) throw new Error('Unable to access cart');
+
+          const { error: deleteError } = await supabase
+            .from('cart_items')
+            .delete()
+            .eq('cart_id', cartId);
+
+          if (deleteError) throw new Error(deleteError.message);
+
+          setItems([]);
+          setDiscount(null);
+          setError(null);
+          localStorage.setItem('shopCoreCart', JSON.stringify([]));
+        } catch (err) {
+          console.error('Error clearing cart (Supabase):', err);
+          clearCartLocal();
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         setLoading(true);
         const response = await fetch(`${API_URL}/cart/clear`, {
