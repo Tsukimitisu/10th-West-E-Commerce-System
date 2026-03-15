@@ -160,7 +160,9 @@ const Checkout = () => {
         items: items.map((i) => ({
           productId: i.productId,
           quantity: i.quantity,
-          price: i.product.is_on_sale && i.product.sale_price ? i.product.sale_price : i.product.price
+          price: i.product.is_on_sale && i.product.sale_price ? i.product.sale_price : i.product.price,
+          product_name: i.product?.name,
+          product_price: i.product.is_on_sale && i.product.sale_price ? i.product.sale_price : i.product.price
         })),
         shipping_address: shippingAddress,
         shipping_method: shippingMethod,

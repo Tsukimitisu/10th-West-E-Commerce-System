@@ -1220,13 +1220,34 @@ export const createOrder = async (order) => {
 
     if (orderError) throw new Error(orderError.message);
 
-    const orderItems = (order.items || []).map((item) => {
-      const resolvedPrice = Number(item.product_price ?? item.price ?? item.product?.price ?? 0);
+    const rawItems = Array.isArray(order.items) ? order.items : [];
+    const productIds = rawItems
+      .map((item) => item.productId ?? item.product_id ?? item.product?.id ?? null)
+      .filter((id) => id != null);
+
+    let productLookup = new Map();
+    if (productIds.length > 0) {
+      const { data: productRows, error: productError } = await supabase
+        .from('products')
+        .select('id, name, price, stock_quantity')
+        .in('id', [...new Set(productIds)]);
+
+      if (productError) throw new Error(productError.message);
+      productLookup = new Map((productRows || []).map((row) => [row.id, row]));
+    }
+
+    const orderItems = rawItems.map((item) => {
+      const productId = item.productId ?? item.product_id ?? item.product?.id ?? null;
+      const product = productId != null ? productLookup.get(productId) : null;
+      const resolvedPrice = Number(
+        item.product_price ?? item.price ?? item.product?.price ?? product?.price ?? 0
+      );
+
       return {
         order_id: orderData.id,
-        product_id: item.productId ?? item.product_id ?? item.product?.id ?? null,
-        quantity: item.quantity ?? 1,
-        product_name: item.product_name ?? item.name ?? item.product?.name ?? 'Unknown Product',
+        product_id: productId,
+        quantity: Number(item.quantity ?? 1),
+        product_name: item.product_name ?? item.name ?? item.product?.name ?? product?.name ?? 'Unknown Product',
         product_price: resolvedPrice,
         price: resolvedPrice,
       };
@@ -1240,6 +1261,34 @@ export const createOrder = async (order) => {
       if (itemsError) {
         await supabase.from('orders').delete().eq('id', orderData.id);
         throw new Error(itemsError.message);
+      }
+    }
+
+    // Decrement stock after order items insert
+    for (const item of orderItems) {
+      if (!item.product_id || !Number.isFinite(item.quantity) || item.quantity <= 0) {
+        continue;
+      }
+
+      const product = productLookup.get(item.product_id);
+      if (!product) {
+        await supabase.from('order_items').delete().eq('order_id', orderData.id);
+        await supabase.from('orders').delete().eq('id', orderData.id);
+        throw new Error(`Product #${item.product_id} not found for stock update.`);
+      }
+
+      const { data: updatedProduct, error: stockError } = await supabase
+        .from('products')
+        .update({ stock_quantity: product.stock_quantity - item.quantity })
+        .eq('id', item.product_id)
+        .gte('stock_quantity', item.quantity)
+        .select('id')
+        .single();
+
+      if (stockError || !updatedProduct) {
+        await supabase.from('order_items').delete().eq('order_id', orderData.id);
+        await supabase.from('orders').delete().eq('id', orderData.id);
+        throw new Error(`Insufficient stock for product #${item.product_id}.`);
       }
     }
 
