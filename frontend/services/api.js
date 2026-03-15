@@ -1543,13 +1543,28 @@ export const addAddress = async (address) => {
         .eq('user_id', currentUser.id);
     }
 
-    const { data, error } = await supabase
-      .from('addresses')
-      .insert({ ...payload, user_id: currentUser.id })
-      .select()
-      .single();
+    const insertWithPayload = async (nextPayload) => {
+      const { data, error } = await supabase
+        .from('addresses')
+        .insert({ ...nextPayload, user_id: currentUser.id })
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return data;
+    };
 
-    if (error) throw new Error(error.message);
+    let data;
+    try {
+      data = await insertWithPayload(payload);
+    } catch (err) {
+      if (String(err?.message || err).includes("Could not find the 'country' column")) {
+        const { country, ...withoutCountry } = payload;
+        data = await insertWithPayload(withoutCountry);
+      } else {
+        throw err;
+      }
+    }
+
     return {
       ...data,
       name: data.recipient_name ?? '',
@@ -1596,15 +1611,30 @@ export const updateAddress = async (id, updates) => {
         .neq('id', id);
     }
 
-    const { data, error } = await supabase
-      .from('addresses')
-      .update(payload)
-      .eq('id', id)
-      .eq('user_id', currentUser.id)
-      .select()
-      .single();
+    const updateWithPayload = async (nextPayload) => {
+      const { data, error } = await supabase
+        .from('addresses')
+        .update(nextPayload)
+        .eq('id', id)
+        .eq('user_id', currentUser.id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return data;
+    };
 
-    if (error) throw new Error(error.message);
+    let data;
+    try {
+      data = await updateWithPayload(payload);
+    } catch (err) {
+      if (String(err?.message || err).includes("Could not find the 'country' column")) {
+        const { country, ...withoutCountry } = payload;
+        data = await updateWithPayload(withoutCountry);
+      } else {
+        throw err;
+      }
+    }
+
     return {
       ...data,
       name: data.recipient_name ?? '',
