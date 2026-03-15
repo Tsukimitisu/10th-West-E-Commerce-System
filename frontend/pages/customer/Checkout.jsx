@@ -4,6 +4,7 @@ import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield } from 'lucide-
 import { useCart } from '../../context/CartContext';
 import { getAddresses, createOrder, createPaymentIntent, getProductById } from '../../services/api';
 import AddressDropdowns from '../../components/AddressDropdowns';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
 
 const Checkout = () => {
@@ -40,6 +41,7 @@ const Checkout = () => {
   const [zipError, setZipError] = useState('');
   const [profile, setProfile] = useState(null);
   const [hideTerms, setHideTerms] = useState(false);
+  const [addressQuery, setAddressQuery] = useState('');
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
@@ -75,6 +77,7 @@ const Checkout = () => {
           name: def.recipient_name || f.name,
           phone: def.phone || f.phone
         }));
+        setAddressQuery(def.street || '');
       }
     }).catch(() => {});
   }, []);
@@ -282,6 +285,7 @@ const Checkout = () => {
                               name: addr.recipient_name || f.name,
                               phone: addr.phone || f.phone
                             }));
+                            setAddressQuery(addr.street || '');
                           }}
                           className="mt-1 text-orange-500 focus:ring-orange-500"
                         />
@@ -303,6 +307,7 @@ const Checkout = () => {
                           name: profile?.name || f.name,
                           phone: profile?.phone || f.phone
                         }));
+                        setAddressQuery('');
                       }}
                       className="text-sm text-orange-500 hover:text-orange-600 font-medium"
                     >
@@ -311,8 +316,42 @@ const Checkout = () => {
                   </div>
                 )}
 
+                {selectedAddress && !showNewAddress && (
+                  <div className="mb-4">
+                    <MapPinPicker
+                      street={addresses.find((a) => a.id === selectedAddress)?.street}
+                      barangay={addresses.find((a) => a.id === selectedAddress)?.barangay || ''}
+                      city={addresses.find((a) => a.id === selectedAddress)?.city}
+                      state={addresses.find((a) => a.id === selectedAddress)?.state}
+                      onChange={() => {}}
+                      disabled
+                    />
+                  </div>
+                )}
+
                 {(addresses.length === 0 || showNewAddress) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Search Address</label>
+                      <AddressAutocomplete
+                        value={addressQuery}
+                        onInputChange={(val) => setAddressQuery(val)}
+                        onSelect={(selected) => {
+                          setAddressQuery(selected.street || '');
+                          setForm((f) => ({
+                            ...f,
+                            street: selected.street || f.street,
+                            barangay: selected.barangay || f.barangay,
+                            city: selected.city || f.city,
+                            state: selected.state || f.state,
+                            postal_code: selected.postal_code || f.postal_code,
+                            lat: null,
+                            lng: null,
+                          }));
+                          setZipError(selected.postal_code ? '' : zipError);
+                        }}
+                      />
+                    </div>
                     <div className="md:col-span-2">
                       <AddressDropdowns
                         province={form.state}

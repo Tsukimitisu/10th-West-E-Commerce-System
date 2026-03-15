@@ -69,8 +69,8 @@ const MapPinPicker = ({ street, barangay, city, state, onChange, height = 280, d
 
   // Geocode when address parts are present
   useEffect(() => {
-    if (!leafletReady || !street || !barangay || !city || !state) return;
-    const addressKey = `${street}|${barangay}|${city}|${state}`;
+    if (!leafletReady || !street || !city || !state) return;
+    const addressKey = `${street}|${barangay || ''}|${city}|${state}`;
     if (addressKey === lastAddressKey) return;
     setLastAddressKey(addressKey);
 
@@ -79,7 +79,7 @@ const MapPinPicker = ({ street, barangay, city, state, onChange, height = 280, d
     const marker = markerRef.current;
     if (!map || !marker) return;
 
-    const query = `${street}, ${barangay}, ${city}, ${state}, Philippines`;
+    const query = `${street}${barangay ? `, ${barangay}` : ''}, ${city}, ${state}, Philippines`;
     setGeocoding(true);
     setError('');
     const controller = new AbortController();
