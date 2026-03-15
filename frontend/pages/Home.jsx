@@ -1,19 +1,25 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Truck, Shield, Clock, Headphones, ChevronLeft, ChevronRight, Zap, Star } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Truck, Shield, Wrench, Search, Zap, ChevronRight, X, Settings, Clock, Headphones } from 'lucide-react';
 import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist } from '../services/api';
 import ProductCard from '../components/ProductCard';
 
 const Home = () => {
+  // --- Data & API State ---
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [banners, setBanners] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
+  const[announcements, setAnnouncements] = useState([]);
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [wishlistedIds, setWishlistedIds] = useState([]);
   const [currentBanner, setCurrentBanner] = useState(0);
+  
+  // --- UI State ---
+  const[isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
+  // --- Data Fetching ---
   useEffect(() => {
     getProducts().then(setProducts).catch(() => { });
     getCategories().then(setCategories).catch(() => { });
@@ -29,12 +35,15 @@ const Home = () => {
         if (!user?.id) return;
         const wishlist = await getWishlist(user.id);
         setWishlistedIds(wishlist.map(item => Number(item.product_id ?? item.product?.id ?? item.id)).filter(Boolean));
-      } catch {}
+      } catch (error) {
+        console.error("Failed to load wishlist", error);
+      }
     };
 
     loadWishlist();
-  }, []);
+  },[]);
 
+  // --- Wishlist Logic ---
   const handleWishlistToggle = (productId, shouldBeWishlisted) => {
     const normalizedId = Number(productId);
     if (!normalizedId) return;
@@ -47,220 +56,397 @@ const Home = () => {
     });
   };
 
+  // --- Banner Rotation ---
   useEffect(() => {
     if (banners.length > 1) {
       const timer = setInterval(() => setCurrentBanner(prev => (prev + 1) % banners.length), 5000);
       return () => clearInterval(timer);
     }
-  }, [banners.length]);
+  },[banners.length]);
 
-  const featured = products.filter(p => p.is_on_sale || p.rating && p.rating >= 4).slice(0, 8);
+  // --- Derived Product Lists ---
+  const featured = products.filter(p => p.is_on_sale || (p.rating && p.rating >= 4)).slice(0, 8);
   const bestSellers = [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 8);
   const newArrivals = [...products].sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()).slice(0, 4);
 
-  return (
-    <div className="min-h-screen bg-white">
-      {/* Hero Banner */}
-      {banners.length > 0 ? (
-        <section className="relative bg-gray-900 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-900 via-gray-900/90 to-transparent z-10" />
-          <div className="absolute inset-0">
-            <img src={banners[currentBanner]?.image_url || 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1600&h=600&fit=crop'} alt="" className="w-full h-full object-cover opacity-40 transition-opacity duration-500" />
-          </div>
-          <div className="relative z-20 max-w-7xl mx-auto px-4 py-16 md:py-24 lg:py-32">
-            <div className="max-w-xl">
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-orange-500/20 border border-orange-500/30 rounded-full text-orange-400 text-xs font-semibold mb-4">
-                <Zap size={14} /> Premium Motorcycle Parts
-              </span>
-              <h1 className="font-display font-bold text-3xl md:text-5xl lg:text-6xl text-white mb-4 leading-tight">
-                {banners[currentBanner]?.title || <>Ride With <span className="text-orange-500">Confidence</span></>}
-              </h1>
-              <p className="text-gray-400 text-sm md:text-base mb-8 max-w-md leading-relaxed">
-                {banners[currentBanner]?.subtitle || 'Quality motorcycle parts, accessories, and gear from trusted brands. Free shipping on orders over \u20B12,500.'}
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Link to={banners[currentBanner]?.link_url || '/shop'} className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-all hover:shadow-lg hover:shadow-orange-500/20 flex items-center gap-2">
-                  Shop Now <ArrowRight size={18} />
-                </Link>
-                <Link to="/shop?sort=newest" className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg transition-colors border border-white/20">
-                  New Arrivals
-                </Link>
-              </div>
-            </div>
-            {banners.length > 1 && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">
-                {banners.map((_, i) => (
-                  <button key={i} onClick={() => setCurrentBanner(i)} className={`w-2.5 h-2.5 rounded-full transition-all ${i === currentBanner ? 'bg-orange-500 w-6' : 'bg-white/40 hover:bg-white/60'}`} />
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      ) : (
-        <section className="relative bg-gray-900 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-900 via-gray-900/90 to-transparent z-10" />
-          <div className="absolute inset-0">
-            <img src="https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1600&h=600&fit=crop" alt="" className="w-full h-full object-cover opacity-40" />
-          </div>
-          <div className="relative z-20 max-w-7xl mx-auto px-4 py-16 md:py-24 lg:py-32">
-            <div className="max-w-xl">
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-orange-500/20 border border-orange-500/30 rounded-full text-orange-400 text-xs font-semibold mb-4">
-                <Zap size={14} /> Premium Motorcycle Parts
-              </span>
-              <h1 className="font-display font-bold text-3xl md:text-5xl lg:text-6xl text-white mb-4 leading-tight">
-                Ride With <span className="text-orange-500">Confidence</span>
-              </h1>
-              <p className="text-gray-400 text-sm md:text-base mb-8 max-w-md leading-relaxed">
-                Quality motorcycle parts, accessories, and gear from trusted brands. Free shipping on orders over \u20B12,500.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Link to="/shop" className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-all hover:shadow-lg hover:shadow-orange-500/20 flex items-center gap-2">
-                  Shop Now <ArrowRight size={18} />
-                </Link>
-                <Link to="/shop?sort=newest" className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg transition-colors border border-white/20">
-                  New Arrivals
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
+  // --- Animation Variants (Framer Motion v11 Compatible) ---
+  const fadeIn = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
+  };
 
-      {/* Trust bar */}
-      <section className="border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  const stagger = {
+    visible: { transition: { staggerChildren: 0.1 } }
+  };
+
+  const sidebarVariants = {
+    closed: { x: "-100%", opacity: 0 },
+    open: { x: 0, opacity: 1, transition: { type: "spring", stiffness: 100, damping: 20 } }
+  };
+
+  const buttonVariants = {
+    rest: { scale: 1, skewX: -10 },   
+    hover: { scale: 1.05, skewX: 0 }, 
+    tap: { scale: 0.95 },             
+  };
+
+  return (
+    <div className="min-h-screen bg-white font-sans overflow-x-hidden text-gray-900 relative">
+      
+      {/* 1. FLOATING TOGGLE BUTTON */}
+      <div className="fixed top-1/2 left-0 z-40 transform -translate-y-1/2">
+        {!isSidebarOpen && (
+          <motion.button
+            initial={{ x: -50 }}
+            animate={{ x: 0 }}
+            onClick={() => setIsSidebarOpen(true)}
+            className="flex items-center gap-2 bg-red-600 text-white py-4 px-2 rounded-r-lg shadow-2xl hover:bg-red-700 transition-colors cursor-pointer"
+            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+          >
+            <Settings size={20} className="mb-2 rotate-90" />
+            <span className="font-bold uppercase tracking-widest text-sm">Find Parts</span>
+          </motion.button>
+        )}
+      </div>
+
+      {/* 2. SIDEBAR DRAWER */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/80 z-[60]"
+            />
+            
+            <motion.div
+              initial="closed"
+              animate="open"
+              exit="closed"
+              variants={sidebarVariants}
+              className="fixed top-0 left-0 h-full w-[320px] bg-zinc-900 text-white shadow-2xl z-[70] p-6 flex flex-col overflow-y-auto border-r-4 border-red-600"
+            >
+              <div className="flex justify-between items-center mb-8 shrink-0">
+                <h3 className="text-xl font-black italic uppercase">My Garage</h3>
+                <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase block mb-2">Select Brand</label>
+                  <select className="w-full p-3 bg-zinc-800 rounded border border-zinc-700 text-white font-bold focus:ring-2 focus:ring-red-600 outline-none">
+                    <option>Honda</option>
+                    <option>Yamaha</option>
+                    <option>Kawasaki</option>
+                    <option>Suzuki</option>
+                    <option>Ducati</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase block mb-2">Select Model</label>
+                  <select className="w-full p-3 bg-zinc-800 rounded border border-zinc-700 text-white font-bold focus:ring-2 focus:ring-red-600 outline-none">
+                    <option>Select Model</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-400 uppercase block mb-2">Year</label>
+                  <select className="w-full p-3 bg-zinc-800 rounded border border-zinc-700 text-white font-bold focus:ring-2 focus:ring-red-600 outline-none">
+                    <option>2024</option>
+                    <option>2023</option>
+                    <option>2022</option>
+                  </select>
+                </div>
+
+                <button className="w-full py-4 bg-red-600 text-white font-bold uppercase tracking-wider hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 mt-4 flex items-center justify-center gap-2">
+                  <Search size={20} /> Find Parts
+                </button>
+                
+                <div className="mt-8 pt-8 border-t border-zinc-800">
+                  <p className="text-xs text-gray-500 mb-4">Popular Searches:</p>
+                  <div className="flex flex-wrap gap-2">
+                      {['Brakes', 'Exhaust', 'Tires', 'Oil'].map(tag => (
+                          <span key={tag} className="px-3 py-1 bg-zinc-800 text-xs rounded-full text-gray-300 hover:text-white hover:bg-zinc-700 cursor-pointer">{tag}</span>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* --- HERO SECTION (Dynamic from API + Red/Zinc Styling) --- */}
+      <section className="relative h-[600px] md:h-[700px] bg-zinc-900 flex items-center z-10">
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <img 
+            src={banners.length > 0 ? banners[currentBanner]?.image_url : "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?q=80&w=2070&auto=format&fit=crop"} 
+            alt="Hero Banner" 
+            className="w-full h-full object-cover opacity-60 transition-opacity duration-500"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent" />
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 relative z-10 w-full">
+          <motion.div 
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8 }}
+            className="max-w-2xl"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <span className="h-1 w-12 bg-red-600"></span>
+              <span className="text-red-500 font-bold tracking-widest uppercase text-sm">
+                <Zap size={14} className="inline mr-1" /> Professional Grade Parts
+              </span>
+            </div>
+            <h1 className="text-5xl md:text-7xl font-black text-white italic uppercase leading-none mb-6">
+              {banners.length > 0 && banners[currentBanner]?.title ? (
+                banners[currentBanner]?.title
+              ) : (
+                <>Upgrade <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-400">Your Ride</span></>
+              )}
+            </h1>
+            <p className="text-gray-300 text-lg mb-8 max-w-lg">
+              {banners.length > 0 && banners[currentBanner]?.subtitle 
+                ? banners[currentBanner]?.subtitle 
+                : 'High-performance parts for street, track, and off-road. Genuine components and aftermarket upgrades delivered to your door.'}
+            </p>
+            
+            <div className="flex flex-wrap gap-4">
+              <Link to={banners[currentBanner]?.link_url || '/shop'}>
+                <motion.button
+                  variants={buttonVariants}
+                  initial="rest"
+                  whileHover="hover"
+                  whileTap="tap"
+                  className="px-8 py-4 bg-red-600 text-white font-bold uppercase tracking-wider hover:bg-red-700 transition-colors"
+                >
+                  <span className="block skew-x-[10deg] flex items-center gap-2">Shop Parts <ArrowRight size={18} /></span>
+                </motion.button>
+              </Link>
+              <Link to="/shop?sort=newest">
+                 <motion.button 
+                   variants={buttonVariants}
+                   initial="rest"
+                   whileHover="hover"
+                   className="px-8 py-4 border border-white/30 text-white font-bold uppercase tracking-wider skew-x-[-10deg] hover:bg-white/10 transition-colors"
+                 >
+                   <span className="block skew-x-[10deg]">New Arrivals</span>
+                 </motion.button>
+              </Link>
+            </div>
+          </motion.div>
+        </div>
+        
+        {/* Banner Dots from Main logic */}
+        {banners.length > 1 && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">
+            {banners.map((_, i) => (
+              <button key={i} onClick={() => setCurrentBanner(i)} className={`w-2.5 h-2.5 rounded-full transition-all ${i === currentBanner ? 'bg-red-600 w-6' : 'bg-white/40 hover:bg-white/60'}`} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* --- SERVICE STRIP --- */}
+      <div className="bg-zinc-100 py-12 border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
-              { icon: Truck, label: 'Free Shipping', desc: 'Orders over â‚±2,500' },
-              { icon: Shield, label: 'Authentic Parts', desc: '100% genuine products' },
-              { icon: Clock, label: 'Fast Delivery', desc: '2-5 business days' },
-              { icon: Headphones, label: 'Expert Support', desc: 'Mon-Sat, 9am-6pm' },
+              { icon: Truck, title: "Fast Shipping", sub: "Orders over ₱2,500" },
+              { icon: Shield, title: "Genuine Parts", sub: "100% Authentic" },
+              { icon: Wrench, title: "Fitment Check", sub: "Guaranteed to fit" },
+              { icon: Headphones, title: "Expert Support", sub: "Mon-Sat, 9am-6pm" },
             ].map((item, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2">
-                <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
-                  <item.icon size={20} className="text-orange-500" />
+              <div key={i} className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white border border-gray-200 rounded-full flex items-center justify-center text-red-600 shadow-sm">
+                  <item.icon size={24} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{item.label}</p>
-                  <p className="text-xs text-gray-500">{item.desc}</p>
+                  <h3 className="font-bold text-gray-900 uppercase text-sm">{item.title}</h3>
+                  <p className="text-xs text-gray-500">{item.sub}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Categories */}
+      {/* --- CATEGORIES --- */}
       {categories.length > 0 && (
-        <section className="py-12 md:py-16">
+        <section className="py-16 md:py-24 bg-white">
           <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex justify-between items-end mb-10">
               <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">Shop by Category</h2>
-                <p className="text-sm text-gray-500 mt-1">Find the perfect parts for your ride</p>
+                <h2 className="text-3xl md:text-4xl font-black uppercase italic text-gray-900">Shop By <span className="text-red-600">Category</span></h2>
+                <div className="h-1 w-20 bg-red-600 mt-2 skew-x-[-20deg]"></div>
               </div>
-              <Link to="/shop" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                View All <ArrowRight size={14} />
+              <Link to="/shop" className="hidden md:flex items-center gap-2 font-bold hover:text-red-600 transition-colors">
+                View All Categories <ArrowRight size={20} />
               </Link>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-              {categories.slice(0, 8).map(cat => (
-                <Link key={cat.id} to={`/shop?category=${cat.id}`} className="group flex flex-col items-center gap-2 p-4 bg-gray-50 hover:bg-orange-50 rounded-xl transition-colors text-center">
-                  <div className="w-12 h-12 bg-white group-hover:bg-orange-100 rounded-lg flex items-center justify-center transition-colors shadow-sm">
-                    <span className="text-lg font-bold text-gray-400 group-hover:text-orange-500 transition-colors">{cat.name.charAt(0)}</span>
-                  </div>
-                  <span className="text-xs font-medium text-gray-700 group-hover:text-orange-500 transition-colors line-clamp-2">{cat.name}</span>
-                </Link>
+
+            <motion.div 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={stagger}
+              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+            >
+              {categories.slice(0, 6).map((cat) => (
+                <motion.div 
+                  key={cat.id} 
+                  variants={fadeIn}
+                  whileHover={{ y: -5 }}
+                  className="group relative h-40 bg-zinc-50 border border-gray-200 rounded overflow-hidden hover:border-red-600 transition-colors cursor-pointer"
+                >
+                  <Link to={`/shop?category=${cat.id}`} className="block h-full w-full p-4 flex flex-col justify-between">
+                    <div className="self-end p-2 bg-white rounded-full text-gray-400 group-hover:text-red-600 shadow-sm transition-colors">
+                      <ChevronRight size={16} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold uppercase text-lg leading-tight group-hover:text-red-600 transition-colors line-clamp-2">
+                        {cat.name}
+                      </h3>
+                      <span className="text-xs text-gray-500 mt-1 block">View Parts</span>
+                    </div>
+                    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity transform rotate-12">
+                      <Wrench size={100} />
+                    </div>
+                  </Link>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           </div>
         </section>
       )}
 
-      {/* Featured Products */}
+      {/* --- FEATURED PRODUCTS --- */}
       {featured.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50">
+        <section className="py-16 md:py-24 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-10">
               <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">Featured Products</h2>
-                <p className="text-sm text-gray-500 mt-1">Hand-picked deals and top-rated parts</p>
+                <span className="text-red-600 font-bold uppercase tracking-widest text-sm">Hand-picked</span>
+                <h2 className="text-3xl md:text-4xl font-black uppercase italic text-gray-900 mt-2">Featured Products</h2>
               </div>
-              <Link to="/shop" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                See All <ArrowRight size={14} />
+              <Link to="/shop" className="text-sm font-bold text-gray-900 hover:text-red-600 flex items-center gap-1 transition-colors">
+                See All <ArrowRight size={16} />
               </Link>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {featured.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />)}
-            </div>
+            
+            <motion.div 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={stagger}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+            >
+              {featured.map(p => (
+                <motion.div key={p.id} variants={fadeIn} className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-xl transition-shadow">
+                  <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
+                </motion.div>
+              ))}
+            </motion.div>
           </div>
         </section>
       )}
 
-      {/* Promo Banner */}
-      <section className="py-12 md:py-16">
+      {/* --- PROMO BANNER --- */}
+      <section className="py-12 md:py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+          <div className="bg-gradient-to-r from-zinc-900 to-zinc-800 border-l-8 border-red-600 rounded-r-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden shadow-2xl">
             <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=1200&h=400&fit=crop')] bg-cover bg-center opacity-10" />
             <div className="relative z-10">
-              <span className="text-orange-400 text-sm font-semibold">Limited Time Offer</span>
-              <h3 className="font-display font-bold text-2xl md:text-3xl text-white mt-2">Up to 30% Off Riding Gear</h3>
-              <p className="text-gray-400 mt-2 text-sm">Helmets, jackets, gloves, and boots from top brands.</p>
+              <span className="text-red-500 font-bold tracking-widest uppercase text-sm">Limited Time Offer</span>
+              <h3 className="font-black text-2xl md:text-4xl italic uppercase text-white mt-2">Up to 30% Off Riding Gear</h3>
+              <p className="text-gray-400 mt-2 font-medium">Helmets, jackets, gloves, and boots from top brands.</p>
             </div>
-            <Link to="/shop?sale=true" className="relative z-10 px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors shrink-0 flex items-center gap-2">
-              Shop the Sale <ArrowRight size={18} />
+            <Link to="/shop?sale=true" className="relative z-10 px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wider rounded transition-colors shrink-0 flex items-center gap-2 skew-x-[-10deg]">
+               <span className="block skew-x-[10deg] flex items-center gap-2">Shop the Sale <ArrowRight size={18} /></span>
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Best Sellers */}
+      {/* --- BEST SELLERS --- */}
       {bestSellers.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50">
+        <section className="py-16 md:py-24 bg-gray-50">
           <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">Best Sellers</h2>
-                <p className="text-sm text-gray-500 mt-1">Most popular products from our shop</p>
-              </div>
-              <Link to="/shop?sort=best-selling" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                View All <ArrowRight size={14} />
-              </Link>
+            <div className="text-center mb-12">
+              <span className="text-red-600 font-bold uppercase tracking-widest text-sm">Top Rated</span>
+              <h2 className="text-3xl md:text-4xl font-black uppercase text-gray-900 mt-2">Best Sellers</h2>
+              <div className="w-24 h-1 bg-red-600 mx-auto mt-4 skew-x-[-20deg]"></div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {bestSellers.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />)}
-            </div>
+            
+            <motion.div 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={stagger}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+            >
+              {bestSellers.map(p => (
+                <motion.div key={p.id} variants={fadeIn} className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-xl transition-shadow">
+                  <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
+                </motion.div>
+              ))}
+            </motion.div>
           </div>
         </section>
       )}
 
-      {/* New Arrivals Grid */}
+      {/* --- NEW ARRIVALS --- */}
       {newArrivals.length > 0 && (
-        <section className="py-12 md:py-16">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">New Arrivals</h2>
-                <p className="text-sm text-gray-500 mt-1">Fresh stock just landed</p>
+        <section className="py-16 bg-zinc-900 text-white relative overflow-hidden">
+          <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'radial-gradient(circle, #333 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
+          
+          <div className="max-w-7xl mx-auto px-4 relative z-10">
+            <div className="flex flex-col md:flex-row gap-10 items-center">
+              <div className="md:w-1/4">
+                <span className="text-red-500 font-bold tracking-widest text-sm uppercase">Just Landed</span>
+                <h2 className="text-4xl font-black italic uppercase mt-2 mb-4">New <br/>Arrivals</h2>
+                <p className="text-gray-400 text-sm mb-6">Check out the latest performance parts and accessories added to our catalog.</p>
+                <Link to="/shop?sort=newest" className="inline-flex items-center gap-2 text-white border-b-2 border-red-600 pb-1 hover:text-red-500 transition-colors">
+                  Shop All New Items <ArrowRight size={16}/>
+                </Link>
               </div>
-              <Link to="/shop?sort=newest" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                View All <ArrowRight size={14} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {newArrivals.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />)}
+              
+              <div className="md:w-3/4 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {newArrivals.map((p) => (
+                    <div key={p.id} className="bg-white rounded p-3 text-gray-900">
+                      <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
       )}
 
-      {/* Recently Viewed */}
+      {/* --- RECENTLY VIEWED --- */}
       {recentlyViewed.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50">
+        <section className="py-16 bg-white border-t border-gray-100">
           <div className="max-w-7xl mx-auto px-4">
-            <h2 className="font-display font-bold text-2xl text-gray-900 mb-8">Recently Viewed</h2>
+            <div className="mb-10">
+              <h2 className="text-2xl font-black uppercase text-gray-900">Recently Viewed</h2>
+              <div className="h-1 w-16 bg-red-600 mt-2 skew-x-[-20deg]"></div>
+            </div>
+            
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              {recentlyViewed.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />)}
+              {recentlyViewed.map(p => (
+                <div key={p.id} className="bg-gray-50 rounded p-3 shadow-sm border border-gray-100">
+                  <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
+                </div>
+              ))}
             </div>
           </div>
         </section>
