@@ -69,8 +69,8 @@ const MapPinPicker = ({ street, barangay, city, state, onChange, height = 280, d
 
   // Geocode when address parts are present
   useEffect(() => {
-    if (!leafletReady || !street || !city || !state) return;
-    const addressKey = `${street}|${barangay || ''}|${city}|${state}`;
+    if (!leafletReady || !city || !state || (!street && !barangay)) return;
+    const addressKey = `${street || ''}|${barangay || ''}|${city}|${state}`;
     if (addressKey === lastAddressKey) return;
     setLastAddressKey(addressKey);
 
@@ -79,7 +79,9 @@ const MapPinPicker = ({ street, barangay, city, state, onChange, height = 280, d
     const marker = markerRef.current;
     if (!map || !marker) return;
 
-    const query = `${street}${barangay ? `, ${barangay}` : ''}, ${city}, ${state}, Philippines`;
+    const query = street
+      ? `${street}${barangay ? `, ${barangay}` : ''}, ${city}, ${state}, Philippines`
+      : `${barangay}, ${city}, ${state}, Philippines`;
     setGeocoding(true);
     setError('');
     const controller = new AbortController();
@@ -107,7 +109,7 @@ const MapPinPicker = ({ street, barangay, city, state, onChange, height = 280, d
     return () => controller.abort();
   }, [leafletReady, street, barangay, city, state, onChange, lastAddressKey]);
 
-  if (!street) return null;
+  if (!street && !barangay) return null;
 
   return (
     <div className="space-y-2">

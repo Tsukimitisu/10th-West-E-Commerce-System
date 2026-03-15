@@ -370,15 +370,17 @@ const Checkout = () => {
                       />
                     </div>
                     <Input label="Street / House No." value={form.street} onChange={(v) => setForm((f) => ({ ...f, street: v, lat: null, lng: null }))} required={!selectedAddress} className="md:col-span-2" />
-                    <div className="md:col-span-2">
-                      <MapPinPicker
-                        street={form.street}
-                        barangay={form.barangay}
-                        city={form.city}
-                        state={form.state}
-                        onChange={({ lat, lng }) => setForm((f) => ({ ...f, lat, lng }))}
-                      />
-                    </div>
+                    {form.state && form.city && form.barangay && (
+                      <div className="md:col-span-2">
+                        <MapPinPicker
+                          street={form.street}
+                          barangay={form.barangay}
+                          city={form.city}
+                          state={form.state}
+                          onChange={({ lat, lng }) => setForm((f) => ({ ...f, lat, lng }))}
+                        />
+                      </div>
+                    )}
                     <Input
                       label="Postal Code"
                       value={form.postal_code}
