@@ -413,8 +413,14 @@ const Checkout = () => {
                   <div className="border-t border-gray-100 pt-2 flex justify-between"><span className="font-semibold text-gray-900">Total</span><span className="font-bold text-xl text-gray-900">{formatPrice(grandTotal)}</span></div>
                 </div>
 
-                <label className="flex items-start gap-2 mt-4 cursor-pointer">
-                  <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} className="mt-0.5 text-orange-500 focus:ring-orange-500 rounded" />
+                <label className={`flex items-start gap-2 mt-4 ${agreeTerms ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
+                  <input
+                    type="checkbox"
+                    checked={agreeTerms}
+                    disabled={agreeTerms}
+                    onChange={(e) => setAgreeTerms(e.target.checked)}
+                    className="mt-0.5 text-orange-500 focus:ring-orange-500 rounded disabled:cursor-not-allowed"
+                  />
                   <span className="text-xs text-gray-500">I agree to the <Link to="/terms" className="text-orange-500 hover:underline">Terms & Conditions</Link> and <Link to="/privacy" className="text-orange-500 hover:underline">Privacy Policy</Link></span>
                 </label>
 
