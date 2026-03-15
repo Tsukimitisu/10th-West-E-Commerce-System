@@ -3,7 +3,8 @@ import React, { useEffect, useRef, useState } from 'react';
 // Lightweight Leaflet-based map picker loaded via CDN (no extra dependency in package.json).
 // Shows after street is filled; geocodes PH address via Nominatim, then lets user drag the pin.
 // Emits { lat, lng } through onChange.
-const MapPinPicker = ({ street, barangay, city, state, onChange, height = 280, disabled = false }) => {
+// Accepts optional `lat` / `lng` props to immediately position the pin (e.g. from autocomplete).
+const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: externalLng, onChange, height = 280, disabled = false }) => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -11,6 +12,7 @@ const MapPinPicker = ({ street, barangay, city, state, onChange, height = 280, d
   const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState('');
   const [lastAddressKey, setLastAddressKey] = useState('');
+  const [lastExternalKey, setLastExternalKey] = useState('');
 
   const loadLeaflet = () => new Promise((resolve, reject) => {
     if (window.L) return resolve(window.L);
@@ -67,10 +69,32 @@ const MapPinPicker = ({ street, barangay, city, state, onChange, height = 280, d
     };
   }, [leafletReady, onChange]);
 
-  // Geocode when address parts are present
+  // Fly to externally-provided coords (from autocomplete selection) — skip Nominatim
   useEffect(() => {
-    if (!leafletReady || !city || !state || (!street && !barangay)) return;
-    const addressKey = `${street || ''}|${barangay || ''}|${city}|${state}`;
+    if (!leafletReady || !externalLat || !externalLng) return;
+    const key = `${externalLat}|${externalLng}`;
+    if (key === lastExternalKey) return;
+    setLastExternalKey(key);
+
+    const map = mapRef.current;
+    const marker = markerRef.current;
+    if (!map || !marker) return;
+
+    const pos = [Number(externalLat), Number(externalLng)];
+    map.setView(pos, 17);
+    marker.setLatLng(pos);
+    onChange?.({ lat: pos[0], lng: pos[1] });
+    setError('');
+    // Also update lastAddressKey so the geocode effect doesn't re-fire for the same address
+    const addressKey = `${street || ''}|${barangay || ''}|${city || ''}|${state || ''}`;
+    setLastAddressKey(addressKey);
+  }, [leafletReady, externalLat, externalLng, onChange, lastExternalKey, street, barangay, city, state]);
+
+  // Geocode when address parts are present (fallback when no external coords provided)
+  useEffect(() => {
+    // Need at least the street (3+ chars) to attempt geocode
+    if (!leafletReady || (!street || street.trim().length < 3)) return;
+    const addressKey = `${street || ''}|${barangay || ''}|${city || ''}|${state || ''}`;
     if (addressKey === lastAddressKey) return;
     setLastAddressKey(addressKey);
 
@@ -79,9 +103,9 @@ const MapPinPicker = ({ street, barangay, city, state, onChange, height = 280, d
     const marker = markerRef.current;
     if (!map || !marker) return;
 
-    const query = street
-      ? `${street}${barangay ? `, ${barangay}` : ''}, ${city}, ${state}, Philippines`
-      : `${barangay}, ${city}, ${state}, Philippines`;
+    // Build query from whichever parts are available
+    const parts = [street, barangay, city, state, 'Philippines'].filter(Boolean);
+    const query = parts.join(', ');
     setGeocoding(true);
     setError('');
     const controller = new AbortController();
@@ -109,7 +133,8 @@ const MapPinPicker = ({ street, barangay, city, state, onChange, height = 280, d
     return () => controller.abort();
   }, [leafletReady, street, barangay, city, state, onChange, lastAddressKey]);
 
-  if (!street && !barangay) return null;
+  // Don't render until there is at least some street text
+  if (!street) return null;
 
   return (
     <div className="space-y-2">

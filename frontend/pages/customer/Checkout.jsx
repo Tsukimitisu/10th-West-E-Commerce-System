@@ -357,8 +357,8 @@ const Checkout = () => {
                             city: selected.city || f.city,
                             state: selected.state || f.state,
                             postal_code: selected.postal_code || f.postal_code,
-                            lat: null,
-                            lng: null,
+                            lat: selected.lat ?? null,
+                            lng: selected.lng ?? null,
                           }));
                           setZipError(selected.postal_code ? '' : zipError);
                         }}
@@ -371,13 +371,15 @@ const Checkout = () => {
                         placeholder="House No. / Street"
                       />
                     </div>
-                    {form.state && form.city && form.barangay && (
+                    {form.street && (
                       <div className="md:col-span-2">
                         <MapPinPicker
                           street={form.street}
                           barangay={form.barangay}
                           city={form.city}
                           state={form.state}
+                          lat={form.lat}
+                          lng={form.lng}
                           onChange={({ lat, lng }) => setForm((f) => ({ ...f, lat, lng }))}
                         />
                       </div>

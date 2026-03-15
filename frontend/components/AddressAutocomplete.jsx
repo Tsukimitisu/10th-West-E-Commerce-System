@@ -100,6 +100,8 @@ const AddressAutocomplete = ({
       state: province,
       postal_code,
       country: 'Philippines',
+      lat: s.lat ? Number(s.lat) : null,
+      lng: s.lon ? Number(s.lon) : null,
     });
     setQuery(street);
     setSuggestions([]);

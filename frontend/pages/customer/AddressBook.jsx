@@ -1,8 +1,9 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MapPin, Plus, Trash2, Edit3, Check, X, Home, Building2, Star, AlertTriangle } from 'lucide-react';
 import { getAddresses, saveAddress, deleteAddress, updateAddress } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
 import AddressDropdowns from '../../components/AddressDropdowns';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
 
 const AddressBook = () => {
@@ -162,14 +163,37 @@ const AddressBook = () => {
                 />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Street / House No.</label>
-                  <input type="text" value={form.street} onChange={e => setForm(f => ({...f, street: e.target.value, lat: null, lng: null }))} required
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                  <AddressAutocomplete
+                    value={form.street}
+                    onInputChange={(val) => setForm(f => ({ ...f, street: val, lat: null, lng: null }))}
+                    onSelect={(selected) => {
+                      setForm(f => ({
+                        ...f,
+                        street: selected.street || f.street,
+                        barangay: selected.barangay || f.barangay,
+                        city: selected.city || f.city,
+                        state: selected.state || f.state,
+                        zip: selected.postal_code || f.zip,
+                        lat: selected.lat ?? null,
+                        lng: selected.lng ?? null,
+                      }));
+                    }}
+                    context={{
+                      barangay: form.barangay,
+                      city: form.city,
+                      state: form.state,
+                    }}
+                    strictContext={Boolean(form.barangay || form.city || form.state)}
+                    placeholder="House No. / Street"
+                  />
                 </div>
                 <MapPinPicker
                   street={form.street}
                   barangay={form.barangay}
                   city={form.city}
                   state={form.state}
+                  lat={form.lat}
+                  lng={form.lng}
                   onChange={({ lat, lng }) => setForm(f => ({ ...f, lat, lng }))}
                 />
               </div>
