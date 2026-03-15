@@ -2,7 +2,15 @@ import React, { useEffect, useRef, useState } from 'react';
 
 // Lightweight PH-focused address autocomplete using Nominatim (OpenStreetMap).
 // Expects parent to manage the final form fields; this only suggests and returns parsed address parts.
-const AddressAutocomplete = ({ value, onSelect, onInputChange, placeholder = 'Search address (Philippines)', disabled = false }) => {
+const AddressAutocomplete = ({
+  value,
+  onSelect,
+  onInputChange,
+  placeholder = 'Search address (Philippines)',
+  disabled = false,
+  context = {},
+  strictContext = false,
+}) => {
   const [query, setQuery] = useState(value || '');
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -31,7 +39,9 @@ const AddressAutocomplete = ({ value, onSelect, onInputChange, placeholder = 'Se
 
     const timer = setTimeout(async () => {
       try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=ph&q=${encodeURIComponent(query)}`;
+        const contextParts = [context.barangay, context.city, context.state].filter(Boolean).join(', ');
+        const scopedQuery = contextParts ? `${query}, ${contextParts}, Philippines` : query;
+        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=ph&q=${encodeURIComponent(scopedQuery)}`;
         const res = await fetch(url, {
           signal: controller.signal,
           headers: {
@@ -41,7 +51,24 @@ const AddressAutocomplete = ({ value, onSelect, onInputChange, placeholder = 'Se
         });
         if (!res.ok) throw new Error('Failed to fetch suggestions');
         const data = await res.json();
-        const list = Array.isArray(data) ? data : [];
+        let list = Array.isArray(data) ? data : [];
+
+        if (strictContext && contextParts) {
+          const normalize = (val) => String(val || '').toLowerCase();
+          const barangayKey = normalize(context.barangay);
+          const cityKey = normalize(context.city);
+          const stateKey = normalize(context.state);
+          list = list.filter((item) => {
+            const addr = item.address || {};
+            const b = normalize(addr.suburb || addr.village || addr.neighbourhood || addr.hamlet || '');
+            const c = normalize(addr.city || addr.town || addr.municipality || addr.county || '');
+            const s = normalize(addr.state || addr.region || '');
+            const matchBarangay = !barangayKey || b.includes(barangayKey) || barangayKey.includes(b);
+            const matchCity = !cityKey || c.includes(cityKey) || cityKey.includes(c);
+            const matchState = !stateKey || s.includes(stateKey) || stateKey.includes(s);
+            return matchBarangay && matchCity && matchState;
+          });
+        }
         setSuggestions(list);
         setOpen(list.length > 0);
       } catch (err) {

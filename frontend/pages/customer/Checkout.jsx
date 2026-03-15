@@ -41,7 +41,6 @@ const Checkout = () => {
   const [zipError, setZipError] = useState('');
   const [profile, setProfile] = useState(null);
   const [hideTerms, setHideTerms] = useState(false);
-  const [addressQuery, setAddressQuery] = useState('');
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
@@ -77,7 +76,6 @@ const Checkout = () => {
           name: def.recipient_name || f.name,
           phone: def.phone || f.phone
         }));
-        setAddressQuery(def.street || '');
       }
     }).catch(() => {});
   }, []);
@@ -285,7 +283,6 @@ const Checkout = () => {
                               name: addr.recipient_name || f.name,
                               phone: addr.phone || f.phone
                             }));
-                            setAddressQuery(addr.street || '');
                           }}
                           className="mt-1 text-orange-500 focus:ring-orange-500"
                         />
@@ -307,7 +304,6 @@ const Checkout = () => {
                           name: profile?.name || f.name,
                           phone: profile?.phone || f.phone
                         }));
-                        setAddressQuery('');
                       }}
                       className="text-sm text-orange-500 hover:text-orange-600 font-medium"
                     >
@@ -332,27 +328,6 @@ const Checkout = () => {
                 {(addresses.length === 0 || showNewAddress) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Search Address</label>
-                      <AddressAutocomplete
-                        value={addressQuery}
-                        onInputChange={(val) => setAddressQuery(val)}
-                        onSelect={(selected) => {
-                          setAddressQuery(selected.street || '');
-                          setForm((f) => ({
-                            ...f,
-                            street: selected.street || f.street,
-                            barangay: selected.barangay || f.barangay,
-                            city: selected.city || f.city,
-                            state: selected.state || f.state,
-                            postal_code: selected.postal_code || f.postal_code,
-                            lat: null,
-                            lng: null,
-                          }));
-                          setZipError(selected.postal_code ? '' : zipError);
-                        }}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
                       <AddressDropdowns
                         province={form.state}
                         city={form.city}
@@ -369,7 +344,33 @@ const Checkout = () => {
                         }}
                       />
                     </div>
-                    <Input label="Street / House No." value={form.street} onChange={(v) => setForm((f) => ({ ...f, street: v, lat: null, lng: null }))} required={!selectedAddress} className="md:col-span-2" />
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Street / House No.</label>
+                      <AddressAutocomplete
+                        value={form.street}
+                        onInputChange={(val) => setForm((f) => ({ ...f, street: val, lat: null, lng: null }))}
+                        onSelect={(selected) => {
+                          setForm((f) => ({
+                            ...f,
+                            street: selected.street || f.street,
+                            barangay: selected.barangay || f.barangay,
+                            city: selected.city || f.city,
+                            state: selected.state || f.state,
+                            postal_code: selected.postal_code || f.postal_code,
+                            lat: null,
+                            lng: null,
+                          }));
+                          setZipError(selected.postal_code ? '' : zipError);
+                        }}
+                        context={{
+                          barangay: form.barangay,
+                          city: form.city,
+                          state: form.state,
+                        }}
+                        strictContext={Boolean(form.barangay || form.city || form.state)}
+                        placeholder="House No. / Street"
+                      />
+                    </div>
                     {form.state && form.city && form.barangay && (
                       <div className="md:col-span-2">
                         <MapPinPicker
