@@ -10,7 +10,7 @@ const Wishlist = () => {
   const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState({});
   const [quantityErrors, setQuantityErrors] = useState({});
-  const { addToCart } = useCart();
+  const { addToCart, items: cartItems } = useCart();
 
   useEffect(() => {
     const load = async () => {
@@ -44,12 +44,14 @@ const Wishlist = () => {
     const name = item.name || item.product_name || item.product?.name;
     const price = Number(item.sale_price ?? item.price ?? item.product?.sale_price ?? item.product?.price ?? 0);
     const image = item.image_url || item.product?.image_url || item.product?.image || '';
+    const stockQuantity = item.stock_quantity ?? item.product?.stock_quantity ?? 0;
 
     addToCart({
       id: productId,
       name,
       price,
       image,
+      stock_quantity: stockQuantity,
     }, quantity);
   };
 
@@ -89,8 +91,10 @@ const Wishlist = () => {
               const inStock = item.in_stock !== false && stockQuantity > 0;
               const imageUrl = item.image_url || item.product?.image_url || item.product?.image || '';
               const selectedQty = quantities[productId] ?? 1;
+              const cartQty = cartItems.find((cartItem) => cartItem.productId === productId)?.quantity ?? 0;
+              const availableQty = Math.max(0, stockQuantity - cartQty);
               const hasQtyError = !!quantityErrors[productId];
-              const canAdd = inStock && !hasQtyError;
+              const canAdd = inStock && !hasQtyError && selectedQty <= availableQty;
 
               return (
                 <div key={productId} className="bg-white rounded-xl border border-gray-100 overflow-hidden group hover:shadow-md transition-all">
@@ -134,17 +138,17 @@ const Wishlist = () => {
                         <input
                           type="number"
                           min={1}
-                          max={Math.max(1, stockQuantity)}
+                          max={Math.max(1, availableQty)}
                           value={selectedQty}
                           onChange={(e) => {
                             const nextValue = Number(e.target.value);
                             const safeValue = Number.isFinite(nextValue) && nextValue > 0 ? Math.floor(nextValue) : 1;
                             setQuantities((prev) => ({ ...prev, [productId]: safeValue }));
 
-                            if (stockQuantity > 0 && safeValue > stockQuantity) {
+                            if (availableQty > 0 && safeValue > availableQty) {
                               setQuantityErrors((prev) => ({
                                 ...prev,
-                                [productId]: `Only ${stockQuantity} left in stock.`
+                                [productId]: `Only ${availableQty} left in stock.`
                               }));
                             } else {
                               setQuantityErrors((prev) => ({
@@ -169,6 +173,9 @@ const Wishlist = () => {
                     </div>
                     {hasQtyError && (
                       <p className="text-[11px] text-red-500">{quantityErrors[productId]}</p>
+                    )}
+                    {!hasQtyError && inStock && availableQty === 0 && (
+                      <p className="text-[11px] text-red-500">No more stock available in your cart.</p>
                     )}
                   </div>
                 </div>
