@@ -38,6 +38,7 @@ const Checkout = () => {
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [zipError, setZipError] = useState('');
+  const [profile, setProfile] = useState(null);
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
@@ -50,11 +51,24 @@ const Checkout = () => {
     if (!user) return;
 
     const u = JSON.parse(user);
-    setForm((f) => ({ ...f, name: u.name || '', email: u.email || '' }));
+    setProfile(u);
+    setForm((f) => ({
+      ...f,
+      name: u.name || '',
+      email: u.email || '',
+      phone: u.phone || f.phone || ''
+    }));
     getAddresses(u.id).then((addrs) => {
       setAddresses(addrs);
       const def = addrs.find((a) => a.is_default);
-      if (def) setSelectedAddress(def.id);
+      if (def) {
+        setSelectedAddress(def.id);
+        setForm((f) => ({
+          ...f,
+          name: def.recipient_name || f.name,
+          phone: def.phone || f.phone
+        }));
+      }
     }).catch(() => {});
   }, []);
 
@@ -110,6 +124,15 @@ const Checkout = () => {
 
     const usingSavedAddress = selectedAddress && !showNewAddress;
     const selectedAddr = addresses.find((a) => a.id === selectedAddress);
+    if (!usingSavedAddress && !showNewAddress) {
+      setError('Please select a shipping address.');
+      return;
+    }
+
+    if (usingSavedAddress && !selectedAddr) {
+      setError('Please select a shipping address.');
+      return;
+    }
     if (usingSavedAddress && selectedAddr && selectedAddr.country && selectedAddr.country !== 'Philippines') {
       setError('Only Philippine addresses are allowed.');
       return;
@@ -120,6 +143,13 @@ const Checkout = () => {
       setError('Zip Code must contain exactly 4 digits.');
       setZipError('Zip Code must contain exactly 4 digits.');
       return;
+    }
+
+    if (!usingSavedAddress) {
+      if (!form.name || !form.phone || !form.street || !form.city || !form.state || !form.postal_code) {
+        setError('Please complete the shipping address and contact details.');
+        return;
+      }
     }
 
     setProcessing(true);
@@ -231,7 +261,23 @@ const Checkout = () => {
                   <div className="space-y-2 mb-4">
                     {addresses.map((addr) => (
                       <label key={addr.id} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${selectedAddress === addr.id ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <input type="radio" name="address" checked={selectedAddress === addr.id} onChange={() => { setSelectedAddress(addr.id); setShowNewAddress(false); setZipError(''); setError(''); }} className="mt-1 text-orange-500 focus:ring-orange-500" />
+                        <input
+                          type="radio"
+                          name="address"
+                          checked={selectedAddress === addr.id}
+                          onChange={() => {
+                            setSelectedAddress(addr.id);
+                            setShowNewAddress(false);
+                            setZipError('');
+                            setError('');
+                            setForm((f) => ({
+                              ...f,
+                              name: addr.recipient_name || f.name,
+                              phone: addr.phone || f.phone
+                            }));
+                          }}
+                          className="mt-1 text-orange-500 focus:ring-orange-500"
+                        />
                         <div>
                           <p className="text-sm font-medium text-gray-900">{addr.recipient_name} {addr.is_default && <span className="text-xs text-orange-500 ml-1">Default</span>}</p>
                           <p className="text-sm text-gray-500">{addr.street}, {addr.city}, {addr.state} {addr.postal_code}</p>
@@ -239,7 +285,20 @@ const Checkout = () => {
                         </div>
                       </label>
                     ))}
-                    <button type="button" onClick={() => { setSelectedAddress(null); setShowNewAddress(true); setZipError(''); }} className="text-sm text-orange-500 hover:text-orange-600 font-medium">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAddress(null);
+                        setShowNewAddress(true);
+                        setZipError('');
+                        setForm((f) => ({
+                          ...f,
+                          name: profile?.name || f.name,
+                          phone: profile?.phone || f.phone
+                        }));
+                      }}
+                      className="text-sm text-orange-500 hover:text-orange-600 font-medium"
+                    >
                       + Use a different address
                     </button>
                   </div>
