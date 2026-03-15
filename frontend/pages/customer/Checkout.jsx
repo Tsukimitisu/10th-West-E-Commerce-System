@@ -371,7 +371,7 @@ const Checkout = () => {
                         placeholder="House No. / Street"
                       />
                     </div>
-                    {form.street && (
+                    {form.state && form.city && form.barangay && (
                       <div className="md:col-span-2">
                         <MapPinPicker
                           street={form.street}
