@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 // Lightweight Leaflet-based map picker loaded via CDN (no extra dependency in package.json).
-// Shows after street is filled; geocodes PH address via Nominatim, then lets user drag the pin.
-// Emits { lat, lng } through onChange.
-// Accepts optional `lat` / `lng` props to immediately position the pin (e.g. from autocomplete).
+// Hidden until Province + City + Barangay are all selected.
+// Phase 1 — centres on barangay. Phase 2 — refines to street-level.
+// Accepts optional `lat` / `lng` props to jump to a position immediately (e.g. from autocomplete).
+// Emits { lat, lng } through onChange. Pin is always draggable.
 const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: externalLng, onChange, height = 280, disabled = false }) => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -11,9 +12,10 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
   const [leafletReady, setLeafletReady] = useState(!!window.L);
   const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState('');
-  const [lastAddressKey, setLastAddressKey] = useState('');
+  const [lastGeoKey, setLastGeoKey] = useState('');
   const [lastExternalKey, setLastExternalKey] = useState('');
 
+  /* ── Load Leaflet from CDN ────────────────────────────── */
   const loadLeaflet = () => new Promise((resolve, reject) => {
     if (window.L) return resolve(window.L);
 
@@ -44,7 +46,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     return () => { cancelled = true; };
   }, []);
 
-  // Initialize map once Leaflet is ready
+  /* ── Initialise map once Leaflet is ready ─────────────── */
   useEffect(() => {
     if (!leafletReady || !mapContainerRef.current || mapRef.current) return;
     const L = window.L;
@@ -66,10 +68,12 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
 
     return () => {
       map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
     };
   }, [leafletReady, onChange]);
 
-  // Fly to externally-provided coords (from autocomplete selection) — skip Nominatim
+  /* ── Fly to external coords (autocomplete selection) ──── */
   useEffect(() => {
     if (!leafletReady || !externalLat || !externalLng) return;
     const key = `${externalLat}|${externalLng}`;
@@ -85,27 +89,34 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     marker.setLatLng(pos);
     onChange?.({ lat: pos[0], lng: pos[1] });
     setError('');
-    // Also update lastAddressKey so the geocode effect doesn't re-fire for the same address
-    const addressKey = `${street || ''}|${barangay || ''}|${city || ''}|${state || ''}`;
-    setLastAddressKey(addressKey);
+    // Sync geocode key so the next effect doesn't re‑fire for the same address
+    setLastGeoKey(`${street || ''}|${barangay || ''}|${city || ''}|${state || ''}`);
   }, [leafletReady, externalLat, externalLng, onChange, lastExternalKey, street, barangay, city, state]);
 
-  // Geocode when address parts are present (fallback when no external coords provided)
+  /* ── Geocode when address parts change ───────────────── */
+  // Fires in two scenarios:
+  //   1. Only barangay + city + state → centres on barangay (zoom 15)
+  //   2. street + context → pins the exact location (zoom 17)
   useEffect(() => {
-    // Need at least the street (3+ chars) to attempt geocode
-    if (!leafletReady || (!street || street.trim().length < 3)) return;
-    const addressKey = `${street || ''}|${barangay || ''}|${city || ''}|${state || ''}`;
-    if (addressKey === lastAddressKey) return;
-    setLastAddressKey(addressKey);
+    if (!leafletReady || !city || !state) return;
+    // At minimum we need barangay OR street
+    if (!barangay && !street) return;
 
-    const L = window.L;
+    const geoKey = `${street || ''}|${barangay || ''}|${city}|${state}`;
+    if (geoKey === lastGeoKey) return;
+    setLastGeoKey(geoKey);
+
     const map = mapRef.current;
     const marker = markerRef.current;
     if (!map || !marker) return;
 
-    // Build query from whichever parts are available
-    const parts = [street, barangay, city, state, 'Philippines'].filter(Boolean);
-    const query = parts.join(', ');
+    // Build the query – more parts → more accurate
+    const hasStreet = street && street.trim().length >= 2;
+    const query = hasStreet
+      ? `${street}${barangay ? `, ${barangay}` : ''}, ${city}, ${state}, Philippines`
+      : `${barangay}, ${city}, ${state}, Philippines`;
+    const zoom = hasStreet ? 17 : 15;
+
     setGeocoding(true);
     setError('');
     const controller = new AbortController();
@@ -122,19 +133,18 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
       if (!Array.isArray(data) || data.length === 0) throw new Error('No results');
       const { lat, lon } = data[0];
       const next = [Number(lat), Number(lon)];
-      map.setView(next, 17);
+      map.setView(next, zoom);
       marker.setLatLng(next);
       onChange?.({ lat: Number(lat), lng: Number(lon) });
     }).catch(() => {
       setError('Could not locate that address. You can drag the pin manually.');
-      // Keep existing marker position
     }).finally(() => setGeocoding(false));
 
     return () => controller.abort();
-  }, [leafletReady, street, barangay, city, state, onChange, lastAddressKey]);
+  }, [leafletReady, street, barangay, city, state, onChange, lastGeoKey]);
 
-  // Don't render until there is at least some street text
-  if (!street) return null;
+  /* ── Render guard: hidden until Province + City + Barangay selected ── */
+  if (!barangay || !city || !state) return null;
 
   return (
     <div className="space-y-2">
