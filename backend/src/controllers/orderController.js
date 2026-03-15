@@ -86,7 +86,8 @@ export const getOrderById = async (req, res) => {
     const itemsResult = await pool.query(
       `SELECT 
          oi.*, 
-         p.name as product_name,
+         COALESCE(oi.product_name, p.name) as product_name,
+         p.name as product_name_current,
          p.image as product_image,
          p.part_number as product_part_number,
          p.price as product_price_current,
@@ -220,21 +221,28 @@ export const createOrder = async (req, res) => {
     const guestInfo = req.body.guest_info;
     const normalizedItems = (items || []).map(item => ({
       product_id: item.product_id ?? item.productId,
-      quantity: item.quantity
+      quantity: Number(item.quantity)
     }));
 
-    if (normalizedItems.some(item => !item.product_id)) {
+    if (normalizedItems.some(item => !item.product_id || !Number.isInteger(item.quantity) || item.quantity <= 0)) {
       return res.status(400).json({ message: 'Invalid items payload' });
     }
 
-    // Check stock levels first
-    for (const item of normalizedItems) {
-      const stockCheck = await client.query(
-        'SELECT name, stock_quantity FROM products WHERE id = $1 FOR UPDATE',
-        [item.product_id]
-      );
+    // Lock and validate all products in one query so stock checks and decrements stay consistent.
+    const uniqueProductIds = [...new Set(normalizedItems.map(item => Number(item.product_id)))];
+    const productSnapshotResult = await client.query(
+      `SELECT id, name, price, stock_quantity
+       FROM products
+       WHERE id = ANY($1::int[])
+       FOR UPDATE`,
+      [uniqueProductIds]
+    );
 
-      const product = stockCheck.rows[0];
+    const productMap = new Map(productSnapshotResult.rows.map(product => [Number(product.id), product]));
+
+    for (const item of normalizedItems) {
+      const product = productMap.get(Number(item.product_id));
+
       if (!product) {
         await client.query('ROLLBACK');
         return res.status(400).json({
@@ -242,7 +250,7 @@ export const createOrder = async (req, res) => {
         });
       }
 
-      if (product.stock_quantity < item.quantity) {
+      if (Number(product.stock_quantity) < item.quantity) {
         await client.query('ROLLBACK');
         return res.status(400).json({
           message: `${product.name}: Maximum available quantity is ${product.stock_quantity}.`
@@ -286,19 +294,33 @@ export const createOrder = async (req, res) => {
     const order = orderResult.rows[0];
 
     // Add order items and update stock
+    const stockUpdates = [];
     for (const item of normalizedItems) {
-      // Add order item
+      const product = productMap.get(Number(item.product_id));
+
+      // Persist product snapshot into order_items so order history stays readable even if product changes later.
       await client.query(
         `INSERT INTO order_items (order_id, product_id, product_name, product_price, quantity)
-         SELECT $1, $2, name, price, $3 FROM products WHERE id = $2`,
-        [order.id, item.product_id, item.quantity]
+         VALUES ($1, $2, $3, $4, $5)`,
+        [order.id, item.product_id, product.name, product.price, item.quantity]
       );
 
-      // Update product stock
-      await client.query(
-        'UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2',
+      const stockUpdateResult = await client.query(
+        `UPDATE products
+         SET stock_quantity = stock_quantity - $1
+         WHERE id = $2 AND stock_quantity >= $1
+         RETURNING id, name, stock_quantity`,
         [item.quantity, item.product_id]
       );
+
+      if (stockUpdateResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `${product.name}: Unable to update stock. Please try checkout again.`
+        });
+      }
+
+      stockUpdates.push(stockUpdateResult.rows[0]);
     }
 
     // Clear user's cart if logged in
@@ -321,7 +343,8 @@ export const createOrder = async (req, res) => {
     const itemsResult = await client.query(
       `SELECT 
          oi.*, 
-         p.name as product_name,
+         COALESCE(oi.product_name, p.name) as product_name,
+         p.name as product_name_current,
          p.image as product_image,
          p.part_number as product_part_number,
          p.price as product_price_current,
@@ -353,11 +376,11 @@ export const createOrder = async (req, res) => {
     // Emit real-time events
     emitNewOrder(fullOrder);
     // Emit stock updates for each item
-    for (const item of itemsResult.rows) {
+    for (const stockUpdate of stockUpdates) {
       emitStockUpdate({
-        product_id: item.product_id,
-        stock_quantity: parseInt(item.product_stock_quantity),
-        name: item.product_name
+        product_id: stockUpdate.id,
+        stock_quantity: parseInt(stockUpdate.stock_quantity),
+        name: stockUpdate.name
       });
     }
 
@@ -399,7 +422,7 @@ export const getOrderInvoice = async (req, res) => {
 
     // Get order items
     const itemsResult = await pool.query(
-      `SELECT oi.*, p.name as product_name, p.part_number
+      `SELECT oi.*, COALESCE(oi.product_name, p.name) as product_name, p.part_number
        FROM order_items oi
        LEFT JOIN products p ON oi.product_id = p.id
        WHERE oi.order_id = $1`,
