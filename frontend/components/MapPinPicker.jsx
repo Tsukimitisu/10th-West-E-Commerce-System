@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // Hidden until Province + City + Barangay are all selected.
 // Phase 1 — centres on barangay. Phase 2 — refines to street-level.
 // Accepts optional `lat` / `lng` props to jump to a position immediately (e.g. from autocomplete).
-// Emits { lat, lng } through onChange. Pin is draggable.
+// Emits { lat, lng } through onChange. Pin is fixed to detected location.
 const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: externalLng, onChange, height = 280, disabled = false }) => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -15,7 +15,6 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
   const [errorType, setErrorType] = useState('');
   const [lastGeoKey, setLastGeoKey] = useState('');
   const [lastExternalKey, setLastExternalKey] = useState('');
-  const [manualOverride, setManualOverride] = useState(false);
 
   /* ── Load Leaflet from CDN ────────────────────────────── */
   const loadLeaflet = () => new Promise((resolve, reject) => {
@@ -79,12 +78,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
       maxZoom: 19,
     }).addTo(map);
 
-    const marker = L.marker(fallbackCenter, { draggable: true }).addTo(map);
-    marker.on('dragend', () => {
-      const pos = marker.getLatLng();
-      setManualOverride(true);
-      onChange?.({ lat: pos.lat, lng: pos.lng });
-    });
+    const marker = L.marker(fallbackCenter, { draggable: false }).addTo(map);
 
     mapRef.current = map;
     markerRef.current = marker;
@@ -100,9 +94,6 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     }
   }, [barangay, city, state]);
 
-  useEffect(() => {
-    setManualOverride(false);
-  }, [street, barangay, city, state]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -117,7 +108,6 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     const key = `${externalLat}|${externalLng}`;
     if (key === lastExternalKey) return;
     setLastExternalKey(key);
-    setManualOverride(false);
 
     const map = mapRef.current;
     const marker = markerRef.current;
@@ -141,7 +131,6 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     if (!leafletReady || !city || !state) return;
     // At minimum we need barangay OR street
     if (!barangay && !street) return;
-    if (manualOverride) return;
 
     const geoKey = `${street || ''}|${barangay || ''}|${city}|${state}`;
     if (geoKey === lastGeoKey) return;
@@ -184,7 +173,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     }).finally(() => setGeocoding(false));
 
     return () => controller.abort();
-  }, [leafletReady, street, barangay, city, state, onChange, lastGeoKey, manualOverride]);
+  }, [leafletReady, street, barangay, city, state, onChange, lastGeoKey]);
 
   /* ── Render guard: hidden until Province + City + Barangay selected ── */
   if (!barangay || !city || !state) return null;
@@ -226,7 +215,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
           )}
         </div>
       )}
-      <p className="text-xs text-gray-500">Drag the pin if the automatic placement is off. Lat/Lng are saved with the address/order.</p>
+      <p className="text-xs text-gray-500">Pin placement updates automatically from the detected address. Lat/Lng are saved with the address/order.</p>
     </div>
   );
 };
