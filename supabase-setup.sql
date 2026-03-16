@@ -121,21 +121,19 @@ CREATE TABLE IF NOT EXISTS orders (
   total_amount DECIMAL(10,2) NOT NULL,
   status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'completed', 'cancelled')),
   shipping_address TEXT NOT NULL,
+  shipping_lat DECIMAL(10,7),
+  shipping_lng DECIMAL(10,7),
   source VARCHAR(20) DEFAULT 'online' CHECK (source IN ('online', 'pos')),
   payment_method VARCHAR(20) CHECK (payment_method IN ('cash', 'card', 'cod', 'online', 'stripe', 'gcash', 'maya', 'bank_transfer')),
   amount_tendered DECIMAL(10,2),
   change_due DECIMAL(10,2),
   cashier_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  barangay VARCHAR(100),
   discount_amount DECIMAL(10,2) DEFAULT 0.00,
   promo_code_used VARCHAR(100),
   payment_intent_id VARCHAR(255),
   tracking_number VARCHAR(255),
   assigned_staff_id INTEGER REFERENCES users(id),
   tax_amount DECIMAL(10,2) DEFAULT 0,
-
-ALTER TABLE addresses
-  ADD COLUMN IF NOT EXISTS barangay VARCHAR(100);
   shipping_method VARCHAR(50) DEFAULT 'standard',
   delivery_notes TEXT,
   estimated_delivery DATE,
@@ -161,13 +159,32 @@ CREATE TABLE IF NOT EXISTS addresses (
   recipient_name VARCHAR(255) NOT NULL,
   phone VARCHAR(50) NOT NULL,
   street TEXT NOT NULL,
+  barangay VARCHAR(100),
   city VARCHAR(100) NOT NULL,
   state VARCHAR(100) NOT NULL,
+  country VARCHAR(100) DEFAULT 'Philippines',
   postal_code VARCHAR(20) NOT NULL,
+  lat DECIMAL(10,7),
+  lng DECIMAL(10,7),
   is_default BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS shipping_lat DECIMAL(10,7);
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS shipping_lng DECIMAL(10,7);
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS lat DECIMAL(10,7);
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS lng DECIMAL(10,7);
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS barangay VARCHAR(100);
 
 -- 11. Returns
 CREATE TABLE IF NOT EXISTS returns (
