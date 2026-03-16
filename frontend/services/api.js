@@ -1506,6 +1506,7 @@ export const getAddresses = async (userId) => {
     zip: address?.zip ?? address?.postal_code ?? '',
     country: address?.country || 'Philippines',
     label: address?.label || 'Home',
+    barangay: address?.barangay ?? '',
     lat: address?.lat ?? null,
     lng: address?.lng ?? null,
   });
@@ -1533,6 +1534,7 @@ export const addAddress = async (address) => {
     recipient_name: address.recipient_name ?? address.name,
     phone: address.phone,
     street: address.street,
+    barangay: address.barangay ?? null,
     city: address.city,
     state: address.state,
     postal_code: address.postal_code ?? address.zip,
@@ -1606,6 +1608,7 @@ export const updateAddress = async (id, updates) => {
     recipient_name: updates.recipient_name ?? updates.name,
     phone: updates.phone,
     street: updates.street,
+    barangay: updates.barangay ?? null,
     city: updates.city,
     state: updates.state,
     postal_code: updates.postal_code ?? updates.zip,

@@ -40,7 +40,7 @@ export const getAddress = async (req, res) => {
 
 // Create new address
 export const createAddress = async (req, res) => {
-  const { recipient_name, phone, street, city, state, postal_code, is_default, lat, lng } = req.body;
+  const { recipient_name, phone, street, barangay, city, state, postal_code, is_default, lat, lng } = req.body;
 
   if (!recipient_name || !phone || !street || !city || !state || !postal_code) {
     return res.status(400).json({ message: 'All fields are required' });
@@ -61,10 +61,10 @@ export const createAddress = async (req, res) => {
 
     // Insert new address
     const result = await client.query(
-      `INSERT INTO addresses (user_id, recipient_name, phone, street, city, state, postal_code, lat, lng, is_default)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO addresses (user_id, recipient_name, phone, street, barangay, city, state, postal_code, lat, lng, is_default)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
-      [req.user.id, recipient_name, phone, street, city, state, postal_code, lat ?? null, lng ?? null, is_default || false]
+      [req.user.id, recipient_name, phone, street, barangay ?? null, city, state, postal_code, lat ?? null, lng ?? null, is_default || false]
     );
 
     await client.query('COMMIT');
@@ -85,7 +85,7 @@ export const createAddress = async (req, res) => {
 // Update address
 export const updateAddress = async (req, res) => {
   const { id } = req.params;
-  const { recipient_name, phone, street, city, state, postal_code, is_default, lat, lng } = req.body;
+  const { recipient_name, phone, street, barangay, city, state, postal_code, is_default, lat, lng } = req.body;
 
   const client = await pool.connect();
 
@@ -117,16 +117,17 @@ export const updateAddress = async (req, res) => {
        SET recipient_name = COALESCE($1, recipient_name),
            phone = COALESCE($2, phone),
            street = COALESCE($3, street),
-           city = COALESCE($4, city),
-           state = COALESCE($5, state),
-           postal_code = COALESCE($6, postal_code),
-           lat = COALESCE($7, lat),
-           lng = COALESCE($8, lng),
-           is_default = COALESCE($9, is_default),
+         barangay = COALESCE($4, barangay),
+         city = COALESCE($5, city),
+         state = COALESCE($6, state),
+         postal_code = COALESCE($7, postal_code),
+         lat = COALESCE($8, lat),
+         lng = COALESCE($9, lng),
+         is_default = COALESCE($10, is_default),
            updated_at = CURRENT_TIMESTAMP
-      WHERE id = $10
+       WHERE id = $11
        RETURNING *`,
-      [recipient_name, phone, street, city, state, postal_code, lat, lng, is_default, id]
+       [recipient_name, phone, street, barangay, city, state, postal_code, lat, lng, is_default, id]
     );
 
     await client.query('COMMIT');

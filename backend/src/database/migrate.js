@@ -182,6 +182,7 @@ const createTables = async () => {
         recipient_name VARCHAR(255) NOT NULL,
         phone VARCHAR(50) NOT NULL,
         street TEXT NOT NULL,
+        barangay VARCHAR(100),
         city VARCHAR(100) NOT NULL,
         state VARCHAR(100) NOT NULL,
         country VARCHAR(100) DEFAULT 'Philippines',
@@ -212,6 +213,12 @@ const createTables = async () => {
       ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'Philippines';
     `);
     console.log('✅ Addresses table ensured country column');
+
+    await client.query(`
+      ALTER TABLE addresses
+      ADD COLUMN IF NOT EXISTS barangay VARCHAR(100);
+    `);
+    console.log('✅ Addresses table ensured barangay column');
 
     await client.query(`
       ALTER TABLE addresses

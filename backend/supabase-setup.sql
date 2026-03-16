@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS addresses (
   recipient_name VARCHAR(255) NOT NULL,
   phone VARCHAR(50) NOT NULL,
   street TEXT NOT NULL,
+  barangay VARCHAR(100),
   city VARCHAR(100) NOT NULL,
   state VARCHAR(100) NOT NULL,
   country VARCHAR(100) DEFAULT 'Philippines',
@@ -181,6 +182,9 @@ ALTER TABLE addresses
 
 ALTER TABLE addresses
   ADD COLUMN IF NOT EXISTS lng DECIMAL(10,7);
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS barangay VARCHAR(100);
 
 -- 11. Returns
 CREATE TABLE IF NOT EXISTS returns (

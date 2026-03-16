@@ -126,12 +126,16 @@ CREATE TABLE IF NOT EXISTS orders (
   amount_tendered DECIMAL(10,2),
   change_due DECIMAL(10,2),
   cashier_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  barangay VARCHAR(100),
   discount_amount DECIMAL(10,2) DEFAULT 0.00,
   promo_code_used VARCHAR(100),
   payment_intent_id VARCHAR(255),
   tracking_number VARCHAR(255),
   assigned_staff_id INTEGER REFERENCES users(id),
   tax_amount DECIMAL(10,2) DEFAULT 0,
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS barangay VARCHAR(100);
   shipping_method VARCHAR(50) DEFAULT 'standard',
   delivery_notes TEXT,
   estimated_delivery DATE,
