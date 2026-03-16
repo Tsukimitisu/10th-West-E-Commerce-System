@@ -12,6 +12,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
   const [leafletReady, setLeafletReady] = useState(typeof window !== 'undefined' && !!window.L);
   const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState('');
+  const [errorType, setErrorType] = useState('');
   const [lastGeoKey, setLastGeoKey] = useState('');
   const [lastExternalKey, setLastExternalKey] = useState('');
 
@@ -57,7 +58,10 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     loadLeaflet().then(() => {
       if (!cancelled) setLeafletReady(true);
     }).catch(() => {
-      if (!cancelled) setError('Map failed to load.');
+      if (!cancelled) {
+        setError('Map failed to load.');
+        setErrorType('map');
+      }
     });
     return () => { cancelled = true; };
   }, []);
@@ -116,6 +120,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     marker.setLatLng(pos);
     onChange?.({ lat: pos[0], lng: pos[1] });
     setError('');
+    setErrorType('');
     // Sync geocode key so the next effect doesn't re‑fire for the same address
     setLastGeoKey(`${street || ''}|${barangay || ''}|${city || ''}|${state || ''}`);
   }, [leafletReady, externalLat, externalLng, onChange, lastExternalKey, street, barangay, city, state]);
@@ -146,6 +151,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
 
     setGeocoding(true);
     setError('');
+    setErrorType('');
     const controller = new AbortController();
 
     fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ph&q=${encodeURIComponent(query)}`, {
@@ -165,6 +171,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
       onChange?.({ lat: Number(lat), lng: Number(lon) });
     }).catch(() => {
       setError('Could not locate that address. You can drag the pin manually.');
+      setErrorType('geocode');
     }).finally(() => setGeocoding(false));
 
     return () => controller.abort();
@@ -173,6 +180,12 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
   /* ── Render guard: hidden until Province + City + Barangay selected ── */
   if (!barangay || !city || !state) return null;
 
+  const handleRetry = () => {
+    setError('');
+    setErrorType('');
+    setLastGeoKey('');
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -180,11 +193,30 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
         {geocoding && <span className="text-xs text-gray-500">Locating…</span>}
       </div>
       <div
-        ref={mapContainerRef}
-        className="w-full rounded-lg border border-gray-200 overflow-hidden"
-        style={{ height: `${height}px`, pointerEvents: disabled ? 'none' : 'auto', filter: disabled ? 'grayscale(0.6)' : 'none' }}
-      />
-      {error && <p className="text-xs text-orange-500">{error}</p>}
+        className="w-full rounded-lg border border-gray-200 overflow-hidden relative"
+        style={{ height: `${height}px` }}
+      >
+        {!leafletReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 text-xs text-gray-500">
+            Loading map…
+          </div>
+        )}
+        <div
+          ref={mapContainerRef}
+          className="w-full h-full"
+          style={{ pointerEvents: disabled ? 'none' : 'auto', filter: disabled ? 'grayscale(0.6)' : 'none' }}
+        />
+      </div>
+      {error && (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-orange-500">{error}</p>
+          {errorType === 'geocode' && (
+            <button type="button" onClick={handleRetry} className="text-xs text-orange-600 hover:text-orange-700 font-medium">
+              Retry
+            </button>
+          )}
+        </div>
+      )}
       <p className="text-xs text-gray-500">Drag the pin if the automatic placement is off. Lat/Lng are saved with the address/order.</p>
     </div>
   );
