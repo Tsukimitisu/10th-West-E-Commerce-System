@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // Hidden until Province + City + Barangay are all selected.
 // Phase 1 — centres on barangay. Phase 2 — refines to street-level.
 // Accepts optional `lat` / `lng` props to jump to a position immediately (e.g. from autocomplete).
-// Emits { lat, lng } through onChange. Pin is always draggable.
+// Emits { lat, lng } through onChange. Pin is fixed to detected location.
 const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: externalLng, onChange, height = 280, disabled = false }) => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
@@ -78,11 +78,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
       maxZoom: 19,
     }).addTo(map);
 
-    const marker = L.marker(fallbackCenter, { draggable: true }).addTo(map);
-    marker.on('dragend', () => {
-      const pos = marker.getLatLng();
-      onChange?.({ lat: pos.lat, lng: pos.lng });
-    });
+    const marker = L.marker(fallbackCenter, { draggable: false }).addTo(map);
 
     mapRef.current = map;
     markerRef.current = marker;
@@ -218,7 +214,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
           )}
         </div>
       )}
-      <p className="text-xs text-gray-500">Drag the pin if the automatic placement is off. Lat/Lng are saved with the address/order.</p>
+      <p className="text-xs text-gray-500">Pin placement updates automatically from the detected address. Lat/Lng are saved with the address/order.</p>
     </div>
   );
 };
