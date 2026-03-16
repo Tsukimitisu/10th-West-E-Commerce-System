@@ -138,6 +138,8 @@ const createTables = async () => {
         total_amount DECIMAL(10, 2) NOT NULL,
         status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'completed', 'cancelled')),
         shipping_address TEXT NOT NULL,
+        shipping_lat DECIMAL(10, 7),
+        shipping_lng DECIMAL(10, 7),
         source VARCHAR(20) DEFAULT 'online' CHECK (source IN ('online', 'pos')),
         payment_method VARCHAR(20) CHECK (payment_method IN ('cash', 'card', 'cod', 'online', 'stripe', 'gcash', 'maya', 'bank_transfer')),
         amount_tendered DECIMAL(10, 2),
@@ -184,6 +186,8 @@ const createTables = async () => {
         state VARCHAR(100) NOT NULL,
         country VARCHAR(100) DEFAULT 'Philippines',
         postal_code VARCHAR(20) NOT NULL,
+        lat DECIMAL(10, 7),
+        lng DECIMAL(10, 7),
         is_default BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -191,12 +195,33 @@ const createTables = async () => {
     `);
     console.log('✅ Addresses table created');
 
+    // Backfill shipping coordinates for existing deployments
+    await client.query(`
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS shipping_lat DECIMAL(10, 7);
+    `);
+    await client.query(`
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS shipping_lng DECIMAL(10, 7);
+    `);
+    console.log('✅ Orders table ensured shipping coordinates');
+
     // Backfill country column for existing deployments
     await client.query(`
       ALTER TABLE addresses
       ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'Philippines';
     `);
     console.log('✅ Addresses table ensured country column');
+
+    await client.query(`
+      ALTER TABLE addresses
+      ADD COLUMN IF NOT EXISTS lat DECIMAL(10, 7);
+    `);
+    await client.query(`
+      ALTER TABLE addresses
+      ADD COLUMN IF NOT EXISTS lng DECIMAL(10, 7);
+    `);
+    console.log('✅ Addresses table ensured coordinates');
 
     // Create Returns table
     await client.query(`

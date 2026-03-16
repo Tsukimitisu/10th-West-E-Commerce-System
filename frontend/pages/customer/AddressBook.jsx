@@ -48,7 +48,7 @@ const AddressBook = () => {
     try {
       const streetWithBarangay = form.barangay ? `${form.street}, ${form.barangay}` : form.street;
       const payload = { ...form, street: streetWithBarangay };
-      // Persist geolocation locally so users keep their pin position (backend schema has no lat/lng columns).
+      // Persist geolocation locally as a fallback for legacy rows without coordinates.
       if (form.lat && form.lng) {
         const key = `${streetWithBarangay}|${form.city}|${form.state}`;
         const stored = JSON.parse(localStorage.getItem('addressGeo') || '{}');

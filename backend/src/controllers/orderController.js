@@ -201,6 +201,8 @@ export const createOrder = async (req, res) => {
   const {
     items,
     shipping_address,
+    shipping_lat,
+    shipping_lng,
     payment_intent_id,
     total_amount,
     discount_amount = 0,
@@ -268,10 +270,10 @@ export const createOrder = async (req, res) => {
     const orderResult = await client.query(
       `INSERT INTO orders (
         user_id, guest_name, guest_email, total_amount, 
-        shipping_address, payment_intent_id, status, 
+        shipping_address, shipping_lat, shipping_lng, payment_intent_id, status, 
         discount_amount, promo_code_used, payment_method, source,
         amount_tendered, change_due, cashier_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
       RETURNING *`,
       [
         userId,
@@ -279,6 +281,8 @@ export const createOrder = async (req, res) => {
         guestInfo?.email || null,
         total_amount,
         shipping_address,
+        shipping_lat ?? null,
+        shipping_lng ?? null,
         payment_intent_id,
         'paid',
         discount_amount,

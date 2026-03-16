@@ -1090,6 +1090,8 @@ const mapOrderFromApi = (order) => ({
   cashier_id: order.cashier_id ?? undefined,
   discount_amount: order.discount_amount != null ? Number(order.discount_amount) : undefined,
   promo_code_used: order.promo_code_used ?? undefined,
+  shipping_lat: order.shipping_lat ?? undefined,
+  shipping_lng: order.shipping_lng ?? undefined,
 });
 
 let MOCK_ORDERS = [];
@@ -1192,6 +1194,8 @@ export const createOrder = async (order) => {
       total_amount: order.total_amount || 0,
       status: OrderStatus.PENDING,
       shipping_address: order.shipping_address || '',
+      shipping_lat: order.shipping_lat ?? null,
+      shipping_lng: order.shipping_lng ?? null,
       created_at: new Date().toISOString(),
       source: order.source || 'online',
       payment_method: order.payment_method,
@@ -1210,6 +1214,8 @@ export const createOrder = async (order) => {
         total_amount: order.total_amount,
         status: OrderStatus.PENDING,
         shipping_address: order.shipping_address,
+        shipping_lat: order.shipping_lat ?? null,
+        shipping_lng: order.shipping_lng ?? null,
         source: order.source || 'online',
         payment_method: order.payment_method,
         guest_name: order.guest_info?.name,
@@ -1500,6 +1506,8 @@ export const getAddresses = async (userId) => {
     zip: address?.zip ?? address?.postal_code ?? '',
     country: address?.country || 'Philippines',
     label: address?.label || 'Home',
+    lat: address?.lat ?? null,
+    lng: address?.lng ?? null,
   });
 
   if (USE_SUPABASE) {
@@ -1530,6 +1538,8 @@ export const addAddress = async (address) => {
     postal_code: address.postal_code ?? address.zip,
     country: 'Philippines',
     is_default: !!address.is_default,
+    lat: address.lat ?? null,
+    lng: address.lng ?? null,
   };
 
   if (USE_SUPABASE) {
@@ -1571,6 +1581,8 @@ export const addAddress = async (address) => {
       zip: data.postal_code ?? '',
       country: data.country || 'Philippines',
       label: data.label || 'Home',
+      lat: data.lat ?? null,
+      lng: data.lng ?? null,
     };
   }
 
@@ -1584,6 +1596,8 @@ export const addAddress = async (address) => {
     zip: data.address?.postal_code ?? '',
     country: data.address?.country || 'Philippines',
     label: data.address?.label || 'Home',
+    lat: data.address?.lat ?? null,
+    lng: data.address?.lng ?? null,
   };
 };
 
@@ -1597,6 +1611,8 @@ export const updateAddress = async (id, updates) => {
     postal_code: updates.postal_code ?? updates.zip,
     country: 'Philippines',
     is_default: updates.is_default,
+    lat: updates.lat ?? null,
+    lng: updates.lng ?? null,
   };
 
   if (USE_SUPABASE) {
@@ -1641,6 +1657,8 @@ export const updateAddress = async (id, updates) => {
       zip: data.postal_code ?? '',
       country: data.country || 'Philippines',
       label: data.label || 'Home',
+      lat: data.lat ?? null,
+      lng: data.lng ?? null,
     };
   }
 
@@ -1654,6 +1672,8 @@ export const updateAddress = async (id, updates) => {
     zip: data.address?.postal_code ?? '',
     country: data.address?.country || 'Philippines',
     label: data.address?.label || 'Home',
+    lat: data.address?.lat ?? null,
+    lng: data.address?.lng ?? null,
   };
 };
 

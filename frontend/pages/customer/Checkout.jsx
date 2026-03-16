@@ -179,6 +179,19 @@ const Checkout = () => {
           ? `${selectedAddr.recipient_name}, ${selectedAddr.street}, ${selectedAddr.city}, ${selectedAddr.state} ${selectedAddr.postal_code}, Philippines`
           : `${form.name}, ${streetWithBarangay}, ${form.city}, ${form.state} ${form.postal_code}, Philippines${coordLabel}`;
 
+      let shippingLat = usingSavedAddress ? (selectedAddr?.lat ?? null) : (form.lat ?? null);
+      let shippingLng = usingSavedAddress ? (selectedAddr?.lng ?? null) : (form.lng ?? null);
+      if (usingSavedAddress && (shippingLat == null || shippingLng == null) && selectedAddr) {
+        try {
+          const stored = JSON.parse(localStorage.getItem('addressGeo') || '{}');
+          const key = `${selectedAddr.street}|${selectedAddr.city}|${selectedAddr.state}`;
+          if (stored[key]) {
+            shippingLat = stored[key].lat ?? shippingLat;
+            shippingLng = stored[key].lng ?? shippingLng;
+          }
+        } catch {}
+      }
+
       const stockError = await validateStockBeforeCheckout();
       if (stockError) {
         setError(stockError);
@@ -203,6 +216,8 @@ const Checkout = () => {
           product_price: i.product.is_on_sale && i.product.sale_price ? i.product.sale_price : i.product.price
         })),
         shipping_address: shippingAddress,
+        shipping_lat: shippingLat,
+        shipping_lng: shippingLng,
         shipping_method: shippingMethod,
         total_amount: grandTotal,
         payment_method: paymentMethod,
