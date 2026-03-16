@@ -15,6 +15,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
   const [errorType, setErrorType] = useState('');
   const [lastGeoKey, setLastGeoKey] = useState('');
   const [lastExternalKey, setLastExternalKey] = useState('');
+  const [manualOverride, setManualOverride] = useState(false);
 
   /* ── Load Leaflet from CDN ────────────────────────────── */
   const loadLeaflet = () => new Promise((resolve, reject) => {
@@ -81,6 +82,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     const marker = L.marker(fallbackCenter, { draggable: true }).addTo(map);
     marker.on('dragend', () => {
       const pos = marker.getLatLng();
+      setManualOverride(true);
       onChange?.({ lat: pos.lat, lng: pos.lng });
     });
 
@@ -99,6 +101,10 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
   }, [barangay, city, state]);
 
   useEffect(() => {
+    setManualOverride(false);
+  }, [street, barangay, city, state]);
+
+  useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
     const timer = setTimeout(() => map.invalidateSize(), 100);
@@ -111,6 +117,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     const key = `${externalLat}|${externalLng}`;
     if (key === lastExternalKey) return;
     setLastExternalKey(key);
+    setManualOverride(false);
 
     const map = mapRef.current;
     const marker = markerRef.current;
@@ -134,6 +141,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     if (!leafletReady || !city || !state) return;
     // At minimum we need barangay OR street
     if (!barangay && !street) return;
+    if (manualOverride) return;
 
     const geoKey = `${street || ''}|${barangay || ''}|${city}|${state}`;
     if (geoKey === lastGeoKey) return;
@@ -176,7 +184,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     }).finally(() => setGeocoding(false));
 
     return () => controller.abort();
-  }, [leafletReady, street, barangay, city, state, onChange, lastGeoKey]);
+  }, [leafletReady, street, barangay, city, state, onChange, lastGeoKey, manualOverride]);
 
   /* ── Render guard: hidden until Province + City + Barangay selected ── */
   if (!barangay || !city || !state) return null;
