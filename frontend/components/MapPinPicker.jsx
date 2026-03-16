@@ -68,7 +68,8 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
 
   /* ── Initialise map once Leaflet is ready ─────────────── */
   useEffect(() => {
-    if (!leafletReady || !mapContainerRef.current || mapRef.current) return;
+    if (!leafletReady || !window.L || !mapContainerRef.current || mapRef.current) return;
+    if (!barangay || !city || !state) return;
     const L = window.L;
     const fallbackCenter = [12.8797, 121.7740]; // Philippines centroid
     const map = L.map(mapContainerRef.current).setView(fallbackCenter, 12);
@@ -89,7 +90,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     return () => {
       destroyMap();
     };
-  }, [leafletReady, onChange]);
+  }, [leafletReady, barangay, city, state, onChange]);
 
   useEffect(() => {
     if (!barangay || !city || !state) {
@@ -194,9 +195,9 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
       </div>
       <div
         className="w-full rounded-lg border border-gray-200 overflow-hidden relative"
-        style={{ height: `${height}px` }}
+        style={{ height: `${height}px`, minHeight: `${height}px`, minWidth: '100%' }}
       >
-        {!leafletReady && (
+        {(!leafletReady || !window.L) && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-50 text-xs text-gray-500">
             Loading map…
           </div>
