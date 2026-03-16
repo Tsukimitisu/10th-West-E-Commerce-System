@@ -9,7 +9,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
-  const [leafletReady, setLeafletReady] = useState(!!window.L);
+  const [leafletReady, setLeafletReady] = useState(typeof window !== 'undefined' && !!window.L);
   const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState('');
   const [lastGeoKey, setLastGeoKey] = useState('');
@@ -17,24 +17,40 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
 
   /* ── Load Leaflet from CDN ────────────────────────────── */
   const loadLeaflet = () => new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') return reject(new Error('No window'));
     if (window.L) return resolve(window.L);
 
-    const existingCss = document.getElementById('leaflet-css');
-    if (!existingCss) {
+    const loadCss = () => new Promise((cssResolve) => {
+      const existingCss = document.getElementById('leaflet-css');
+      if (existingCss) return cssResolve();
       const link = document.createElement('link');
       link.id = 'leaflet-css';
       link.rel = 'stylesheet';
       link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      link.onload = () => cssResolve();
+      link.onerror = () => cssResolve();
       document.head.appendChild(link);
-    }
+    });
 
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.async = true;
-    script.onload = () => resolve(window.L);
-    script.onerror = reject;
-    document.body.appendChild(script);
+    const loadScript = () => new Promise((scriptResolve, scriptReject) => {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.async = true;
+      script.onload = () => scriptResolve(window.L);
+      script.onerror = scriptReject;
+      document.body.appendChild(script);
+    });
+
+    Promise.all([loadCss(), loadScript()]).then(([, L]) => resolve(L)).catch(reject);
   });
+
+  const destroyMap = () => {
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -67,11 +83,22 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     markerRef.current = marker;
 
     return () => {
-      map.remove();
-      mapRef.current = null;
-      markerRef.current = null;
+      destroyMap();
     };
   }, [leafletReady, onChange]);
+
+  useEffect(() => {
+    if (!barangay || !city || !state) {
+      destroyMap();
+    }
+  }, [barangay, city, state]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    const timer = setTimeout(() => map.invalidateSize(), 100);
+    return () => clearTimeout(timer);
+  }, [leafletReady, barangay, city, state]);
 
   /* ── Fly to external coords (autocomplete selection) ──── */
   useEffect(() => {
