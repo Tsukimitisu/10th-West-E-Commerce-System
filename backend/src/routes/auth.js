@@ -5,7 +5,7 @@ import {
   register, login, logout, getProfile,
   forgotPassword, resetPassword, verifyResetToken, changePassword,
   setup2FA, verify2FA, disable2FA,
-  oauthCallback,
+  oauthCallback, exchangeOAuthCode,
   getActiveSessions, revokeSession,
   getActivityLogs,
   deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData,
@@ -38,6 +38,9 @@ router.post('/reset-password',
   validate,
   resetPassword
 );
+
+// OAuth code exchange (used by frontend after OAuth redirect)
+router.post('/exchange-code', body('code').notEmpty(), validate, exchangeOAuthCode);
 
 // ─── OAuth: Google ─────────────────────────────────────────────────
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
@@ -79,7 +82,7 @@ router.delete('/sessions/:sessionId', authenticateToken, revokeSession);
 router.get('/activity-logs', authenticateToken, requireRole('admin', 'super_admin', 'owner'), getActivityLogs);
 
 // ─── Account deletion (Right to be Forgotten - RA 10173) ────────────────────
-router.delete('/account', authenticateToken, deleteAccountHandler);
+router.delete('/account', authenticateToken, body('password').optional(), deleteAccountHandler);
 
 // ─── Data export / portability (RA 10173 §18) ──────────────────────────────
 router.get('/export-data', authenticateToken, exportUserData);

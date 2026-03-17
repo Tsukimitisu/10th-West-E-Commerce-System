@@ -6,7 +6,11 @@ export const generateCsrfToken = (req, res, next) => {
   const token = crypto.randomBytes(32).toString('hex');
   const sessionId = req.headers['x-session-id'] || req.ip;
   tokens.set(sessionId, { token, expires: Date.now() + 3600000 });
-  res.cookie('csrf-token', token, { httpOnly: false, sameSite: 'strict' });
+  res.cookie('csrf-token', token, {
+    httpOnly: false,
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+  });
   req.csrfToken = token;
   next();
 };
