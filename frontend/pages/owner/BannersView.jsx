@@ -19,7 +19,7 @@ const BannersView = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', image_url: '', link_url: '', is_active: true, display_order: 0 });
+  const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', button_text: '', image_url: '', link_url: '', is_active: true, display_order: 0 });
   const [announcementForm, setAnnouncementForm] = useState({ title: '', content: '', is_published: false });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -85,7 +85,7 @@ const BannersView = () => {
   };
 
   const resetForm = () => {
-    setBannerForm({ title: '', subtitle: '', image_url: '', link_url: '', is_active: true, display_order: 0 });
+    setBannerForm({ title: '', subtitle: '', button_text: '', image_url: '', link_url: '', is_active: true, display_order: 0 });
     setAnnouncementForm({ title: '', content: '', is_published: false });
     setEditing(null);
     setShowModal(false);
@@ -249,13 +249,14 @@ const BannersView = () => {
                     </span>
                   </div>
                   {banner.subtitle && <p className="text-xs text-gray-500 truncate mt-0.5">{banner.subtitle}</p>}
+                  {banner.button_text && <p className="text-[10px] text-gray-400 mt-0.5">Button: {banner.button_text}</p>}
                   <p className="text-[10px] text-gray-400 mt-1">Order: {banner.display_order || 0}</p>
                 </div>
                 <div className="flex items-center gap-1">
                   <button onClick={() => toggleBannerActive(banner)} className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors" title={banner.is_active ? 'Hide' : 'Show'}>
                     {banner.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
                   </button>
-                  <button onClick={() => { setBannerForm({ title: banner.title || '', subtitle: banner.subtitle || '', image_url: banner.image_url || '', link_url: banner.link_url || '', is_active: banner.is_active, display_order: banner.display_order || 0 }); setEditing(banner); setImagePreview(banner.image_url || ''); setLinkMode(LINK_OPTIONS.some(o => o.value === banner.link_url) ? 'page' : (banner.link_url ? 'custom' : 'page')); setShowModal(true); }}
+                  <button onClick={() => { setBannerForm({ title: banner.title || '', subtitle: banner.subtitle || '', button_text: banner.button_text || '', image_url: banner.image_url || '', link_url: banner.link_url || '', is_active: banner.is_active, display_order: banner.display_order || 0 }); setEditing(banner); setImagePreview(banner.image_url || ''); setLinkMode(LINK_OPTIONS.some(o => o.value === banner.link_url) ? 'page' : (banner.link_url ? 'custom' : 'page')); setShowModal(true); }}
                     className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors"><Edit3 size={14} /></button>
                   <button onClick={() => handleDeleteBanner(banner)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                 </div>
@@ -392,9 +393,19 @@ const BannersView = () => {
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Subtitle</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
                   <input type="text" value={bannerForm.subtitle} onChange={e => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Button Text</label>
+                  <input
+                    type="text"
+                    value={bannerForm.button_text}
+                    onChange={e => setBannerForm({ ...bannerForm, button_text: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300"
+                    placeholder="Shop Parts"
+                  />
                 </div>
 
                 {/* Image Upload */}

@@ -287,6 +287,7 @@ CREATE TABLE IF NOT EXISTS banners (
   id SERIAL PRIMARY KEY,
   title VARCHAR(255),
   subtitle TEXT,
+  button_text VARCHAR(120),
   image_url VARCHAR(500),
   link_url VARCHAR(500),
   is_active BOOLEAN DEFAULT TRUE,
@@ -294,6 +295,9 @@ CREATE TABLE IF NOT EXISTS banners (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE banners
+  ADD COLUMN IF NOT EXISTS button_text VARCHAR(120);
 
 -- 20. Announcements
 CREATE TABLE IF NOT EXISTS announcements (

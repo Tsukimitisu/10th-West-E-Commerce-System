@@ -294,7 +294,9 @@ const Home = () => {
                   whileTap="tap"
                   className="px-8 py-4 bg-red-600 text-white font-bold uppercase tracking-wider hover:bg-red-700 transition-colors"
                 >
-                  <span className="block skew-x-[10deg] flex items-center gap-2">Shop Parts <ArrowRight size={18} /></span>
+                  <span className="block skew-x-[10deg] flex items-center gap-2">
+                    {activeBanners[currentBanner]?.button_text || 'Shop Parts'} <ArrowRight size={18} />
+                  </span>
                 </motion.button>
               </Link>
               <Link to="/shop?sort=newest">
