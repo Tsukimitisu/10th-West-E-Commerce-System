@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Image, Plus, Edit3, Trash2, Eye, EyeOff, X, Check, AlertCircle, GripVertical, Megaphone, ArrowUp, ArrowDown, AlertTriangle, Upload, Link as LinkIcon } from 'lucide-react';
-import { getAllBanners, createBanner, updateBanner, deleteBanner, getAllAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, uploadProductImage } from '../../services/api';
+import { Image, Plus, Edit3, Trash2, Eye, EyeOff, X, Check, AlertCircle, GripVertical, Megaphone, ArrowUp, ArrowDown, AlertTriangle, Upload, Link as LinkIcon, SlidersHorizontal, Save } from 'lucide-react';
+import { getAllBanners, createBanner, updateBanner, deleteBanner, getAllAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, uploadProductImage, getSystemSettings, updateSystemSettings } from '../../services/api';
 
 const LINK_OPTIONS = [
   { value: '/shop', label: 'Shop - All Products' },
@@ -28,17 +28,60 @@ const BannersView = () => {
   const [imagePreview, setImagePreview] = useState('');
   const [uploading, setUploading] = useState(false);
   const [linkMode, setLinkMode] = useState('page'); // 'page' or 'custom'
+  const [carouselConfig, setCarouselConfig] = useState({
+    hero_autoplay: true,
+    hero_interval_ms: '5000',
+    hero_show_dots: true,
+    hero_show_arrows: true,
+    hero_pause_on_hover: true,
+  });
+  const [savingCarousel, setSavingCarousel] = useState(false);
+  const [carouselSaved, setCarouselSaved] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     try {
-      const [b, a] = await Promise.all([getAllBanners(), getAllAnnouncements()]);
+      const [b, a, homeSettings] = await Promise.all([
+        getAllBanners(),
+        getAllAnnouncements(),
+        getSystemSettings('home').catch(() => []),
+      ]);
       setBanners(b || []);
       setAnnouncements(a || []);
+
+      const map = {};
+      (Array.isArray(homeSettings) ? homeSettings : []).forEach((row) => {
+        map[row.key] = row.value;
+      });
+      setCarouselConfig({
+        hero_autoplay: map.hero_autoplay !== 'false',
+        hero_interval_ms: map.hero_interval_ms || '5000',
+        hero_show_dots: map.hero_show_dots !== 'false',
+        hero_show_arrows: map.hero_show_arrows !== 'false',
+        hero_pause_on_hover: map.hero_pause_on_hover !== 'false',
+      });
     } catch (e) { console.error(e); }
     setLoading(false);
+  };
+
+  const handleSaveCarouselConfig = async () => {
+    setSavingCarousel(true);
+    try {
+      await updateSystemSettings('home', {
+        hero_autoplay: String(carouselConfig.hero_autoplay),
+        hero_interval_ms: String(carouselConfig.hero_interval_ms || '5000'),
+        hero_show_dots: String(carouselConfig.hero_show_dots),
+        hero_show_arrows: String(carouselConfig.hero_show_arrows),
+        hero_pause_on_hover: String(carouselConfig.hero_pause_on_hover),
+      });
+      setCarouselSaved(true);
+      setTimeout(() => setCarouselSaved(false), 1800);
+    } catch (e) {
+      console.error(e);
+    }
+    setSavingCarousel(false);
   };
 
   const resetForm = () => {
@@ -155,10 +198,12 @@ const BannersView = () => {
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Image size={22} /> Content Management</h1>
           <p className="text-sm text-gray-500 mt-1">Manage banners, promotions & announcements</p>
         </div>
-        <button onClick={() => { resetForm(); setShowModal(true); }}
-          className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
-          <Plus size={16} /> {tab === 'banners' ? 'Add Banner' : 'Add Announcement'}
-        </button>
+        {tab !== 'carousel' && (
+          <button onClick={() => { resetForm(); setShowModal(true); }}
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
+            <Plus size={16} /> {tab === 'banners' ? 'Add Banner' : 'Add Announcement'}
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -170,6 +215,10 @@ const BannersView = () => {
         <button onClick={() => setTab('announcements')}
           className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === 'announcements' ? 'bg-white text-orange-500 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
           <Megaphone size={14} /> Announcements ({announcements.length})
+        </button>
+        <button onClick={() => setTab('carousel')}
+          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === 'carousel' ? 'bg-white text-orange-500 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+          <SlidersHorizontal size={14} /> Carousel
         </button>
       </div>
 
@@ -214,7 +263,7 @@ const BannersView = () => {
             ))}
           </div>
         )
-      ) : (
+      ) : tab === 'announcements' ? (
         /* Announcements List */
         announcements.length === 0 ? (
           <div className="bg-white border border-gray-100 rounded-xl p-12 text-center">
@@ -248,6 +297,82 @@ const BannersView = () => {
             ))}
           </div>
         )
+      ) : (
+        <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
+          <div>
+            <h3 className="font-semibold text-gray-900">Home Hero Carousel Management</h3>
+            <p className="text-sm text-gray-500 mt-1">These options apply to the Home page hero only.</p>
+          </div>
+
+          <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Autoplay slides</p>
+              <p className="text-[11px] text-gray-500">Automatically rotate banners in the hero section.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={carouselConfig.hero_autoplay}
+              onChange={e => setCarouselConfig(cfg => ({ ...cfg, hero_autoplay: e.target.checked }))}
+              className="w-4 h-4 text-orange-500 border-gray-300 rounded"
+            />
+          </label>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Slide interval (milliseconds)</label>
+            <input
+              type="number"
+              min="2000"
+              step="500"
+              value={carouselConfig.hero_interval_ms}
+              onChange={e => setCarouselConfig(cfg => ({ ...cfg, hero_interval_ms: e.target.value }))}
+              className="w-full max-w-xs px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+              <span className="text-sm text-gray-800">Show dots</span>
+              <input
+                type="checkbox"
+                checked={carouselConfig.hero_show_dots}
+                onChange={e => setCarouselConfig(cfg => ({ ...cfg, hero_show_dots: e.target.checked }))}
+                className="w-4 h-4 text-orange-500 border-gray-300 rounded"
+              />
+            </label>
+            <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+              <span className="text-sm text-gray-800">Show arrows</span>
+              <input
+                type="checkbox"
+                checked={carouselConfig.hero_show_arrows}
+                onChange={e => setCarouselConfig(cfg => ({ ...cfg, hero_show_arrows: e.target.checked }))}
+                className="w-4 h-4 text-orange-500 border-gray-300 rounded"
+              />
+            </label>
+          </div>
+
+          <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Pause on hover</p>
+              <p className="text-[11px] text-gray-500">Improves readability while users hover the hero on desktop.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={carouselConfig.hero_pause_on_hover}
+              onChange={e => setCarouselConfig(cfg => ({ ...cfg, hero_pause_on_hover: e.target.checked }))}
+              className="w-4 h-4 text-orange-500 border-gray-300 rounded"
+            />
+          </label>
+
+          <div className="pt-2">
+            <button
+              onClick={handleSaveCarouselConfig}
+              disabled={savingCarousel}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-2"
+            >
+              <Save size={14} /> {savingCarousel ? 'Saving...' : (carouselSaved ? 'Saved!' : 'Save Carousel Settings')}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Modal */}
