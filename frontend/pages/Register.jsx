@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, Check, X } from 'lucide-react';
-import { register } from '../services/api';
+import { register, API_ORIGIN } from '../services/api';
 
 const Register = ({ onLogin }) => {
   const [name, setName] = useState('');
@@ -14,6 +14,7 @@ const Register = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
   const checks = [
@@ -36,15 +37,28 @@ const Register = ({ onLogin }) => {
     setLoading(true);
     try {
       const result = await register(name, email, password, { consent_given: true, age_confirmed: true });
-      onLogin(result.user, result.token);
-      navigate('/');
+      if (result?.requiresVerification) {
+        setSuccess(result.message || 'Registration successful. Please verify your email before signing in.');
+        setPassword('');
+        setConfirmPassword('');
+        setAgreeTerms(false);
+        setAgeConfirmed(false);
+        setTimeout(() => navigate('/login'), 2000);
+        return;
+      }
+      if (result?.user && result?.token) {
+        onLogin(result.user, result.token);
+        navigate('/');
+      } else {
+        setSuccess(result?.message || 'Registration successful. Please verify your email before signing in.');
+      }
     } catch (err) {
       setError(err.message || 'Registration failed');
     } finally { setLoading(false); }
   };
 
   const handleOAuth = (provider) => {
-    window.location.href = `http://localhost:5000/api/auth/${provider}`;
+    window.location.href = `${API_ORIGIN}/api/auth/${provider}`;
   };
 
   return (
@@ -62,6 +76,12 @@ const Register = ({ onLogin }) => {
           {error && (
             <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-500 flex items-center gap-2">
               <AlertCircle size={16} /> {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 flex items-center gap-2">
+              <Check size={16} /> {success}
             </div>
           )}
 

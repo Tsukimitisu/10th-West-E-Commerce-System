@@ -1,5 +1,6 @@
 import { Role, OrderStatus, ReturnStatus } from '../types.js';
 import { supabase } from './supabase.js';
+// Used only by custom Supabase fallback auth paths for secure password hashing.
 import bcrypt from 'bcryptjs';
 
 // Configuration
@@ -9,7 +10,7 @@ const API_URL = import.meta.env.VITE_API_URL || (() => {
 })();
 const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK === 'true';
-const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
+export const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
 
 const toNullableString = (value) => {
   if (value === undefined || value === null) return null;
@@ -213,31 +214,16 @@ export const register = async (name, email, password, consentData = {}) => {
 
     if (error) throw new Error(error.message);
 
-    const token = 'sb-token-' + btoa(JSON.stringify({ id: newUser.id, email: newUser.email, role: newUser.role }));
-
     return {
-      user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        phone: newUser.phone,
-        avatar: newUser.avatar,
-        store_credit: newUser.store_credit,
-        is_active: newUser.is_active,
-        last_login: newUser.last_login,
-        email_verified: newUser.email_verified,
-      },
-      token,
+      message: 'Registration successful! Please check your email to verify your account before logging in.',
+      requiresVerification: true,
     };
   }
 
-  const data = await authenticatedFetch(`${API_URL}/auth/register`, {
+  return await authenticatedFetch(`${API_URL}/auth/register`, {
     method: 'POST',
     body: JSON.stringify({ name, email, password, ...consentData }),
   });
-
-  return { user: data.user, token: data.token };
 };
 
 export const logoutApi = async () => {
@@ -266,10 +252,24 @@ export const getProfile = async () => {
 };
 
 // Delete account - Right to be Forgotten (RA 10173 §18)
-export const deleteAccount = async () => {
+export const deleteAccount = async (password) => {
   if (USE_SUPABASE) {
     const user = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
     if (!user.id) throw new Error('Not authenticated');
+
+    // Require password confirmation for password-based accounts.
+    const { data: dbUser, error: userErr } = await supabase
+      .from('users')
+      .select('password_hash')
+      .eq('id', user.id)
+      .single();
+    if (userErr) throw new Error(userErr.message);
+    if (dbUser?.password_hash) {
+      if (!password) throw new Error('Password is required to delete your account');
+      const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
+      if (!isValidPassword) throw new Error('Incorrect password');
+    }
+
     const { error } = await supabase
       .from('users')
       .update({ is_active: false, name: 'Deleted User', email: `deleted_${user.id}@removed.local`, phone: null })
@@ -277,7 +277,10 @@ export const deleteAccount = async () => {
     if (error) throw new Error(error.message);
     return { message: 'Account deleted successfully' };
   }
-  return await authenticatedFetch(`${API_URL}/auth/account`, { method: 'DELETE' });
+  return await authenticatedFetch(`${API_URL}/auth/account`, {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
+  });
 };
 
 // Data export / portability - RA 10173 §18
@@ -323,8 +326,9 @@ export const resetPassword = async (token, newPassword) => {
       .eq('password_reset_token', token)
       .single();
     if (!user) throw new Error('Invalid or expired reset token');
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
     const { error } = await supabase.from('users')
-      .update({ password_hash: newPassword, password_reset_token: null, password_reset_expires: null })
+      .update({ password_hash: hashedPassword, password_reset_token: null, password_reset_expires: null })
       .eq('id', user.id);
     if (error) throw new Error(error.message);
     return { message: 'Password reset successful' };
@@ -357,7 +361,21 @@ export const changePassword = async (currentPassword, newPassword) => {
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
-    const { error } = await supabase.from('users').update({ password_hash: newPassword }).eq('id', currentUser.id);
+
+    const { data: dbUser, error: fetchErr } = await supabase
+      .from('users')
+      .select('password_hash')
+      .eq('id', currentUser.id)
+      .single();
+    if (fetchErr) throw new Error(fetchErr.message);
+
+    if (dbUser?.password_hash) {
+      const isValidPassword = await bcrypt.compare(currentPassword, dbUser.password_hash);
+      if (!isValidPassword) throw new Error('Current password is incorrect');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    const { error } = await supabase.from('users').update({ password_hash: hashedPassword }).eq('id', currentUser.id);
     if (error) throw new Error(error.message);
     return { message: 'Password changed successfully' };
   }
@@ -384,6 +402,13 @@ export const disable2FA = async (password) => {
   return authenticatedFetch(`${API_URL}/auth/2fa`, {
     method: 'DELETE',
     body: JSON.stringify({ password }),
+  });
+};
+
+export const exchangeOAuthCode = async (code) => {
+  return authenticatedFetch(`${API_URL}/auth/exchange-code`, {
+    method: 'POST',
+    body: JSON.stringify({ code }),
   });
 };
 
