@@ -21,6 +21,7 @@ const Profile = () => {
   const [twoFAEnabled, setTwoFAEnabled] = useState(user?.two_factor_enabled || false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
@@ -85,10 +86,14 @@ const Profile = () => {
 
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== 'DELETE') return;
+    if (!deletePassword) {
+      setDeleteError('Password is required to confirm account deletion');
+      return;
+    }
     setDeleteLoading(true);
     setDeleteError('');
     try {
-      await deleteAccount();
+      await deleteAccount(deletePassword);
       localStorage.removeItem('shopCoreUser');
       localStorage.removeItem('shopCoreToken');
       window.location.href = '/#/login';
@@ -235,7 +240,6 @@ const Profile = () => {
               <div className="flex justify-center p-4 bg-gray-50 rounded-lg">
                 <img src={twoFASetup.qrCode} alt="2FA QR Code" className="w-48 h-48" />
               </div>
-              <p className="text-xs text-gray-500 text-center">Secret: <code className="bg-gray-100 px-2 py-0.5 rounded text-gray-700">{twoFASetup.secret}</code></p>
               <div className="flex gap-2">
                 <input type="text" value={totpCode} onChange={e => setTotpCode(e.target.value.replace(/\D/g, ''))} maxLength={6} placeholder="000000"
                   className="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-center tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-orange-500" />
@@ -320,12 +324,22 @@ const Profile = () => {
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="DELETE" />
             </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Enter your password:</label>
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={e => setDeletePassword(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                placeholder="Current password"
+              />
+            </div>
             <div className="flex gap-3">
-              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); setDeleteError(''); }}
+              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); setDeletePassword(''); setDeleteError(''); }}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                 Cancel
               </button>
-              <button onClick={handleDeleteAccount} disabled={deleteConfirmText !== 'DELETE' || deleteLoading}
+              <button onClick={handleDeleteAccount} disabled={deleteConfirmText !== 'DELETE' || !deletePassword || deleteLoading}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-300 rounded-lg transition-colors flex items-center justify-center gap-2">
                 {deleteLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Trash2 size={14} />}
                 Delete Forever
