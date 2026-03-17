@@ -1,8 +1,8 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Truck, Shield, Wrench, Search, Zap, ChevronRight, X, Settings, Clock, Headphones } from 'lucide-react';
-import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist } from '../services/api';
+import { ArrowRight, Truck, Shield, Wrench, Search, Zap, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, X, Settings, Clock, Headphones } from 'lucide-react';
+import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist, getSystemSettings } from '../services/api';
 import ProductCard from '../components/ProductCard';
 
 const Home = () => {
@@ -14,6 +14,15 @@ const Home = () => {
   const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [wishlistedIds, setWishlistedIds] = useState([]);
   const [currentBanner, setCurrentBanner] = useState(0);
+  const [heroConfig, setHeroConfig] = useState({
+    autoplay: true,
+    intervalMs: 5000,
+    showDots: true,
+    showArrows: true,
+    pauseOnHover: true,
+  });
+  const [isHeroPaused, setIsHeroPaused] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(null);
   
   // --- UI State ---
   const[isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -25,6 +34,26 @@ const Home = () => {
     getCategories().then(setCategories).catch(() => { });
     getBanners().then(setBanners).catch(() => { });
     getAnnouncements().then(setAnnouncements).catch(() => { });
+    getSystemSettings('home').then((rows) => {
+      const map = {};
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        map[row.key] = row.value;
+      });
+
+      const toBool = (value, fallback) => {
+        if (value === undefined || value === null) return fallback;
+        return String(value) === 'true';
+      };
+      const parsedInterval = Number(map.hero_interval_ms);
+
+      setHeroConfig({
+        autoplay: toBool(map.hero_autoplay, true),
+        intervalMs: Number.isFinite(parsedInterval) && parsedInterval >= 2000 ? parsedInterval : 5000,
+        showDots: toBool(map.hero_show_dots, true),
+        showArrows: toBool(map.hero_show_arrows, true),
+        pauseOnHover: toBool(map.hero_pause_on_hover, true),
+      });
+    }).catch(() => { });
 
     const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
     if (viewed.length > 0) setRecentlyViewed(viewed.slice(0, 6));
@@ -43,6 +72,16 @@ const Home = () => {
     loadWishlist();
   },[]);
 
+  const activeBanners = banners
+    .filter((banner) => banner?.is_active !== false)
+    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
+  useEffect(() => {
+    if (currentBanner >= activeBanners.length && activeBanners.length > 0) {
+      setCurrentBanner(0);
+    }
+  }, [activeBanners.length, currentBanner]);
+
   // --- Wishlist Logic ---
   const handleWishlistToggle = (productId, shouldBeWishlisted) => {
     const normalizedId = Number(productId);
@@ -58,11 +97,21 @@ const Home = () => {
 
   // --- Banner Rotation ---
   useEffect(() => {
-    if (banners.length > 1) {
-      const timer = setInterval(() => setCurrentBanner(prev => (prev + 1) % banners.length), 5000);
+    if (heroConfig.autoplay && !isHeroPaused && activeBanners.length > 1) {
+      const timer = setInterval(() => setCurrentBanner(prev => (prev + 1) % activeBanners.length), heroConfig.intervalMs);
       return () => clearInterval(timer);
     }
-  },[banners.length]);
+  }, [activeBanners.length, heroConfig.autoplay, heroConfig.intervalMs, isHeroPaused]);
+
+  const goToPrevBanner = () => {
+    if (activeBanners.length <= 1) return;
+    setCurrentBanner(prev => (prev - 1 + activeBanners.length) % activeBanners.length);
+  };
+
+  const goToNextBanner = () => {
+    if (activeBanners.length <= 1) return;
+    setCurrentBanner(prev => (prev + 1) % activeBanners.length);
+  };
 
   // --- Derived Product Lists ---
   const featured = products.filter(p => p.is_on_sale || (p.rating && p.rating >= 4)).slice(0, 8);
@@ -182,10 +231,28 @@ const Home = () => {
       </AnimatePresence>
 
       {/* --- HERO SECTION (Dynamic from API + Red/Zinc Styling) --- */}
-      <section className="relative h-[600px] md:h-[700px] bg-zinc-900 flex items-center z-10">
+      <section
+        className="relative h-[600px] md:h-[700px] bg-zinc-900 flex items-center z-10"
+        onMouseEnter={() => {
+          if (heroConfig.pauseOnHover) setIsHeroPaused(true);
+        }}
+        onMouseLeave={() => {
+          if (heroConfig.pauseOnHover) setIsHeroPaused(false);
+        }}
+        onTouchStart={(e) => setTouchStartX(e.changedTouches[0].clientX)}
+        onTouchEnd={(e) => {
+          if (touchStartX === null || activeBanners.length <= 1) return;
+          const deltaX = e.changedTouches[0].clientX - touchStartX;
+          if (Math.abs(deltaX) > 40) {
+            if (deltaX > 0) goToPrevBanner();
+            else goToNextBanner();
+          }
+          setTouchStartX(null);
+        }}
+      >
         <div className="absolute inset-0 z-0 overflow-hidden">
           <img 
-            src={banners.length > 0 ? banners[currentBanner]?.image_url : "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?q=80&w=2070&auto=format&fit=crop"} 
+            src={activeBanners.length > 0 ? activeBanners[currentBanner]?.image_url : "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?q=80&w=2070&auto=format&fit=crop"} 
             alt="Hero Banner" 
             className="w-full h-full object-cover opacity-60 transition-opacity duration-500"
           />
@@ -206,20 +273,20 @@ const Home = () => {
               </span>
             </div>
             <h1 className="text-5xl md:text-7xl font-black text-white italic uppercase leading-none mb-6">
-              {banners.length > 0 && banners[currentBanner]?.title ? (
-                banners[currentBanner]?.title
+              {activeBanners.length > 0 && activeBanners[currentBanner]?.title ? (
+                activeBanners[currentBanner]?.title
               ) : (
                 <>Upgrade <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-400">Your Ride</span></>
               )}
             </h1>
             <p className="text-gray-300 text-lg mb-8 max-w-lg">
-              {banners.length > 0 && banners[currentBanner]?.subtitle 
-                ? banners[currentBanner]?.subtitle 
+              {activeBanners.length > 0 && activeBanners[currentBanner]?.subtitle 
+                ? activeBanners[currentBanner]?.subtitle 
                 : 'High-performance parts for street, track, and off-road. Genuine components and aftermarket upgrades delivered to your door.'}
             </p>
             
             <div className="flex flex-wrap gap-4">
-              <Link to={banners[currentBanner]?.link_url || '/shop'}>
+              <Link to={activeBanners[currentBanner]?.link_url || '/shop'}>
                 <motion.button
                   variants={buttonVariants}
                   initial="rest"
@@ -243,11 +310,32 @@ const Home = () => {
             </div>
           </motion.div>
         </div>
+
+        {heroConfig.showArrows && activeBanners.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={goToPrevBanner}
+              className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 z-30 h-10 w-10 md:h-12 md:w-12 rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors flex items-center justify-center"
+              aria-label="Previous banner"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={goToNextBanner}
+              className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 z-30 h-10 w-10 md:h-12 md:w-12 rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors flex items-center justify-center"
+              aria-label="Next banner"
+            >
+              <ChevronRightIcon size={20} />
+            </button>
+          </>
+        )}
         
         {/* Banner Dots from Main logic */}
-        {banners.length > 1 && (
+        {heroConfig.showDots && activeBanners.length > 1 && (
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">
-            {banners.map((_, i) => (
+            {activeBanners.map((_, i) => (
               <button key={i} onClick={() => setCurrentBanner(i)} className={`w-2.5 h-2.5 rounded-full transition-all ${i === currentBanner ? 'bg-red-600 w-6' : 'bg-white/40 hover:bg-white/60'}`} />
             ))}
           </div>
