@@ -82,7 +82,12 @@ router.delete('/sessions/:sessionId', authenticateToken, revokeSession);
 router.get('/activity-logs', authenticateToken, requireRole('admin', 'super_admin', 'owner'), getActivityLogs);
 
 // ─── Account deletion (Right to be Forgotten - RA 10173) ────────────────────
-router.delete('/account', authenticateToken, body('password').optional(), deleteAccountHandler);
+router.delete('/account',
+  authenticateToken,
+  body('password').notEmpty().withMessage('Password is required'),
+  validate,
+  deleteAccountHandler
+);
 
 // ─── Data export / portability (RA 10173 §18) ──────────────────────────────
 router.get('/export-data', authenticateToken, exportUserData);

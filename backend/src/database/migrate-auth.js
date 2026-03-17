@@ -18,6 +18,8 @@ const migrateAuth = async () => {
         ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP,
         ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255),
         ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP,
         ADD COLUMN IF NOT EXISTS last_login TIMESTAMP,
         ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS consent_given_at TIMESTAMP,
@@ -186,6 +188,26 @@ const migrateAuth = async () => {
       CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
     `);
     console.log('✅ Sessions table created');
+
+    // ── 7. OAuth exchange codes table (short-lived one-time auth codes) ──────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS oauth_codes (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        code_hash VARCHAR(255) NOT NULL UNIQUE,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        used BOOLEAN DEFAULT FALSE,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_oauth_codes_hash ON oauth_codes(code_hash);
+      CREATE INDEX IF NOT EXISTS idx_oauth_codes_user ON oauth_codes(user_id);
+      CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
+    `);
+    console.log('✅ OAuth codes table created');
 
     console.log('\n🎉 Auth & Staff migration completed successfully!');
   } catch (error) {
