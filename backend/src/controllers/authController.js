@@ -21,7 +21,7 @@ const signToken = (user) =>
   jwt.sign(
     { id: user.id, email: user.email, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: '24h' }
   );
 
 const sanitizeUser = (row) => ({
@@ -55,8 +55,8 @@ const recordLoginAttempt = async (email, ip, success) => {
 const isAccountLocked = async (email) => {
   const result = await pool.query(
     `SELECT COUNT(*) as cnt FROM login_attempts
-     WHERE email = $1 AND success = false AND created_at > NOW() - INTERVAL '${LOCK_DURATION_MINUTES} minutes'`,
-    [email]
+     WHERE email = $1 AND success = false AND created_at > NOW() - make_interval(mins => $2)`,
+    [email, LOCK_DURATION_MINUTES]
   );
   return parseInt(result.rows[0].cnt) >= MAX_LOGIN_ATTEMPTS;
 };
@@ -92,12 +92,57 @@ export const register = async (req, res) => {
     );
 
     const user = result.rows[0];
-    const token = signToken(user);
 
-    await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    // Security: Do NOT auto-login. Send verification email first.
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
+    await pool.query(
+      `UPDATE users SET email_verification_token = $1, email_verification_expires = NOW() + INTERVAL '24 hours' WHERE id = $2`,
+      [tokenHash, user.id]
+    );
+
+    // Send verification email
+    try {
+      const transporter = createTransporter();
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const verifyUrl = `${frontendUrl}/#/verify-email?token=${verificationToken}`;
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
+        to: email,
+        subject: 'Verify Your Email - 10th West Moto',
+        html: `
+          <!DOCTYPE html><html><head><style>
+            body{font-family:Arial,sans-serif;line-height:1.6;color:#333}
+            .container{max-width:600px;margin:0 auto;padding:20px}
+            .header{background:linear-gradient(135deg,#1e293b,#334155);color:white;padding:30px;text-align:center;border-radius:12px 12px 0 0}
+            .content{padding:30px;background:#f8fafc}
+            .btn{display:inline-block;padding:14px 32px;background:#ea580c;color:white!important;text-decoration:none;border-radius:8px;font-weight:bold;margin:20px 0}
+            .footer{text-align:center;padding:20px;color:#94a3b8;font-size:12px}
+          </style></head><body>
+            <div class="container">
+              <div class="header"><h1 style="margin:0">✉️ Verify Your Email</h1><p style="margin:8px 0 0">10th West Moto Parts</p></div>
+              <div class="content">
+                <h2>Hi ${user.name},</h2>
+                <p>Thank you for registering! Please verify your email address to activate your account:</p>
+                <div style="text-align:center"><a href="${verifyUrl}" class="btn">Verify My Email</a></div>
+                <p style="font-size:12px;color:#64748b">This link expires in 24 hours. If you didn't create this account, please ignore this email.</p>
+              </div>
+              <div class="footer"><p>10th West Moto - Motorcycle Parts & Accessories</p></div>
+            </div>
+          </body></html>
+        `,
+      });
+    } catch (emailErr) {
+      console.error('Verification email send failed:', emailErr.message);
+    }
+
     await logActivity({ userId: user.id, action: 'register', entityType: 'user', entityId: user.id, ipAddress: ip, userAgent: ua });
 
-    res.status(201).json({ message: 'User registered successfully', user: sanitizeUser(user), token });
+    res.status(201).json({
+      message: 'Registration successful! Please check your email to verify your account before logging in.',
+      requiresVerification: true,
+    });
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({ message: 'Server error during registration' });
@@ -169,7 +214,7 @@ export const login = async (req, res) => {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     await pool.query(
       `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
-       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '7 days')`,
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours')`,
       [user.id, tokenHash, ip, ua]
     );
 
@@ -379,9 +424,23 @@ export const changePassword = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
     await pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hashedPassword, req.user.id]);
+
+    // Security: Invalidate all other active sessions (keep current one)
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      const currentToken = authHeader.split(' ')[1];
+      const currentTokenHash = crypto.createHash('sha256').update(currentToken).digest('hex');
+      await pool.query(
+        'UPDATE sessions SET is_active = false WHERE user_id = $1 AND token_hash != $2',
+        [req.user.id, currentTokenHash]
+      );
+    } else {
+      await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [req.user.id]);
+    }
+
     await logActivity({ userId: req.user.id, action: 'password_changed', ipAddress: req.clientIp, userAgent: req.clientUa });
 
-    res.json({ message: 'Password changed successfully' });
+    res.json({ message: 'Password changed successfully. All other sessions have been terminated.' });
   } catch (error) {
     console.error('Change password error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -402,7 +461,8 @@ export const setup2FA = async (req, res) => {
     await pool.query('UPDATE users SET two_factor_secret = $1 WHERE id = $2', [secret.base32, req.user.id]);
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
 
-    res.json({ secret: secret.base32, qrCode: qrCodeUrl, message: 'Scan the QR code with your authenticator app, then verify with a code.' });
+    // Security: Only return QR code, never expose the raw secret to the frontend
+    res.json({ qrCode: qrCodeUrl, message: 'Scan the QR code with your authenticator app, then verify with a code.' });
   } catch (error) {
     console.error('2FA setup error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -490,21 +550,71 @@ export const oauthCallback = async (req, res) => {
       }
     }
 
-    const token = signToken(user);
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    // Security: Use a short-lived opaque code instead of passing JWT directly in URL.
+    // The frontend exchanges this code for a JWT via POST /auth/exchange-code.
+    const oauthCode = crypto.randomBytes(32).toString('hex');
+    const codeHash = crypto.createHash('sha256').update(oauthCode).digest('hex');
     await pool.query(
-      `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at) VALUES ($1, $2, $3, $4, NOW() + INTERVAL '7 days')`,
-      [user.id, tokenHash, ip, ua]
+      `INSERT INTO oauth_codes (user_id, code_hash, ip_address, user_agent, expires_at)
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '2 minutes')`,
+      [user.id, codeHash, ip, ua]
     );
 
     await logActivity({ userId: user.id, action: 'oauth_login', details: { provider }, ipAddress: ip, userAgent: ua });
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    // Only pass token in URL — never expose PII (name, email, phone) in query params
-    res.redirect(`${frontendUrl}/#/oauth-callback?token=${token}`);
+    // Only pass opaque code in URL — never expose JWT or PII in query params
+    res.redirect(`${frontendUrl}/#/oauth-callback?code=${oauthCode}`);
   } catch (error) {
     console.error('OAuth callback error:', error);
     res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/#/login?error=oauth_failed`);
+  }
+};
+
+// ─── EXCHANGE OAUTH CODE FOR TOKEN ─────────────────────────────────
+export const exchangeOAuthCode = async (req, res) => {
+  const { code } = req.body;
+  const ip = req.clientIp;
+  const ua = req.clientUa;
+
+  try {
+    if (!code) return res.status(400).json({ message: 'Code is required' });
+
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+    const result = await pool.query(
+      `SELECT user_id FROM oauth_codes WHERE code_hash = $1 AND expires_at > NOW() AND used = false`,
+      [codeHash]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: 'Invalid or expired code' });
+    }
+
+    const userId = result.rows[0].user_id;
+
+    // Mark code as used (single-use)
+    await pool.query('UPDATE oauth_codes SET used = true WHERE code_hash = $1', [codeHash]);
+
+    // Fetch user
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    const token = signToken(user);
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    await pool.query(
+      `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours')`,
+      [user.id, tokenHash, ip, ua]
+    );
+
+    res.json({ user: sanitizeUser(user), token });
+  } catch (error) {
+    console.error('Exchange OAuth code error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -567,10 +677,23 @@ export const getActivityLogs = async (req, res) => {
 // ─── DELETE ACCOUNT (Right to be Forgotten - RA 10173 §18) ─────────
 export const deleteAccountHandler = async (req, res) => {
   const userId = req.user.id;
+  const { password } = req.body;
   const ip = req.clientIp;
   const ua = req.clientUa;
 
   try {
+    // Security: Require password confirmation before account deletion
+    const userResult = await pool.query('SELECT password_hash, oauth_provider FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) return res.status(404).json({ message: 'User not found' });
+
+    const user = userResult.rows[0];
+    // Password-based accounts must confirm password; OAuth-only accounts skip
+    if (user.password_hash && user.password_hash !== 'DELETED') {
+      if (!password) return res.status(400).json({ message: 'Password is required to delete your account' });
+      const isValid = await bcrypt.compare(password, user.password_hash);
+      if (!isValid) return res.status(401).json({ message: 'Incorrect password' });
+    }
+
     // Anonymize personal data — retain transaction records for BIR compliance
     await pool.query(
       `UPDATE users SET
@@ -586,6 +709,9 @@ export const deleteAccountHandler = async (req, res) => {
        WHERE id = $1`,
       [userId]
     );
+
+    // Invalidate all sessions
+    await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [userId]);
 
     await logActivity({ userId, action: 'account_deleted', entityType: 'user', entityId: userId, ipAddress: ip, userAgent: ua });
 
@@ -609,13 +735,13 @@ export const resendVerification = async (req, res) => {
       return res.json({ message: 'Email is already verified' });
     }
 
-    // Generate a verification token
+    // Generate a verification token using dedicated columns (not shared with password reset)
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
 
-    // Store token with 24h expiry
+    // Store token with 24h expiry in dedicated email verification columns
     await pool.query(
-      `UPDATE users SET reset_token = $1, reset_token_expires = NOW() + INTERVAL '24 hours' WHERE id = $2`,
+      `UPDATE users SET email_verification_token = $1, email_verification_expires = NOW() + INTERVAL '24 hours' WHERE id = $2`,
       [tokenHash, userId]
     );
 
@@ -661,8 +787,9 @@ export const verifyEmailToken = async (req, res) => {
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
+    // Use dedicated email verification columns (not shared with password reset)
     const result = await pool.query(
-      `SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()`,
+      `SELECT id FROM users WHERE email_verification_token = $1 AND email_verification_expires > NOW()`,
       [tokenHash]
     );
 
@@ -671,7 +798,7 @@ export const verifyEmailToken = async (req, res) => {
     }
 
     await pool.query(
-      `UPDATE users SET email_verified = true, reset_token = NULL, reset_token_expires = NULL WHERE id = $1`,
+      `UPDATE users SET email_verified = true, email_verification_token = NULL, email_verification_expires = NULL WHERE id = $1`,
       [result.rows[0].id]
     );
 
