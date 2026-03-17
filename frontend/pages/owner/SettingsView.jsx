@@ -35,11 +35,19 @@ const SettingsView = () => {
     promotions: false, fromName: '10th West Moto', fromEmail: '',
   });
 
+  const [home, setHome] = useState({
+    heroAutoplay: true,
+    heroIntervalMs: '5000',
+    heroShowDots: true,
+    heroShowArrows: true,
+    heroPauseOnHover: true,
+  });
+
   useEffect(() => {
     (async () => {
       try {
         const allSettings = await getSystemSettings();
-        const parsed = { store: {}, tax: {}, shipping: {}, payment: {}, email: {} };
+        const parsed = { store: {}, tax: {}, shipping: {}, payment: {}, email: {}, home: {} };
         (Array.isArray(allSettings) ? allSettings : []).forEach(s => {
           if (parsed[s.category]) parsed[s.category][s.key] = s.value;
         });
@@ -81,6 +89,13 @@ const SettingsView = () => {
           returnApproval: parsed.email.return_approval !== 'false',
           promotions: parsed.email.promotions === 'true',
         });
+        setHome({
+          heroAutoplay: parsed.home.hero_autoplay !== 'false',
+          heroIntervalMs: parsed.home.hero_interval_ms || '5000',
+          heroShowDots: parsed.home.hero_show_dots !== 'false',
+          heroShowArrows: parsed.home.hero_show_arrows !== 'false',
+          heroPauseOnHover: parsed.home.hero_pause_on_hover !== 'false',
+        });
       } catch (err) { console.error('Failed to load settings:', err); }
       setLoading(false);
     })();
@@ -106,6 +121,15 @@ const SettingsView = () => {
         case 'email':
           settingsMap = { from_name: email.fromName, from_email: email.fromEmail, order_confirmation: String(email.orderConfirmation), shipping_update: String(email.shippingUpdate), return_approval: String(email.returnApproval), promotions: String(email.promotions) };
           break;
+        case 'home':
+          settingsMap = {
+            hero_autoplay: String(home.heroAutoplay),
+            hero_interval_ms: home.heroIntervalMs,
+            hero_show_dots: String(home.heroShowDots),
+            hero_show_arrows: String(home.heroShowArrows),
+            hero_pause_on_hover: String(home.heroPauseOnHover),
+          };
+          break;
       }
       await updateSystemSettings(tab, settingsMap);
       setSaveError('');
@@ -124,6 +148,7 @@ const SettingsView = () => {
 
   const tabs = [
     { id: 'store', label: 'Store', icon: Store },
+    { id: 'home', label: 'Home', icon: Globe },
     { id: 'tax', label: 'Tax', icon: Receipt },
     { id: 'shipping', label: 'Shipping', icon: Truck },
     { id: 'payment', label: 'Payment', icon: CreditCard },
@@ -192,6 +217,81 @@ const SettingsView = () => {
               </div>
             </div>
             <div><Label>Logo URL</Label><input value={store.logoUrl} onChange={e => setStore(s => ({...s, logoUrl: e.target.value}))} className={inputClass} placeholder="https://..." /></div>
+          </div>
+        )}
+
+        {/* Home */}
+        {tab === 'home' && (
+          <div className="space-y-4 max-w-xl">
+            <h3 className="font-display font-semibold text-gray-900">Home Hero Carousel</h3>
+            <p className="text-sm text-gray-500">
+              These settings affect the hero section on the Home page only.
+            </p>
+
+            <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Auto-rotate slides</p>
+                <p className="text-[10px] text-gray-500">Automatically move to the next hero slide.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={home.heroAutoplay}
+                onChange={e => setHome(h => ({ ...h, heroAutoplay: e.target.checked }))}
+                className="w-4 h-4 text-orange-500 rounded"
+              />
+            </label>
+
+            <div>
+              <Label>Slide Interval (milliseconds)</Label>
+              <input
+                type="number"
+                min="2000"
+                step="500"
+                value={home.heroIntervalMs}
+                onChange={e => setHome(h => ({ ...h, heroIntervalMs: e.target.value }))}
+                className={inputClass}
+              />
+              <p className="text-[10px] text-gray-500 mt-1">Recommended: 4000-7000ms for readability.</p>
+            </div>
+
+            <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Show navigation dots</p>
+                <p className="text-[10px] text-gray-500">Displays slide indicators below the hero.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={home.heroShowDots}
+                onChange={e => setHome(h => ({ ...h, heroShowDots: e.target.checked }))}
+                className="w-4 h-4 text-orange-500 rounded"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Show left and right arrows</p>
+                <p className="text-[10px] text-gray-500">Lets users manually switch slides.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={home.heroShowArrows}
+                onChange={e => setHome(h => ({ ...h, heroShowArrows: e.target.checked }))}
+                className="w-4 h-4 text-orange-500 rounded"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Pause on hover</p>
+                <p className="text-[10px] text-gray-500">Stops auto-rotation while reading desktop hero text.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={home.heroPauseOnHover}
+                onChange={e => setHome(h => ({ ...h, heroPauseOnHover: e.target.checked }))}
+                className="w-4 h-4 text-orange-500 rounded"
+              />
+            </label>
           </div>
         )}
 
