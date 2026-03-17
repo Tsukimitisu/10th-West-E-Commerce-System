@@ -18,6 +18,7 @@ const BannersView = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState('banner');
   const [editing, setEditing] = useState(null);
   const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', button_text: '', image_url: '', link_url: '', is_active: true, display_order: 0 });
   const [announcementForm, setAnnouncementForm] = useState({ title: '', content: '', is_published: false });
@@ -87,6 +88,7 @@ const BannersView = () => {
   const resetForm = () => {
     setBannerForm({ title: '', subtitle: '', button_text: '', image_url: '', link_url: '', is_active: true, display_order: 0 });
     setAnnouncementForm({ title: '', content: '', is_published: false });
+    setModalType(tab === 'announcements' ? 'announcement' : 'banner');
     setEditing(null);
     setShowModal(false);
     setSelectedImageFile(null);
@@ -199,7 +201,7 @@ const BannersView = () => {
           <p className="text-sm text-gray-500 mt-1">Manage banners, promotions & announcements</p>
         </div>
         {tab !== 'carousel' && (
-          <button onClick={() => { resetForm(); setShowModal(true); }}
+          <button onClick={() => { resetForm(); setModalType(tab === 'announcements' ? 'announcement' : 'banner'); setShowModal(true); }}
             className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
             <Plus size={16} /> {tab === 'banners' ? 'Add Banner' : 'Add Announcement'}
           </button>
@@ -256,7 +258,7 @@ const BannersView = () => {
                   <button onClick={() => toggleBannerActive(banner)} className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors" title={banner.is_active ? 'Hide' : 'Show'}>
                     {banner.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
                   </button>
-                  <button onClick={() => { setBannerForm({ title: banner.title || '', subtitle: banner.subtitle || '', button_text: banner.button_text || '', image_url: banner.image_url || '', link_url: banner.link_url || '', is_active: banner.is_active, display_order: banner.display_order || 0 }); setEditing(banner); setImagePreview(banner.image_url || ''); setLinkMode(LINK_OPTIONS.some(o => o.value === banner.link_url) ? 'page' : (banner.link_url ? 'custom' : 'page')); setShowModal(true); }}
+                  <button onClick={() => { setBannerForm({ title: banner.title || '', subtitle: banner.subtitle || '', button_text: banner.button_text || '', image_url: banner.image_url || '', link_url: banner.link_url || '', is_active: banner.is_active, display_order: banner.display_order || 0 }); setEditing(banner); setImagePreview(banner.image_url || ''); setLinkMode(LINK_OPTIONS.some(o => o.value === banner.link_url) ? 'page' : (banner.link_url ? 'custom' : 'page')); setModalType('banner'); setShowModal(true); }}
                     className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors"><Edit3 size={14} /></button>
                   <button onClick={() => handleDeleteBanner(banner)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                 </div>
@@ -288,7 +290,7 @@ const BannersView = () => {
                     <p className="text-[10px] text-gray-400 mt-1">{ann.published_at ? new Date(ann.published_at).toLocaleDateString() : 'Not published'}</p>
                   </div>
                   <div className="flex items-center gap-1 ml-4">
-                    <button onClick={() => { setAnnouncementForm({ title: ann.title || '', content: ann.content || '', is_published: ann.is_published }); setEditing(ann); setShowModal(true); }}
+                    <button onClick={() => { setAnnouncementForm({ title: ann.title || '', content: ann.content || '', is_published: ann.is_published }); setEditing(ann); setModalType('announcement'); setShowModal(true); }}
                       className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors"><Edit3 size={14} /></button>
                     <button onClick={() => handleDeleteAnnouncement(ann)}
                       className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
@@ -303,6 +305,70 @@ const BannersView = () => {
           <div>
             <h3 className="font-semibold text-gray-900">Home Hero Carousel Management</h3>
             <p className="text-sm text-gray-500 mt-1">These options apply to the Home page hero only.</p>
+          </div>
+
+          <div className="border border-gray-100 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900">Slides</h4>
+                <p className="text-xs text-gray-500">Each slide supports image, title, description, and button text.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setBannerForm({ title: '', subtitle: '', button_text: '', image_url: '', link_url: '/shop', is_active: true, display_order: banners.length });
+                  setEditing(null);
+                  setImagePreview('');
+                  setLinkMode('page');
+                  setModalType('banner');
+                  setShowModal(true);
+                }}
+                className="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5"
+              >
+                <Plus size={14} /> Add Slide
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {banners.length === 0 ? (
+                <p className="text-xs text-gray-500">No slides yet.</p>
+              ) : banners.sort((a, b) => (a.display_order || 0) - (b.display_order || 0)).map((banner) => (
+                <div key={banner.id} className="border border-gray-100 rounded-lg p-3 flex items-center gap-3">
+                  <div className="w-20 h-14 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                    {banner.image_url ? (
+                      <img src={banner.image_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center"><Image size={16} className="text-gray-300" /></div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{banner.title || 'Untitled'}</p>
+                    <p className="text-xs text-gray-500 truncate">{banner.subtitle || 'No description'}</p>
+                    <p className="text-[11px] text-gray-400 truncate">Button: {banner.button_text || 'Shop Parts'}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => toggleBannerActive(banner)} className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors" title={banner.is_active ? 'Hide' : 'Show'}>
+                      {banner.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setBannerForm({ title: banner.title || '', subtitle: banner.subtitle || '', button_text: banner.button_text || '', image_url: banner.image_url || '', link_url: banner.link_url || '', is_active: banner.is_active, display_order: banner.display_order || 0 });
+                        setEditing(banner);
+                        setImagePreview(banner.image_url || '');
+                        setLinkMode(LINK_OPTIONS.some(o => o.value === banner.link_url) ? 'page' : (banner.link_url ? 'custom' : 'page'));
+                        setModalType('banner');
+                        setShowModal(true);
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button onClick={() => handleDeleteBanner(banner)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
@@ -381,11 +447,11 @@ const BannersView = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">{editing ? 'Edit' : 'Add'} {tab === 'banners' ? 'Banner' : 'Announcement'}</h3>
+              <h3 className="font-semibold text-gray-900">{editing ? 'Edit' : 'Add'} {modalType === 'banner' ? 'Slide' : 'Announcement'}</h3>
               <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
 
-            {tab === 'banners' ? (
+            {modalType === 'banner' ? (
               <form onSubmit={handleBannerSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
