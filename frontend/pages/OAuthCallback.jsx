@@ -1,32 +1,31 @@
 ﻿import React, { useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { getProfile } from '../services/api';
+import { exchangeOAuthCode } from '../services/api';
 
 const OAuthCallback = ({ onLogin }) => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = searchParams.get('token');
+    const code = searchParams.get('code');
     const error = searchParams.get('error');
 
     if (error) {
       navigate(`/login?error=${encodeURIComponent(error)}`);
       return;
     }
-    if (token) {
-      // Store token temporarily, then fetch user profile securely via API
-      localStorage.setItem('shopCoreToken', token);
-      // Remove token from URL to prevent leaks via referrer/history
+    if (code) {
+      // Remove code from URL after parsing to reduce leakage via referrer/history
       window.history.replaceState({}, document.title, window.location.pathname);
 
-      getProfile().then(user => {
-        onLogin(user, token);
-        navigate('/');
-      }).catch(() => {
-        localStorage.removeItem('shopCoreToken');
-        navigate('/login?error=Authentication failed');
-      });
+      exchangeOAuthCode(code)
+        .then((data) => {
+          onLogin(data.user, data.token);
+          navigate('/');
+        })
+        .catch(() => {
+          navigate('/login?error=Authentication failed');
+        });
     } else {
       navigate('/login?error=Authentication failed');
     }
