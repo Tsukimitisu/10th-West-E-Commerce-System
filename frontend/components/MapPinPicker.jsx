@@ -83,10 +83,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     mapRef.current = map;
     markerRef.current = marker;
 
-    return () => {
-      destroyMap();
-    };
-  }, [leafletReady, barangay, city, state, onChange]);
+    }, [leafletReady, barangay, city, state, onChange]);
 
   useEffect(() => {
     if (!barangay || !city || !state) {
