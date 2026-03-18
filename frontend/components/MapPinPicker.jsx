@@ -163,7 +163,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
       marker.setLatLng(next);
       onChange?.({ lat: Number(lat), lng: Number(lon) });
     }).catch(() => {
-      setError('Could not locate that address. You can drag the pin manually.');
+      setError('Could not locate that address. Please check your spelling or street name.');
       setErrorType('geocode');
     }).finally(() => setGeocoding(false));
 
