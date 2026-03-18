@@ -53,22 +53,6 @@ const AddressAutocomplete = ({
         const data = await res.json();
         let list = Array.isArray(data) ? data : [];
 
-        if (strictContext && contextParts) {
-          const normalize = (val) => String(val || '').toLowerCase();
-          const barangayKey = normalize(context.barangay);
-          const cityKey = normalize(context.city);
-          const stateKey = normalize(context.state);
-          list = list.filter((item) => {
-            const addr = item.address || {};
-            const b = normalize(addr.suburb || addr.village || addr.neighbourhood || addr.hamlet || '');
-            const c = normalize(addr.city || addr.town || addr.municipality || addr.county || '');
-            const s = normalize(addr.state || addr.region || '');
-            const matchBarangay = !barangayKey || b.includes(barangayKey) || barangayKey.includes(b);
-            const matchCity = !cityKey || c.includes(cityKey) || cityKey.includes(c);
-            const matchState = !stateKey || s.includes(stateKey) || stateKey.includes(s);
-            return matchBarangay && matchCity && matchState;
-          });
-        }
         setSuggestions(list);
         setOpen(list.length > 0);
       } catch (err) {
