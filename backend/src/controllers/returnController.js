@@ -140,8 +140,10 @@ export const getReturnById = async (req, res) => {
 
     const returnData = result.rows[0];
 
+    const isStaff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user.role);
+    
     // Check authorization
-    if (req.user.role !== 'admin' && returnData.user_id !== req.user.id) {
+    if (!isStaff && returnData.user_id !== req.user.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
