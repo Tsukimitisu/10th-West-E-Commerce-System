@@ -84,7 +84,13 @@ const AddressBook = () => {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    try { await deleteAddress(deleteTarget.id); setAddresses(addresses.filter(a => a.id !== deleteTarget.id)); } catch {}
+    try { 
+      await deleteAddress(deleteTarget.id); 
+      setAddresses(addresses.filter(a => a.id !== deleteTarget.id)); 
+      if (editing && editing.id === deleteTarget.id) {
+        resetForm();
+      }
+    } catch {}
     setDeleteTarget(null);
   };
 

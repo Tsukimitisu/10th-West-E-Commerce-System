@@ -8,20 +8,28 @@ import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
 
 const Checkout = () => {
-  const { selectedItems: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
+  const { selectedItems: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearSelectedItems } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isBuyNowQuery = searchParams.get('buyNow') === '1';
 
-  const isBuyNow = !!(location.state?.buyNowItem || sessionStorage.getItem('buyNowItem'));
+  const isBuyNow = !!(location.state?.buyNowItem || (isBuyNowQuery && sessionStorage.getItem('buyNowItem')));
   const buyNowItem = useMemo(() => {
     if (location.state?.buyNowItem) return location.state.buyNowItem;
+    
     const stored = sessionStorage.getItem('buyNowItem');
     if (stored) {
-      sessionStorage.removeItem('buyNowItem');
-      return JSON.parse(stored);
+      if (isBuyNowQuery) {
+        sessionStorage.removeItem('buyNowItem');
+        return JSON.parse(stored);
+      } else {
+        // Clear it if they landed on normal checkout without the buyNow flag
+        sessionStorage.removeItem('buyNowItem');
+      }
     }
     return null;
-  }, [location.state]);
+  }, [location.state, isBuyNowQuery]);
 
   const items = isBuyNow && buyNowItem ? [buyNowItem] : cartItems;
   const subtotal = isBuyNow && buyNowItem
@@ -227,7 +235,9 @@ const Checkout = () => {
       };
 
       const order = await createOrder(orderData);
-      if (!isBuyNow) await clearCart();
+      if (!isBuyNow) {
+        await clearSelectedItems();
+      }
       navigate(`/order-confirmation/${order.id}`);
     } catch (err) {
       setError(err.message || 'Something went wrong');
