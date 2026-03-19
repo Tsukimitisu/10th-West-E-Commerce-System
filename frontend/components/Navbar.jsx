@@ -486,7 +486,7 @@ const Navbar = ({ user, onLogout }) => {
                 </button>
                 <input
                   value={globalSearch}
-                  onChange={(e) => setGlobalSearch(e.target.value)}
+                  onChange={handleSearchChange}
                   placeholder="Search parts..."
                   className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-300 transition-all duration-200"
                 />
