@@ -164,6 +164,15 @@ const Navbar = ({ user, onLogout }) => {
     setSearchParams(next, { replace: true });
   };
 
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setGlobalSearch(value);
+    
+    if (isShopRoute) {
+      updateShopParams({ search: value.trim() || null });
+    }
+  };
+
   const handleGlobalSearchSubmit = (e) => {
     e.preventDefault();
     const value = globalSearch.trim();
@@ -245,7 +254,7 @@ const Navbar = ({ user, onLogout }) => {
                   </button>
                   <input
                     value={globalSearch}
-                    onChange={(e) => setGlobalSearch(e.target.value)}
+                    onChange={handleSearchChange}
                     placeholder="Search parts, brands..."
                     className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-300 transition-all duration-200"
                   />
