@@ -41,7 +41,10 @@ const OrderHistory = () => {
 
   const filtered = orders.filter((o) => {
     const matchesSearch = !search || o.id?.toString().includes(search) || o.order_number?.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = filter === 'all' || o.status === filter;
+    let matchesFilter = filter === 'all' || o.status === filter;
+    if (filter === 'completed') {
+      matchesFilter = o.status === 'completed' || o.status === 'delivered';
+    }
     return matchesSearch && matchesFilter;
   });
 
@@ -50,30 +53,45 @@ const OrderHistory = () => {
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="font-display font-semibold text-lg text-gray-900 flex items-center gap-2"><Package size={20} /> My Orders</h2>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 sm:w-48">
-              <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search orders..."
-                className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-              />
-            </div>
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              <option value="all">All Orders</option>
-              <option value="pending">Pending</option>
-              <option value="paid">Paid</option>
-              <option value="preparing">Preparing</option>
-              <option value="shipped">Shipped</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+        </div>
+
+        {/* Search Input */}
+        <div className="relative w-full sm:w-72">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search order number or ID..."
+            className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
+          />
+        </div>
+
+        {/* Tabs */}
+        <div className="border-b border-gray-100">
+          <div className="flex overflow-x-auto hide-scrollbar -mb-px space-x-6 px-1">
+            {[
+              { id: 'all', label: 'All Orders' },
+              { id: 'preparing', label: 'Preparing' },
+              { id: 'shipped', label: 'Shipped' },
+              { id: 'completed', label: 'Delivered / Completed' },
+              { id: 'cancelled', label: 'Cancelled' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setFilter(tab.id)}
+                className={`whitespace-nowrap pb-3.5 text-sm font-medium transition-colors relative ${
+                  filter === tab.id
+                    ? 'text-orange-600'
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                {tab.label}
+                {filter === tab.id && (
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500 rounded-t-full" />
+                )}
+              </button>
+            ))}
           </div>
         </div>
 

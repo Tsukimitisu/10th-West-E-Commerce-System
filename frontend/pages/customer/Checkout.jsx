@@ -8,7 +8,7 @@ import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
 
 const Checkout = () => {
-  const { items: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
+  const { selectedItems: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearCart } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
 

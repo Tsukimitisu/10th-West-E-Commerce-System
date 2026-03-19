@@ -9,6 +9,7 @@ const CartContext = createContext(undefined);
 
 export const CartProvider = ({ children }) => {
   const [items, setItems] = useState([]);
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
   const [discount, setDiscount] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -158,6 +159,22 @@ export const CartProvider = ({ children }) => {
   useEffect(() => {
     if (initialized) {
       localStorage.setItem('shopCoreCart', JSON.stringify(items));
+      // Auto-select new items
+      const currentSelected = new Set(selectedItemIds);
+      const newSelected = [...selectedItemIds];
+      let changed = false;
+      items.forEach(item => {
+        if (!currentSelected.has(item.productId)) {
+          newSelected.push(item.productId);
+          changed = true;
+        }
+      });
+      // also cleanup removed items
+      const itemIds = new Set(items.map(i => i.productId));
+      const cleanSelected = newSelected.filter(id => itemIds.has(id));
+      if (changed || cleanSelected.length !== selectedItemIds.length) {
+        setSelectedItemIds(cleanSelected);
+      }
     }
   }, [items, initialized]);
 
@@ -553,15 +570,31 @@ export const CartProvider = ({ children }) => {
     localStorage.setItem('shopCoreCart', JSON.stringify([]));
   };
 
-  // Calculations
-  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
-  
-  const subtotal = items.reduce((sum, item) => {
-      const price = (item.product.is_on_sale && item.product.sale_price) 
-        ? item.product.sale_price 
-        : item.product.price;
-      return sum + (price * item.quantity);
-  }, 0);
+    const toggleSelection = (productId) => {
+        setSelectedItemIds(prev => 
+            prev.includes(productId) 
+                ? prev.filter(id => id !== productId) 
+                : [...prev, productId]
+        );
+    };
+
+    const toggleAllSelection = (selectAll) => {
+        if (selectAll) {
+            setSelectedItemIds(items.map(i => i.productId));
+        } else {
+            setSelectedItemIds([]);
+        }
+    };
+
+    // Calculations
+    const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);      
+    
+    const selectedItems = items.filter(i => selectedItemIds.includes(i.productId));
+
+    const subtotal = selectedItems.reduce((sum, item) => {
+        const price = item.product.is_on_sale ? item.product.sale_price : item.product.price;
+        return sum + (price * item.quantity);
+    }, 0);
 
   let discountAmount = 0;
   if (discount) {
@@ -594,7 +627,11 @@ export const CartProvider = ({ children }) => {
 
   return (
     <CartContext.Provider value={{ 
-        items, 
+        items,
+        selectedItemIds,
+        selectedItems,
+        toggleSelection,
+        toggleAllSelection,
         addToCart, 
         removeFromCart, 
         updateQuantity, 

@@ -4,7 +4,19 @@ import { Minus, Plus, Trash2, Heart, ShoppingBag, ArrowRight, ChevronRight, Arro
 import { useCart } from '../../context/CartContext';
 
 const Cart = () => {
-  const { items, updateQuantity, removeFromCart, clearCart, subtotal, discount, discountAmount, total } = useCart();
+  const { 
+    items, 
+    selectedItemIds, 
+    toggleSelection, 
+    toggleAllSelection, 
+    updateQuantity, 
+    removeFromCart, 
+    clearCart, 
+    subtotal, 
+    discount, 
+    discountAmount, 
+    total 
+  } = useCart();
   const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [quantityErrors, setQuantityErrors] = useState({});
@@ -27,6 +39,11 @@ const Cart = () => {
       delete next[productId];
       return next;
     });
+  };
+
+  const handleRemoveItem = (productId) => {
+    clearQuantityError(productId);
+    removeFromCart(productId);
   };
 
   const handleIncreaseQty = (item) => {
@@ -74,7 +91,15 @@ const Cart = () => {
               <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                 {/* Header */}
                 <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100">
-                  <div className="col-span-6">Product</div>
+                  <div className="col-span-6 flex items-center gap-3">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedItemIds.length === items.length && items.length > 0} 
+                      onChange={(e) => toggleAllSelection(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                    />
+                    <span>Product</span>
+                  </div>
                   <div className="col-span-2 text-center">Price</div>
                   <div className="col-span-2 text-center">Quantity</div>
                   <div className="col-span-2 text-right">Total</div>
@@ -86,7 +111,13 @@ const Cart = () => {
                     <div key={item.productId} className={`p-4 md:px-6 md:py-5 ${i < items.length - 1 ? 'border-b border-gray-100' : ''}`}>
                       <div className="md:grid md:grid-cols-12 md:gap-4 md:items-center">
                         {/* Product */}
-                        <div className="col-span-6 flex gap-4">
+                        <div className="col-span-6 flex gap-4 items-center">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedItemIds.includes(item.productId)}
+                            onChange={() => toggleSelection(item.productId)}
+                            className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500 cursor-pointer flex-shrink-0"
+                          />
                           <Link to={`/products/${item.productId}`} className="w-20 h-20 md:w-24 md:h-24 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0">
                             <img src={item.product.image || 'https://via.placeholder.com/96'} alt={item.product.name} className="w-full h-full object-cover" />
                           </Link>
@@ -97,7 +128,7 @@ const Cart = () => {
                               <p className="text-xs text-gray-400 mt-1">Stock: {item.product.stock_quantity}</p>
                             )}
                             <div className="flex gap-3 mt-2 md:hidden">
-                              <button onClick={() => removeFromCart(item.productId)} className="text-xs text-gray-400 hover:text-orange-500 transition-colors flex items-center gap-1"><Trash2 size={12} /> Remove</button>
+                              <button onClick={() => handleRemoveItem(item.productId)} className="text-xs text-gray-400 hover:text-orange-500 transition-colors flex items-center gap-1"><Trash2 size={12} /> Remove</button>
                             </div>
                           </div>
                         </div>
@@ -126,7 +157,7 @@ const Cart = () => {
                         {/* Total & Remove */}
                         <div className="col-span-2 flex items-center justify-between md:justify-end gap-3 mt-3 md:mt-0">
                           <span className="text-sm font-bold text-gray-900 md:mr-2">{formatPrice(price * item.quantity)}</span>
-                          <button onClick={() => removeFromCart(item.productId)} className="hidden md:block p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors">
+                          <button onClick={() => handleRemoveItem(item.productId)} className="hidden md:block p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors">
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -173,7 +204,11 @@ const Cart = () => {
                   </div>
                 </div>
 
-                <button onClick={handleCheckout} className="w-full mt-6 py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2 text-sm">
+<button 
+                    disabled={selectedItemIds.length === 0}
+                    onClick={handleCheckout} 
+                    className={`w-full mt-6 py-3.5 text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2 text-sm ${selectedItemIds.length === 0 ? 'bg-orange-300 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600'}`}
+                  >
                   Proceed to Checkout <ArrowRight size={16} />
                 </button>
 

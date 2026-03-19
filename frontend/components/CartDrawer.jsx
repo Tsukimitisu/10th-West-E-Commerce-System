@@ -4,7 +4,16 @@ import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, LogIn } from 'lucide-r
 import { useCart } from '../context/CartContext';
 
 const CartDrawer = ({ isOpen, onClose }) => {
-  const { items, updateQuantity, removeFromCart, subtotal, itemCount } = useCart();
+  const { 
+    items, 
+    selectedItemIds, 
+    toggleSelection, 
+    toggleAllSelection, 
+    updateQuantity, 
+    removeFromCart, 
+    subtotal, 
+    itemCount 
+  } = useCart();
   const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [quantityErrors, setQuantityErrors] = useState({});
@@ -18,6 +27,11 @@ const CartDrawer = ({ isOpen, onClose }) => {
       delete next[productId];
       return next;
     });
+  };
+
+  const handleRemoveItem = (productId) => {
+    clearQuantityError(productId);
+    removeFromCart(productId);
   };
 
   const handleIncreaseQty = (item) => {
@@ -71,8 +85,23 @@ const CartDrawer = ({ isOpen, onClose }) => {
         ) : (
           <>
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex items-center gap-3 pb-2 border-b border-gray-50">
+                <input 
+                  type="checkbox" 
+                  checked={selectedItemIds.length === items.length && items.length > 0} 
+                  onChange={(e) => toggleAllSelection(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Select All items</span>
+              </div>
               {items.map(item => (
-                <div key={item.productId} className="flex gap-3 animate-fade-in">
+                <div key={item.productId} className="flex gap-3 animate-fade-in items-center">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedItemIds.includes(item.productId)}
+                    onChange={() => toggleSelection(item.productId)}
+                    className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                  />
                   <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
                     <img src={item.product.image || 'https://via.placeholder.com/80'} alt={item.product.name} className="w-full h-full object-cover" />
                   </div>
@@ -92,7 +121,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
                         <span className="px-3 py-1 text-sm font-medium min-w-[2rem] text-center">{item.quantity}</span>
                         <button onClick={() => handleIncreaseQty(item)} className="px-2 py-1 text-gray-500 hover:bg-gray-50 transition-colors"><Plus size={14} /></button>
                       </div>
-                      <button onClick={() => removeFromCart(item.productId)} className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors">
+                      <button onClick={() => handleRemoveItem(item.productId)} className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors">
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -118,7 +147,9 @@ const CartDrawer = ({ isOpen, onClose }) => {
                 View Cart
               </button>
               <button
+                disabled={selectedItemIds.length === 0}
                 onClick={() => {
+                  if (selectedItemIds.length === 0) return;
                   const user = localStorage.getItem('shopCoreUser');
                   if (!user) {
                     setShowLoginModal(true);
@@ -127,7 +158,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
                     navigate('/checkout');
                   }
                 }}
-                className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                className={`w-full py-3 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${selectedItemIds.length === 0 ? 'bg-orange-300 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600'}`}
               >
                 Checkout <ArrowRight size={16} />
               </button>
