@@ -15,9 +15,12 @@ const AddressBook = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saveError, setSaveError] = useState('');
   const [zipError, setZipError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
 
-  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false, lat: null, lng: null }); setEditing(null); setShowForm(false); setSaveError(''); setZipError(''); };
+  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false, lat: null, lng: null }); setEditing(null); setShowForm(false); setSaveError(''); setZipError(''); setPhoneError(''); };
   const digitsOnly = (value) => value.replace(/\D/g, '');
+  const formatPhone = (value) => value.replace(/[^\d+]/g, '');
+  const validatePhone = (phone) => /^(09\d{9}|\+639\d{9})$/.test(phone);
   const validateZip = (zip) => /^\d{4}$/.test(zip);
 
   useEffect(() => {
@@ -36,10 +39,17 @@ const AddressBook = () => {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaveError('');
+    setPhoneError('');
     if (form.country && form.country !== 'Philippines') {
       setSaveError('Only Philippine addresses are allowed.');
       return;
     }
+    
+    if (!validatePhone(form.phone)) {
+      setPhoneError('Invalid phone number. Must start with 09 or +639 and have correct length.');
+      return;
+    }
+
     const zipValid = validateZip(form.zip);
     if (!zipValid) {
       setZipError('Zip Code must contain exactly 4 digits.');
@@ -102,6 +112,7 @@ const AddressBook = () => {
     } catch {}
     setEditing(addr);
     setShowForm(true);
+    setPhoneError('');
     const existingZip = addr.zip || addr.postal_code || '';
     setZipError(existingZip.length === 0 || validateZip(existingZip) ? '' : 'Zip Code must contain exactly 4 digits.');
   };
@@ -141,8 +152,9 @@ const AddressBook = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input type="tel" value={form.phone} onChange={e => setForm(f => ({...f, phone: digitsOnly(e.target.value)}))} inputMode="numeric" pattern="[0-9]*" required
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                  <input type="tel" value={form.phone} onChange={e => setForm(f => ({...f, phone: formatPhone(e.target.value)}))} required
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${phoneError ? 'border-red-300' : 'border-gray-200'}`} />
+                  {phoneError && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} /> {phoneError}</p>}
                 </div>
               </div>
               <div className="space-y-4">

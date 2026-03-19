@@ -55,9 +55,6 @@ const Home = () => {
       });
     }).catch(() => { });
 
-    const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-    if (viewed.length > 0) setRecentlyViewed(viewed.slice(0, 6));
-
     const loadWishlist = async () => {
       try {
         const user = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
@@ -71,6 +68,25 @@ const Home = () => {
 
     loadWishlist();
   },[]);
+
+  // Update real-time viewed items
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+      setRecentlyViewed(viewed.slice(0, 6));
+    };
+
+    // Initial load
+    handleStorageChange();
+
+    window.addEventListener('recentlyViewedUpdated', handleStorageChange);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('recentlyViewedUpdated', handleStorageChange);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   const activeBanners = banners
     .filter((banner) => banner?.is_active !== false)

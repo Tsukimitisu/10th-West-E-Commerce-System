@@ -42,6 +42,7 @@ const ProductDetail = () => {
         const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
         const updated = [p, ...viewed.filter((v) => v.id !== p.id)].slice(0, 10);
         localStorage.setItem('recentlyViewed', JSON.stringify(updated));
+        window.dispatchEvent(new Event('recentlyViewedUpdated'));
 
         recordProductView(Number(id)).catch(() => {});
       } catch {}

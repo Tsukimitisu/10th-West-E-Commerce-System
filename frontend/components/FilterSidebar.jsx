@@ -127,8 +127,17 @@ const FilterSidebar = ({
               <input
                 type="number"
                 min={0}
+                step="1"
                 value={priceRange[0]}
-                onChange={(e) => onPriceChange([Number(e.target.value), priceRange[1]])}
+                onKeyDown={(e) => {
+                  if (['.', ',', 'e', 'E', '-', '+'].includes(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                  onPriceChange([val, priceRange[1]]);
+                }}
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-200"
               />
             </div>
@@ -137,8 +146,17 @@ const FilterSidebar = ({
               <input
                 type="number"
                 min={0}
+                step="1"
                 value={priceRange[1]}
-                onChange={(e) => onPriceChange([priceRange[0], Number(e.target.value)])}
+                onKeyDown={(e) => {
+                  if (['.', ',', 'e', 'E', '-', '+'].includes(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                  onPriceChange([priceRange[0], val]);
+                }}
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-200"
               />
             </div>
