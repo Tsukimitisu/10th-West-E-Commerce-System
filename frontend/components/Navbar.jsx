@@ -140,6 +140,35 @@ const Navbar = ({ user, onLogout }) => {
     } catch (e) { console.error(e); }
   };
 
+  const handleNotificationClick = async (n) => {
+    // Mark as read first
+    if (n.type !== 'announcement' && !n.is_read) {
+      await handleMarkRead(n.id, n.type);
+    }
+    setNotifOpen(false);
+
+    // Navigate to relevant page based on type or reference_type
+    const refType = n.reference_type || n.type;
+    const refId = n.reference_id;
+
+    if (refType === 'order' || refType === 'order_status') {
+      if (user.role === 'customer') {
+        navigate(refId ? `/profile/orders` : '/profile/orders'); // Ideally scroll or route to specific order
+      } else {
+        navigate(refId ? `/admin/orders` : '/admin/orders');
+      }
+    } else if (refType === 'support' || refType === 'ticket') {
+      if (user.role === 'customer') {
+        navigate('/support');
+      } else {
+        navigate('/admin/support');
+      }
+    } else if (refType === 'inventory' || refType === 'product') {
+       navigate('/admin/inventory');
+    }
+    // Add more types as needed
+  };
+
   const isShopRoute = location.pathname === '/shop';
   const isHomeRoute = location.pathname === '/';
   const shouldShowGlobalSearch = isShopRoute || isHomeRoute;
@@ -351,7 +380,7 @@ const Navbar = ({ user, onLogout }) => {
                           <div className="p-8 text-center text-gray-400 text-sm">No notifications</div>
                         ) : (
                           notifications.map((n, i) => (
-                            <button key={`${n.id || n.title}-${i}`} onClick={() => { handleMarkRead(n.id, n.type); setNotifOpen(false); }} className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-all duration-150 border-b border-gray-50 ${!n.is_read ? 'bg-orange-50/60' : ''}`}>
+                            <button key={`${n.id || n.title}-${i}`} onClick={() => handleNotificationClick(n)} className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-all duration-150 border-b border-gray-50 ${!n.is_read ? 'bg-orange-50/60' : ''}`}>
                               <div className="flex gap-3">
                                 <div className="mt-0.5 shrink-0">
                                   {n.type === 'announcement' ? (
