@@ -186,46 +186,46 @@ const Navbar = ({ user, onLogout }) => {
   return (
     <>
       {/* Main navbar */}
-      <header className={`sticky top-0 z-50 bg-white transition-shadow duration-300 ${scrolled ? 'shadow-md' : 'shadow-sm'}`}>
-        <div className="max-w-7xl mx-auto px-4">
+      <header className={`sticky top-0 z-50 bg-white transition-all duration-300 ${scrolled ? 'shadow-lg' : 'shadow-none border-b border-gray-100'}`}>
+        <div className="max-w-7xl mx-auto px-4 lg:px-6">
           <div className="flex items-center justify-between h-16">
             {/* Mobile menu button */}
-            <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 -ml-2 text-gray-600 hover:text-gray-900">
+            <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
               <Menu size={22} />
             </button>
 
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2 shrink-0">
-              <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+            <Link to="/" className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity">
+              <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center shadow-md">
                 <span className="text-white font-bold text-sm font-display">10</span>
               </div>
               <div className="hidden sm:block">
                 <span className="font-display font-bold text-gray-900 text-lg leading-none">10TH WEST</span>
-                <span className="block text-[10px] font-semibold tracking-[0.2em] text-orange-500 uppercase">Moto Parts</span>
+                <span className="block text-[9px] font-bold tracking-[0.3em] text-orange-500 uppercase">Moto Parts</span>
               </div>
             </Link>
 
-            {/* Desktop navigation */}
-            <nav className="hidden lg:flex items-center gap-1 ml-8">
-              <Link to="/" className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/' ? 'text-orange-500 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
+            {/* Desktop navigation - Center */}
+            <nav className="hidden lg:flex items-center gap-0.5 ml-8 flex-1">
+              <Link to="/" className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/' ? 'text-orange-600 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
                 Home
               </Link>
-              <Link to="/shop" className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/shop' ? 'text-orange-500 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
+              <Link to="/shop" className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/shop' ? 'text-orange-600 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}>
                 Shop
               </Link>
               <div ref={moreMenuRef} className="relative">
                 <button
                   onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${location.pathname === '/faq' || location.pathname === '/contact' ? 'text-orange-500 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 ${location.pathname === '/faq' || location.pathname === '/contact' ? 'text-orange-600 bg-orange-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
                 >
-                  More <ChevronDown size={14} className={`transition-transform ${moreMenuOpen ? 'rotate-180' : ''}`} />
+                  More <ChevronDown size={16} className={`transition-transform duration-300 ${moreMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {moreMenuOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-2 animate-fade-in">
-                    <Link to="/faq" className="block px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors">
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 animate-fade-in z-50">
+                    <Link to="/faq" className="block px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-150">
                       FAQ
                     </Link>
-                    <Link to="/contact" className="block px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors">
+                    <Link to="/contact" className="block px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-150">
                       Contact
                     </Link>
                   </div>
@@ -233,34 +233,54 @@ const Navbar = ({ user, onLogout }) => {
               </div>
             </nav>
 
+            {/* Desktop Search Bar */}
+            {shouldShowGlobalSearch && (
+              <form onSubmit={handleGlobalSearchSubmit} className="hidden lg:flex items-center justify-center gap-2 mx-4 flex-1 max-w-md">
+                <div className="relative flex-1">
+                  <button
+                    type="submit"
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-500 transition-colors duration-200 cursor-pointer"
+                  >
+                    <Search size={18} />
+                  </button>
+                  <input
+                    value={globalSearch}
+                    onChange={(e) => setGlobalSearch(e.target.value)}
+                    placeholder="Search parts, brands..."
+                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-300 transition-all duration-200"
+                  />
+                </div>
+              </form>
+            )}
+
             {/* Right actions */}
             <div className="flex items-center gap-1">
               {isShopRoute && (
-                <div ref={shopToolsRef} className="hidden lg:block relative mr-1">
+                <div ref={shopToolsRef} className="hidden lg:block relative">
                   <button
                     onClick={() => setShopToolsOpen(!shopToolsOpen)}
-                    className={`h-9 px-3 rounded-lg border text-xs font-semibold transition-colors flex items-center gap-1.5 ${shopToolsOpen ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-white border-gray-200 text-gray-600 hover:text-orange-500 hover:bg-orange-50'}`}
+                    className={`h-10 px-3 rounded-lg border text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 ${shopToolsOpen ? 'bg-orange-50 border-orange-300 text-orange-600 shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:text-orange-600 hover:bg-orange-50'}`}
                   >
-                    <SlidersHorizontal size={14} />
-                    Shop Tools
-                    <ChevronDown size={13} className={`transition-transform ${shopToolsOpen ? 'rotate-180' : ''}`} />
+                    <SlidersHorizontal size={16} />
+                    <span className="hidden sm:inline">Tools</span>
+                    <ChevronDown size={14} className={`transition-transform duration-300 ${shopToolsOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {shopToolsOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-[360px] bg-white rounded-xl shadow-lg border border-gray-100 p-3 space-y-3 animate-fade-in z-50">
+                    <div className="absolute right-0 top-full mt-2 w-[380px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 space-y-4 animate-fade-in z-50">
                       <div className="relative">
-                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
                           value={shopSearch}
                           onChange={(e) => updateShopParams({ search: e.target.value })}
                           placeholder="Search products..."
-                          className="w-full h-9 pl-8 pr-3 rounded-lg border border-gray-200 bg-white text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-700 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/30 transition-all duration-200"
                         />
                       </div>
                       <div className="flex items-center gap-2">
                         <select
                           value={shopSort}
                           onChange={(e) => updateShopParams({ sort: e.target.value })}
-                          className="h-9 flex-1 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="h-10 flex-1 px-3 rounded-lg border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/30 transition-all duration-200"
                         >
                           <option value="newest">Newest</option>
                           <option value="price-asc">Price: Low to High</option>
@@ -270,26 +290,26 @@ const Navbar = ({ user, onLogout }) => {
                         </select>
                         <button
                           onClick={() => window.dispatchEvent(new CustomEvent('shop:open-filters'))}
-                          className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors flex items-center gap-1.5"
+                          className="h-10 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-200 flex items-center gap-1.5"
                         >
                           <SlidersHorizontal size={14} /> Filter
                         </button>
                       </div>
                       <div className="flex items-center justify-end">
-                        <div className="h-9 inline-flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
+                        <div className="h-10 inline-flex items-center border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
                           <button
                             onClick={() => updateShopParams({ view: 'grid' })}
-                            className={`h-full px-2.5 ${shopView === 'grid' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`h-full px-3 transition-all duration-200 ${shopView === 'grid' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             title="Grid view"
                           >
-                            <Grid3X3 size={14} />
+                            <Grid3X3 size={16} />
                           </button>
                           <button
                             onClick={() => updateShopParams({ view: 'list' })}
-                            className={`h-full px-2.5 ${shopView === 'list' ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`h-full px-3 transition-all duration-200 ${shopView === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             title="List view"
                           >
-                            <List size={14} />
+                            <List size={16} />
                           </button>
                         </div>
                       </div>
@@ -301,42 +321,42 @@ const Navbar = ({ user, onLogout }) => {
               {/* Notifications */}
               {user && (
                 <div ref={notifRef} className="relative">
-                  <button onClick={() => setNotifOpen(!notifOpen)} className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors relative">
+                  <button onClick={() => setNotifOpen(!notifOpen)} className="p-2.5 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors relative">
                     <Bell size={20} />
                     {unreadCount > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 bg-orange-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      <span className="absolute top-1 right-1 bg-gradient-to-br from-orange-500 to-orange-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
                     )}
                   </button>
                   {notifOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-100 animate-fade-in z-50">
-                      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                        <h3 className="font-semibold text-gray-900 text-sm">Notifications</h3>
+                    <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 animate-fade-in z-50">
+                      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
+                        <h3 className="font-bold text-gray-900 text-sm">Notifications</h3>
                         {unreadCount > 0 && (
-                          <button onClick={handleMarkAllRead} className="text-xs text-orange-500 hover:text-orange-600 font-medium">Mark all read</button>
+                          <button onClick={handleMarkAllRead} className="text-xs text-orange-600 hover:text-orange-700 font-semibold hover:underline">Mark all read</button>
                         )}
                       </div>
-                      <div className="max-h-80 overflow-y-auto">
+                      <div className="max-h-96 overflow-y-auto">
                         {notifications.length === 0 ? (
-                          <div className="p-6 text-center text-gray-400 text-sm">No notifications</div>
+                          <div className="p-8 text-center text-gray-400 text-sm">No notifications</div>
                         ) : (
                           notifications.map((n, i) => (
-                            <button key={`${n.id || n.title}-${i}`} onClick={() => { handleMarkRead(n.id, n.type); setNotifOpen(false); }} className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${!n.is_read ? 'bg-orange-50/50' : ''}`}>
+                            <button key={`${n.id || n.title}-${i}`} onClick={() => { handleMarkRead(n.id, n.type); setNotifOpen(false); }} className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-all duration-150 border-b border-gray-50 ${!n.is_read ? 'bg-orange-50/60' : ''}`}>
                               <div className="flex gap-3">
                                 <div className="mt-0.5 shrink-0">
                                   {n.type === 'announcement' ? (
-                                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
+                                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
                                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                                     </div>
                                   ) : (
-                                    <div className="w-8 h-8 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center">
+                                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
                                       <Bell size={16} />
                                     </div>
                                   )}
                                 </div>
                                 <div>
-                                  <p className={`text-sm ${!n.is_read ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{n.title || n.message}</p>
+                                  <p className={`text-sm ${!n.is_read ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{n.title || n.message}</p>
                                   {n.type === 'announcement' && <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>}
                                   <p className="text-xs text-gray-400 mt-1">{n.created_at || n.published_at ? new Date(n.created_at || n.published_at).toLocaleDateString() : ''}</p>
                                 </div>
@@ -352,16 +372,16 @@ const Navbar = ({ user, onLogout }) => {
 
               {/* Wishlist */}
               {user && (
-                <Link to="/wishlist" className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors hidden sm:flex">
+                <Link to="/wishlist" className="p-2.5 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors hidden sm:flex">
                   <Heart size={20} />
                 </Link>
               )}
 
               {/* Cart */}
-              <button onClick={() => setCartOpen(true)} className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors relative">
+              <button onClick={() => setCartOpen(true)} className="p-2.5 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors relative">
                 <ShoppingCart size={20} />
                 {itemCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-orange-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  <span className="absolute top-1 right-1 bg-gradient-to-br from-orange-500 to-orange-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
                     {itemCount > 99 ? '99+' : itemCount}
                   </span>
                 )}
@@ -370,33 +390,33 @@ const Navbar = ({ user, onLogout }) => {
               {/* User menu */}
               {user ? (
                 <div ref={userMenuRef} className="relative">
-                  <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2">
-                    <div className="w-7 h-7 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center text-xs font-bold">
+                  <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="p-2 text-gray-500 hover:text-gray-900 ml-2 flex items-center gap-2 hover:bg-gray-50 rounded-lg transition-colors">
+                    <div className="w-8 h-8 bg-gradient-to-br from-orange-100 to-orange-200 text-orange-600 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm">
                       {user.name.charAt(0).toUpperCase()}
                     </div>
-                    <span className="hidden md:block text-sm font-medium text-gray-700 max-w-24 truncate">{user.name.split(' ')[0]}</span>
+                    <span className="hidden md:block text-sm font-semibold text-gray-700 max-w-20 truncate">{user.name.split(' ')[0]}</span>
                     <ChevronDown size={14} className="hidden md:block text-gray-400" />
                   </button>
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 animate-fade-in">
-                      <div className="px-4 py-2 border-b border-gray-100 mb-1">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 animate-fade-in">
+                      <div className="px-4 py-3 border-b border-gray-100 mb-1">
+                        <p className="text-sm font-bold text-gray-900 truncate">{user.name}</p>
                         <p className="text-xs text-gray-500 truncate">{user.email}</p>
                       </div>
-                      <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><User size={16} /> My Profile</Link>
-                      <Link to="/orders" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><Package size={16} /> My Orders</Link>
-                      <Link to="/wishlist" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><Heart size={16} /> Wishlist</Link>
-                      <Link to="/addresses" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><MapPin size={16} /> Addresses</Link>
-                      <Link to="/my-returns" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><RotateCcw size={16} /> Returns</Link>
+                      <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-150"><User size={16} /> My Profile</Link>
+                      <Link to="/orders" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-150"><Package size={16} /> My Orders</Link>
+                      <Link to="/wishlist" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-150"><Heart size={16} /> Wishlist</Link>
+                      <Link to="/addresses" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-150"><MapPin size={16} /> Addresses</Link>
+                      <Link to="/my-returns" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-150"><RotateCcw size={16} /> Returns</Link>
                       {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
                         <>
                           <div className="border-t border-gray-100 mt-1 pt-1" />
-                          <Link to="/admin" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><Shield size={16} /> Admin Panel</Link>
-                          <Link to="/pos" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors"><Monitor size={16} /> POS Terminal</Link>
+                          <Link to="/admin" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-150"><Shield size={16} /> Admin Panel</Link>
+                          <Link to="/pos" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-150"><Monitor size={16} /> POS Terminal</Link>
                         </>
                       )}
                       <div className="border-t border-gray-100 mt-1 pt-1">
-                        <button onClick={() => setShowLogoutConfirm(true)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-500 hover:bg-orange-50 transition-colors w-full">
+                        <button onClick={() => setShowLogoutConfirm(true)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-all duration-150 w-full">
                           <LogOut size={16} /> Sign Out
                         </button>
                       </div>
@@ -404,7 +424,7 @@ const Navbar = ({ user, onLogout }) => {
                   )}
                 </div>
               ) : (
-                <Link to="/login" className="ml-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">
+                <Link to="/login" className="ml-3 px-5 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-sm font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg">
                   Sign In
                 </Link>
               )}
@@ -414,25 +434,25 @@ const Navbar = ({ user, onLogout }) => {
 
       </header>
 
+      {/* Mobile search bar */}
       {shouldShowGlobalSearch && (
-        <div className="sticky top-16 z-40 bg-white/95 backdrop-blur border-b border-gray-100">
-          <div className="max-w-7xl mx-auto px-4 py-2.5">
-            <form onSubmit={handleGlobalSearchSubmit} className="flex items-center gap-2">
+        <div className="lg:hidden sticky top-16 z-40 bg-white/95 backdrop-blur border-b border-gray-100">
+          <div className="max-w-7xl mx-auto px-4 py-2 flex justify-center">
+            <form onSubmit={handleGlobalSearchSubmit} className="flex items-center gap-2 w-full">
               <div className="relative flex-1">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <button
+                  type="submit"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-500 transition-colors duration-200 cursor-pointer"
+                >
+                  <Search size={18} />
+                </button>
                 <input
                   value={globalSearch}
                   onChange={(e) => setGlobalSearch(e.target.value)}
-                  placeholder="Search motorcycle parts, brands, categories..."
-                  className="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-200"
+                  placeholder="Search parts..."
+                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700 focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-300 transition-all duration-200"
                 />
               </div>
-              <button
-                type="submit"
-                className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors"
-              >
-                Search
-              </button>
             </form>
           </div>
         </div>
@@ -445,17 +465,17 @@ const Navbar = ({ user, onLogout }) => {
           <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white shadow-2xl animate-fade-in overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <Link to="/" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
-                <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center">
                   <span className="text-white font-bold text-sm font-display">10</span>
                 </div>
-                <span className="font-display font-bold text-gray-900">10TH WEST MOTO</span>
+                <span className="font-display font-bold text-gray-900">10TH WEST</span>
               </Link>
-              <button onClick={() => setMobileOpen(false)} className="p-2 text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <button onClick={() => setMobileOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><X size={20} /></button>
             </div>
             {user && (
-              <div className="p-4 border-b border-gray-100 bg-gray-50">
+              <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-orange-50 to-amber-50">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center font-bold">{user.name.charAt(0).toUpperCase()}</div>
+                  <div className="w-10 h-10 bg-gradient-to-br from-orange-100 to-orange-200 text-orange-600 rounded-lg flex items-center justify-center font-bold">{user.name.charAt(0).toUpperCase()}</div>
                   <div>
                     <p className="font-semibold text-gray-900 text-sm">{user.name}</p>
                     <p className="text-xs text-gray-500">{user.email}</p>
@@ -464,37 +484,37 @@ const Navbar = ({ user, onLogout }) => {
               </div>
             )}
             <nav className="p-4 space-y-1">
-              <Link to="/" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Home</Link>
-              <Link to="/shop" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Shop All</Link>
+              <Link to="/" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">Home</Link>
+              <Link to="/shop" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">Shop All</Link>
               <div className="border-t border-gray-100 my-2" />
-              <Link to="/faq" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">FAQ</Link>
-              <Link to="/contact" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Contact</Link>
+              <Link to="/faq" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">FAQ</Link>
+              <Link to="/contact" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">Contact</Link>
               {user && (
                 <>
                   <div className="border-t border-gray-100 my-2" />
-                  <Link to="/profile" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">My Profile</Link>
-                  <Link to="/orders" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">My Orders</Link>
-                  <Link to="/wishlist" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Wishlist</Link>
-                  <Link to="/addresses" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Address Book</Link>
-                  <Link to="/my-returns" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">My Returns</Link>
+                  <Link to="/profile" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">My Profile</Link>
+                  <Link to="/orders" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">My Orders</Link>
+                  <Link to="/wishlist" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">Wishlist</Link>
+                  <Link to="/addresses" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">Address Book</Link>
+                  <Link to="/my-returns" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">My Returns</Link>
                 </>
               )}
               {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
-                <Link to="/admin" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">Admin Panel</Link>
+                <Link to="/admin" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">Admin Panel</Link>
               )}
               {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
-                <Link to="/pos" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-orange-500">POS Terminal</Link>
+                <Link to="/pos" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-all duration-150">POS Terminal</Link>
               )}
             </nav>
             <div className="p-4 border-t border-gray-100">
               {user ? (
-                <button onClick={() => { onLogout(); setMobileOpen(false); }} className="w-full px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+                <button onClick={() => { onLogout(); setMobileOpen(false); }} className="w-full px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-all duration-200 flex items-center justify-center gap-2">
                   <LogOut size={16} /> Sign Out
                 </button>
               ) : (
                 <div className="space-y-2">
-                  <Link to="/login" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 bg-orange-500 text-white rounded-lg text-sm font-medium text-center hover:bg-orange-600 transition-colors">Sign In</Link>
-                  <Link to="/register" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium text-center hover:bg-gray-50 transition-colors">Create Account</Link>
+                  <Link to="/login" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg text-sm font-semibold text-center hover:from-orange-600 hover:to-orange-700 transition-all duration-200 shadow-md">Sign In</Link>
+                  <Link to="/register" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold text-center hover:bg-gray-50 transition-all duration-200">Create Account</Link>
                 </div>
               )}
             </div>
@@ -511,12 +531,12 @@ const Navbar = ({ user, onLogout }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white p-8 rounded-3xl shadow-2xl w-96 border border-gray-100 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-4 mb-6">
-              <div className="bg-orange-50 p-3 rounded-2xl">
-                <LogOut className="w-8 h-8 text-orange-500" />
+              <div className="bg-gradient-to-br from-orange-50 to-amber-50 p-3 rounded-2xl">
+                <LogOut className="w-8 h-8 text-orange-600" />
               </div>
               <div>
                 <h3 className="text-2xl font-black text-gray-900">Sign Out?</h3>
-                <p className="text-gray-500 font-medium text-sm mt-1">Confirm to logout</p>
+                <p className="text-gray-500 font-semibold text-sm mt-1">Confirm to logout</p>
               </div>
             </div>
             <p className="text-gray-600 mb-6">
@@ -525,13 +545,13 @@ const Navbar = ({ user, onLogout }) => {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowLogoutConfirm(false)}
-                className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-2xl font-bold transition-all"
+                className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-2xl font-bold transition-all duration-200"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { setShowLogoutConfirm(false); onLogout(); }}
-                className="flex-1 py-3 bg-orange-500 text-white rounded-2xl hover:bg-orange-600 font-bold shadow-lg hover:shadow-xl transition-all"
+                className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl hover:from-orange-600 hover:to-orange-700 font-bold shadow-lg hover:shadow-xl transition-all duration-200"
               >
                 Sign Out
               </button>

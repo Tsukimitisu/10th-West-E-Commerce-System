@@ -212,9 +212,20 @@ const Home = () => {
                   </select>
                 </div>
 
-                <button className="w-full py-4 bg-red-600 text-white font-bold uppercase tracking-wider hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 mt-4 flex items-center justify-center gap-2">
-                  <Search size={20} /> Find Parts
-                </button>
+                <div className="relative mt-6">
+                  <input
+                    type="text"
+                    placeholder="Search parts..."
+                    className="w-full p-3.5 bg-gray-800/70 border border-orange-400/30 rounded-lg text-white font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:bg-gray-800 transition-all duration-200 hover:border-orange-400/50 text-sm pl-10"
+                  />
+                  <motion.button 
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-orange-400 hover:text-orange-300 transition-colors duration-200 cursor-pointer"
+                  >
+                    <Search size={18} />
+                  </motion.button>
+                </div>
                 
                 <div className="mt-8 pt-8 border-t border-zinc-800">
                   <p className="text-xs text-gray-500 mb-4">Popular Searches:</p>
