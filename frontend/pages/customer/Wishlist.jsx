@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, ShoppingCart, Trash2, Eye, Package } from 'lucide-react';
+import { Heart, ShoppingCart, Trash2, Eye, Package, AlertTriangle } from 'lucide-react';
 import { getWishlist, removeFromWishlist } from '../../services/api';
 import { useCart } from '../../context/CartContext';
 import AccountLayout from '../../components/customer/AccountLayout';
@@ -88,7 +88,9 @@ const Wishlist = () => {
               const price = Number(item.price ?? item.product?.price ?? 0);
               const salePrice = item.sale_price != null ? Number(item.sale_price) : (item.product?.sale_price != null ? Number(item.product.sale_price) : null);
               const stockQuantity = item.stock_quantity ?? item.product?.stock_quantity ?? 0;
+              const lowStockThreshold = item.low_stock_threshold ?? item.product?.low_stock_threshold ?? 5;
               const inStock = item.in_stock !== false && stockQuantity > 0;
+              const isLowStock = stockQuantity > 0 && stockQuantity <= lowStockThreshold;
               const imageUrl = item.image_url || item.product?.image_url || item.product?.image || '';
               const selectedQty = quantities[productId] ?? 1;
               const cartQty = cartItems.find((cartItem) => cartItem.productId === productId)?.quantity ?? 0;
@@ -109,6 +111,11 @@ const Wishlist = () => {
                         <span className="px-3 py-1 bg-gray-900 text-white text-xs font-medium rounded-full">Out of Stock</span>
                       </div>
                     )}
+                    {isLowStock && !hasQtyError && (
+                      <div className="absolute top-2 left-2">
+                        <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-1 rounded-md shadow-sm">Low Stock</span>
+                      </div>
+                    )}
                     <button
                       onClick={() => handleRemove(productId)}
                       className="absolute top-2 right-2 w-8 h-8 bg-white/90 hover:bg-orange-50 rounded-full flex items-center justify-center text-gray-400 hover:text-orange-500 transition-colors shadow-sm"
@@ -121,7 +128,10 @@ const Wishlist = () => {
                     <Link to={`/products/${productId}`} className="block">
                       <h3 className="text-sm font-medium text-gray-900 hover:text-orange-500 line-clamp-2 transition-colors">{name}</h3>
                     </Link>
-                    <p className="text-xs text-gray-500">Stock: {stockQuantity}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-gray-500">Stock: {stockQuantity}</p>
+                      {isLowStock && <span className="text-[10px] text-amber-600 flex items-center gap-0.5"><AlertTriangle size={10} /> Low stock</span>}
+                    </div>
                     <div className="flex items-center gap-2">
                       {salePrice ? (
                         <>
