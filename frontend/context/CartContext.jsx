@@ -525,6 +525,7 @@ export const CartProvider = ({ children }) => {
           if (deleteError) throw new Error(deleteError.message);
 
           setItems([]);
+          setSelectedItemIds([]);
           setDiscount(null);
           setError(null);
           localStorage.setItem('shopCoreCart', JSON.stringify([]));
@@ -548,6 +549,7 @@ export const CartProvider = ({ children }) => {
 
         if (response.ok) {
           setItems([]);
+          setSelectedItemIds([]);
           setDiscount(null);
           setError(null);
           localStorage.setItem('shopCoreCart', JSON.stringify([]));
@@ -563,8 +565,87 @@ export const CartProvider = ({ children }) => {
     }
   };
 
+  const clearSelectedItems = async () => {
+    if (selectedItemIds.length === 0) return;
+    if (selectedItemIds.length === items.length) {
+      return clearCart();
+    }
+
+    const token = getToken();
+    
+    if (token) {
+      if (USE_SUPABASE) {
+        try {
+          setLoading(true);
+          const currentUser = getCurrentUserFromToken();
+          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+          if (!cartId) throw new Error('Unable to access cart');
+
+          const { error: deleteError } = await supabase
+            .from('cart_items')
+            .delete()
+            .eq('cart_id', cartId)
+            .in('product_id', selectedItemIds);
+
+          if (deleteError) throw new Error(deleteError.message);
+
+          setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
+          setSelectedItemIds([]);
+          setError(null);
+          
+          // Update local storage
+          const currentLocal = JSON.parse(localStorage.getItem('shopCoreCart') || '[]');
+          localStorage.setItem('shopCoreCart', JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
+        } catch (err) {
+          console.error('Error clearing selected items (Supabase):', err);
+          clearSelectedItemsLocal();
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        setLoading(true);
+        // Fallback for REST API - delete one by one
+        await Promise.all(selectedItemIds.map(id => 
+          fetch(`${API_URL}/cart/items/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
+        ));
+
+        setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
+        setSelectedItemIds([]);
+        setError(null);
+        
+        // Update local storage
+        const currentLocal = JSON.parse(localStorage.getItem('shopCoreCart') || '[]');
+        localStorage.setItem('shopCoreCart', JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
+      } catch (err) {
+        console.error('Error clearing selected items:', err);
+        clearSelectedItemsLocal();
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      clearSelectedItemsLocal();
+    }
+  };
+
+  const clearSelectedItemsLocal = () => {
+    setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
+    setSelectedItemIds([]);
+    setError(null);
+    const currentLocal = JSON.parse(localStorage.getItem('shopCoreCart') || '[]');
+    localStorage.setItem('shopCoreCart', JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
+  };
+
   const clearCartLocal = () => {
     setItems([]);
+    setSelectedItemIds([]);
     setDiscount(null);
     setError(null);
     localStorage.setItem('shopCoreCart', JSON.stringify([]));
