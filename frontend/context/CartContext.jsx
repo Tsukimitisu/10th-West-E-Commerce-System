@@ -36,6 +36,7 @@ export const CartProvider = ({ children }) => {
       .select('id')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (findError) throw new Error(findError.message);
@@ -222,6 +223,7 @@ export const CartProvider = ({ children }) => {
             .select('id, quantity')
             .eq('cart_id', cartId)
             .eq('product_id', product.id)
+            .limit(1)
             .maybeSingle();
 
           if (existingError) throw new Error(existingError.message);
