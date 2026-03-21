@@ -39,10 +39,13 @@ const AddressAutocomplete = ({
 
     const timer = setTimeout(async () => {
       try {
-        // Omit barangay from context limits to avoid excessive OSM filtering which often yields 0 results.
-        const contextParts = [context.city, context.state].filter(Boolean).join(', ');
-        const scopedQuery = contextParts ? `${query}, ${contextParts}, Philippines` : `${query}, Philippines`;
-        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=ph&q=${encodeURIComponent(scopedQuery)}`;
+        // Clean up redundant parts if the user typed their full address
+        const queryParts = query.split(',').map(s => s.trim());
+        const allParts = [...queryParts, context.city, context.state, 'Philippines'].filter(Boolean);
+        const uniqueParts = Array.from(new Set(allParts));
+        const cleanQuery = uniqueParts.join(', ');
+
+        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=ph&q=${encodeURIComponent(cleanQuery)}`;
         const res = await fetch(url, {
           signal: controller.signal,
           headers: {

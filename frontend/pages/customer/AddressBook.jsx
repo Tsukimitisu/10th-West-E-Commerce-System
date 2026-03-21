@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Plus, Trash2, Edit3, Check, X, Home, Building2, Star, AlertTriangle } from 'lucide-react';
 import { getAddresses, saveAddress, deleteAddress, updateAddress } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
@@ -16,6 +16,7 @@ const AddressBook = () => {
   const [saveError, setSaveError] = useState('');
   const [zipError, setZipError] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const phoneInputRef = useRef(null);
 
   const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false, lat: null, lng: null }); setEditing(null); setShowForm(false); setSaveError(''); setZipError(''); setPhoneError(''); };
   const digitsOnly = (value) => value.replace(/\D/g, '');
@@ -47,6 +48,10 @@ const AddressBook = () => {
     
     if (!validatePhone(form.phone)) {
       setPhoneError('Invalid phone number. Must start with 09 or +639 and have correct length.');
+      if (phoneInputRef.current) {
+        phoneInputRef.current.focus();
+        phoneInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
 
@@ -56,11 +61,10 @@ const AddressBook = () => {
       return;
     }
     try {
-      const streetWithBarangay = form.barangay ? `${form.street}, ${form.barangay}` : form.street;
-      const payload = { ...form, street: streetWithBarangay };
+      const payload = { ...form };
       // Persist geolocation locally as a fallback for legacy rows without coordinates.
       if (form.lat && form.lng) {
-        const key = `${streetWithBarangay}|${form.city}|${form.state}`;
+        const key = `${form.street}|${form.city}|${form.state}`;
         const stored = JSON.parse(localStorage.getItem('addressGeo') || '{}');
         stored[key] = { lat: form.lat, lng: form.lng };
         localStorage.setItem('addressGeo', JSON.stringify(stored));
@@ -158,8 +162,8 @@ const AddressBook = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input type="tel" value={form.phone} onChange={e => setForm(f => ({...f, phone: formatPhone(e.target.value)}))} required
-                    className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${phoneError ? 'border-red-300' : 'border-gray-700'}`} />
+                  <input type="tel" value={form.phone} ref={phoneInputRef} onChange={e => setForm(f => ({...f, phone: formatPhone(e.target.value)}))} required
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${phoneError ? 'border-red-300 ring-1 ring-red-300 bg-red-50/5' : 'border-gray-700'}`} />
                   {phoneError && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} /> {phoneError}</p>}
                 </div>
               </div>

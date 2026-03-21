@@ -78,7 +78,12 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
       maxZoom: 19,
     }).addTo(map);
 
-    const marker = L.marker(fallbackCenter, { draggable: false }).addTo(map);
+    const marker = L.marker(fallbackCenter, { draggable: !disabled }).addTo(map);
+
+    marker.on('dragend', () => {
+      const pos = marker.getLatLng();
+      onChange?.({ lat: pos.lat, lng: pos.lng });
+    });
 
     mapRef.current = map;
     markerRef.current = marker;
@@ -137,14 +142,30 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
 
     // Build the query â€“ more parts â†’ more accurate
     const hasStreet = street && street.trim().length >= 2;
-    const query = hasStreet
-      ? `${street}${barangay ? `, ${barangay}` : ''}, ${city}, ${state}, Philippines`
-      : `${barangay}, ${city}, ${state}, Philippines`;
     const queries = [];
+
     if (hasStreet) {
-      queries.push(`${street}, ${barangay ? barangay + ', ' : ''}${city}, ${state}, Philippines`);
-      queries.push(`${street}, ${city}, ${state}, Philippines`);
+      // Split street in case user entered "City, Barangay, Street" and deduplicate with selected location context
+      const streetParts = street.split(',').map(s => s.trim());
+      const contextParts = [barangay, city, state].filter(Boolean);
+      const allParts = [...streetParts, ...contextParts];
+      const uniqueParts = Array.from(new Set(allParts)).filter(Boolean);
+
+      // Try the raw unique parts joined
+      queries.push(`${uniqueParts.join(', ')}, Philippines`);
+
+      // Try reverse order (often fixes "City, Barangay, Street" input for Nominatim which prefers "Street, City")
+      queries.push(`${uniqueParts.slice().reverse().join(', ')}, Philippines`);
+
+      // Try just the first part of the street with context (fixes if user typed entire address in street but we just want the street name)
+      const streetFirstPart = streetParts[streetParts.length - 1]; // if "City, Barangay, Street", last part is street typically, wait.
+      const streetFirstPartA = streetParts[0]; // if "Street, Barangay, City"
+      queries.push(`${streetFirstPartA}, ${contextParts.join(', ')}, Philippines`);
+      if (streetFirstPart !== streetFirstPartA) {
+        queries.push(`${streetFirstPart}, ${contextParts.join(', ')}, Philippines`);
+      }
     }
+    
     if (barangay) {
       queries.push(`${barangay}, ${city}, ${state}, Philippines`);
     }
@@ -235,7 +256,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
           )}
         </div>
       )}
-      <p className="text-xs text-gray-400">Pin placement updates automatically from the detected address. Lat/Lng are saved with the address/order.</p>
+      <p className="text-xs text-gray-400">Pin placement updates automatically. If the location is inaccurate, you can drag the pin to your exact location.</p>
     </div>
   );
 };
