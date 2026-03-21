@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import AdminLayout from '../../components/owner/AdminLayout';
 import DashboardView from './DashboardView';
@@ -46,3 +46,5 @@ const AdminDashboard = ({ user, onLogout }) => {
 };
 
 export default AdminDashboard;
+
+

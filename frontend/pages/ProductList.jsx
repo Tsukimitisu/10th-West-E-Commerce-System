@@ -117,7 +117,7 @@ const ProductList = () => {
       <div className="max-w-7xl mx-auto px-4 py-12">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+            <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
               <div className="aspect-square skeleton" />
               <div className="p-4 space-y-3">
                 <div className="h-3 skeleton rounded w-20" />
@@ -132,26 +132,26 @@ const ProductList = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-900">
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="mb-4 bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-sm">
+        <div className="mb-4 bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-gray-900">{filtered.length} products found</p>
-              <p className="text-xs text-gray-500">Use filters to narrow down your parts fast</p>
+              <p className="text-sm font-semibold text-white">{filtered.length} products found</p>
+              <p className="text-xs text-gray-400">Use filters to narrow down your parts fast</p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setMobileFiltersOpen(true)}
-                className="lg:hidden h-10 px-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2"
+                className="lg:hidden h-10 px-3 rounded-xl border border-gray-700 text-sm font-medium text-gray-200 hover:bg-gray-700 inline-flex items-center gap-2"
               >
                 <SlidersHorizontal size={16} />
                 Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
               </button>
               <button
                 onClick={() => setShowDesktopFilters(prev => !prev)}
-                className="hidden lg:inline-flex h-10 px-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 items-center gap-2"
+                className="hidden lg:inline-flex h-10 px-3 rounded-xl border border-gray-700 text-sm font-medium text-gray-200 hover:bg-gray-700 items-center gap-2"
               >
                 {showDesktopFilters ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
                 {showDesktopFilters ? 'Hide Filters' : 'Show Filters'}
@@ -159,7 +159,7 @@ const ProductList = () => {
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="h-10 px-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                className="h-10 px-3 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/30"
               >
                 <option value="newest">Newest</option>
                 <option value="price-asc">Price Low to High</option>
@@ -199,9 +199,9 @@ const ProductList = () => {
                 <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Search size={32} className="text-gray-300" />
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2">No products found</h3>
-                <p className="text-sm text-gray-500 mb-4">Try adjusting your filters or search query.</p>
-                <button onClick={clearAllFilters} className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">
+                <h3 className="font-semibold text-white mb-2">No products found</h3>
+                <p className="text-sm text-gray-400 mb-4">Try adjusting your filters or search query.</p>
+                <button onClick={clearAllFilters} className="px-6 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">
                   Clear All Filters
                 </button>
               </div>
@@ -222,3 +222,5 @@ const ProductList = () => {
 };
 
 export default ProductList;
+
+

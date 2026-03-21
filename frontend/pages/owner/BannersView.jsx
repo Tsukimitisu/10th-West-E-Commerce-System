@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Image, Plus, Edit3, Trash2, Eye, EyeOff, X, Check, AlertCircle, GripVertical, Megaphone, ArrowUp, ArrowDown, AlertTriangle, Upload, Link as LinkIcon, SlidersHorizontal, Save } from 'lucide-react';
 import { getAllBanners, createBanner, updateBanner, deleteBanner, getAllAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, uploadProductImage, getSystemSettings, updateSystemSettings } from '../../services/api';
 
@@ -197,12 +197,12 @@ const BannersView = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Image size={22} /> Content Management</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage banners, promotions & announcements</p>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2"><Image size={22} /> Content Management</h1>
+          <p className="text-sm text-gray-400 mt-1">Manage banners, promotions & announcements</p>
         </div>
         {tab !== 'carousel' && (
           <button onClick={() => { resetForm(); setModalType(tab === 'announcements' ? 'announcement' : 'banner'); setShowModal(true); }}
-            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
+            className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
             <Plus size={16} /> {tab === 'banners' ? 'Add Banner' : 'Add Announcement'}
           </button>
         )}
@@ -211,15 +211,15 @@ const BannersView = () => {
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
         <button onClick={() => setTab('banners')}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === 'banners' ? 'bg-white text-orange-500 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === 'banners' ? 'bg-gray-800 text-red-500 shadow-sm' : 'text-gray-600 hover:text-white'}`}>
           <Image size={14} /> Banners ({banners.length})
         </button>
         <button onClick={() => setTab('announcements')}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === 'announcements' ? 'bg-white text-orange-500 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === 'announcements' ? 'bg-gray-800 text-red-500 shadow-sm' : 'text-gray-600 hover:text-white'}`}>
           <Megaphone size={14} /> Announcements ({announcements.length})
         </button>
         <button onClick={() => setTab('carousel')}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === 'carousel' ? 'bg-white text-orange-500 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === 'carousel' ? 'bg-gray-800 text-red-500 shadow-sm' : 'text-gray-600 hover:text-white'}`}>
           <SlidersHorizontal size={14} /> Carousel
         </button>
       </div>
@@ -231,35 +231,35 @@ const BannersView = () => {
       ) : tab === 'banners' ? (
         /* Banners List */
         banners.length === 0 ? (
-          <div className="bg-white border border-gray-100 rounded-xl p-12 text-center">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-12 text-center">
             <Image size={48} className="mx-auto text-gray-300 mb-3" />
-            <h3 className="font-semibold text-gray-900 mb-1">No banners yet</h3>
-            <p className="text-sm text-gray-500">Create banners to display on the homepage.</p>
+            <h3 className="font-semibold text-white mb-1">No banners yet</h3>
+            <p className="text-sm text-gray-400">Create banners to display on the homepage.</p>
           </div>
         ) : (
           <div className="space-y-3">
             {banners.sort((a, b) => (a.display_order || 0) - (b.display_order || 0)).map(banner => (
-              <div key={banner.id} className={`bg-white border rounded-xl p-4 flex gap-4 items-center ${banner.is_active ? 'border-gray-100' : 'border-gray-100 opacity-60'}`}>
+              <div key={banner.id} className={`bg-gray-800 border rounded-xl p-4 flex gap-4 items-center ${banner.is_active ? 'border-gray-700' : 'border-gray-700 opacity-60'}`}>
                 <div className="w-24 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                   {banner.image_url ? <img src={banner.image_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Image size={20} className="text-gray-300" /></div>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 text-sm truncate">{banner.title || 'Untitled Banner'}</h3>
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${banner.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
+                    <h3 className="font-semibold text-white text-sm truncate">{banner.title || 'Untitled Banner'}</h3>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${banner.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
                       {banner.is_active ? 'Active' : 'Hidden'}
                     </span>
                   </div>
-                  {banner.subtitle && <p className="text-xs text-gray-500 truncate mt-0.5">{banner.subtitle}</p>}
+                  {banner.subtitle && <p className="text-xs text-gray-400 truncate mt-0.5">{banner.subtitle}</p>}
                   {banner.button_text && <p className="text-[10px] text-gray-400 mt-0.5">Button: {banner.button_text}</p>}
                   <p className="text-[10px] text-gray-400 mt-1">Order: {banner.display_order || 0}</p>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => toggleBannerActive(banner)} className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors" title={banner.is_active ? 'Hide' : 'Show'}>
+                  <button onClick={() => toggleBannerActive(banner)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors" title={banner.is_active ? 'Hide' : 'Show'}>
                     {banner.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
                   </button>
                   <button onClick={() => { setBannerForm({ title: banner.title || '', subtitle: banner.subtitle || '', button_text: banner.button_text || '', image_url: banner.image_url || '', link_url: banner.link_url || '', is_active: banner.is_active, display_order: banner.display_order || 0 }); setEditing(banner); setImagePreview(banner.image_url || ''); setLinkMode(LINK_OPTIONS.some(o => o.value === banner.link_url) ? 'page' : (banner.link_url ? 'custom' : 'page')); setModalType('banner'); setShowModal(true); }}
-                    className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors"><Edit3 size={14} /></button>
+                    className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"><Edit3 size={14} /></button>
                   <button onClick={() => handleDeleteBanner(banner)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                 </div>
               </div>
@@ -269,29 +269,29 @@ const BannersView = () => {
       ) : tab === 'announcements' ? (
         /* Announcements List */
         announcements.length === 0 ? (
-          <div className="bg-white border border-gray-100 rounded-xl p-12 text-center">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl p-12 text-center">
             <Megaphone size={48} className="mx-auto text-gray-300 mb-3" />
-            <h3 className="font-semibold text-gray-900 mb-1">No announcements</h3>
-            <p className="text-sm text-gray-500">Create announcements to keep customers informed.</p>
+            <h3 className="font-semibold text-white mb-1">No announcements</h3>
+            <p className="text-sm text-gray-400">Create announcements to keep customers informed.</p>
           </div>
         ) : (
           <div className="space-y-3">
             {announcements.map(ann => (
-              <div key={ann.id} className="bg-white border border-gray-100 rounded-xl p-4">
+              <div key={ann.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-gray-900 text-sm">{ann.title}</h3>
+                      <h3 className="font-semibold text-white text-sm">{ann.title}</h3>
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${ann.is_published ? 'bg-green-50 text-green-600' : 'bg-yellow-50 text-yellow-600'}`}>
                         {ann.is_published ? 'Published' : 'Draft'}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{ann.content}</p>
+                    <p className="text-xs text-gray-400 mt-1 line-clamp-2">{ann.content}</p>
                     <p className="text-[10px] text-gray-400 mt-1">{ann.published_at ? new Date(ann.published_at).toLocaleDateString() : 'Not published'}</p>
                   </div>
                   <div className="flex items-center gap-1 ml-4">
                     <button onClick={() => { setAnnouncementForm({ title: ann.title || '', content: ann.content || '', is_published: ann.is_published }); setEditing(ann); setModalType('announcement'); setShowModal(true); }}
-                      className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors"><Edit3 size={14} /></button>
+                      className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"><Edit3 size={14} /></button>
                     <button onClick={() => handleDeleteAnnouncement(ann)}
                       className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                   </div>
@@ -301,17 +301,17 @@ const BannersView = () => {
           </div>
         )
       ) : (
-        <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 space-y-4">
           <div>
-            <h3 className="font-semibold text-gray-900">Home Hero Carousel Management</h3>
-            <p className="text-sm text-gray-500 mt-1">These options apply to the Home page hero only.</p>
+            <h3 className="font-semibold text-white">Home Hero Carousel Management</h3>
+            <p className="text-sm text-gray-400 mt-1">These options apply to the Home page hero only.</p>
           </div>
 
-          <div className="border border-gray-100 rounded-xl p-4 space-y-3">
+          <div className="border border-gray-700 rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-semibold text-gray-900">Slides</h4>
-                <p className="text-xs text-gray-500">Each slide supports image, title, description, and button text.</p>
+                <h4 className="text-sm font-semibold text-white">Slides</h4>
+                <p className="text-xs text-gray-400">Each slide supports image, title, description, and button text.</p>
               </div>
               <button
                 onClick={() => {
@@ -322,7 +322,7 @@ const BannersView = () => {
                   setModalType('banner');
                   setShowModal(true);
                 }}
-                className="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5"
+                className="px-3 py-2 bg-red-500/100 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5"
               >
                 <Plus size={14} /> Add Slide
               </button>
@@ -330,9 +330,9 @@ const BannersView = () => {
 
             <div className="space-y-2">
               {banners.length === 0 ? (
-                <p className="text-xs text-gray-500">No slides yet.</p>
+                <p className="text-xs text-gray-400">No slides yet.</p>
               ) : banners.sort((a, b) => (a.display_order || 0) - (b.display_order || 0)).map((banner) => (
-                <div key={banner.id} className="border border-gray-100 rounded-lg p-3 flex items-center gap-3">
+                <div key={banner.id} className="border border-gray-700 rounded-lg p-3 flex items-center gap-3">
                   <div className="w-20 h-14 bg-gray-100 rounded overflow-hidden flex-shrink-0">
                     {banner.image_url ? (
                       <img src={banner.image_url} alt="" className="w-full h-full object-cover" />
@@ -341,12 +341,12 @@ const BannersView = () => {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{banner.title || 'Untitled'}</p>
-                    <p className="text-xs text-gray-500 truncate">{banner.subtitle || 'No description'}</p>
+                    <p className="text-sm font-medium text-white truncate">{banner.title || 'Untitled'}</p>
+                    <p className="text-xs text-gray-400 truncate">{banner.subtitle || 'No description'}</p>
                     <p className="text-[11px] text-gray-400 truncate">Button: {banner.button_text || 'Shop Parts'}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => toggleBannerActive(banner)} className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors" title={banner.is_active ? 'Hide' : 'Show'}>
+                    <button onClick={() => toggleBannerActive(banner)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors" title={banner.is_active ? 'Hide' : 'Show'}>
                       {banner.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
                     </button>
                     <button
@@ -358,7 +358,7 @@ const BannersView = () => {
                         setModalType('banner');
                         setShowModal(true);
                       }}
-                      className="p-1.5 text-gray-400 hover:text-orange-500 rounded-lg hover:bg-orange-50 transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
                     >
                       <Edit3 size={14} />
                     </button>
@@ -371,16 +371,16 @@ const BannersView = () => {
             </div>
           </div>
 
-          <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+          <label className="flex items-center justify-between p-3 border border-gray-700 rounded-lg cursor-pointer">
             <div>
-              <p className="text-sm font-medium text-gray-900">Autoplay slides</p>
-              <p className="text-[11px] text-gray-500">Automatically rotate banners in the hero section.</p>
+              <p className="text-sm font-medium text-white">Autoplay slides</p>
+              <p className="text-[11px] text-gray-400">Automatically rotate banners in the hero section.</p>
             </div>
             <input
               type="checkbox"
               checked={carouselConfig.hero_autoplay}
               onChange={e => setCarouselConfig(cfg => ({ ...cfg, hero_autoplay: e.target.checked }))}
-              className="w-4 h-4 text-orange-500 border-gray-300 rounded"
+              className="w-4 h-4 text-red-500 border-gray-300 rounded"
             />
           </label>
 
@@ -392,41 +392,41 @@ const BannersView = () => {
               step="500"
               value={carouselConfig.hero_interval_ms}
               onChange={e => setCarouselConfig(cfg => ({ ...cfg, hero_interval_ms: e.target.value }))}
-              className="w-full max-w-xs px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300"
+              className="w-full max-w-xs px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+            <label className="flex items-center justify-between p-3 border border-gray-700 rounded-lg cursor-pointer">
               <span className="text-sm text-gray-800">Show dots</span>
               <input
                 type="checkbox"
                 checked={carouselConfig.hero_show_dots}
                 onChange={e => setCarouselConfig(cfg => ({ ...cfg, hero_show_dots: e.target.checked }))}
-                className="w-4 h-4 text-orange-500 border-gray-300 rounded"
+                className="w-4 h-4 text-red-500 border-gray-300 rounded"
               />
             </label>
-            <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+            <label className="flex items-center justify-between p-3 border border-gray-700 rounded-lg cursor-pointer">
               <span className="text-sm text-gray-800">Show arrows</span>
               <input
                 type="checkbox"
                 checked={carouselConfig.hero_show_arrows}
                 onChange={e => setCarouselConfig(cfg => ({ ...cfg, hero_show_arrows: e.target.checked }))}
-                className="w-4 h-4 text-orange-500 border-gray-300 rounded"
+                className="w-4 h-4 text-red-500 border-gray-300 rounded"
               />
             </label>
           </div>
 
-          <label className="flex items-center justify-between p-3 border border-gray-100 rounded-lg cursor-pointer">
+          <label className="flex items-center justify-between p-3 border border-gray-700 rounded-lg cursor-pointer">
             <div>
-              <p className="text-sm font-medium text-gray-900">Pause on hover</p>
-              <p className="text-[11px] text-gray-500">Improves readability while users hover the hero on desktop.</p>
+              <p className="text-sm font-medium text-white">Pause on hover</p>
+              <p className="text-[11px] text-gray-400">Improves readability while users hover the hero on desktop.</p>
             </div>
             <input
               type="checkbox"
               checked={carouselConfig.hero_pause_on_hover}
               onChange={e => setCarouselConfig(cfg => ({ ...cfg, hero_pause_on_hover: e.target.checked }))}
-              className="w-4 h-4 text-orange-500 border-gray-300 rounded"
+              className="w-4 h-4 text-red-500 border-gray-300 rounded"
             />
           </label>
 
@@ -434,7 +434,7 @@ const BannersView = () => {
             <button
               onClick={handleSaveCarouselConfig}
               disabled={savingCarousel}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-2"
+              className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-2"
             >
               <Save size={14} /> {savingCarousel ? 'Saving...' : (carouselSaved ? 'Saved!' : 'Save Carousel Settings')}
             </button>
@@ -445,9 +445,9 @@ const BannersView = () => {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
+          <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">{editing ? 'Edit' : 'Add'} {modalType === 'banner' ? 'Slide' : 'Announcement'}</h3>
+              <h3 className="font-semibold text-white">{editing ? 'Edit' : 'Add'} {modalType === 'banner' ? 'Slide' : 'Announcement'}</h3>
               <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
 
@@ -456,12 +456,12 @@ const BannersView = () => {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
                   <input type="text" value={bannerForm.title} onChange={e => setBannerForm({ ...bannerForm, title: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300" />
+                    className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
                   <input type="text" value={bannerForm.subtitle} onChange={e => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300" />
+                    className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Button Text</label>
@@ -469,7 +469,7 @@ const BannersView = () => {
                     type="text"
                     value={bannerForm.button_text}
                     onChange={e => setBannerForm({ ...bannerForm, button_text: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300"
+                    className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300"
                     placeholder="Shop Parts"
                   />
                 </div>
@@ -479,10 +479,10 @@ const BannersView = () => {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Banner Image</label>
                   {(imagePreview || bannerForm.image_url) ? (
                     <div className="relative group">
-                      <img src={imagePreview || bannerForm.image_url} alt="Preview" className="w-full h-40 object-cover rounded-lg border border-gray-200" />
+                      <img src={imagePreview || bannerForm.image_url} alt="Preview" className="w-full h-40 object-cover rounded-lg border border-gray-700" />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
                         <button type="button" onClick={() => fileInputRef.current?.click()}
-                          className="px-3 py-1.5 bg-white text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-100">
+                          className="px-3 py-1.5 bg-gray-800 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-100">
                           Change
                         </button>
                         <button type="button" onClick={clearImage}
@@ -496,10 +496,10 @@ const BannersView = () => {
                       onClick={() => fileInputRef.current?.click()}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={handleDrop}
-                      className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-colors"
+                      className="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center cursor-pointer hover:border-red-300 hover:bg-red-500/10/30 transition-colors"
                     >
                       <Upload size={24} className="mx-auto text-gray-300 mb-2" />
-                      <p className="text-sm text-gray-500 font-medium">Click to upload or drag & drop</p>
+                      <p className="text-sm text-gray-400 font-medium">Click to upload or drag & drop</p>
                       <p className="text-[11px] text-gray-400 mt-1">PNG, JPG, WEBP, GIF (max 5MB)</p>
                     </div>
                   )}
@@ -511,24 +511,24 @@ const BannersView = () => {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Link Destination</label>
                   <div className="flex gap-1 mb-2">
                     <button type="button" onClick={() => { setLinkMode('page'); setBannerForm({ ...bannerForm, link_url: LINK_OPTIONS[0].value }); }}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${linkMode === 'page' ? 'bg-orange-50 text-orange-600' : 'text-gray-500 hover:text-gray-700 bg-gray-50'}`}>
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${linkMode === 'page' ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 bg-gray-900'}`}>
                       <LinkIcon size={10} className="inline mr-1" />Store Page
                     </button>
                     <button type="button" onClick={() => { setLinkMode('custom'); setBannerForm({ ...bannerForm, link_url: '' }); }}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${linkMode === 'custom' ? 'bg-orange-50 text-orange-600' : 'text-gray-500 hover:text-gray-700 bg-gray-50'}`}>
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${linkMode === 'custom' ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 bg-gray-900'}`}>
                       Custom URL
                     </button>
                   </div>
                   {linkMode === 'page' ? (
                     <select value={bannerForm.link_url} onChange={e => setBannerForm({ ...bannerForm, link_url: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300 bg-white">
+                      className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300 bg-gray-800">
                       {LINK_OPTIONS.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
                   ) : (
                     <input type="text" value={bannerForm.link_url} onChange={e => setBannerForm({ ...bannerForm, link_url: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300"
+                      className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300"
                       placeholder="/shop or https://example.com" />
                   )}
                   <p className="text-[11px] text-gray-400 mt-1">Where should the banner link to when clicked?</p>
@@ -538,23 +538,23 @@ const BannersView = () => {
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Display Order</label>
                     <input type="number" value={bannerForm.display_order} onChange={e => setBannerForm({ ...bannerForm, display_order: Number(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300" />
+                      className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300" />
                   </div>
                   <div className="flex items-end">
                     <label className="flex items-center gap-2 text-sm cursor-pointer">
                       <input type="checkbox" checked={bannerForm.is_active} onChange={e => setBannerForm({ ...bannerForm, is_active: e.target.checked })}
-                        className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500" />
+                        className="w-4 h-4 text-red-500 border-gray-300 rounded focus:ring-orange-500" />
                       Active
                     </label>
                   </div>
                 </div>
                 <div className="flex gap-2 pt-2">
                   <button type="submit" disabled={saving || uploading}
-                    className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+                    className="flex-1 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
                     {uploading ? (<><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Uploading image...</>) :
                      saving ? 'Saving...' : (editing ? 'Update Banner' : 'Create Banner')}
                   </button>
-                  <button type="button" onClick={resetForm} className="px-4 py-2.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50">Cancel</button>
+                  <button type="button" onClick={resetForm} className="px-4 py-2.5 border border-gray-700 text-gray-600 text-sm rounded-lg hover:bg-gray-900">Cancel</button>
                 </div>
               </form>
             ) : (
@@ -562,24 +562,24 @@ const BannersView = () => {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Title *</label>
                   <input type="text" required value={announcementForm.title} onChange={e => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300" />
+                    className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Content *</label>
                   <textarea required value={announcementForm.content} onChange={e => setAnnouncementForm({ ...announcementForm, content: e.target.value })} rows={4}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300 resize-none" />
+                    className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300 resize-none" />
                 </div>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="checkbox" checked={announcementForm.is_published} onChange={e => setAnnouncementForm({ ...announcementForm, is_published: e.target.checked })}
-                    className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500" />
+                    className="w-4 h-4 text-red-500 border-gray-300 rounded focus:ring-orange-500" />
                   Publish immediately
                 </label>
                 <div className="flex gap-2 pt-2">
                   <button type="submit" disabled={saving}
-                    className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors">
+                    className="flex-1 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors">
                     {saving ? 'Saving...' : (editing ? 'Update' : 'Create')}
                   </button>
-                  <button type="button" onClick={resetForm} className="px-4 py-2.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50">Cancel</button>
+                  <button type="button" onClick={resetForm} className="px-4 py-2.5 border border-gray-700 text-gray-600 text-sm rounded-lg hover:bg-gray-900">Cancel</button>
                 </div>
               </form>
             )}
@@ -590,10 +590,10 @@ const BannersView = () => {
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
-              <h3 className="text-lg font-bold text-gray-900">Delete {deleteType === 'banner' ? 'Banner' : 'Announcement'}</h3>
+              <h3 className="text-lg font-bold text-white">Delete {deleteType === 'banner' ? 'Banner' : 'Announcement'}</h3>
             </div>
             <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete this {deleteType}? This cannot be undone.</p>
             <div className="flex gap-3">
@@ -608,3 +608,5 @@ const BannersView = () => {
 };
 
 export default BannersView;
+
+

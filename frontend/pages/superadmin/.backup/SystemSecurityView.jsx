@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   Shield, Lock, Key, Eye, EyeOff, Settings, Save, Loader2,
   CheckCircle2, AlertTriangle, Clock, Monitor, Globe, UserCog,
@@ -99,7 +99,7 @@ const SystemSecurityView = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-white flex items-center gap-2"><Shield size={22} className="text-red-400" /> System Security</h1>
-          <p className="text-sm text-gray-500 mt-1">Configure lockout policies, password rules, and 2FA settings</p>
+          <p className="text-sm text-gray-400 mt-1">Configure lockout policies, password rules, and 2FA settings</p>
         </div>
         {(tab === 'lockout' || tab === 'password' || tab === '2fa') && (
           <button onClick={handleSave} disabled={saving}
@@ -117,7 +117,7 @@ const SystemSecurityView = () => {
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                tab === t.id ? 'bg-red-600/20 text-red-400' : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                tab === t.id ? 'bg-red-600/20 text-red-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'
               }`}>
               <Icon size={14} /> {t.label}
             </button>
@@ -128,8 +128,8 @@ const SystemSecurityView = () => {
       {/* Account Lockout Policy */}
       {tab === 'lockout' && (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 space-y-6">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Lock size={16} className="text-gray-500" /> Account Lockout Policy</h3>
-          <p className="text-xs text-gray-500">Configure how the system handles failed login attempts</p>
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Lock size={16} className="text-gray-400" /> Account Lockout Policy</h3>
+          <p className="text-xs text-gray-400">Configure how the system handles failed login attempts</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="text-xs text-gray-400 mb-2 block">Max Login Attempts</label>
@@ -156,8 +156,8 @@ const SystemSecurityView = () => {
       {/* Password Rules */}
       {tab === 'password' && (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 space-y-6">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Key size={16} className="text-gray-500" /> Password Requirements</h3>
-          <p className="text-xs text-gray-500">Set minimum password complexity requirements for all users</p>
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Key size={16} className="text-gray-400" /> Password Requirements</h3>
+          <p className="text-xs text-gray-400">Set minimum password complexity requirements for all users</p>
           <div className="space-y-5">
             <div>
               <label className="text-xs text-gray-400 mb-2 block">Minimum Password Length</label>
@@ -173,7 +173,7 @@ const SystemSecurityView = () => {
               <label key={rule.key} className="flex items-center gap-3 cursor-pointer group">
                 <div className={`w-10 h-5 rounded-full transition-colors relative ${config[rule.key] === 'true' ? 'bg-red-600' : 'bg-gray-700'}`}
                   onClick={() => setConfig({ ...config, [rule.key]: config[rule.key] === 'true' ? 'false' : 'true' })}>
-                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${config[rule.key] === 'true' ? 'left-5' : 'left-0.5'}`} />
+                  <div className={`absolute top-0.5 w-4 h-4 bg-gray-800 rounded-full transition-all ${config[rule.key] === 'true' ? 'left-5' : 'left-0.5'}`} />
                 </div>
                 <span className="text-sm text-gray-300 group-hover:text-white transition-colors">{rule.label}</span>
               </label>
@@ -196,8 +196,8 @@ const SystemSecurityView = () => {
       {/* Two-Factor Authentication */}
       {tab === '2fa' && (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 space-y-6">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Shield size={16} className="text-gray-500" /> Two-Factor Authentication</h3>
-          <p className="text-xs text-gray-500">Control whether 2FA is required for system users</p>
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Shield size={16} className="text-gray-400" /> Two-Factor Authentication</h3>
+          <p className="text-xs text-gray-400">Control whether 2FA is required for system users</p>
           <div className="space-y-3">
             {[
               { value: 'disabled', label: 'Disabled', desc: '2FA is not available for any user' },
@@ -217,7 +217,7 @@ const SystemSecurityView = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-white">{opt.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{opt.desc}</p>
                 </div>
               </label>
             ))}
@@ -231,15 +231,15 @@ const SystemSecurityView = () => {
           {/* Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-              <p className="text-xs text-gray-500">Login Attempts (24h)</p>
+              <p className="text-xs text-gray-400">Login Attempts (24h)</p>
               <p className="text-2xl font-bold text-white mt-1">{loginStats.today_total || 0}</p>
             </div>
             <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-              <p className="text-xs text-gray-500">Failed Attempts (24h)</p>
+              <p className="text-xs text-gray-400">Failed Attempts (24h)</p>
               <p className={`text-2xl font-bold mt-1 ${(loginStats.today_failed || 0) > 0 ? 'text-red-400' : 'text-green-400'}`}>{loginStats.today_failed || 0}</p>
             </div>
             <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-              <p className="text-xs text-gray-500">Locked Accounts</p>
+              <p className="text-xs text-gray-400">Locked Accounts</p>
               <p className={`text-2xl font-bold mt-1 ${(loginStats.locked_accounts || 0) > 0 ? 'text-red-400' : 'text-green-400'}`}>{loginStats.locked_accounts || 0}</p>
             </div>
           </div>
@@ -255,7 +255,7 @@ const SystemSecurityView = () => {
                   <option value="success">Successful</option>
                   <option value="failed">Failed</option>
                 </select>
-                <button onClick={refreshLoginData} className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg"><RefreshCw size={14} /></button>
+                <button onClick={refreshLoginData} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg"><RefreshCw size={14} /></button>
               </div>
             </div>
             <div className="max-h-80 overflow-y-auto space-y-1">
@@ -285,7 +285,7 @@ const SystemSecurityView = () => {
           <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
             <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
               <Globe size={16} className="text-red-400" /> Failed Login Clusters
-              <span className="ml-auto text-[10px] text-gray-500">(5+ failed attempts from same IP in 1 hour)</span>
+              <span className="ml-auto text-[10px] text-gray-400">(5+ failed attempts from same IP in 1 hour)</span>
             </h3>
             {(!suspicious.failed_login_clusters || suspicious.failed_login_clusters.length === 0) ? (
               <div className="flex items-center gap-2 py-4 justify-center text-green-400 text-xs">
@@ -297,11 +297,11 @@ const SystemSecurityView = () => {
                   <div key={idx} className="flex items-center justify-between bg-red-900/10 border border-red-800/30 rounded-lg px-4 py-3">
                     <div>
                       <p className="text-sm text-white font-medium">{c.ip_address}</p>
-                      <p className="text-[10px] text-gray-500">Targeted: {(c.targeted_emails || []).join(', ')}</p>
+                      <p className="text-[10px] text-gray-400">Targeted: {(c.targeted_emails || []).join(', ')}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-red-400">{c.attempt_count} attempts</p>
-                      <p className="text-[10px] text-gray-500">{c.last_attempt ? new Date(c.last_attempt).toLocaleString() : ''}</p>
+                      <p className="text-[10px] text-gray-400">{c.last_attempt ? new Date(c.last_attempt).toLocaleString() : ''}</p>
                     </div>
                   </div>
                 ))}
@@ -319,14 +319,14 @@ const SystemSecurityView = () => {
             ) : (
               <div className="space-y-2">
                 {suspicious.locked_accounts.map((a, idx) => (
-                  <div key={idx} className="flex items-center justify-between bg-orange-900/10 border border-orange-800/30 rounded-lg px-4 py-3">
+                  <div key={idx} className="flex items-center justify-between bg-orange-900/10 border border-red-800/30 rounded-lg px-4 py-3">
                     <div>
                       <p className="text-sm text-white font-medium">{a.name}</p>
-                      <p className="text-[10px] text-gray-500">{a.email}</p>
+                      <p className="text-[10px] text-gray-400">{a.email}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-orange-400">{a.login_attempts} failed attempts</p>
-                      <p className="text-[10px] text-gray-500">Locked until: {a.locked_until ? new Date(a.locked_until).toLocaleString() : 'Indefinite'}</p>
+                      <p className="text-[10px] text-gray-400">Locked until: {a.locked_until ? new Date(a.locked_until).toLocaleString() : 'Indefinite'}</p>
                     </div>
                   </div>
                 ))}
@@ -347,7 +347,7 @@ const SystemSecurityView = () => {
                   <div key={idx} className="flex items-center justify-between bg-yellow-900/10 border border-yellow-800/30 rounded-lg px-4 py-3">
                     <div>
                       <p className="text-sm text-white font-medium">{b.name || 'Unknown'}</p>
-                      <p className="text-[10px] text-gray-500">Action: {b.action}</p>
+                      <p className="text-[10px] text-gray-400">Action: {b.action}</p>
                     </div>
                     <p className="text-sm font-bold text-yellow-400">{b.op_count} operations</p>
                   </div>
@@ -362,3 +362,5 @@ const SystemSecurityView = () => {
 };
 
 export default SystemSecurityView;
+
+

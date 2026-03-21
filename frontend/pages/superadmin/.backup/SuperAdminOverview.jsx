@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   Users, Shield, Activity, Database, AlertTriangle, CheckCircle2,
   TrendingUp, Server, Lock, Clock, Eye, UserCog, KeyRound,
@@ -74,7 +74,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
     blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
     red: 'bg-red-500/10 text-red-400 border-red-500/20',
     green: 'bg-green-500/10 text-green-400 border-green-500/20',
-    orange: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+    orange: 'bg-red-500/100/10 text-orange-400 border-red-500/20',
   };
 
   const roleLabels = { super_admin: 'Super Admin', owner: 'Owner', store_staff: 'Store Staff', customer: 'Customer', admin: 'Admin', cashier: 'Cashier' };
@@ -85,7 +85,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-white flex items-center gap-2"><KeyRound size={22} className="text-red-400" /> System Overview</h1>
-        <p className="text-sm text-gray-500 mt-1">Monitor system health, security, and user activity</p>
+        <p className="text-sm text-gray-400 mt-1">Monitor system health, security, and user activity</p>
       </div>
 
       {/* KPI Cards */}
@@ -109,12 +109,12 @@ const SuperAdminOverview = ({ onNavigate }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Users by Role */}
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><UserCog size={16} className="text-gray-500" /> Users by Role</h3>
+          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><UserCog size={16} className="text-gray-400" /> Users by Role</h3>
           <div className="space-y-3">
             {Object.entries(stats.usersByRole).sort((a, b) => b[1] - a[1]).map(([role, count]) => (
               <div key={role} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${roleColors[role]?.replace('text-', 'bg-') || 'bg-gray-500'}`} />
+                  <div className={`w-2 h-2 rounded-full ${roleColors[role]?.replace('text-', 'bg-') || 'bg-gray-9000'}`} />
                   <span className="text-xs text-gray-400">{roleLabels[role] || role}</span>
                 </div>
                 <span className={`text-sm font-bold ${roleColors[role] || 'text-gray-400'}`}>{count}</span>
@@ -126,7 +126,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
 
         {/* System Health */}
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Server size={16} className="text-gray-500" /> System Health</h3>
+          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Server size={16} className="text-gray-400" /> System Health</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">Database</span>
@@ -155,7 +155,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
 
         {/* Quick Actions */}
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Settings size={16} className="text-gray-500" /> Quick Actions</h3>
+          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Settings size={16} className="text-gray-400" /> Quick Actions</h3>
           <div className="space-y-2">
             {[
               { label: 'Manage Users', icon: Users, view: 'users' },
@@ -181,8 +181,8 @@ const SuperAdminOverview = ({ onNavigate }) => {
       {/* Recent Activity */}
       <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Activity size={16} className="text-gray-500" /> Recent System Activity</h3>
-          <button onClick={() => onNavigate('logs')} className="text-xs text-red-400 hover:text-red-300 font-medium">View All →</button>
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Activity size={16} className="text-gray-400" /> Recent System Activity</h3>
+          <button onClick={() => onNavigate('logs')} className="text-xs text-red-400 hover:text-red-300 font-medium">View All â†’</button>
         </div>
         {stats.recentActivity.length === 0 ? (
           <p className="text-xs text-gray-600 text-center py-8">No recent activity</p>
@@ -191,7 +191,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
             {stats.recentActivity.map((log, idx) => (
               <div key={log.id || idx} className="flex items-start gap-3 py-2 border-b border-gray-800 last:border-0">
                 <div className="w-6 h-6 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Activity size={12} className="text-gray-500" />
+                  <Activity size={12} className="text-gray-400" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-300 truncate">{log.action?.replace(/_/g, ' ')}</p>
@@ -210,3 +210,5 @@ const SuperAdminOverview = ({ onNavigate }) => {
 };
 
 export default SuperAdminOverview;
+
+

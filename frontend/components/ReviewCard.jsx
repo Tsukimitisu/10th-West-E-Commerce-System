@@ -7,7 +7,7 @@ const ReviewCard = ({ review }) => {
   const timeAgo = getTimeAgo(date);
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-5 hover:border-gray-200 transition-colors">
+    <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-gray-700 transition-colors">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-sm font-bold text-gray-600">
@@ -15,7 +15,7 @@ const ReviewCard = ({ review }) => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 text-sm">{review.user_name}</span>
+              <span className="font-medium text-white text-sm">{review.user_name}</span>
               <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
                 <CheckCircle size={10} /> Verified
               </span>
@@ -47,3 +47,5 @@ function getTimeAgo(date) {
 }
 
 export default ReviewCard;
+
+

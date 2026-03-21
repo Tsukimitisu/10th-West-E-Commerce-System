@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { X, ChevronDown, ChevronUp, SlidersHorizontal, Shapes, Tag, WalletCards, Boxes, Sparkles } from 'lucide-react';
 
 const FilterSidebar = ({
@@ -26,30 +26,30 @@ const FilterSidebar = ({
   };
 
   const activePill = 'bg-[#1f2937] text-white border-[#1f2937] shadow-sm';
-  const idlePill = 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50';
+  const idlePill = 'bg-gray-800 text-gray-700 border-gray-700 hover:border-gray-300 hover:bg-gray-900';
 
   const content = (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-[#fff8f0] via-white to-[#fff4eb] p-4">
+      <div className="rounded-2xl border border-gray-700 bg-gradient-to-br from-[#fff8f0] via-white to-[#fff4eb] p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-[#f97316] text-white flex items-center justify-center">
               <SlidersHorizontal size={16} />
             </div>
             <div>
-              <p className="font-display font-semibold text-gray-900 leading-tight">Filters</p>
-              <p className="text-[11px] text-gray-500">Refine your shop results</p>
+              <p className="font-display font-semibold text-white leading-tight">Filters</p>
+              <p className="text-[11px] text-gray-400">Refine your shop results</p>
             </div>
           </div>
           {onMobileClose && (
-            <button onClick={onMobileClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white lg:hidden">
+            <button onClick={onMobileClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-800 lg:hidden">
               <X size={18} />
             </button>
           )}
         </div>
         <div className="mt-3 flex items-center justify-between">
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white border border-orange-100 text-xs text-gray-600">
-            <Sparkles size={12} className="text-orange-500" />
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-gray-800 border border-red-100 text-xs text-gray-600">
+            <Sparkles size={12} className="text-red-500" />
             <span>{activeFilterCount} active</span>
           </div>
           <button
@@ -64,7 +64,7 @@ const FilterSidebar = ({
 
       <FilterSection
         title="Category"
-        icon={<Shapes size={15} className="text-orange-500" />}
+        icon={<Shapes size={15} className="text-red-500" />}
         open={openSections.category}
         onToggle={() => toggleSection('category')}
       >
@@ -90,7 +90,7 @@ const FilterSidebar = ({
       {brands.length > 0 && (
         <FilterSection
           title="Brand"
-          icon={<Tag size={15} className="text-orange-500" />}
+          icon={<Tag size={15} className="text-red-500" />}
           open={openSections.brand}
           onToggle={() => toggleSection('brand')}
         >
@@ -116,14 +116,14 @@ const FilterSidebar = ({
 
       <FilterSection
         title="Price Range"
-        icon={<WalletCards size={15} className="text-orange-500" />}
+        icon={<WalletCards size={15} className="text-red-500" />}
         open={openSections.price}
         onToggle={() => toggleSection('price')}
       >
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] text-gray-500 mb-1 block">Min (PHP)</label>
+              <label className="text-[11px] text-gray-400 mb-1 block">Min (PHP)</label>
               <input
                 type="number"
                 min={0}
@@ -138,11 +138,11 @@ const FilterSidebar = ({
                   const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
                   onPriceChange([val, priceRange[1]]);
                 }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-200"
+                className="w-full px-3 py-2 border border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-red-200"
               />
             </div>
             <div>
-              <label className="text-[11px] text-gray-500 mb-1 block">Max (PHP)</label>
+              <label className="text-[11px] text-gray-400 mb-1 block">Max (PHP)</label>
               <input
                 type="number"
                 min={0}
@@ -157,17 +157,17 @@ const FilterSidebar = ({
                   const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
                   onPriceChange([priceRange[0], val]);
                 }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-200"
+                className="w-full px-3 py-2 border border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-red-200"
               />
             </div>
           </div>
-          <p className="text-[11px] text-gray-500">Set your ideal budget range</p>
+          <p className="text-[11px] text-gray-400">Set your ideal budget range</p>
         </div>
       </FilterSection>
 
       <FilterSection
         title="Availability"
-        icon={<Boxes size={15} className="text-orange-500" />}
+        icon={<Boxes size={15} className="text-red-500" />}
         open={openSections.stock}
         onToggle={() => toggleSection('stock')}
       >
@@ -176,19 +176,19 @@ const FilterSidebar = ({
             type="checkbox"
             checked={inStockOnly}
             onChange={(e) => onStockChange(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+            className="w-4 h-4 rounded border-gray-300 text-red-500 focus:ring-orange-500"
           />
           <span className="text-sm text-gray-700">Show in-stock items only</span>
         </label>
       </FilterSection>
 
       {onMobileClose && (
-        <div className="lg:hidden sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-200 -mx-4 px-4 pt-3 pb-4 mt-2">
+        <div className="lg:hidden sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-700 -mx-4 px-4 pt-3 pb-4 mt-2">
           <div className="flex gap-2">
             <button
               onClick={onClearAll}
               disabled={activeFilterCount === 0}
-              className="flex-1 h-11 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:text-gray-300 disabled:bg-gray-50"
+              className="flex-1 h-11 rounded-xl border border-gray-700 text-sm font-medium text-gray-700 hover:bg-gray-900 disabled:text-gray-300 disabled:bg-gray-900"
             >
               Reset
             </button>
@@ -208,13 +208,13 @@ const FilterSidebar = ({
     return (
       <>
         <div className={`${showDesktop ? 'hidden lg:block' : 'hidden'} w-64 flex-shrink-0`}>
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 sticky top-24 shadow-sm">{content}</div>
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sticky top-24 shadow-sm">{content}</div>
         </div>
 
         {isMobileOpen && (
           <div className="fixed inset-0 z-[100] lg:hidden">
             <div className="absolute inset-0 bg-black/45" onClick={onMobileClose} />
-            <div className="absolute inset-x-0 bottom-0 max-h-[88vh] bg-white rounded-t-3xl shadow-2xl p-4 overflow-y-auto animate-fade-in">
+            <div className="absolute inset-x-0 bottom-0 max-h-[88vh] bg-gray-800 rounded-t-3xl shadow-2xl p-4 overflow-y-auto animate-fade-in">
               <div className="w-10 h-1.5 rounded-full bg-gray-300 mx-auto mb-3" />
               {content}
             </div>
@@ -225,15 +225,15 @@ const FilterSidebar = ({
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+    <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 shadow-sm">
       {content}
     </div>
   );
 };
 
 const FilterSection = ({ title, icon, open, onToggle, children }) => (
-  <div className="rounded-2xl border border-gray-200 bg-white px-3 py-2.5">
-    <button onClick={onToggle} className="flex items-center justify-between w-full py-1.5 text-sm font-semibold text-gray-900">
+  <div className="rounded-2xl border border-gray-700 bg-gray-800 px-3 py-2.5">
+    <button onClick={onToggle} className="flex items-center justify-between w-full py-1.5 text-sm font-semibold text-white">
       <span className="inline-flex items-center gap-2">
         {icon}
         {title}
@@ -245,3 +245,5 @@ const FilterSection = ({ title, icon, open, onToggle, children }) => (
 );
 
 export default FilterSidebar;
+
+

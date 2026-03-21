@@ -182,7 +182,7 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white font-sans overflow-x-hidden text-gray-900 relative">
+    <div className="min-h-screen bg-gray-900 font-sans overflow-x-hidden text-white relative">
       
       {/* 1. FLOATING TOGGLE BUTTON */}
       <div className="fixed sm:top-1/2 bottom-6 right-4 sm:right-auto sm:left-0 z-40 transform sm:-translate-y-1/2 flex justify-center">
@@ -262,7 +262,7 @@ const Home = () => {
                   <input
                     type="text"
                     placeholder="Search parts..."
-                    className="w-full p-3.5 bg-gray-800/70 border border-orange-400/30 rounded-lg text-white font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:bg-gray-800 transition-all duration-200 hover:border-orange-400/50 text-sm pl-10"
+                    className="w-full p-3.5 bg-gray-800/70 border border-red-400/30 rounded-lg text-white font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:bg-gray-800 transition-all duration-200 hover:border-red-400/50 text-sm pl-10"
                   />
                   <motion.button 
                     whileHover={{ scale: 1.1 }}
@@ -274,7 +274,7 @@ const Home = () => {
                 </div>
                 
                 <div className="mt-8 pt-8 border-t border-zinc-800">
-                  <p className="text-xs text-gray-500 mb-4">Popular Searches:</p>
+                  <p className="text-xs text-gray-400 mb-4">Popular Searches:</p>
                   <div className="flex flex-wrap gap-2">
                       {['Brakes', 'Exhaust', 'Tires', 'Oil'].map(tag => (
                           <span key={tag} className="px-3 py-1 bg-zinc-800 text-xs rounded-full text-gray-300 hover:text-white hover:bg-zinc-700 cursor-pointer">{tag}</span>
@@ -402,7 +402,7 @@ const Home = () => {
       </section>
 
       {/* --- SERVICE STRIP --- */}
-      <div className="bg-zinc-100 py-12 border-b border-gray-200">
+      <div className="bg-zinc-100 py-12 border-b border-gray-700">
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
@@ -412,12 +412,12 @@ const Home = () => {
               { icon: Headphones, title: "Expert Support", sub: "Mon-Sat, 9am-6pm" },
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white border border-gray-200 rounded-full flex items-center justify-center text-red-600 shadow-sm">
+                <div className="w-12 h-12 bg-gray-800 border border-gray-700 rounded-full flex items-center justify-center text-red-600 shadow-sm">
                   <item.icon size={24} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 uppercase text-sm">{item.title}</h3>
-                  <p className="text-xs text-gray-500">{item.sub}</p>
+                  <h3 className="font-bold text-white uppercase text-sm">{item.title}</h3>
+                  <p className="text-xs text-gray-400">{item.sub}</p>
                 </div>
               </div>
             ))}
@@ -427,11 +427,11 @@ const Home = () => {
 
       {/* --- CATEGORIES --- */}
       {categories.length > 0 && (
-        <section className="py-16 md:py-24 bg-white">
+        <section className="py-16 md:py-24 bg-gray-800">
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex justify-between items-end mb-10">
               <div>
-                <h2 className="text-3xl md:text-4xl font-black uppercase italic text-gray-900">Shop By <span className="text-red-600">Category</span></h2>
+                <h2 className="text-3xl md:text-4xl font-black uppercase italic text-white">Shop By <span className="text-red-600">Category</span></h2>
                 <div className="h-1 w-20 bg-red-600 mt-2 skew-x-[-20deg]"></div>
               </div>
               <Link to="/shop" className="hidden md:flex items-center gap-2 font-bold hover:text-red-600 transition-colors">
@@ -451,17 +451,17 @@ const Home = () => {
                   key={cat.id} 
                   variants={fadeIn}
                   whileHover={{ y: -5 }}
-                  className="group relative h-40 bg-zinc-50 border border-gray-200 rounded overflow-hidden hover:border-red-600 transition-colors cursor-pointer"
+                  className="group relative h-40 bg-zinc-50 border border-gray-700 rounded overflow-hidden hover:border-red-600 transition-colors cursor-pointer"
                 >
                   <Link to={`/shop?category=${cat.id}`} className="block h-full w-full p-4 flex flex-col justify-between">
-                    <div className="self-end p-2 bg-white rounded-full text-gray-400 group-hover:text-red-600 shadow-sm transition-colors">
+                    <div className="self-end p-2 bg-gray-800 rounded-full text-gray-400 group-hover:text-red-600 shadow-sm transition-colors">
                       <ChevronRight size={16} />
                     </div>
                     <div>
                       <h3 className="font-bold uppercase text-lg leading-tight group-hover:text-red-600 transition-colors line-clamp-2">
                         {cat.name}
                       </h3>
-                      <span className="text-xs text-gray-500 mt-1 block">View Parts</span>
+                      <span className="text-xs text-gray-400 mt-1 block">View Parts</span>
                     </div>
                     <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity transform rotate-12">
                       <Wrench size={100} />
@@ -476,14 +476,14 @@ const Home = () => {
 
       {/* --- FEATURED PRODUCTS --- */}
       {featured.length > 0 && (
-        <section className="py-16 md:py-24 bg-gray-50">
+        <section className="py-16 md:py-24 bg-gray-900">
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex items-center justify-between mb-10">
               <div>
                 <span className="text-red-600 font-bold uppercase tracking-widest text-sm">Hand-picked</span>
-                <h2 className="text-3xl md:text-4xl font-black uppercase italic text-gray-900 mt-2">Featured Products</h2>
+                <h2 className="text-3xl md:text-4xl font-black uppercase italic text-white mt-2">Featured Products</h2>
               </div>
-              <Link to="/shop" className="text-sm font-bold text-gray-900 hover:text-red-600 flex items-center gap-1 transition-colors">
+              <Link to="/shop" className="text-sm font-bold text-white hover:text-red-600 flex items-center gap-1 transition-colors">
                 See All <ArrowRight size={16} />
               </Link>
             </div>
@@ -496,7 +496,7 @@ const Home = () => {
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
             >
               {featured.map(p => (
-                <motion.div key={p.id} variants={fadeIn} className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-xl transition-shadow">
+                <motion.div key={p.id} variants={fadeIn} className="bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-700 hover:shadow-xl transition-shadow">
                   <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
                 </motion.div>
               ))}
@@ -506,7 +506,7 @@ const Home = () => {
       )}
 
       {/* --- PROMO BANNER --- */}
-      <section className="py-12 md:py-16 bg-white">
+      <section className="py-12 md:py-16 bg-gray-900 border-t border-gray-800">
         <div className="max-w-7xl mx-auto px-4">
           <div className="bg-gradient-to-r from-zinc-900 to-zinc-800 border-l-8 border-red-600 rounded-r-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden shadow-2xl">
             <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=1200&h=400&fit=crop')] bg-cover bg-center opacity-10" />
@@ -524,11 +524,11 @@ const Home = () => {
 
       {/* --- BEST SELLERS --- */}
       {bestSellers.length > 0 && (
-        <section className="py-16 md:py-24 bg-gray-50">
+        <section className="py-16 md:py-24 bg-gray-900">
           <div className="max-w-7xl mx-auto px-4">
             <div className="text-center mb-12">
               <span className="text-red-600 font-bold uppercase tracking-widest text-sm">Top Rated</span>
-              <h2 className="text-3xl md:text-4xl font-black uppercase text-gray-900 mt-2">Best Sellers</h2>
+              <h2 className="text-3xl md:text-4xl font-black uppercase text-white mt-2">Best Sellers</h2>
               <div className="w-24 h-1 bg-red-600 mx-auto mt-4 skew-x-[-20deg]"></div>
             </div>
             
@@ -540,7 +540,7 @@ const Home = () => {
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
             >
               {bestSellers.map(p => (
-                <motion.div key={p.id} variants={fadeIn} className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-xl transition-shadow">
+                <motion.div key={p.id} variants={fadeIn} className="bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-700 hover:shadow-xl transition-shadow">
                   <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
                 </motion.div>
               ))}
@@ -568,7 +568,7 @@ const Home = () => {
               <div className="md:w-3/4 w-full">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {newArrivals.map((p) => (
-                    <div key={p.id} className="bg-white rounded p-3 text-gray-900">
+                    <div key={p.id} className="bg-gray-800 rounded p-3 text-white">
                       <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
                     </div>
                   ))}
@@ -581,16 +581,16 @@ const Home = () => {
 
       {/* --- RECENTLY VIEWED --- */}
       {recentlyViewed.length > 0 && (
-        <section className="py-16 bg-white border-t border-gray-100">
+        <section className="py-16 bg-gray-800 border-t border-gray-700">
           <div className="max-w-7xl mx-auto px-4">
             <div className="mb-10">
-              <h2 className="text-2xl font-black uppercase text-gray-900">Recently Viewed</h2>
+              <h2 className="text-2xl font-black uppercase text-white">Recently Viewed</h2>
               <div className="h-1 w-16 bg-red-600 mt-2 skew-x-[-20deg]"></div>
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
               {recentlyViewed.map(p => (
-                <div key={p.id} className="bg-gray-50 rounded p-3 shadow-sm border border-gray-100">
+                <div key={p.id} className="bg-gray-900 rounded p-3 shadow-sm border border-gray-700">
                   <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
                 </div>
               ))}
@@ -603,3 +603,4 @@ const Home = () => {
 };
 
 export default Home;
+

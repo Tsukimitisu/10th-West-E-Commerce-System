@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   Settings, Store, CreditCard, Truck, Mail, Globe,
   Save, Loader2, CheckCircle2, DollarSign, Percent, Clock, Package
@@ -75,7 +75,7 @@ const SystemConfigView = () => {
     <label className="flex items-center gap-3 cursor-pointer group">
       <div className={`w-10 h-5 rounded-full transition-colors relative ${value === 'true' ? 'bg-red-600' : 'bg-gray-700'}`}
         onClick={onChange}>
-        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${value === 'true' ? 'left-5' : 'left-0.5'}`} />
+        <div className={`absolute top-0.5 w-4 h-4 bg-gray-800 rounded-full transition-all ${value === 'true' ? 'left-5' : 'left-0.5'}`} />
       </div>
       <span className="text-sm text-gray-300 group-hover:text-white">{label}</span>
     </label>
@@ -98,7 +98,7 @@ const SystemConfigView = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-white flex items-center gap-2"><Settings size={22} className="text-red-400" /> System Configuration</h1>
-          <p className="text-sm text-gray-500 mt-1">Configure tax rates, currency, payment gateways, and email services</p>
+          <p className="text-sm text-gray-400 mt-1">Configure tax rates, currency, payment gateways, and email services</p>
         </div>
         <button onClick={handleSave} disabled={saving}
           className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
@@ -114,7 +114,7 @@ const SystemConfigView = () => {
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                tab === t.id ? 'bg-red-600/20 text-red-400' : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                tab === t.id ? 'bg-red-600/20 text-red-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'
               }`}>
               <Icon size={14} /> {t.label}
             </button>
@@ -125,7 +125,7 @@ const SystemConfigView = () => {
       {/* Store Info */}
       {tab === 'store' && (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <h3 className="text-sm font-semibold text-white mb-5 flex items-center gap-2"><Store size={16} className="text-gray-500" /> Store Information</h3>
+          <h3 className="text-sm font-semibold text-white mb-5 flex items-center gap-2"><Store size={16} className="text-gray-400" /> Store Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <Input label="Store Name" value={store.name} onChange={(e) => setStore({ ...store, name: e.target.value })} placeholder="10th West Moto" />
             <Input label="Tagline" value={store.tagline} onChange={(e) => setStore({ ...store, tagline: e.target.value })} placeholder="Motorcycle Parts & Accessories" />
@@ -163,7 +163,7 @@ const SystemConfigView = () => {
       {/* Tax Rates */}
       {tab === 'tax' && (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <h3 className="text-sm font-semibold text-white mb-5 flex items-center gap-2"><Percent size={16} className="text-gray-500" /> Tax Configuration</h3>
+          <h3 className="text-sm font-semibold text-white mb-5 flex items-center gap-2"><Percent size={16} className="text-gray-400" /> Tax Configuration</h3>
           <div className="space-y-5">
             <Toggle value={tax.enabled} onChange={() => setTax({ ...tax, enabled: tax.enabled === 'true' ? 'false' : 'true' })} label="Enable tax on orders" />
             {tax.enabled === 'true' && (
@@ -182,11 +182,11 @@ const SystemConfigView = () => {
       {/* Shipping */}
       {tab === 'shipping' && (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-          <h3 className="text-sm font-semibold text-white mb-5 flex items-center gap-2"><Truck size={16} className="text-gray-500" /> Shipping Configuration</h3>
+          <h3 className="text-sm font-semibold text-white mb-5 flex items-center gap-2"><Truck size={16} className="text-gray-400" /> Shipping Configuration</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <Input label="Free Shipping Threshold (₱)" value={shipping.free_threshold} onChange={(e) => setShipping({ ...shipping, free_threshold: e.target.value })} placeholder="3000" type="number" hint="Orders above this amount get free shipping" />
-            <Input label="Standard Flat Rate (₱)" value={shipping.flat_rate} onChange={(e) => setShipping({ ...shipping, flat_rate: e.target.value })} placeholder="150" type="number" />
-            <Input label="Express Rate (₱)" value={shipping.express_rate} onChange={(e) => setShipping({ ...shipping, express_rate: e.target.value })} placeholder="350" type="number" />
+            <Input label="Free Shipping Threshold (â‚±)" value={shipping.free_threshold} onChange={(e) => setShipping({ ...shipping, free_threshold: e.target.value })} placeholder="3000" type="number" hint="Orders above this amount get free shipping" />
+            <Input label="Standard Flat Rate (â‚±)" value={shipping.flat_rate} onChange={(e) => setShipping({ ...shipping, flat_rate: e.target.value })} placeholder="150" type="number" />
+            <Input label="Express Rate (â‚±)" value={shipping.express_rate} onChange={(e) => setShipping({ ...shipping, express_rate: e.target.value })} placeholder="350" type="number" />
             <div className="flex items-end pb-1">
               <Toggle value={shipping.enable_pickup} onChange={() => setShipping({ ...shipping, enable_pickup: shipping.enable_pickup === 'true' ? 'false' : 'true' })} label="Enable store pickup option" />
             </div>
@@ -197,7 +197,7 @@ const SystemConfigView = () => {
       {/* Payment Gateways */}
       {tab === 'payment' && (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 space-y-6">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><CreditCard size={16} className="text-gray-500" /> Payment Methods</h3>
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><CreditCard size={16} className="text-gray-400" /> Payment Methods</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               { key: 'cash_enabled', label: 'Cash Payment', desc: 'Accept cash for POS and COD' },
@@ -207,7 +207,7 @@ const SystemConfigView = () => {
             ].map(pm => (
               <div key={pm.key} className={`p-4 rounded-xl border transition-all ${payment[pm.key] === 'true' ? 'border-red-500/30 bg-red-500/5' : 'border-gray-700 bg-gray-800'}`}>
                 <Toggle value={payment[pm.key]} onChange={() => setPayment({ ...payment, [pm.key]: payment[pm.key] === 'true' ? 'false' : 'true' })} label={pm.label} />
-                <p className="text-[10px] text-gray-500 mt-1 ml-13">{pm.desc}</p>
+                <p className="text-[10px] text-gray-400 mt-1 ml-13">{pm.desc}</p>
               </div>
             ))}
           </div>
@@ -224,7 +224,7 @@ const SystemConfigView = () => {
       {/* Email Services */}
       {tab === 'email' && (
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 space-y-6">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Mail size={16} className="text-gray-500" /> Email Configuration</h3>
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Mail size={16} className="text-gray-400" /> Email Configuration</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input label="From Name" value={email.from_name} onChange={(e) => setEmail({ ...email, from_name: e.target.value })} placeholder="10th West Moto" />
             <Input label="From Email" value={email.from_email} onChange={(e) => setEmail({ ...email, from_email: e.target.value })} placeholder="noreply@10thwestmoto.com" type="email" />
@@ -245,7 +245,7 @@ const SystemConfigView = () => {
                   </div>
                   <div className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${email[em.key] === 'true' ? 'bg-red-600' : 'bg-gray-700'}`}
                     onClick={() => setEmail({ ...email, [em.key]: email[em.key] === 'true' ? 'false' : 'true' })}>
-                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${email[em.key] === 'true' ? 'left-5' : 'left-0.5'}`} />
+                    <div className={`absolute top-0.5 w-4 h-4 bg-gray-800 rounded-full transition-all ${email[em.key] === 'true' ? 'left-5' : 'left-0.5'}`} />
                   </div>
                 </div>
               ))}
@@ -258,3 +258,5 @@ const SystemConfigView = () => {
 };
 
 export default SystemConfigView;
+
+

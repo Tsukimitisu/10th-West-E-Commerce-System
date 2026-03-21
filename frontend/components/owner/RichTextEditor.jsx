@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+﻿import React, { useRef, useCallback } from 'react';
 import { Bold, Italic, Heading1, Heading2, List, ListOrdered, Minus, Undo2, Redo2 } from 'lucide-react';
 
 const ToolButton = ({ onClick, active, title, children }) => (
@@ -7,7 +7,7 @@ const ToolButton = ({ onClick, active, title, children }) => (
     onMouseDown={(e) => { e.preventDefault(); onClick(); }}
     title={title}
     className={`p-1.5 rounded-md transition-colors ${
-      active ? 'bg-orange-100 text-orange-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+      active ? 'bg-red-500/20 text-orange-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700'
     }`}
   >
     {children}
@@ -46,9 +46,9 @@ const RichTextEditor = ({ value, onChange, placeholder, minHeight = '300px' }) =
   }, [onChange]);
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-300">
+    <div className="border border-gray-700 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-red-300">
       {/* Toolbar */}
-      <div className="flex items-center gap-0.5 px-2 py-1.5 bg-gray-50 border-b border-gray-200 flex-wrap">
+      <div className="flex items-center gap-0.5 px-2 py-1.5 bg-gray-900 border-b border-gray-700 flex-wrap">
         <ToolButton onClick={() => exec('bold')} title="Bold">
           <Bold size={15} />
         </ToolButton>
@@ -100,10 +100,10 @@ const RichTextEditor = ({ value, onChange, placeholder, minHeight = '300px' }) =
         data-placeholder={placeholder}
         className="px-3 py-2 text-sm text-gray-800 outline-none overflow-y-auto prose prose-sm max-w-none
           [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-gray-400
-          [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-gray-900 [&_h2]:mt-4 [&_h2]:mb-2
+          [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-white [&_h2]:mt-4 [&_h2]:mb-2
           [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-gray-800 [&_h3]:mt-3 [&_h3]:mb-1
           [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
-          [&_li]:mb-1 [&_strong]:font-semibold [&_hr]:my-3 [&_hr]:border-gray-200"
+          [&_li]:mb-1 [&_strong]:font-semibold [&_hr]:my-3 [&_hr]:border-gray-700"
         style={{ minHeight }}
       />
     </div>
@@ -111,3 +111,5 @@ const RichTextEditor = ({ value, onChange, placeholder, minHeight = '300px' }) =
 };
 
 export default RichTextEditor;
+
+

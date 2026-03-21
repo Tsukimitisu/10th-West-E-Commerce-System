@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Newspaper, Save, Plus, Edit3, Trash2, X, FileText, HelpCircle, Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { getPolicy, updatePolicy, getFAQs, createFAQ, updateFAQ, deleteFAQ } from '../../services/api';
 import RichTextEditor from '../../components/owner/RichTextEditor';
@@ -10,7 +10,7 @@ const POLICY_TYPES = [
   { key: 'shipping_policy', label: 'Shipping Policy' },
 ];
 
-const inputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300';
+const inputClass = 'w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300';
 
 const ContentView = () => {
   const [mainTab, setMainTab] = useState('policies');
@@ -153,14 +153,14 @@ const ContentView = () => {
     <div className="space-y-4">
       {/* Header */}
       <div>
-        <h1 className="font-display font-bold text-xl text-gray-900 flex items-center gap-2">
+        <h1 className="font-display font-bold text-xl text-white flex items-center gap-2">
           <Newspaper size={22} /> Content Management
         </h1>
-        <p className="text-sm text-gray-500">Manage store policies and frequently asked questions</p>
+        <p className="text-sm text-gray-400">Manage store policies and frequently asked questions</p>
       </div>
 
       {/* Main Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-700">
         <div className="flex gap-0">
           {mainTabs.map((t) => (
             <button
@@ -168,8 +168,8 @@ const ContentView = () => {
               onClick={() => setMainTab(t.id)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
                 mainTab === t.id
-                  ? 'text-orange-600 border-orange-500'
-                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+                  ? 'text-orange-600 border-red-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               <t.icon size={16} />
@@ -183,15 +183,15 @@ const ContentView = () => {
       {mainTab === 'policies' && (
         <div className="space-y-4">
           {/* Policy Sub-Tabs */}
-          <div className="flex gap-1 bg-white rounded-lg border border-gray-100 p-1 w-fit flex-wrap">
+          <div className="flex gap-1 bg-gray-800 rounded-lg border border-gray-700 p-1 w-fit flex-wrap">
             {POLICY_TYPES.map((pt) => (
               <button
                 key={pt.key}
                 onClick={() => setPolicyTab(pt.key)}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
                   policyTab === pt.key
-                    ? 'bg-orange-50 text-orange-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-red-500/10 text-orange-600'
+                    : 'text-gray-400 hover:text-gray-700'
                 }`}
               >
                 {pt.label}
@@ -200,11 +200,11 @@ const ContentView = () => {
           </div>
 
           {/* Policy Editor */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <div className="bg-gray-800 rounded-xl shadow-sm border border-gray-700 p-5">
             {policyLoading ? (
               <div className="flex items-center justify-center py-16">
-                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-2" />
-                <span className="text-sm text-gray-500">Loading policy...</span>
+                <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin mr-2" />
+                <span className="text-sm text-gray-400">Loading policy...</span>
               </div>
             ) : (
               <div className="space-y-4">
@@ -249,7 +249,7 @@ const ContentView = () => {
                     className={`px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 ${
                       policySaved
                         ? 'bg-green-600 text-white'
-                        : 'bg-orange-500 hover:bg-orange-600 text-white'
+                        : 'bg-red-500/100 hover:bg-red-600 text-white'
                     }`}
                   >
                     {policySaving ? (
@@ -285,10 +285,10 @@ const ContentView = () => {
         <div className="space-y-4">
           {/* Actions */}
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">{faqs.length} FAQ{faqs.length !== 1 ? 's' : ''} total</p>
+            <p className="text-sm text-gray-400">{faqs.length} FAQ{faqs.length !== 1 ? 's' : ''} total</p>
             <button
               onClick={openAddFaq}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
             >
               <Plus size={14} />
               Add New FAQ
@@ -296,21 +296,21 @@ const ContentView = () => {
           </div>
 
           {/* FAQ List */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="bg-gray-800 rounded-xl shadow-sm border border-gray-700">
             {faqLoading ? (
               <div className="flex items-center justify-center py-16">
-                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-2" />
-                <span className="text-sm text-gray-500">Loading FAQs...</span>
+                <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin mr-2" />
+                <span className="text-sm text-gray-400">Loading FAQs...</span>
               </div>
             ) : faqError ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <AlertCircle size={32} className="text-gray-300 mb-2" />
-                <p className="text-sm text-gray-500">{faqError}</p>
+                <p className="text-sm text-gray-400">{faqError}</p>
               </div>
             ) : faqs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <HelpCircle size={32} className="text-gray-300 mb-2" />
-                <p className="text-sm text-gray-500">No FAQs yet. Add your first one!</p>
+                <p className="text-sm text-gray-400">No FAQs yet. Add your first one!</p>
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
@@ -319,15 +319,15 @@ const ContentView = () => {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <p className="text-sm font-semibold text-gray-900">{faq.question}</p>
+                          <p className="text-sm font-semibold text-white">{faq.question}</p>
                         </div>
-                        <p className="text-sm text-gray-500 line-clamp-2">{faq.answer}</p>
+                        <p className="text-sm text-gray-400 line-clamp-2">{faq.answer}</p>
                         <div className="flex items-center gap-3 mt-2">
                           <span
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                               faq.is_active !== false
                                 ? 'bg-green-50 text-green-700 border border-green-200'
-                                : 'bg-gray-50 text-gray-500 border border-gray-200'
+                                : 'bg-gray-900 text-gray-400 border border-gray-700'
                             }`}
                           >
                             {faq.is_active !== false ? (
@@ -344,7 +344,7 @@ const ContentView = () => {
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button
                           onClick={() => openEditFaq(faq)}
-                          className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
+                          className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                           title="Edit"
                         >
                           <Edit3 size={14} />
@@ -387,9 +387,9 @@ const ContentView = () => {
       {faqModalOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4">
           <div className="fixed inset-0 bg-black/40" onClick={() => setFaqModalOpen(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col animate-fade-in">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-              <h3 className="font-display font-semibold text-gray-900">
+          <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col animate-fade-in">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700 flex-shrink-0">
+              <h3 className="font-display font-semibold text-white">
                 {editingFaq ? 'Edit FAQ' : 'Add New FAQ'}
               </h3>
               <button
@@ -403,7 +403,7 @@ const ContentView = () => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Question <span className="text-orange-500">*</span>
+                    Question <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -417,7 +417,7 @@ const ContentView = () => {
 
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Answer <span className="text-orange-500">*</span>
+                    Answer <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     value={faqForm.answer}
@@ -445,7 +445,7 @@ const ContentView = () => {
                         type="checkbox"
                         checked={faqForm.is_active}
                         onChange={(e) => setFaqForm((f) => ({ ...f, is_active: e.target.checked }))}
-                        className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500"
+                        className="w-4 h-4 text-red-500 rounded focus:ring-orange-500"
                       />
                       Active
                     </label>
@@ -463,7 +463,7 @@ const ContentView = () => {
                   <button
                     type="submit"
                     disabled={faqSaving}
-                    className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-500/100 hover:bg-red-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
                   >
                     {faqSaving ? (
                       <>
@@ -488,3 +488,5 @@ const ContentView = () => {
 };
 
 export default ContentView;
+
+

@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 
 // Lightweight Leaflet-based map picker loaded via CDN (no extra dependency in package.json).
 // Hidden until Province + City + Barangay are all selected.
-// Phase 1 — centres on barangay. Phase 2 — refines to street-level.
+// Phase 1 â€” centres on barangay. Phase 2 â€” refines to street-level.
 // Accepts optional `lat` / `lng` props to jump to a position immediately (e.g. from autocomplete).
 // Emits { lat, lng } through onChange. Pin is fixed to detected location.
 const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: externalLng, onChange, height = 280, disabled = false }) => {
@@ -16,7 +16,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
   const [lastGeoKey, setLastGeoKey] = useState('');
   const [lastExternalKey, setLastExternalKey] = useState('');
 
-  /* ── Load Leaflet from CDN ────────────────────────────── */
+  /* â”€â”€ Load Leaflet from CDN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   const loadLeaflet = () => new Promise((resolve, reject) => {
     if (typeof window === 'undefined') return reject(new Error('No window'));
     if (window.L) return resolve(window.L);
@@ -66,7 +66,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     return () => { cancelled = true; };
   }, []);
 
-  /* ── Initialise map once Leaflet is ready ─────────────── */
+  /* â”€â”€ Initialise map once Leaflet is ready â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   useEffect(() => {
     if (!leafletReady || !window.L || !mapContainerRef.current || mapRef.current) return;
     if (!barangay || !city || !state) return;
@@ -97,7 +97,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     return () => clearTimeout(timer);
   }, [leafletReady, barangay, city, state]);
 
-  /* ── Fly to external coords (autocomplete selection) ──── */
+  /* â”€â”€ Fly to external coords (autocomplete selection) â”€â”€â”€â”€ */
   useEffect(() => {
     if (!leafletReady || !externalLat || !externalLng) return;
     const key = `${externalLat}|${externalLng}`;
@@ -114,14 +114,14 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     onChange?.({ lat: pos[0], lng: pos[1] });
     setError('');
     setErrorType('');
-    // Sync geocode key so the next effect doesn't re‑fire for the same address
+    // Sync geocode key so the next effect doesn't reâ€‘fire for the same address
     setLastGeoKey(`${street || ''}|${barangay || ''}|${city || ''}|${state || ''}`);
   }, [leafletReady, externalLat, externalLng, onChange, lastExternalKey, street, barangay, city, state]);
 
-  /* ── Geocode when address parts change ───────────────── */
+  /* â”€â”€ Geocode when address parts change â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   // Fires in two scenarios:
-  //   1. Only barangay + city + state → centres on barangay (zoom 15)
-  //   2. street + context → pins the exact location (zoom 17)
+  //   1. Only barangay + city + state â†’ centres on barangay (zoom 15)
+  //   2. street + context â†’ pins the exact location (zoom 17)
   useEffect(() => {
     if (!leafletReady || !city || !state) return;
     // At minimum we need barangay OR street
@@ -135,7 +135,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     const marker = markerRef.current;
     if (!map || !marker) return;
 
-    // Build the query – more parts → more accurate
+    // Build the query â€“ more parts â†’ more accurate
     const hasStreet = street && street.trim().length >= 2;
     const query = hasStreet
       ? `${street}${barangay ? `, ${barangay}` : ''}, ${city}, ${state}, Philippines`
@@ -195,7 +195,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     return () => controller.abort();
   }, [leafletReady, street, barangay, city, state, onChange, lastGeoKey]);
 
-  /* ── Render guard: hidden until Province + City + Barangay selected ── */
+  /* â”€â”€ Render guard: hidden until Province + City + Barangay selected â”€â”€ */
   if (!barangay || !city || !state) return null;
 
   const handleRetry = () => {
@@ -208,15 +208,15 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-gray-700">Pin exact location</p>
-        {geocoding && <span className="text-xs text-gray-500">Locating…</span>}
+        {geocoding && <span className="text-xs text-gray-400">Locatingâ€¦</span>}
       </div>
       <div
-        className="w-full rounded-lg border border-gray-200 overflow-hidden relative"
+        className="w-full rounded-lg border border-gray-700 overflow-hidden relative"
         style={{ height: `${height}px`, minHeight: `${height}px`, minWidth: '100%' }}
       >
         {(!leafletReady || !window.L) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 text-xs text-gray-500">
-            Loading map…
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-xs text-gray-400">
+            Loading mapâ€¦
           </div>
         )}
         <div
@@ -227,7 +227,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
       </div>
       {error && (
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-orange-500">{error}</p>
+          <p className="text-xs text-red-500">{error}</p>
           {errorType === 'geocode' && (
             <button type="button" onClick={handleRetry} className="text-xs text-orange-600 hover:text-orange-700 font-medium">
               Retry
@@ -235,9 +235,11 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
           )}
         </div>
       )}
-      <p className="text-xs text-gray-500">Pin placement updates automatically from the detected address. Lat/Lng are saved with the address/order.</p>
+      <p className="text-xs text-gray-400">Pin placement updates automatically from the detected address. Lat/Lng are saved with the address/order.</p>
     </div>
   );
 };
 
 export default MapPinPicker;
+
+

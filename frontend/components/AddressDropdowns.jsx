@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 
 // Hierarchical Philippines location picker powered by PSGC open API (psgc.gitlab.io).
 // Emits chosen province/city/municipality/barangay names and codes via onChange.
@@ -188,14 +188,14 @@ const AddressDropdowns = ({
           value={selectedProvince.code}
           onChange={(e) => handleProvinceChange(e.target.value)}
           disabled={disabled || loadingProvince}
-          className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-800"
         >
           <option value="">Select a province</option>
           {provinces.map((p) => (
             <option key={p.code} value={p.code}>{p.name}</option>
           ))}
         </select>
-        {loadingProvince && <p className="text-xs text-gray-500 mt-1">Loading provinces...</p>}
+        {loadingProvince && <p className="text-xs text-gray-400 mt-1">Loading provinces...</p>}
       </div>
 
       <div>
@@ -204,14 +204,14 @@ const AddressDropdowns = ({
           value={selectedCity.code}
           onChange={(e) => handleCityChange(e.target.value)}
           disabled={disabled || !selectedProvince.code || loadingCity}
-          className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white disabled:bg-gray-50 disabled:text-gray-500"
+          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-800 disabled:bg-gray-900 disabled:text-gray-400"
         >
           <option value="">{selectedProvince.code ? 'Select a city/municipality' : 'Choose province first'}</option>
           {cities.map((c) => (
             <option key={c.code} value={c.code}>{c.name}</option>
           ))}
         </select>
-        {loadingCity && <p className="text-xs text-gray-500 mt-1">Loading cities/municipalities...</p>}
+        {loadingCity && <p className="text-xs text-gray-400 mt-1">Loading cities/municipalities...</p>}
       </div>
 
       <div>
@@ -220,14 +220,14 @@ const AddressDropdowns = ({
           value={selectedBarangay}
           onChange={(e) => handleBarangayChange(e.target.value)}
           disabled={disabled || !selectedCity.code || loadingBarangay}
-          className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white disabled:bg-gray-50 disabled:text-gray-500"
+          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-800 disabled:bg-gray-900 disabled:text-gray-400"
         >
           <option value="">{selectedCity.code ? 'Select a barangay' : 'Choose city/municipality first'}</option>
           {barangays.map((b) => (
             <option key={b.code} value={b.name}>{b.name}</option>
           ))}
         </select>
-        {loadingBarangay && <p className="text-xs text-gray-500 mt-1">Loading barangays...</p>}
+        {loadingBarangay && <p className="text-xs text-gray-400 mt-1">Loading barangays...</p>}
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
@@ -236,3 +236,5 @@ const AddressDropdowns = ({
 };
 
 export default AddressDropdowns;
+
+
