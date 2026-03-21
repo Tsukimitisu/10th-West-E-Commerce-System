@@ -41,7 +41,7 @@ const Footer = () => {
                 <label className="flex items-start gap-2 mt-2 cursor-pointer">
                   <input type="checkbox" checked={newsletterConsent} onChange={e => setNewsletterConsent(e.target.checked)}
                     className="mt-0.5 text-red-600 focus:ring-red-600 rounded" />
-                  <span className="text-[11px] text-gray-500">I consent to receive marketing emails and agree to the <Link to="/privacy" className="text-gray-400 hover:text-white">Privacy Policy</Link> per RA 10173.</span>
+                  <span className="text-[11px] text-gray-400">I consent to receive marketing emails and agree to the <Link to="/privacy" className="text-gray-400 hover:text-white">Privacy Policy</Link> per RA 10173.</span>
                 </label>
               </form>
             )}
@@ -114,7 +114,7 @@ const Footer = () => {
               <span className="px-3 py-1.5 bg-gray-800 rounded text-xs font-medium">GCash</span>
               <span className="px-3 py-1.5 bg-gray-800 rounded text-xs font-medium">COD</span>
             </div>
-            <div className="flex items-center gap-2 mt-4 text-xs text-gray-500">
+            <div className="flex items-center gap-2 mt-4 text-xs text-gray-400">
               <Shield size={14} /> <Truck size={14} /> Secure checkout & fast shipping
             </div>
           </div>
@@ -124,7 +124,7 @@ const Footer = () => {
       {/* Legal / Business Info */}
       <div className="border-t border-gray-800">
         <div className="max-w-7xl mx-auto px-4 py-4 space-y-3">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-500">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-400">
             <p>&copy; {new Date().getFullYear()} 10th West Moto Parts. All rights reserved.</p>
             <div className="flex gap-4">
               <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
@@ -144,3 +144,5 @@ const Footer = () => {
 };
 
 export default Footer;
+
+

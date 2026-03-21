@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, AlertTriangle, CheckCircle2, Send } from 'lucide-react';
 
@@ -63,3 +63,5 @@ const EmailVerificationBanner = () => {
 };
 
 export default EmailVerificationBanner;
+
+

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getProducts, getCategories, createOrder, getOrderById, logPosActivity } from '../../services/api';
 import { Loader2, Search, Trash2, Plus, Minus, LogOut, RotateCcw, Monitor, ShoppingBag, Bike, Box, ArrowLeftCircle, Tag, Check, Clock, DollarSign, Receipt, AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
@@ -291,19 +291,19 @@ const PosTerminal = () => {
     return (
         <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 via-white to-gray-100 overflow-hidden">
             {/* Header */}
-            <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 h-16 flex items-center justify-between px-6 shadow-sm z-30 sticky top-0">
+            <header className="bg-white/80 backdrop-blur-md border-b border-gray-700 h-16 flex items-center justify-between px-6 shadow-sm z-30 sticky top-0">
                 <div className="flex items-center gap-3">
-                    <div className="bg-orange-500 p-2 rounded-lg shadow-lg shadow-orange-200">
+                    <div className="bg-red-500/100 p-2 rounded-lg shadow-lg shadow-orange-200">
                         <Bike className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-black tracking-tighter text-gray-900 leading-none">10TH WEST</h1>
-                        <p className="text-[10px] text-orange-500 font-bold tracking-[0.2em] leading-none mt-1">POS TERMINAL</p>
+                        <h1 className="text-xl font-black tracking-tighter text-white leading-none">10TH WEST</h1>
+                        <p className="text-[10px] text-red-500 font-bold tracking-[0.2em] leading-none mt-1">POS TERMINAL</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-6">
                     {!returnMode ? (
-                        <button onClick={() => setReturnMode(true)} className="bg-gray-100 px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-orange-50 hover:text-orange-500 transition-all">
+                        <button onClick={() => setReturnMode(true)} className="bg-gray-100 px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-red-500/10 hover:text-red-500 transition-all">
                             Process Return
                         </button>
                     ) : (
@@ -311,39 +311,39 @@ const PosTerminal = () => {
                             <ArrowLeftCircle className="w-3 h-3 mr-1" /> Back to Sale
                         </button>
                     )}
-                    <button onClick={fetchData} className="text-xs text-gray-400 hover:text-gray-900 font-medium flex items-center gap-1.5 transition-colors">
+                    <button onClick={fetchData} className="text-xs text-gray-400 hover:text-white font-medium flex items-center gap-1.5 transition-colors">
                         <RotateCcw size={14} className={loading ? 'animate-spin' : ''} /> Sync Stock
                     </button>
                     <div className="h-8 w-px bg-gray-200"></div>
                     <div className="text-right">
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cashier</p>
-                        <p className="text-sm font-bold text-gray-900">{user?.name}</p>
+                        <p className="text-sm font-bold text-white">{user?.name}</p>
                     </div>
-                    <button onClick={handleLogout} className="bg-white p-2.5 rounded-xl hover:bg-orange-50 text-gray-400 hover:text-orange-500 border border-gray-100 hover:border-orange-100 shadow-sm transition-all group">
+                    <button onClick={handleLogout} className="bg-gray-800 p-2.5 rounded-xl hover:bg-red-500/10 text-gray-400 hover:text-red-500 border border-gray-700 hover:border-red-100 shadow-sm transition-all group">
                         <LogOut className="h-5 w-5 group-hover:translate-x-0.5 transition-transform" />
                     </button>
                 </div>
             </header>
 
             {/* Shift Summary Bar */}
-            <div className="bg-gradient-to-r from-orange-50 via-orange-50/80 to-amber-50 border-b border-orange-100 px-6 py-2 flex items-center justify-between text-sm z-20">
+            <div className="bg-gradient-to-r from-orange-50 via-orange-50/80 to-amber-50 border-b border-red-100 px-6 py-2 flex items-center justify-between text-sm z-20">
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2 text-orange-700">
-                        <Clock className="w-4 h-4 text-orange-500" />
-                        <span className="font-bold text-xs uppercase tracking-wider text-orange-500">Shift Started:</span>
+                        <Clock className="w-4 h-4 text-red-500" />
+                        <span className="font-bold text-xs uppercase tracking-wider text-red-500">Shift Started:</span>
                         <span className="font-bold text-orange-900">{shiftStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                     <div className="h-4 w-px bg-orange-200"></div>
                     <div className="flex items-center gap-2">
-                        <Receipt className="w-4 h-4 text-orange-500" />
-                        <span className="font-bold text-xs uppercase tracking-wider text-orange-500">Transactions:</span>
-                        <span className="font-black text-orange-900 bg-orange-100 px-2 py-0.5 rounded-md text-xs">{shiftTransactionCount}</span>
+                        <Receipt className="w-4 h-4 text-red-500" />
+                        <span className="font-bold text-xs uppercase tracking-wider text-red-500">Transactions:</span>
+                        <span className="font-black text-orange-900 bg-red-500/20 px-2 py-0.5 rounded-md text-xs">{shiftTransactionCount}</span>
                     </div>
                     <div className="h-4 w-px bg-orange-200"></div>
                     <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-orange-500" />
-                        <span className="font-bold text-xs uppercase tracking-wider text-orange-500">Shift Sales:</span>
-                        <span className="font-black text-orange-900 bg-orange-100 px-2.5 py-0.5 rounded-md text-xs">₱{shiftTotalSales.toFixed(2)}</span>
+                        <DollarSign className="w-4 h-4 text-red-500" />
+                        <span className="font-bold text-xs uppercase tracking-wider text-red-500">Shift Sales:</span>
+                        <span className="font-black text-orange-900 bg-red-500/20 px-2.5 py-0.5 rounded-md text-xs">â‚±{shiftTotalSales.toFixed(2)}</span>
                     </div>
                 </div>
             </div>
@@ -353,12 +353,12 @@ const PosTerminal = () => {
                 <div className="flex-1 flex flex-col items-center justify-center p-10">
                     <div className="bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-white/50 max-w-2xl w-full">
                         <div className="flex items-center gap-4 mb-8">
-                            <div className="bg-orange-50 p-3 rounded-2xl">
-                                <RotateCcw className="w-8 h-8 text-orange-500" />
+                            <div className="bg-red-500/10 p-3 rounded-2xl">
+                                <RotateCcw className="w-8 h-8 text-red-500" />
                             </div>
                             <div>
-                                <h2 className="text-3xl font-black text-gray-900 tracking-tight">Return & Refund</h2>
-                                <p className="text-gray-500 font-medium">Process order returns or exchanges</p>
+                                <h2 className="text-3xl font-black text-white tracking-tight">Return & Refund</h2>
+                                <p className="text-gray-400 font-medium">Process order returns or exchanges</p>
                             </div>
                         </div>
 
@@ -368,7 +368,7 @@ const PosTerminal = () => {
                                 <input
                                     type="text"
                                     placeholder="Scan or Enter Order ID"
-                                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-lg font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all shadow-inner"
+                                    className="w-full pl-12 pr-4 py-4 bg-gray-900 border border-gray-700 rounded-2xl text-lg font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-red-500 outline-none transition-all shadow-inner"
                                     value={returnOrderId}
                                     onChange={(e) => setReturnOrderId(e.target.value)}
                                     autoFocus
@@ -378,16 +378,16 @@ const PosTerminal = () => {
                         </form>
 
                         {returnOrder && (
-                            <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <div className="flex justify-between mb-6 pb-6 border-b border-gray-100">
+                            <div className="bg-gray-50/50 border border-gray-700 rounded-2xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div className="flex justify-between mb-6 pb-6 border-b border-gray-700">
                                     <div>
                                         <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Receipt ID</p>
-                                        <p className="font-black text-gray-900 text-lg">#{returnOrder.id}</p>
-                                        <p className="text-xs text-gray-500 font-medium mt-1">{new Date(returnOrder.created_at).toLocaleString()}</p>
+                                        <p className="font-black text-white text-lg">#{returnOrder.id}</p>
+                                        <p className="text-xs text-gray-400 font-medium mt-1">{new Date(returnOrder.created_at).toLocaleString()}</p>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Total Paid</p>
-                                        <p className="font-black text-orange-500 text-2xl">₱{returnOrder.total_amount.toFixed(2)}</p>
+                                        <p className="font-black text-red-500 text-2xl">â‚±{returnOrder.total_amount.toFixed(2)}</p>
                                         <div className="flex justify-end mt-1">
                                             <p className="text-[10px] font-black uppercase bg-green-100 text-green-600 px-2 py-0.5 rounded-full ring-1 ring-green-200 ring-inset">{returnOrder.status}</p>
                                         </div>
@@ -395,15 +395,15 @@ const PosTerminal = () => {
                                 </div>
                                 <div className="space-y-3 mb-8 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                                     {returnOrder.items.map(item => (
-                                        <div key={item.productId} className="flex justify-between items-center p-3 bg-white rounded-xl border border-gray-50 hover:border-orange-100 transition-all group cursor-pointer shadow-sm" onClick={() => handleReturnItemToggle(item.productId, item.quantity)}>
-                                            <div className={`w-6 h-6 border-2 rounded-lg mr-3 flex items-center justify-center transition-all ${returnItems[item.productId] ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-200' : 'border-gray-200 group-hover:border-orange-200 bg-gray-50'}`}>
+                                        <div key={item.productId} className="flex justify-between items-center p-3 bg-gray-800 rounded-xl border border-gray-50 hover:border-red-100 transition-all group cursor-pointer shadow-sm" onClick={() => handleReturnItemToggle(item.productId, item.quantity)}>
+                                            <div className={`w-6 h-6 border-2 rounded-lg mr-3 flex items-center justify-center transition-all ${returnItems[item.productId] ? 'bg-red-500/100 border-red-500 text-white shadow-lg shadow-orange-200' : 'border-gray-700 group-hover:border-red-200 bg-gray-900'}`}>
                                                 {returnItems[item.productId] ? <Check className="w-4 h-4" /> : null}
                                             </div>
                                             <div className="flex-1">
-                                                <p className="font-bold text-gray-900 text-sm">{item.product.name}</p>
+                                                <p className="font-bold text-white text-sm">{item.product.name}</p>
                                                 <p className="text-[10px] text-gray-400 font-bold tracking-widest">QTY: {item.quantity}</p>
                                             </div>
-                                            <div className="font-black text-gray-900">₱{(item.product.price * item.quantity).toFixed(2)}</div>
+                                            <div className="font-black text-white">â‚±{(item.product.price * item.quantity).toFixed(2)}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -421,7 +421,7 @@ const PosTerminal = () => {
                 // SALE MODE UI (Existing)
                 <div className="flex-1 flex overflow-hidden min-h-0">
                     {/* LEFT: Product Browser */}
-                    <div className="flex-1 flex flex-col border-r border-gray-200 bg-white min-w-0">
+                    <div className="flex-1 flex flex-col border-r border-gray-700 bg-gray-800 min-w-0">
                         {/* Search & Categories */}
                         <div className="p-4 border-b border-slate-200 space-y-4">
                             <div className="relative">
@@ -440,7 +440,7 @@ const PosTerminal = () => {
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                                 <button
                                     onClick={() => setSelectedCategory('all')}
-                                    className={`px-5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${selectedCategory === 'all' ? 'bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-200' : 'bg-white text-gray-500 border-gray-100 hover:border-gray-300 hover:bg-gray-50'}`}
+                                    className={`px-5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${selectedCategory === 'all' ? 'bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-200' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-300 hover:bg-gray-900'}`}
                                 >
                                     All Parts
                                 </button>
@@ -448,7 +448,7 @@ const PosTerminal = () => {
                                     <button
                                         key={c.id}
                                         onClick={() => setSelectedCategory(c.id)}
-                                        className={`px-5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${selectedCategory === c.id ? 'bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-200' : 'bg-white text-gray-500 border-gray-100 hover:border-gray-300 hover:bg-gray-50'}`}
+                                        className={`px-5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${selectedCategory === c.id ? 'bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-200' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-300 hover:bg-gray-900'}`}
                                     >
                                         {c.name}
                                     </button>
@@ -457,7 +457,7 @@ const PosTerminal = () => {
                         </div>
 
                         {/* Product Grid */}
-                        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+                        <div className="flex-1 overflow-y-auto p-4 bg-gray-900">
                             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
                                 {filteredProducts.map(product => {
                                     const isOutOfStock = product.stock_quantity === 0;
@@ -466,35 +466,35 @@ const PosTerminal = () => {
                                             key={product.id}
                                             onClick={() => addToCart(product)}
                                             disabled={isOutOfStock}
-                                            className={`bg-white p-4 rounded-2xl shadow-sm border border-gray-100 hover:border-orange-500 hover:shadow-xl hover:shadow-orange-50 transition-all flex flex-col items-center text-center h-full group relative overflow-hidden ${isOutOfStock ? 'opacity-60 grayscale' : ''}`}
+                                            className={`bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-700 hover:border-red-500 hover:shadow-xl hover:shadow-orange-50 transition-all flex flex-col items-center text-center h-full group relative overflow-hidden ${isOutOfStock ? 'opacity-60 grayscale' : ''}`}
                                         >
                                             <div className="w-full flex justify-between items-start mb-3">
-                                                <span className="text-[9px] font-bold bg-gray-50 px-2 py-0.5 rounded-full text-gray-400 border border-gray-100">{product.partNumber}</span>
-                                                {product.is_on_sale && <span className="text-[9px] font-black bg-orange-100 text-orange-500 px-2 py-0.5 rounded-full ring-1 ring-orange-200 ring-inset">SALE</span>}
+                                                <span className="text-[9px] font-bold bg-gray-900 px-2 py-0.5 rounded-full text-gray-400 border border-gray-700">{product.partNumber}</span>
+                                                {product.is_on_sale && <span className="text-[9px] font-black bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full ring-1 ring-orange-200 ring-inset">SALE</span>}
                                             </div>
-                                            <div className="h-24 w-24 mb-4 rounded-xl overflow-hidden bg-gray-50/50 p-2 group-hover:bg-orange-50/30 transition-colors">
+                                            <div className="h-24 w-24 mb-4 rounded-xl overflow-hidden bg-gray-50/50 p-2 group-hover:bg-red-500/10/30 transition-colors">
                                                 <img src={product.image} alt={product.name} className="h-full w-full object-contain group-hover:scale-110 transition-transform duration-500" />
                                             </div>
-                                            <h3 className="font-bold text-gray-900 text-sm line-clamp-2 mb-2 flex-1 group-hover:text-orange-500 transition-colors text-left w-full leading-snug">{product.name}</h3>
+                                            <h3 className="font-bold text-white text-sm line-clamp-2 mb-2 flex-1 group-hover:text-red-500 transition-colors text-left w-full leading-snug">{product.name}</h3>
                                             <div className="flex justify-between items-center w-full mt-auto pt-3 border-t border-gray-50">
-                                                <span className={`text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md ${product.stock_quantity <= product.low_stock_threshold ? 'bg-orange-50 text-orange-500' : 'bg-green-50 text-green-600'}`}>
+                                                <span className={`text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md ${product.stock_quantity <= product.low_stock_threshold ? 'bg-red-500/10 text-red-500' : 'bg-green-50 text-green-600'}`}>
                                                     {isOutOfStock ? 'OUT' : `${product.stock_quantity} IN STOCK`}
                                                 </span>
                                                 <div className="flex flex-col items-end">
                                                     {product.is_on_sale ? (
                                                         <>
-                                                            <span className="text-gray-400 line-through text-[10px] font-medium">₱{product.price.toFixed(2)}</span>
-                                                            <span className="text-gray-900 font-black text-lg -mt-1">₱{product.sale_price?.toFixed(2)}</span>
+                                                            <span className="text-gray-400 line-through text-[10px] font-medium">â‚±{product.price.toFixed(2)}</span>
+                                                            <span className="text-white font-black text-lg -mt-1">â‚±{product.sale_price?.toFixed(2)}</span>
                                                         </>
                                                     ) : (
-                                                        <span className="text-gray-900 font-black text-lg">₱{product.price.toFixed(2)}</span>
+                                                        <span className="text-white font-black text-lg">â‚±{product.price.toFixed(2)}</span>
                                                     )}
                                                 </div>
                                             </div>
 
                                             {/* Subtle hover effect */}
                                             <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <div className="bg-orange-500 text-white p-1.5 rounded-full shadow-lg">
+                                                <div className="bg-red-500/100 text-white p-1.5 rounded-full shadow-lg">
                                                     <Plus size={14} />
                                                 </div>
                                             </div>
@@ -506,13 +506,13 @@ const PosTerminal = () => {
                     </div>
 
                     {/* RIGHT: Current Transaction */}
-                    <div className="w-80 lg:w-96 flex-shrink-0 flex flex-col bg-white shadow-2xl border-l border-gray-200 z-20">
-                        <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-gray-50 to-white">
+                    <div className="w-80 lg:w-96 flex-shrink-0 flex flex-col bg-gray-800 shadow-2xl border-l border-gray-700 z-20">
+                        <div className="p-5 border-b border-gray-700 flex justify-between items-center bg-gradient-to-r from-gray-50 to-white">
                             <div>
-                                <h2 className="font-black text-xl text-gray-900 tracking-tight">Current Order</h2>
+                                <h2 className="font-black text-xl text-white tracking-tight">Current Order</h2>
                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Transaction #{Math.floor(Math.random() * 10000)}</p>
                             </div>
-                            <button onClick={clearCart} className="text-gray-400 hover:text-orange-500 p-2.5 rounded-xl hover:bg-orange-50 transition-all border border-gray-100 hover:border-orange-100" title="Clear Cart">
+                            <button onClick={clearCart} className="text-gray-400 hover:text-red-500 p-2.5 rounded-xl hover:bg-red-500/10 transition-all border border-gray-700 hover:border-red-100" title="Clear Cart">
                                 <Trash2 className="h-5 w-5" />
                             </button>
                         </div>
@@ -521,22 +521,22 @@ const PosTerminal = () => {
                         <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-gradient-to-b from-gray-50/50 to-white">
                             {cartItems.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-gray-300 space-y-4">
-                                    <div className="bg-gray-50 p-6 rounded-3xl">
+                                    <div className="bg-gray-900 p-6 rounded-3xl">
                                         <ShoppingBag className="h-16 w-16 opacity-20" />
                                     </div>
                                     <p className="font-bold text-sm">Scan or select items to begin</p>
                                 </div>
                             ) : (
                                 cartItems.map(item => (
-                                    <div key={item.productId} className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-orange-100 transition-all group">
-                                        <div className="h-14 w-14 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0 p-1 group-hover:bg-orange-50 transition-colors">
+                                    <div key={item.productId} className="flex items-center gap-3 bg-gray-800 p-4 rounded-2xl border border-gray-700 shadow-sm hover:shadow-md hover:border-red-100 transition-all group">
+                                        <div className="h-14 w-14 rounded-xl overflow-hidden bg-gray-900 flex-shrink-0 p-1 group-hover:bg-red-500/10 transition-colors">
                                             <img src={item.product.image} alt="" className="h-full w-full object-contain" />
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="text-[10px] text-slate-400 font-mono mb-0.5">{item.product.partNumber}</div>
                                             <h4 className="font-bold text-slate-900 text-sm truncate">{item.product.name}</h4>
                                             <div className="text-xs text-slate-500 font-medium">
-                                                ₱{(item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price).toFixed(2)} / unit
+                                                â‚±{(item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price).toFixed(2)} / unit
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -556,7 +556,7 @@ const PosTerminal = () => {
                                                 </button>
                                             </div>
                                             <div className="font-bold text-slate-900 w-16 text-right text-sm">
-                                                ₱{((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity).toFixed(2)}
+                                                â‚±{((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity).toFixed(2)}
                                             </div>
                                         </div>
                                     </div>
@@ -565,11 +565,11 @@ const PosTerminal = () => {
                         </div>
 
                         {/* Totals */}
-                        <div className="p-6 bg-white border-t border-gray-100 shadow-[0_-8px_16px_-4px_rgba(0,0,0,0.05)]">
+                        <div className="p-6 bg-gray-800 border-t border-gray-700 shadow-[0_-8px_16px_-4px_rgba(0,0,0,0.05)]">
                             <div className="space-y-3 mb-6">
                                 <div className="flex justify-between text-gray-600 text-sm font-medium">
                                     <span>Subtotal</span>
-                                    <span className="font-bold">₱{subtotal.toFixed(2)}</span>
+                                    <span className="font-bold">â‚±{subtotal.toFixed(2)}</span>
                                 </div>
                                 {discountAmount > 0 && (
                                     <div className="flex justify-between text-green-600 text-sm font-bold bg-green-50 -mx-2 px-2 py-1.5 rounded-lg">
@@ -577,30 +577,30 @@ const PosTerminal = () => {
                                             <Tag className="w-3.5 h-3.5" />
                                             Discount
                                         </span>
-                                        <span>-₱{discountAmount.toFixed(2)}</span>
+                                        <span>-â‚±{discountAmount.toFixed(2)}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between text-gray-600 text-sm font-medium">
                                     <span>VAT (12% included)</span>
-                                    <span className="font-bold">₱{taxAmount.toFixed(2)}</span>
+                                    <span className="font-bold">â‚±{taxAmount.toFixed(2)}</span>
                                 </div>
-                                <div className="flex justify-between text-3xl font-black text-gray-900 pt-4 border-t-2 border-gray-100">
+                                <div className="flex justify-between text-3xl font-black text-white pt-4 border-t-2 border-gray-700">
                                     <span>TOTAL</span>
-                                    <span className="text-orange-500">₱{total.toFixed(2)}</span>
+                                    <span className="text-red-500">â‚±{total.toFixed(2)}</span>
                                 </div>
                             </div>
 
                             <div className="flex gap-3 mb-4">
                                 <button
                                     onClick={() => setShowDiscountModal(true)}
-                                    className="flex-1 py-2.5 border-2 border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 hover:border-gray-300 flex items-center justify-center gap-2 transition-all"
+                                    className="flex-1 py-2.5 border-2 border-gray-700 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-900 hover:border-gray-300 flex items-center justify-center gap-2 transition-all"
                                 >
                                     <Tag className="w-4 h-4" /> Discount
                                 </button>
                                 {posDiscount && (
                                     <button
                                         onClick={() => setPosDiscount(null)}
-                                        className="px-4 py-2.5 border-2 border-orange-200 text-orange-500 rounded-xl hover:bg-orange-50 font-bold transition-all"
+                                        className="px-4 py-2.5 border-2 border-red-200 text-red-500 rounded-xl hover:bg-red-500/10 font-bold transition-all"
                                     >
                                         Remove
                                     </button>
@@ -614,7 +614,7 @@ const PosTerminal = () => {
                             >
                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"></div>
                                 <span className="relative">CHECKOUT</span>
-                                <span className="relative font-black">₱{total.toFixed(2)}</span>
+                                <span className="relative font-black">â‚±{total.toFixed(2)}</span>
                             </button>
                         </div>
                     </div>
@@ -624,33 +624,33 @@ const PosTerminal = () => {
             {/* Manual Discount Modal */}
             {showDiscountModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white p-8 rounded-3xl shadow-2xl w-96 border border-gray-100 animate-in zoom-in-95 duration-200">
-                        <h3 className="text-2xl font-black mb-6 text-gray-900">Apply Discount</h3>
+                    <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-96 border border-gray-700 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-2xl font-black mb-6 text-white">Apply Discount</h3>
                         <div className="flex gap-3 mb-6">
                             <button
                                 onClick={() => setTempDiscount({ ...tempDiscount, type: 'percent' })}
-                                className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${tempDiscount.type === 'percent' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
+                                className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${tempDiscount.type === 'percent' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-800 text-gray-700 border-gray-700 hover:border-gray-300'}`}
                             >
                                 % Percent
                             </button>
                             <button
                                 onClick={() => setTempDiscount({ ...tempDiscount, type: 'fixed' })}
-                                className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${tempDiscount.type === 'fixed' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
+                                className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${tempDiscount.type === 'fixed' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-800 text-gray-700 border-gray-700 hover:border-gray-300'}`}
                             >
-                                ₱ Fixed
+                                â‚± Fixed
                             </button>
                         </div>
                         <input
                             type="number"
                             placeholder="Enter discount value"
-                            className="w-full border-2 border-gray-200 p-4 rounded-2xl mb-6 text-xl font-bold focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 outline-none transition-all"
+                            className="w-full border-2 border-gray-700 p-4 rounded-2xl mb-6 text-xl font-bold focus:border-red-500 focus:ring-4 focus:ring-orange-500/10 outline-none transition-all"
                             value={tempDiscount.value}
                             onChange={(e) => setTempDiscount({ ...tempDiscount, value: e.target.value })}
                             autoFocus
                         />
                         <div className="flex gap-3">
                             <button onClick={() => setShowDiscountModal(false)} className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-2xl font-bold transition-all">Cancel</button>
-                            <button onClick={handleApplyDiscount} className="flex-1 py-3 bg-orange-500 text-white rounded-2xl hover:bg-orange-600 font-bold shadow-lg hover:shadow-xl transition-all">Apply</button>
+                            <button onClick={handleApplyDiscount} className="flex-1 py-3 bg-red-500/100 text-white rounded-2xl hover:bg-red-600 font-bold shadow-lg hover:shadow-xl transition-all">Apply</button>
                         </div>
                     </div>
                 </div>
@@ -677,14 +677,14 @@ const PosTerminal = () => {
             {/* Logout Confirmation Modal */}
             {showLogoutConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white p-8 rounded-3xl shadow-2xl w-96 border border-gray-100 animate-in zoom-in-95 duration-200">
+                    <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-96 border border-gray-700 animate-in zoom-in-95 duration-200">
                         <div className="flex items-center gap-4 mb-6">
-                            <div className="bg-orange-50 p-3 rounded-2xl">
-                                <LogOut className="w-8 h-8 text-orange-500" />
+                            <div className="bg-red-500/10 p-3 rounded-2xl">
+                                <LogOut className="w-8 h-8 text-red-500" />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-black text-gray-900">Sign Out?</h3>
-                                <p className="text-gray-500 font-medium text-sm mt-1">You have items in the cart</p>
+                                <h3 className="text-2xl font-black text-white">Sign Out?</h3>
+                                <p className="text-gray-400 font-medium text-sm mt-1">You have items in the cart</p>
                             </div>
                         </div>
                         <p className="text-gray-600 mb-6">
@@ -699,7 +699,7 @@ const PosTerminal = () => {
                             </button>
                             <button
                                 onClick={confirmLogout}
-                                className="flex-1 py-3 bg-orange-500 text-white rounded-2xl hover:bg-orange-600 font-bold shadow-lg hover:shadow-xl transition-all"
+                                className="flex-1 py-3 bg-red-500/100 text-white rounded-2xl hover:bg-red-600 font-bold shadow-lg hover:shadow-xl transition-all"
                             >
                                 Sign Out
                             </button>
@@ -727,3 +727,5 @@ const PosTerminal = () => {
 };
 
 export default PosTerminal;
+
+

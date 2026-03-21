@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
 import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements } from '../services/api';
@@ -228,7 +228,7 @@ const Navbar = ({ user, onLogout }) => {
         <div className="max-w-7xl mx-auto px-4 lg:px-6">
           <div className="flex items-center justify-between h-16">
             {/* Mobile menu button */}
-            <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 -ml-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 -ml-2 text-gray-600 hover:text-white hover:bg-gray-100 rounded-lg transition-colors">
               <Menu size={22} />
             </button>
 
@@ -238,8 +238,8 @@ const Navbar = ({ user, onLogout }) => {
                 <span className="text-white font-bold text-sm font-display">10</span>
               </div>
               <div className="hidden sm:block">
-                <span className="font-display font-bold text-gray-900 text-lg leading-none">10TH WEST</span>
-                <span className="block text-[9px] font-bold tracking-[0.3em] text-orange-500 uppercase">Moto Parts</span>
+                <span className="font-display font-bold text-white text-lg leading-none">10TH WEST</span>
+                <span className="block text-[9px] font-bold tracking-[0.3em] text-red-500 uppercase">Moto Parts</span>
               </div>
             </Link>
 
@@ -259,7 +259,7 @@ const Navbar = ({ user, onLogout }) => {
                   More <ChevronDown size={16} className={`transition-transform duration-300 ease-in-out ${moreMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {moreMenuOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 animate-fade-in z-50 transition-all duration-300 ease-in-out">
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-gray-800 rounded-2xl shadow-xl border border-gray-700 py-2 animate-fade-in z-50 transition-all duration-300 ease-in-out">
                     <Link to="/faq" className="block px-4 py-2.5 text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 ease-in-out">
                       FAQ
                     </Link>
@@ -285,7 +285,7 @@ const Navbar = ({ user, onLogout }) => {
                     value={globalSearch}
                     onChange={handleSearchChange}
                     placeholder="Search parts, brands..."
-                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
+                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-700 bg-gray-900 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
                   />
                 </div>
               </form>
@@ -297,28 +297,28 @@ const Navbar = ({ user, onLogout }) => {
                 <div ref={shopToolsRef} className="hidden lg:block relative">
                   <button
                     onClick={() => setShopToolsOpen(!shopToolsOpen)}
-                    className={`h-10 px-3 rounded-lg border text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 ${shopToolsOpen ? 'bg-red-50 border-red-300 text-red-600 shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:text-red-600 hover:bg-red-50'}`}
+                    className={`h-10 px-3 rounded-lg border text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 ${shopToolsOpen ? 'bg-red-50 border-red-300 text-red-600 shadow-md' : 'bg-gray-800 border-gray-700 text-gray-600 hover:text-red-600 hover:bg-red-50'}`}
                   >
                     <SlidersHorizontal size={16} />
                     <span className="hidden sm:inline">Tools</span>
                     <ChevronDown size={14} className={`transition-transform duration-300 ${shopToolsOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {shopToolsOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-[380px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 space-y-4 animate-fade-in z-50">
+                    <div className="absolute right-0 top-full mt-2 w-[380px] bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 p-4 space-y-4 animate-fade-in z-50">
                       <div className="relative">
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
                           value={shopSearch}
                           onChange={(e) => updateShopParams({ search: e.target.value })}
                           placeholder="Search products..."
-                          className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-700 focus:outline-none focus:bg-white focus:ring-2 focus:ring-red-500/30 transition-all duration-200"
+                          className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-700 bg-gray-900 text-xs text-gray-700 focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-red-500/30 transition-all duration-200"
                         />
                       </div>
                       <div className="flex items-center gap-2">
                         <select
                           value={shopSort}
                           onChange={(e) => updateShopParams({ sort: e.target.value })}
-                          className="h-10 flex-1 px-3 rounded-lg border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-white focus:ring-2 focus:ring-red-500/30 transition-all duration-200"
+                          className="h-10 flex-1 px-3 rounded-lg border border-gray-700 bg-gray-900 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-red-500/30 transition-all duration-200"
                         >
                           <option value="newest">Newest</option>
                           <option value="price-asc">Price: Low to High</option>
@@ -328,23 +328,23 @@ const Navbar = ({ user, onLogout }) => {
                         </select>
                         <button
                           onClick={() => window.dispatchEvent(new CustomEvent('shop:open-filters'))}
-                          className="h-10 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5"
+                          className="h-10 px-3 rounded-lg border border-gray-700 bg-gray-800 text-xs font-semibold text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5"
                         >
                           <SlidersHorizontal size={14} /> Filter
                         </button>
                       </div>
                       <div className="flex items-center justify-end">
-                        <div className="h-10 inline-flex items-center border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                        <div className="h-10 inline-flex items-center border border-gray-700 rounded-lg overflow-hidden bg-gray-900">
                           <button
                             onClick={() => updateShopParams({ view: 'grid' })}
-                            className={`h-full px-3 transition-all duration-200 ${shopView === 'grid' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`h-full px-3 transition-all duration-200 ${shopView === 'grid' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             title="Grid view"
                           >
                             <Grid3X3 size={16} />
                           </button>
                           <button
                             onClick={() => updateShopParams({ view: 'list' })}
-                            className={`h-full px-3 transition-all duration-200 ${shopView === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`h-full px-3 transition-all duration-200 ${shopView === 'list' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             title="List view"
                           >
                             <List size={16} />
@@ -368,9 +368,9 @@ const Navbar = ({ user, onLogout }) => {
                     )}
                   </button>
                   {notifOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 animate-fade-in z-50">
-                      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
-                        <h3 className="font-bold text-gray-900 text-sm">Notifications</h3>
+                    <div className="absolute right-0 top-full mt-2 w-96 bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 animate-fade-in z-50">
+                      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-700">
+                        <h3 className="font-bold text-white text-sm">Notifications</h3>
                         {unreadCount > 0 && (
                           <button onClick={handleMarkAllRead} className="text-xs text-red-600 hover:text-red-700 font-semibold hover:underline">Mark all read</button>
                         )}
@@ -380,7 +380,7 @@ const Navbar = ({ user, onLogout }) => {
                           <div className="p-8 text-center text-gray-400 text-sm">No notifications</div>
                         ) : (
                           notifications.map((n, i) => (
-                            <button key={`${n.id || n.title}-${i}`} onClick={() => handleNotificationClick(n)} className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-all duration-150 border-b border-gray-50 ${!n.is_read ? 'bg-red-50/60' : ''}`}>
+                            <button key={`${n.id || n.title}-${i}`} onClick={() => handleNotificationClick(n)} className={`w-full text-left px-4 py-3 hover:bg-gray-900 transition-all duration-150 border-b border-gray-50 ${!n.is_read ? 'bg-red-50/60' : ''}`}>
                               <div className="flex gap-3">
                                 <div className="mt-0.5 shrink-0">
                                   {n.type === 'announcement' ? (
@@ -394,8 +394,8 @@ const Navbar = ({ user, onLogout }) => {
                                   )}
                                 </div>
                                 <div>
-                                  <p className={`text-sm ${!n.is_read ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{n.title || n.message}</p>
-                                  {n.type === 'announcement' && <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>}
+                                  <p className={`text-sm ${!n.is_read ? 'font-bold text-white' : 'font-medium text-gray-700'}`}>{n.title || n.message}</p>
+                                  {n.type === 'announcement' && <p className="text-sm text-gray-400 mt-0.5 line-clamp-2">{n.message}</p>}
                                   <p className="text-xs text-gray-400 mt-1">{n.created_at || n.published_at ? new Date(n.created_at || n.published_at).toLocaleDateString() : ''}</p>
                                 </div>
                               </div>
@@ -436,10 +436,10 @@ const Navbar = ({ user, onLogout }) => {
                     <ChevronDown size={14} className="hidden md:block text-gray-400" />
                   </button>
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 animate-fade-in">
-                      <div className="px-4 py-3 border-b border-gray-100 mb-1">
-                        <p className="text-sm font-bold text-gray-900 truncate">{user.name}</p>
-                        <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 py-2 animate-fade-in">
+                      <div className="px-4 py-3 border-b border-gray-700 mb-1">
+                        <p className="text-sm font-bold text-white truncate">{user.name}</p>
+                        <p className="text-xs text-gray-400 truncate">{user.email}</p>
                       </div>
                       <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><User size={16} /> My Profile</Link>
                       <Link to="/orders" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><Package size={16} /> My Orders</Link>
@@ -448,12 +448,12 @@ const Navbar = ({ user, onLogout }) => {
                       <Link to="/my-returns" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><RotateCcw size={16} /> Returns</Link>
                       {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
                         <>
-                          <div className="border-t border-gray-100 mt-1 pt-1" />
+                          <div className="border-t border-gray-700 mt-1 pt-1" />
                           <Link to="/admin" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><Shield size={16} /> Admin Panel</Link>
                           <Link to="/pos" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><Monitor size={16} /> POS Terminal</Link>
                         </>
                       )}
-                      <div className="border-t border-gray-100 mt-1 pt-1">
+                      <div className="border-t border-gray-700 mt-1 pt-1">
                         <button onClick={() => setShowLogoutConfirm(true)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out w-full">
                           <LogOut size={16} /> Sign Out
                         </button>
@@ -488,7 +488,7 @@ const Navbar = ({ user, onLogout }) => {
                   value={globalSearch}
                   onChange={handleSearchChange}
                   placeholder="Search parts..."
-                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700 focus:outline-none focus:bg-white focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
+                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-700 bg-gray-900 text-sm text-gray-700 focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
                 />
               </div>
             </form>
@@ -500,23 +500,23 @@ const Navbar = ({ user, onLogout }) => {
       {mobileOpen && (
         <div className="fixed inset-0 z-[100] lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white shadow-2xl animate-fade-in overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-gray-800 shadow-2xl animate-fade-in overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
               <Link to="/" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
                 <div className="w-8 h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center">
                   <span className="text-white font-bold text-sm font-display">10</span>
                 </div>
-                <span className="font-display font-bold text-gray-900">10TH WEST</span>
+                <span className="font-display font-bold text-white">10TH WEST</span>
               </Link>
               <button onClick={() => setMobileOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><X size={20} /></button>
             </div>
             {user && (
-              <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-red-50 to-pink-50">
+              <div className="p-4 border-b border-gray-700 bg-gradient-to-r from-red-50 to-pink-50">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-red-100 to-red-200 text-red-600 rounded-lg flex items-center justify-center font-bold">{user.name.charAt(0).toUpperCase()}</div>
                   <div>
-                    <p className="font-semibold text-gray-900 text-sm">{user.name}</p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
+                    <p className="font-semibold text-white text-sm">{user.name}</p>
+                    <p className="text-xs text-gray-400">{user.email}</p>
                   </div>
                 </div>
               </div>
@@ -524,12 +524,12 @@ const Navbar = ({ user, onLogout }) => {
             <nav className="p-4 space-y-1">
               <Link to="/" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">Home</Link>
               <Link to="/shop" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">Shop All</Link>
-              <div className="border-t border-gray-100 my-2" />
+              <div className="border-t border-gray-700 my-2" />
               <Link to="/faq" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">FAQ</Link>
               <Link to="/contact" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">Contact</Link>
               {user && (
                 <>
-                  <div className="border-t border-gray-100 my-2" />
+                  <div className="border-t border-gray-700 my-2" />
                   <Link to="/profile" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">My Profile</Link>
                   <Link to="/orders" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">My Orders</Link>
                   <Link to="/wishlist" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">Wishlist</Link>
@@ -544,15 +544,15 @@ const Navbar = ({ user, onLogout }) => {
                 <Link to="/pos" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">POS Terminal</Link>
               )}
             </nav>
-            <div className="p-4 border-t border-gray-100">
+            <div className="p-4 border-t border-gray-700">
               {user ? (
-                <button onClick={() => { onLogout(); setMobileOpen(false); }} className="w-full px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-all duration-200 flex items-center justify-center gap-2">
+                <button onClick={() => { onLogout(); setMobileOpen(false); }} className="w-full px-4 py-2.5 border border-gray-700 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-900 transition-all duration-200 flex items-center justify-center gap-2">
                   <LogOut size={16} /> Sign Out
                 </button>
               ) : (
                 <div className="space-y-2">
                   <Link to="/login" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg text-sm font-semibold text-center hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-md">Sign In</Link>
-                  <Link to="/register" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-semibold text-center hover:bg-gray-50 transition-all duration-200">Create Account</Link>
+                  <Link to="/register" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 border border-gray-700 text-gray-700 rounded-lg text-sm font-semibold text-center hover:bg-gray-900 transition-all duration-200">Create Account</Link>
                 </div>
               )}
             </div>
@@ -567,14 +567,14 @@ const Navbar = ({ user, onLogout }) => {
       {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl w-96 border border-gray-100 animate-in zoom-in-95 duration-200">
+          <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-96 border border-gray-700 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-4 mb-6">
               <div className="bg-gradient-to-br from-red-50 to-pink-50 p-3 rounded-2xl">
                 <LogOut className="w-8 h-8 text-red-600" />
               </div>
               <div>
-                <h3 className="text-2xl font-black text-gray-900">Sign Out?</h3>
-                <p className="text-gray-500 font-semibold text-sm mt-1">Confirm to logout</p>
+                <h3 className="text-2xl font-black text-white">Sign Out?</h3>
+                <p className="text-gray-400 font-semibold text-sm mt-1">Confirm to logout</p>
               </div>
             </div>
             <p className="text-gray-600 mb-6">
@@ -602,3 +602,5 @@ const Navbar = ({ user, onLogout }) => {
 };
 
 export default Navbar;
+
+

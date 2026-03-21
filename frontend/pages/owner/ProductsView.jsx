@@ -5,10 +5,10 @@ import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 
 const InputField = ({ label, required, children }) => (
-  <div><label className="block text-xs font-medium text-gray-600 mb-1">{label}{required && <span className="text-orange-500 ml-0.5">*</span>}</label>{children}</div>
+  <div><label className="block text-xs font-medium text-gray-600 mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>{children}</div>
 );
 
-const inputClass = "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300";
+const inputClass = "w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300";
 
 const ProductsView = () => {
   const [products, setProducts] = useState([]);
@@ -288,10 +288,10 @@ const ProductsView = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="font-display font-bold text-xl text-gray-900">Products</h1>
-          <p className="text-sm text-gray-500">{products.length} total products</p>
+          <h1 className="font-display font-bold text-xl text-white">Products</h1>
+          <p className="text-sm text-gray-400">{products.length} total products</p>
         </div>
-        <button onClick={openAdd} className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+        <button onClick={openAdd} className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
           <Plus size={16} /> Add Product
         </button>
       </div>
@@ -301,13 +301,13 @@ const ProductsView = () => {
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Search products, SKU, barcode..." value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300" />
+            className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300" />
         </div>
-        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20">
+        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20">
           <option value="">All Categories</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select value={filterStock} onChange={e => setFilterStock(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20">
+        <select value={filterStock} onChange={e => setFilterStock(e.target.value)} className="px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20">
           <option value="">All Stock</option>
           <option value="in">In Stock</option>
           <option value="low">Low Stock</option>
@@ -316,25 +316,25 @@ const ProductsView = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-200 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
+          <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
             <Package size={40} className="mx-auto text-gray-300 mb-3" />
-            <p className="text-sm text-gray-500">No products found</p>
+            <p className="text-sm text-gray-400">No products found</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50/80 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Product</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 hidden md:table-cell">SKU / Barcode</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Category</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Price</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Stock</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Status</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 w-24">Actions</th>
+              <thead><tr className="bg-gray-50/80 border-b border-gray-700">
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Product</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">SKU / Barcode</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Category</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Price</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Stock</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Status</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-24">Actions</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map(p => {
@@ -343,14 +343,14 @@ const ProductsView = () => {
                     <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
+                          <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700">
                             {p.image ? <img src={p.image} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={16} className="m-auto text-gray-400 mt-2.5" />}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-medium text-gray-900 text-sm truncate max-w-[200px]">{p.name}</p>
+                            <p className="font-medium text-white text-sm truncate max-w-[200px]">{p.name}</p>
                             <p className="text-[10px] text-gray-400 font-mono">{p.partNumber || 'â€”'}</p>
                           </div>
-                          {p.is_on_sale && <span className="ml-1 px-1.5 py-0.5 bg-orange-50 text-orange-500 text-[10px] font-bold rounded">SALE</span>}
+                          {p.is_on_sale && <span className="ml-1 px-1.5 py-0.5 bg-red-500/10 text-red-500 text-[10px] font-bold rounded">SALE</span>}
                         </div>
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">
@@ -360,16 +360,16 @@ const ProductsView = () => {
                       <td className="px-4 py-3"><span className="text-xs text-gray-600">{cat?.name || 'â€”'}</span></td>
                       <td className="px-4 py-3 text-right">
                         {p.is_on_sale ? (
-                          <div><span className="text-xs text-gray-400 line-through">₱{p.price}</span><br /><span className="text-orange-500 font-medium">₱{p.sale_price}</span></div>
-                        ) : <span className="font-medium text-gray-900">₱{p.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>}
+                          <div><span className="text-xs text-gray-400 line-through">₱{p.price}</span><br /><span className="text-red-500 font-medium">₱{p.sale_price}</span></div>
+                        ) : <span className="font-medium text-white">₱{p.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className={`font-bold text-sm ${p.stock_quantity === 0 ? 'text-orange-500' : p.stock_quantity <= p.low_stock_threshold ? 'text-amber-600' : 'text-gray-900'}`}>
+                        <span className={`font-bold text-sm ${p.stock_quantity === 0 ? 'text-red-500' : p.stock_quantity <= p.low_stock_threshold ? 'text-amber-600' : 'text-white'}`}>
                           {p.stock_quantity}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${p.stock_quantity === 0 ? 'bg-orange-50 text-orange-500' : p.stock_quantity <= p.low_stock_threshold ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${p.stock_quantity === 0 ? 'bg-red-500/10 text-red-500' : p.stock_quantity <= p.low_stock_threshold ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>
                           {p.stock_quantity === 0 ? 'Out of Stock' : p.stock_quantity <= p.low_stock_threshold ? 'Low Stock' : 'In Stock'}
                         </span>
                       </td>
@@ -377,7 +377,7 @@ const ProductsView = () => {
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => openEdit(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><Pencil size={14} /></button>
                           <button onClick={() => handleDuplicate(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-purple-600 transition-colors" title="Duplicate"><Copy size={14} /></button>
-                          <button onClick={() => handleDelete(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-orange-500 transition-colors" title="Delete"><Trash2 size={14} /></button>
+                          <button onClick={() => handleDelete(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-500 transition-colors" title="Delete"><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
@@ -454,7 +454,7 @@ const ProductsView = () => {
               <p className="text-[11px] text-gray-400 mt-1">PNG, JPG, WEBP, GIF (max 5MB)</p>
               {(imagePreviewUrl || form.image) && (
                 <div className="mt-2 flex items-start gap-3">
-                  <img src={imagePreviewUrl || form.image} alt="Preview" className="w-20 h-20 rounded-lg object-cover border border-gray-200" />
+                  <img src={imagePreviewUrl || form.image} alt="Preview" className="w-20 h-20 rounded-lg object-cover border border-gray-700" />
                   {selectedImageFile && (
                     <button type="button" onClick={clearSelectedImage} className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg">
                       Remove Selected
@@ -465,9 +465,9 @@ const ProductsView = () => {
             </InputField>
 
             {/* Sale */}
-            <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'}`}>
+            <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-red-500/10 border-red-200' : 'bg-gray-900 border-gray-700'}`}>
               <label className="flex items-center gap-2 font-medium text-sm cursor-pointer">
-                <input type="checkbox" checked={form.is_on_sale} onChange={e => setForm(f => ({ ...f, is_on_sale: e.target.checked }))} className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500" />
+                <input type="checkbox" checked={form.is_on_sale} onChange={e => setForm(f => ({ ...f, is_on_sale: e.target.checked }))} className="w-4 h-4 text-red-500 rounded focus:ring-orange-500" />
                 Put on Sale
               </label>
               {form.is_on_sale && (
@@ -485,9 +485,9 @@ const ProductsView = () => {
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+            <div className="flex justify-end gap-2 pt-4 border-t border-gray-700">
               <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-              <button type="submit" disabled={submitting} className="px-5 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors">
+              <button type="submit" disabled={submitting} className="px-5 py-2 bg-red-500/100 hover:bg-red-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors">
                 {submitting ? 'Saving...' : editing ? 'Update Product' : 'Add Product'}
               </button>
             </div>
@@ -517,7 +517,7 @@ const ProductsView = () => {
                   <button
                     type="submit"
                     disabled={categorySubmitting}
-                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                    className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
                   >
                     {categorySubmitting ? 'Adding...' : 'Add'}
                   </button>
@@ -525,11 +525,11 @@ const ProductsView = () => {
               </InputField>
             </form>
 
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-600">Existing Categories</div>
+            <div className="border border-gray-700 rounded-lg overflow-hidden">
+              <div className="px-3 py-2 bg-gray-900 border-b border-gray-700 text-xs font-semibold text-gray-600">Existing Categories</div>
               <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
                 {categories.length === 0 ? (
-                  <p className="px-3 py-3 text-sm text-gray-500">No categories yet.</p>
+                  <p className="px-3 py-3 text-sm text-gray-400">No categories yet.</p>
                 ) : (
                   categories.map(category => (
                     <div key={category.id} className="px-3 py-2 flex items-center gap-2">
@@ -545,7 +545,7 @@ const ProductsView = () => {
                             type="button"
                             onClick={() => handleUpdateCategory(category.id)}
                             disabled={categorySubmitting}
-                            className="px-2.5 py-1.5 text-xs bg-orange-500 hover:bg-orange-600 text-white rounded-md disabled:opacity-70"
+                            className="px-2.5 py-1.5 text-xs bg-red-500/100 hover:bg-red-600 text-white rounded-md disabled:opacity-70"
                           >
                             Save
                           </button>
@@ -565,7 +565,7 @@ const ProductsView = () => {
                             type="button"
                             onClick={() => startEditCategory(category)}
                             disabled={categorySubmitting}
-                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-500 hover:text-blue-600 disabled:opacity-70"
+                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-400 hover:text-blue-600 disabled:opacity-70"
                             title="Edit category"
                           >
                             <Pencil size={14} />
@@ -574,7 +574,7 @@ const ProductsView = () => {
                             type="button"
                             onClick={() => handleDeleteCategory(category)}
                             disabled={categorySubmitting}
-                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-500 hover:text-red-600 disabled:opacity-70"
+                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-400 hover:text-red-600 disabled:opacity-70"
                             title="Delete category"
                           >
                             <Trash2 size={14} />
@@ -609,10 +609,10 @@ const ProductsView = () => {
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
-              <h3 className="text-lg font-bold text-gray-900">Delete Product</h3>
+              <h3 className="text-lg font-bold text-white">Delete Product</h3>
             </div>
             <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete <strong>"{deleteTarget.name}"</strong>? This cannot be undone.</p>
             <div className="flex gap-3">
@@ -627,3 +627,5 @@ const ProductsView = () => {
 };
 
 export default ProductsView;
+
+

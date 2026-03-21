@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 
 // Lightweight PH-focused address autocomplete using Nominatim (OpenStreetMap).
 // Expects parent to manage the final form fields; this only suggests and returns parsed address parts.
@@ -128,7 +128,7 @@ const AddressAutocomplete = ({
         }}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+        className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
         autoComplete="off"
         role="combobox"
         aria-expanded={open}
@@ -140,7 +140,7 @@ const AddressAutocomplete = ({
       )}
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
       {open && suggestions.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto" role="listbox">
+        <div className="absolute z-20 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto" role="listbox">
           {suggestions.map((s) => {
             const label = renderLabel(s);
             return (
@@ -148,18 +148,18 @@ const AddressAutocomplete = ({
                 type="button"
                 key={s.place_id}
                 onClick={() => handleSelect(s)}
-                className="w-full text-left px-3 py-2 hover:bg-orange-50 text-sm text-gray-800"
+                className="w-full text-left px-3 py-2 hover:bg-red-500/10 text-sm text-gray-800"
                 role="option"
               >
                 <div className="font-medium truncate">{label.primary}</div>
-                {label.secondary && <div className="text-xs text-gray-500 truncate">{label.secondary}</div>}
+                {label.secondary && <div className="text-xs text-gray-400 truncate">{label.secondary}</div>}
               </button>
             );
           })}
         </div>
       )}
       {open && !loading && !error && suggestions.length === 0 && query.trim().length >= 3 && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg text-sm text-gray-500 px-3 py-2">
+        <div className="absolute z-20 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-lg text-sm text-gray-400 px-3 py-2">
           No suggestions found. Try refining your search.
         </div>
       )}
@@ -168,3 +168,5 @@ const AddressAutocomplete = ({
 };
 
 export default AddressAutocomplete;
+
+

@@ -124,7 +124,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
     if (type?.includes('low_stock')) return 'bg-red-50 text-red-500';
     if (type?.includes('order')) return 'bg-blue-50 text-blue-500';
     if (type?.includes('return')) return 'bg-yellow-50 text-yellow-500';
-    return 'bg-orange-50 text-orange-500';
+    return 'bg-red-500/10 text-red-500';
   };
   const allNavItems = createNavItems(badges);
   const navItems = user?.role === 'store_staff'
@@ -162,14 +162,14 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   const SidebarContent = ({ mobile = false }) => (
     <>
       {/* Logo */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100 flex-shrink-0">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-orange-500 rounded-lg flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 bg-red-500/100 rounded-lg flex items-center justify-center flex-shrink-0">
             <span className="text-white font-extrabold text-sm">10</span>
           </div>
           {(!collapsed || mobile) && (
             <div>
-              <h1 className="font-display font-bold text-sm text-gray-900 leading-none">10TH WEST</h1>
+              <h1 className="font-display font-bold text-sm text-white leading-none">10TH WEST</h1>
               <p className="text-[10px] text-gray-400 font-medium tracking-wide">ADMIN PANEL</p>
             </div>
           )}
@@ -184,19 +184,19 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
           const isActive = activeView === item.id;
           return (
             <React.Fragment key={item.id}>
-              {item.divider && idx > 0 && <div className="my-2 border-t border-gray-100" />}
+              {item.divider && idx > 0 && <div className="my-2 border-t border-gray-700" />}
               <button
                 onClick={() => handleNav(item)}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all
-                  ${isActive ? 'bg-orange-50 text-orange-500 shadow-sm shadow-orange-100/50' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
+                  ${isActive ? 'bg-red-500/10 text-red-500 shadow-sm shadow-orange-100/50' : 'text-gray-600 hover:bg-gray-900 hover:text-white'}
                   ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
                 title={collapsed && !mobile ? item.label : undefined}
               >
-                <Icon size={18} className={`flex-shrink-0 ${isActive ? 'text-orange-500' : 'text-gray-400'}`} />
+                <Icon size={18} className={`flex-shrink-0 ${isActive ? 'text-red-500' : 'text-gray-400'}`} />
                 {(!collapsed || mobile) && (
                   <>
                     <span className="flex-1 text-left">{item.label}</span>
-                    {item.badge ? <span className="min-w-[20px] h-5 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">{item.badge}</span> : null}
+                    {item.badge ? <span className="min-w-[20px] h-5 bg-red-500/100 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">{item.badge}</span> : null}
                     {item.external && <ExternalLink size={12} className="text-gray-300" />}
                   </>
                 )}
@@ -207,18 +207,18 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
       </nav>
 
       {/* User */}
-      <div className="p-3 border-t border-gray-100 flex-shrink-0">
+      <div className="p-3 border-t border-gray-700 flex-shrink-0">
         <div className={`flex items-center gap-3 ${collapsed && !mobile ? 'justify-center' : ''}`}>
-          <div className="w-8 h-8 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+          <div className="w-8 h-8 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
             {user?.name?.charAt(0)?.toUpperCase() || 'A'}
           </div>
           {(!collapsed || mobile) && (
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-gray-900 truncate">{user?.name || 'Admin'}</p>
+              <p className="text-xs font-semibold text-white truncate">{user?.name || 'Admin'}</p>
               <p className="text-[10px] text-gray-400 capitalize">{user?.role}</p>
             </div>
           )}
-          <button onClick={handleLogout} className="text-gray-300 hover:text-orange-500 transition-colors flex-shrink-0" title="Sign out">
+          <button onClick={handleLogout} className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0" title="Sign out">
             <LogOut size={16} />
           </button>
         </div>
@@ -227,9 +227,9 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   );
 
   return (
-    <div className="h-screen flex bg-gray-50 overflow-hidden">
+    <div className="h-screen flex bg-gray-900 overflow-hidden">
       {/* Desktop Sidebar */}
-      <aside className={`${collapsed ? 'w-[72px]' : 'w-60'} bg-white border-r border-gray-200 flex-col transition-all duration-200 hidden lg:flex`}>
+      <aside className={`${collapsed ? 'w-[72px]' : 'w-60'} bg-gray-800 border-r border-gray-700 flex-col transition-all duration-200 hidden lg:flex`}>
         <SidebarContent />
       </aside>
 
@@ -237,7 +237,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="fixed inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <aside className="fixed left-0 top-0 bottom-0 w-64 bg-white shadow-2xl z-50 flex flex-col">
+          <aside className="fixed left-0 top-0 bottom-0 w-64 bg-gray-800 shadow-2xl z-50 flex flex-col">
             <SidebarContent mobile />
           </aside>
         </div>
@@ -245,7 +245,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 flex-shrink-0">
+        <header className="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 lg:px-6 flex-shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => setCollapsed(!collapsed)} className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
               <ChevronLeft size={18} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
@@ -253,32 +253,32 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
             <button onClick={() => setMobileOpen(true)} className="lg:hidden text-gray-400 hover:text-gray-600">
               <Menu size={20} />
             </button>
-            <h2 className="font-display font-semibold text-gray-900 text-sm capitalize">{activeView === 'pos' ? 'POS Terminal' : activeView}</h2>
+            <h2 className="font-display font-semibold text-white text-sm capitalize">{activeView === 'pos' ? 'POS Terminal' : activeView}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium ${connected ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-500'}`} title={connected ? 'Real-time connected' : 'Reconnecting...'}>
+            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium ${connected ? 'bg-green-50 text-green-600' : 'bg-red-500/10 text-red-500'}`} title={connected ? 'Real-time connected' : 'Reconnecting...'}>
               {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
               <span className="hidden sm:inline">{connected ? 'Live' : 'Offline'}</span>
             </div>
             <div className="relative hidden sm:block">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" placeholder="Search..." className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300 w-44" />
+              <input type="text" placeholder="Search..." className="pl-8 pr-3 py-1.5 border border-gray-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300 w-44" />
             </div>
             <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors" onClick={() => setNotifOpen(!notifOpen)}>
               <Bell size={18} />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-orange-500 text-white text-[9px] font-bold rounded-full w-[18px] h-[18px] flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 bg-red-500/100 text-white text-[9px] font-bold rounded-full w-[18px] h-[18px] flex items-center justify-center">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
             </button>
             {/* Notification dropdown */}
             {notifOpen && (
-              <div ref={notifRef} className="absolute right-4 top-12 w-96 bg-white rounded-xl shadow-2xl border border-gray-100 z-50">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                  <h3 className="font-semibold text-gray-900 text-sm">Notifications</h3>
+              <div ref={notifRef} className="absolute right-4 top-12 w-96 bg-gray-800 rounded-xl shadow-2xl border border-gray-700 z-50">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+                  <h3 className="font-semibold text-white text-sm">Notifications</h3>
                   {unreadCount > 0 && (
-                    <button onClick={handleMarkAllRead} className="text-xs text-orange-500 hover:text-orange-600 font-medium">Mark all read</button>
+                    <button onClick={handleMarkAllRead} className="text-xs text-red-500 hover:text-orange-600 font-medium">Mark all read</button>
                   )}
                 </div>
                 <div className="max-h-96 overflow-y-auto">
@@ -292,20 +292,20 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
                       <button
                         key={n.id}
                         onClick={() => { handleMarkRead(n.id); setNotifOpen(false); }}
-                        className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 ${!n.is_read ? 'bg-orange-50/40' : ''}`}
+                        className={`w-full text-left px-4 py-3 hover:bg-gray-900 transition-colors border-b border-gray-50 ${!n.is_read ? 'bg-red-500/10/40' : ''}`}
                       >
                         <div className="flex gap-3">
                           <div className={`mt-0.5 shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${getNotifColor(n.type)}`}>
                             {getNotifIcon(n.type)}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className={`text-sm leading-snug ${!n.is_read ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{n.title}</p>
-                            {n.message && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>}
+                            <p className={`text-sm leading-snug ${!n.is_read ? 'font-semibold text-white' : 'text-gray-600'}`}>{n.title}</p>
+                            {n.message && <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{n.message}</p>}
                             <p className="text-[10px] text-gray-400 mt-1">
                               {n.created_at ? new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
                             </p>
                           </div>
-                          {!n.is_read && <div className="mt-2 w-2 h-2 bg-orange-500 rounded-full shrink-0" />}
+                          {!n.is_read && <div className="mt-2 w-2 h-2 bg-red-500/100 rounded-full shrink-0" />}
                         </div>
                       </button>
                     ))
@@ -321,14 +321,14 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
       {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl w-96 border border-gray-100 animate-in zoom-in-95 duration-200">
+          <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-96 border border-gray-700 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-4 mb-6">
-              <div className="bg-orange-50 p-3 rounded-2xl">
-                <LogOut className="w-8 h-8 text-orange-500" />
+              <div className="bg-red-500/10 p-3 rounded-2xl">
+                <LogOut className="w-8 h-8 text-red-500" />
               </div>
               <div>
-                <h3 className="text-2xl font-black text-gray-900">Sign Out?</h3>
-                <p className="text-gray-500 font-medium text-sm mt-1">Confirm to logout</p>
+                <h3 className="text-2xl font-black text-white">Sign Out?</h3>
+                <p className="text-gray-400 font-medium text-sm mt-1">Confirm to logout</p>
               </div>
             </div>
             <p className="text-gray-600 mb-6">
@@ -343,7 +343,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
               </button>
               <button
                 onClick={confirmLogout}
-                className="flex-1 py-3 bg-orange-500 text-white rounded-2xl hover:bg-orange-600 font-bold shadow-lg hover:shadow-xl transition-all"
+                className="flex-1 py-3 bg-red-500/100 text-white rounded-2xl hover:bg-red-600 font-bold shadow-lg hover:shadow-xl transition-all"
               >
                 Sign Out
               </button>
@@ -356,3 +356,5 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
 };
 
 export default AdminLayout;
+
+

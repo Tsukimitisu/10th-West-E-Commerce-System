@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   Users, Search, Plus, Lock, Unlock, Key, Shield, UserCog,
   ChevronDown, ChevronUp, MoreVertical, AlertTriangle, CheckCircle2,
@@ -177,7 +177,7 @@ const UserManagementView = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-white flex items-center gap-2"><Users size={22} className="text-red-400" /> User Management</h1>
-          <p className="text-sm text-gray-500 mt-1">Create, edit, and manage all user accounts</p>
+          <p className="text-sm text-gray-400 mt-1">Create, edit, and manage all user accounts</p>
         </div>
         <button onClick={() => { setForm({ name: '', email: '', phone: '', role: 'store_staff', password: '' }); setShowModal('add'); }}
           className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
@@ -188,7 +188,7 @@ const UserManagementView = () => {
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Search by name or email..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-9 pr-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500/50" />
         </div>
@@ -212,7 +212,7 @@ const UserManagementView = () => {
         {loading ? (
           <div className="flex items-center justify-center py-20"><Loader2 size={24} className="text-red-400 animate-spin" /></div>
         ) : users.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
             <Users size={40} className="mb-3 opacity-30" />
             <p className="text-sm">No users found</p>
           </div>
@@ -239,7 +239,7 @@ const UserManagementView = () => {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-white">{user.name}</p>
-                          <p className="text-[11px] text-gray-500">{user.email}</p>
+                          <p className="text-[11px] text-gray-400">{user.email}</p>
                         </div>
                       </div>
                     </td>
@@ -252,10 +252,10 @@ const UserManagementView = () => {
                       ) : user.is_active ? (
                         <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 size={12} /> Active</span>
                       ) : (
-                        <span className="flex items-center gap-1 text-xs text-gray-500"><XCircle size={12} /> Inactive</span>
+                        <span className="flex items-center gap-1 text-xs text-gray-400"><XCircle size={12} /> Inactive</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell">
+                    <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell">
                       {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
@@ -267,9 +267,9 @@ const UserManagementView = () => {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openView(user)} title="View" className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"><Eye size={14} /></button>
-                        <button onClick={() => openEdit(user)} title="Edit" className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-gray-800 rounded-lg transition-colors"><Edit3 size={14} /></button>
-                        <button onClick={() => openResetPw(user)} title="Reset Password" className="p-1.5 text-gray-500 hover:text-orange-400 hover:bg-gray-800 rounded-lg transition-colors"><Key size={14} /></button>
+                        <button onClick={() => openView(user)} title="View" className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"><Eye size={14} /></button>
+                        <button onClick={() => openEdit(user)} title="Edit" className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded-lg transition-colors"><Edit3 size={14} /></button>
+                        <button onClick={() => openResetPw(user)} title="Reset Password" className="p-1.5 text-gray-400 hover:text-orange-400 hover:bg-gray-800 rounded-lg transition-colors"><Key size={14} /></button>
                         {isLocked(user) ? (
                           <button onClick={() => handleUnlock(user)} title="Unlock" disabled={actionLoading === `unlock-${user.id}`}
                             className="p-1.5 text-red-400 hover:text-green-400 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50">
@@ -277,12 +277,12 @@ const UserManagementView = () => {
                           </button>
                         ) : (
                           <button onClick={() => handleLock(user)} title="Lock" disabled={user.id === currentUser.id || actionLoading === `lock-${user.id}`}
-                            className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-30">
+                            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-30">
                             {actionLoading === `lock-${user.id}` ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
                           </button>
                         )}
                         <button onClick={() => handleDeleteUser(user)} title="Delete" disabled={user.id === currentUser.id || actionLoading === `del-${user.id}`}
-                          className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-30">
+                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-30">
                           {actionLoading === `del-${user.id}` ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                         </button>
                       </div>
@@ -297,7 +297,7 @@ const UserManagementView = () => {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-            <span className="text-xs text-gray-500">{total} users total</span>
+            <span className="text-xs text-gray-400">{total} users total</span>
             <div className="flex gap-1">
               {Array.from({ length: totalPages }, (_, i) => (
                 <button key={i} onClick={() => setPage(i + 1)}
@@ -319,7 +319,7 @@ const UserManagementView = () => {
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-bold text-white">User Details</h3>
-                  <button onClick={() => setShowModal(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
+                  <button onClick={() => setShowModal(null)} className="text-gray-400 hover:text-white"><X size={20} /></button>
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 pb-4 border-b border-gray-800">
@@ -333,15 +333,15 @@ const UserManagementView = () => {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div><span className="text-gray-500 text-xs">Phone</span><p className="text-gray-300">{selectedUser.phone || 'N/A'}</p></div>
-                    <div><span className="text-gray-500 text-xs">Status</span><p className={isLocked(selectedUser) ? 'text-red-400' : selectedUser.is_active ? 'text-green-400' : 'text-gray-500'}>{isLocked(selectedUser) ? 'Locked' : selectedUser.is_active ? 'Active' : 'Inactive'}</p></div>
-                    <div><span className="text-gray-500 text-xs">2FA</span><p className={selectedUser.two_factor_enabled ? 'text-green-400' : 'text-gray-500'}>{selectedUser.two_factor_enabled ? 'Enabled' : 'Disabled'}</p></div>
-                    <div><span className="text-gray-500 text-xs">Login Attempts</span><p className="text-gray-300">{selectedUser.login_attempts || 0}</p></div>
-                    <div><span className="text-gray-500 text-xs">Last Login</span><p className="text-gray-300">{selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleString() : 'Never'}</p></div>
-                    <div><span className="text-gray-500 text-xs">Created</span><p className="text-gray-300">{new Date(selectedUser.created_at).toLocaleString()}</p></div>
+                    <div><span className="text-gray-400 text-xs">Phone</span><p className="text-gray-300">{selectedUser.phone || 'N/A'}</p></div>
+                    <div><span className="text-gray-400 text-xs">Status</span><p className={isLocked(selectedUser) ? 'text-red-400' : selectedUser.is_active ? 'text-green-400' : 'text-gray-400'}>{isLocked(selectedUser) ? 'Locked' : selectedUser.is_active ? 'Active' : 'Inactive'}</p></div>
+                    <div><span className="text-gray-400 text-xs">2FA</span><p className={selectedUser.two_factor_enabled ? 'text-green-400' : 'text-gray-400'}>{selectedUser.two_factor_enabled ? 'Enabled' : 'Disabled'}</p></div>
+                    <div><span className="text-gray-400 text-xs">Login Attempts</span><p className="text-gray-300">{selectedUser.login_attempts || 0}</p></div>
+                    <div><span className="text-gray-400 text-xs">Last Login</span><p className="text-gray-300">{selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleString() : 'Never'}</p></div>
+                    <div><span className="text-gray-400 text-xs">Created</span><p className="text-gray-300">{new Date(selectedUser.created_at).toLocaleString()}</p></div>
                   </div>
                   <div className="pt-4 border-t border-gray-800">
-                    <label className="text-xs text-gray-500 mb-1 block">Change Role</label>
+                    <label className="text-xs text-gray-400 mb-1 block">Change Role</label>
                     <div className="flex gap-2">
                       <select value={selectedUser.role} onChange={(e) => handleChangeRole(selectedUser.id, e.target.value)}
                         disabled={selectedUser.id === currentUser.id || actionLoading === `role-${selectedUser.id}`}
@@ -360,7 +360,7 @@ const UserManagementView = () => {
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-bold text-white">{showModal === 'add' ? 'Add New User' : 'Edit User'}</h3>
-                  <button onClick={() => setShowModal(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
+                  <button onClick={() => setShowModal(null)} className="text-gray-400 hover:text-white"><X size={20} /></button>
                 </div>
                 <div className="space-y-4">
                   <div>
@@ -410,19 +410,19 @@ const UserManagementView = () => {
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-bold text-white">Reset Password</h3>
-                  <button onClick={() => setShowModal(null)} className="text-gray-500 hover:text-white"><X size={20} /></button>
+                  <button onClick={() => setShowModal(null)} className="text-gray-400 hover:text-white"><X size={20} /></button>
                 </div>
                 <div className="space-y-4">
                   <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
                     <p className="text-sm text-gray-300">Resetting password for: <span className="text-white font-semibold">{selectedUser.name}</span></p>
-                    <p className="text-xs text-gray-500">{selectedUser.email}</p>
+                    <p className="text-xs text-gray-400">{selectedUser.email}</p>
                   </div>
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">New Password *</label>
                     <input type="password" value={resetPwForm} onChange={(e) => setResetPwForm(e.target.value)} placeholder="Min 8 characters"
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/30" />
                   </div>
-                  <div className="bg-orange-900/20 border border-orange-700/30 rounded-lg p-3">
+                  <div className="bg-orange-900/20 border border-red-700/30 rounded-lg p-3">
                     <p className="text-xs text-orange-400 flex items-center gap-1"><AlertTriangle size={12} /> This will log the user out of all sessions</p>
                   </div>
                   <div className="flex gap-3">
@@ -444,3 +444,5 @@ const UserManagementView = () => {
 };
 
 export default UserManagementView;
+
+

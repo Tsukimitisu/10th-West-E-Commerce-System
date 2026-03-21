@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Tag, Plus, Trash2, X, Gift, Percent, DollarSign, Calendar, CheckCircle2, XCircle, AlertCircle, AlertTriangle } from 'lucide-react';
 import { getDiscounts, createDiscount, deleteDiscount } from '../../services/api';
 
 const InputField = ({ label, required, children }) => (
   <div>
     <label className="block text-xs font-medium text-gray-600 mb-1">
-      {label}{required && <span className="text-orange-500 ml-0.5">*</span>}
+      {label}{required && <span className="text-red-500 ml-0.5">*</span>}
     </label>
     {children}
   </div>
 );
 
-const inputClass = "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300";
+const inputClass = "w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300";
 
 const getStatus = (discount) => {
-  if (!discount.is_active) return { label: 'Inactive', color: 'bg-gray-50 text-gray-600 border-gray-200' };
+  if (!discount.is_active) return { label: 'Inactive', color: 'bg-gray-900 text-gray-600 border-gray-700' };
   if (discount.expires_at && new Date(discount.expires_at) < new Date()) return { label: 'Expired', color: 'bg-red-50 text-red-600 border-red-200' };
   return { label: 'Active', color: 'bg-green-50 text-green-600 border-green-200' };
 };
@@ -107,17 +107,17 @@ const PromotionsView = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-orange-50 text-orange-500 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-red-500/10 text-red-500 rounded-xl flex items-center justify-center">
             <Tag size={20} />
           </div>
           <div>
-            <h1 className="font-display font-bold text-xl text-gray-900">Promotions & Discounts</h1>
-            <p className="text-sm text-gray-500">Manage discount codes, coupons, and campaigns</p>
+            <h1 className="font-display font-bold text-xl text-white">Promotions & Discounts</h1>
+            <p className="text-sm text-gray-400">Manage discount codes, coupons, and campaigns</p>
           </div>
         </div>
         <button
           onClick={openCreate}
-          className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+          className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
         >
           <Plus size={16} /> Create New
         </button>
@@ -128,42 +128,42 @@ const PromotionsView = () => {
         {[
           { label: 'Total Campaigns', value: totalCampaigns.toString(), icon: <Gift size={18} />, color: 'bg-blue-50 text-blue-600' },
           { label: 'Active Campaigns', value: activeCampaigns.toString(), icon: <CheckCircle2 size={18} />, color: 'bg-green-50 text-green-600' },
-          { label: 'Total Redemptions', value: totalRedemptions.toString(), icon: <Percent size={18} />, color: 'bg-orange-50 text-orange-600' },
+          { label: 'Total Redemptions', value: totalRedemptions.toString(), icon: <Percent size={18} />, color: 'bg-red-500/10 text-orange-600' },
         ].map((stat, i) => (
-          <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <div key={i} className="bg-gray-800 rounded-xl shadow-sm border border-gray-700 p-4">
             <div className={`w-8 h-8 ${stat.color} rounded-lg flex items-center justify-center mb-2`}>{stat.icon}</div>
-            <p className="text-lg font-bold text-gray-900">{stat.value}</p>
-            <p className="text-xs text-gray-500">{stat.label}</p>
+            <p className="text-lg font-bold text-white">{stat.value}</p>
+            <p className="text-xs text-gray-400">{stat.label}</p>
           </div>
         ))}
       </div>
 
       {/* Discount Codes Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-gray-800 rounded-xl shadow-sm border border-gray-700 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center">
-            <div className="w-6 h-6 border-2 border-gray-200 border-t-orange-500 rounded-full animate-spin mx-auto" />
+            <div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" />
           </div>
         ) : discounts.length === 0 ? (
           <div className="p-12 text-center">
             <Tag size={40} className="mx-auto text-gray-300 mb-3" />
-            <p className="text-sm text-gray-500">No discount codes yet</p>
+            <p className="text-sm text-gray-400">No discount codes yet</p>
             <p className="text-xs text-gray-400 mt-1">Create your first promotion to get started</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-100">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Code</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Type</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Value</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 hidden md:table-cell">Min Purchase</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 hidden sm:table-cell">Usage</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 hidden lg:table-cell">Starts</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 hidden lg:table-cell">Expires</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 w-20">Actions</th>
+                <tr className="bg-gray-50/80 border-b border-gray-700">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Code</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Type</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Value</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Min Purchase</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Usage</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden lg:table-cell">Starts</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden lg:table-cell">Expires</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-20">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -172,7 +172,7 @@ const PromotionsView = () => {
                   return (
                     <tr key={d.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3">
-                        <span className="font-mono font-bold text-gray-900 bg-gray-50 px-2 py-0.5 rounded text-xs">
+                        <span className="font-mono font-bold text-white bg-gray-900 px-2 py-0.5 rounded text-xs">
                           {d.code}
                         </span>
                       </td>
@@ -182,15 +182,15 @@ const PromotionsView = () => {
                           {d.type}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-900">
-                        {d.type === 'percentage' ? `${d.value}%` : `₱${parseFloat(d.value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
+                      <td className="px-4 py-3 text-right font-medium text-white">
+                        {d.type === 'percentage' ? `${d.value}%` : `â‚±${parseFloat(d.value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
                       </td>
-                      <td className="px-4 py-3 text-right text-gray-500 hidden md:table-cell">
-                        {d.min_purchase ? `₱${parseFloat(d.min_purchase).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '-'}
+                      <td className="px-4 py-3 text-right text-gray-400 hidden md:table-cell">
+                        {d.min_purchase ? `â‚±${parseFloat(d.min_purchase).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '-'}
                       </td>
                       <td className="px-4 py-3 text-center hidden sm:table-cell">
                         <span className="text-xs text-gray-600">
-                          {d.used_count || 0} / {d.max_uses === 0 || !d.max_uses ? '∞' : d.max_uses}
+                          {d.used_count || 0} / {d.max_uses === 0 || !d.max_uses ? 'âˆž' : d.max_uses}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -201,10 +201,10 @@ const PromotionsView = () => {
                           {status.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell">
+                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell">
                         {d.starts_at ? new Date(d.starts_at).toLocaleDateString() : '-'}
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell">
+                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell">
                         {d.expires_at ? new Date(d.expires_at).toLocaleDateString() : '-'}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -229,14 +229,14 @@ const PromotionsView = () => {
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setModalOpen(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+            <div className="flex items-center justify-between p-5 border-b border-gray-700">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-orange-50 text-orange-500 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-red-500/10 text-red-500 rounded-lg flex items-center justify-center">
                   <Tag size={16} />
                 </div>
-                <h2 className="text-base font-bold text-gray-900">Create Discount Code</h2>
+                <h2 className="text-base font-bold text-white">Create Discount Code</h2>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
@@ -271,13 +271,13 @@ const PromotionsView = () => {
                     className={inputClass}
                   >
                     <option value="percentage">Percentage (%)</option>
-                    <option value="fixed">Fixed Amount (₱)</option>
+                    <option value="fixed">Fixed Amount (â‚±)</option>
                   </select>
                 </InputField>
-                <InputField label={`Value ${form.type === 'percentage' ? '(%)' : '(₱)'}`} required>
+                <InputField label={`Value ${form.type === 'percentage' ? '(%)' : '(â‚±)'}`} required>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
-                      {form.type === 'percentage' ? '%' : '₱'}
+                      {form.type === 'percentage' ? '%' : 'â‚±'}
                     </span>
                     <input
                       type="number"
@@ -295,7 +295,7 @@ const PromotionsView = () => {
 
               {/* Min Purchase & Max Uses */}
               <div className="grid grid-cols-2 gap-4">
-                <InputField label="Minimum Purchase (₱)">
+                <InputField label="Minimum Purchase (â‚±)">
                   <input
                     type="number"
                     step="1"
@@ -347,23 +347,23 @@ const PromotionsView = () => {
               </div>
 
               {/* Active Toggle */}
-              <div className={`p-4 rounded-lg border ${form.is_active ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+              <div className={`p-4 rounded-lg border ${form.is_active ? 'bg-green-50 border-green-200' : 'bg-gray-900 border-gray-700'}`}>
                 <label className="flex items-center gap-2 font-medium text-sm cursor-pointer">
                   <input
                     type="checkbox"
                     checked={form.is_active}
                     onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))}
-                    className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500"
+                    className="w-4 h-4 text-red-500 rounded focus:ring-orange-500"
                   />
                   Active
-                  <span className="text-xs font-normal text-gray-500 ml-1">
+                  <span className="text-xs font-normal text-gray-400 ml-1">
                     {form.is_active ? '- This code can be used immediately' : '- This code is disabled'}
                   </span>
                 </label>
               </div>
 
               {/* Actions */}
-              <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+              <div className="flex justify-end gap-2 pt-4 border-t border-gray-700">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
@@ -373,7 +373,7 @@ const PromotionsView = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="px-5 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Create Discount
                 </button>
@@ -386,10 +386,10 @@ const PromotionsView = () => {
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
-              <h3 className="text-lg font-bold text-gray-900">Delete Discount</h3>
+              <h3 className="text-lg font-bold text-white">Delete Discount</h3>
             </div>
             <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete discount code <strong>"{deleteTarget.code}"</strong>?</p>
             <div className="flex gap-3">
@@ -404,3 +404,5 @@ const PromotionsView = () => {
 };
 
 export default PromotionsView;
+
+

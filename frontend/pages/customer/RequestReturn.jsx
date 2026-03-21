@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, RotateCcw, Package, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getOrderById } from '../../services/api';
@@ -81,11 +81,11 @@ const RequestReturn = () => {
       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
         <CheckCircle2 size={32} className="text-green-600" />
       </div>
-      <h2 className="font-display font-bold text-xl text-gray-900 mb-2">Return Request Submitted</h2>
-      <p className="text-gray-500 text-sm mb-6">We'll review your request and get back to you within 1–2 business days.</p>
+      <h2 className="font-display font-bold text-xl text-white mb-2">Return Request Submitted</h2>
+      <p className="text-gray-400 text-sm mb-6">We'll review your request and get back to you within 1â€“2 business days.</p>
       <div className="flex gap-3 justify-center">
-        <Link to="/my-returns" className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors">View My Returns</Link>
-        <Link to="/orders" className="px-5 py-2.5 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">Back to Orders</Link>
+        <Link to="/my-returns" className="px-5 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">View My Returns</Link>
+        <Link to="/orders" className="px-5 py-2.5 border border-gray-700 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-900 transition-colors">Back to Orders</Link>
       </div>
     </div>
   );
@@ -93,8 +93,8 @@ const RequestReturn = () => {
   if (!order) return (
     <div className="max-w-2xl mx-auto px-4 py-16 text-center">
       <Package size={48} className="mx-auto text-gray-300 mb-3" />
-      <h2 className="font-display font-semibold text-xl text-gray-900 mb-2">Order not found</h2>
-      <Link to="/orders" className="text-orange-500 hover:text-orange-600 text-sm font-medium">Back to orders</Link>
+      <h2 className="font-display font-semibold text-xl text-white mb-2">Order not found</h2>
+      <Link to="/orders" className="text-red-500 hover:text-orange-600 text-sm font-medium">Back to orders</Link>
     </div>
   );
 
@@ -102,37 +102,37 @@ const RequestReturn = () => {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <Link to={`/orders/${order.id}`} className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-orange-500 mb-6 transition-colors">
+      <Link to={`/orders/${order.id}`} className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-red-500 mb-6 transition-colors">
         <ArrowLeft size={16} /> Back to Order
       </Link>
 
-      <h1 className="font-display font-bold text-xl text-gray-900 mb-1 flex items-center gap-2"><RotateCcw size={22} /> Request Return</h1>
-      <p className="text-sm text-gray-500 mb-6">Order #{order.order_number || order.id}</p>
+      <h1 className="font-display font-bold text-xl text-white mb-1 flex items-center gap-2"><RotateCcw size={22} /> Request Return</h1>
+      <p className="text-sm text-gray-400 mb-6">Order #{order.order_number || order.id}</p>
 
       {error && (
-        <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-500 flex items-center gap-2">
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex items-center gap-2">
           <AlertCircle size={16} /> {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Select items */}
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900 text-sm">Select items to return</h3>
+        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+          <div className="p-4 border-b border-gray-700">
+            <h3 className="font-semibold text-white text-sm">Select items to return</h3>
           </div>
           <div className="divide-y divide-gray-100">
             {items.map((item, i) => (
-              <label key={i} className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50 transition-colors ${selectedItems.has(i) ? 'bg-orange-50/50' : ''}`}>
+              <label key={i} className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-900 transition-colors ${selectedItems.has(i) ? 'bg-red-500/10/50' : ''}`}>
                 <input type="checkbox" checked={selectedItems.has(i)} onChange={() => toggleItem(i)}
-                  className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500" />
-                <div className="w-12 h-12 bg-gray-50 rounded-lg overflow-hidden border border-gray-100 flex-shrink-0">
+                  className="w-4 h-4 text-red-500 border-gray-300 rounded focus:ring-orange-500" />
+                <div className="w-12 h-12 bg-gray-900 rounded-lg overflow-hidden border border-gray-700 flex-shrink-0">
                   {item.image_url ? <img src={item.image_url} alt="" className="w-full h-full object-cover" />
                     : <div className="w-full h-full flex items-center justify-center"><Package size={16} className="text-gray-300" /></div>}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{item.name || item.product_name}</p>
-                  <p className="text-xs text-gray-500">Qty: {item.quantity} · ₱{Number(item.price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-sm font-medium text-white truncate">{item.name || item.product_name}</p>
+                  <p className="text-xs text-gray-400">Qty: {item.quantity} Â· â‚±{Number(item.price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
                 </div>
               </label>
             ))}
@@ -140,13 +140,13 @@ const RequestReturn = () => {
         </div>
 
         {/* Reason */}
-        <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Reason for return</h3>
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+          <h3 className="font-semibold text-white text-sm mb-3">Reason for return</h3>
           <div className="space-y-2">
             {reasons.map(r => (
               <label key={r} className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="radio" name="reason" value={r} checked={reason === r} onChange={() => setReason(r)}
-                  className="w-4 h-4 text-orange-500 border-gray-300 focus:ring-orange-500" />
+                  className="w-4 h-4 text-red-500 border-gray-300 focus:ring-orange-500" />
                 <span className="text-gray-700">{r}</span>
               </label>
             ))}
@@ -154,14 +154,14 @@ const RequestReturn = () => {
         </div>
 
         {/* Notes */}
-        <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <h3 className="font-semibold text-gray-900 text-sm mb-3">Additional notes <span className="text-gray-400 font-normal">(optional)</span></h3>
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+          <h3 className="font-semibold text-white text-sm mb-3">Additional notes <span className="text-gray-400 font-normal">(optional)</span></h3>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Provide any additional details about your return..."
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" />
+            className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" />
         </div>
 
         <button type="submit" disabled={submitting}
-          className="w-full py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+          className="w-full py-3 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
           {submitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <RotateCcw size={16} />}
           Submit Return Request
         </button>
@@ -171,3 +171,5 @@ const RequestReturn = () => {
 };
 
 export default RequestReturn;
+
+

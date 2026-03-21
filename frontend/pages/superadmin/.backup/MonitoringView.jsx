@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   Activity, FileText, AlertTriangle, Search, RefreshCw,
   Loader2, CheckCircle2, XCircle, Filter, Download,
@@ -86,7 +86,7 @@ const MonitoringView = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-white flex items-center gap-2"><Activity size={22} className="text-red-400" /> Monitoring & Logs</h1>
-          <p className="text-sm text-gray-500 mt-1">View system activity, error logs, and transaction history</p>
+          <p className="text-sm text-gray-400 mt-1">View system activity, error logs, and transaction history</p>
         </div>
         <button onClick={loadData} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
           <RefreshCw size={14} /> Refresh
@@ -97,15 +97,15 @@ const MonitoringView = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-4 flex items-center gap-3">
           <div className="p-2 bg-blue-500/10 rounded-lg"><Activity size={18} className="text-blue-400" /></div>
-          <div><p className="text-xs text-gray-500">Activity Logs</p><p className="text-lg font-bold text-white">{activityLogs.length}</p></div>
+          <div><p className="text-xs text-gray-400">Activity Logs</p><p className="text-lg font-bold text-white">{activityLogs.length}</p></div>
         </div>
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-4 flex items-center gap-3">
           <div className="p-2 bg-red-500/10 rounded-lg"><AlertTriangle size={18} className="text-red-400" /></div>
-          <div><p className="text-xs text-gray-500">Error Logs</p><p className="text-lg font-bold text-white">{errorLogs.length}</p></div>
+          <div><p className="text-xs text-gray-400">Error Logs</p><p className="text-lg font-bold text-white">{errorLogs.length}</p></div>
         </div>
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-4 flex items-center gap-3">
-          <div className="p-2 bg-orange-500/10 rounded-lg"><FileText size={18} className="text-orange-400" /></div>
-          <div><p className="text-xs text-gray-500">Transaction Logs</p><p className="text-lg font-bold text-white">{transactionLogs.length}</p></div>
+          <div className="p-2 bg-red-500/100/10 rounded-lg"><FileText size={18} className="text-orange-400" /></div>
+          <div><p className="text-xs text-gray-400">Transaction Logs</p><p className="text-lg font-bold text-white">{transactionLogs.length}</p></div>
         </div>
       </div>
 
@@ -117,16 +117,16 @@ const MonitoringView = () => {
             return (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                  tab === t.id ? 'bg-red-600/20 text-red-400' : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                  tab === t.id ? 'bg-red-600/20 text-red-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'
                 }`}>
                 <Icon size={14} /> {t.label}
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${tab === t.id ? 'bg-red-600/30 text-red-300' : 'bg-gray-800 text-gray-500'}`}>{t.count}</span>
+                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${tab === t.id ? 'bg-red-600/30 text-red-300' : 'bg-gray-800 text-gray-400'}`}>{t.count}</span>
               </button>
             );
           })}
         </div>
         <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Search logs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 pr-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500/30 w-full sm:w-56" />
         </div>
@@ -137,7 +137,7 @@ const MonitoringView = () => {
         <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
           <div className="max-h-[520px] overflow-y-auto">
             {filterLogs(activityLogs).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                 <Activity size={36} className="mb-3 opacity-30" />
                 <p className="text-sm">No activity logs found</p>
               </div>
@@ -159,11 +159,11 @@ const MonitoringView = () => {
                         <span className={`text-xs font-medium ${getActionColor(log.action)}`}>{formatAction(log.action)}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-400 hidden md:table-cell">{log.user_name || 'System'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell font-mono">{log.ip_address || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell max-w-xs truncate">
+                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell font-mono">{log.ip_address || '-'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell max-w-xs truncate">
                         {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)).slice(0, 60) : '-'}
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -200,9 +200,9 @@ const MonitoringView = () => {
                         <span className="px-2 py-0.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-full text-[10px] font-bold">{log.error_type || 'Error'}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-300 max-w-xs truncate">{log.message}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell font-mono">{log.endpoint || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell">{log.user_name || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 hidden md:table-cell font-mono">{log.endpoint || '-'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell">{log.user_name || '-'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -217,7 +217,7 @@ const MonitoringView = () => {
         <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
           <div className="max-h-[520px] overflow-y-auto">
             {filterLogs(transactionLogs).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                 <FileText size={36} className="mb-3 opacity-30" />
                 <p className="text-sm">No transaction logs found</p>
               </div>
@@ -238,10 +238,10 @@ const MonitoringView = () => {
                         <span className={`text-xs font-medium ${getActionColor(log.action)}`}>{formatAction(log.action)}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-400 hidden md:table-cell">{log.user_name || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden lg:table-cell max-w-xs truncate">
+                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell max-w-xs truncate">
                         {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)).slice(0, 60) : '-'}
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -255,3 +255,5 @@ const MonitoringView = () => {
 };
 
 export default MonitoringView;
+
+
