@@ -168,9 +168,6 @@ const Navbar = ({ user, onLogout }) => {
   const isShopRoute = location.pathname === '/shop';
   const isHomeRoute = location.pathname === '/';
   const shouldShowGlobalSearch = isShopRoute || isHomeRoute;
-  const shopSearch = searchParams.get('search') || '';
-  const shopSort = searchParams.get('sort') || 'newest';
-  const shopView = searchParams.get('view') === 'list' ? 'list' : 'grid';
 
   useEffect(() => {
     if (isShopRoute) {
