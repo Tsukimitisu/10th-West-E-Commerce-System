@@ -32,15 +32,15 @@ const Footer = () => {
                   <input
                     type="email" value={email} onChange={e => setEmail(e.target.value)} required
                     placeholder="Enter your email"
-                    className="flex-1 md:w-72 px-4 py-3 bg-gray-800 border border-gray-700 rounded-l-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+                    className="flex-1 md:w-72 px-4 py-3 bg-gray-800 border border-gray-700 rounded-l-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
                   />
-                  <button type="submit" disabled={!newsletterConsent} className="px-5 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-r-lg transition-colors flex items-center gap-2">
+                  <button type="submit" disabled={!newsletterConsent} className="px-5 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-r-lg transition-colors flex items-center gap-2">
                     <Send size={16} /> Subscribe
                   </button>
                 </div>
                 <label className="flex items-start gap-2 mt-2 cursor-pointer">
                   <input type="checkbox" checked={newsletterConsent} onChange={e => setNewsletterConsent(e.target.checked)}
-                    className="mt-0.5 text-orange-500 focus:ring-orange-500 rounded" />
+                    className="mt-0.5 text-red-600 focus:ring-red-600 rounded" />
                   <span className="text-[11px] text-gray-500">I consent to receive marketing emails and agree to the <Link to="/privacy" className="text-gray-400 hover:text-white">Privacy Policy</Link> per RA 10173.</span>
                 </label>
               </form>
@@ -55,12 +55,12 @@ const Footer = () => {
           {/* Brand */}
           <div>
             <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm font-display">10</span>
               </div>
               <div>
                 <span className="font-display font-bold text-white text-lg leading-none">10TH WEST</span>
-                <span className="block text-[10px] font-semibold tracking-[0.2em] text-orange-500 uppercase">Moto Parts</span>
+                <span className="block text-[10px] font-semibold tracking-[0.2em] text-red-600 uppercase">Moto Parts</span>
               </div>
             </Link>
             <p className="text-sm text-gray-400 mb-4 leading-relaxed">
@@ -103,9 +103,9 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-semibold text-white mb-4">Connect With Us</h4>
             <div className="flex gap-3 mb-6">
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-orange-500 rounded-lg flex items-center justify-center transition-colors"><Facebook size={18} /></a>
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-orange-500 rounded-lg flex items-center justify-center transition-colors"><Instagram size={18} /></a>
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-orange-500 rounded-lg flex items-center justify-center transition-colors"><Youtube size={18} /></a>
+              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"><Facebook size={18} /></a>
+              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"><Instagram size={18} /></a>
+              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"><Youtube size={18} /></a>
             </div>
             <h4 className="font-display font-semibold text-white mb-3">We Accept</h4>
             <div className="flex flex-wrap gap-2">
