@@ -286,69 +286,6 @@ const Navbar = ({ user, onLogout }) => {
 
             {/* Right actions */}
             <div className="flex items-center gap-1">
-              {isShopRoute && (
-                <div ref={shopToolsRef} className="hidden lg:block relative">
-                  <button
-                    onClick={() => setShopToolsOpen(!shopToolsOpen)}
-                    className={`h-10 px-3 rounded-lg border text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 ${shopToolsOpen ? 'bg-red-50 border-red-300 text-red-600 shadow-md' : 'bg-gray-800 border-gray-700 text-gray-600 hover:text-red-600 hover:bg-red-50'}`}
-                  >
-                    <SlidersHorizontal size={16} />
-                    <span className="hidden sm:inline">Tools</span>
-                    <ChevronDown size={14} className={`transition-transform duration-300 ${shopToolsOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {shopToolsOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-[380px] bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 p-4 space-y-4 animate-fade-in z-50">
-                      <div className="relative">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                          value={shopSearch}
-                          onChange={(e) => updateShopParams({ search: e.target.value })}
-                          placeholder="Search products..."
-                          className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-700 bg-gray-900 text-xs text-gray-700 focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-red-500/30 transition-all duration-200"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={shopSort}
-                          onChange={(e) => updateShopParams({ sort: e.target.value })}
-                          className="h-10 flex-1 px-3 rounded-lg border border-gray-700 bg-gray-900 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-red-500/30 transition-all duration-200"
-                        >
-                          <option value="newest">Newest</option>
-                          <option value="price-asc">Price: Low to High</option>
-                          <option value="price-desc">Price: High to Low</option>
-                          <option value="best-selling">Best Selling</option>
-                          <option value="top-rated">Top Rated</option>
-                        </select>
-                        <button
-                          onClick={() => window.dispatchEvent(new CustomEvent('shop:open-filters'))}
-                          className="h-10 px-3 rounded-lg border border-gray-700 bg-gray-800 text-xs font-semibold text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5"
-                        >
-                          <SlidersHorizontal size={14} /> Filter
-                        </button>
-                      </div>
-                      <div className="flex items-center justify-end">
-                        <div className="h-10 inline-flex items-center border border-gray-700 rounded-lg overflow-hidden bg-gray-900">
-                          <button
-                            onClick={() => updateShopParams({ view: 'grid' })}
-                            className={`h-full px-3 transition-all duration-200 ${shopView === 'grid' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                            title="Grid view"
-                          >
-                            <Grid3X3 size={16} />
-                          </button>
-                          <button
-                            onClick={() => updateShopParams({ view: 'list' })}
-                            className={`h-full px-3 transition-all duration-200 ${shopView === 'list' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                            title="List view"
-                          >
-                            <List size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Notifications */}
               {user && (
                 <div ref={notifRef} className="relative">
