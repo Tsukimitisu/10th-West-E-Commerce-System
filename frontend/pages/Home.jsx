@@ -84,8 +84,12 @@ const Home = () => {
         );
         setRecentlyViewed(freshItems);
         
-        // Optionally update the cache so other tabs/components have the fresh stock as well
-        localStorage.setItem('recentlyViewed', JSON.stringify(freshItems));
+        // Update the cache safely to avoid infinite loops across tabs
+        const currentCache = localStorage.getItem('recentlyViewed');
+        const newCache = JSON.stringify(freshItems);
+        if (currentCache !== newCache) {
+          localStorage.setItem('recentlyViewed', newCache);
+        }
       } catch (err) {
         setRecentlyViewed(viewedItems.slice(0, 6));
       }
