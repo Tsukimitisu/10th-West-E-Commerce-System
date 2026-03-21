@@ -2,7 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Truck, Shield, Wrench, Search, Zap, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, X, Settings, Clock, Headphones } from 'lucide-react';
-import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist, getSystemSettings } from '../services/api';
+import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist, getSystemSettings, getProductById } from '../services/api';
 import ProductCard from '../components/ProductCard';
 
 const Home = () => {
@@ -71,9 +71,35 @@ const Home = () => {
 
   // Update real-time viewed items
   useEffect(() => {
+    const fetchFreshRecentlyViewed = async (viewedItems) => {
+      try {
+        const freshItems = await Promise.all(
+          viewedItems.slice(0, 6).map(async (item) => {
+            try {
+              return await getProductById(item.id);
+            } catch (err) {
+              return item; // Fallback to cached item if fetch fails
+            }
+          })
+        );
+        setRecentlyViewed(freshItems);
+        
+        // Update the cache safely to avoid infinite loops across tabs
+        const currentCache = localStorage.getItem('recentlyViewed');
+        const newCache = JSON.stringify(freshItems);
+        if (currentCache !== newCache) {
+          localStorage.setItem('recentlyViewed', newCache);
+        }
+      } catch (err) {
+        setRecentlyViewed(viewedItems.slice(0, 6));
+      }
+    };
+
     const handleStorageChange = () => {
       const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-      setRecentlyViewed(viewed.slice(0, 6));
+      // Show cached immediately, then fetch fresh ones
+      setRecentlyViewed(viewed.slice(0, 6)); 
+      fetchFreshRecentlyViewed(viewed);
     };
 
     // Initial load

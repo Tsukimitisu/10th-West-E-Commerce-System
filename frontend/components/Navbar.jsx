@@ -17,7 +17,6 @@ const Navbar = ({ user, onLogout }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const [shopToolsOpen, setShopToolsOpen] = useState(false);
   const { itemCount } = useCart();
   const { on, off, connected } = useSocket();
   const location = useLocation();
@@ -27,7 +26,6 @@ const Navbar = ({ user, onLogout }) => {
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
   const moreMenuRef = useRef(null);
-  const shopToolsRef = useRef(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -39,7 +37,6 @@ const Navbar = ({ user, onLogout }) => {
     setMobileOpen(false);
     setUserMenuOpen(false);
     setMoreMenuOpen(false);
-    setShopToolsOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -117,7 +114,6 @@ const Navbar = ({ user, onLogout }) => {
     const notifHandler = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false);
-      if (shopToolsRef.current && !shopToolsRef.current.contains(e.target)) setShopToolsOpen(false);
     };
     document.addEventListener('mousedown', notifHandler);
     return () => document.removeEventListener('mousedown', notifHandler);
@@ -172,9 +168,6 @@ const Navbar = ({ user, onLogout }) => {
   const isShopRoute = location.pathname === '/shop';
   const isHomeRoute = location.pathname === '/';
   const shouldShowGlobalSearch = isShopRoute || isHomeRoute;
-  const shopSearch = searchParams.get('search') || '';
-  const shopSort = searchParams.get('sort') || 'newest';
-  const shopView = searchParams.get('view') === 'list' ? 'list' : 'grid';
 
   useEffect(() => {
     if (isShopRoute) {
