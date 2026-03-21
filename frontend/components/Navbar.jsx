@@ -37,7 +37,6 @@ const Navbar = ({ user, onLogout }) => {
     setMobileOpen(false);
     setUserMenuOpen(false);
     setMoreMenuOpen(false);
-    setShopToolsOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -115,7 +114,6 @@ const Navbar = ({ user, onLogout }) => {
     const notifHandler = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
       if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false);
-      if (shopToolsRef.current && !shopToolsRef.current.contains(e.target)) setShopToolsOpen(false);
     };
     document.addEventListener('mousedown', notifHandler);
     return () => document.removeEventListener('mousedown', notifHandler);
