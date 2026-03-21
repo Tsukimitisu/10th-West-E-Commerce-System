@@ -84,6 +84,8 @@ const Checkout = () => {
           name: def.recipient_name || f.name,
           phone: def.phone || f.phone
         }));
+      } else if (addrs.length === 0) {
+        setShowNewAddress(true);
       }
     }).catch(() => {});
   }, []);
@@ -138,9 +140,10 @@ const Checkout = () => {
       return;
     }
 
-    const usingSavedAddress = selectedAddress && !showNewAddress;
-    const selectedAddr = addresses.find((a) => a.id === selectedAddress);
-    if (!usingSavedAddress && !showNewAddress) {
+const isNewAddressMode = showNewAddress || addresses.length === 0;
+      const usingSavedAddress = selectedAddress && !isNewAddressMode;
+      const selectedAddr = addresses.find((a) => a.id === selectedAddress);
+      if (!usingSavedAddress && !isNewAddressMode) {
       setError('Please select a shipping address.');
       return;
     }

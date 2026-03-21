@@ -39,6 +39,8 @@ const Home = () => {
     });
   });
 
+  const [isHeroPaused, setIsHeroPaused] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(null);
   const[isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
