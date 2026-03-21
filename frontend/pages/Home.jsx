@@ -1,8 +1,9 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Truck, Shield, Wrench, Search, Zap, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, X, Settings, Clock, Headphones } from 'lucide-react';
 import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist, getSystemSettings, getProductById } from '../services/api';
+import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
 
 const Home = () => {
@@ -21,10 +22,23 @@ const Home = () => {
     showArrows: true,
     pauseOnHover: true,
   });
-  const [isHeroPaused, setIsHeroPaused] = useState(false);
-  const [touchStartX, setTouchStartX] = useState(null);
-  
-  // --- UI State ---
+
+  // Custom socket hook binding
+  useSocketEvent('product:updated', (updatedProduct) => {
+    // If the updated product is in the recently viewed, update it automatically
+    setRecentlyViewed(prev => {
+      const matchIndex = prev.findIndex(p => p.id === updatedProduct.id);
+      if (matchIndex === -1) return prev;
+
+      const newRecent = [...prev];
+      newRecent[matchIndex] = { ...newRecent[matchIndex], ...updatedProduct };
+
+      // Keep local storage in sync with live updates
+      localStorage.setItem('recentlyViewed', JSON.stringify(newRecent));
+      return newRecent;
+    });
+  });
+
   const[isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
