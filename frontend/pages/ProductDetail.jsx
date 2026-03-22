@@ -271,14 +271,55 @@ const ProductDetail = () => {
             {/* Quantity & Actions */}
             <div className="flex flex-wrap gap-3 mb-6">
               <div className="flex items-center border border-gray-700 rounded-lg">
-                <button onClick={() => { setQuantity(q => Math.max(1, q - 1)); setQuantityError(''); }} className="px-3 py-3 text-gray-400 hover:text-gray-700 hover:bg-gray-900 transition-colors"><Minus size={16} /></button>
-                <span className="w-12 text-center font-medium">{quantity}</span>
+                <button onClick={() => { setQuantity(q => Math.max(1, q - 1)); setQuantityError(''); }} className="px-3 py-3 text-gray-400 hover:text-gray-700 hover:bg-gray-900 transition-colors" disabled={quantity <= 1}><Minus size={16} /></button>
+                <input 
+                  type="text" 
+                  inputMode="numeric" 
+                  pattern="[0-9]*"
+                  value={quantity} 
+                  onChange={(e) => {
+                    const rawVal = e.target.value;
+                    if (rawVal === '') {
+                      return;
+                    }
+                    let val = parseInt(rawVal, 10);
+                    if (isNaN(val)) return;
+                    
+                    const maxQty = 50;
+                    let errorMsg = '';
+                    
+                    if (val < 1) val = 1;
+                    if (val > maxQty) {
+                      val = maxQty;
+                      errorMsg = `Maximum quantity limit is ${maxQty}.`;
+                    }
+                    if (val > maxStock) {
+                      val = maxStock;
+                      errorMsg = `Maximum available quantity is ${maxStock}.`;
+                    }
+                    
+                    setQuantity(val);
+                    setQuantityError(errorMsg);
+                  }}
+                  onBlur={(e) => {
+                    if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
+                      setQuantity(1);
+                      setQuantityError('');
+                    }
+                  }}
+                  className="w-12 text-center font-medium bg-transparent text-white focus:outline-none focus:bg-gray-700 py-1 transition-colors" 
+                />
                 <button
                   onClick={() => {
                     setQuantity((q) => {
+                      const maxQty = 50;
+                      if (q >= maxQty) {
+                        setQuantityError(`Maximum quantity limit is ${maxQty}.`);
+                        return maxQty;
+                      }
                       if (q >= maxStock) {
                         setQuantityError(`Maximum available quantity is ${maxStock}.`);
-                        return q;
+                        return maxStock;
                       }
                       setQuantityError('');
                       return q + 1;
