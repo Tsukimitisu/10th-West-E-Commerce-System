@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, LogIn } from 'lucide-react';
 import { useCart } from '../context/CartContext';
@@ -18,29 +18,6 @@ const CartDrawer = ({ isOpen, onClose }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [quantityErrors, setQuantityErrors] = useState({});
   const [localQuantities, setLocalQuantities] = useState({});
-
-  useEffect(() => {
-    const nextLocal = {};
-    items.forEach(i => {
-      // Only keep the local state if the user is currently editing it
-      // otherwise, sync it to the global cart. Actually, it's safer to just sync it
-      // if it does not equal the current value, but since items is from context, 
-      // we can just set it directly. However, we don't want to interrupt active typing.
-      // This is a simple safe approach:
-      if (localQuantities[i.productId] === undefined) {
-         nextLocal[i.productId] = i.quantity;
-      } else {
-         nextLocal[i.productId] = localQuantities[i.productId];
-      }
-    });
-    // Add any that were already defined but maybe update the ones we know
-    items.forEach(i => {
-       if (localQuantities[i.productId] === undefined) {
-          nextLocal[i.productId] = i.quantity;
-       }
-    });
-    // It's better to just use item.quantity as a fallback if local isn't present
-  }, [items]);
 
   const formatPrice = (p) => `₱${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
