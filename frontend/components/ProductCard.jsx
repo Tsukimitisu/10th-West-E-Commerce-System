@@ -1,10 +1,29 @@
-﻿import React from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, Star, Tag, AlertTriangle } from 'lucide-react';
-import { addToWishlist, removeFromWishlist } from '../services/api';
+import { addToWishlist, removeFromWishlist, getWishlist } from '../services/api';
 
 const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'grid' }) => {
-  const isWishlisted = wishlistedIds.includes(product.id);
+  const [localWishlisted, setLocalWishlisted] = useState(wishlistedIds.includes(product.id));
+
+  useEffect(() => {
+    setLocalWishlisted(wishlistedIds.includes(product.id));
+  }, [wishlistedIds, product.id]);
+
+  useEffect(() => {
+    if (wishlistedIds.length > 0) return;
+    const checkWishlist = async () => {
+      try {
+        const user = localStorage.getItem('shopCoreUser');
+        if (!user) return;
+        const userId = JSON.parse(user).id;
+        const items = await getWishlist(userId);
+        setLocalWishlisted(items.some(i => i.product_id === product.id));
+      } catch {}
+    };
+    checkWishlist();
+  }, [product.id, wishlistedIds.length]);
+
   const stockLevel = Math.max(0, Number(product.stock_quantity ?? 0));
   const isOutOfStock = stockLevel <= 0;
   const isLowStock = stockLevel > 0 && stockLevel <= (product.low_stock_threshold || 5);
@@ -18,10 +37,16 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
       const user = localStorage.getItem('shopCoreUser');
       if (!user) return;
       const userId = JSON.parse(user).id;
-      if (isWishlisted) await removeFromWishlist(userId, product.id);
+      
+      const newStatus = !localWishlisted;
+      setLocalWishlisted(newStatus);
+
+      if (!newStatus) await removeFromWishlist(userId, product.id);
       else await addToWishlist(userId, product.id);
-      onWishlistToggle?.(product.id, !isWishlisted);
-    } catch {}
+      onWishlistToggle?.(product.id, newStatus);
+    } catch {
+      setLocalWishlisted(!localWishlisted); // Revert on failure
+    }
   };
 
   const formatPrice = (p) => `${'\u20B1'}${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
@@ -40,7 +65,7 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
               <h3 className="font-semibold text-white group-hover:text-red-500 transition-colors line-clamp-1">{product.name}</h3>
             </div>
             <button onClick={handleWishlist} className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0">
-              <Heart size={18} className={isWishlisted ? 'text-red-500 fill-orange-500' : 'text-gray-300 hover:text-orange-400'} />
+              <Heart size={18} className={localWishlisted ? 'text-red-500 fill-orange-500' : 'text-gray-300 hover:text-orange-400'} />
             </button>
           </div>
           <p className="text-sm text-gray-400 line-clamp-2 mt-1">{product.description}</p>
@@ -83,7 +108,7 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
           )}
         </div>
         <button onClick={handleWishlist} className="absolute top-2 right-2 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-gray-800 hover:scale-110 transition-all">
-          <Heart size={16} className={isWishlisted ? 'text-red-500 fill-orange-500' : 'text-gray-400'} />
+          <Heart size={16} className={localWishlisted ? 'text-red-500 fill-orange-500' : 'text-gray-400'} />
         </button>
         {isOutOfStock && (
           <div className="absolute inset-0 bg-white/60 flex items-center justify-center">

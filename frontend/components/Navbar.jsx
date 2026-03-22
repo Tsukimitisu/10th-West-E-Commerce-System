@@ -149,20 +149,32 @@ const Navbar = ({ user, onLogout }) => {
 
     if (refType === 'order' || refType === 'order_status') {
       if (user.role === 'customer') {
-        navigate(refId ? `/profile/orders` : '/profile/orders'); // Ideally scroll or route to specific order
+        navigate(refId ? `/orders/${refId}` : '/orders');
       } else {
         navigate(refId ? `/admin/orders` : '/admin/orders');
       }
-    } else if (refType === 'support' || refType === 'ticket') {
+    } else if (refType === 'support' || refType === 'ticket' || refType === 'message') {
       if (user.role === 'customer') {
-        navigate('/support');
+        navigate('/contact');
       } else {
         navigate('/admin/support');
       }
+    } else if (refType === 'promo') {
+      navigate(refId ? `/products/${refId}` : '/shop');
     } else if (refType === 'inventory' || refType === 'product') {
-       navigate('/admin/inventory');
+       if (user.role !== 'customer') {
+         navigate('/admin/inventory');
+       } else {
+         navigate(refId ? `/products/${refId}` : '/shop');
+       }
+    } else {
+      // Fallback
+      if (user.role === 'customer') {
+        navigate('/');
+      } else {
+        navigate('/admin');
+      }
     }
-    // Add more types as needed
   };
 
   const isShopRoute = location.pathname === '/shop';

@@ -33,6 +33,8 @@ import variantRoutes from './routes/variants.js';
 import subcategoryRoutes from './routes/subcategories.js';
 import shippingRoutes from './routes/shipping.js';
 import adminRoutes from './routes/admin.js';
+import wishlistRoutes from './routes/wishlist.js';
+
 import { apiLimiter, authLimiter } from './middleware/rateLimiter.js';
 import { errorLogger } from './middleware/errorLogger.js';
 import { generateCsrfToken, validateCsrf } from './middleware/csrf.js';
@@ -205,6 +207,7 @@ app.use('/api/variants', variantRoutes);
 app.use('/api/subcategories', subcategoryRoutes);
 app.use('/api/shipping', shippingRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/wishlist', wishlistRoutes);
 
 // 404 handler
 app.use((req, res) => {
