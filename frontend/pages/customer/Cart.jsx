@@ -46,8 +46,50 @@ const Cart = () => {
     removeFromCart(productId);
   };
 
+  const MAX_QUANTITY = 50;
+
+  const handleQuantityInputChange = (item, rawValue) => {
+    if (rawValue === '') {
+      return;
+    }
+    let val = parseInt(rawValue, 10);
+    if (isNaN(val)) return;
+
+    if (val < 1) val = 1;
+
+    const stock = Number(item.product.stock_quantity ?? Infinity);
+    let errorMsg = null;
+
+    if (val > MAX_QUANTITY) {
+      val = MAX_QUANTITY;
+      errorMsg = `Maximum quantity limit is ${MAX_QUANTITY}.`;
+    }
+    if (Number.isFinite(stock) && val > stock) {
+      val = stock;
+      errorMsg = `Cannot exceed stock (${stock}).`;
+    }
+
+    if (errorMsg) {
+       setQuantityErrors((prev) => ({ ...prev, [item.productId]: errorMsg }));
+    } else {
+       clearQuantityError(item.productId);
+    }
+    updateQuantity(item.productId, val);
+  };
+
+  const handleQuantityBlur = (item, e) => {
+    if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
+      updateQuantity(item.productId, 1);
+      clearQuantityError(item.productId);
+    }
+  };
+
   const handleIncreaseQty = (item) => {
     const stock = Number(item.product.stock_quantity ?? Infinity);
+    if (item.quantity >= MAX_QUANTITY) {
+      setQuantityErrors((prev) => ({ ...prev, [item.productId]: `Maximum quantity limit is ${MAX_QUANTITY}.` }));
+      return;
+    }
     if (Number.isFinite(stock) && item.quantity >= stock) {
       setQuantityErrors((prev) => ({ ...prev, [item.productId]: `Cannot exceed stock (${stock}).` }));
       return;
@@ -144,10 +186,18 @@ const Cart = () => {
                         {/* Quantity */}
                         <div className="col-span-2 flex justify-center mt-3 md:mt-0">
                           <div className="flex items-center border border-gray-700 rounded-lg">
-                            <button onClick={() => handleDecreaseQty(item)} className="px-2.5 py-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-900 transition-colors">
+                            <button onClick={() => handleDecreaseQty(item)} className="px-2.5 py-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-900 transition-colors" disabled={item.quantity <= 1}>
                               <Minus size={14} />
                             </button>
-                            <span className="w-10 text-center text-sm font-medium">{item.quantity}</span>
+                            <input 
+                              type="text" 
+                              inputMode="numeric" 
+                              pattern="[0-9]*"
+                              value={item.quantity} 
+                              onChange={(e) => handleQuantityInputChange(item, e.target.value)} 
+                              onBlur={(e) => handleQuantityBlur(item, e)}
+                              className="w-12 py-1 text-sm font-medium text-center bg-transparent text-white focus:outline-none focus:bg-gray-700 transition-colors"
+                            />
                             <button onClick={() => handleIncreaseQty(item)} className="px-2.5 py-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-900 transition-colors">
                               <Plus size={14} />
                             </button>

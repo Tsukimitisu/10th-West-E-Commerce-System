@@ -532,11 +532,37 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                             >
                               -
                             </button>
-                            <span className="text-xs text-white font-medium min-w-[12px] text-center">{buyNowQty}</span>
+                            <input 
+                              type="text" 
+                              inputMode="numeric" 
+                              pattern="[0-9]*"
+                              value={buyNowQty} 
+                              onChange={(e) => {
+                                const rawVal = e.target.value;
+                                if (rawVal === '') {
+                                  return;
+                                }
+                                let val = parseInt(rawVal, 10);
+                                if (isNaN(val)) return;
+                                const maxQty = 50;
+                                const stock = Number(item.product.stock_quantity ?? Infinity);
+                                if (val < 1) val = 1;
+                                if (val > maxQty) val = maxQty;
+                                if (Number.isFinite(stock) && val > stock) val = stock;
+                                setBuyNowQty(val);
+                                setError('');
+                              }} 
+                              onBlur={(e) => {
+                                if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
+                                  setBuyNowQty(1);
+                                }
+                              }}
+                              className="text-xs text-white font-medium w-8 text-center bg-transparent border-none rounded focus:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-600 px-0 transition-colors"
+                            />
                             <button
                               type="button"
-                              disabled={buyNowQty >= (item.product.stock_quantity || 100)}
-                              onClick={() => setBuyNowQty(Math.min((item.product.stock_quantity || 100), buyNowQty + 1))}
+                              disabled={buyNowQty >= (item.product.stock_quantity || 100) || buyNowQty >= 50}
+                              onClick={() => setBuyNowQty(Math.min((item.product.stock_quantity || 100), Math.min(50, buyNowQty + 1)))}
                               className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
                             >
                               +
