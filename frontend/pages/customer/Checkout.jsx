@@ -8,7 +8,7 @@ import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
 
 const Checkout = () => {
-  const { selectedItems: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearSelectedItems } = useCart();
+  const { selectedItems: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearSelectedItems, updateQuantity } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
@@ -72,6 +72,63 @@ const Checkout = () => {
     street: '', barangay: '', city: '', state: '', postal_code: '',
     lat: null, lng: null,
   });
+
+  const [localQuantities, setLocalQuantities] = useState({});
+  const [quantityErrors, setQuantityErrors] = useState({});
+  const MAX_QUANTITY = 50;
+
+  const handleQuantityInputChange = (item, rawValue) => {
+    if (rawValue === '') {
+      setLocalQuantities(prev => ({ ...prev, [item.productId]: '' }));
+      return;
+    }
+    let val = parseInt(rawValue, 10);
+    if (isNaN(val)) return;
+    setLocalQuantities(prev => ({ ...prev, [item.productId]: val }));
+  };
+
+  const handleQuantityBlur = (item) => {
+    const rawVal = localQuantities[item.productId];
+    if (rawVal === undefined) return;
+
+    if (rawVal === '' || isNaN(parseInt(rawVal, 10))) {
+      setLocalQuantities(prev => ({ ...prev, [item.productId]: 1 }));
+      updateQuantity(item.productId, 1);
+      setQuantityErrors(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
+      return;
+    }
+
+    let val = parseInt(rawVal, 10);
+    if (val < 1) val = 1;
+
+    const stock = Number(item.product.stock_quantity ?? Infinity);
+    let errorMsg = null;
+
+    if (val > MAX_QUANTITY) {
+      val = MAX_QUANTITY;
+      errorMsg = `Maximum quantity limit is ${MAX_QUANTITY}.`;
+    }
+    if (Number.isFinite(stock) && val > stock) {
+      val = stock;
+      errorMsg = `Cannot exceed stock (${stock}).`;
+    }
+
+    if (errorMsg) {
+       setQuantityErrors((prev) => ({ ...prev, [item.productId]: errorMsg }));
+    } else {
+       setQuantityErrors(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
+    }
+
+    setLocalQuantities(prev => {
+       const next = { ...prev };
+       delete next[item.productId];
+       return next;
+    });
+
+    if (val !== item.quantity) {
+       updateQuantity(item.productId, val);
+    }
+  };
 
   useEffect(() => {
     const persistedAgreement = localStorage.getItem('checkoutTermsAccepted') === 'true';
@@ -579,7 +636,54 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                             </button>
                           </div>
                         ) : (
-                          <p className="text-xs text-gray-400 mt-1">Qty: {item.quantity}</p>
+                          <>
+                            <div className="flex items-center gap-2 mt-1">
+                              <button
+                                type="button"
+                                disabled={item.quantity <= 1}
+                                onClick={() => {
+                                  updateQuantity(item.productId, item.quantity - 1);
+                                  setQuantityErrors(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
+                                }}
+                                className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
+                              >
+                                -
+                              </button>
+                              <input 
+                                type="text" 
+                                inputMode="numeric" 
+                                pattern="[0-9]*"
+                                value={localQuantities[item.productId] !== undefined ? localQuantities[item.productId] : item.quantity} 
+                                onChange={(e) => handleQuantityInputChange(item, e.target.value)} 
+                                onBlur={() => handleQuantityBlur(item)}
+                                className="text-xs text-white font-medium w-8 text-center bg-transparent border-none rounded focus:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-600 px-0 transition-colors"
+                              />
+                              <button
+                                type="button"
+                                disabled={item.quantity >= (item.product.stock_quantity || 100) || item.quantity >= 50}
+                                onClick={() => {
+                                  const maxQty = 50;
+                                  const stock = Number(item.product.stock_quantity ?? Infinity);
+                                  if (item.quantity >= maxQty) {
+                                    setQuantityErrors(prev => ({ ...prev, [item.productId]: `Maximum quantity limit is ${maxQty}.` }));
+                                    return;
+                                  }
+                                  if (Number.isFinite(stock) && item.quantity >= stock) {
+                                    setQuantityErrors(prev => ({ ...prev, [item.productId]: `Cannot exceed stock (${stock}).` }));
+                                    return;
+                                  }
+                                  updateQuantity(item.productId, item.quantity + 1);
+                                  setQuantityErrors(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
+                                }}
+                                className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
+                              >
+                                +
+                              </button>
+                            </div>
+                            {quantityErrors[item.productId] && (
+                              <p className="text-[10px] text-red-500 mt-1">{quantityErrors[item.productId]}</p>
+                            )}
+                          </>
                         )}
                       </div>
                       <span className="text-sm font-medium text-white">{formatPrice((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity)}</span>
