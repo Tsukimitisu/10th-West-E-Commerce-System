@@ -14,22 +14,31 @@ const Checkout = () => {
   const searchParams = new URLSearchParams(location.search);
   const isBuyNowQuery = searchParams.get('buyNow') === '1';
 
-  const isBuyNow = !!(location.state?.buyNowItem || (isBuyNowQuery && sessionStorage.getItem('buyNowItem')));
-  const buyNowItem = useMemo(() => {
-    if (location.state?.buyNowItem) return location.state.buyNowItem;
-    
-    const stored = sessionStorage.getItem('buyNowItem');
-    if (stored) {
-      if (isBuyNowQuery) {
-        sessionStorage.removeItem('buyNowItem');
-        return JSON.parse(stored);
-      } else {
-        // Clear it if they landed on normal checkout without the buyNow flag
-        sessionStorage.removeItem('buyNowItem');
-      }
+  const buyNowItemStore = useMemo(() => {
+    try {
+      const stored = sessionStorage.getItem('buyNowItem');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
     }
+  }, []);
+
+  const isBuyNow = !!(location.state?.buyNowItem || (isBuyNowQuery && buyNowItemStore));
+  
+  const buyNowItem = useMemo(() => {
+    if (location.state?.buyNowItem) {
+      sessionStorage.setItem('buyNowItem', JSON.stringify(location.state.buyNowItem));
+      return location.state.buyNowItem;
+    }
+    
+    if (isBuyNowQuery && buyNowItemStore) {
+      return buyNowItemStore;
+    }
+
+    // Only clear if we landed here normally without the query or state
+    sessionStorage.removeItem('buyNowItem');
     return null;
-  }, [location.state, isBuyNowQuery]);
+  }, [location.state, isBuyNowQuery, buyNowItemStore]);
 
   const [buyNowQty, setBuyNowQty] = useState(1);
 
