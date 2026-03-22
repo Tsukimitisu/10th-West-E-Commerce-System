@@ -31,9 +31,17 @@ const Checkout = () => {
     return null;
   }, [location.state, isBuyNowQuery]);
 
-  const items = isBuyNow && buyNowItem ? [buyNowItem] : cartItems;
+  const [buyNowQty, setBuyNowQty] = useState(1);
+
+  useEffect(() => {
+    if (buyNowItem) {
+      setBuyNowQty(buyNowItem.quantity || 1);
+    }
+  }, [buyNowItem]);
+
+  const items = isBuyNow && buyNowItem ? [{ ...buyNowItem, quantity: buyNowQty }] : cartItems;
   const subtotal = isBuyNow && buyNowItem
-    ? ((buyNowItem.product.is_on_sale && buyNowItem.product.sale_price ? buyNowItem.product.sale_price : buyNowItem.product.price) * buyNowItem.quantity)
+    ? ((buyNowItem.product.is_on_sale && buyNowItem.product.sale_price ? buyNowItem.product.sale_price : buyNowItem.product.price) * buyNowQty)
     : cartSubtotal;
   const total = isBuyNow ? subtotal - (discountAmount || 0) : cartTotal;
   const [addresses, setAddresses] = useState([]);
@@ -514,7 +522,29 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white line-clamp-1">{item.product.name}</p>
-                        <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
+                        {isBuyNow ? (
+                          <div className="flex items-center gap-2 mt-1">
+                            <button
+                              type="button"
+                              disabled={buyNowQty <= 1}
+                              onClick={() => setBuyNowQty(Math.max(1, buyNowQty - 1))}
+                              className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
+                            >
+                              -
+                            </button>
+                            <span className="text-xs text-white font-medium min-w-[12px] text-center">{buyNowQty}</span>
+                            <button
+                              type="button"
+                              disabled={buyNowQty >= (item.product.stock_quantity || 100)}
+                              onClick={() => setBuyNowQty(Math.min((item.product.stock_quantity || 100), buyNowQty + 1))}
+                              className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400 mt-1">Qty: {item.quantity}</p>
+                        )}
                       </div>
                       <span className="text-sm font-medium text-white">{formatPrice((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity)}</span>
                     </div>
