@@ -1,5 +1,5 @@
 ﻿import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, Check, X } from 'lucide-react';
 import { register, API_ORIGIN } from '../services/api';
 
@@ -16,6 +16,8 @@ const Register = ({ onLogin }) => {
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const defaultRedirect = searchParams.get('redirect') || '/';
 
   const checks = [
     { label: 'At least 8 characters', pass: password.length >= 8 },
@@ -43,12 +45,28 @@ const Register = ({ onLogin }) => {
         setConfirmPassword('');
         setAgreeTerms(false);
         setAgeConfirmed(false);
-        setTimeout(() => navigate('/login'), 2000);
+        const additionalParams = new URLSearchParams(searchParams);
+        additionalParams.delete('redirect');
+        const paramString = additionalParams.toString();
+        
+        let loginUrl = '/login';
+        if (defaultRedirect !== '/') {
+          loginUrl += `?redirect=${defaultRedirect}`;
+          if (paramString) loginUrl += `&${paramString}`;
+        }
+        setTimeout(() => navigate(loginUrl), 2000);
         return;
       }
       if (result?.user && result?.token) {
         onLogin(result.user, result.token);
-        navigate('/');
+        
+        const additionalParams = new URLSearchParams(searchParams);
+        additionalParams.delete('redirect');
+        const paramString = additionalParams.toString();
+        let redirect = defaultRedirect;
+        if (paramString) redirect += `?${paramString}`;
+        
+        navigate(redirect);
       } else {
         setSuccess(result?.message || 'Registration successful. Please verify your email before signing in.');
       }

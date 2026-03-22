@@ -30,6 +30,12 @@ const Login = ({ onLogin }) => {
       // Role-based redirect: each role goes to their own dashboard
       const role = result.user?.role;
       let redirect = defaultRedirect;
+      
+      const additionalParams = new URLSearchParams(searchParams);
+      additionalParams.delete('redirect');
+      const paramString = additionalParams.toString();
+      if (paramString) redirect += `?${paramString}`;
+
       if (role === 'super_admin') redirect = '/super-admin';
       else if (role === 'owner') redirect = '/admin';
       else if (role === 'store_staff') redirect = '/admin';
