@@ -20,6 +20,7 @@ const Cart = () => {
   const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [quantityErrors, setQuantityErrors] = useState({});
+  const [localQuantities, setLocalQuantities] = useState({});
 
   const formatPrice = (p) => `₱${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
@@ -50,11 +51,26 @@ const Cart = () => {
 
   const handleQuantityInputChange = (item, rawValue) => {
     if (rawValue === '') {
+      setLocalQuantities(prev => ({ ...prev, [item.productId]: '' }));
       return;
     }
     let val = parseInt(rawValue, 10);
     if (isNaN(val)) return;
+    setLocalQuantities(prev => ({ ...prev, [item.productId]: val }));
+  };
 
+  const handleQuantityBlur = (item) => {
+    const rawVal = localQuantities[item.productId];
+    if (rawVal === undefined) return;
+
+    if (rawVal === '' || isNaN(parseInt(rawVal, 10))) {
+      setLocalQuantities(prev => ({ ...prev, [item.productId]: 1 }));
+      updateQuantity(item.productId, 1);
+      clearQuantityError(item.productId);
+      return;
+    }
+
+    let val = parseInt(rawVal, 10);
     if (val < 1) val = 1;
 
     const stock = Number(item.product.stock_quantity ?? Infinity);
@@ -74,13 +90,15 @@ const Cart = () => {
     } else {
        clearQuantityError(item.productId);
     }
-    updateQuantity(item.productId, val);
-  };
 
-  const handleQuantityBlur = (item, e) => {
-    if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
-      updateQuantity(item.productId, 1);
-      clearQuantityError(item.productId);
+    setLocalQuantities(prev => {
+       const next = { ...prev };
+       delete next[item.productId];
+       return next;
+    });
+
+    if (val !== item.quantity) {
+       updateQuantity(item.productId, val);
     }
   };
 
@@ -193,9 +211,9 @@ const Cart = () => {
                               type="text" 
                               inputMode="numeric" 
                               pattern="[0-9]*"
-                              value={item.quantity} 
+                              value={localQuantities[item.productId] !== undefined ? localQuantities[item.productId] : item.quantity} 
                               onChange={(e) => handleQuantityInputChange(item, e.target.value)} 
-                              onBlur={(e) => handleQuantityBlur(item, e)}
+                              onBlur={() => handleQuantityBlur(item)}
                               className="w-12 py-1 text-sm font-medium text-center bg-transparent text-white focus:outline-none focus:bg-gray-700 transition-colors"
                             />
                             <button onClick={() => handleIncreaseQty(item)} className="px-2.5 py-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-900 transition-colors">
