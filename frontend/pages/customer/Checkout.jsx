@@ -540,6 +540,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                               onChange={(e) => {
                                 const rawVal = e.target.value;
                                 if (rawVal === '') {
+                                  setBuyNowQty('');
                                   return;
                                 }
                                 let val = parseInt(rawVal, 10);
@@ -553,7 +554,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                                 setError('');
                               }} 
                               onBlur={(e) => {
-                                if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
+                                if (buyNowQty === '' || isNaN(parseInt(buyNowQty, 10))) {
                                   setBuyNowQty(1);
                                 }
                               }}

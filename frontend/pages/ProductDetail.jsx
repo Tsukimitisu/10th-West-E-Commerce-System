@@ -280,6 +280,7 @@ const ProductDetail = () => {
                   onChange={(e) => {
                     const rawVal = e.target.value;
                     if (rawVal === '') {
+                      setQuantity('');
                       return;
                     }
                     let val = parseInt(rawVal, 10);
@@ -301,8 +302,8 @@ const ProductDetail = () => {
                     setQuantity(val);
                     setQuantityError(errorMsg);
                   }}
-                  onBlur={(e) => {
-                    if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
+                  onBlur={() => {
+                    if (quantity === '' || isNaN(parseInt(quantity, 10))) {
                       setQuantity(1);
                       setQuantityError('');
                     }
