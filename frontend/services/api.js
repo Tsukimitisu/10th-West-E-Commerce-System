@@ -801,7 +801,6 @@ export const deleteProduct = async (id) => {
 
 export const uploadProductImage = async (file) => {
   if (!file) throw new Error('Image file is required');
-  if (USE_SUPABASE) throw new Error('Image upload is only available in backend API mode');
 
   const token = getAuthToken();
   if (!token) throw new Error('You must be logged in to upload images');
@@ -2122,6 +2121,16 @@ export const addSubcategory = async (subcategory) => {
     return data;
   }
   return authenticatedFetch(`${API_URL}/subcategories`, { method: 'POST', body: JSON.stringify(subcategory) });
+};
+
+export const updateSubcategory = async (id, name) => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('subcategories').update({ name }).eq('id', id).select().single();
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('subcategory.update', 'subcategory', id, { name });
+    return data;
+  }
+  return authenticatedFetch(`${API_URL}/subcategories/${id}`, { method: 'PUT', body: JSON.stringify({ name }) });
 };
 
 export const deleteSubcategory = async (id) => {

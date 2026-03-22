@@ -1,7 +1,8 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { getProducts, getCategories, createProduct, updateProduct, deleteProduct, uploadProductImage, addCategory, updateCategory, deleteCategory } from '../../services/api';
-import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle } from 'lucide-react';
+import { getProducts, getCategories, getSubcategories, createProduct, updateProduct, deleteProduct, uploadProductImage, addCategory, updateCategory, deleteCategory, addSubcategory, updateSubcategory, deleteSubcategory } from '../../services/api';
+import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle, Layers } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
+import VariantsModal from '../../components/owner/VariantsModal';
 import { useSocketEvent } from '../../context/SocketContext';
 
 const InputField = ({ label, required, children }) => (
@@ -13,11 +14,14 @@ const inputClass = "w-full px-3 py-2 border border-gray-700 rounded-lg text-sm f
 const ProductsView = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [filterStock, setFilterStock] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [variantsModalOpen, setVariantsModalOpen] = useState(false);
+  const [selectedProductVariants, setSelectedProductVariants] = useState(null);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
@@ -30,17 +34,21 @@ const ProductsView = () => {
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [categoryError, setCategoryError] = useState('');
   const [categorySubmitting, setCategorySubmitting] = useState(false);
+  const [subcategoryModalOpen, setSubcategoryModalOpen] = useState(false);
+  const [newSubcategoryName, setNewSubcategoryName] = useState('');
+  const [editingSubcategoryId, setEditingSubcategoryId] = useState(null);
+  const [editingSubcategoryName, setEditingSubcategoryName] = useState('');
   const [form, setForm] = useState({
     partNumber: '', name: '', description: '', price: '', buyingPrice: '',
-    category_id: '', image: '', stock_quantity: '0', boxNumber: '',
+    category_id: '', subcategory_id: '', image: '', stock_quantity: '0', boxNumber: '',
     low_stock_threshold: '5', sale_price: '', is_on_sale: false, sku: '', barcode: '',
     brand: ''
   });
 
   const fetch = async () => {
     try {
-      const [p, c] = await Promise.all([getProducts(), getCategories()]);
-      setProducts(p); setCategories(c);
+      const [p, c, s] = await Promise.all([getProducts(), getCategories(), getSubcategories()]);
+      setProducts(p); setCategories(c); setSubcategories(s || []);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -74,6 +82,7 @@ const ProductsView = () => {
       price: '',
       buyingPrice: '',
       category_id: categories[0]?.id?.toString() || '',
+      subcategory_id: '',
       image: '',
       stock_quantity: '0',
       boxNumber: '',
@@ -94,7 +103,7 @@ const ProductsView = () => {
     setFormError('');
     setForm({
       partNumber: p.partNumber || '', name: p.name, description: p.description || '', price: p.price.toString(),
-      buyingPrice: p.buyingPrice.toString(), category_id: p.category_id.toString(), image: p.image || '',
+      buyingPrice: p.buyingPrice.toString(), category_id: p.category_id.toString(), subcategory_id: p.subcategory_id?.toString() || '', image: p.image || '',
       stock_quantity: p.stock_quantity.toString(), boxNumber: p.boxNumber || '',
       low_stock_threshold: p.low_stock_threshold.toString(), sale_price: p.sale_price?.toString() || '',
       is_on_sale: p.is_on_sale || false, sku: p.sku || '', barcode: p.barcode || '', brand: p.brand || ''
@@ -109,7 +118,7 @@ const ProductsView = () => {
     setFormError('');
     setForm({
       partNumber: '', name: `${p.name} (Copy)`, description: p.description || '', price: p.price.toString(),
-      buyingPrice: p.buyingPrice.toString(), category_id: p.category_id.toString(), image: p.image || '',
+      buyingPrice: p.buyingPrice.toString(), category_id: p.category_id.toString(), subcategory_id: p.subcategory_id?.toString() || '', image: p.image || '',
       stock_quantity: '0', boxNumber: p.boxNumber || '', low_stock_threshold: p.low_stock_threshold.toString(),
       sale_price: p.sale_price?.toString() || '', is_on_sale: false, sku: '', barcode: '', brand: p.brand || ''
     });
@@ -134,6 +143,7 @@ const ProductsView = () => {
         price: parseFloat(form.price),
         buyingPrice: parseFloat(form.buyingPrice),
         category_id: parseInt(form.category_id, 10),
+        subcategory_id: form.subcategory_id ? parseInt(form.subcategory_id, 10) : null,
         image: finalImage,
         stock_quantity: parseInt(form.stock_quantity, 10),
         boxNumber: form.boxNumber,
@@ -267,6 +277,43 @@ const ProductsView = () => {
     }
   };
 
+  const handleCreateSubcategory = async (e) => {
+    e.preventDefault();
+    const name = newSubcategoryName.trim();
+    if (!name || !form.category_id) return;
+    try {
+      setCategorySubmitting(true); setCategoryError('');
+      const created = await addSubcategory({ name, category_id: parseInt(form.category_id, 10) });
+      setSubcategories(prev => [...prev, created].sort((a,b) => a.name.localeCompare(b.name)));
+      setForm(prev => ({ ...prev, subcategory_id: created.id.toString() }));
+      setNewSubcategoryName('');
+    } catch (e) { setCategoryError(e.message || 'Failed to create subcategory'); }
+    finally { setCategorySubmitting(false); }
+  };
+
+  const handleUpdateSubcategory = async (id) => {
+    const name = editingSubcategoryName.trim();
+    if (!name) return;
+    try {
+      setCategorySubmitting(true); setCategoryError('');
+      const updated = await updateSubcategory(id, name);
+      setSubcategories(prev => prev.map(s => s.id === id ? updated : s).sort((a,b) => a.name.localeCompare(b.name)));
+      setEditingSubcategoryId(null); setEditingSubcategoryName('');
+    } catch (e) { setCategoryError(e.message || 'Failed to update subcategory'); }
+    finally { setCategorySubmitting(false); }
+  };
+
+  const handleDeleteSubcategory = async (subcat) => {
+    if (!window.confirm(`Delete subcategory "${subcat.name}"?`)) return;
+    try {
+      setCategorySubmitting(true); setCategoryError('');
+      await deleteSubcategory(subcat.id);
+      setSubcategories(prev => prev.filter(s => s.id !== subcat.id));
+      setForm(prev => ({ ...prev, subcategory_id: prev.subcategory_id === subcat.id.toString() ? '' : prev.subcategory_id }));
+    } catch (e) { setCategoryError(e.message || 'Failed to delete subcategory'); }
+    finally { setCategorySubmitting(false); }
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try { await deleteProduct(deleteTarget.id); fetch(); } catch (e) { console.error(e); }
@@ -339,6 +386,7 @@ const ProductsView = () => {
               <tbody className="divide-y divide-gray-50">
                 {filtered.map(p => {
                   const cat = categories.find(c => c.id === p.category_id);
+                  const subcat = subcategories.find(s => s.id === p.subcategory_id);
                   return (
                     <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3">
@@ -357,7 +405,10 @@ const ProductsView = () => {
                         <p className="text-xs font-mono text-gray-600">{p.sku || 'â€”'}</p>
                         <p className="text-[10px] font-mono text-gray-400">{p.barcode || 'â€”'}</p>
                       </td>
-                      <td className="px-4 py-3"><span className="text-xs text-gray-600">{cat?.name || 'â€”'}</span></td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-gray-300 block">{cat?.name || '—'}</span>
+                        {subcat && <span className="text-[10px] text-gray-500 block">{subcat.name}</span>}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         {p.is_on_sale ? (
                           <div><span className="text-xs text-gray-400 line-through">₱{p.price}</span><br /><span className="text-red-500 font-medium">₱{p.sale_price}</span></div>
@@ -375,6 +426,7 @@ const ProductsView = () => {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => { setSelectedProductVariants(p); setVariantsModalOpen(true); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-green-500 transition-colors" title="Manage Variants"><Layers size={14} /></button>
                           <button onClick={() => openEdit(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><Pencil size={14} /></button>
                           <button onClick={() => handleDuplicate(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-purple-600 transition-colors" title="Duplicate"><Copy size={14} /></button>
                           <button onClick={() => handleDelete(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-500 transition-colors" title="Delete"><Trash2 size={14} /></button>
@@ -402,10 +454,10 @@ const ProductsView = () => {
               </InputField>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <InputField label="Category" required>
                 <div className="space-y-2">
-                  <select value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))} required className={inputClass}>
+                  <select value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value, subcategory_id: '' }))} required className={inputClass}>
                     <option value="">Select</option>
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
@@ -414,7 +466,25 @@ const ProductsView = () => {
                     onClick={openCategoryModal}
                     className="text-xs font-medium text-orange-600 hover:text-orange-700"
                   >
-                    + Add New Category
+                    + Manage Categories
+                  </button>
+                </div>
+              </InputField>
+              <InputField label="Subcategory">
+                <div className="space-y-2">
+                  <select value={form.subcategory_id} onChange={e => setForm(f => ({ ...f, subcategory_id: e.target.value }))} className={inputClass} disabled={!form.category_id}>
+                    <option value="">None</option>
+                    {subcategories.filter(s => s.category_id?.toString() === form.category_id?.toString()).map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setSubcategoryModalOpen(true)}
+                    className="text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50"
+                    disabled={!form.category_id}
+                  >
+                    + Manage Subcategories
                   </button>
                 </div>
               </InputField>
@@ -605,6 +675,114 @@ const ProductsView = () => {
           </div>
         </Modal>
       )}
+
+      {/* Subcategory Management Modal */}
+      {subcategoryModalOpen && (
+        <Modal isOpen={subcategoryModalOpen} onClose={() => setSubcategoryModalOpen(false)} title={`Manage Subcategories (${categories.find(c => c.id.toString() === form.category_id?.toString())?.name || 'Selected Category'})`} size="md">
+          <div className="space-y-4">
+            <form onSubmit={handleCreateSubcategory} className="flex gap-2">
+              <input
+                type="text"
+                value={newSubcategoryName}
+                onChange={(e) => setNewSubcategoryName(e.target.value)}
+                placeholder="New subcategory name"
+                className="flex-1 px-3 py-2 border border-gray-700 bg-gray-900 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                disabled={categorySubmitting}
+              />
+              <button
+                type="submit"
+                disabled={!newSubcategoryName.trim() || categorySubmitting}
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
+              >
+                <Plus size={16} /> Add
+              </button>
+            </form>
+
+            <div className="border border-gray-700 rounded-lg max-h-60 overflow-y-auto">
+              <div className="divide-y divide-gray-800">
+                {subcategories.filter(s => s.category_id?.toString() === form.category_id?.toString()).length === 0 ? (
+                  <div className="p-4 text-center text-sm text-gray-500">No subcategories yet.</div>
+                ) : (
+                  subcategories.filter(s => s.category_id?.toString() === form.category_id?.toString()).map(subcat => (
+                    <div key={subcat.id} className="flex items-center justify-between p-3 bg-gray-900 group">
+                      {editingSubcategoryId === subcat.id ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            type="text"
+                            value={editingSubcategoryName}
+                            onChange={(e) => setEditingSubcategoryName(e.target.value)}
+                            className="flex-1 px-2 py-1 text-sm bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:border-red-500"
+                            autoFocus
+                            disabled={categorySubmitting}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateSubcategory(subcat.id)}
+                            disabled={categorySubmitting}
+                            className="px-2.5 py-1.5 text-xs bg-red-500 hover:bg-red-600 text-white rounded-md disabled:opacity-70"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingSubcategoryId(null)}
+                            disabled={categorySubmitting}
+                            className="px-2.5 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-white rounded-md disabled:opacity-70 border border-gray-700"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="font-medium text-sm text-gray-300">{subcat.name}</span>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={() => { setEditingSubcategoryId(subcat.id); setEditingSubcategoryName(subcat.name); setCategoryError(''); }}
+                              disabled={categorySubmitting}
+                              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-800 text-gray-400 hover:text-blue-500 disabled:opacity-70"
+                              title="Edit subcategory"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSubcategory(subcat)}
+                              disabled={categorySubmitting}
+                              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-800 text-gray-400 hover:text-red-500 disabled:opacity-70"
+                              title="Delete subcategory"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {categoryError && (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                {categoryError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setSubcategoryModalOpen(false)}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      <VariantsModal isOpen={variantsModalOpen} onClose={() => { setVariantsModalOpen(false); setSelectedProductVariants(null); }} product={selectedProductVariants} />
 
       {/* Delete Confirmation Modal */}
       {deleteTarget && (

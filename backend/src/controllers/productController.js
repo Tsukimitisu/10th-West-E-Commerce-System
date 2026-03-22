@@ -1,5 +1,6 @@
 import pool from '../config/database.js';
 import { emitProductCreated, emitProductUpdated, emitProductDeleted } from '../socket.js';
+import supabaseClient from '../services/supabaseClient.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -231,15 +232,38 @@ export const uploadProductImage = async (req, res) => {
       return res.status(400).json({ message: 'Image file is required' });
     }
 
-    await fs.mkdir(uploadsDir, { recursive: true });
-
     const ext = MIME_EXTENSION_MAP[contentType] || 'bin';
     const filename = `product-${Date.now()}-${Math.floor(Math.random() * 1_000_000_000)}.${ext}`;
-    const filepath = path.join(uploadsDir, filename);
+    
+    let imageUrl;
 
-    await fs.writeFile(filepath, req.body);
+    // Try Supabase first if available
+    const { SUPABASE_URL } = process.env;
+    if (SUPABASE_URL) {
+      const { data, error } = await supabaseClient.storage
+        .from('products')
+        .upload(filename, req.body, {
+          contentType: contentType,
+          upsert: false
+        });
 
-    const imageUrl = `${req.protocol}://${req.get('host')}/uploads/products/${filename}`;
+      if (!error) {
+        // Get public URL
+        const { data: publicUrlData } = supabaseClient.storage
+          .from('products')
+          .getPublicUrl(filename);
+        imageUrl = publicUrlData.publicUrl;
+      } else {
+        console.warn('Supabase storage upload failed, falling back to local FS:', error.message);
+      }
+    }
+
+    if (!imageUrl) {
+      await fs.mkdir(uploadsDir, { recursive: true });
+      const filepath = path.join(uploadsDir, filename);
+      await fs.writeFile(filepath, req.body);
+      imageUrl = `${req.protocol}://${req.get('host')}/uploads/products/${filename}`;
+    }
 
     res.status(201).json({
       message: 'Image uploaded successfully',
