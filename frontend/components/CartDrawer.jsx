@@ -17,6 +17,30 @@ const CartDrawer = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [quantityErrors, setQuantityErrors] = useState({});
+  const [localQuantities, setLocalQuantities] = useState({});
+
+  useEffect(() => {
+    const nextLocal = {};
+    items.forEach(i => {
+      // Only keep the local state if the user is currently editing it
+      // otherwise, sync it to the global cart. Actually, it's safer to just sync it
+      // if it does not equal the current value, but since items is from context, 
+      // we can just set it directly. However, we don't want to interrupt active typing.
+      // This is a simple safe approach:
+      if (localQuantities[i.productId] === undefined) {
+         nextLocal[i.productId] = i.quantity;
+      } else {
+         nextLocal[i.productId] = localQuantities[i.productId];
+      }
+    });
+    // Add any that were already defined but maybe update the ones we know
+    items.forEach(i => {
+       if (localQuantities[i.productId] === undefined) {
+          nextLocal[i.productId] = i.quantity;
+       }
+    });
+    // It's better to just use item.quantity as a fallback if local isn't present
+  }, [items]);
 
   const formatPrice = (p) => `₱${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
@@ -38,12 +62,26 @@ const CartDrawer = ({ isOpen, onClose }) => {
 
   const handleQuantityInputChange = (item, rawValue) => {
     if (rawValue === '') {
-      // Temporarily allow empty string for typing but don't update cart yet
+      setLocalQuantities(prev => ({ ...prev, [item.productId]: '' }));
       return;
     }
     let val = parseInt(rawValue, 10);
     if (isNaN(val)) return;
+    setLocalQuantities(prev => ({ ...prev, [item.productId]: val }));
+  };
 
+  const handleQuantityBlur = (item) => {
+    const rawVal = localQuantities[item.productId];
+    if (rawVal === undefined) return;
+
+    if (rawVal === '' || isNaN(parseInt(rawVal, 10))) {
+      setLocalQuantities(prev => ({ ...prev, [item.productId]: 1 }));
+      updateQuantity(item.productId, 1);
+      clearQuantityError(item.productId);
+      return;
+    }
+
+    let val = parseInt(rawVal, 10);
     if (val < 1) val = 1;
 
     const stock = Number(item.product.stock_quantity ?? Infinity);
@@ -63,13 +101,15 @@ const CartDrawer = ({ isOpen, onClose }) => {
     } else {
        clearQuantityError(item.productId);
     }
-    updateQuantity(item.productId, val);
-  };
 
-  const handleQuantityBlur = (item, e) => {
-    if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
-      updateQuantity(item.productId, 1);
-      clearQuantityError(item.productId);
+    setLocalQuantities(prev => {
+       const next = { ...prev };
+       delete next[item.productId]; // clear local state to re-sync with context
+       return next;
+    });
+
+    if (val !== item.quantity) {
+       updateQuantity(item.productId, val);
     }
   };
 
@@ -165,9 +205,9 @@ const CartDrawer = ({ isOpen, onClose }) => {
                           type="text" 
                           inputMode="numeric" 
                           pattern="[0-9]*"
-                          value={item.quantity} 
+                          value={localQuantities[item.productId] !== undefined ? localQuantities[item.productId] : item.quantity} 
                           onChange={(e) => handleQuantityInputChange(item, e.target.value)} 
-                          onBlur={(e) => handleQuantityBlur(item, e)}
+                          onBlur={() => handleQuantityBlur(item)}
                           className="w-10 py-1 text-sm font-medium text-center bg-transparent text-white focus:outline-none focus:bg-gray-700 transition-colors"
                         />
                         <button onClick={() => handleIncreaseQty(item)} className="px-2 py-1 text-gray-400 hover:bg-gray-900 transition-colors"><Plus size={14} /></button>
