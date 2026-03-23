@@ -37,6 +37,7 @@ import wishlistRoutes from './routes/wishlist.js';
 
 import { apiLimiter, authLimiter } from './middleware/rateLimiter.js';
 import { errorLogger } from './middleware/errorLogger.js';
+import { errorHandler } from './middleware/errorHandler.js';
 import { generateCsrfToken, validateCsrf } from './middleware/csrf.js';
 
 // Get directory name for ES modules
@@ -217,15 +218,8 @@ app.use((req, res) => {
 // Error logging middleware (logs to error_logs table)
 app.use(errorLogger);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  // Log full error server-side only
-  console.error('Error:', err.message);
-  // C11: Never expose stack traces to clients, even in development
-  res.status(err.status || 500).json({
-    message: err.message || 'Internal server error',
-  });
-});
+// Global Error handling middleware (formats responses, hides stack trace in production)
+app.use(errorHandler);
 
 // Start server with Socket.IO
 httpServer.listen(PORT, '0.0.0.0', () => {
