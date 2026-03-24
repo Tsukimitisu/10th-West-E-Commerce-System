@@ -117,7 +117,7 @@ const ProductList = () => {
       case 'price-asc': result.sort((a, b) => (a.sale_price || a.price) - (b.sale_price || b.price)); break;
       case 'price-desc': result.sort((a, b) => (b.sale_price || b.price) - (a.sale_price || a.price)); break;
       case 'newest': result.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()); break;
-      case 'best-selling': result.sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0)); break;
+      case 'best-selling': result.sort((a, b) => (b.total_sold || 0) - (a.total_sold || 0)); break;
       case 'top-rated': result.sort((a, b) => (b.rating || 0) - (a.rating || 0)); break;
       case 'relevance': break; // Already sorted by relevance above if searchQuery exists
     }

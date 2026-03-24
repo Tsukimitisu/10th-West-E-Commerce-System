@@ -173,7 +173,7 @@ const Home = () => {
 
   // --- Derived Product Lists ---
   const featured = products.filter(p => p.is_on_sale || (p.rating && p.rating >= 4)).slice(0, 8);
-  const bestSellers = [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 8);
+  const bestSellers = [...products].sort((a, b) => (b.total_sold || 0) - (a.total_sold || 0)).slice(0, 8);
   const newArrivals = [...products].sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()).slice(0, 4);
 
   // --- Animation Variants (Framer Motion v11 Compatible) ---

@@ -34,7 +34,15 @@ export const getProducts = async (req, res) => {
   try {
     const { category, search } = req.query;
     
-    let selectClause = 'SELECT p.*, c.name as category_name';
+    let selectClause = `
+      SELECT p.*, c.name as category_name,
+      COALESCE((
+        SELECT SUM(oi.quantity)
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE oi.product_id = p.id AND o.status IN ('paid', 'completed')
+      ), 0) as total_sold
+    `;
     let fromClause = 'FROM products p LEFT JOIN categories c ON p.category_id = c.id';
     let whereClause = 'WHERE 1=1';
     let orderByClause = '';
@@ -92,7 +100,8 @@ export const getProducts = async (req, res) => {
       price: parseFloat(product.price),
       buying_price: parseFloat(product.buying_price),
       sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
-      stock_quantity: parseInt(product.stock_quantity)
+      stock_quantity: parseInt(product.stock_quantity),
+      total_sold: parseInt(product.total_sold)
     })));
   } catch (error) {
     console.error('Get products error:', error);
