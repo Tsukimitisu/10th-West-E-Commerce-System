@@ -286,14 +286,14 @@ const PosTerminal = () => {
         navigate('/admin');
     };
 
-    if (loading && products.length === 0) return <div className="h-screen flex items-center justify-center bg-slate-100"><Loader2 className="animate-spin h-10 w-10 text-orange-600" /></div>;
+    if (loading && products.length === 0) return <div className="h-screen flex items-center justify-center bg-slate-100"><Loader2 className="animate-spin h-10 w-10 text-red-600" /></div>;
 
     return (
         <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 via-white to-gray-100 overflow-hidden">
             {/* Header */}
             <header className="bg-white/80 backdrop-blur-md border-b border-gray-700 h-16 flex items-center justify-between px-6 shadow-sm z-30 sticky top-0">
                 <div className="flex items-center gap-3">
-                    <div className="bg-red-500/100 p-2 rounded-lg shadow-lg shadow-orange-200">
+                    <div className="bg-red-500/100 p-2 rounded-lg shadow-lg shadow-red-200">
                         <Bike className="h-6 w-6 text-white" />
                     </div>
                     <div>
@@ -326,24 +326,24 @@ const PosTerminal = () => {
             </header>
 
             {/* Shift Summary Bar */}
-            <div className="bg-gradient-to-r from-orange-50 via-orange-50/80 to-amber-50 border-b border-red-100 px-6 py-2 flex items-center justify-between text-sm z-20">
+            <div className="bg-gradient-to-r from-red-50 via-red-50/80 to-red-50 border-b border-red-100 px-6 py-2 flex items-center justify-between text-sm z-20">
                 <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2 text-orange-700">
+                    <div className="flex items-center gap-2 text-red-700">
                         <Clock className="w-4 h-4 text-red-500" />
                         <span className="font-bold text-xs uppercase tracking-wider text-red-500">Shift Started:</span>
-                        <span className="font-bold text-orange-900">{shiftStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="font-bold text-red-900">{shiftStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
-                    <div className="h-4 w-px bg-orange-200"></div>
+                    <div className="h-4 w-px bg-red-200"></div>
                     <div className="flex items-center gap-2">
                         <Receipt className="w-4 h-4 text-red-500" />
                         <span className="font-bold text-xs uppercase tracking-wider text-red-500">Transactions:</span>
-                        <span className="font-black text-orange-900 bg-red-500/20 px-2 py-0.5 rounded-md text-xs">{shiftTransactionCount}</span>
+                        <span className="font-black text-red-900 bg-red-500/20 px-2 py-0.5 rounded-md text-xs">{shiftTransactionCount}</span>
                     </div>
-                    <div className="h-4 w-px bg-orange-200"></div>
+                    <div className="h-4 w-px bg-red-200"></div>
                     <div className="flex items-center gap-2">
                         <DollarSign className="w-4 h-4 text-red-500" />
                         <span className="font-bold text-xs uppercase tracking-wider text-red-500">Shift Sales:</span>
-                        <span className="font-black text-orange-900 bg-red-500/20 px-2.5 py-0.5 rounded-md text-xs">â‚±{shiftTotalSales.toFixed(2)}</span>
+                        <span className="font-black text-red-900 bg-red-500/20 px-2.5 py-0.5 rounded-md text-xs">â‚±{shiftTotalSales.toFixed(2)}</span>
                     </div>
                 </div>
             </div>
@@ -368,7 +368,7 @@ const PosTerminal = () => {
                                 <input
                                     type="text"
                                     placeholder="Scan or Enter Order ID"
-                                    className="w-full pl-12 pr-4 py-4 bg-gray-900 border border-gray-700 rounded-2xl text-lg font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-red-500 outline-none transition-all shadow-inner"
+                                    className="w-full pl-12 pr-4 py-4 bg-gray-900 border border-gray-700 rounded-2xl text-lg font-bold focus:ring-4 focus:ring-red-500/10 focus:border-red-500 outline-none transition-all shadow-inner"
                                     value={returnOrderId}
                                     onChange={(e) => setReturnOrderId(e.target.value)}
                                     autoFocus
@@ -396,7 +396,7 @@ const PosTerminal = () => {
                                 <div className="space-y-3 mb-8 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                                     {returnOrder.items.map(item => (
                                         <div key={item.productId} className="flex justify-between items-center p-3 bg-gray-800 rounded-xl border border-gray-50 hover:border-red-100 transition-all group cursor-pointer shadow-sm" onClick={() => handleReturnItemToggle(item.productId, item.quantity)}>
-                                            <div className={`w-6 h-6 border-2 rounded-lg mr-3 flex items-center justify-center transition-all ${returnItems[item.productId] ? 'bg-red-500/100 border-red-500 text-white shadow-lg shadow-orange-200' : 'border-gray-700 group-hover:border-red-200 bg-gray-900'}`}>
+                                            <div className={`w-6 h-6 border-2 rounded-lg mr-3 flex items-center justify-center transition-all ${returnItems[item.productId] ? 'bg-red-500/100 border-red-500 text-white shadow-lg shadow-red-200' : 'border-gray-700 group-hover:border-red-200 bg-gray-900'}`}>
                                                 {returnItems[item.productId] ? <Check className="w-4 h-4" /> : null}
                                             </div>
                                             <div className="flex-1">
@@ -409,7 +409,7 @@ const PosTerminal = () => {
                                 </div>
                                 <button
                                     onClick={processReturn}
-                                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-black rounded-2xl hover:from-orange-600 hover:to-orange-700 shadow-xl shadow-orange-200 hover:shadow-orange-300 transition-all hover:-translate-y-1 active:translate-y-0"
+                                    className="w-full py-4 bg-gradient-to-r from-red-500 to-red-600 text-white font-black rounded-2xl hover:from-red-600 hover:to-red-700 shadow-xl shadow-red-200 hover:shadow-red-300 transition-all hover:-translate-y-1 active:translate-y-0"
                                 >
                                     CONFIRM REFUND
                                 </button>
@@ -430,7 +430,7 @@ const PosTerminal = () => {
                                     ref={searchInputRef}
                                     type="text"
                                     placeholder="Scan Part# or Search Name..."
-                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-lg focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-lg focus:ring-2 focus:ring-red-500 outline-none transition-all"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     onKeyDown={handleSearchKeyDown}
@@ -466,11 +466,11 @@ const PosTerminal = () => {
                                             key={product.id}
                                             onClick={() => addToCart(product)}
                                             disabled={isOutOfStock}
-                                            className={`bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-700 hover:border-red-500 hover:shadow-xl hover:shadow-orange-50 transition-all flex flex-col items-center text-center h-full group relative overflow-hidden ${isOutOfStock ? 'opacity-60 grayscale' : ''}`}
+                                            className={`bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-700 hover:border-red-500 hover:shadow-xl hover:shadow-red-50 transition-all flex flex-col items-center text-center h-full group relative overflow-hidden ${isOutOfStock ? 'opacity-60 grayscale' : ''}`}
                                         >
                                             <div className="w-full flex justify-between items-start mb-3">
                                                 <span className="text-[9px] font-bold bg-gray-900 px-2 py-0.5 rounded-full text-gray-400 border border-gray-700">{product.partNumber}</span>
-                                                {product.is_on_sale && <span className="text-[9px] font-black bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full ring-1 ring-orange-200 ring-inset">SALE</span>}
+                                                {product.is_on_sale && <span className="text-[9px] font-black bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full ring-1 ring-red-200 ring-inset">SALE</span>}
                                             </div>
                                             <div className="h-24 w-24 mb-4 rounded-xl overflow-hidden bg-gray-50/50 p-2 group-hover:bg-red-500/10/30 transition-colors">
                                                 <img src={product.image} alt={product.name} className="h-full w-full object-contain group-hover:scale-110 transition-transform duration-500" />
@@ -610,7 +610,7 @@ const PosTerminal = () => {
                             <button
                                 onClick={() => setShowPayment(true)}
                                 disabled={cartItems.length === 0}
-                                className="w-full py-5 bg-gradient-to-r from-orange-500 via-orange-500 to-orange-600 text-white rounded-2xl font-black text-xl shadow-2xl shadow-orange-200 hover:shadow-orange-300 hover:from-orange-600 hover:via-orange-600 hover:to-orange-700 disabled:opacity-50 disabled:shadow-none transition-all hover:-translate-y-1 active:translate-y-0 flex justify-center items-center gap-3 relative overflow-hidden group"
+                                className="w-full py-5 bg-gradient-to-r from-red-500 via-red-500 to-red-600 text-white rounded-2xl font-black text-xl shadow-2xl shadow-red-200 hover:shadow-red-300 hover:from-red-600 hover:via-red-600 hover:to-red-700 disabled:opacity-50 disabled:shadow-none transition-all hover:-translate-y-1 active:translate-y-0 flex justify-center items-center gap-3 relative overflow-hidden group"
                             >
                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"></div>
                                 <span className="relative">CHECKOUT</span>
@@ -643,7 +643,7 @@ const PosTerminal = () => {
                         <input
                             type="number"
                             placeholder="Enter discount value"
-                            className="w-full border-2 border-gray-700 p-4 rounded-2xl mb-6 text-xl font-bold focus:border-red-500 focus:ring-4 focus:ring-orange-500/10 outline-none transition-all"
+                            className="w-full border-2 border-gray-700 p-4 rounded-2xl mb-6 text-xl font-bold focus:border-red-500 focus:ring-4 focus:ring-red-500/10 outline-none transition-all"
                             value={tempDiscount.value}
                             onChange={(e) => setTempDiscount({ ...tempDiscount, value: e.target.value })}
                             autoFocus

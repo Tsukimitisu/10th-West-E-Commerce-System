@@ -13,14 +13,14 @@ const Footer = () => {
   };
 
   return (
-    <footer className="bg-gray-900 text-gray-300">
+    <footer className="bg-zinc-900 text-gray-600 border-t border-red-200">
       {/* Newsletter */}
       <div className="border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-4 py-10">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
-              <h3 className="text-white font-display font-bold text-xl mb-1">Stay in the Loop</h3>
-              <p className="text-gray-400 text-sm">Subscribe for exclusive deals, new arrivals, and riding tips.</p>
+              <h3 className="text-red-600 font-display font-bold text-xl mb-1">Stay in the Loop</h3>
+              <p className="text-gray-600 text-sm">Subscribe for exclusive deals, new arrivals, and riding tips.</p>
             </div>
             {subscribed ? (
               <div className="flex items-center gap-2 text-green-400 font-medium">
@@ -32,7 +32,7 @@ const Footer = () => {
                   <input
                     type="email" value={email} onChange={e => setEmail(e.target.value)} required
                     placeholder="Enter your email"
-                    className="flex-1 md:w-72 px-4 py-3 bg-gray-800 border border-gray-700 rounded-l-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
+                    className="flex-1 md:w-72 px-4 py-3 bg-gray-100 border border-gray-300 rounded-l-lg text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:border-red-500"
                   />
                   <button type="submit" disabled={!newsletterConsent} className="px-5 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-r-lg transition-colors flex items-center gap-2">
                     <Send size={16} /> Subscribe
@@ -41,7 +41,7 @@ const Footer = () => {
                 <label className="flex items-start gap-2 mt-2 cursor-pointer">
                   <input type="checkbox" checked={newsletterConsent} onChange={e => setNewsletterConsent(e.target.checked)}
                     className="mt-0.5 text-red-600 focus:ring-red-600 rounded" />
-                  <span className="text-[11px] text-gray-400">I consent to receive marketing emails and agree to the <Link to="/privacy" className="text-gray-400 hover:text-white">Privacy Policy</Link> per RA 10173.</span>
+                  <span className="text-[11px] text-gray-600">I consent to receive marketing emails and agree to the <Link to="/privacy" className="text-gray-700 hover:text-gray-900">Privacy Policy</Link> per RA 10173.</span>
                 </label>
               </form>
             )}
