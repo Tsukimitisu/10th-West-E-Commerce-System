@@ -617,7 +617,7 @@ const mapProductToSupabase = (product) => ({
 
 export const getProducts = async (params = {}) => {
   if (USE_MOCK_DATA) {
-    return getProductsMock();
+    return getProductsMock(params);
   }
 
   if (USE_SUPABASE) {
@@ -1028,9 +1028,26 @@ const registerMock = async (name, email, password) => {
 };
 
 // Mock product functions
-const getProductsMock = async () => {
-  await new Promise(resolve => setTimeout(resolve, 300));
-  return [...MOCK_PRODUCTS];
+const getProductsMock = async (params = {}) => {
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  let result = [...MOCK_PRODUCTS];
+
+  if (params.search) {
+    const words = params.search.toLowerCase().trim().split(/\s+/).filter(w => w.length > 0);
+    result = result.filter(p => {
+      return words.every(word => {
+        return (
+          p.name?.toLowerCase().includes(word) ||
+          p.description?.toLowerCase().includes(word) ||
+          p.brand?.toLowerCase().includes(word) ||
+          p.part_number?.toLowerCase().includes(word) ||
+          p.sku?.toLowerCase().includes(word)
+        );
+      });
+    });
+  }
+
+  return result;
 };
 
 const getProductByIdMock = async (id) => {

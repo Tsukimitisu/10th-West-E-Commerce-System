@@ -21,7 +21,7 @@ const ProductList = () => {
   const [selectedBrand, setSelectedBrand] = useState('');
   const [priceRange, setPriceRange] = useState([0, 100000]);
   const [inStockOnly, setInStockOnly] = useState(false);
-  const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'newest');
+  const [sortBy, setSortBy] = useState(searchParams.get('sort') || (searchParams.get('search') ? 'relevance' : 'newest'));
 
   useEffect(() => {
     Promise.all([getProducts(), getCategories()])
@@ -84,8 +84,26 @@ const ProductList = () => {
   const filtered = useMemo(() => {
     let result = [...products];
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(p => p.name.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q) || p.category_name?.toLowerCase().includes(q));
+      const words = searchQuery.toLowerCase().trim().split(/\s+/).filter(w => w.length > 0);
+      result = result.filter(p => {
+        return words.every(word => {
+          return (
+            p.name?.toLowerCase().includes(word) || 
+            p.description?.toLowerCase().includes(word) || 
+            p.category_name?.toLowerCase().includes(word) ||
+            p.brand?.toLowerCase().includes(word) ||
+            p.sku?.toLowerCase().includes(word) ||
+            p.part_number?.toLowerCase().includes(word)
+          );
+        });
+      });
+      // Client-side relevance scoring to match backend behavior
+      const exactSearch = searchQuery.trim().toLowerCase();
+      result.sort((a, b) => {
+        let scoreA = (a.name?.toLowerCase().includes(exactSearch) ? 15 : 0) + (a.part_number?.toLowerCase() === exactSearch ? 20 : 0);
+        let scoreB = (b.name?.toLowerCase().includes(exactSearch) ? 15 : 0) + (b.part_number?.toLowerCase() === exactSearch ? 20 : 0);
+        return scoreB - scoreA;
+      });
     }
     if (selectedCategory) result = result.filter(p => String(p.category_id) === selectedCategory);
     if (selectedBrand) result = result.filter(p => p.brand === selectedBrand);
@@ -101,6 +119,7 @@ const ProductList = () => {
       case 'newest': result.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()); break;
       case 'best-selling': result.sort((a, b) => (b.reviewCount || 0) - (a.reviewCount || 0)); break;
       case 'top-rated': result.sort((a, b) => (b.rating || 0) - (a.rating || 0)); break;
+      case 'relevance': break; // Already sorted by relevance above if searchQuery exists
     }
     return result;
   }, [products, searchQuery, selectedCategory, selectedBrand, priceRange, inStockOnly, sortBy]);
@@ -161,6 +180,7 @@ const ProductList = () => {
                 onChange={e => setSortBy(e.target.value)}
                 className="h-10 px-3 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/30"
               >
+                {searchQuery && <option value="relevance">Relevance</option>}
                 <option value="newest">Newest</option>
                 <option value="price-asc">Price Low to High</option>
                 <option value="price-desc">Price High to Low</option>
