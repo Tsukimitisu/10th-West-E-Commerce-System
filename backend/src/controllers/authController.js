@@ -61,21 +61,105 @@ const isAccountLocked = async (email) => {
   return parseInt(result.rows[0].cnt) >= MAX_LOGIN_ATTEMPTS;
 };
 
-// ─── REGISTER ──────────────────────────────────────────────────────
-export const register = async (req, res) => {
-  const { name, email, password, consent_given, age_confirmed } = req.body;
-  // Force role to 'customer' on public registration - staff roles are assigned via admin/staff management
-  const role = 'customer';
-  const ip = req.clientIp;
-  const ua = req.clientUa;
+// Ensure OTP table exists (Idempotent)
+const initOtpTable = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS registration_otps (
+      email VARCHAR(255) PRIMARY KEY,
+      otp_hash VARCHAR(255) NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `).catch(err => console.error("Error creating OTP table:", err));
+};
+initOtpTable();
 
+// ─── SEND REGISTRATION OTP ─────────────────────────────────────────
+export const sendRegistrationOtp = async (req, res) => {
+  const { email, name } = req.body;
   try {
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) {
       return res.status(400).json({ message: 'Email already registered' });
     }
 
-    // Password strength check
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+
+    await pool.query(
+      `INSERT INTO registration_otps (email, otp_hash, expires_at)
+       VALUES ($1, $2, NOW() + INTERVAL '15 minutes')
+       ON CONFLICT (email) DO UPDATE SET otp_hash = $2, expires_at = NOW() + INTERVAL '15 minutes'`,
+      [email, otpHash]
+    );
+
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
+      to: email,
+      subject: 'Your Registration Code - 10th West Moto',
+      html: `
+        <!DOCTYPE html><html><head><style>
+          body{font-family:Arial,sans-serif;line-height:1.6;color:#333}
+          .container{max-width:600px;margin:0 auto;padding:20px}
+          .header{background:linear-gradient(135deg,#1e293b,#334155);color:white;padding:30px;text-align:center;border-radius:12px 12px 0 0}
+          .content{padding:30px;background:#f8fafc}
+          .otp{display:inline-block;padding:12px 24px;background:#ea580c;color:white;text-decoration:none;border-radius:8px;font-size:24px;font-weight:bold;letter-spacing:4px;margin:20px 0}
+          .footer{text-align:center;padding:20px;color:#94a3b8;font-size:12px}
+        </style></head><body>
+          <div class="container">
+            <div class="header"><h1 style="margin:0">🔐 Verify Your Email</h1><p style="margin:8px 0 0">10th West Moto Parts</p></div>
+            <div class="content">
+              <h2>Hi ${name || 'there'},</h2>
+              <p>Please use the verification code below to complete your registration:</p>
+              <div style="text-align:center"><span class="otp">${otp}</span></div>
+              <p style="font-size:12px;color:#64748b">This code will expire in 15 minutes. Wait! If you did not request this, you can safely ignore this email.</p>
+            </div>
+            <div class="footer"><p>10th West Moto - Motorcycle Parts & Accessories</p></div>
+          </div>
+        </body></html>
+      `,
+    });
+
+    res.json({ message: 'Verification code sent to your email.' });
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ message: 'Failed to send verification code' });
+  }
+};
+
+// ─── REGISTER ──────────────────────────────────────────────────────
+export const register = async (req, res) => {
+  const { name, email, password, consent_given, age_confirmed, otp } = req.body;
+  const role = 'customer';
+  const ip = req.clientIp;
+  const ua = req.clientUa;
+
+  try {
+    if (!otp) {
+      return res.status(400).json({ message: 'Verification code is required' });
+    }
+
+    const otpRecord = await pool.query('SELECT * FROM registration_otps WHERE email = $1', [email]);
+    if (otpRecord.rows.length === 0) {
+      return res.status(400).json({ message: 'No verification code found. Please request a new one.' });
+    }
+
+    const record = otpRecord.rows[0];
+    const otpHash = crypto.createHash('sha256').update(otp.trim()).digest('hex');
+    
+    if (record.otp_hash !== otpHash) {
+      return res.status(400).json({ message: 'Invalid verification code.' });
+    }
+    if (new Date() > new Date(record.expires_at)) {
+      return res.status(400).json({ message: 'Verification code has expired. Please request a new one.' });
+    }
+
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ message: 'Email already registered' });
+    }
+
     if (!PASSWORD_REGEX.test(password)) {
       return res.status(400).json({
         message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character (!@#$%^&*()_-+=)',
@@ -86,62 +170,18 @@ export const register = async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO users (name, email, password_hash, role, email_verified, consent_given_at, age_confirmed_at)
-       VALUES ($1, $2, $3, $4, false, $5, $6)
+       VALUES ($1, $2, $3, $4, true, $5, $6)
        RETURNING id, name, email, role, phone, avatar, store_credit, is_active, two_factor_enabled, last_login, email_verified`,
       [name, email, hashedPassword, role, consent_given ? new Date() : null, age_confirmed ? new Date() : null]
     );
 
+    await pool.query('DELETE FROM registration_otps WHERE email = $1', [email]);
+
     const user = result.rows[0];
-
-    // Security: Do NOT auto-login. Send verification email first.
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
-    await pool.query(
-      `UPDATE users SET email_verification_token = $1, email_verification_expires = NOW() + INTERVAL '24 hours' WHERE id = $2`,
-      [tokenHash, user.id]
-    );
-
-    // Send verification email
-    try {
-      const transporter = createTransporter();
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      const verifyUrl = `${frontendUrl}/#/verify-email?token=${verificationToken}`;
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
-        to: email,
-        subject: 'Verify Your Email - 10th West Moto',
-        html: `
-          <!DOCTYPE html><html><head><style>
-            body{font-family:Arial,sans-serif;line-height:1.6;color:#333}
-            .container{max-width:600px;margin:0 auto;padding:20px}
-            .header{background:linear-gradient(135deg,#1e293b,#334155);color:white;padding:30px;text-align:center;border-radius:12px 12px 0 0}
-            .content{padding:30px;background:#f8fafc}
-            .btn{display:inline-block;padding:14px 32px;background:#ea580c;color:white!important;text-decoration:none;border-radius:8px;font-weight:bold;margin:20px 0}
-            .footer{text-align:center;padding:20px;color:#94a3b8;font-size:12px}
-          </style></head><body>
-            <div class="container">
-              <div class="header"><h1 style="margin:0">✉️ Verify Your Email</h1><p style="margin:8px 0 0">10th West Moto Parts</p></div>
-              <div class="content">
-                <h2>Hi ${user.name},</h2>
-                <p>Thank you for registering! Please verify your email address to activate your account:</p>
-                <div style="text-align:center"><a href="${verifyUrl}" class="btn">Verify My Email</a></div>
-                <p style="font-size:12px;color:#64748b">This link expires in 24 hours. If you didn't create this account, please ignore this email.</p>
-              </div>
-              <div class="footer"><p>10th West Moto - Motorcycle Parts & Accessories</p></div>
-            </div>
-          </body></html>
-        `,
-      });
-    } catch (emailErr) {
-      console.error('Verification email send failed:', emailErr.message);
-    }
-
     await logActivity({ userId: user.id, action: 'register', entityType: 'user', entityId: user.id, ipAddress: ip, userAgent: ua });
 
     res.status(201).json({
-      message: 'Registration successful! Please check your email to verify your account before logging in.',
-      requiresVerification: true,
+      message: 'Email verified and account created successfully! You can now log in.',
     });
   } catch (error) {
     console.error('Register error:', error);

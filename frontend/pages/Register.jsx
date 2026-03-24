@@ -1,9 +1,11 @@
 ﻿import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, Check, X } from 'lucide-react';
-import { register, API_ORIGIN } from '../services/api';
+import { register, sendRegistrationOtp, API_ORIGIN } from '../services/api';
 
 const Register = ({ onLogin }) => {
+  const [step, setStep] = useState(1);
+  const [otp, setOtp] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

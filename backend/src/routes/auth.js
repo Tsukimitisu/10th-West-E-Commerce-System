@@ -7,7 +7,7 @@ import {
   setup2FA, verify2FA, disable2FA,
   oauthCallback, exchangeOAuthCode,
   getActiveSessions, revokeSession,
-  getActivityLogs,
+  getActivityLogs, sendRegistrationOtp,
   deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData,
 } from '../controllers/authController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
@@ -28,7 +28,16 @@ const loginValidation = [
 ];
 
 // ─── Public routes ─────────────────────────────────────────────────
-router.post('/register', registerValidation, validate, register);
+router.post('/send-registration-otp', registerValidation.slice(0, 2), validate, sendRegistrationOtp);
+
+router.post('/register', 
+  [
+    ...registerValidation,
+    body('otp').notEmpty().withMessage('Verification OTP is required')
+  ], 
+  validate, 
+  register
+);
 router.post('/login', loginValidation, validate, login);
 router.post('/forgot-password', body('email').isEmail(), validate, forgotPassword);
 router.post('/verify-reset-token', body('token').notEmpty(), validate, verifyResetToken);

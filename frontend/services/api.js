@@ -178,7 +178,7 @@ export const login = async (email, password, totp_code) => {
   return { user: data.user, token: data.token };
 };
 
-export const register = async (name, email, password, consentData = {}) => {
+export const register = async (name, email, password, consentData = {}, otp = '') => {
   if (USE_MOCK_DATA) {
     return registerMock(name, email, password);
   }
@@ -222,7 +222,18 @@ export const register = async (name, email, password, consentData = {}) => {
 
   return await authenticatedFetch(`${API_URL}/auth/register`, {
     method: 'POST',
-    body: JSON.stringify({ name, email, password, ...consentData }),
+    body: JSON.stringify({ name, email, password, otp, ...consentData }),
+  });
+};
+
+export const sendRegistrationOtp = async (email, name) => {
+  if (USE_MOCK_DATA || USE_SUPABASE) {
+    // For mock, just return success
+    return { message: 'OTP sent (mock)' };
+  }
+  return await authenticatedFetch(`${API_URL}/auth/send-registration-otp`, {
+    method: 'POST',
+    body: JSON.stringify({ email, name }),
   });
 };
 
