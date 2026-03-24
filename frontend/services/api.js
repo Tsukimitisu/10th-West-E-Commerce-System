@@ -1,4 +1,4 @@
-import { Role, OrderStatus, ReturnStatus } from '../types.js';
+﻿import { Role, OrderStatus, ReturnStatus } from '../types.js';
 import { supabase } from './supabase.js';
 // Used only by custom Supabase fallback auth paths for secure password hashing.
 import bcrypt from 'bcryptjs';
@@ -262,7 +262,7 @@ export const getProfile = async () => {
   return await authenticatedFetch(`${API_URL}/auth/profile`);
 };
 
-// Delete account - Right to be Forgotten (RA 10173 §18)
+// Delete account - Right to be Forgotten (RA 10173 Â§18)
 export const deleteAccount = async (password) => {
   if (USE_SUPABASE) {
     const user = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
@@ -294,7 +294,7 @@ export const deleteAccount = async (password) => {
   });
 };
 
-// Data export / portability - RA 10173 §18
+// Data export / portability - RA 10173 Â§18
 export const exportMyData = async () => {
   if (USE_SUPABASE) {
     const user = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
@@ -302,7 +302,7 @@ export const exportMyData = async () => {
     const { data: userData } = await supabase.from('users').select('id, name, email, phone, role, created_at, last_login').eq('id', user.id).single();
     const { data: orders } = await supabase.from('orders').select('id, status, total_amount, created_at').eq('user_id', user.id);
     const { data: addresses } = await supabase.from('addresses').select('*').eq('user_id', user.id);
-    return { exported_at: new Date().toISOString(), legal_basis: 'RA 10173 §18', personal_information: userData, orders: orders || [], addresses: addresses || [] };
+    return { exported_at: new Date().toISOString(), legal_basis: 'RA 10173 Â§18', personal_information: userData, orders: orders || [], addresses: addresses || [] };
   }
   return await authenticatedFetch(`${API_URL}/auth/export-data`);
 };
@@ -1421,7 +1421,7 @@ export const createOrder = async (order) => {
     notifyAdminStaff(
       'order.new',
       'New Order Received',
-      `Order #${String(orderData.id).padStart(4, '0')} — ₱${Number(order.total_amount).toLocaleString()} (${orderItems.length} item${orderItems.length !== 1 ? 's' : ''})`,
+      `Order #${String(orderData.id).padStart(4, '0')} â€” â‚±${Number(order.total_amount).toLocaleString()} (${orderItems.length} item${orderItems.length !== 1 ? 's' : ''})`,
       orderData.id,
       'order'
     );
@@ -1826,7 +1826,7 @@ export const createReturn = async (returnRequest) => {
   notifyAdminStaff(
     'return.new',
     'New Return Request',
-    `Return request for Order #${String(returnRequest.order_id).padStart(4, '0')} — ₱${Number(returnRequest.refund_amount || 0).toLocaleString()}`,
+    `Return request for Order #${String(returnRequest.order_id).padStart(4, '0')} â€” â‚±${Number(returnRequest.refund_amount || 0).toLocaleString()}`,
     data.return?.id,
     'return'
   );
@@ -1957,7 +1957,7 @@ export const deleteFAQ = async (id) => {
 export const getPolicy = async (type) => {
   const data = await fetch(`${API_URL}/policies/${type}`);
   if (data.status === 404) {
-    // Policy doesn't exist yet — return empty for initial creation
+    // Policy doesn't exist yet â€” return empty for initial creation
     return { title: '', content: '' };
   }
   if (!data.ok) {
@@ -2107,7 +2107,7 @@ export const validateDiscount = async (code, amount) => {
     if (!data) throw new Error('Invalid discount code');
     // Only enforce min_purchase if it's set and greater than 0
     if (data.min_purchase && parseFloat(data.min_purchase) > 0 && amount < parseFloat(data.min_purchase)) {
-      throw new Error(`Minimum purchase of ₱${parseFloat(data.min_purchase).toLocaleString()} required`);
+      throw new Error(`Minimum purchase of â‚±${parseFloat(data.min_purchase).toLocaleString()} required`);
     }
     if (data.max_uses && data.max_uses > 0 && data.used_count >= data.max_uses) throw new Error('Discount code usage limit reached');
     if (data.expires_at && new Date(data.expires_at) < new Date()) throw new Error('Discount code has expired');
@@ -3104,15 +3104,16 @@ export const getBackupHistory = async () => {
 };
 
 export const resendVerificationEmail = async (email) => {
-  return await authenticatedFetch(${API_URL}/auth/resend-verification, {
+  return await authenticatedFetch(`${API_URL}/auth/resend-verification`, {
     method: 'POST',
     body: JSON.stringify({ email })
   });
 };
 
 export const verifyEmailToken = async (token) => {
-  return await authenticatedFetch(${API_URL}/auth/verify-email, {
+  return await authenticatedFetch(`${API_URL}/auth/verify-email`, {
     method: 'POST',
     body: JSON.stringify({ token })
   });
 };
+
