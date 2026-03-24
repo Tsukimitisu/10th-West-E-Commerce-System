@@ -615,16 +615,22 @@ const mapProductToSupabase = (product) => ({
 
 // ==================== PRODUCTS ====================
 
-export const getProducts = async () => {
+export const getProducts = async (params = {}) => {
   if (USE_MOCK_DATA) {
     return getProductsMock();
   }
 
   if (USE_SUPABASE) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('products')
       .select('*, categories(name)')
       .order('id');
+      
+    if (params.search) {
+      query = query.or(`name.ilike.%${params.search}%,part_number.ilike.%${params.search}%`);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw new Error(error.message);
 
@@ -634,7 +640,11 @@ export const getProducts = async () => {
     }));
   }
 
-  const products = await authenticatedFetch(`${API_URL}/products`);
+  const queryParams = new URLSearchParams();
+  if (params.search) queryParams.append('search', params.search);
+  const qString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+  const products = await authenticatedFetch(`${API_URL}/products${qString}`);
   return products.map((p) => ({
     ...p,
     partNumber: p.part_number,

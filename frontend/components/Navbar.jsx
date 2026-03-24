@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
-import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements } from '../services/api';
+import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements, getProducts } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
 import { useSocket } from '../context/SocketContext';
@@ -23,6 +23,12 @@ const Navbar = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [globalSearch, setGlobalSearch] = useState(searchParams.get('search') || '');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+  const searchDropdownRef = useRef(null);
+  const mobileSearchDropdownRef = useRef(null);
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
   const moreMenuRef = useRef(null);
@@ -42,10 +48,36 @@ const Navbar = ({ user, onLogout }) => {
   useEffect(() => {
     const handler = (e) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false);
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(e.target) && (!mobileSearchDropdownRef.current || !mobileSearchDropdownRef.current.contains(e.target))) setShowDropdown(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  useEffect(() => {
+    if (!globalSearch || globalSearch.trim().length < 2) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSearching(true);
+      setSearchError(null);
+      try {
+        const results = await getProducts({ search: globalSearch.trim() });
+        setSearchResults(results.slice(0, 5));
+        setShowDropdown(true);
+      } catch (err) {
+        console.error("Search error:", err);
+        setSearchError("Failed to fetch products");
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [globalSearch]);
 
   const refreshNotifications = useCallback(async () => {
     if (!user) return;
@@ -278,7 +310,7 @@ const Navbar = ({ user, onLogout }) => {
 
             {/* Desktop Search Bar */}
             {shouldShowGlobalSearch && (
-              <form onSubmit={handleGlobalSearchSubmit} className="hidden lg:flex items-center justify-center gap-2 mx-4 flex-1 max-w-md">
+              <form onSubmit={handleGlobalSearchSubmit} className="hidden lg:flex items-center justify-center gap-2 mx-4 flex-1 max-w-md" ref={searchDropdownRef}>
                 <div className="relative flex-1">
                   <button
                     type="submit"
@@ -289,9 +321,48 @@ const Navbar = ({ user, onLogout }) => {
                   <input
                     value={globalSearch}
                     onChange={handleSearchChange}
+                    onFocus={() => { if(globalSearch.length >= 2) setShowDropdown(true); }}
                     placeholder="Search parts, brands..."
                     className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-700 bg-gray-900 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
                   />
+                  {showDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[400px] flex flex-col overflow-hidden">
+                      {isSearching ? (
+                        <div className="p-4 text-center text-sm text-gray-400">Searching...</div>
+                      ) : searchError ? (
+                        <div className="p-4 text-center text-sm text-red-400">{searchError}</div>
+                      ) : searchResults.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-gray-400">No products found</div>
+                      ) : (
+                        <>
+                          <div className="overflow-y-auto">
+                            {searchResults.map((product) => (
+                              <Link
+                                key={product.id}
+                                to={`/products/${product.id}`}
+                                onClick={() => setShowDropdown(false)}
+                                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-700 transition-colors border-b border-gray-700/50"
+                              >
+                                {product.image_url ? (
+                                  <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-md object-cover bg-gray-900" />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-md bg-gray-900 flex items-center justify-center shrink-0"><Package size={16} className="text-gray-500" /></div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-white truncate">{product.name}</p>
+                                  <p className="text-xs text-gray-400 truncate">{product.part_number || product.category_name}</p>
+                                </div>
+                                <div className="text-sm font-bold text-red-500 shrink-0">₱{product.price?.toFixed(2) || '0.00'}</div>
+                              </Link>
+                            ))}
+                          </div>
+                          <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-gray-800/80 hover:bg-gray-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
+                            View All Results
+                          </Link>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </form>
             )}
@@ -418,7 +489,7 @@ const Navbar = ({ user, onLogout }) => {
       {shouldShowGlobalSearch && (
         <div className={`lg:hidden sticky top-16 z-40 transition-all duration-300 ${scrolled ? 'backdrop-blur-xl' : 'backdrop-blur'} bg-transparent`}>
           <div className="max-w-7xl mx-auto px-4 py-2 flex justify-center">
-            <form onSubmit={handleGlobalSearchSubmit} className="flex items-center gap-2 w-full">
+            <form onSubmit={handleGlobalSearchSubmit} className="flex items-center gap-2 w-full" ref={mobileSearchDropdownRef}>
               <div className="relative flex-1">
                 <button
                   type="submit"
@@ -429,9 +500,48 @@ const Navbar = ({ user, onLogout }) => {
                 <input
                   value={globalSearch}
                   onChange={handleSearchChange}
+                  onFocus={() => { if(globalSearch.length >= 2) setShowDropdown(true); }}
                   placeholder="Search parts..."
                   className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-700 bg-gray-900 text-sm text-gray-700 focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
                 />
+                {showDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[350px] flex flex-col overflow-hidden">
+                    {isSearching ? (
+                      <div className="p-4 text-center text-sm text-gray-400">Searching...</div>
+                    ) : searchError ? (
+                      <div className="p-4 text-center text-sm text-red-400">{searchError}</div>
+                    ) : searchResults.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-gray-400">No products found</div>
+                    ) : (
+                      <>
+                        <div className="overflow-y-auto">
+                          {searchResults.map((product) => (
+                            <Link
+                              key={product.id}
+                              to={`/products/${product.id}`}
+                              onClick={() => setShowDropdown(false)}
+                              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-700 transition-colors border-b border-gray-700/50"
+                            >
+                              {product.image_url ? (
+                                <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-md object-cover bg-gray-900" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-md bg-gray-900 flex items-center justify-center shrink-0"><Package size={16} className="text-gray-500" /></div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-white truncate">{product.name}</p>
+                                <p className="text-xs text-gray-400 truncate">{product.part_number || product.category_name}</p>
+                              </div>
+                              <div className="text-sm font-bold text-red-500 shrink-0">₱{product.price?.toFixed(2) || '0.00'}</div>
+                            </Link>
+                          ))}
+                        </div>
+                        <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-gray-800/80 hover:bg-gray-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
+                          View All Results
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </form>
           </div>
