@@ -34,28 +34,57 @@ export const getProducts = async (req, res) => {
   try {
     const { category, search } = req.query;
     
-    let query = `
-      SELECT p.*, c.name as category_name 
-      FROM products p 
-      LEFT JOIN categories c ON p.category_id = c.id 
-      WHERE 1=1
-    `;
+    let selectClause = 'SELECT p.*, c.name as category_name';
+    let fromClause = 'FROM products p LEFT JOIN categories c ON p.category_id = c.id';
+    let whereClause = 'WHERE 1=1';
+    let orderByClause = '';
     const params = [];
 
     // Filter by category
     if (category) {
       params.push(category);
-      query += ` AND p.category_id = $${params.length}`;
+      whereClause += ` AND p.category_id = $${params.length}`;
     }
 
-    // Search by name or part number
+    // Search by name, description, brand, sku, part number or category
     if (search) {
-      params.push(`%${search}%`);
-      query += ` AND (p.name ILIKE $${params.length} OR p.part_number ILIKE $${params.length})`;
+      const words = search.trim().split(/\s+/).filter(w => w.length > 0);
+      let relevanceScores = [];
+
+      words.forEach(word => {
+        params.push(`%${word}%`);
+        const idx = params.length;
+        
+        whereClause += ` AND (
+          p.name ILIKE $${idx} OR 
+          p.part_number ILIKE $${idx} OR 
+          p.description ILIKE $${idx} OR 
+          p.brand ILIKE $${idx} OR 
+          p.sku ILIKE $${idx} OR 
+          c.name ILIKE $${idx}
+        )`;
+
+        relevanceScores.push(`
+          (CASE WHEN p.name ILIKE $${idx} THEN 10 ELSE 0 END) +
+          (CASE WHEN p.part_number ILIKE $${idx} THEN 8 ELSE 0 END) +
+          (CASE WHEN p.brand ILIKE $${idx} THEN 5 ELSE 0 END) +
+          (CASE WHEN c.name ILIKE $${idx} THEN 3 ELSE 0 END) +
+          (CASE WHEN p.description ILIKE $${idx} THEN 1 ELSE 0 END)
+        `);
+      });
+
+      // Exact match boost
+      params.push(`%${search.trim()}%`);
+      const exactIdx = params.length;
+      relevanceScores.push(`(CASE WHEN p.name ILIKE $${exactIdx} THEN 15 ELSE 0 END)`);
+
+      selectClause += `, (${relevanceScores.join(' + ')}) as relevance_score`;
+      orderByClause = 'ORDER BY relevance_score DESC, p.id DESC';
+    } else {
+      orderByClause = 'ORDER BY p.id DESC';
     }
 
-    query += ' ORDER BY p.id DESC';
-
+    const query = `${selectClause} ${fromClause} ${whereClause} ${orderByClause}`;
     const result = await pool.query(query, params);
     
     res.json(result.rows.map(product => ({

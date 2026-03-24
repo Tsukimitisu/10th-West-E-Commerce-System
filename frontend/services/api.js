@@ -624,20 +624,38 @@ export const getProducts = async (params = {}) => {
     let query = supabase
       .from('products')
       .select('*, categories(name)')
-      .order('id');
+      .order('id', { ascending: false });
       
     if (params.search) {
-      query = query.or(`name.ilike.%${params.search}%,part_number.ilike.%${params.search}%`);
+      const words = params.search.trim().split(/\s+/).filter(w => w.length > 0);
+      words.forEach(word => {
+        // We use inner quotes to prevent any issues with comma, but simple ilike allows commas
+        // .or() concatenates multiple conditions with OR. 
+        // Multiple .or() chains essentially operate as ANDs between the groups.
+        query = query.or(`name.ilike.%${word}%,part_number.ilike.%${word}%,description.ilike.%${word}%,brand.ilike.%${word}%,sku.ilike.%${word}%`);
+      });
     }
 
     const { data, error } = await query;
 
     if (error) throw new Error(error.message);
 
-    return (data || []).map((p) => ({
+    let products = (data || []).map((p) => ({
       ...mapProductFromSupabase(p),
       category_name: p.categories?.name,
     }));
+
+    // Client-side relevance sorting for Supabase search results to match Express backend quality
+    if (params.search && products.length > 0) {
+      const exactSearch = params.search.trim().toLowerCase();
+      products.sort((a, b) => {
+        let scoreA = (a.name?.toLowerCase().includes(exactSearch) ? 15 : 0) + (a.part_number?.toLowerCase() === exactSearch ? 20 : 0);
+        let scoreB = (b.name?.toLowerCase().includes(exactSearch) ? 15 : 0) + (b.part_number?.toLowerCase() === exactSearch ? 20 : 0);
+        return scoreB - scoreA;
+      });
+    }
+
+    return products;
   }
 
   const queryParams = new URLSearchParams();
