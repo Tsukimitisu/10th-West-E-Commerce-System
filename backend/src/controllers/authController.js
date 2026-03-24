@@ -130,144 +130,81 @@ export const sendRegistrationOtp = async (req, res) => {
 
 // ─── REGISTER ──────────────────────────────────────────────────────
 export const register = async (req, res) => {
-  const { name, email, password, consent_given, age_confirmed, otp } = req.body;
-  const role = 'customer';
-  const ip = req.clientIp;
-  const ua = req.clientUa;
-
+  const { name, email, password, consent_given, age_confirmed, newsletter_opt_in } = req.body;
   try {
-    if (!otp) {
-      return res.status(400).json({ message: 'Verification code is required' });
+    const existingResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    if (existingResult.rows.length > 0) {
+      const existingUser = existingResult.rows[0];
+      if (existingUser.email_verified) {
+        return res.status(400).json({ message: 'Email already registered' });
+      } else {
+        await pool.query(
+          'UPDATE users SET email_verification_token = $1, email_verification_expires = $2 WHERE id = $3',
+          [verificationTokenHash, expiresAt, existingUser.id]
+        );
+        const transporter = createTransporter();
+        const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+        await transporter.sendMail({
+          from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
+          to: email,
+          subject: 'Verify your account - 10th West Moto',
+          html: `<h2>Verify your email</h2><p>Click <a href="${verificationUrl}">here</a> to verify your account.</p>`
+        });
+        return res.json({ message: 'This email is already registered but not yet verified. A new verification email has been sent.', requiresVerification: true });
+      }
     }
 
-    const otpRecord = await pool.query('SELECT * FROM registration_otps WHERE email = $1', [email]);
-    if (otpRecord.rows.length === 0) {
-      return res.status(400).json({ message: 'No verification code found. Please request a new one.' });
-    }
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    const record = otpRecord.rows[0];
-    const otpHash = crypto.createHash('sha256').update(otp.trim()).digest('hex');
-    
-    if (record.otp_hash !== otpHash) {
-      return res.status(400).json({ message: 'Invalid verification code.' });
-    }
-    if (new Date() > new Date(record.expires_at)) {
-      return res.status(400).json({ message: 'Verification code has expired. Please request a new one.' });
-    }
-
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ message: 'Email already registered' });
-    }
-
-    if (!PASSWORD_REGEX.test(password)) {
-      return res.status(400).json({
-        message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character (!@#$%^&*()_-+=)',
-      });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    const result = await pool.query(
-      `INSERT INTO users (name, email, password_hash, role, email_verified, consent_given_at, age_confirmed_at)
-       VALUES ($1, $2, $3, $4, true, $5, $6)
-       RETURNING id, name, email, role, phone, avatar, store_credit, is_active, two_factor_enabled, last_login, email_verified`,
-      [name, email, hashedPassword, role, consent_given ? new Date() : null, age_confirmed ? new Date() : null]
+    const newUserResult = await pool.query(
+      `INSERT INTO users (name, email, password_hash, role, status, email_verified, consent_given, age_confirmed, newsletter_opt_in, email_verification_token, email_verification_expires)
+       VALUES ($1, $2, $3, 'customer', 'active', false, $4, $5, $6, $7, $8) RETURNING id`,
+      [name, email, passwordHash, consent_given, age_confirmed, newsletter_opt_in, verificationTokenHash, expiresAt]
     );
 
-    await pool.query('DELETE FROM registration_otps WHERE email = $1', [email]);
-
-    const user = result.rows[0];
-    await logActivity({ userId: user.id, action: 'register', entityType: 'user', entityId: user.id, ipAddress: ip, userAgent: ua });
-
-    res.status(201).json({
-      message: 'Email verified and account created successfully! You can now log in.',
+    const transporter = createTransporter();
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
+      to: email,
+      subject: 'Verify your account - 10th West Moto',
+      html: `<h2>Verify your email</h2><p>Click <a href="${verificationUrl}">here</a> to verify your account.</p>`
     });
+
+    res.status(201).json({ message: 'Registration successful. Please check your email to verify your account.', requiresVerification: true });
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ message: 'Server error during registration' });
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Failed to create account' });
   }
 };
 
-// ─── LOGIN ─────────────────────────────────────────────────────────
 export const login = async (req, res) => {
-  const { email, password, totp_code } = req.body;
-  const ip = req.clientIp;
-  const ua = req.clientUa;
-
+  const { email, password } = req.body;
   try {
-    // Check lockout
-    if (await isAccountLocked(email)) {
-      return res.status(423).json({ message: `Account temporarily locked. Try again in ${LOCK_DURATION_MINUTES} minutes.` });
-    }
-
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) {
-      await recordLoginAttempt(email, ip, false);
-      await logActivity({ userId: null, action: 'login_failed', details: { email, reason: 'not_found' }, ipAddress: ip, userAgent: ua });
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
+    if (result.rows.length === 0) return res.status(401).json({ message: 'Invalid credentials' });
     const user = result.rows[0];
-
-    if (!user.is_active) {
-      return res.status(403).json({ message: 'Account has been deactivated. Contact support.' });
-    }
-
-    // OAuth-only accounts cannot login with password
-    if (user.oauth_provider && !user.password_hash) {
-      return res.status(400).json({ message: `This account uses ${user.oauth_provider} login. Please sign in with ${user.oauth_provider}.` });
-    }
+    if (user.status === 'suspended' || user.status === 'banned') return res.status(403).json({ message: `Account ${user.status}` });
 
     const isValid = await bcrypt.compare(password, user.password_hash);
-    if (!isValid) {
-      await recordLoginAttempt(email, ip, false);
-      await pool.query('UPDATE users SET failed_login_attempts = failed_login_attempts + 1 WHERE id = $1', [user.id]);
-      await logActivity({ userId: user.id, action: 'login_failed', details: { reason: 'wrong_password' }, ipAddress: ip, userAgent: ua });
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
+    if (!isValid) return res.status(401).json({ message: 'Invalid credentials' });
 
-    // ── 2FA check ──
-    if (user.two_factor_enabled) {
-      if (!totp_code) {
-        return res.status(200).json({ requires_2fa: true, message: 'Two-factor authentication code required' });
-      }
-      const verified = speakeasy.totp.verify({
-        secret: user.two_factor_secret,
-        encoding: 'base32',
-        token: totp_code,
-        window: 1,
-      });
-      if (!verified) {
-        await logActivity({ userId: user.id, action: '2fa_failed', ipAddress: ip, userAgent: ua });
-        return res.status(401).json({ message: 'Invalid 2FA code' });
-      }
-    }
+    if (!user.email_verified) return res.status(403).json({ message: 'Your account is not yet verified. Please check your email.', requiresVerification: true, email: user.email });
 
-    // Success
-    await recordLoginAttempt(email, ip, true);
-    await pool.query('UPDATE users SET failed_login_attempts = 0, last_login = NOW() WHERE id = $1', [user.id]);
-
-    const token = signToken(user);
-
-    // Create session record
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    await pool.query(
-      `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
-       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours')`,
-      [user.id, tokenHash, ip, ua]
-    );
-
-    await logActivity({ userId: user.id, action: 'login', entityType: 'user', entityId: user.id, ipAddress: ip, userAgent: ua });
-
-    res.json({ message: 'Login successful', user: sanitizeUser(user), token });
+    await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status }, token });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+    res.status(500).json({ message: 'Login failed' });
   }
 };
 
-// ─── LOGOUT ────────────────────────────────────────────────────────
 export const logout = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -763,93 +700,25 @@ export const deleteAccountHandler = async (req, res) => {
 };
 
 // ─── RESEND EMAIL VERIFICATION ─────────────────────────────────────
-export const resendVerification = async (req, res) => {
-  const userId = req.user.id;
 
-  try {
-    const result = await pool.query('SELECT email, email_verified FROM users WHERE id = $1', [userId]);
-    if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
-
-    const user = result.rows[0];
-    if (user.email_verified) {
-      return res.json({ message: 'Email is already verified' });
-    }
-
-    // Generate a verification token using dedicated columns (not shared with password reset)
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
-
-    // Store token with 24h expiry in dedicated email verification columns
-    await pool.query(
-      `UPDATE users SET email_verification_token = $1, email_verification_expires = NOW() + INTERVAL '24 hours' WHERE id = $2`,
-      [tokenHash, userId]
-    );
-
-    // Send verification email
-    try {
-      const transporter = createTransporter();
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      const verifyUrl = `${frontendUrl}/#/verify-email?token=${verificationToken}`;
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
-        to: user.email,
-        subject: 'Verify Your Email - 10th West Moto',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: #f97316; padding: 20px; text-align: center;">
-              <h1 style="color: white; margin: 0;">10th West Moto</h1>
-            </div>
-            <div style="padding: 30px; background: #fff;">
-              <h2>Verify Your Email Address</h2>
-              <p>Click the button below to verify your email. This link expires in 24 hours.</p>
-              <a href="${verifyUrl}" style="display: inline-block; padding: 12px 30px; background: #f97316; color: white; text-decoration: none; border-radius: 8px; margin: 20px 0;">Verify Email</a>
-              <p style="color: #666; font-size: 12px;">If you did not create an account, please ignore this email.</p>
-            </div>
-          </div>
-        `,
-      });
-    } catch (emailErr) {
-      console.error('Email send failed (verification will still work via token):', emailErr.message);
-    }
-
-    res.json({ message: 'Verification email sent. Please check your inbox.' });
-  } catch (error) {
-    console.error('Resend verification error:', error);
-    res.status(500).json({ message: 'Failed to send verification email' });
-  }
-};
-
-// ─── VERIFY EMAIL TOKEN ────────────────────────────────────────────
 export const verifyEmailToken = async (req, res) => {
   const { token } = req.body;
-
+  if (!token) return res.status(400).json({ message: 'Missing token' });
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    // Use dedicated email verification columns (not shared with password reset)
     const result = await pool.query(
-      `SELECT id FROM users WHERE email_verification_token = $1 AND email_verification_expires > NOW()`,
+      'UPDATE users SET email_verified = true, email_verification_token = null, email_verification_expires = null WHERE email_verification_token = $1 AND email_verification_expires > NOW() RETURNING id',
       [tokenHash]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(400).json({ message: 'Invalid or expired verification link' });
-    }
-
-    await pool.query(
-      `UPDATE users SET email_verified = true, email_verification_token = NULL, email_verification_expires = NULL WHERE id = $1`,
-      [result.rows[0].id]
-    );
-
-    res.json({ message: 'Email verified successfully' });
-  } catch (error) {
-    console.error('Verify email error:', error);
-    res.status(500).json({ message: 'Failed to verify email' });
+    if (result.rows.length === 0) return res.status(400).json({ message: 'Invalid or expired verification link' });
+    res.json({ message: 'Your account has been successfully verified. You may now log in.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
-// ─── DATA EXPORT / PORTABILITY (RA 10173 §18 - Right to Data Portability) ───
+
 export const exportUserData = async (req, res) => {
   const userId = req.user.id;
 

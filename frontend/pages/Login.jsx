@@ -9,6 +9,8 @@ const Login = ({ onLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState('');
   const [needs2FA, setNeeds2FA] = useState(false);
   const [totpCode, setTotpCode] = useState('');
   const navigate = useNavigate();

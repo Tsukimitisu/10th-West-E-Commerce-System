@@ -3102,3 +3102,17 @@ export const getBackupHistory = async () => {
   }
   return authenticatedFetch(`${API_URL}/admin/backup/history`);
 };
+
+export const resendVerificationEmail = async (email) => {
+  return await authenticatedFetch(${API_URL}/auth/resend-verification, {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  });
+};
+
+export const verifyEmailToken = async (token) => {
+  return await authenticatedFetch(${API_URL}/auth/verify-email, {
+    method: 'POST',
+    body: JSON.stringify({ token })
+  });
+};

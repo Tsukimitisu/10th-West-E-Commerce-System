@@ -102,7 +102,7 @@ router.delete('/account',
 router.get('/export-data', authenticateToken, exportUserData);
 
 // ─── Email verification ────────────────────────────────────────────
-router.post('/resend-verification', authenticateToken, resendVerification);
+router.post('/resend-verification', body('email').isEmail().withMessage('Valid email required'), validate, resendVerification);
 router.post('/verify-email', body('token').notEmpty(), validate, verifyEmailToken);
 
 export default router;
