@@ -615,6 +615,39 @@ const mapProductToSupabase = (product) => ({
 
 // ==================== PRODUCTS ====================
 
+export const getTopSellers = async (days = null) => {
+  if (USE_MOCK_DATA) {
+    const products = await getProductsMock();
+    return products.sort((a, b) => (b.total_sold || 0) - (a.total_sold || 0)).slice(0, 8);
+  }
+
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, categories(name)')
+      .order('id', { ascending: false })
+      .limit(8);
+      
+    if (error) throw new Error(error.message);
+    return (data || []).map((p) => ({
+      ...mapProductFromSupabase(p),
+      category_name: p.categories?.name,
+    }));
+  }
+
+  const queryParams = new URLSearchParams();
+  if (days && days !== 'all') queryParams.append('days', days);
+  const qString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+  const products = await authenticatedFetch(`${API_URL}/products/top-sellers${qString}`);
+  return products.map((p) => ({
+    ...p,
+    partNumber: p.part_number,
+    buyingPrice: p.buying_price,
+    boxNumber: p.box_number,
+  }));
+};
+
 export const getProducts = async (params = {}) => {
   if (USE_MOCK_DATA) {
     return getProductsMock(params);

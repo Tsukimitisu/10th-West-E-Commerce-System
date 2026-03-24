@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import {
   getProducts,
   getProductById,
+  getTopSellers,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -22,6 +23,7 @@ const productValidation = [
 
 // Public routes
 router.get('/', getProducts);
+router.get('/top-sellers', getTopSellers);
 router.post(
   '/upload-image',
   authenticateToken,

@@ -2,13 +2,16 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Truck, Shield, Wrench, Search, Zap, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, X, Settings, Clock, Headphones } from 'lucide-react';
-import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist, getSystemSettings, getProductById } from '../services/api';
+import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist, getSystemSettings, getProductById, getTopSellers } from '../services/api';
 import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
 
 const Home = () => {
   // --- Data & API State ---
   const [products, setProducts] = useState([]);
+  const [bestSellers, setBestSellers] = useState([]); // Create new state
+  const [topSellersDays, setTopSellersDays] = useState('all'); // State for time range
+  const [loadingBestSellers, setLoadingBestSellers] = useState(false);
   const [categories, setCategories] = useState([]);
   const [banners, setBanners] = useState([]);
   const[announcements, setAnnouncements] = useState([]);
@@ -84,6 +87,15 @@ const Home = () => {
 
     loadWishlist();
   },[]);
+
+  // --- Best Sellers Fetching ---
+  useEffect(() => {
+    setLoadingBestSellers(true);
+    getTopSellers(topSellersDays)
+      .then(setBestSellers)
+      .catch(() => {})
+      .finally(() => setLoadingBestSellers(false));
+  }, [topSellersDays]);
 
   // Update real-time viewed items
   useEffect(() => {
@@ -173,7 +185,6 @@ const Home = () => {
 
   // --- Derived Product Lists ---
   const featured = products.filter(p => p.is_on_sale || (p.rating && p.rating >= 4)).slice(0, 8);
-  const bestSellers = [...products].sort((a, b) => (b.total_sold || 0) - (a.total_sold || 0)).slice(0, 8);
   const newArrivals = [...products].sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()).slice(0, 4);
 
   // --- Animation Variants (Framer Motion v11 Compatible) ---
@@ -539,31 +550,57 @@ const Home = () => {
       </section>
 
       {/* --- BEST SELLERS --- */}
-      {bestSellers.length > 0 && (
-        <section className="py-16 md:py-24 bg-white "style={{backgroundImage: 'radial-gradient(circle, #e7e7e7 1px, transparent 1px)', backgroundSize: '20px 20px'}}>
+      <section className="py-16 md:py-24 bg-white "style={{backgroundImage: 'radial-gradient(circle, #e7e7e7 1px, transparent 1px)', backgroundSize: '20px 20px'}}>
           <div className="max-w-7xl mx-auto px-4">
             <div className="text-center mb-12">
               <span className="text-red-600 font-bold uppercase tracking-widest text-sm">Top Rated</span>
               <h2 className="text-3xl md:text-4xl font-black uppercase text-gray-900 mt-2">Best Sellers</h2>
-              <div className="w-24 h-1 bg-red-600 mx-auto mt-4 skew-x-[-20deg]"></div>
+              <div className="w-24 h-1 bg-red-600 mx-auto mt-4 skew-x-[-20deg] mb-6"></div>
+              
+              <div className="flex items-center justify-center gap-2 mb-4">
+                {[
+                  { label: 'Weekly', value: '7' },
+                  { label: 'Monthly', value: '30' },
+                  { label: 'All Time', value: 'all' }
+                ].map(tab => (
+                  <button
+                    key={tab.value}
+                    onClick={() => setTopSellersDays(tab.value)}
+                    className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-all duration-300 ${
+                      topSellersDays === tab.value 
+                        ? 'bg-red-600 text-white shadow-md' 
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
             
-            <motion.div 
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={stagger}
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
-            >
-              {bestSellers.map(p => (
-                <motion.div key={p.id} variants={fadeIn} className="bg-gray-50 rounded-lg p-4 shadow-sm border border-gray-300 hover:shadow-lg hover:border-red-500 transition-all">
-                  <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
-                </motion.div>
-              ))}
-            </motion.div>
+            {loadingBestSellers ? (
+              <div className="flex justify-center items-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-600"></div>
+              </div>
+            ) : bestSellers.length === 0 ? (
+              <div className="text-center text-gray-500 py-12">No recent sales data to display for this period.</div>
+            ) : (
+              <motion.div 
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                variants={stagger}
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+              >
+                {bestSellers.map(p => (
+                  <motion.div key={p.id} variants={fadeIn} className="bg-gray-50 rounded-lg p-4 shadow-sm border border-gray-300 hover:shadow-lg hover:border-red-500 transition-all">
+                    <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
           </div>
         </section>
-      )}
 
       {/* --- NEW ARRIVALS --- */}
       {newArrivals.length > 0 && (

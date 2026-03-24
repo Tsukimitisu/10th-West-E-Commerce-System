@@ -109,6 +109,52 @@ export const getProducts = async (req, res) => {
   }
 };
 
+// Get top selling products
+export const getTopSellers = async (req, res) => {
+  try {
+    const { days, limit = 8 } = req.query;
+    
+    let dateFilter = '';
+    const params = [];
+    params.push(parseInt(limit));
+    
+    if (days && days !== 'all') {
+      const parsedDays = parseInt(days);
+      if (!isNaN(parsedDays) && parsedDays > 0) {
+        params.push(parsedDays);
+        dateFilter = `AND o.created_at >= NOW() - INTERVAL '${parsedDays} days'`;
+      }
+    }
+
+    // We MUST manually list columns instead of p.* because PostgreSQL strict GROUP BY
+    const result = await pool.query(`
+      SELECT 
+        p.id, p.name, p.brand, p.part_number, p.image, p.description, 
+        p.price, p.sale_price, p.is_on_sale, p.stock_quantity, p.rating, p.created_at,
+        c.name as category_name,
+        COALESCE(SUM(oi.quantity), 0) as total_sold
+      FROM products p
+      LEFT JOIN order_items oi ON oi.product_id = p.id
+      LEFT JOIN orders o ON oi.order_id = o.id AND o.status IN ('paid', 'completed') ${dateFilter}
+      LEFT JOIN categories c ON p.category_id = c.id
+      GROUP BY p.id, c.name
+      ORDER BY total_sold DESC, p.id DESC
+      LIMIT $1
+    `, params);
+    
+    res.json(result.rows.map(product => ({
+      ...product,
+      price: parseFloat(product.price),
+      sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
+      stock_quantity: parseInt(product.stock_quantity),
+      total_sold: parseInt(product.total_sold)
+    })));
+  } catch (error) {
+    console.error('Get top sellers error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // Get single product by ID
 export const getProductById = async (req, res) => {
   try {
