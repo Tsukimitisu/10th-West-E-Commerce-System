@@ -146,7 +146,6 @@ const Profile = () => {
             <div>
               <p className="font-semibold text-white">{user.name}</p>
               <p className="text-sm text-gray-400">{user.email}</p>
-              <p className="text-xs text-gray-400 capitalize mt-0.5">Role: {user.role}</p>
             </div>
           </div>
 
