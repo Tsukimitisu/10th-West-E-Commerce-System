@@ -1,7 +1,7 @@
 ﻿import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, Check, X } from 'lucide-react';
-import { register, sendRegistrationOtp, resendVerificationEmail, API_ORIGIN } from '../services/api';
+import { register, sendRegistrationOtp, API_ORIGIN } from '../services/api';
 
 const Register = ({ onLogin }) => {
   const [step, setStep] = useState(1);
@@ -17,9 +17,6 @@ const Register = ({ onLogin }) => {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [success, setSuccess] = useState('');
-  const [showVerificationModal, setShowVerificationModal] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [resendStatus, setResendStatus] = useState('');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const defaultRedirect = searchParams.get('redirect') || '/';
@@ -45,9 +42,21 @@ const Register = ({ onLogin }) => {
     try {
       const result = await register(name, email, password, { consent_given: true, age_confirmed: true });
       if (result?.requiresVerification) {
-        setShowVerificationModal(true);
+        setSuccess(result.message || 'Registration successful. Please verify your email before signing in.');
         setPassword('');
         setConfirmPassword('');
+        setAgreeTerms(false);
+        setAgeConfirmed(false);
+        const additionalParams = new URLSearchParams(searchParams);
+        additionalParams.delete('redirect');
+        const paramString = additionalParams.toString();
+        
+        let loginUrl = '/login';
+        if (defaultRedirect !== '/') {
+          loginUrl += `?redirect=${defaultRedirect}`;
+          if (paramString) loginUrl += `&${paramString}`;
+        }
+        setTimeout(() => navigate(loginUrl), 2000);
         return;
       }
       if (result?.user && result?.token) {
@@ -70,19 +79,6 @@ const Register = ({ onLogin }) => {
 
   const handleOAuth = (provider) => {
     window.location.href = `${API_ORIGIN}/api/auth/${provider}`;
-  };
-
-  const handleResend = async () => {
-    setResending(true);
-    setResendStatus('');
-    try {
-      await resendVerificationEmail(email);
-      setResendStatus('Verification email resent successfully! Please check your inbox.');
-    } catch (err) {
-      setResendStatus(err.message || 'Failed to resend verification email.');
-    } finally {
-      setResending(false);
-    }
   };
 
   return (
@@ -216,41 +212,6 @@ const Register = ({ onLogin }) => {
           Already have an account? <Link to="/login" className="text-red-500 hover:text-orange-600 font-medium">Sign in</Link>
         </p>
       </div>
-
-      {showVerificationModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-xl p-8 max-w-md w-full text-center relative">
-            <div className="w-16 h-16 bg-blue-500/20 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Mail size={32} />
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Account created successfully.</h2>
-            <p className="text-gray-300 mb-6">
-              Please verify your email to continue. We have sent a verification link to <strong>{email}</strong>.
-            </p>
-            
-            <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-6">
-              <p className="text-sm text-gray-400">
-                <strong>Instructions:</strong> Check your Gmail inbox (and spam folder) for the verification email.
-                Click the confirmation link to activate your account.
-              </p>
-            </div>
-
-            <button
-              onClick={handleResend}
-              disabled={resending}
-              className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:bg-red-500/50 text-white font-medium rounded-lg transition-colors flex items-center justify-center mb-4"
-            >
-              {resending ? 'Sending...' : 'Resend Verification Email'}
-            </button>
-
-            {resendStatus && (
-              <p className={`text-sm ${resendStatus.includes('successfully') ? 'text-green-500' : 'text-red-500'}`}>
-                {resendStatus}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

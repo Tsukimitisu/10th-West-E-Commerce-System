@@ -194,7 +194,7 @@ export const login = async (req, res) => {
     const isValid = await bcrypt.compare(password, user.password_hash);
     if (!isValid) return res.status(401).json({ message: 'Invalid credentials' });
 
-    if (!user.email_verified) return res.status(403).json({ message: 'Your account is not yet verified. Please check your email.', requiresVerification: true, email: user.email });
+    if (!user.email_verified) return res.status(403).json({ message: 'Your account is not verified. Please verify your email first.', requiresVerification: true, email: user.email });
 
     await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
@@ -791,7 +791,7 @@ export const resendVerification = async (req, res) => {
     const user = existingResult.rows[0];
     if (user.email_verified) return res.status(400).json({ message: 'Account is already verified.' });
 
-    const crypto = require('crypto');
+    
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
