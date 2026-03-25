@@ -457,10 +457,15 @@ export const disable2FA = async (password) => {
 };
 
 export const exchangeOAuthCode = async (code) => {
-  return authenticatedFetch(`${API_URL}/auth/exchange-code`, {
-    method: 'POST',
+  const data = await authenticatedFetch(`${API_URL}/auth/exchange-code`, {
+    method: "POST",
     body: JSON.stringify({ code }),
   });
+  if (USE_SUPABASE && data && data.user) {
+    const token = "sb-token-" + btoa(JSON.stringify({ id: data.user.id, email: data.user.email, role: data.user.role }));
+    return { user: data.user, token };
+  }
+  return data;
 };
 
 // Sessions
