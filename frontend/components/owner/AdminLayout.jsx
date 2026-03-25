@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Boxes, ShoppingCart, Monitor,
-  RotateCcw, UserCog, BarChart3,
+  RotateCcw, UserCog, BarChart3, Users,
   LogOut, Bell, Search, Menu, X,
   ChevronLeft, ExternalLink, Wifi, WifiOff, Image, Tag, Newspaper,
   AlertTriangle, CheckCircle
@@ -16,6 +16,7 @@ const createNavItems = (badges = {}) => [
   { id: 'products', label: 'Products', icon: Package },
   { id: 'inventory', label: 'Inventory', icon: Boxes, badge: badges.lowStock },
   { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: badges.pendingOrders },
+  { id: 'customers', label: 'Customers', icon: Users },
   // Staff-only
   { id: 'pos', label: 'POS Terminal', icon: Monitor, external: '#/pos' },
   { id: 'returns', label: 'Returns', icon: RotateCcw, badge: badges.pendingReturns },
@@ -33,7 +34,7 @@ const STORE_STAFF_NAV = ['inventory', 'orders', 'pos', 'returns'];
 
 // Nav items owner can see (business management only)
 const OWNER_NAV = [
-  'dashboard', 'products', 'inventory', 'orders',
+  'dashboard', 'products', 'inventory', 'orders', 'customers',
   'staff', 'reports',
   'promotions', 'banners', 'content'
 ];
@@ -356,5 +357,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
 };
 
 export default AdminLayout;
+
+
 
 

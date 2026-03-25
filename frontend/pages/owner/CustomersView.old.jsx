@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { getOrders, adminDeleteUser } from '../../services/api';
-import { Users, Search, Eye, ShoppingBag, DollarSign, Star, Mail, Phone, MapPin, Calendar, Package, Trash2 } from 'lucide-react';
+﻿import React, { useEffect, useState } from 'react';
+import { getOrders } from '../../services/api';
+import { Users, Search, Eye, ShoppingBag, DollarSign, Star, Mail, Phone, MapPin, Calendar, Package } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 
 const CustomersView = () => {
@@ -8,7 +8,6 @@ const CustomersView = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [deleteId, setDeleteId] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -41,18 +40,6 @@ const CustomersView = () => {
     })();
   }, []);
 
-  const handleDeleteCustomer = async () => {
-    if (!deleteId) return;
-    try {
-      await adminDeleteUser(deleteId);
-      setCustomers(customers.filter(c => c.id !== deleteId));
-      setDeleteId(null);
-    } catch (err) {
-      console.error('Failed to delete customer', err);
-      alert(err.message || 'Failed to delete customer');
-    }
-  };
-
   const filtered = customers.filter(c => {
     const term = search.toLowerCase();
     return !term || c.name.toLowerCase().includes(term) || c.email.toLowerCase().includes(term) || c.id.toString().includes(term);
@@ -76,8 +63,8 @@ const CustomersView = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Total Customers', value: totalCustomers.toString(), icon: <Users size={18} />, color: 'bg-blue-50 text-blue-600' },
-          { label: 'Total Revenue', value: `₱${totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
-          { label: 'Avg Order Value', value: `₱${avgOrderValue.toFixed(0)}`, icon: <ShoppingBag size={18} />, color: 'bg-purple-50 text-purple-600' },
+          { label: 'Total Revenue', value: `â‚±${totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
+          { label: 'Avg Order Value', value: `â‚±${avgOrderValue.toFixed(0)}`, icon: <ShoppingBag size={18} />, color: 'bg-purple-50 text-purple-600' },
           { label: 'Repeat Customers', value: repeatCustomers.toString(), icon: <Star size={18} />, color: 'bg-amber-50 text-amber-600' },
         ].map((kpi, i) => (
           <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
@@ -109,7 +96,7 @@ const CustomersView = () => {
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Orders</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Total Spent</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Last Order</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-24">Actions</th>
+              <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-20">View</th>
             </tr></thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map(c => (
@@ -127,13 +114,10 @@ const CustomersView = () => {
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{c.email || '-'}</td>
                   <td className="px-4 py-3 text-right font-medium text-white">{c.orderCount}</td>
-                  <td className="px-4 py-3 text-right font-bold text-white">₱{c.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-right font-bold text-white">â‚±{c.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-xs text-gray-400 hidden sm:table-cell">{new Date(c.lastOrder).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => setSelectedCustomer(c)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="View Detail"><Eye size={14} /></button>
-                        <button onClick={() => setDeleteId(c.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors" title="Delete Customer"><Trash2 size={14} /></button>
-                      </div>
+                    <button onClick={() => setSelectedCustomer(c)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors"><Eye size={14} /></button>
                   </td>
                 </tr>
               ))}
@@ -141,28 +125,8 @@ const CustomersView = () => {
           </table>
         )}
       </div>
-        {/* Delete Confirmation Modal */}
-        {deleteId && (
-          <Modal isOpen={true} onClose={() => setDeleteId(null)} title="Confirm Deletion">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 size={32} />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Customer?</h3>
-              <p className="text-gray-500 mb-6">Are you sure you want to delete this customer account? This action cannot be undone.</p>
-              <div className="flex gap-3">
-                <button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors">
-                  Cancel
-                </button>
-                <button onClick={handleDeleteCustomer} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors">
-                  Delete Account
-                </button>
-              </div>
-            </div>
-          </Modal>
-        )}
 
-        {/* Customer Detail Modal */}
+      {/* Customer Detail Modal */}
       <Modal isOpen={!!selectedCustomer} onClose={() => setSelectedCustomer(null)} title={selectedCustomer?.name || 'Customer'} size="xl">
         {selectedCustomer && (
           <div className="space-y-5">
@@ -188,11 +152,11 @@ const CustomersView = () => {
                 <p className="text-[10px] text-blue-500 font-medium">Total Orders</p>
               </div>
               <div className="text-center p-3 bg-green-50 rounded-lg">
-                <p className="text-lg font-bold text-green-700">₱{selectedCustomer.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 0 })}</p>
+                <p className="text-lg font-bold text-green-700">â‚±{selectedCustomer.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 0 })}</p>
                 <p className="text-[10px] text-green-500 font-medium">Total Spent</p>
               </div>
               <div className="text-center p-3 bg-purple-50 rounded-lg">
-                <p className="text-lg font-bold text-purple-700">₱{(selectedCustomer.totalSpent / selectedCustomer.orderCount).toFixed(0)}</p>
+                <p className="text-lg font-bold text-purple-700">â‚±{(selectedCustomer.totalSpent / selectedCustomer.orderCount).toFixed(0)}</p>
                 <p className="text-[10px] text-purple-500 font-medium">Avg Order</p>
               </div>
             </div>
@@ -211,7 +175,7 @@ const CustomersView = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-white">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-sm font-bold text-white">â‚±{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
                       <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
                         o.status === 'delivered' ? 'bg-green-50 text-green-600' :
                         o.status === 'pending' ? 'bg-yellow-50 text-yellow-600' :
@@ -222,19 +186,6 @@ const CustomersView = () => {
                 ))}
               </div>
             </div>
-
-            {/* Action Buttons */}
-            <div className="pt-4 border-t border-gray-700 flex justify-end">
-              <button
-                onClick={() => {
-                  setSelectedCustomer(null);
-                  setDeleteId(selectedCustomer.id);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-lg transition-colors font-medium text-sm"
-              >
-                <Trash2 size={16} /> Delete Customer
-              </button>
-            </div>
           </div>
         )}
       </Modal>
@@ -243,6 +194,5 @@ const CustomersView = () => {
 };
 
 export default CustomersView;
-
 
 

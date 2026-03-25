@@ -76,6 +76,16 @@ const authenticatedFetch = async (url, options = {}) => {
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  } else if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase())) {
+    try {
+      const csrfRes = await fetch(`${API_URL}/csrf-token`);
+      if (csrfRes.ok) {
+        const { csrfToken } = await csrfRes.json();
+        if (csrfToken) headers['x-csrf-token'] = csrfToken;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch CSRF token:', e);
+    }
   }
 
   const response = await fetch(url, {

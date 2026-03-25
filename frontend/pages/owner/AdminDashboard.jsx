@@ -5,6 +5,7 @@ import DashboardView from './DashboardView';
 import ProductsView from './ProductsView';
 import InventoryView from './InventoryView';
 import OrdersView from './OrdersView';
+import CustomersView from './CustomersView';
 import ReturnsView from './ReturnsView';
 import StaffView from './StaffView';
 import ReportsView from './ReportsView';
@@ -28,6 +29,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       case 'products': return <ProductsView />;
       case 'inventory': return <InventoryView />;
       case 'orders': return <OrdersView />;
+      case 'customers': return <CustomersView />;
       case 'returns': return <ReturnsView />;
       case 'staff': return <StaffView />;
       case 'reports': return <ReportsView />;
