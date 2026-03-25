@@ -8,6 +8,7 @@ const ResetPassword = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -258,18 +259,23 @@ const ResetPassword = () => {
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      required
-                      disabled={isLocked}
-                      autoComplete="new-password"
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    />
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        required
+                        disabled={isLocked}
+                        autoComplete="new-password"
+                        className="w-full pl-10 pr-10 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                   </div>
-                  {confirmPassword && password !== confirmPassword && (
-                    <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
-                  )}
                 </div>
 
                 <div className="bg-gray-900 border border-gray-700 rounded-lg p-3">

@@ -424,8 +424,13 @@ const UserManagementView = () => {
                   </div>
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">New Password *</label>
-                    <input type="password" value={resetPwForm} onChange={(e) => setResetPwForm(e.target.value)} placeholder="Min 8 characters"
-                      className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                      <div className="relative">
+                        <input type={showResetPassword ? "text" : "password"} value={resetPwForm} onChange={(e) => setResetPwForm(e.target.value)} placeholder="Min 8 characters"
+                          className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                        <button type="button" onClick={() => setShowResetPassword(!showResetPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300">
+                          {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                   </div>
                   <div className="bg-red-500/10 border border-red-200 rounded-lg p-3">
                     <p className="text-xs text-orange-600 flex items-center gap-1"><AlertTriangle size={12} /> This will log the user out of all sessions</p>

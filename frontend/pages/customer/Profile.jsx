@@ -157,22 +157,27 @@ const Profile = () => {
 
           <form onSubmit={handleProfileUpdate} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <input type="text" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))}
-                  className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                  <div className="relative">
+                    <input type={showPasswords ? "text" : "password"} value={passData.new} onChange={e => setPassData(p => ({...p, new: e.target.value}))} required
+                      className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pr-10" />
+                    <button type="button" onClick={() => setShowPasswords(!showPasswords)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                  <div className="relative">
+                    <input type={showPasswords ? "text" : "password"} value={passData.confirm} onChange={e => setPassData(p => ({...p, confirm: e.target.value}))} required
+                      className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pr-10" />
+                    <button type="button" onClick={() => setShowPasswords(!showPasswords)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))}
-                  className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                <input type="tel" value={form.phone} onChange={e => setForm(f => ({...f, phone: e.target.value}))}
-                  className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
-              </div>
-            </div>
             <button type="submit" disabled={loading}
               className="px-6 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
               {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={16} />}

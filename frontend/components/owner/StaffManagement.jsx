@@ -7,8 +7,7 @@ import {
 import {
   Loader2, Plus, Pencil, Trash2, X, Save, Search, Shield, ShieldOff,
   UserPlus, Eye, Activity, Lock, ChevronDown, ChevronUp, ToggleLeft, ToggleRight,
-  UserCheck, UserX, Clock, FileText, BarChart3, Unlock, Key, AlertTriangle,
-} from 'lucide-react';
+UserCheck, UserX, Clock, FileText, BarChart3, Unlock, Key, AlertTriangle, EyeOff} from 'lucide-react';
 
 const StaffManagement = () => {
   const [view, setView] = useState('list');
@@ -379,15 +378,25 @@ const StaffManagement = () => {
               <div className="space-y-3">
                 <div>
                   <label className="text-sm text-gray-600">New Password</label>
-                  <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-red-500"
-                    placeholder="Min 8 characters" />
+                  <div className="relative">
+                    <input type={showResetPassword ? "text" : "password"} value={resetPassword} onChange={e => setResetPassword(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-red-500 pr-10"
+                      placeholder="Min 8 characters" />
+                    <button type="button" onClick={() => setShowResetPassword(!showResetPassword)} className="absolute right-3 top-1/2 translate-y-[-10%] text-gray-400">
+                      {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm text-gray-600">Confirm Password</label>
-                  <input type="password" value={resetConfirm} onChange={e => setResetConfirm(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-red-500"
-                    placeholder="Re-enter password" />
+                  <div className="relative">
+                    <input type={showResetPassword ? "text" : "password"} value={resetConfirm} onChange={e => setResetConfirm(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-red-500 pr-10"
+                      placeholder="Re-enter password" />
+                    <button type="button" onClick={() => setShowResetPassword(!showResetPassword)} className="absolute right-3 top-1/2 translate-y-[-10%] text-gray-400">
+                      {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-5">
