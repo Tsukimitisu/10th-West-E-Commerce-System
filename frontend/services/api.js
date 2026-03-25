@@ -214,6 +214,16 @@ export const register = async (name, email, password, consentData = {}, otp = ''
 
     if (error) throw new Error(error.message);
 
+    // Call the backend to generate the token and physically send the email
+    try {
+      await authenticatedFetch(`${API_URL}/auth/resend-verification`, {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+    } catch (emailErr) {
+      console.error('Failed to trigger backend verification email:', emailErr);
+    }
+
     return {
       message: 'Registration successful! Please check your email to verify your account before logging in.',
       requiresVerification: true,
