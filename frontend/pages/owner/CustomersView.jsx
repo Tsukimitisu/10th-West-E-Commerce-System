@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getOrders, adminDeleteUser } from '../../services/api';
+import { getOrders, adminDeleteUser, adminGetAllUsers } from '../../services/api';
 import { Users, Search, Eye, ShoppingBag, DollarSign, Star, Mail, Phone, MapPin, Calendar, Package, Trash2 } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 
@@ -13,14 +13,33 @@ const CustomersView = () => {
   useEffect(() => {
     (async () => {
       try {
+        // First fetch actual customers from DB
+        const usersResp = await adminGetAllUsers({ role: 'customer', page: 1 });
+        const allCust = usersResp.users || [];
+        
         const orders = await getOrders();
         const map = new Map();
+        
+        // Populate map with registered users first
+        allCust.forEach(u => {
+          map.set(u.id, {
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone || '',
+            orderCount: 0,
+            totalSpent: 0,
+            lastOrder: null,
+            orders: []
+          });
+        });
+        
         orders.forEach((o) => {
           const uid = o.user_id;
           if (!map.has(uid)) {
             map.set(uid, {
               id: uid,
-              name: o.customer_name || o.shipping_name || `Customer #${uid}`,
+              name: o.customer_name || o.shipping_name || `Customer #${uid || 'Guest'}`,
               email: o.customer_email || o.email || '',
               phone: o.customer_phone || o.phone || '',
               orderCount: 0,
@@ -32,7 +51,7 @@ const CustomersView = () => {
           const c = map.get(uid);
           c.orderCount++;
           c.totalSpent += o.total_amount || 0;
-          if (new Date(o.created_at) > new Date(c.lastOrder)) c.lastOrder = o.created_at;
+          if (!c.lastOrder || new Date(o.created_at) > new Date(c.lastOrder)) c.lastOrder = o.created_at;
           c.orders.push(o);
         });
         setCustomers(Array.from(map.values()).sort((a, b) => b.totalSpent - a.totalSpent));

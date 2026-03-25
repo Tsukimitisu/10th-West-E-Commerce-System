@@ -194,16 +194,33 @@ export const register = async (name, email, password, consentData = {}, otp = ''
   }
 
   if (USE_SUPABASE) {
-    // Check if email already exists
-    const { data: existing } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single();
+      // Check if email already exists
+      const { data: existing } = await supabase
+        .from("users")
+        .select("id, email_verified")
+        .eq("email", email)
+        .maybeSingle();
 
-    if (existing) throw new Error('Email already registered');
+      if (existing) {
+        if (existing.email_verified) {
+          throw new Error("Email already registered");
+        } else {
+          try {
+            await authenticatedFetch(`${API_URL}/auth/resend-verification`, {
+              method: "POST",
+              body: JSON.stringify({ email })
+            });
+          } catch (e) {
+            console.error("Failed to trigger backend verification email:", e);
+          }
+          return {
+            message: "This email is already registered but not yet verified. A new verification email has been sent.",
+            requiresVerification: true,
+          };
+        }
+      }
 
-    // Hash password before storing (PCI/security compliance)
+      // Hash password before storing (PCI/security compliance)
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Insert new user directly into users table
