@@ -62,6 +62,7 @@ const CustomersView = () => {
   const totalRevenue = customers.reduce((s, c) => s + c.totalSpent, 0);
   const avgOrderValue = customers.length > 0 ? totalRevenue / customers.reduce((s, c) => s + c.orderCount, 0) : 0;
   const repeatCustomers = customers.filter(c => c.orderCount > 1).length;
+  const customerToDelete = deleteId ? customers.find(c => c.id === deleteId) : null;
 
   return (
     <div className="space-y-4">
@@ -109,7 +110,7 @@ const CustomersView = () => {
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Orders</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Total Spent</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Last Order</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-24">Actions</th>
+              <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-auto">Actions</th>
             </tr></thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map(c => (
@@ -131,8 +132,8 @@ const CustomersView = () => {
                   <td className="px-4 py-3 text-xs text-gray-400 hidden sm:table-cell">{new Date(c.lastOrder).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => setSelectedCustomer(c)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="View Detail"><Eye size={14} /></button>
-                        <button onClick={() => setDeleteId(c.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors" title="Delete Customer"><Trash2 size={14} /></button>
+                          <button onClick={() => setSelectedCustomer(c)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title={`View ${c.name}`}><Eye size={14} /></button>
+                          <button onClick={() => setDeleteId(c.id)} className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors text-xs font-medium"><Trash2 size={13} /> Delete {c.name}</button>
                       </div>
                   </td>
                 </tr>
@@ -142,14 +143,14 @@ const CustomersView = () => {
         )}
       </div>
         {/* Delete Confirmation Modal */}
-        {deleteId && (
+        {deleteId && customerToDelete && (
           <Modal isOpen={true} onClose={() => setDeleteId(null)} title="Confirm Deletion">
             <div className="p-6 text-center">
               <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Trash2 size={32} />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Customer?</h3>
-              <p className="text-gray-500 mb-6">Are you sure you want to delete this customer account? This action cannot be undone.</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Delete {customerToDelete.name}?</h3>
+              <p className="text-gray-500 mb-6">Are you sure you want to delete the account for <strong>{customerToDelete.name}</strong>? This action cannot be undone.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors">
                   Cancel
@@ -232,7 +233,7 @@ const CustomersView = () => {
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-lg transition-colors font-medium text-sm"
               >
-                <Trash2 size={16} /> Delete Customer
+                <Trash2 size={16} /> Delete {selectedCustomer.name}
               </button>
             </div>
           </div>
