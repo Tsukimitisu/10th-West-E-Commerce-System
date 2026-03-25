@@ -29,6 +29,11 @@ export const CartProvider = ({ children }) => {
     }
   };
 
+  const getCartKey = () => {
+    const user = getCurrentUserFromToken();
+    return user?.id ? `shopCoreCart_${user.id}` : 'shopCoreGuestCart';
+  };
+
   const getOrCreateSupabaseCartId = async (userId) => {
     if (!supabase || !userId) return null;
     const { data: existingCart, error: findError } = await supabase
@@ -70,7 +75,7 @@ export const CartProvider = ({ children }) => {
     const token = getToken();
     if (!token) {
       // Load from localStorage if not logged in
-      const savedCart = localStorage.getItem('shopCoreCart');
+      const savedCart = sessionStorage.getItem(getCartKey());
       setItems(savedCart ? JSON.parse(savedCart) : []);
       setInitialized(true);
       return;
@@ -80,7 +85,7 @@ export const CartProvider = ({ children }) => {
       try {
         const currentUser = getCurrentUserFromToken();
         if (!currentUser?.id) {
-          const savedCart = localStorage.getItem('shopCoreCart');
+          const savedCart = sessionStorage.getItem(getCartKey());
           setItems(savedCart ? JSON.parse(savedCart) : []);
           setInitialized(true);
           return;
@@ -106,10 +111,10 @@ export const CartProvider = ({ children }) => {
         })));
 
         setItems(mappedItems);
-        localStorage.setItem('shopCoreCart', JSON.stringify(mappedItems));
+        sessionStorage.setItem(getCartKey(), JSON.stringify(mappedItems));
       } catch (err) {
         console.error('Error syncing cart (Supabase):', err);
-        const savedCart = localStorage.getItem('shopCoreCart');
+        const savedCart = sessionStorage.getItem(getCartKey());
         setItems(savedCart ? JSON.parse(savedCart) : []);
       }
       setInitialized(true);
@@ -128,15 +133,15 @@ export const CartProvider = ({ children }) => {
         const mappedItems = mapCartItemsFromBackend(data.items || []);
         setItems(mappedItems);
         // Save to localStorage as backup
-        localStorage.setItem('shopCoreCart', JSON.stringify(mappedItems));
+        sessionStorage.setItem(getCartKey(), JSON.stringify(mappedItems));
       } else {
         // Fall back to localStorage
-        const savedCart = localStorage.getItem('shopCoreCart');
+        const savedCart = sessionStorage.getItem(getCartKey());
         setItems(savedCart ? JSON.parse(savedCart) : []);
       }
     } catch (err) {
       console.error('Error syncing cart:', err);
-      const savedCart = localStorage.getItem('shopCoreCart');
+      const savedCart = sessionStorage.getItem(getCartKey());
       setItems(savedCart ? JSON.parse(savedCart) : []);
     }
     setInitialized(true);
@@ -153,13 +158,17 @@ export const CartProvider = ({ children }) => {
       syncCart();
     };
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('auth:changed', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('auth:changed', handleStorageChange);
+    };
   }, []);
 
   // Save to localStorage as backup
   useEffect(() => {
     if (initialized) {
-      localStorage.setItem('shopCoreCart', JSON.stringify(items));
+      sessionStorage.setItem(getCartKey(), JSON.stringify(items));
       // Auto-select new items
       const currentSelected = new Set(selectedItemIds);
       const newSelected = [...selectedItemIds];
@@ -530,7 +539,7 @@ export const CartProvider = ({ children }) => {
           setSelectedItemIds([]);
           setDiscount(null);
           setError(null);
-          localStorage.setItem('shopCoreCart', JSON.stringify([]));
+          sessionStorage.setItem(getCartKey(), JSON.stringify([]));
         } catch (err) {
           console.error('Error clearing cart (Supabase):', err);
           clearCartLocal();
@@ -554,7 +563,7 @@ export const CartProvider = ({ children }) => {
           setSelectedItemIds([]);
           setDiscount(null);
           setError(null);
-          localStorage.setItem('shopCoreCart', JSON.stringify([]));
+          sessionStorage.setItem(getCartKey(), JSON.stringify([]));
         }
       } catch (err) {
         console.error('Error clearing cart:', err);
@@ -596,8 +605,8 @@ export const CartProvider = ({ children }) => {
           setError(null);
           
           // Update local storage
-          const currentLocal = JSON.parse(localStorage.getItem('shopCoreCart') || '[]');
-          localStorage.setItem('shopCoreCart', JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
+          const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
+          sessionStorage.setItem(getCartKey(), JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
         } catch (err) {
           console.error('Error clearing selected items (Supabase):', err);
           clearSelectedItemsLocal();
@@ -624,8 +633,8 @@ export const CartProvider = ({ children }) => {
         setError(null);
         
         // Update local storage
-        const currentLocal = JSON.parse(localStorage.getItem('shopCoreCart') || '[]');
-        localStorage.setItem('shopCoreCart', JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
+        const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
+        sessionStorage.setItem(getCartKey(), JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
       } catch (err) {
         console.error('Error clearing selected items:', err);
         clearSelectedItemsLocal();
@@ -641,8 +650,8 @@ export const CartProvider = ({ children }) => {
     setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
     setSelectedItemIds([]);
     setError(null);
-    const currentLocal = JSON.parse(localStorage.getItem('shopCoreCart') || '[]');
-    localStorage.setItem('shopCoreCart', JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
+    const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
+    sessionStorage.setItem(getCartKey(), JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
   };
 
   const clearCartLocal = () => {
@@ -650,7 +659,7 @@ export const CartProvider = ({ children }) => {
     setSelectedItemIds([]);
     setDiscount(null);
     setError(null);
-    localStorage.setItem('shopCoreCart', JSON.stringify([]));
+    sessionStorage.setItem(getCartKey(), JSON.stringify([]));
   };
 
     const toggleSelection = (productId) => {
