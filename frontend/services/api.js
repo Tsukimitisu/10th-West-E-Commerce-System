@@ -150,7 +150,10 @@ export const login = async (email, password, totp_code) => {
 
     if (!isValidPassword) throw new Error('Invalid credentials');
 
-    // Update last login
+      if (!user.email_verified) {
+        throw new Error('Your account is not verified. Please verify your email first.');
+      }
+// Update last login
     await supabase
       .from('users')
       .update({ last_login: new Date().toISOString() })
