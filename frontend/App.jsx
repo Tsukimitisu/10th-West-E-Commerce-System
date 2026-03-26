@@ -55,7 +55,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-800 flex flex-col">
+    <div className="min-h-screen bg-zinc-900 flex flex-col">
       {!hideChrome && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
       {!hideChrome && !isSuperAdmin && user && <EmailVerificationBanner user={user} />}
       <div className="flex-1">
