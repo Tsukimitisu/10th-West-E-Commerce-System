@@ -9,6 +9,14 @@ import MapPinPicker from '../../components/MapPinPicker';
 
 const Checkout = () => {
   const { selectedItems: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearSelectedItems, updateQuantity } = useCart();
+
+  // Bulletproof snapshot of intended checkout items to prevent unselected items from appearing during context updates
+  const [checkoutItemIds] = useState(() => cartItems.map(i => i.productId));
+  
+  const verifiedCartItems = useMemo(() => {
+    return cartItems.filter(i => checkoutItemIds.includes(i.productId));
+  }, [cartItems, checkoutItemIds]);
+
   const navigate = useNavigate();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
@@ -48,11 +56,21 @@ const Checkout = () => {
     }
   }, [buyNowItem]);
 
-  const items = isBuyNow && buyNowItem ? [{ ...buyNowItem, quantity: buyNowQty }] : cartItems;
+  const items = isBuyNow && buyNowItem ? [{ ...buyNowItem, quantity: buyNowQty }] : verifiedCartItems;
+  
+  const calculatedCartSubtotal = useMemo(() => {
+    return verifiedCartItems.reduce((sum, item) => {
+      const price = item.product.is_on_sale ? item.product.sale_price : item.product.price;
+      return sum + (price * item.quantity);
+    }, 0);
+  }, [verifiedCartItems]);
+
+  const calculatedCartTotal = calculatedCartSubtotal - (discountAmount || 0);
+
   const subtotal = isBuyNow && buyNowItem
     ? ((buyNowItem.product.is_on_sale && buyNowItem.product.sale_price ? buyNowItem.product.sale_price : buyNowItem.product.price) * buyNowQty)
-    : cartSubtotal;
-  const total = isBuyNow ? subtotal - (discountAmount || 0) : cartTotal;
+    : calculatedCartSubtotal;
+  const total = isBuyNow ? subtotal - (discountAmount || 0) : calculatedCartTotal;
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showNewAddress, setShowNewAddress] = useState(false);
