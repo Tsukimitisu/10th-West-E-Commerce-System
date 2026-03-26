@@ -282,10 +282,10 @@ const Navbar = ({ user, onLogout }) => {
 
             {/* Desktop navigation - Center */}
             <nav className="hidden lg:flex items-center gap-0.5 ml-8 flex-1">
-              <Link to="/" className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors duration-300 ease-in-out ${location.pathname === '/' ? 'text-red-600 border-b-2 border-red-600' : 'text-red-500 hover:text-red-600'}`}>
+              <Link to="/" className={`px-7 py-2 rounded-lg text-sm font-semibold transition-colors duration-500 ease-in-out ${location.pathname === '/' ? 'text-red-600 border-b-2 border-red-600' : 'text-red-500 hover:text-red-600'}`}>
                 Home
               </Link>
-              <Link to="/shop" className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors duration-300 ease-in-out ${location.pathname === '/shop' ? 'text-red-600 border-b-2 border-red-600' : 'text-red-500 hover:text-red-600'}`}>
+              <Link to="/shop" className={`px-7 py-2 rounded-lg text-sm font-semibold transition-colors duration-500 ease-in-out ${location.pathname === '/shop' ? 'text-red-600 border-b-2 border-red-600' : 'text-red-500 hover:text-red-600'}`}>
                 Shop
               </Link>
               <div ref={moreMenuRef} className="relative">
@@ -323,7 +323,7 @@ const Navbar = ({ user, onLogout }) => {
                     onChange={handleSearchChange}
                     onFocus={() => { if(globalSearch.length >= 2) setShowDropdown(true); }}
                     placeholder="Search parts, brands..."
-                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-700 bg-zinc-900 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
+                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-700 bg-zinc-900 text-sm text-white placeholder-gray-400 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
                   />
                   {showDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[400px] flex flex-col overflow-hidden">

@@ -186,7 +186,7 @@ const ProductList = () => {
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="h-10 px-3 bg-white/10 backdrop-blur border border-white/30 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                className="h-10 px-3 bg-white/10 backdrop-blur border border-white/30 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-700/50"
               >
                 {searchQuery && <option value="relevance">Relevance</option>}
                 <option value="newest">Newest</option>

@@ -25,7 +25,7 @@ const FilterSidebar = ({
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const activePill = 'bg-orange-500/80 text-white border-orange-500 shadow-sm';
+  const activePill = 'bg-red-700/80 text-white border-grey-900 shadow-sm';
   const idlePill = 'bg-white/10 text-gray-700 border-white/20 hover:border-white/40 hover:bg-white/20';
 
   const content = (
@@ -33,7 +33,7 @@ const FilterSidebar = ({
       <div className="rounded-2xl border border-white/20 bg-white/5 p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#f97316] text-white flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center">
               <SlidersHorizontal size={16} />
             </div>
             <div>
@@ -55,7 +55,7 @@ const FilterSidebar = ({
           <button
             onClick={onClearAll}
             disabled={activeFilterCount === 0}
-            className="text-xs font-semibold text-orange-600 hover:text-orange-700 disabled:text-gray-400"
+            className="text-xs font-semibold text-red-700 hover:text-zinc-900 disabled:text-gray-400"
           >
             Clear all
           </button>
