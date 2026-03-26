@@ -61,7 +61,7 @@ export const CartProvider = ({ children }) => {
   };
 
   const mapCartItemsFromBackend = (rows = []) => {
-    return rows.map((item) => ({
+    const mapped = rows.map((item) => ({
       cartItemId: item.id,
       productId: item.product_id ?? item.product?.id,
       quantity: item.quantity,
@@ -71,6 +71,13 @@ export const CartProvider = ({ children }) => {
         image: item.product?.image || item.product?.image_url || '',
       },
     }));
+    return mapped.sort((a, b) => {
+      const idA = a.cartItemId || a.productId;
+      const idB = b.cartItemId || b.productId;
+      if (idA < idB) return -1;
+      if (idA > idB) return 1;
+      return 0;
+    });
   };
 
   // Sync cart from backend when user logs in
@@ -97,10 +104,8 @@ export const CartProvider = ({ children }) => {
         const { data: rows, error: itemsError } = await supabase
           .from('cart_items')
           .select('id, product_id, quantity, products(*)')
-          .eq('cart_id', cartId);
-
-        if (itemsError) throw new Error(itemsError.message);
-
+            .eq('cart_id', cartId)
+            .order('id', { ascending: true });
         const mappedItems = mapCartItemsFromBackend((rows || []).map((item) => ({
           ...item,
           product: item.products

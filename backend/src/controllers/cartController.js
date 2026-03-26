@@ -36,7 +36,8 @@ export const getCart = async (req, res) => {
               p.name, p.price, p.image, p.stock_quantity
        FROM cart_items ci
        JOIN products p ON ci.product_id = p.id
-       WHERE ci.cart_id = $1`,
+       WHERE ci.cart_id = $1
+       ORDER BY ci.id ASC`,
       [cart.id]
     );
 
