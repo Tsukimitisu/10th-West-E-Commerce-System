@@ -377,8 +377,17 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
           <Link to="/" className="hover:text-red-500">Home</Link>
           <ChevronRight size={14} />
-          <Link to="/cart" className="hover:text-red-500">Cart</Link>
-          <ChevronRight size={14} />
+          {isBuyNow && items.length > 0 ? (
+            <>
+              <Link to={`/product/${items[0].productId}`} className="hover:text-red-500">Product</Link>
+              <ChevronRight size={14} />
+            </>
+          ) : (
+            <>
+              <Link to="/cart" className="hover:text-red-500">Cart</Link>
+              <ChevronRight size={14} />
+            </>
+          )}
           <span className="text-white font-medium">Checkout</span>
         </div>
 

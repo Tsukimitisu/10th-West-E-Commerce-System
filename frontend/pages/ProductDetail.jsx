@@ -117,7 +117,8 @@ const ProductDetail = () => {
       sessionStorage.setItem('buyNowItem', JSON.stringify(buyNowItem));
       navigate('/login?redirect=/checkout&buyNow=1');
     } else {
-      navigate('/checkout', { state: { buyNowItem } });
+      sessionStorage.setItem('buyNowItem', JSON.stringify(buyNowItem));
+      navigate('/checkout?buyNow=1', { state: { buyNowItem } });
     }
   };
 
