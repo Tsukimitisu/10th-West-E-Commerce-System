@@ -73,13 +73,6 @@ export const CartProvider = ({ children }) => {
   // Sync cart from backend when user logs in
   const syncCart = async () => {
     const token = getToken();
-    if (!token) {
-      // Load from localStorage if not logged in
-      const savedCart = sessionStorage.getItem(getCartKey());
-      setItems(savedCart ? JSON.parse(savedCart) : []);
-      setInitialized(true);
-      return;
-    }
 
     if (USE_SUPABASE) {
       try {
@@ -219,8 +212,10 @@ export const CartProvider = ({ children }) => {
 
     setError(null);
     const token = getToken();
-    
-    if (token) {
+    if (USE_SUPABASE && !token) {
+      throw new Error("Guest Supabase fallback");
+    }
+    if (true) {
       if (USE_SUPABASE) {
         try {
           setLoading(true);
@@ -350,8 +345,10 @@ export const CartProvider = ({ children }) => {
 
   const removeFromCart = async (productId) => {
     const token = getToken();
-
-    if (token) {
+    if (USE_SUPABASE && !token) {
+      throw new Error("Guest Supabase fallback");
+    }
+    if (true) {
       if (USE_SUPABASE) {
         try {
           setLoading(true);
@@ -435,8 +432,10 @@ export const CartProvider = ({ children }) => {
     setError(null);
     
     const token = getToken();
-
-    if (token) {
+    if (USE_SUPABASE && !token) {
+      throw new Error("Guest Supabase fallback");
+    }
+    if (true) {
       if (USE_SUPABASE) {
         try {
           setLoading(true);
@@ -523,8 +522,10 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = async () => {
     const token = getToken();
-
-    if (token) {
+    if (USE_SUPABASE && !token) {
+      throw new Error("Guest Supabase fallback");
+    }
+    if (true) {
       if (USE_SUPABASE) {
         try {
           setLoading(true);
@@ -588,8 +589,10 @@ export const CartProvider = ({ children }) => {
     }
 
     const token = getToken();
-    
-    if (token) {
+    if (USE_SUPABASE && !token) {
+      throw new Error("Guest Supabase fallback");
+    }
+    if (true) {
       if (USE_SUPABASE) {
         try {
           setLoading(true);

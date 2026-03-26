@@ -30,6 +30,8 @@ const getOrCreateCart = async (req) => {
 export const getCart = async (req, res) => {
   try {
     const cart = await getOrCreateCart(req);
+
+    const items = await pool.query(
       `SELECT ci.id, ci.cart_id, ci.product_id, ci.quantity,
               p.name, p.price, p.image, p.stock_quantity
        FROM cart_items ci
