@@ -62,10 +62,9 @@ const Checkout = () => {
   const [error, setError] = useState('');
   const [shippingMethod, setShippingMethod] = useState('standard');
   const [paymentMethod, setPaymentMethod] = useState('card');
-  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(true);
   const [zipError, setZipError] = useState('');
   const [profile, setProfile] = useState(null);
-  const [hideTerms, setHideTerms] = useState(false);
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
@@ -131,11 +130,11 @@ const Checkout = () => {
   };
 
   useEffect(() => {
-    const persistedAgreement = localStorage.getItem('checkoutTermsAccepted') === 'true';
-    if (persistedAgreement) {
+    const persistedAgreement = localStorage.getItem('checkoutTermsAccepted');
+    if (persistedAgreement === 'true') {
       setAgreeTerms(true);
-      setHideTerms(true);
-    }
+    } // If not, defaults to true anyway via useState. Wait, user said "Default checked".
+  }, []);
 
     const user = localStorage.getItem('shopCoreUser');
     if (!user) return;
@@ -740,8 +739,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                   <div className="border-t border-gray-700 pt-2 flex justify-between"><span className="font-semibold text-white">Total</span><span className="font-bold text-xl text-white">{formatPrice(grandTotal)}</span></div>
                 </div>
 
-                {!hideTerms && (
-                  <label className={`flex items-start gap-2 mt-4 ${agreeTerms ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
+                  <label className={`flex items-start gap-2 mt-4 cursor-pointer`}>
                     <input
                       type="checkbox"
                       checked={agreeTerms}
@@ -750,14 +748,14 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                         setAgreeTerms(checked);
                         if (checked) {
                           localStorage.setItem('checkoutTermsAccepted', 'true');
-                          setHideTerms(true);
+                        } else {
+                          localStorage.setItem('checkoutTermsAccepted', 'false');
                         }
                       }}
                       className="mt-0.5 text-red-500 focus:ring-orange-500 rounded"
                     />
                     <span className="text-xs text-gray-400">I agree to the <Link to="/terms" className="text-red-500 hover:underline">Terms & Conditions</Link> and <Link to="/privacy" className="text-red-500 hover:underline">Privacy Policy</Link></span>
                   </label>
-                )}
 
                 {error && <p className="text-sm text-red-500 mt-3">{error}</p>}
 

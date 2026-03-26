@@ -167,23 +167,10 @@ export const CartProvider = ({ children }) => {
     };
   }, []);
 
-  // Save to localStorage as backup
-  useEffect(() => {
-    if (initialized) {
-      sessionStorage.setItem(getCartKey(), JSON.stringify(items));
-      // cleanup removed items
-      const itemIds = new Set(items.map(i => i.productId));
-      const cleanSelected = selectedItemIds.filter(id => itemIds.has(id));
-      if (cleanSelected.length !== selectedItemIds.length) {
-        setSelectedItemIds(cleanSelected);
-      }
-      sessionStorage.setItem(getSelectedKey(), JSON.stringify(cleanSelected));
-    }
-  }, [items, selectedItemIds, initialized]);
-
   // Load selection state once on mount / init
+  const [hasLoadedSelection, setHasLoadedSelection] = useState(false);
   useEffect(() => {
-    if (initialized) {
+    if (initialized && !hasLoadedSelection) {
       try {
         const saved = sessionStorage.getItem(getSelectedKey());
         if (saved) {
@@ -195,8 +182,23 @@ export const CartProvider = ({ children }) => {
       } catch (e) {
         console.error('Failed to load selected item ids', e);
       }
+      setHasLoadedSelection(true);
     }
-  }, [initialized]);
+  }, [initialized, hasLoadedSelection]);
+
+  // Save to localStorage as backup
+  useEffect(() => {
+    if (initialized && hasLoadedSelection) {
+      sessionStorage.setItem(getCartKey(), JSON.stringify(items));
+      // cleanup removed items
+      const itemIds = new Set(items.map(i => i.productId));
+      const cleanSelected = selectedItemIds.filter(id => itemIds.has(id));
+      if (cleanSelected.length !== selectedItemIds.length) {
+        setSelectedItemIds(cleanSelected);
+      }
+      sessionStorage.setItem(getSelectedKey(), JSON.stringify(cleanSelected));
+    }
+  }, [items, selectedItemIds, initialized, hasLoadedSelection]);
 
   const resolveMaxStock = (product) => {
     const rawStock = Number(product?.stock_quantity);
