@@ -296,7 +296,7 @@ const Navbar = ({ user, onLogout }) => {
                   More <ChevronDown size={16} className={`transition-transform duration-300 ease-in-out ${moreMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {moreMenuOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-gray-800 rounded-2xl shadow-xl border border-gray-700 py-2 animate-fade-in z-50 transition-all duration-300 ease-in-out">
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-zinc-900 rounded-2xl shadow-xl border border-gray-700 py-2 animate-fade-in z-50 transition-all duration-300 ease-in-out">
                     <Link to="/faq" className="block px-4 py-2.5 text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 ease-in-out">
                       FAQ
                     </Link>
@@ -323,10 +323,10 @@ const Navbar = ({ user, onLogout }) => {
                     onChange={handleSearchChange}
                     onFocus={() => { if(globalSearch.length >= 2) setShowDropdown(true); }}
                     placeholder="Search parts, brands..."
-                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-700 bg-gray-900 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
+                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-700 bg-zinc-900 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
                   />
                   {showDropdown && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[400px] flex flex-col overflow-hidden">
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[400px] flex flex-col overflow-hidden">
                       {isSearching ? (
                         <div className="p-4 text-center text-sm text-gray-400">Searching...</div>
                       ) : searchError ? (
@@ -341,7 +341,7 @@ const Navbar = ({ user, onLogout }) => {
                                 key={product.id}
                                 to={`/products/${product.id}`}
                                 onClick={() => setShowDropdown(false)}
-                                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-700 transition-colors border-b border-gray-700/50"
+                                className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors border-b border-gray-700/50"
                               >
                                 {product.image_url ? (
                                   <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-md object-cover bg-gray-900" />
@@ -356,7 +356,7 @@ const Navbar = ({ user, onLogout }) => {
                               </Link>
                             ))}
                           </div>
-                          <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-gray-800/80 hover:bg-gray-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
+                          <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
                             View All Results
                           </Link>
                         </>
@@ -449,7 +449,7 @@ const Navbar = ({ user, onLogout }) => {
                     <ChevronDown size={14} className="hidden md:block text-gray-400" />
                   </button>
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 py-2 animate-fade-in">
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-900 rounded-2xl shadow-2xl border border-gray-700 py-2 animate-fade-in">
                       <div className="px-4 py-3 border-b border-gray-700 mb-1">
                         <p className="text-sm font-bold text-white truncate">{user.name}</p>
                         <p className="text-xs text-gray-400 truncate">{user.email}</p>
@@ -502,10 +502,10 @@ const Navbar = ({ user, onLogout }) => {
                   onChange={handleSearchChange}
                   onFocus={() => { if(globalSearch.length >= 2) setShowDropdown(true); }}
                   placeholder="Search parts..."
-                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-700 bg-gray-900 text-sm text-gray-700 focus:outline-none focus:bg-gray-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
+                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-700 bg-zinc-900 text-sm text-gray-700 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
                 />
                 {showDropdown && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[350px] flex flex-col overflow-hidden">
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[350px] flex flex-col overflow-hidden">
                     {isSearching ? (
                       <div className="p-4 text-center text-sm text-gray-400">Searching...</div>
                     ) : searchError ? (
@@ -520,12 +520,12 @@ const Navbar = ({ user, onLogout }) => {
                               key={product.id}
                               to={`/products/${product.id}`}
                               onClick={() => setShowDropdown(false)}
-                              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-700 transition-colors border-b border-gray-700/50"
+                              className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors border-b border-gray-700/50"
                             >
                               {product.image_url ? (
-                                <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-md object-cover bg-gray-900" />
+                                <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-md object-cover bg-zinc-900" />
                               ) : (
-                                <div className="w-10 h-10 rounded-md bg-gray-900 flex items-center justify-center shrink-0"><Package size={16} className="text-gray-500" /></div>
+                                <div className="w-10 h-10 rounded-md bg-zinc-900 flex items-center justify-center shrink-0"><Package size={16} className="text-gray-500" /></div>
                               )}
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-white truncate">{product.name}</p>
@@ -535,7 +535,7 @@ const Navbar = ({ user, onLogout }) => {
                             </Link>
                           ))}
                         </div>
-                        <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-gray-800/80 hover:bg-gray-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
+                        <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
                           View All Results
                         </Link>
                       </>
@@ -552,7 +552,7 @@ const Navbar = ({ user, onLogout }) => {
       {mobileOpen && (
         <div className="fixed inset-0 z-[100] lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-gray-800 shadow-2xl animate-fade-in overflow-y-auto">
+          <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-zinc-900 shadow-2xl animate-fade-in overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
               <Link to="/" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
                 <div className="w-8 h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center">

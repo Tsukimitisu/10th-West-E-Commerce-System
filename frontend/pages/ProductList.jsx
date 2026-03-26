@@ -97,7 +97,6 @@ const ProductList = () => {
           );
         });
       });
-      // Client-side relevance scoring to match backend behavior
       const exactSearch = searchQuery.trim().toLowerCase();
       result.sort((a, b) => {
         let scoreA = (a.name?.toLowerCase().includes(exactSearch) ? 15 : 0) + (a.part_number?.toLowerCase() === exactSearch ? 20 : 0);
@@ -119,7 +118,7 @@ const ProductList = () => {
       case 'newest': result.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()); break;
       case 'best-selling': result.sort((a, b) => (b.total_sold || 0) - (a.total_sold || 0)); break;
       case 'top-rated': result.sort((a, b) => (b.rating || 0) - (a.rating || 0)); break;
-      case 'relevance': break; // Already sorted by relevance above if searchQuery exists
+      case 'relevance': break;
     }
     return result;
   }, [products, searchQuery, selectedCategory, selectedBrand, priceRange, inStockOnly, sortBy]);
@@ -151,26 +150,35 @@ const ProductList = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      {/* Content */}
+    <div 
+      className="min-h-screen" 
+      style={{
+        backgroundColor: '#f3f4f6',
+        // Geometric Low-Poly Background Pattern
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800' viewBox='0 0 800 800'%3E%3Cg fill-opacity='0.4'%3E%3Cpath fill='%23d1d5db' d='M0 0l400 0-200 300L0 0z'/%3E%3Cpath fill='%23e5e7eb' d='M400 0l400 0-200 300-200-300z'/%3E%3Cpath fill='%239ca3af' d='M800 0l0 400-300-200 300-200z'/%3E%3Cpath fill='%23d1d5db' d='M800 400l0 400-300-200 300-200z'/%3E%3Cpath fill='%23e5e7eb' d='M800 800l-400 0 200-300 200 300z'/%3E%3Cpath fill='%23f3f4f6' d='M400 800l-400 0 200-300 200 300z'/%3E%3Cpath fill='%239ca3af' d='M0 800l0-400 300 200-300 200z'/%3E%3Cpath fill='%23d1d5db' d='M0 400l0-400 300 200-300 200z'/%3E%3Cpath fill='%23f9fafb' d='M300 200l200 0-100 200-100-200z'/%3E%3Cpath fill='%23e5e7eb' d='M500 200l0 200-200 0 200-200z'/%3E%3Cpath fill='%239ca3af' d='M500 400l-200 200 0-200 200 0z'/%3E%3Cpath fill='%23d1d5db' d='M300 400l200 200-200 0 0-200z'/%3E%3C/g%3E%3C/svg%3E")`,
+        backgroundAttachment: 'fixed',
+        backgroundSize: '600px', 
+        backgroundRepeat: 'repeat'
+      }}
+    >
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="mb-4 bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3 shadow-sm">
+        <div className="mb-4 bg-white/10 backdrop-blur-md border border-white/25 rounded-2xl px-4 py-3 shadow-lg">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-white">{filtered.length} products found</p>
-              <p className="text-xs text-gray-400">Use filters to narrow down your parts fast</p>
+              <p className="text-sm font-semibold text-gray-900">{filtered.length} products found</p>
+              <p className="text-xs text-gray-600">Use filters to narrow down your parts fast</p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setMobileFiltersOpen(true)}
-                className="lg:hidden h-10 px-3 rounded-xl border border-gray-700 text-sm font-medium text-gray-200 hover:bg-gray-700 inline-flex items-center gap-2"
+                className="lg:hidden h-10 px-3 rounded-xl border border-white/30 bg-white/10 backdrop-blur text-sm font-medium text-gray-900 hover:bg-white/20 inline-flex items-center gap-2"
               >
                 <SlidersHorizontal size={16} />
                 Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
               </button>
               <button
                 onClick={() => setShowDesktopFilters(prev => !prev)}
-                className="hidden lg:inline-flex h-10 px-3 rounded-xl border border-gray-700 text-sm font-medium text-gray-200 hover:bg-gray-700 items-center gap-2"
+                className="hidden lg:inline-flex h-10 px-3 rounded-xl border border-white/30 bg-white/10 backdrop-blur text-sm font-medium text-gray-900 hover:bg-white/20 items-center gap-2"
               >
                 {showDesktopFilters ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
                 {showDesktopFilters ? 'Hide Filters' : 'Show Filters'}
@@ -178,7 +186,7 @@ const ProductList = () => {
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="h-10 px-3 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                className="h-10 px-3 bg-white/10 backdrop-blur border border-white/30 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/50"
               >
                 {searchQuery && <option value="relevance">Relevance</option>}
                 <option value="newest">Newest</option>
@@ -192,7 +200,6 @@ const ProductList = () => {
         </div>
 
         <div className="flex gap-6">
-          {/* Filter Sidebar */}
           <FilterSidebar
             categories={categories}
             selectedCategory={selectedCategory}
@@ -212,16 +219,15 @@ const ProductList = () => {
             resultCount={filtered.length}
           />
 
-          {/* Products */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 bg-white/15 backdrop-blur-md border border-white/30 rounded-2xl p-6 shadow-lg">
             {filtered.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="text-center py-16 bg-white/20 backdrop-blur-sm rounded-3xl border border-white/30">
+                <div className="w-20 h-20 bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Search size={32} className="text-gray-300" />
                 </div>
-                <h3 className="font-semibold text-white mb-2">No products found</h3>
-                <p className="text-sm text-gray-400 mb-4">Try adjusting your filters or search query.</p>
-                <button onClick={clearAllFilters} className="px-6 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">
+                <h3 className="font-semibold text-gray-900 mb-2">No products found</h3>
+                <p className="text-sm text-gray-600 mb-4">Try adjusting your filters or search query.</p>
+                <button onClick={clearAllFilters} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg">
                   Clear All Filters
                 </button>
               </div>
@@ -242,5 +248,3 @@ const ProductList = () => {
 };
 
 export default ProductList;
-
-
