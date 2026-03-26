@@ -353,7 +353,9 @@ export const CartProvider = ({ children }) => {
       }
       return [...currentItems, { productId: product.id, product, quantity: requestedQty }];
     });
-      setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
+    setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
+    return true;
+  };
 
   const removeFromCart = async (productId) => {
     const token = getToken();
@@ -772,5 +774,4 @@ export const useCart = () => {
   }
   return context;
 };
-
 
