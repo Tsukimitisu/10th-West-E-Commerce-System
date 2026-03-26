@@ -41,6 +41,10 @@ const AddressBook = () => {
     e.preventDefault();
     setSaveError('');
     setPhoneError('');
+    if (!form.name || !form.street || !form.city || !form.state || !form.zip || !form.phone) {
+      setSaveError('Please fill in all required fields (Name, Phone, Street, City, Province, Zip).');
+      return;
+    }
     if (form.country && form.country !== 'Philippines') {
       setSaveError('Only Philippine addresses are allowed.');
       return;

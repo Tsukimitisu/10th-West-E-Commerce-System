@@ -189,6 +189,7 @@ const createTables = async () => {
         state VARCHAR(100) NOT NULL,
         country VARCHAR(100) DEFAULT 'Philippines',
         postal_code VARCHAR(20) NOT NULL,
+        address_string TEXT,
         lat DECIMAL(10, 7),
         lng DECIMAL(10, 7),
         is_default BOOLEAN DEFAULT FALSE,

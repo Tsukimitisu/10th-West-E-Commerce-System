@@ -61,10 +61,10 @@ export const createAddress = async (req, res) => {
 
     // Insert new address
     const result = await client.query(
-      `INSERT INTO addresses (user_id, recipient_name, phone, street, barangay, city, state, postal_code, lat, lng, is_default)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO addresses (user_id, recipient_name, phone, street, barangay, city, state, postal_code, address_string, lat, lng, is_default)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [req.user.id, recipient_name, phone, street, barangay ?? null, city, state, postal_code, lat ?? null, lng ?? null, is_default || false]
+      [req.user.id, recipient_name, phone, street, barangay ?? null, city, state, postal_code, `${street}, ${barangay ? barangay + ', ' : ''}${city}, ${state} ${postal_code}, Philippines`, lat ?? null, lng ?? null, is_default || false]
     );
 
     await client.query('COMMIT');
@@ -121,13 +121,14 @@ export const updateAddress = async (req, res) => {
          city = COALESCE($5, city),
          state = COALESCE($6, state),
          postal_code = COALESCE($7, postal_code),
-         lat = COALESCE($8, lat),
-         lng = COALESCE($9, lng),
-         is_default = COALESCE($10, is_default),
+         address_string = $8,
+         lat = COALESCE($9, lat),
+         lng = COALESCE($10, lng),
+         is_default = COALESCE($11, is_default),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $11
+       WHERE id = $12
        RETURNING *`,
-       [recipient_name, phone, street, barangay, city, state, postal_code, lat, lng, is_default, id]
+       [recipient_name, phone, street, barangay, city, state, postal_code, `${street}, ${barangay ? barangay + ', ' : ''}${city}, ${state} ${postal_code}, Philippines`, lat, lng, is_default, id]
     );
 
     await client.query('COMMIT');

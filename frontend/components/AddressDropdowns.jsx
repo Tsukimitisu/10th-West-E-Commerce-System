@@ -27,7 +27,24 @@ const AddressDropdowns = ({
   const BASE = 'https://psgc.gitlab.io/api';
   const NCR_REGION_CODE = '130000000';
   const NCR_OPTION = { code: 'NCR', name: 'Metro Manila (NCR)', isNcr: true };
+  // Sync props to state if they change externally (e.g., from Autocomplete)
+  useEffect(() => {
+    if (province && province.toLowerCase() !== selectedProvince.name.toLowerCase()) {
+      setSelectedProvince({ code: '', name: province });
+    }
+  }, [province]);
 
+  useEffect(() => {
+    if (city && city.toLowerCase() !== selectedCity.name.toLowerCase()) {
+      setSelectedCity({ code: '', name: city });
+    }
+  }, [city]);
+
+  useEffect(() => {
+    if (barangay && barangay.toLowerCase() !== selectedBarangay.toLowerCase()) {
+      setSelectedBarangay(barangay);
+    }
+  }, [barangay]);
   const emitChange = (next) => {
     onChange?.({
       province: next.province ?? selectedProvince.name,
