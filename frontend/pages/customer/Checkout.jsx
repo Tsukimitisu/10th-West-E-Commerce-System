@@ -154,6 +154,7 @@ const Checkout = () => {
     } // If not, defaults to true anyway via useState. Wait, user said "Default checked".
   }, []);
 
+  useEffect(() => {
     const user = localStorage.getItem('shopCoreUser');
     if (!user) return;
 
