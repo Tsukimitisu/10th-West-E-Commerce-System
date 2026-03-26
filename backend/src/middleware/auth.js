@@ -2,6 +2,39 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../config/database.js';
 
+export const authenticateOptional = async (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const sessionResult = await pool.query(
+      'SELECT id FROM sessions WHERE token_hash = $1 AND is_active = true AND expires_at > NOW()',
+      [tokenHash]
+    );
+
+    if (sessionResult.rows.length === 0) {
+      const anySession = await pool.query('SELECT COUNT(*) FROM sessions WHERE user_id = $1', [decoded.id]);
+      if (parseInt(anySession.rows[0].count) > 0) {
+        return next(); // Expired, treat as guest
+      }
+    }
+
+    const userResult = await pool.query('SELECT is_active FROM users WHERE id = $1', [decoded.id]);
+    if (userResult.rows.length > 0 && userResult.rows[0].is_active) {
+      req.user = decoded;
+    }
+    next();
+  } catch (err) {
+    next(); // Invalid token, treat as guest
+  }
+};
+
 export const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -90,4 +123,23 @@ export const requirePermission = (permissionName) => {
       res.status(500).json({ message: 'Server error' });
     }
   };
+};
+
+
+export const optionalAuth = async (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+  } catch (error) {
+    req.user = null;
+  }
+  next();
 };

@@ -1,26 +1,35 @@
 import pool from '../config/database.js';
 
-// Get or create cart for user
-const getOrCreateCart = async (userId) => {
-  let cart = await pool.query('SELECT * FROM carts WHERE user_id = $1', [userId]);
-  
-  if (cart.rows.length === 0) {
-    cart = await pool.query(
-      'INSERT INTO carts (user_id) VALUES ($1) RETURNING *',
-      [userId]
-    );
+// Get or create cart for user or session
+const getOrCreateCart = async (req) => {
+  const userId = req.user?.id || null;
+  const sessionId = !userId ? req.session.id : null;
+
+  if (userId) {
+    let cart = await pool.query('SELECT * FROM carts WHERE user_id = $1', [userId]);
+    if (cart.rows.length === 0) {
+      cart = await pool.query(
+        'INSERT INTO carts (user_id) VALUES ($1) RETURNING *',
+        [userId]
+      );
+    }
+    return cart.rows[0];
+  } else {
+    let cart = await pool.query('SELECT * FROM carts WHERE session_id = $1', [sessionId]);
+    if (cart.rows.length === 0) {
+      cart = await pool.query(
+        'INSERT INTO carts (session_id) VALUES ($1) RETURNING *',
+        [sessionId]
+      );
+    }
+    return cart.rows[0];
   }
-  
-  return cart.rows[0];
 };
 
-// Get cart with items
+// Merge guest cart to user cart on login (if needed, but for now we fix leakage)
 export const getCart = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const cart = await getOrCreateCart(userId);
-
-    const items = await pool.query(
+    const cart = await getOrCreateCart(req);
       `SELECT ci.id, ci.cart_id, ci.product_id, ci.quantity,
               p.name, p.price, p.image, p.stock_quantity
        FROM cart_items ci
@@ -55,8 +64,7 @@ export const addToCart = async (req, res) => {
   const { product_id, quantity = 1 } = req.body;
 
   try {
-    const userId = req.user.id;
-    const cart = await getOrCreateCart(userId);
+    const cart = await getOrCreateCart(req);
 
     // Check if product exists and has stock
     const product = await pool.query(
@@ -111,8 +119,7 @@ export const updateCartItem = async (req, res) => {
   const { quantity } = req.body;
 
   try {
-    const userId = req.user.id;
-    const cart = await getOrCreateCart(userId);
+    const cart = await getOrCreateCart(req);
 
     // Verify item belongs to user's cart
     const item = await pool.query(
@@ -148,8 +155,7 @@ export const removeFromCart = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const userId = req.user.id;
-    const cart = await getOrCreateCart(userId);
+    const cart = await getOrCreateCart(req);
 
     const result = await pool.query(
       'DELETE FROM cart_items WHERE id = $1 AND cart_id = $2 RETURNING id',
@@ -170,8 +176,7 @@ export const removeFromCart = async (req, res) => {
 // Clear cart
 export const clearCart = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const cart = await getOrCreateCart(userId);
+    const cart = await getOrCreateCart(req);
 
     await pool.query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
 

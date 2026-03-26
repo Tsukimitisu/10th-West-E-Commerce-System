@@ -1,4 +1,5 @@
 import express from 'express';
+import session from 'express-session';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
@@ -156,6 +157,16 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(session({
+  secret: process.env.SESSION_SECRET || '10th_west_moto_secret_super_secure',
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  }
+}));
 app.use('/uploads', express.static(uploadsDir));
 app.use(passport.initialize());
 app.use(activityLogger);

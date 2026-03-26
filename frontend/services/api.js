@@ -91,6 +91,7 @@ const authenticatedFetch = async (url, options = {}) => {
   const response = await fetch(url, {
     ...options,
     headers,
+    credentials: 'include'
   });
 
   if (!response.ok) {

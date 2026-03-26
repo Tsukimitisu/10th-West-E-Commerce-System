@@ -109,6 +109,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS carts (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -179,6 +180,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS addresses (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         recipient_name VARCHAR(255) NOT NULL,
         phone VARCHAR(50) NOT NULL,
         street TEXT NOT NULL,
@@ -236,6 +238,7 @@ const createTables = async () => {
         id SERIAL PRIMARY KEY,
         order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         reason TEXT NOT NULL,
         status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'refunded', 'exchanged')),
         refund_amount DECIMAL(10, 2) NOT NULL,
@@ -265,6 +268,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS store_credits (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         amount DECIMAL(10, 2) NOT NULL,
         reason VARCHAR(255),
         reference_id INTEGER,
@@ -343,6 +347,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS notifications (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         type VARCHAR(50) NOT NULL,
         title VARCHAR(255) NOT NULL,
         message TEXT,
@@ -405,6 +410,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS device_history (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         device_info TEXT,
         ip_address VARCHAR(50),
         login_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -431,6 +437,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS sessions (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         token_hash VARCHAR(255) NOT NULL,
         is_active BOOLEAN DEFAULT TRUE,
         ip_address VARCHAR(50),
@@ -447,6 +454,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS wishlists (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, product_id)
