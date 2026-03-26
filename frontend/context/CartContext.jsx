@@ -10,6 +10,7 @@ const CartContext = createContext(undefined);
 export const CartProvider = ({ children }) => {
   const [items, setItems] = useState([]);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
+
   const [discount, setDiscount] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -33,6 +34,8 @@ export const CartProvider = ({ children }) => {
     const user = getCurrentUserFromToken();
     return user?.id ? `shopCoreCart_${user.id}` : 'shopCoreGuestCart';
   };
+
+  const getSelectedKey = () => `${getCartKey()}_selected`;
 
   const getOrCreateSupabaseCartId = async (userId) => {
     if (!supabase || !userId) return null;
@@ -163,24 +166,32 @@ export const CartProvider = ({ children }) => {
   useEffect(() => {
     if (initialized) {
       sessionStorage.setItem(getCartKey(), JSON.stringify(items));
-      // Auto-select new items
-      const currentSelected = new Set(selectedItemIds);
-      const newSelected = [...selectedItemIds];
-      let changed = false;
-      items.forEach(item => {
-        if (!currentSelected.has(item.productId)) {
-          newSelected.push(item.productId);
-          changed = true;
-        }
-      });
-      // also cleanup removed items
+      // cleanup removed items
       const itemIds = new Set(items.map(i => i.productId));
-      const cleanSelected = newSelected.filter(id => itemIds.has(id));
-      if (changed || cleanSelected.length !== selectedItemIds.length) {
+      const cleanSelected = selectedItemIds.filter(id => itemIds.has(id));
+      if (cleanSelected.length !== selectedItemIds.length) {
         setSelectedItemIds(cleanSelected);
       }
+      sessionStorage.setItem(getSelectedKey(), JSON.stringify(cleanSelected));
     }
-  }, [items, initialized]);
+  }, [items, selectedItemIds, initialized]);
+
+  // Load selection state once on mount / init
+  useEffect(() => {
+    if (initialized) {
+      try {
+        const saved = sessionStorage.getItem(getSelectedKey());
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && selectedItemIds.length === 0) {
+            setSelectedItemIds(parsed);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load selected item ids', e);
+      }
+    }
+  }, [initialized]);
 
   const resolveMaxStock = (product) => {
     const rawStock = Number(product?.stock_quantity);
@@ -249,7 +260,8 @@ export const CartProvider = ({ children }) => {
           }
 
           await syncCart();
-          return true;
+            setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
+            return true;
         } catch (err) {
           console.error('Error adding to cart (Supabase):', err);
           const fallbackAdded = addToCartLocal(product, requestedQty);
@@ -280,7 +292,8 @@ export const CartProvider = ({ children }) => {
 
         if (response.ok) {
           await syncCart();
-          return true;
+            setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
+            return true;
         } else {
           throw new Error('Failed to add item to cart');
         }
@@ -340,8 +353,7 @@ export const CartProvider = ({ children }) => {
       }
       return [...currentItems, { productId: product.id, product, quantity: requestedQty }];
     });
-    return true;
-  };
+      setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
 
   const removeFromCart = async (productId) => {
     const token = getToken();
@@ -584,9 +596,6 @@ export const CartProvider = ({ children }) => {
 
   const clearSelectedItems = async () => {
     if (selectedItemIds.length === 0) return;
-    if (selectedItemIds.length === items.length) {
-      return clearCart();
-    }
 
     const token = getToken();
     if (USE_SUPABASE && !token) {
@@ -627,16 +636,18 @@ export const CartProvider = ({ children }) => {
       try {
         setLoading(true);
         // Fallback for REST API - delete one by one
-        await Promise.all(selectedItemIds.map(id => 
-          fetch(`${API_URL}/cart/items/${id}`, {
+        await Promise.all(selectedItemIds.map(async id => {
+          const targetItem = items.find((item) => item.productId === id);
+          if (!targetItem) return;
+          const cartItemId = targetItem?.cartItemId ?? id;
+          return fetch(`${API_URL}/cart/remove/${cartItemId}`, {
             method: 'DELETE',
             credentials: 'include',
-        headers: {
+            headers: {
               'Authorization': `Bearer ${token}`
             }
-          })
-        ));
-
+          });
+        }));
         setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
         setSelectedItemIds([]);
         setError(null);

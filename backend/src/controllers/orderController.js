@@ -336,8 +336,8 @@ export const createOrder = async (req, res) => {
 
       if (cartResult.rows.length > 0) {
         await client.query(
-          'DELETE FROM cart_items WHERE cart_id = $1',
-          [cartResult.rows[0].id]
+          'DELETE FROM cart_items WHERE cart_id = $1 AND product_id = ANY($2::int[])',
+          [cartResult.rows[0].id, uniqueProductIds]
         );
       }
     }
