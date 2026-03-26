@@ -259,10 +259,29 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
           stored[key] = { lat: form.lat, lng: form.lng };
           localStorage.setItem('addressGeo', JSON.stringify(stored));
         }
-        const coordLabel = !usingSavedAddress && form.lat && form.lng ? ` (lat:${form.lat}, lng:${form.lng})` : '';
-        const shippingAddress = selectedAddr
-          ? `${selectedAddr.recipient_name}, ${selectedAddr.street}, ${selectedAddr.city}, ${selectedAddr.state} ${selectedAddr.postal_code}, Philippines`
-          : `${form.name}, ${streetWithBarangay}, ${form.city}, ${form.state} ${form.postal_code}, Philippines${coordLabel}`;
+          
+          const formatAddressParts = (parts) => parts.filter(p => p != null && p !== '').join(', ');
+          const coordLabel = !usingSavedAddress && form.lat && form.lng ? ` (lat:${form.lat}, lng:${form.lng})` : '';
+          let shippingAddress = '';
+          if (selectedAddr) {
+            const stateZip = [selectedAddr.state, selectedAddr.postal_code].filter(Boolean).join(' ');
+            shippingAddress = formatAddressParts([
+              selectedAddr.recipient_name,
+              selectedAddr.street,
+              selectedAddr.city,
+              stateZip,
+              'Philippines'
+            ]);
+          } else {
+            const stateZip = [form.state, form.postal_code].filter(Boolean).join(' ');
+            shippingAddress = formatAddressParts([
+              form.name,
+              streetWithBarangay,
+              form.city,
+              stateZip,
+              `Philippines${coordLabel}`
+            ]);
+          }
 
       let shippingLat = usingSavedAddress ? (selectedAddr?.lat ?? null) : (form.lat ?? null);
       let shippingLng = usingSavedAddress ? (selectedAddr?.lng ?? null) : (form.lng ?? null);

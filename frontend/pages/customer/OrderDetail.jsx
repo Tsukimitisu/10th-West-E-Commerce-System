@@ -234,10 +234,14 @@ const OrderDetail = () => {
           <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
             <h3 className="font-semibold text-white text-sm mb-2 flex items-center gap-1.5"><MapPin size={14} /> Shipping Address</h3>
             <p className="text-sm text-gray-600 leading-relaxed">
-              {order.shipping_name || order.address?.name || 'N/A'}<br />
-              {order.shipping_address || order.address?.street || ''}<br />
-              {order.shipping_city || order.address?.city || ''}{order.shipping_state ? `, ${order.shipping_state}` : ''} {order.shipping_zip || order.address?.zip || ''}<br />
-              {order.shipping_phone || order.address?.phone || ''}
+                {order.shipping_address ? (
+                  order.shipping_address.split(', ').map((part, index) => (
+                    <span key={index}>{part}<br /></span>
+                  ))
+                ) : (
+                  <span className="text-gray-500">No address provided<br /></span>
+                )}
+                {order.shipping_phone || order.address?.phone ? <span>{order.shipping_phone || order.address?.phone}</span> : null}
             </p>
           </div>
 

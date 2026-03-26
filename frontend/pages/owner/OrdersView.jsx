@@ -242,8 +242,15 @@ const OrdersView = () => {
               </div>
               <div className="p-3 bg-gray-900 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><MapPin size={12} /> Shipping Address</div>
-                <p className="text-sm text-gray-700">{detailOrder.shipping_address || detailOrder.shipping_line1 || '-'}</p>
-                <p className="text-xs text-gray-400">{detailOrder.shipping_city ? `${detailOrder.shipping_city}, ${detailOrder.shipping_state || ''} ${detailOrder.shipping_zip || ''}` : ''}</p>
+                  <div className="text-sm text-gray-300">
+                    {detailOrder.shipping_address ? (
+                      detailOrder.shipping_address.split(', ').map((part, index) => (
+                        <div key={index}>{part}</div>
+                      ))
+                    ) : (
+                      <span className="text-gray-500">No address provided</span>
+                    )}
+                  </div>
               </div>
             </div>
 
