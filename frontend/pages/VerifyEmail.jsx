@@ -1,9 +1,10 @@
 ﻿import React, { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Check, X, Loader, Mail } from 'lucide-react';
 import { verifyEmailToken, resendVerificationEmail } from '../services/api';
 
-const VerifyEmail = () => {
+const VerifyEmail = ({ onLogin }) => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
@@ -38,7 +39,13 @@ const VerifyEmail = () => {
     try {
       const res = await verifyEmailToken(token);
       setStatus('success');
-      setMessage('Your account has been successfully verified.');
+      setMessage('Your account has been successfully verified. Logging you in...');
+      if (res.token && res.user && onLogin) {
+        setTimeout(() => {
+          onLogin(res.user, res.token);
+          navigate('/');
+        }, 1500);
+      }
     } catch (err) {
       setStatus('error');
       setMessage(err.message || 'Invalid or expired verification link.');
@@ -80,12 +87,14 @@ const VerifyEmail = () => {
             </div>
             <h2 className="text-xl font-bold text-white mb-2">Email Verified!</h2>
             <p className="text-gray-400 mb-6">{message}</p>
-            <Link 
-              to="/login"
-              className="w-full py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors flex items-center justify-center"
-            >
-              Go to Login
-            </Link>
+            {!message.includes('Logging you in') && (
+              <Link
+                to="/login"
+                className="w-full py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors flex items-center justify-center"
+              >
+                Go to Login
+              </Link>
+            )}
           </>
         )}
 

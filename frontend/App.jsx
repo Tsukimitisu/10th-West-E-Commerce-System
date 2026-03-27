@@ -72,6 +72,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                   : <Login onLogin={onLogin} />
           } />
           <Route path="/register" element={<Register onLogin={onLogin} />} />
+          <Route path="/verify-email" element={<VerifyEmail onLogin={onLogin} />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/oauth-callback" element={<OAuthCallback onLogin={onLogin} />} />

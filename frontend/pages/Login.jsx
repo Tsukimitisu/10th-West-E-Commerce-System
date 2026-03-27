@@ -1,7 +1,7 @@
 ﻿import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Shield, Check } from 'lucide-react';
-import { login, API_ORIGIN } from '../services/api';
+import { login, API_ORIGIN, resendVerificationEmail } from '../services/api';
 
 const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -45,7 +45,7 @@ const Login = ({ onLogin }) => {
       navigate(redirect);
     } catch (err) {
       setError(err.message || 'Invalid email or password');
-      if (err.requiresVerification) {
+      if (err.requiresVerification || (err.message && err.message.toLowerCase().includes('verify'))) {
         setNeedsVerification(true);
       }
     } finally {
@@ -58,11 +58,7 @@ const Login = ({ onLogin }) => {
       setLoading(true);
       setError('');
       setResendSuccess('');
-      await authenticatedFetch(`${API_ORIGIN}/api/auth/resend-verification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
+      await resendVerificationEmail(email);
       setResendSuccess('Verification email resent. Please check your inbox.');
     } catch (err) {
       setError(err.message || 'Failed to resend verification email.');

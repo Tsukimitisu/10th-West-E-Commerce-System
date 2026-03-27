@@ -174,10 +174,9 @@ export const register = async (req, res) => {
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
     const newUserResult = await pool.query(
-      `INSERT INTO users (name, email, password_hash, role, status, email_verified, consent_given, age_confirmed, newsletter_opt_in, email_verification_token, email_verification_expires)
-       VALUES ($1, $2, $3, 'customer', 'active', false, $4, $5, $6, $7, $8) RETURNING id`,
-      [name, email, passwordHash, consent_given, age_confirmed, newsletter_opt_in, verificationTokenHash, expiresAt]
-    );
+        `INSERT INTO users (name, email, password_hash, role, email_verified, consent_given_at, age_confirmed_at, email_verification_token, email_verification_expires)
+         VALUES ($1, $2, $3, 'customer', false, NOW(), NOW(), $4, $5) RETURNING id`,
+        [name, email, passwordHash, verificationTokenHash, expiresAt]\n      );
 
     const transporter = createTransporter();
     const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
@@ -213,7 +212,7 @@ export const login = async (req, res) => {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) return res.status(401).json({ message: 'Invalid credentials' });
     const user = result.rows[0];
-    if (user.status === 'suspended' || user.status === 'banned') return res.status(403).json({ message: `Account ${user.status}` });
+    if (!user.is_active || user.is_deleted) return res.status(403).json({ message: `Account is disabled or deleted` });
 
     const isValid = await bcrypt.compare(password, user.password_hash);
     if (!isValid) return res.status(401).json({ message: 'Invalid credentials' });
@@ -222,7 +221,7 @@ export const login = async (req, res) => {
 
     await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status }, token });
+    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, is_active: user.is_active }, token });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Login failed' });
@@ -731,11 +730,15 @@ export const verifyEmailToken = async (req, res) => {
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const result = await pool.query(
-      'UPDATE users SET email_verified = true, email_verification_token = null, email_verification_expires = null WHERE email_verification_token = $1 AND email_verification_expires > NOW() RETURNING id',
+      'UPDATE users SET email_verified = true, email_verification_token = null, email_verification_expires = null WHERE email_verification_token = $1 AND email_verification_expires > NOW() RETURNING id, name, email, role, phone, avatar, store_credit, is_active, last_login',
       [tokenHash]
     );
     if (result.rows.length === 0) return res.status(400).json({ message: 'Invalid or expired verification link' });
-    res.json({ message: 'Your account has been successfully verified. You may now log in.' });
+    
+    const user = result.rows[0];
+    user.email_verified = true;
+    const jwtToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    res.json({ message: 'Your account has been successfully verified.', user, token: jwtToken });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });

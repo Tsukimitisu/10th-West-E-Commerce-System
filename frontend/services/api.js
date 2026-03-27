@@ -153,10 +153,13 @@ export const login = async (email, password, totp_code) => {
 
     if (!isValidPassword) throw new Error('Invalid credentials');
 
-      if (!user.email_verified) {
-        throw new Error('Your account is not verified. Please verify your email first.');
-      }
-// Update last login
+    if (!user.email_verified) {
+      const err = new Error('Your account is not verified. Please verify your email first.');
+      err.requiresVerification = true;
+      throw err;
+    }
+
+    // Update last login
     await supabase
       .from('users')
       .update({ last_login: new Date().toISOString() })
@@ -3159,9 +3162,15 @@ export const resendVerificationEmail = async (email) => {
 };
 
 export const verifyEmailToken = async (token) => {
-  return await authenticatedFetch(`${API_URL}/auth/verify-email`, {
+  const data = await authenticatedFetch(`${API_URL}/auth/verify-email`, {
     method: 'POST',
     body: JSON.stringify({ token })
   });
+
+  if (USE_SUPABASE && data && data.user) {
+    const sbToken = 'sb-token-' + btoa(JSON.stringify({ id: data.user.id, email: data.user.email, role: data.user.role }));
+    return { ...data, token: sbToken };
+  }
+  return data;
 };
 
