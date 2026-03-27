@@ -1,37 +1,38 @@
-﻿import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Mail, AlertTriangle, CheckCircle2, Send } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Send } from 'lucide-react';
+import { resendVerificationEmail } from '../services/api';
 
 const EmailVerificationBanner = () => {
   const [visible, setVisible] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
     try {
       const userData = localStorage.getItem('shopCoreUser');
-      if (userData) {
-        const user = JSON.parse(userData);
-        // Show banner if user is logged in but email is not verified
-        if (user && user.id && !user.email_verified) {
-          setVisible(true);
-        }
+      if (!userData) return;
+
+      const user = JSON.parse(userData);
+      if (user && user.id && !user.email_verified) {
+        setUserEmail(user.email || '');
+        setVisible(true);
       }
     } catch {}
   }, []);
 
   const handleResend = async () => {
+    if (!userEmail) return;
+
     setSending(true);
     try {
-      const token = localStorage.getItem('shopCoreToken');
-      const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      await fetch(`${API}/auth/resend-verification`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      });
+      await resendVerificationEmail(userEmail);
       setSent(true);
-    } catch {}
-    setSending(false);
+    } catch {
+      setSent(false);
+    } finally {
+      setSending(false);
+    }
   };
 
   if (!visible) return null;
@@ -48,8 +49,11 @@ const EmailVerificationBanner = () => {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {!sent && (
-            <button onClick={handleResend} disabled={sending}
-              className="px-3 py-1 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-md transition-colors disabled:opacity-50 flex items-center gap-1">
+            <button
+              onClick={handleResend}
+              disabled={sending}
+              className="px-3 py-1 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-md transition-colors disabled:opacity-50 flex items-center gap-1"
+            >
               {sending ? 'Sending...' : <><Send size={12} /> Resend Email</>}
             </button>
           )}
@@ -63,5 +67,3 @@ const EmailVerificationBanner = () => {
 };
 
 export default EmailVerificationBanner;
-
-

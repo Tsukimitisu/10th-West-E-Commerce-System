@@ -10,6 +10,7 @@ const Login = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
   const [resendSuccess, setResendSuccess] = useState('');
   const [needs2FA, setNeeds2FA] = useState(false);
   const [totpCode, setTotpCode] = useState('');
@@ -20,6 +21,9 @@ const Login = ({ onLogin }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setNeedsVerification(false);
+    setVerificationEmail('');
+    setResendSuccess('');
     setLoading(true);
     try {
       const result = await login(email, password, needs2FA ? totpCode : undefined);
@@ -45,8 +49,9 @@ const Login = ({ onLogin }) => {
       navigate(redirect);
     } catch (err) {
       setError(err.message || 'Invalid email or password');
-      if (err.requiresVerification || (err.message && err.message.toLowerCase().includes('verify'))) {
+      if (err.requiresVerification || err.code === 'EMAIL_NOT_VERIFIED') {
         setNeedsVerification(true);
+        setVerificationEmail(err.email || email);
       }
     } finally {
       setLoading(false);
@@ -58,7 +63,7 @@ const Login = ({ onLogin }) => {
       setLoading(true);
       setError('');
       setResendSuccess('');
-      await resendVerificationEmail(email);
+      await resendVerificationEmail(verificationEmail || email);
       setResendSuccess('Verification email resent. Please check your inbox.');
     } catch (err) {
       setError(err.message || 'Failed to resend verification email.');
@@ -139,7 +144,7 @@ const Login = ({ onLogin }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <div className="relative">
                     <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="name@example.com"
+                    <input type="email" value={email} onChange={e => { setEmail(e.target.value); setNeedsVerification(false); setVerificationEmail(''); setResendSuccess(''); }} required placeholder="name@example.com"
                       className="w-full pl-10 pr-4 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
                   </div>
                 </div>
@@ -150,7 +155,7 @@ const Login = ({ onLogin }) => {
                   </div>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required placeholder="Enter your password"
+                    <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setNeedsVerification(false); setVerificationEmail(''); setResendSuccess(''); }} required placeholder="Enter your password"
                       className="w-full pl-10 pr-10 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}

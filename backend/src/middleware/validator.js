@@ -4,9 +4,18 @@ export const validate = (req, res, next) => {
   const errors = validationResult(req);
   
   if (!errors.isEmpty()) {
+    const rawErrors = errors.array();
+    const fieldErrors = rawErrors.reduce((acc, error) => {
+      if (error.type === 'field' && error.path && !acc[error.path]) {
+        acc[error.path] = error.msg;
+      }
+      return acc;
+    }, {});
+
     return res.status(400).json({ 
       message: 'Validation failed', 
-      errors: errors.array() 
+      errors: rawErrors,
+      fieldErrors,
     });
   }
 

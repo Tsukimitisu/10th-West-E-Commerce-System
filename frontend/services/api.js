@@ -94,24 +94,28 @@ const authenticatedFetch = async (url, options = {}) => {
     credentials: 'include'
   });
 
+  const responseBody = await response.json().catch(() => ({ message: 'Request failed' }));
+
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
     if (token && response.status === 401) {
       clearAuthSession();
       window.dispatchEvent(new Event('auth:session-expired'));
     } else if (token && response.status === 403) {
-      const msg = (error.message || '').toLowerCase();
+      const msg = (responseBody.message || '').toLowerCase();
       if (msg.includes('session') || msg.includes('expired') || msg.includes('invalid') || msg.includes('deactivated') || msg.includes('log in')) {
         clearAuthSession();
         window.dispatchEvent(new Event('auth:session-expired'));
       }
     }
-    const apiError = new Error(error.message || 'Request failed');
-    Object.assign(apiError, error);
+    const apiError = new Error(responseBody.message || 'Request failed');
+    Object.assign(apiError, responseBody, {
+      status: response.status,
+      fieldErrors: responseBody.fieldErrors || {},
+    });
     throw apiError;
   }
 
-  return response.json();
+  return responseBody;
 };
 
 // ==================== SUPABASE HELPERS ====================
@@ -154,8 +158,10 @@ export const login = async (email, password, totp_code) => {
     if (!isValidPassword) throw new Error('Invalid credentials');
 
     if (!user.email_verified) {
-      const err = new Error('Your account is not verified. Please verify your email first.');
+      const err = new Error('Your account is not verified. Please check your email.');
       err.requiresVerification = true;
+      err.email = user.email;
+      err.code = 'EMAIL_NOT_VERIFIED';
       throw err;
     }
 
@@ -197,7 +203,7 @@ export const login = async (email, password, totp_code) => {
   return { user: data.user, token: data.token };
 };
 
-export const register = async (name, email, password, consentData = {}, otp = '') => {
+export const register = async (name, email, password, confirmPassword, consentData = {}, otp = '') => {
   if (USE_MOCK_DATA) {
     return registerMock(name, email, password);
   }
@@ -212,7 +218,9 @@ export const register = async (name, email, password, consentData = {}, otp = ''
 
       if (existing) {
         if (existing.email_verified) {
-          throw new Error("Email already registered");
+          const err = new Error('Email already in use.');
+          err.fieldErrors = { email: 'This email is already in use.' };
+          throw err;
         } else {
           try {
             await authenticatedFetch(`${API_URL}/auth/resend-verification`, {
@@ -268,7 +276,7 @@ export const register = async (name, email, password, consentData = {}, otp = ''
 
   return await authenticatedFetch(`${API_URL}/auth/register`, {
     method: 'POST',
-    body: JSON.stringify({ name, email, password, otp, ...consentData }),
+    body: JSON.stringify({ name, email, password, confirmPassword, otp, ...consentData }),
   });
 };
 
@@ -354,11 +362,14 @@ export const exportMyData = async () => {
 };
 
 // Resend email verification
-export const resendVerification = async () => {
+export const resendVerification = async (email) => {
   if (USE_SUPABASE) {
     return { message: 'Verification email sent' };
   }
-  return await authenticatedFetch(`${API_URL}/auth/resend-verification`, { method: 'POST' });
+  return await authenticatedFetch(`${API_URL}/auth/resend-verification`, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
 };
 
 export const forgotPassword = async (email) => {

@@ -12,21 +12,38 @@ import {
 } from '../controllers/authController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
-import { resendVerificationLimiter, registerLimiter } from '../middleware/rateLimiter.js';
+import { resendVerificationLimiter, registerLimiter, loginLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
 // ─── Validation rules ──────────────────────────────────────────────
 const registerValidation = [
-  body('name').trim().escape().notEmpty().withMessage('Name is required'),
-  body('email').trim().isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('name')
+    .trim()
+    .notEmpty().withMessage('Name is required')
+    .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters')
+    .escape(),
+  body('email')
+    .trim()
+    .isEmail().withMessage('Please enter a valid email address')
+    .normalizeEmail(),
   body('password').isStrongPassword({
     minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 0
-  }).withMessage('Password must be at least 8 characters, and include uppercase, lowercase, and a number'),
+  }).withMessage('Password must be at least 8 characters and include uppercase, lowercase, and a number'),
+  body('confirmPassword')
+    .notEmpty().withMessage('Please confirm your password')
+    .custom((value, { req }) => value === req.body.password)
+    .withMessage('Passwords do not match'),
+  body('consent_given')
+    .custom((value) => value === true)
+    .withMessage('You must agree to the Terms of Service and Privacy Policy'),
+  body('age_confirmed')
+    .custom((value) => value === true)
+    .withMessage('You must confirm you are at least 18 years old'),
 ];
 
 const loginValidation = [
-  body('email').trim().isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('email').trim().isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
@@ -39,7 +56,7 @@ router.post('/register',
   validate,
   register
 );
-router.post('/login', loginValidation, validate, login);
+router.post('/login', loginLimiter, loginValidation, validate, login);
 router.post('/forgot-password', body('email').isEmail(), validate, forgotPassword);
 router.post('/verify-reset-token', body('token').notEmpty(), validate, verifyResetToken);
 router.post('/reset-password',
@@ -103,7 +120,12 @@ router.delete('/account',
 router.get('/export-data', authenticateToken, exportUserData);
 
 // ─── Email verification ────────────────────────────────────────────
-router.post('/resend-verification', resendVerificationLimiter, body('email').isEmail().withMessage('Valid email required'), validate, resendVerification);
+router.post('/resend-verification',
+  resendVerificationLimiter,
+  body('email').trim().isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
+  validate,
+  resendVerification
+);
 router.post('/verify-email', body('token').notEmpty(), validate, verifyEmailToken);
 
 export default router;
