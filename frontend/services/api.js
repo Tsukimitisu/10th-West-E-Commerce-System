@@ -2104,6 +2104,25 @@ export const getWishlist = async (userId) => {
   return (rows || []).map(normalizeWishlistItem);
 };
 
+export const WISHLIST_SYNC_EVENT = 'shopcore:wishlist-changed';
+
+const emitWishlistChange = ({ userId, productId, isWishlisted }) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(WISHLIST_SYNC_EVENT, {
+      detail: { userId, productId, isWishlisted }
+    }));
+  }
+
+  try {
+    localStorage.setItem('shopCoreWishlistSync', JSON.stringify({
+      userId,
+      productId,
+      isWishlisted,
+      timestamp: new Date().toISOString(),
+    }));
+  } catch {}
+};
+
 export const addToWishlist = async (userId, productId) => {
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
@@ -2113,13 +2132,16 @@ export const addToWishlist = async (userId, productId) => {
       .insert({ user_id: currentUser.id, product_id: productId })
       .select()
       .single();
-    if (error) throw new Error(error.message);
+    if (error && error.code !== '23505') throw new Error(error.message);
+    emitWishlistChange({ userId: currentUser.id, productId, isWishlisted: true });
     return data;
   }
-  return authenticatedFetch(`${API_URL}/wishlist`, {
+  const result = await authenticatedFetch(`${API_URL}/wishlist`, {
     method: 'POST',
     body: JSON.stringify({ product_id: productId }),
   });
+  emitWishlistChange({ userId, productId, isWishlisted: true });
+  return result;
 };
 
 export const removeFromWishlist = async (userId, productId) => {
@@ -2127,9 +2149,12 @@ export const removeFromWishlist = async (userId, productId) => {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) return;
     await supabase.from('wishlists').delete().eq('user_id', currentUser.id).eq('product_id', productId);
+    emitWishlistChange({ userId: currentUser.id, productId, isWishlisted: false });
     return;
   }
-  return authenticatedFetch(`${API_URL}/wishlist/${productId}`, { method: 'DELETE' });
+  const result = await authenticatedFetch(`${API_URL}/wishlist/${productId}`, { method: 'DELETE' });
+  emitWishlistChange({ userId, productId, isWishlisted: false });
+  return result;
 };
 
 export const getReviews = async (productId) => {

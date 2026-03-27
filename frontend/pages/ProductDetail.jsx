@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, ChevronDown } from 'lucide-react';
-import { getProductById, getRelatedProducts, getProductReviews, addToWishlist, removeFromWishlist, getWishlist, recordProductView } from '../services/api';
+import { getProductById, getRelatedProducts, getProductReviews, addToWishlist, removeFromWishlist, getWishlist, recordProductView, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useCart } from '../context/CartContext';
 import ProductCard from '../components/ProductCard';
 import StarRating from '../components/StarRating';
@@ -37,13 +37,14 @@ const ProductDetail = () => {
 
   useEffect(() => {
     const loadWishlist = async () => {
-      if (!userId) {
+      const storedUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+      if (!storedUser?.id) {
         setWishlistedIds([]);
         return;
       }
 
       try {
-        const items = await getWishlist(userId);
+        const items = await getWishlist(storedUser.id);
         setWishlistedIds(normalizeWishlistIds(items));
       } catch {
         setWishlistedIds([]);
@@ -56,9 +57,11 @@ const ProductDetail = () => {
       loadWishlist();
     };
 
+    window.addEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
     window.addEventListener('focus', syncWishlist);
     window.addEventListener('storage', syncWishlist);
     return () => {
+      window.removeEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
       window.removeEventListener('focus', syncWishlist);
       window.removeEventListener('storage', syncWishlist);
     };

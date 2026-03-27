@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { getProducts, getCategories, getWishlist } from '../services/api';
+import { getProducts, getCategories, getWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
 
@@ -34,13 +34,32 @@ const ProductList = () => {
     const loadWishlist = async () => {
       try {
         const user = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
-        if (!user?.id) return;
+        if (!user?.id) {
+          setWishlistedIds([]);
+          return;
+        }
         const wishlist = await getWishlist(user.id);
         setWishlistedIds(wishlist.map(item => Number(item.product_id ?? item.product?.id ?? item.id)).filter(Boolean));
-      } catch {}
+      } catch {
+        setWishlistedIds([]);
+      }
     };
 
     loadWishlist();
+
+    const syncWishlist = () => {
+      loadWishlist();
+    };
+
+    window.addEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
+    window.addEventListener('storage', syncWishlist);
+    window.addEventListener('focus', syncWishlist);
+
+    return () => {
+      window.removeEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
+      window.removeEventListener('storage', syncWishlist);
+      window.removeEventListener('focus', syncWishlist);
+    };
   }, []);
 
   const handleWishlistToggle = (productId, shouldBeWishlisted) => {

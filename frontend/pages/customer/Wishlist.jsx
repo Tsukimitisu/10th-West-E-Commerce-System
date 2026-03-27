@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, ShoppingCart, Trash2, Eye, Package, AlertTriangle } from 'lucide-react';
-import { getWishlist, removeFromWishlist } from '../../services/api';
+import { getWishlist, removeFromWishlist, WISHLIST_SYNC_EVENT } from '../../services/api';
 import { useCart } from '../../context/CartContext';
 import AccountLayout from '../../components/customer/AccountLayout';
 
@@ -18,15 +18,34 @@ const Wishlist = () => {
         const userData = localStorage.getItem('shopCoreUser');
         const user = userData ? JSON.parse(userData) : null;
         if (!user) {
+          setItems([]);
           setLoading(false);
           return;
         }
         const data = await getWishlist(user.id);
         setItems(data);
-      } catch {}
+      } catch {
+        setItems([]);
+      }
       setLoading(false);
     };
+
     load();
+
+    const syncWishlist = () => {
+      setLoading(true);
+      load();
+    };
+
+    window.addEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
+    window.addEventListener('storage', syncWishlist);
+    window.addEventListener('focus', syncWishlist);
+
+    return () => {
+      window.removeEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
+      window.removeEventListener('storage', syncWishlist);
+      window.removeEventListener('focus', syncWishlist);
+    };
   }, []);
 
   const handleRemove = async (productId) => {
@@ -35,7 +54,17 @@ const Wishlist = () => {
       const user = userData ? JSON.parse(userData) : null;
       if (!user) return;
       await removeFromWishlist(user.id, productId);
-      setItems((prev) => prev.filter((i) => i.product_id !== productId && i.id !== productId));
+      setItems((prev) => prev.filter((item) => Number(item.product_id ?? item.product?.id ?? item.id) !== Number(productId)));
+      setQuantities((prev) => {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      });
+      setQuantityErrors((prev) => {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      });
     } catch {}
   };
 

@@ -2,7 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Truck, Shield, Wrench, Search, Zap, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, X, Settings, Clock, Headphones } from 'lucide-react';
-import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist, getSystemSettings, getProductById, getTopSellers } from '../services/api';
+import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist, getSystemSettings, getProductById, getTopSellers, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
 
@@ -77,15 +77,33 @@ const Home = () => {
     const loadWishlist = async () => {
       try {
         const user = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
-        if (!user?.id) return;
+        if (!user?.id) {
+          setWishlistedIds([]);
+          return;
+        }
         const wishlist = await getWishlist(user.id);
         setWishlistedIds(wishlist.map(item => Number(item.product_id ?? item.product?.id ?? item.id)).filter(Boolean));
       } catch (error) {
         console.error("Failed to load wishlist", error);
+        setWishlistedIds([]);
       }
     };
 
     loadWishlist();
+
+    const syncWishlist = () => {
+      loadWishlist();
+    };
+
+    window.addEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
+    window.addEventListener('storage', syncWishlist);
+    window.addEventListener('focus', syncWishlist);
+
+    return () => {
+      window.removeEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
+      window.removeEventListener('storage', syncWishlist);
+      window.removeEventListener('focus', syncWishlist);
+    };
   },[]);
 
   // --- Best Sellers Fetching ---
