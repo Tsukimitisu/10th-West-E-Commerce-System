@@ -360,6 +360,8 @@ const createTables = async () => {
         is_read BOOLEAN DEFAULT FALSE,
         reference_id INTEGER,
         reference_type VARCHAR(50),
+        thumbnail_url VARCHAR(500),
+        metadata JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);

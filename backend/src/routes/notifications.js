@@ -59,10 +59,13 @@ router.put('/read-all', authenticateToken, async (req, res) => {
 // Create notification (internal use)
 router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), async (req, res) => {
   try {
-    const { user_id, type, title, message, reference_id, reference_type } = req.body;
+    const { user_id, type, title, message, reference_id, reference_type, thumbnail_url, metadata } = req.body;
     const result = await pool.query(
-      'INSERT INTO notifications (user_id, type, title, message, reference_id, reference_type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [user_id, type, title, message, reference_id, reference_type]
+      `INSERT INTO notifications (
+        user_id, type, title, message, reference_id, reference_type, thumbnail_url, metadata
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+      RETURNING *`,
+      [user_id, type, title, message, reference_id, reference_type, thumbnail_url || null, metadata ? JSON.stringify(metadata) : null]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {

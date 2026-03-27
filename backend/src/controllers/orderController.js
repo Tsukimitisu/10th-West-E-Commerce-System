@@ -2,6 +2,7 @@ import pool from '../config/database.js';
 import Stripe from 'stripe';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
+import { buildOrderStatusMessage, createNotification as createUserNotification, ensureNotificationColumns } from '../utils/notifications.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const STAFF_ROLES = new Set(['admin', 'super_admin', 'owner', 'store_staff', 'cashier', 'manager']);
@@ -16,6 +17,7 @@ const ensureOrderAddressSnapshotColumns = async () => {
   });
 };
 ensureOrderAddressSnapshotColumns();
+ensureNotificationColumns();
 
 const normalizeText = (value) => {
   if (value === undefined || value === null) return null;
@@ -215,6 +217,23 @@ export const updateOrderStatus = async (req, res) => {
   }
 
   try {
+    const orderDetailResult = await pool.query(
+      `SELECT o.id, o.user_id, o.status, o.order_number,
+              oi.product_id, COALESCE(oi.product_name, p.name) as product_name,
+              p.image as product_image
+       FROM orders o
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+       LEFT JOIN products p ON p.id = oi.product_id
+       WHERE o.id = $1
+       ORDER BY oi.id ASC
+       LIMIT 1`,
+      [id]
+    );
+
+    if (orderDetailResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
     const deliveredAt = status === 'completed' || status === 'delivered'
       ? new Date().toISOString()
       : null;
@@ -231,12 +250,30 @@ export const updateOrderStatus = async (req, res) => {
       [status, id, deliveredAt]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
-
     const updatedOrder = result.rows[0];
     emitOrderStatusUpdate(updatedOrder);
+
+    const orderDetail = orderDetailResult.rows[0];
+    if (orderDetail.user_id) {
+      await createUserNotification(pool, {
+        user_id: orderDetail.user_id,
+        type: 'order.status',
+        title: `Order #${String(orderDetail.order_number || updatedOrder.id).padStart(4, '0')} ${status}`,
+        message: orderDetail.product_name
+          ? `${buildOrderStatusMessage(status)} Item: ${orderDetail.product_name}.`
+          : buildOrderStatusMessage(status),
+        reference_id: updatedOrder.id,
+        reference_type: 'order',
+        thumbnail_url: orderDetail.product_image || null,
+        metadata: {
+          status,
+          order_id: updatedOrder.id,
+          order_number: orderDetail.order_number || updatedOrder.id,
+          product_id: orderDetail.product_id || null,
+          product_name: orderDetail.product_name || null,
+        },
+      });
+    }
 
     res.json({
       message: 'Order status updated',

@@ -33,6 +33,28 @@ const Navbar = ({ user, onLogout }) => {
   const notifRef = useRef(null);
   const moreMenuRef = useRef(null);
 
+  const formatNotificationTime = (notification) => (
+    notification.created_at || notification.published_at
+      ? new Date(notification.created_at || notification.published_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      : ''
+  );
+
+  const getNotificationSummary = (notification) => {
+    if (notification.type === 'announcement') {
+      return notification.message || '';
+    }
+
+    if (notification.message) {
+      return notification.message;
+    }
+
+    if (notification.metadata?.status && notification.reference_type === 'order') {
+      return `Order status: ${notification.metadata.status}`;
+    }
+
+    return '';
+  };
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener('scroll', onScroll);
@@ -119,6 +141,9 @@ const Navbar = ({ user, onLogout }) => {
     const handleNotification = (notification) => {
       if (!notification) {
         refreshNotifications();
+        return;
+      }
+      if (notification.user_id && notification.user_id !== user.id) {
         return;
       }
       setNotifications((prev) => [notification, ...prev].slice(0, 10));
@@ -393,10 +418,12 @@ const Navbar = ({ user, onLogout }) => {
                           <div className="p-8 text-center text-gray-400 text-sm">No notifications</div>
                         ) : (
                           notifications.map((n, i) => (
-                            <button key={`${n.id || n.title}-${i}`} onClick={() => handleNotificationClick(n)} className={`w-full text-left px-4 py-3 hover:bg-gray-900 transition-all duration-150 border-b border-gray-50 ${!n.is_read ? 'bg-red-50/60' : ''}`}>
+                          <button key={`${n.id || n.title}-${i}`} onClick={() => handleNotificationClick(n)} className={`w-full text-left px-4 py-3 hover:bg-gray-900 transition-all duration-150 border-b border-gray-50 ${!n.is_read ? 'bg-red-50/60' : ''}`}>
                               <div className="flex gap-3">
                                 <div className="mt-0.5 shrink-0">
-                                  {n.type === 'announcement' ? (
+                                  {n.thumbnail_url ? (
+                                    <img src={n.thumbnail_url} alt="" className="w-10 h-10 rounded-lg object-cover bg-gray-900 border border-gray-700" />
+                                  ) : n.type === 'announcement' ? (
                                     <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
                                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                                     </div>
@@ -406,10 +433,10 @@ const Navbar = ({ user, onLogout }) => {
                                     </div>
                                   )}
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                   <p className={`text-sm ${!n.is_read ? 'font-bold text-white' : 'font-medium text-gray-700'}`}>{n.title || n.message}</p>
-                                  {n.type === 'announcement' && <p className="text-sm text-gray-400 mt-0.5 line-clamp-2">{n.message}</p>}
-                                  <p className="text-xs text-gray-400 mt-1">{n.created_at || n.published_at ? new Date(n.created_at || n.published_at).toLocaleDateString() : ''}</p>
+                                  {getNotificationSummary(n) && <p className="text-sm text-gray-400 mt-0.5 line-clamp-2">{getNotificationSummary(n)}</p>}
+                                  <p className="text-xs text-gray-400 mt-1">{formatNotificationTime(n)}</p>
                                 </div>
                               </div>
                             </button>

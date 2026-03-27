@@ -56,6 +56,20 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef(null);
 
+  const formatNotificationTime = (notification) => (
+    notification.created_at
+      ? new Date(notification.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      : ''
+  );
+
+  const getNotificationSummary = (notification) => {
+    if (notification.message) return notification.message;
+    if (notification.metadata?.status && notification.reference_type === 'order') {
+      return `Order status: ${notification.metadata.status}`;
+    }
+    return '';
+  };
+
   const refreshNotifications = useCallback(async () => {
     try {
       const [count, list] = await Promise.all([
@@ -79,12 +93,16 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   useEffect(() => {
     if (!user || !connected) return;
     const handleRefresh = () => refreshNotifications();
-    on('notification', handleRefresh);
+    const handleNotification = (notification) => {
+      if (notification?.user_id && notification.user_id !== user.id) return;
+      handleRefresh();
+    };
+    on('notification', handleNotification);
     on('order:new', handleRefresh);
     on('order:updated', handleRefresh);
     on('inventory:low-stock', handleRefresh);
     return () => {
-      off('notification', handleRefresh);
+      off('notification', handleNotification);
       off('order:new', handleRefresh);
       off('order:updated', handleRefresh);
       off('inventory:low-stock', handleRefresh);
@@ -114,6 +132,16 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
       setUnreadCount(prev => Math.max(0, prev - 1));
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     } catch (e) { console.error(e); }
+  };
+
+  const handleNotificationClick = async (notification) => {
+    await handleMarkRead(notification.id);
+    setNotifOpen(false);
+
+    const refType = notification.reference_type || notification.type;
+    if (refType === 'order') onNavigate('orders');
+    else if (refType === 'product' || refType === 'inventory') onNavigate('inventory');
+    else if (refType === 'return') onNavigate('returns');
   };
 
   const getNotifIcon = (type) => {
@@ -312,19 +340,21 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
                     notifications.map((n) => (
                       <button
                         key={n.id}
-                        onClick={() => { handleMarkRead(n.id); setNotifOpen(false); }}
+                        onClick={() => handleNotificationClick(n)}
                         className={`w-full text-left px-4 py-3 hover:bg-gray-900 transition-colors border-b border-gray-50 ${!n.is_read ? 'bg-red-500/10/40' : ''}`}
                       >
                         <div className="flex gap-3">
-                          <div className={`mt-0.5 shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${getNotifColor(n.type)}`}>
-                            {getNotifIcon(n.type)}
-                          </div>
+                          {n.thumbnail_url ? (
+                            <img src={n.thumbnail_url} alt="" className="mt-0.5 shrink-0 w-10 h-10 rounded-lg object-cover bg-gray-900 border border-gray-700" />
+                          ) : (
+                            <div className={`mt-0.5 shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${getNotifColor(n.type)}`}>
+                              {getNotifIcon(n.type)}
+                            </div>
+                          )}
                           <div className="min-w-0 flex-1">
                             <p className={`text-sm leading-snug ${!n.is_read ? 'font-semibold text-white' : 'text-gray-600'}`}>{n.title}</p>
-                            {n.message && <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{n.message}</p>}
-                            <p className="text-[10px] text-gray-400 mt-1">
-                              {n.created_at ? new Date(n.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
-                            </p>
+                            {getNotificationSummary(n) && <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{getNotificationSummary(n)}</p>}
+                            <p className="text-[10px] text-gray-400 mt-1">{formatNotificationTime(n)}</p>
                           </div>
                           {!n.is_read && <div className="mt-2 w-2 h-2 bg-red-500/100 rounded-full shrink-0" />}
                         </div>

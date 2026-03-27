@@ -1544,13 +1544,30 @@ export const updateOrderStatus = async (id, status) => {
 
     // Notify customer about their order status update
     if (data.user_id) {
+      let firstOrderItem = null;
+      try {
+        const { data: orderItems } = await supabase
+          .from('order_items')
+          .select('product_id, product_name, products(image)')
+          .eq('order_id', id)
+          .limit(1);
+        firstOrderItem = orderItems?.[0] || null;
+      } catch {}
+
       createNotification({
         user_id: data.user_id,
         type: 'order.status',
-        title: 'Order Status Updated',
-        message: `Your order #${String(id).padStart(4, '0')} is now ${status}`,
+        title: `Order #${String(id).padStart(4, '0')} ${status}`,
+        message: `Your order status is now ${status}${firstOrderItem?.product_name ? `. Item: ${firstOrderItem.product_name}.` : '.'}`,
         reference_id: id,
         reference_type: 'order',
+        thumbnail_url: firstOrderItem?.products?.image || null,
+        metadata: {
+          status,
+          order_id: id,
+          product_id: firstOrderItem?.product_id || null,
+          product_name: firstOrderItem?.product_name || null,
+        },
       });
     }
 
@@ -2373,6 +2390,16 @@ export const deleteVariant = async (id) => {
 
 // ==================== NOTIFICATIONS ====================
 
+const normalizeNotification = (notification) => ({
+  ...notification,
+  thumbnail_url: notification?.thumbnail_url ?? notification?.metadata?.thumbnail_url ?? null,
+  metadata: notification?.metadata && typeof notification.metadata === 'string'
+    ? (() => {
+        try { return JSON.parse(notification.metadata); } catch { return null; }
+      })()
+    : (notification?.metadata ?? null),
+});
+
 export const getNotifications = async () => {
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
@@ -2383,9 +2410,10 @@ export const getNotifications = async () => {
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(50);
-    return data || [];
+    return (data || []).map(normalizeNotification);
   }
-  return authenticatedFetch(`${API_URL}/notifications`).catch(() => []);
+  const data = await authenticatedFetch(`${API_URL}/notifications`).catch(() => []);
+  return (data || []).map(normalizeNotification);
 };
 
 export const getUnreadNotificationCount = async () => {
@@ -2429,18 +2457,18 @@ export const deleteNotification = async (id) => {
   return authenticatedFetch(`${API_URL}/notifications/${id}`, { method: 'DELETE' });
 };
 
-export const createNotification = async ({ user_id, type, title, message, reference_id, reference_type }) => {
+export const createNotification = async ({ user_id, type, title, message, reference_id, reference_type, thumbnail_url = null, metadata = null }) => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase.from('notifications').insert({
-      user_id, type, title, message, reference_id, reference_type,
+      user_id, type, title, message, reference_id, reference_type, thumbnail_url, metadata,
     }).select().single();
     if (error) console.error('Notification insert error:', error.message);
-    return data;
+    return normalizeNotification(data);
   }
   return authenticatedFetch(`${API_URL}/notifications`, {
     method: 'POST',
-    body: JSON.stringify({ user_id, type, title, message, reference_id, reference_type }),
-  }).catch(err => console.error('Notification create error:', err));
+    body: JSON.stringify({ user_id, type, title, message, reference_id, reference_type, thumbnail_url, metadata }),
+  }).then(normalizeNotification).catch(err => console.error('Notification create error:', err));
 };
 
 // Notify all admin (owner) and staff users

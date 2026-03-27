@@ -2,6 +2,7 @@ import pool from '../config/database.js';
 import Stripe from 'stripe';
 import { emitReturnCreated, emitReturnUpdated, emitStockUpdate } from '../socket.js';
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
+import { createNotification as createUserNotification } from '../utils/notifications.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
@@ -326,6 +327,24 @@ export const approveReturn = async (req, res) => {
     const approvedReturn = mapReturnRecord(result.rows[0]);
     emitReturnUpdated(approvedReturn);
 
+    const firstItem = approvedReturn.items?.[0] || null;
+    await createUserNotification(client, {
+      user_id: approvedReturn.user_id,
+      type: 'return.status',
+      title: `Return Request #${approvedReturn.id} approved`,
+      message: firstItem?.name
+        ? `Your return request for ${firstItem.name} was approved.`
+        : 'Your return request was approved.',
+      reference_id: approvedReturn.order_id,
+      reference_type: 'order',
+      metadata: {
+        return_id: approvedReturn.id,
+        status: 'approved',
+        order_id: approvedReturn.order_id,
+        product_name: firstItem?.name || null,
+      },
+    });
+
     res.json({
       message: 'Return approved',
       return: approvedReturn
@@ -378,6 +397,24 @@ export const rejectReturn = async (req, res) => {
 
     const rejectedReturn = mapReturnRecord(result.rows[0]);
     emitReturnUpdated(rejectedReturn);
+
+    const firstItem = rejectedReturn.items?.[0] || null;
+    await createUserNotification(client, {
+      user_id: rejectedReturn.user_id,
+      type: 'return.status',
+      title: `Return Request #${rejectedReturn.id} rejected`,
+      message: firstItem?.name
+        ? `Your return request for ${firstItem.name} was rejected.`
+        : 'Your return request was rejected.',
+      reference_id: rejectedReturn.order_id,
+      reference_type: 'order',
+      metadata: {
+        return_id: rejectedReturn.id,
+        status: 'rejected',
+        order_id: rejectedReturn.order_id,
+        product_name: firstItem?.name || null,
+      },
+    });
 
     res.json({
       message: 'Return rejected',
