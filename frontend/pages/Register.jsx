@@ -29,18 +29,25 @@ const Register = ({ onLogin }) => {
     { label: 'One uppercase letter', pass: /[A-Z]/.test(password) },
     { label: 'One lowercase letter', pass: /[a-z]/.test(password) },
     { label: 'One number', pass: /\d/.test(password) },
-    { label: 'One special character', pass: /[!@#$%^&*()_\-+=]/.test(password) },
+    { label: 'One special character (optional)', pass: /[!@#$%^&*()_\-+=]/.test(password), optional: true },
   ];
+  const requiredChecks = checks.filter(c => !c.optional);
+  const requiredPassed = requiredChecks.filter(c => c.pass).length;
   const passwordStrength = checks.filter(c => c.pass).length;
-  const strengthColor = passwordStrength <= 1 ? 'bg-red-500/100' : passwordStrength <= 3 ? 'bg-amber-500' : 'bg-green-500';
+  const strengthColor = passwordStrength <= 2 ? 'bg-red-500/100' : passwordStrength <= 4 ? 'bg-amber-500' : 'bg-green-500';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    
+    // Field-specific validation messages
+    if (!name.trim()) { setError('Name is required'); return; }
+    if (!email.trim() || !/^\S+@\S+\.\S+$/.test(email)) { setError('Please enter a valid email address'); return; }
+    if (requiredPassed < requiredChecks.length) { setError('Password must meet all required security rules'); return; }
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
-    if (passwordStrength < 5) { setError('Password does not meet all requirements'); return; }
     if (!agreeTerms) { setError('You must agree to the Terms of Service and Privacy Policy'); return; }
     if (!ageConfirmed) { setError('You must confirm you are at least 18 years old'); return; }
+    
     setLoading(true);
     try {
       const result = await register(name, email, password, { consent_given: true, age_confirmed: true });

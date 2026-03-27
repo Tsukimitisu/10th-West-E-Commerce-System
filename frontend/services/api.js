@@ -106,7 +106,9 @@ const authenticatedFetch = async (url, options = {}) => {
         window.dispatchEvent(new Event('auth:session-expired'));
       }
     }
-    throw new Error(error.message || 'Request failed');
+    const apiError = new Error(error.message || 'Request failed');
+    Object.assign(apiError, error);
+    throw apiError;
   }
 
   return response.json();

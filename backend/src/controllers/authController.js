@@ -135,7 +135,7 @@ export const register = async (req, res) => {
     const existingResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     if (existingResult.rows.length > 0) {
       const existingUser = existingResult.rows[0];
@@ -818,7 +818,7 @@ export const resendVerification = async (req, res) => {
     
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await pool.query(
       'UPDATE users SET email_verification_token = $1, email_verification_expires = $2 WHERE id = $3',

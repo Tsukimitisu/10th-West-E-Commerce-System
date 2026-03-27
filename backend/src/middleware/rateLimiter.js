@@ -33,6 +33,10 @@ const rateLimit = (windowMs = 60000, maxRequests = 100) => {
 
 // Strict limiter for auth endpoints
 export const authLimiter = rateLimit(15 * 60 * 1000, 20); // 20 per 15 min
+// Resend Verification limiter
+export const resendVerificationLimiter = rateLimit(5 * 60 * 1000, 3); // 3 per 5 min
+// Registration limiter
+export const registerLimiter = rateLimit(15 * 60 * 1000, 5); // 5 per 15 min
 // General API limiter
 export const apiLimiter = rateLimit(60 * 1000, 100); // 100 per min
 // Webhook limiter

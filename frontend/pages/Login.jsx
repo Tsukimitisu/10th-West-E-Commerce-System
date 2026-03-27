@@ -1,6 +1,6 @@
 ﻿import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Shield } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Shield, Check } from 'lucide-react';
 import { login, API_ORIGIN } from '../services/api';
 
 const Login = ({ onLogin }) => {
@@ -45,6 +45,27 @@ const Login = ({ onLogin }) => {
       navigate(redirect);
     } catch (err) {
       setError(err.message || 'Invalid email or password');
+      if (err.requiresVerification) {
+        setNeedsVerification(true);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      setResendSuccess('');
+      await authenticatedFetch(`${API_ORIGIN}/api/auth/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      setResendSuccess('Verification email resent. Please check your inbox.');
+    } catch (err) {
+      setError(err.message || 'Failed to resend verification email.');
     } finally {
       setLoading(false);
     }
@@ -76,8 +97,25 @@ const Login = ({ onLogin }) => {
           )}
 
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex items-center gap-2">
-              <AlertCircle size={16} /> {error}
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={16} /> <span>{error}</span>
+              </div>
+              {needsVerification && (
+                <button 
+                  onClick={handleResendVerification}
+                  disabled={loading}
+                  className="px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors self-start mt-1"
+                >
+                  Resend Verification Email
+                </button>
+              )}
+            </div>
+          )}
+
+          {resendSuccess && (
+            <div className="mb-4 p-3 bg-green-500/10 border border-green-200 rounded-lg text-sm text-green-500 flex items-center gap-2">
+              <Check size={16} /> {resendSuccess}
             </div>
           )}
 

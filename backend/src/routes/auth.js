@@ -12,6 +12,7 @@ import {
 } from '../controllers/authController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
+import { resendVerificationLimiter, registerLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -19,7 +20,9 @@ const router = express.Router();
 const registerValidation = [
   body('name').trim().escape().notEmpty().withMessage('Name is required'),
   body('email').trim().isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('password').isStrongPassword({
+    minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 0
+  }).withMessage('Password must be at least 8 characters, and include uppercase, lowercase, and a number'),
 ];
 
 const loginValidation = [
@@ -28,14 +31,12 @@ const loginValidation = [
 ];
 
 // ─── Public routes ─────────────────────────────────────────────────
-router.post('/send-registration-otp', registerValidation.slice(0, 2), validate, sendRegistrationOtp);
+router.post('/send-registration-otp', registerLimiter, registerValidation.slice(0, 2), validate, sendRegistrationOtp);
 
-router.post('/register', 
-  [
-    ...registerValidation,
-    body('otp').notEmpty().withMessage('Verification OTP is required')
-  ], 
-  validate, 
+router.post('/register',
+  registerLimiter,
+  registerValidation,
+  validate,
   register
 );
 router.post('/login', loginValidation, validate, login);
@@ -102,7 +103,7 @@ router.delete('/account',
 router.get('/export-data', authenticateToken, exportUserData);
 
 // ─── Email verification ────────────────────────────────────────────
-router.post('/resend-verification', body('email').isEmail().withMessage('Valid email required'), validate, resendVerification);
+router.post('/resend-verification', resendVerificationLimiter, body('email').isEmail().withMessage('Valid email required'), validate, resendVerification);
 router.post('/verify-email', body('token').notEmpty(), validate, verifyEmailToken);
 
 export default router;

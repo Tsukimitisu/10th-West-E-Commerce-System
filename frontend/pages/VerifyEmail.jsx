@@ -1,13 +1,31 @@
 ﻿import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Check, X, Loader, Mail } from 'lucide-react';
-import { verifyEmailToken } from '../services/api';
+import { verifyEmailToken, resendVerificationEmail } from '../services/api';
 
 const VerifyEmail = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [message, setMessage] = useState('');
+  const [email, setEmail] = useState('');
+  const [resendStatus, setResendStatus] = useState('');
+  const [isResending, setIsResending] = useState(false);
+
+  const handleResend = async (e) => {
+    e.preventDefault();
+    if (!email) return;
+    setIsResending(true);
+    setResendStatus('');
+    try {
+      await resendVerificationEmail(email);
+      setResendStatus('Verification email resent successfully! Please check your inbox.');
+    } catch (err) {
+      setResendStatus(err.message || 'Failed to resend verification email.');
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   const handleVerify = async () => {
     if (!token) {
@@ -78,7 +96,34 @@ const VerifyEmail = () => {
             </div>
             <h2 className="text-xl font-bold text-white mb-2">Verification Failed</h2>
             <p className="text-gray-400 mb-6">{message}</p>
-            <Link 
+            
+            <div className="w-full bg-gray-900 border border-gray-700 rounded-lg p-5 mb-6 text-left">
+              <h3 className="text-sm font-bold text-white mb-3">Link expired? Get a new one</h3>
+              <form onSubmit={handleResend} className="flex flex-col gap-3">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your registered email"
+                  required
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={isResending}
+                  className="w-full py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-medium rounded-lg transition-colors text-sm"
+                >
+                  {isResending ? 'Sending...' : 'Resend Verification Email'}
+                </button>
+                {resendStatus && (
+                  <p className={`text-xs mt-1 ${resendStatus.includes('Failed') ? 'text-red-400' : 'text-green-400'}`}>
+                    {resendStatus}
+                  </p>
+                )}
+              </form>
+            </div>
+
+            <Link
               to="/login"
               className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors flex items-center justify-center"
             >
