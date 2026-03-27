@@ -3,26 +3,30 @@ import { Link } from 'react-router-dom';
 import { Heart, Star, Tag, AlertTriangle } from 'lucide-react';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../services/api';
 
-const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'grid' }) => {
-  const [localWishlisted, setLocalWishlisted] = useState(wishlistedIds.includes(product.id));
+const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }) => {
+  const hasExternalWishlistState = Array.isArray(wishlistedIds);
+  const normalizedWishlistedIds = hasExternalWishlistState ? wishlistedIds : [];
+  const normalizedProductId = Number(product.id);
+  const [localWishlisted, setLocalWishlisted] = useState(normalizedWishlistedIds.includes(normalizedProductId));
 
   useEffect(() => {
-    setLocalWishlisted(wishlistedIds.includes(product.id));
-  }, [wishlistedIds, product.id]);
+    if (!hasExternalWishlistState) return;
+    setLocalWishlisted(normalizedWishlistedIds.includes(normalizedProductId));
+  }, [hasExternalWishlistState, normalizedWishlistedIds, normalizedProductId]);
 
   useEffect(() => {
-    if (wishlistedIds.length > 0) return;
+    if (hasExternalWishlistState) return;
     const checkWishlist = async () => {
       try {
         const user = localStorage.getItem('shopCoreUser');
         if (!user) return;
         const userId = JSON.parse(user).id;
         const items = await getWishlist(userId);
-        setLocalWishlisted(items.some(i => i.product_id === product.id));
+        setLocalWishlisted(items.some((item) => Number(item.product_id ?? item.product?.id ?? item.id) === normalizedProductId));
       } catch {}
     };
     checkWishlist();
-  }, [product.id, wishlistedIds.length]);
+  }, [hasExternalWishlistState, normalizedProductId]);
 
   const stockLevel = Math.max(0, Number(product.stock_quantity ?? 0));
   const isOutOfStock = stockLevel <= 0;
@@ -41,9 +45,9 @@ const ProductCard = ({ product, wishlistedIds = [], onWishlistToggle, view = 'gr
       const newStatus = !localWishlisted;
       setLocalWishlisted(newStatus);
 
-      if (!newStatus) await removeFromWishlist(userId, product.id);
-      else await addToWishlist(userId, product.id);
-      onWishlistToggle?.(product.id, newStatus);
+      if (!newStatus) await removeFromWishlist(userId, normalizedProductId);
+      else await addToWishlist(userId, normalizedProductId);
+      onWishlistToggle?.(normalizedProductId, newStatus);
     } catch {
       setLocalWishlisted(!localWishlisted); // Revert on failure
     }

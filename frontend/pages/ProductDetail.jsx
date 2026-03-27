@@ -8,6 +8,11 @@ import StarRating from '../components/StarRating';
 import ReviewCard from '../components/ReviewCard';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
+const normalizeWishlistIds = (items = []) => (
+  items
+    .map((item) => Number(item.product_id ?? item.product?.id ?? item.id))
+    .filter(Boolean)
+);
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -19,12 +24,45 @@ const ProductDetail = () => {
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
   const [activeTab, setActiveTab] = useState('description');
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistedIds, setWishlistedIds] = useState([]);
   const [addedToCart, setAddedToCart] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState({ color: '' });
   const [variantError, setVariantError] = useState('');
   const [quantityError, setQuantityError] = useState('');
   const { addToCart } = useCart();
+
+  const user = localStorage.getItem('shopCoreUser');
+  const userId = user ? JSON.parse(user).id : null;
+  const isWishlisted = wishlistedIds.includes(Number(id));
+
+  useEffect(() => {
+    const loadWishlist = async () => {
+      if (!userId) {
+        setWishlistedIds([]);
+        return;
+      }
+
+      try {
+        const items = await getWishlist(userId);
+        setWishlistedIds(normalizeWishlistIds(items));
+      } catch {
+        setWishlistedIds([]);
+      }
+    };
+
+    loadWishlist();
+
+    const syncWishlist = () => {
+      loadWishlist();
+    };
+
+    window.addEventListener('focus', syncWishlist);
+    window.addEventListener('storage', syncWishlist);
+    return () => {
+      window.removeEventListener('focus', syncWishlist);
+      window.removeEventListener('storage', syncWishlist);
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!id) return;
@@ -51,15 +89,6 @@ const ProductDetail = () => {
       setLoading(false);
     };
     loadProduct();
-
-    // Check wishlist
-    const user = localStorage.getItem('shopCoreUser');
-    if (user) {
-      const userId = JSON.parse(user).id;
-      getWishlist(userId).then(items => {
-        setIsWishlisted(items.some(w => w.product_id === Number(id)));
-      }).catch(() => {});
-    }
   }, [id]);
 
   const hasVariants = product && Array.isArray(product.variants) && product.variants.length > 0;
@@ -131,14 +160,29 @@ const ProductDetail = () => {
 
   const handleWishlist = async () => {
     if (!product) return;
-    const user = localStorage.getItem('shopCoreUser');
-    if (!user) return;
-    const userId = JSON.parse(user).id;
+    if (!userId) return;
     try {
-      if (isWishlisted) await removeFromWishlist(userId, product.id);
-      else await addToWishlist(userId, product.id);
-      setIsWishlisted(!isWishlisted);
+      const normalizedProductId = Number(product.id);
+      if (isWishlisted) await removeFromWishlist(userId, normalizedProductId);
+      else await addToWishlist(userId, normalizedProductId);
+      setWishlistedIds((prev) => {
+        const exists = prev.includes(normalizedProductId);
+        if (exists) return prev.filter((wishlistId) => wishlistId !== normalizedProductId);
+        return [...prev, normalizedProductId];
+      });
     } catch {}
+  };
+
+  const handleWishlistToggle = (productId, shouldBeWishlisted) => {
+    const normalizedId = Number(productId);
+    if (!normalizedId) return;
+
+    setWishlistedIds((prev) => {
+      const exists = prev.includes(normalizedId);
+      if (shouldBeWishlisted && !exists) return [...prev, normalizedId];
+      if (!shouldBeWishlisted && exists) return prev.filter((wishlistId) => wishlistId !== normalizedId);
+      return prev;
+    });
   };
 
   const formatPrice = (p) => `\u20B1${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
@@ -466,7 +510,14 @@ const ProductDetail = () => {
           <div className="mt-16 pt-8 border-t border-gray-700">
             <h2 className="font-display font-bold text-xl text-white mb-6">Related Products</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {related.slice(0, 4).map(p => <ProductCard key={p.id} product={p} />)}
+              {related.slice(0, 4).map((relatedProduct) => (
+                <ProductCard
+                  key={relatedProduct.id}
+                  product={relatedProduct}
+                  wishlistedIds={wishlistedIds}
+                  onWishlistToggle={handleWishlistToggle}
+                />
+              ))}
             </div>
           </div>
         )}
