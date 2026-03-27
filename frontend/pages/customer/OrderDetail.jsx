@@ -70,6 +70,11 @@ const OrderDetail = () => {
   const step = stepForStatus[order.status] ?? 0;
   const date = new Date(order.created_at || order.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   const items = order.items || [];
+  const returnRequestStatus = order.return_request?.status || '';
+  const showReturnSection = ['completed', 'delivered'].includes(order.status) || Boolean(returnRequestStatus);
+  const returnDeadline = order.return_deadline_at
+    ? new Date(order.return_deadline_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+    : null;
   const shippingSnapshot = order.shipping_address_snapshot || {};
   const shippingAddressLines = [
     shippingSnapshot.recipient_name,
@@ -112,13 +117,40 @@ const OrderDetail = () => {
               <XCircle size={14} /> Cancel Order
             </button>
           )}
-          {order.status === 'delivered' && (
+          {order.return_eligible && (
             <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 flex items-center gap-1.5 transition-colors">
               <RotateCcw size={14} /> Request Return
             </Link>
           )}
         </div>
       </div>
+
+      {showReturnSection && (
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-white">Return status</p>
+              <p className="text-sm text-gray-400 mt-1">
+                {returnRequestStatus
+                  ? `Current request: ${returnRequestStatus}.`
+                  : order.return_eligibility_message}
+              </p>
+              {order.return_eligible && returnDeadline && (
+                <p className="text-xs text-gray-400 mt-1">Request a return by {returnDeadline}.</p>
+              )}
+            </div>
+            {returnRequestStatus ? (
+              <Link to="/my-returns" className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 transition-colors">
+                View My Returns
+              </Link>
+            ) : order.return_eligible ? (
+              <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm bg-red-500/100 hover:bg-red-600 text-white rounded-lg transition-colors">
+                Request Return
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Cancel Confirmation Modal */}
       {showCancelConfirm && (

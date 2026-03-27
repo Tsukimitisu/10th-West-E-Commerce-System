@@ -1,16 +1,13 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { RotateCcw, Package, Clock, CheckCircle2, XCircle, Truck, Eye, Calendar } from 'lucide-react';
+import { RotateCcw, Package, Clock, CheckCircle2, XCircle, Calendar } from 'lucide-react';
 import AccountLayout from '../../components/customer/AccountLayout';
-
-const API = window.__API_URL__ || 'http://localhost:5000/api';
+import { getMyReturns } from '../../services/api';
 
 const statusConfig = {
-  pending:   { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' },
-  approved:  { icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
-  rejected:  { icon: XCircle, color: 'text-red-500', bg: 'bg-red-500/10 border-red-200' },
-  shipped:   { icon: Truck, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
-  completed: { icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
+  pending: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' },
+  approved: { icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
+  rejected: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-500/10 border-red-200' },
 };
 
 const MyReturns = () => {
@@ -20,12 +17,14 @@ const MyReturns = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const token = localStorage.getItem('shopCoreToken');
-        const res = await fetch(`${API}/returns`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (res.ok) setReturns(await res.json());
-      } catch {}
+        const data = await getMyReturns();
+        setReturns(Array.isArray(data) ? data : []);
+      } catch {
+        setReturns([]);
+      }
       setLoading(false);
     };
+
     load();
   }, []);
 
@@ -36,7 +35,7 @@ const MyReturns = () => {
 
         {loading ? (
           <div className="space-y-3">
-            {[1,2].map(i => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}
+            {[1, 2].map((i) => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}
           </div>
         ) : returns.length === 0 ? (
           <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
@@ -50,7 +49,12 @@ const MyReturns = () => {
             {returns.map((ret) => {
               const st = statusConfig[ret.status] || statusConfig.pending;
               const StatusIcon = st.icon;
-              const date = new Date(ret.created_at || ret.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+              const date = new Date(ret.created_at || ret.date).toLocaleDateString('en-PH', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              });
+
               return (
                 <div key={ret.id} className="bg-gray-800 rounded-xl border border-gray-700 p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -66,15 +70,24 @@ const MyReturns = () => {
                       {ret.reason && <p className="text-sm text-gray-600 mt-1">{ret.reason}</p>}
                     </div>
                     <div className="text-right flex-shrink-0">
-                      {ret.refund_amount && <p className="font-semibold text-white text-sm">â‚±{Number(ret.refund_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>}
+                      {ret.refund_amount > 0 && (
+                        <p className="font-semibold text-white text-sm">
+                          ₱{Number(ret.refund_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </p>
+                      )}
                     </div>
                   </div>
                   {ret.items && ret.items.length > 0 && (
                     <div className="flex gap-2 mt-3 pt-3 border-t border-gray-700">
                       {ret.items.map((item, i) => (
                         <div key={i} className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-700 overflow-hidden">
-                          {item.image_url ? <img src={item.image_url} alt="" className="w-full h-full object-cover" /> :
-                            <div className="w-full h-full flex items-center justify-center"><Package size={12} className="text-gray-400" /></div>}
+                          {item.image_url ? (
+                            <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package size={12} className="text-gray-400" />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -90,5 +103,3 @@ const MyReturns = () => {
 };
 
 export default MyReturns;
-
-

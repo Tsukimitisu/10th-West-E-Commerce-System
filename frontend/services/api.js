@@ -1261,6 +1261,7 @@ const mapOrderFromApi = (order) => ({
   created_at: order.created_at ?? new Date().toISOString(),
   source: order.source ?? 'online',
   payment_method: order.payment_method,
+  delivered_at: order.delivered_at ?? undefined,
   amount_tendered: order.amount_tendered != null ? Number(order.amount_tendered) : undefined,
   change_due: order.change_due != null ? Number(order.change_due) : undefined,
   cashier_id: order.cashier_id ?? undefined,
@@ -1268,6 +1269,11 @@ const mapOrderFromApi = (order) => ({
   promo_code_used: order.promo_code_used ?? undefined,
   shipping_lat: order.shipping_lat ?? undefined,
   shipping_lng: order.shipping_lng ?? undefined,
+  return_eligible: Boolean(order.return_eligible),
+  return_eligibility_message: order.return_eligibility_message ?? '',
+  return_window_days: order.return_window_days != null ? Number(order.return_window_days) : undefined,
+  return_deadline_at: order.return_deadline_at ?? null,
+  return_request: order.return_request ?? null,
 });
 
 let MOCK_ORDERS = [];
@@ -1876,8 +1882,13 @@ export const deleteAddress = async (id) => {
 
 // ==================== RETURNS & REFUNDS ====================
 
-export const getReturns = async (userId) => {
+export const getMyReturns = async () => {
   const data = await authenticatedFetch(`${API_URL}/returns/my-returns`);
+  return data;
+};
+
+export const getReturns = async () => {
+  const data = await authenticatedFetch(`${API_URL}/returns`);
   return data;
 };
 
@@ -1891,7 +1902,7 @@ export const createReturn = async (returnRequest) => {
   notifyAdminStaff(
     'return.new',
     'New Return Request',
-    `Return request for Order #${String(returnRequest.order_id).padStart(4, '0')} â€” â‚±${Number(returnRequest.refund_amount || 0).toLocaleString()}`,
+    `Return request for Order #${String(returnRequest.order_id).padStart(4, '0')}`,
     data.return?.id,
     'return'
   );

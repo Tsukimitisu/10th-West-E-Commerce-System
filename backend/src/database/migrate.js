@@ -607,6 +607,7 @@ const createTables = async () => {
         ('payment', 'maya_enabled', 'false'),
         ('payment', 'stripe_pk', ''),
         ('payment', 'stripe_sk', ''),
+        ('returns', 'return_window_days', '15'),
         ('email', 'order_confirmation', 'true'),
         ('email', 'shipping_update', 'true'),
         ('email', 'return_approval', 'true'),
@@ -668,6 +669,7 @@ const createTables = async () => {
       { name: 'shipping_method', definition: "VARCHAR(50) DEFAULT 'standard'" },
       { name: 'delivery_notes', definition: 'TEXT' },
       { name: 'estimated_delivery', definition: 'DATE' },
+      { name: 'delivered_at', definition: 'TIMESTAMP' },
     ];
 
     for (const col of ordersNewColumns) {

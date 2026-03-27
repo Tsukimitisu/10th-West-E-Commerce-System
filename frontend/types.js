@@ -20,8 +20,7 @@ export const OrderStatus = {
 
 // Return status constants
 export const ReturnStatus = {
-  REQUESTED: 'requested',
+  PENDING: 'pending',
   APPROVED: 'approved',
   REJECTED: 'rejected',
-  COMPLETED: 'completed',
 };

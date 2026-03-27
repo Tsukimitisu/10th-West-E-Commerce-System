@@ -1,6 +1,6 @@
-﻿import React, { useEffect, useState } from 'react';
-import { getReturns, updateReturnStatus, processRefund } from '../../services/api';
-import { RotateCcw, Search, Eye, CheckCircle2, XCircle, Clock, DollarSign, Package, AlertCircle, Truck } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { getReturns, updateReturnStatus } from '../../services/api';
+import { RotateCcw, Search, Eye, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 
@@ -8,13 +8,9 @@ const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   approved: 'bg-blue-50 text-blue-700 border-blue-200',
   rejected: 'bg-red-500/10 text-orange-600 border-red-200',
-  received: 'bg-purple-50 text-purple-700 border-purple-200',
-  refunded: 'bg-green-50 text-green-700 border-green-200',
-  completed: 'bg-green-50 text-green-700 border-green-200',
 };
 
 const ReturnsView = () => {
-  // Role check: staff can view returns but cannot approve/reject/refund
   const userStr = localStorage.getItem('shopCoreUser');
   const currentUser = userStr ? JSON.parse(userStr) : null;
   const isStaff = currentUser?.role === 'store_staff';
@@ -24,78 +20,81 @@ const ReturnsView = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [detailReturn, setDetailReturn] = useState(null);
-  const [refundModal, setRefundModal] = useState(false);
-  const [refundTarget, setRefundTarget] = useState(null);
-  const [refundAmount, setRefundAmount] = useState('');
-  const [refundMethod, setRefundMethod] = useState('original');
+  const [error, setError] = useState('');
 
   const fetchData = async () => {
     try {
       const data = await getReturns();
       setReturns(Array.isArray(data) ? data : []);
-    } catch (e) { console.error(e); setReturns([]); }
+      setError('');
+    } catch (err) {
+      console.error(err);
+      setReturns([]);
+      setError(err.message || 'Failed to load return requests.');
+    }
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  // Real-time: refresh on return events
   useSocketEvent('return:new', fetchData);
   useSocketEvent('return:updated', fetchData);
 
   const handleStatusUpdate = async (ret, status) => {
     try {
       await updateReturnStatus(ret.id, status);
-      fetchData();
-    } catch (e) { console.error(e); }
+      await fetchData();
+      if (detailReturn?.id === ret.id) {
+        setDetailReturn((prev) => prev ? { ...prev, status } : prev);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Failed to update return request.');
+    }
   };
 
-  const handleRefund = async (e) => {
-    e.preventDefault();
-    if (!refundTarget) return;
-    try {
-      await processRefund(refundTarget.id, refundMethod);
-      setRefundModal(false); fetchData();
-    } catch (e) { console.error(e); }
-  };
-
-  const openRefund = (ret) => {
-    setRefundTarget(ret);
-    setRefundAmount((ret.refund_amount || ret.total || 0).toString());
-    setRefundMethod('original');
-    setRefundModal(true);
-  };
-
-  const filtered = returns.filter(r => {
+  const filtered = returns.filter((ret) => {
     const term = search.toLowerCase();
-    const matchSearch = !term || r.id.toString().includes(term) || r.order_id?.toString().includes(term) || r.reason?.toLowerCase().includes(term);
-    const matchStatus = !statusFilter || r.status === statusFilter;
+    const matchSearch = !term
+      || ret.id.toString().includes(term)
+      || ret.order_id?.toString().includes(term)
+      || ret.reason?.toLowerCase().includes(term)
+      || ret.customer_name?.toLowerCase().includes(term)
+      || ret.customer_email?.toLowerCase().includes(term);
+    const matchStatus = !statusFilter || ret.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
-  const pending = returns.filter(r => r.status === 'pending').length;
-  const approved = returns.filter(r => r.status === 'approved').length;
-
-  const allStatuses = ['pending', 'approved', 'rejected', 'received', 'refunded', 'completed'];
+  const pending = returns.filter((ret) => ret.status === 'pending').length;
+  const approved = returns.filter((ret) => ret.status === 'approved').length;
+  const rejected = returns.filter((ret) => ret.status === 'rejected').length;
+  const allStatuses = ['pending', 'approved', 'rejected'];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="font-display font-bold text-xl text-white">Returns & Refunds</h1>
+          <h1 className="font-display font-bold text-xl text-white">Returns</h1>
           <p className="text-sm text-gray-400">{returns.length} total return requests</p>
         </div>
       </div>
 
-      {/* KPIs */}
+      {error && (
+        <div className="p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex items-center gap-2">
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Pending Review', value: pending.toString(), icon: <Clock size={18} />, color: 'bg-yellow-50 text-yellow-600' },
+          { label: 'Pending', value: pending.toString(), icon: <Clock size={18} />, color: 'bg-yellow-50 text-yellow-600' },
           { label: 'Approved', value: approved.toString(), icon: <CheckCircle2 size={18} />, color: 'bg-blue-50 text-blue-600' },
-          { label: 'Total Returns', value: returns.length.toString(), icon: <RotateCcw size={18} />, color: 'bg-gray-900 text-gray-600' },
-          { label: 'Total Refunded', value: `â‚±${returns.filter(r => r.status === 'refunded' || r.status === 'completed').reduce((s, r) => s + (r.refund_amount || 0), 0).toLocaleString()}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
-        ].map((kpi, i) => (
-          <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+          { label: 'Rejected', value: rejected.toString(), icon: <XCircle size={18} />, color: 'bg-red-500/10 text-orange-600' },
+          { label: 'Total', value: returns.length.toString(), icon: <RotateCcw size={18} />, color: 'bg-gray-900 text-gray-600' },
+        ].map((kpi, index) => (
+          <div key={index} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
             <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
             <p className="text-lg font-bold text-white">{kpi.value}</p>
             <p className="text-xs text-gray-400">{kpi.label}</p>
@@ -103,22 +102,31 @@ const ReturnsView = () => {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1 max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search returns..." value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
+          <input
+            type="text"
+            placeholder="Search returns..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+          />
         </div>
         <div className="flex gap-1 flex-wrap">
           <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
-          {allStatuses.map(s => (
-            <button key={s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all capitalize ${statusFilter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>{s}</button>
+          {allStatuses.map((status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(statusFilter === status ? '' : status)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all capitalize ${statusFilter === status ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}
+            >
+              {status}
+            </button>
           ))}
         </div>
       </div>
 
-      {/* Returns Table */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
@@ -126,35 +134,41 @@ const ReturnsView = () => {
           <div className="p-12 text-center"><RotateCcw size={40} className="mx-auto text-gray-300 mb-3" /><p className="text-sm text-gray-400">No return requests found</p></div>
         ) : (
           <table className="w-full text-sm">
-            <thead><tr className="bg-gray-50/80 border-b border-gray-700">
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Return ID</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Order</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Reason</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Status</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Date</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-40">Actions</th>
-            </tr></thead>
+            <thead>
+              <tr className="bg-gray-50/80 border-b border-gray-700">
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Return ID</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Order</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Customer</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden lg:table-cell">Reason</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Date</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-40">Actions</th>
+              </tr>
+            </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map(r => (
-                <tr key={r.id} className="hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-medium text-white font-mono">RET-{r.id.toString().padStart(4, '0')}</td>
-                  <td className="px-4 py-3 text-gray-600">#{r.order_id?.toString().padStart(4, '0') || r.id}</td>
-                  <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell max-w-[200px] truncate">{r.reason || '-'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize ${statusColors[r.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>{r.status}</span>
+              {filtered.map((ret) => (
+                <tr key={ret.id} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-3 font-medium text-white font-mono">RET-{ret.id.toString().padStart(4, '0')}</td>
+                  <td className="px-4 py-3 text-gray-600">#{ret.order_id?.toString().padStart(4, '0') || ret.id}</td>
+                  <td className="px-4 py-3 text-gray-400 hidden md:table-cell">
+                    <div>{ret.customer_name || `User #${ret.user_id}`}</div>
+                    {ret.customer_email && <div className="text-xs">{ret.customer_email}</div>}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-400 hidden sm:table-cell">{new Date(r.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell max-w-[240px] truncate">{ret.reason || '-'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize ${statusColors[ret.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>
+                      {ret.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-400 hidden sm:table-cell">{new Date(ret.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => setDetailReturn(r)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="View"><Eye size={14} /></button>
-                      {!isStaff && r.status === 'pending' && (
+                      <button onClick={() => setDetailReturn(ret)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="View"><Eye size={14} /></button>
+                      {!isStaff && ret.status === 'pending' && (
                         <>
-                          <button onClick={() => handleStatusUpdate(r, 'approved')} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-green-50 text-gray-400 hover:text-green-600 transition-colors" title="Approve"><CheckCircle2 size={14} /></button>
-                          <button onClick={() => handleStatusUpdate(r, 'rejected')} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors" title="Reject"><XCircle size={14} /></button>
+                          <button onClick={() => handleStatusUpdate(ret, 'approved')} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-green-50 text-gray-400 hover:text-green-600 transition-colors" title="Approve"><CheckCircle2 size={14} /></button>
+                          <button onClick={() => handleStatusUpdate(ret, 'rejected')} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors" title="Reject"><XCircle size={14} /></button>
                         </>
-                      )}
-                      {!isStaff && (r.status === 'approved' || r.status === 'received') && (
-                        <button onClick={() => openRefund(r)} className="px-2 py-1 bg-green-50 hover:bg-green-100 text-green-700 text-[10px] font-semibold rounded-lg transition-colors">Refund</button>
                       )}
                     </div>
                   </td>
@@ -165,8 +179,7 @@ const ReturnsView = () => {
         )}
       </div>
 
-      {/* Detail Modal */}
-      <Modal isOpen={!!detailReturn} onClose={() => setDetailReturn(null)} title={`Return RET-${detailReturn?.id.toString().padStart(4, '0') || ''}`} size="lg">
+      <Modal isOpen={!!detailReturn} onClose={() => setDetailReturn(null)} title={`Return RET-${detailReturn?.id?.toString().padStart(4, '0') || ''}`} size="lg">
         {detailReturn && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -180,78 +193,40 @@ const ReturnsView = () => {
               </div>
               <div className="p-3 bg-gray-900 rounded-lg">
                 <p className="text-xs text-gray-400 mb-1">Customer</p>
-                <p className="text-sm font-medium text-white">User #{detailReturn.user_id}</p>
+                <p className="text-sm font-medium text-white">{detailReturn.customer_name || `User #${detailReturn.user_id}`}</p>
               </div>
             </div>
             <div className="p-3 bg-gray-900 rounded-lg">
               <p className="text-xs text-gray-400 mb-1">Reason</p>
-              <p className="text-sm text-white">{detailReturn.reason || 'No reason provided'}</p>
+              <p className="text-sm text-white whitespace-pre-wrap">{detailReturn.reason || 'No reason provided'}</p>
             </div>
             {detailReturn.items?.length > 0 && (
               <div>
                 <h4 className="text-xs font-medium text-gray-400 mb-2">Returned Items</h4>
                 <div className="border border-gray-700 rounded-lg divide-y divide-gray-50">
-                  {detailReturn.items.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-3">
+                  {detailReturn.items.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between p-3">
                       <div>
                         <p className="text-sm font-medium text-white">{item.name || item.product_name}</p>
                         <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
                       </div>
-                      <span className="text-sm font-bold">â‚±{((item.price || 0) * (item.quantity || 1)).toFixed(2)}</span>
+                      <span className="text-sm font-bold">₱{((item.price || 0) * (item.quantity || 1)).toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-            <div className="flex gap-2 pt-2">
-              {!isStaff && detailReturn.status === 'pending' && (
-                <>
-                  <button onClick={() => { handleStatusUpdate(detailReturn, 'approved'); setDetailReturn(null); }} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors">Approve</button>
-                  <button onClick={() => { handleStatusUpdate(detailReturn, 'rejected'); setDetailReturn(null); }} className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors">Reject</button>
-                </>
-              )}
-              {!isStaff && (detailReturn.status === 'approved' || detailReturn.status === 'received') && (
-                <button onClick={() => { setDetailReturn(null); openRefund(detailReturn); }} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"><DollarSign size={12} /> Process Refund</button>
-              )}
-            </div>
+            {!isStaff && detailReturn.status === 'pending' && (
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => { handleStatusUpdate(detailReturn, 'approved'); setDetailReturn(null); }} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors">Approve</button>
+                <button onClick={() => { handleStatusUpdate(detailReturn, 'rejected'); setDetailReturn(null); }} className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors">Reject</button>
+              </div>
+            )}
           </div>
         )}
       </Modal>
-
-      {/* Refund Modal â€” owner only */}
-      {!isStaff && <Modal isOpen={refundModal} onClose={() => setRefundModal(false)} title="Process Refund" size="sm">
-        <form onSubmit={handleRefund} className="space-y-4">
-          <div className="p-3 bg-gray-900 rounded-lg text-sm">
-            <span className="text-gray-400">Return </span><span className="font-bold text-white">RET-{refundTarget?.id.toString().padStart(4, '0')}</span>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Refund Amount (â‚±)</label>
-            <input type="number" step="0.01" min="0" value={refundAmount} onChange={e => setRefundAmount(e.target.value)} required
-              className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Refund Method</label>
-            <div className="space-y-1.5">
-              {[
-                { id: 'original', label: 'Original Payment Method' },
-                { id: 'store_credit', label: 'Store Credit' },
-                { id: 'exchange', label: 'Exchange' },
-              ].map(m => (
-                <button key={m.id} type="button" onClick={() => setRefundMethod(m.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium border transition-all ${refundMethod === m.id ? 'bg-red-500/10 border-red-200 text-orange-600' : 'bg-gray-800 border-gray-700 text-gray-600 hover:bg-gray-900'}`}>{m.label}</button>
-              ))}
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => setRefundModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-            <button type="submit" className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">Process Refund</button>
-          </div>
-        </form>
-      </Modal>}
     </div>
   );
 };
 
 export default ReturnsView;
-
-

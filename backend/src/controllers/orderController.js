@@ -1,6 +1,7 @@
 import pool from '../config/database.js';
 import Stripe from 'stripe';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
+import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const STAFF_ROLES = new Set(['admin', 'super_admin', 'owner', 'store_staff', 'cashier', 'manager']);
@@ -8,9 +9,10 @@ const STAFF_ROLES = new Set(['admin', 'super_admin', 'owner', 'store_staff', 'ca
 const ensureOrderAddressSnapshotColumns = async () => {
   await pool.query(`
     ALTER TABLE orders
-      ADD COLUMN IF NOT EXISTS shipping_address_snapshot JSONB;
+      ADD COLUMN IF NOT EXISTS shipping_address_snapshot JSONB,
+      ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP;
   `).catch((error) => {
-    console.error('Failed to ensure shipping_address_snapshot column:', error);
+    console.error('Failed to ensure order support columns:', error);
   });
 };
 ensureOrderAddressSnapshotColumns();
@@ -51,6 +53,42 @@ const mapOrderRecord = (order) => ({
   discount_amount: parseFloat(order.discount_amount || 0),
   shipping_address_snapshot: parseShippingAddressSnapshot(order),
 });
+
+const buildOrderReturnInfo = async (db, order, userId, isStaff) => {
+  const [settings, latestReturnResult] = await Promise.all([
+    getReturnSettings(db),
+    db.query(
+      `SELECT id, status, created_at, updated_at
+       FROM returns
+       WHERE order_id = $1
+         ${isStaff ? '' : 'AND user_id = $2'}
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      isStaff ? [order.id] : [order.id, userId]
+    ),
+  ]);
+
+  const latestReturn = latestReturnResult.rows[0] || null;
+  const eligibility = buildReturnEligibility({
+    order,
+    latestReturn,
+    returnWindowDays: settings.returnWindowDays,
+  });
+
+  return {
+    return_eligible: eligibility.eligible,
+    return_eligibility_message: eligibility.message,
+    return_window_days: eligibility.returnWindowDays,
+    return_deadline_at: eligibility.deadlineAt ? eligibility.deadlineAt.toISOString() : null,
+    delivered_at: eligibility.deliveredAt ? eligibility.deliveredAt.toISOString() : (order.delivered_at || null),
+    return_request: latestReturn ? {
+      id: latestReturn.id,
+      status: latestReturn.status,
+      created_at: latestReturn.created_at,
+      updated_at: latestReturn.updated_at,
+    } : null,
+  };
+};
 
 // Get all orders (admin)
 export const getAllOrders = async (req, res) => {
@@ -145,12 +183,15 @@ export const getOrderById = async (req, res) => {
          p.barcode as product_barcode
        FROM order_items oi
        LEFT JOIN products p ON oi.product_id = p.id
-       WHERE oi.order_id = $1`,
+      WHERE oi.order_id = $1`,
       [id]
     );
 
+    const returnInfo = await buildOrderReturnInfo(pool, order, userId, isStaff);
+
     res.json({
       ...mapOrderRecord(order),
+      ...returnInfo,
       items: itemsResult.rows.map(item => ({
         ...item,
         product_price: parseFloat(item.product_price)
@@ -167,16 +208,27 @@ export const updateOrderStatus = async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  const validStatuses = ['pending', 'paid', 'preparing', 'shipped', 'completed', 'cancelled'];
+  const validStatuses = ['pending', 'paid', 'preparing', 'shipped', 'completed', 'delivered', 'cancelled'];
 
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ message: 'Invalid status' });
   }
 
   try {
+    const deliveredAt = status === 'completed' || status === 'delivered'
+      ? new Date().toISOString()
+      : null;
     const result = await pool.query(
-      'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      [status, id]
+      `UPDATE orders
+       SET status = $1,
+           delivered_at = CASE
+             WHEN $1 IN ('completed', 'delivered') THEN COALESCE(delivered_at, $3::timestamp)
+             ELSE delivered_at
+           END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING *`,
+      [status, id, deliveredAt]
     );
 
     if (result.rows.length === 0) {

@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { Settings, Store, CreditCard, Truck, Mail, Receipt, Globe, Save, Bell, Loader2 } from 'lucide-react';
+import { Settings, Store, CreditCard, Truck, Mail, Receipt, Globe, Save, Bell, Loader2, RotateCcw } from 'lucide-react';
 import { getSystemSettings, updateSystemSettings } from '../../services/api';
 
 const SettingsView = () => {
@@ -35,6 +35,10 @@ const SettingsView = () => {
     promotions: false, fromName: '10th West Moto', fromEmail: '',
   });
 
+  const [returnsConfig, setReturnsConfig] = useState({
+    returnWindowDays: '15',
+  });
+
   const [home, setHome] = useState({
     heroAutoplay: true,
     heroIntervalMs: '5000',
@@ -47,7 +51,7 @@ const SettingsView = () => {
     (async () => {
       try {
         const allSettings = await getSystemSettings();
-        const parsed = { store: {}, tax: {}, shipping: {}, payment: {}, email: {}, home: {} };
+        const parsed = { store: {}, tax: {}, shipping: {}, payment: {}, email: {}, returns: {}, home: {} };
         (Array.isArray(allSettings) ? allSettings : []).forEach(s => {
           if (parsed[s.category]) parsed[s.category][s.key] = s.value;
         });
@@ -89,6 +93,9 @@ const SettingsView = () => {
           returnApproval: parsed.email.return_approval !== 'false',
           promotions: parsed.email.promotions === 'true',
         });
+        setReturnsConfig({
+          returnWindowDays: parsed.returns.return_window_days || '15',
+        });
         setHome({
           heroAutoplay: parsed.home.hero_autoplay !== 'false',
           heroIntervalMs: parsed.home.hero_interval_ms || '5000',
@@ -120,6 +127,9 @@ const SettingsView = () => {
           break;
         case 'email':
           settingsMap = { from_name: email.fromName, from_email: email.fromEmail, order_confirmation: String(email.orderConfirmation), shipping_update: String(email.shippingUpdate), return_approval: String(email.returnApproval), promotions: String(email.promotions) };
+          break;
+        case 'returns':
+          settingsMap = { return_window_days: returnsConfig.returnWindowDays };
           break;
         case 'home':
           settingsMap = {
@@ -153,6 +163,7 @@ const SettingsView = () => {
     { id: 'shipping', label: 'Shipping', icon: Truck },
     { id: 'payment', label: 'Payment', icon: CreditCard },
     { id: 'email', label: 'Email', icon: Mail },
+    { id: 'returns', label: 'Returns', icon: RotateCcw },
   ];
 
   if (loading) {
@@ -217,6 +228,24 @@ const SettingsView = () => {
               </div>
             </div>
             <div><Label>Logo URL</Label><input value={store.logoUrl} onChange={e => setStore(s => ({...s, logoUrl: e.target.value}))} className={inputClass} placeholder="https://..." /></div>
+          </div>
+        )}
+
+        {tab === 'returns' && (
+          <div className="space-y-4 max-w-xl">
+            <h3 className="font-display font-semibold text-white">Return Settings</h3>
+            <div>
+              <Label>Return Period (days)</Label>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                value={returnsConfig.returnWindowDays}
+                onChange={(e) => setReturnsConfig((prev) => ({ ...prev, returnWindowDays: e.target.value }))}
+                className={inputClass}
+              />
+              <p className="text-xs text-gray-400 mt-2">Delivered orders can request a return within this window.</p>
+            </div>
           </div>
         )}
 
