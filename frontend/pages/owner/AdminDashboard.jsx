@@ -14,7 +14,7 @@ import PromotionsView from './PromotionsView';
 import ContentView from './ContentView';
 
 const AdminDashboard = ({ user, onLogout }) => {
-  const canAccessAdmin = user?.role === 'owner' || user?.role === 'store_staff';
+  const canAccessAdmin = user?.role === 'owner' || user?.role === 'store_staff' || user?.role === 'admin';
 
   if (!canAccessAdmin) {
     return <Navigate to="/login" replace />;

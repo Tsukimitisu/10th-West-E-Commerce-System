@@ -5,6 +5,17 @@ import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
+const ensureReturnReviewColumns = async () => {
+  await pool.query(`
+    ALTER TABLE returns
+      ADD COLUMN IF NOT EXISTS reviewed_by INTEGER REFERENCES users(id),
+      ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP;
+  `).catch((error) => {
+    console.error('Failed to ensure return review columns:', error);
+  });
+};
+ensureReturnReviewColumns();
+
 const parseReturnItems = (value) => {
   if (Array.isArray(value)) return value;
 
@@ -217,9 +228,11 @@ export const getAllReturns = async (req, res) => {
       `SELECT r.*, 
               u.name as customer_name, 
               u.email as customer_email,
+              reviewer.name as reviewed_by_name,
               o.total_amount as order_total
        FROM returns r
        LEFT JOIN users u ON r.user_id = u.id
+       LEFT JOIN users reviewer ON r.reviewed_by = reviewer.id
        LEFT JOIN orders o ON r.order_id = o.id
        ORDER BY r.created_at DESC`
     );
@@ -242,10 +255,12 @@ export const getReturnById = async (req, res) => {
       `SELECT r.*, 
               u.name as customer_name, 
               u.email as customer_email,
+              reviewer.name as reviewed_by_name,
               o.total_amount as order_total,
               o.payment_intent_id
        FROM returns r
        LEFT JOIN users u ON r.user_id = u.id
+       LEFT JOIN users reviewer ON r.reviewed_by = reviewer.id
        LEFT JOIN orders o ON r.order_id = o.id
        WHERE r.id = $1`,
       [id]
@@ -296,8 +311,14 @@ export const approveReturn = async (req, res) => {
     }
 
     const result = await client.query(
-      'UPDATE returns SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      ['approved', id]
+      `UPDATE returns
+       SET status = $1,
+           reviewed_by = $3,
+           reviewed_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING *`,
+      ['approved', id, req.user.id]
     );
 
     await client.query('COMMIT');
@@ -343,8 +364,14 @@ export const rejectReturn = async (req, res) => {
     }
 
     const result = await client.query(
-      'UPDATE returns SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      ['rejected', id]
+      `UPDATE returns
+       SET status = $1,
+           reviewed_by = $3,
+           reviewed_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING *`,
+      ['rejected', id, req.user.id]
     );
 
     await client.query('COMMIT');

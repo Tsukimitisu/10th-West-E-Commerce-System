@@ -44,6 +44,7 @@ const Login = ({ onLogin }) => {
 
       if (role === 'super_admin') redirect = '/super-admin';
       else if (role === 'owner') redirect = '/admin';
+      else if (role === 'admin') redirect = '/admin';
       else if (role === 'store_staff') redirect = '/admin';
       else if (defaultRedirect === '/') redirect = '/';
       navigate(redirect);

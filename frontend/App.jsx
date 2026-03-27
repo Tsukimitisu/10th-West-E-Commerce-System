@@ -63,7 +63,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
           <Route path="/" element={<Home />} />
           <Route path="/shop" element={<ProductList />} />
           <Route path="/login" element={
-            user && (user.role === Role.OWNER || user.role === Role.STORE_STAFF)
+            user && (user.role === Role.OWNER || user.role === Role.STORE_STAFF || user.role === Role.ADMIN)
               ? <Navigate to="/admin" replace />
               : user && user.role === Role.SUPER_ADMIN
                 ? <Navigate to="/super-admin" replace />
@@ -92,7 +92,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
           <Route path="/my-returns" element={user ? <MyReturns /> : <Navigate to="/login" />} />
           <Route path="/addresses" element={user ? <AddressBook /> : <Navigate to="/login" />} />
           <Route path="/wishlist" element={user ? <Wishlist /> : <Navigate to="/login" />} />
-          <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
+          <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF || user?.role === Role.ADMIN ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
           <Route path="/super-admin" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
           <Route path="/pos" element={(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) ? <PosTerminal /> : <Navigate to="/login" replace />} />
         </Routes>

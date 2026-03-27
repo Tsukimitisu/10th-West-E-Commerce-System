@@ -33,9 +33,10 @@ const createNavItems = (badges = {}) => [
 // Nav items store_staff can see
 const STORE_STAFF_NAV = ['inventory', 'orders', 'pos', 'returns'];
 
-// Nav items owner can see (business management only)
+// Nav items owner/admin can see (business management only)
 const OWNER_NAV = [
   'dashboard', 'products', 'inventory', 'orders', 'customers',
+  'returns',
   'staff', 'reports',
   'promotions', 'banners', 'content'
 ];
@@ -131,7 +132,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   const allNavItems = createNavItems(badges);
   const navItems = user?.role === 'store_staff'
     ? allNavItems.filter(item => STORE_STAFF_NAV.includes(item.id))
-    : user?.role === 'owner'
+    : user?.role === 'owner' || user?.role === 'admin'
       ? allNavItems.filter(item => OWNER_NAV.includes(item.id))
       : [];
 

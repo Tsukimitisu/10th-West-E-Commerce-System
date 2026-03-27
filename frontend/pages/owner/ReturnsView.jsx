@@ -196,6 +196,18 @@ const ReturnsView = () => {
                 <p className="text-sm font-medium text-white">{detailReturn.customer_name || `User #${detailReturn.user_id}`}</p>
               </div>
             </div>
+            {(detailReturn.reviewed_by_name || detailReturn.reviewed_at) && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-gray-900 rounded-lg">
+                  <p className="text-xs text-gray-400 mb-1">Reviewed By</p>
+                  <p className="text-sm font-medium text-white">{detailReturn.reviewed_by_name || `User #${detailReturn.reviewed_by}`}</p>
+                </div>
+                <div className="p-3 bg-gray-900 rounded-lg">
+                  <p className="text-xs text-gray-400 mb-1">Reviewed At</p>
+                  <p className="text-sm font-medium text-white">{detailReturn.reviewed_at ? new Date(detailReturn.reviewed_at).toLocaleString() : '-'}</p>
+                </div>
+              </div>
+            )}
             <div className="p-3 bg-gray-900 rounded-lg">
               <p className="text-xs text-gray-400 mb-1">Reason</p>
               <p className="text-sm text-white whitespace-pre-wrap">{detailReturn.reason || 'No reason provided'}</p>
