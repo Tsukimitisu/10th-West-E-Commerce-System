@@ -134,7 +134,7 @@ const ProductDetail = () => {
     } catch {}
   };
 
-  const formatPrice = (p) => `â‚±${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const formatPrice = (p) => `\u20B1${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
   if (loading) {
     return (
@@ -361,7 +361,7 @@ const ProductDetail = () => {
               <div className="text-center">
                 <Truck size={20} className="mx-auto text-gray-600 mb-1" />
                 <p className="text-xs text-gray-600 font-medium">Free Shipping</p>
-                <p className="text-[10px] text-gray-400">Orders â‚±2,500+</p>
+                <p className="text-[10px] text-gray-400">Orders \u20B12,500+</p>
               </div>
               <div className="text-center border-x border-gray-700">
                 <Shield size={20} className="mx-auto text-gray-600 mb-1" />

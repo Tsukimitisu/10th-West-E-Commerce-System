@@ -5,6 +5,7 @@ import {
   RotateCcw, UserCog, BarChart3, Users,
   LogOut, Bell, Search, Menu, X,
   ChevronLeft, ExternalLink, Wifi, WifiOff, Image, Tag, Newspaper,
+  Settings, CircleHelp, House,
   AlertTriangle, CheckCircle
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
@@ -161,17 +162,17 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   };
 
   const SidebarContent = ({ mobile = false }) => (
-    <>
+    <div className="h-full flex flex-col rounded-2xl border border-white/5 bg-gradient-to-b from-[#1a1d23] to-[#111318] shadow-[0_18px_45px_rgba(0,0,0,0.5)] overflow-hidden">
       {/* Logo */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-700 flex-shrink-0">
+      <div className="h-16 flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-red-500/100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-extrabold text-sm">10</span>
+          <div className="w-8 h-8 rounded-lg bg-[#ff5f3c] flex items-center justify-center flex-shrink-0 shadow-[0_8px_16px_rgba(255,95,60,0.35)]">
+            <House size={14} className="text-white" />
           </div>
           {(!collapsed || mobile) && (
             <div>
               <h1 className="font-display font-bold text-sm text-white leading-none">10TH WEST</h1>
-              <p className="text-[10px] text-gray-400 font-medium tracking-wide">ADMIN PANEL</p>
+              <p className="text-[10px] text-gray-400 font-medium tracking-wide">Metric Flow</p>
             </div>
           )}
         </div>
@@ -179,26 +180,26 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 py-2 px-2 space-y-1 overflow-y-auto">
         {navItems.map((item, idx) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;
           return (
             <React.Fragment key={item.id}>
-              {item.divider && idx > 0 && <div className="my-2 border-t border-gray-700" />}
+              {item.divider && idx > 0 && <div className="my-2 border-t border-white/10" />}
               <button
                 onClick={() => handleNav(item)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all
-                  ${isActive ? 'bg-red-500/10 text-red-500 shadow-sm shadow-orange-100/50' : 'text-gray-600 hover:bg-gray-900 hover:text-white'}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all
+                  ${isActive ? 'bg-[#2a2d34] text-[#ff6b47] border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-gray-300 hover:bg-[#20242c] hover:text-white'}
                   ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
                 title={collapsed && !mobile ? item.label : undefined}
               >
-                <Icon size={18} className={`flex-shrink-0 ${isActive ? 'text-red-500' : 'text-gray-400'}`} />
+                <Icon size={17} className={`flex-shrink-0 ${isActive ? 'text-[#ff6b47]' : 'text-gray-400'}`} />
                 {(!collapsed || mobile) && (
                   <>
                     <span className="flex-1 text-left">{item.label}</span>
-                    {item.badge ? <span className="min-w-[20px] h-5 bg-red-500/100 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">{item.badge}</span> : null}
-                    {item.external && <ExternalLink size={12} className="text-gray-300" />}
+                    {item.badge ? <span className="min-w-[20px] h-5 bg-[#ff5f3c] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">{item.badge}</span> : null}
+                    {item.external && <ExternalLink size={12} className="text-gray-400" />}
                   </>
                 )}
               </button>
@@ -207,10 +208,28 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
         })}
       </nav>
 
+      {/* Bottom utility */}
+      <div className="px-2 pb-2 space-y-1 flex-shrink-0">
+        <button
+          type="button"
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all text-gray-300 hover:bg-[#20242c] hover:text-white ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
+        >
+          <Settings size={17} className="flex-shrink-0 text-gray-400" />
+          {(!collapsed || mobile) && <span className="flex-1 text-left">Settings</span>}
+        </button>
+        <button
+          type="button"
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all text-gray-300 hover:bg-[#20242c] hover:text-white ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
+        >
+          <CircleHelp size={17} className="flex-shrink-0 text-gray-400" />
+          {(!collapsed || mobile) && <span className="flex-1 text-left">Help Center</span>}
+        </button>
+      </div>
+
       {/* User */}
-      <div className="p-3 border-t border-gray-700 flex-shrink-0">
+      <div className="p-3 border-t border-white/10 flex-shrink-0">
         <div className={`flex items-center gap-3 ${collapsed && !mobile ? 'justify-center' : ''}`}>
-          <div className="w-8 h-8 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+          <div className="w-8 h-8 bg-[#ff5f3c]/20 text-[#ff6b47] rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
             {user?.name?.charAt(0)?.toUpperCase() || 'A'}
           </div>
           {(!collapsed || mobile) && (
@@ -219,18 +238,18 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
               <p className="text-[10px] text-gray-400 capitalize">{user?.role}</p>
             </div>
           )}
-          <button onClick={handleLogout} className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0" title="Sign out">
+          <button onClick={handleLogout} className="text-gray-300 hover:text-[#ff6b47] transition-colors flex-shrink-0" title="Sign out">
             <LogOut size={16} />
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 
   return (
-    <div className="h-screen flex bg-gray-900 overflow-hidden">
+    <div className="h-screen flex bg-[#0b0d11] overflow-hidden">
       {/* Desktop Sidebar */}
-      <aside className={`${collapsed ? 'w-[72px]' : 'w-60'} bg-gray-800 border-r border-gray-700 flex-col transition-all duration-200 hidden lg:flex`}>
+      <aside className={`${collapsed ? 'w-[92px]' : 'w-[272px]'} bg-[#0b0d11] p-3 flex-col transition-all duration-200 hidden lg:flex`}>
         <SidebarContent />
       </aside>
 
@@ -238,15 +257,15 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="fixed inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <aside className="fixed left-0 top-0 bottom-0 w-64 bg-gray-800 shadow-2xl z-50 flex flex-col">
+          <aside className="fixed left-0 top-0 bottom-0 w-72 bg-[#0b0d11] p-3 shadow-2xl z-50 flex flex-col">
             <SidebarContent mobile />
           </aside>
         </div>
       )}
 
-      {/* Main */}
+      {/* Main */}  
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 lg:px-6 flex-shrink-0">
+        <header className="h-14  border-b border-gray-700 flex items-center justify-between px-4 lg:px-6 flex-shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => setCollapsed(!collapsed)} className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
               <ChevronLeft size={18} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />

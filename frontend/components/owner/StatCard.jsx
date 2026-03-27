@@ -2,7 +2,7 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const StatCard = ({ icon, label, value, change, changeLabel, color = 'bg-red-500/20 text-red-400' }) => (
-  <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 hover:shadow-sm transition-shadow">
+  <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5 p-5 shadow-[0_18px_45px_rgba(0,0,0,0.5)]">
     <div className="flex items-start justify-between mb-3">
       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}>
         {icon}
