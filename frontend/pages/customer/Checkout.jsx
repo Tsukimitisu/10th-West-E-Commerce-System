@@ -2,19 +2,21 @@
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { getAddresses, createOrder, createPaymentIntent, getProductById } from '../../services/api';
+import { getAddresses, createOrder, createPaymentIntent, getProductById, validateDiscountCode } from '../../services/api';
 import AddressDropdowns from '../../components/AddressDropdowns';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
+
+const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 
 const Checkout = () => {
   const {
     items: allCartItems,
     selectedItemIds,
-    discount,
-    discountAmount,
-    applyDiscount,
-    removeDiscount,
+    discount: cartDiscount,
+    discountAmount: cartDiscountAmount,
+    applyDiscount: applyCartDiscount,
+    removeDiscount: removeCartDiscount,
     clearSelectedItems,
     updateQuantity,
     getCheckoutSelection,
@@ -39,39 +41,44 @@ const Checkout = () => {
     return Array.from(new Set(preferredSelection));
   });
 
-  const buyNowItemStore = useMemo(() => {
+  const buyNowSessionStore = useMemo(() => {
     try {
-      const stored = sessionStorage.getItem('buyNowItem');
+      const stored = sessionStorage.getItem(BUY_NOW_SESSION_KEY);
       return stored ? JSON.parse(stored) : null;
     } catch {
       return null;
     }
   }, []);
 
-  const isBuyNow = !!(location.state?.buyNowItem || (isBuyNowQuery && buyNowItemStore));
-  
-  const buyNowItem = useMemo(() => {
-    if (location.state?.buyNowItem) {
-      sessionStorage.setItem('buyNowItem', JSON.stringify(location.state.buyNowItem));
-      return location.state.buyNowItem;
-    }
-    
-    if (isBuyNowQuery && buyNowItemStore) {
-      return buyNowItemStore;
+  const buyNowSession = useMemo(() => {
+    if (!isBuyNowQuery || !buyNowSessionStore?.item) return null;
+
+    const routeSessionId = location.state?.buyNowSessionId;
+    if (routeSessionId && buyNowSessionStore.sessionId !== routeSessionId) {
+      return null;
     }
 
-    // Only clear if we landed here normally without the query or state
-    sessionStorage.removeItem('buyNowItem');
-    return null;
-  }, [location.state, isBuyNowQuery, buyNowItemStore]);
+    return buyNowSessionStore;
+  }, [isBuyNowQuery, buyNowSessionStore, location.state]);
+
+  const isBuyNow = !!buyNowSession?.item;
+  const buyNowItem = buyNowSession?.item || null;
 
   const [buyNowQty, setBuyNowQty] = useState(1);
+  const [buyNowDiscount, setBuyNowDiscount] = useState(null);
+  const [buyNowDiscountAmount, setBuyNowDiscountAmount] = useState(0);
 
   useEffect(() => {
     if (buyNowItem) {
       setBuyNowQty(buyNowItem.quantity || 1);
     }
   }, [buyNowItem]);
+
+  useEffect(() => {
+    if (!isBuyNowQuery) {
+      sessionStorage.removeItem(BUY_NOW_SESSION_KEY);
+    }
+  }, [isBuyNowQuery]);
 
   useEffect(() => {
     if (!isBuyNow && checkoutItemIds.length === 0) {
@@ -86,6 +93,8 @@ const Checkout = () => {
   }, [allCartItems, checkoutItemIds, isBuyNow]);
 
   const items = isBuyNow && buyNowItem ? [{ ...buyNowItem, quantity: buyNowQty }] : verifiedCartItems;
+  const activeDiscount = isBuyNow ? buyNowDiscount : cartDiscount;
+  const activeDiscountAmount = isBuyNow ? buyNowDiscountAmount : cartDiscountAmount;
   
   const calculatedCartSubtotal = useMemo(() => {
     return verifiedCartItems.reduce((sum, item) => {
@@ -94,12 +103,12 @@ const Checkout = () => {
     }, 0);
   }, [verifiedCartItems]);
 
-  const calculatedCartTotal = calculatedCartSubtotal - (discountAmount || 0);
+  const calculatedCartTotal = calculatedCartSubtotal - (activeDiscountAmount || 0);
 
   const subtotal = isBuyNow && buyNowItem
     ? ((buyNowItem.product.is_on_sale && buyNowItem.product.sale_price ? buyNowItem.product.sale_price : buyNowItem.product.price) * buyNowQty)
     : calculatedCartSubtotal;
-  const total = isBuyNow ? subtotal - (discountAmount || 0) : calculatedCartTotal;
+  const total = isBuyNow ? subtotal - (activeDiscountAmount || 0) : calculatedCartTotal;
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showNewAddress, setShowNewAddress] = useState(false);
@@ -221,10 +230,26 @@ const Checkout = () => {
   const handleApplyPromo = async () => {
     setPromoError('');
     try {
-      await applyDiscount(promoCode);
+      if (isBuyNow) {
+        const result = await validateDiscountCode(promoCode, subtotal);
+        setBuyNowDiscount(result?.discount || result);
+        setBuyNowDiscountAmount(Number(result?.discountAmount ?? 0));
+      } else {
+        await applyCartDiscount(promoCode);
+      }
     } catch (e) {
       setPromoError(e.message || 'Invalid promo code');
     }
+  };
+
+  const handleRemovePromo = () => {
+    if (isBuyNow) {
+      setBuyNowDiscount(null);
+      setBuyNowDiscountAmount(0);
+      setPromoError('');
+      return;
+    }
+    removeCartDiscount();
   };
 
   const validateStockBeforeCheckout = async () => {
@@ -390,14 +415,15 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         total_amount: grandTotal,
         payment_method: paymentMethod,
         guest_info: !u ? { name: form.name, email: form.email } : undefined,
-        discount_amount: discountAmount,
-        promo_code_used: discount?.code,
+        discount_amount: activeDiscountAmount,
+        promo_code_used: activeDiscount?.code,
       };
 
       const order = await createOrder(orderData);
       if (!isBuyNow) {
         await clearSelectedItems();
       } else {
+        sessionStorage.removeItem(BUY_NOW_SESSION_KEY);
         clearCheckoutSelection();
       }
       navigate(`/order-confirmation/${order.id}`);
@@ -427,7 +453,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
           <ChevronRight size={14} />
           {isBuyNow && items.length > 0 ? (
             <>
-              <Link to={`/product/${items[0].productId}`} className="hover:text-red-500">Product</Link>
+              <Link to={buyNowSession?.returnPath || `/products/${items[0].productId}`} className="hover:text-red-500">Product</Link>
               <ChevronRight size={14} />
             </>
           ) : (
@@ -799,17 +825,17 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                     <button type="button" onClick={handleApplyPromo} className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors">Apply</button>
                   </div>
                   {promoError && <p className="text-xs text-red-500 mt-1">{promoError}</p>}
-                  {discount && (
+                  {activeDiscount && (
                     <div className="flex items-center justify-between mt-2 p-2 bg-green-50 rounded-lg">
-                      <span className="text-xs text-green-700 font-medium">{discount.code} applied!</span>
-                      <button type="button" onClick={removeDiscount} className="text-xs text-green-600 hover:text-green-800"><X size={14} /></button>
+                      <span className="text-xs text-green-700 font-medium">{activeDiscount.code} applied!</span>
+                      <button type="button" onClick={handleRemovePromo} className="text-xs text-green-600 hover:text-green-800"><X size={14} /></button>
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
-                  {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(discountAmount)}</span></div>}
+                  {activeDiscountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(activeDiscountAmount)}</span></div>}
                   <div className="flex justify-between text-gray-600"><span>Shipping</span><span className={shippingCost === 0 ? 'text-green-600 font-medium' : ''}>{shippingCost === 0 ? 'Free' : formatPrice(shippingCost)}</span></div>
                   <div className="flex justify-between text-gray-400 text-xs"><span>VAT (12% included)</span><span>{formatPrice((grandTotal / 1.12) * 0.12)}</span></div>
                   <div className="border-t border-gray-700 pt-2 flex justify-between"><span className="font-semibold text-white">Total</span><span className="font-bold text-xl text-white">{formatPrice(grandTotal)}</span></div>

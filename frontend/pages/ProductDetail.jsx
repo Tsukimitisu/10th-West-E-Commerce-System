@@ -7,6 +7,8 @@ import ProductCard from '../components/ProductCard';
 import StarRating from '../components/StarRating';
 import ReviewCard from '../components/ReviewCard';
 
+const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
+
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -106,19 +108,24 @@ const ProductDetail = () => {
       return;
     }
 
-    const buyNowItem = {
-      productId: product.id,
-      product,
-      quantity,
+    const buyNowSession = {
+      sessionId: `${product.id}-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      returnPath: `/products/${product.id}`,
+      item: {
+        productId: product.id,
+        product,
+        quantity,
+      },
     };
+
+    sessionStorage.setItem(BUY_NOW_SESSION_KEY, JSON.stringify(buyNowSession));
 
     const user = localStorage.getItem('shopCoreUser');
     if (!user) {
-      sessionStorage.setItem('buyNowItem', JSON.stringify(buyNowItem));
       navigate('/login?redirect=/checkout&buyNow=1');
     } else {
-      sessionStorage.setItem('buyNowItem', JSON.stringify(buyNowItem));
-      navigate('/checkout?buyNow=1', { state: { buyNowItem } });
+      navigate('/checkout?buyNow=1', { state: { buyNowSessionId: buyNowSession.sessionId } });
     }
   };
 
