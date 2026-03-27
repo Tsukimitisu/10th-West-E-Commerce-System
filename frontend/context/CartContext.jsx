@@ -64,6 +64,7 @@ export const CartProvider = ({ children }) => {
   };
 
   const getSelectedKey = () => `${getCartKey()}_selected`;
+  const getCheckoutSelectionKey = () => `${getCartKey()}_checkout_selection`;
   const [cartScopeKey, setCartScopeKey] = useState(getCartKey());
 
   const getOrCreateSupabaseCartId = async (userId) => {
@@ -138,6 +139,31 @@ export const CartProvider = ({ children }) => {
     }
 
     return headers;
+  };
+
+  const normalizeSelectionIds = (ids, sourceItems = items) => {
+    const validIds = new Set(sourceItems.map((item) => item.productId));
+    return Array.from(new Set(Array.isArray(ids) ? ids : [])).filter((id) => validIds.has(id));
+  };
+
+  const getCheckoutSelection = () => {
+    try {
+      const raw = sessionStorage.getItem(getCheckoutSelectionKey());
+      if (!raw) return [];
+      return normalizeSelectionIds(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  };
+
+  const persistCheckoutSelection = (ids = selectedItemIds) => {
+    const normalized = normalizeSelectionIds(ids);
+    sessionStorage.setItem(getCheckoutSelectionKey(), JSON.stringify(normalized));
+    return normalized;
+  };
+
+  const clearCheckoutSelection = () => {
+    sessionStorage.removeItem(getCheckoutSelectionKey());
   };
 
   // Sync cart from backend when user logs in
@@ -263,6 +289,8 @@ export const CartProvider = ({ children }) => {
         setSelectedItemIds(cleanSelected);
       }
       sessionStorage.setItem(getSelectedKey(), JSON.stringify(cleanSelected));
+      const cleanCheckoutSelection = getCheckoutSelection().filter((id) => itemIds.has(id));
+      sessionStorage.setItem(getCheckoutSelectionKey(), JSON.stringify(cleanCheckoutSelection));
     }
   }, [items, selectedItemIds, initialized, hasLoadedSelection, cartScopeKey]);
 
@@ -689,6 +717,7 @@ export const CartProvider = ({ children }) => {
           setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
           setSelectedItemIds([]);
           setError(null);
+          clearCheckoutSelection();
           
           // Update local storage
           const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
@@ -719,6 +748,7 @@ export const CartProvider = ({ children }) => {
         setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
         setSelectedItemIds([]);
         setError(null);
+        clearCheckoutSelection();
         
         // Update local storage
         const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
@@ -738,6 +768,7 @@ export const CartProvider = ({ children }) => {
     setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
     setSelectedItemIds([]);
     setError(null);
+    clearCheckoutSelection();
     const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
     sessionStorage.setItem(getCartKey(), JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
   };
@@ -747,15 +778,16 @@ export const CartProvider = ({ children }) => {
     setSelectedItemIds([]);
     setDiscount(null);
     setError(null);
+    clearCheckoutSelection();
     sessionStorage.setItem(getCartKey(), JSON.stringify([]));
   };
 
     const toggleSelection = (productId) => {
-        setSelectedItemIds(prev => 
-            prev.includes(productId) 
-                ? prev.filter(id => id !== productId) 
+        setSelectedItemIds(prev => normalizeSelectionIds(
+            prev.includes(productId)
+                ? prev.filter(id => id !== productId)
                 : [...prev, productId]
-        );
+        ));
     };
 
     const toggleAllSelection = (selectAll) => {
@@ -770,6 +802,7 @@ export const CartProvider = ({ children }) => {
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);      
     
     const selectedItems = items.filter(i => selectedItemIds.includes(i.productId));
+    const selectedItemCount = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
 
     const subtotal = selectedItems.reduce((sum, item) => {
         const price = item.product.is_on_sale ? item.product.sale_price : item.product.price;
@@ -810,6 +843,7 @@ export const CartProvider = ({ children }) => {
         items,
         selectedItemIds,
         selectedItems,
+        selectedItemCount,
         toggleSelection,
         toggleAllSelection,
         addToCart,
@@ -824,6 +858,9 @@ export const CartProvider = ({ children }) => {
         discountAmount,
         applyDiscount,
         removeDiscount,
+        persistCheckoutSelection,
+        getCheckoutSelection,
+        clearCheckoutSelection,
         error,
         loading,
         syncCart

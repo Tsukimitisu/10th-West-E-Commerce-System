@@ -8,19 +8,36 @@ import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
 
 const Checkout = () => {
-  const { selectedItems: cartItems, subtotal: cartSubtotal, total: cartTotal, discount, discountAmount, applyDiscount, removeDiscount, clearSelectedItems, updateQuantity } = useCart();
-
-  // Bulletproof snapshot of intended checkout items to prevent unselected items from appearing during context updates
-  const [checkoutItemIds] = useState(() => cartItems.map(i => i.productId));
-  
-  const verifiedCartItems = useMemo(() => {
-    return cartItems.filter(i => checkoutItemIds.includes(i.productId));
-  }, [cartItems, checkoutItemIds]);
+  const {
+    items: allCartItems,
+    selectedItemIds,
+    discount,
+    discountAmount,
+    applyDiscount,
+    removeDiscount,
+    clearSelectedItems,
+    updateQuantity,
+    getCheckoutSelection,
+    clearCheckoutSelection,
+  } = useCart();
 
   const navigate = useNavigate();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const isBuyNowQuery = searchParams.get('buyNow') === '1';
+  const [checkoutItemIds] = useState(() => {
+    const routeSelection = Array.isArray(location.state?.checkoutSelectionIds)
+      ? location.state.checkoutSelectionIds
+      : null;
+    const storedSelection = getCheckoutSelection();
+    const fallbackSelection = Array.isArray(selectedItemIds) ? selectedItemIds : [];
+    const preferredSelection = routeSelection?.length
+      ? routeSelection
+      : storedSelection?.length
+        ? storedSelection
+        : fallbackSelection;
+    return Array.from(new Set(preferredSelection));
+  });
 
   const buyNowItemStore = useMemo(() => {
     try {
@@ -55,6 +72,18 @@ const Checkout = () => {
       setBuyNowQty(buyNowItem.quantity || 1);
     }
   }, [buyNowItem]);
+
+  useEffect(() => {
+    if (!isBuyNow && checkoutItemIds.length === 0) {
+      clearCheckoutSelection();
+    }
+  }, [clearCheckoutSelection, checkoutItemIds, isBuyNow]);
+
+  const verifiedCartItems = useMemo(() => {
+    if (isBuyNow) return [];
+    const allowedIds = new Set(checkoutItemIds);
+    return allCartItems.filter((item) => allowedIds.has(item.productId));
+  }, [allCartItems, checkoutItemIds, isBuyNow]);
 
   const items = isBuyNow && buyNowItem ? [{ ...buyNowItem, quantity: buyNowQty }] : verifiedCartItems;
   
@@ -351,6 +380,8 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
       const order = await createOrder(orderData);
       if (!isBuyNow) {
         await clearSelectedItems();
+      } else {
+        clearCheckoutSelection();
       }
       navigate(`/order-confirmation/${order.id}`);
     } catch (err) {

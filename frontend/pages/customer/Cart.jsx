@@ -7,11 +7,13 @@ const Cart = () => {
   const { 
     items, 
     selectedItemIds, 
+    selectedItemCount,
     toggleSelection, 
     toggleAllSelection, 
     updateQuantity, 
     removeFromCart, 
     clearCart, 
+    persistCheckoutSelection,
     subtotal, 
     discount, 
     discountAmount, 
@@ -25,12 +27,17 @@ const Cart = () => {
   const formatPrice = (p) => `₱${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
   const handleCheckout = () => {
+    const checkoutSelectionIds = persistCheckoutSelection();
+    if (checkoutSelectionIds.length === 0) {
+      return;
+    }
+
     const user = localStorage.getItem('shopCoreUser');
     if (!user) {
       setShowLoginModal(true);
       return;
     }
-    navigate('/checkout');
+    navigate('/checkout', { state: { checkoutSelectionIds } });
   };
 
   const clearQuantityError = (productId) => {
@@ -253,7 +260,7 @@ const Cart = () => {
                 <h2 className="font-display font-semibold text-lg text-white mb-4">Order Summary</h2>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between text-gray-600">
-                    <span>Subtotal ({items.length} items)</span>
+                    <span>Subtotal ({selectedItemCount} items)</span>
                     <span className="font-medium text-white">{formatPrice(subtotal)}</span>
                   </div>
                   {discountAmount > 0 && (
