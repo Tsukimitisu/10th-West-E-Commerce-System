@@ -176,7 +176,8 @@ export const register = async (req, res) => {
     const newUserResult = await pool.query(
         `INSERT INTO users (name, email, password_hash, role, email_verified, consent_given_at, age_confirmed_at, email_verification_token, email_verification_expires)
          VALUES ($1, $2, $3, 'customer', false, NOW(), NOW(), $4, $5) RETURNING id`,
-        [name, email, passwordHash, verificationTokenHash, expiresAt]\n      );
+        [name, email, passwordHash, verificationTokenHash, expiresAt]
+      );
 
     const transporter = createTransporter();
     const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
