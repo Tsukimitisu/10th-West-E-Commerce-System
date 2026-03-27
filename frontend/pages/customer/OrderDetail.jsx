@@ -70,6 +70,19 @@ const OrderDetail = () => {
   const step = stepForStatus[order.status] ?? 0;
   const date = new Date(order.created_at || order.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   const items = order.items || [];
+  const shippingSnapshot = order.shipping_address_snapshot || {};
+  const shippingAddressLines = [
+    shippingSnapshot.recipient_name,
+    shippingSnapshot.street,
+    shippingSnapshot.barangay,
+    [shippingSnapshot.city, shippingSnapshot.state, shippingSnapshot.postal_code].filter(Boolean).join(', '),
+    shippingSnapshot.country,
+  ].map((line) => (typeof line === 'string' ? line.trim() : line)).filter(Boolean);
+  const fallbackAddressLines = typeof order.shipping_address === 'string'
+    ? order.shipping_address.split(', ').map((part) => part.trim()).filter(Boolean)
+    : [];
+  const addressLines = shippingAddressLines.length > 0 ? shippingAddressLines : fallbackAddressLines;
+  const shippingPhone = shippingSnapshot.phone || order.shipping_phone || order.address?.phone || '';
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -233,16 +246,16 @@ const OrderDetail = () => {
           {/* Shipping Address */}
           <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
             <h3 className="font-semibold text-white text-sm mb-2 flex items-center gap-1.5"><MapPin size={14} /> Shipping Address</h3>
-            <p className="text-sm text-gray-600 leading-relaxed">
-                {order.shipping_address ? (
-                  order.shipping_address.split(', ').map((part, index) => (
-                    <span key={index}>{part}<br /></span>
-                  ))
-                ) : (
-                  <span className="text-gray-500">No address provided<br /></span>
-                )}
-                {order.shipping_phone || order.address?.phone ? <span>{order.shipping_phone || order.address?.phone}</span> : null}
-            </p>
+            <div className="text-sm text-gray-600 leading-relaxed">
+              {addressLines.length > 0 ? (
+                addressLines.map((line, index) => (
+                  <div key={index}>{line}</div>
+                ))
+              ) : (
+                <div className="text-gray-500">No address provided</div>
+              )}
+              {shippingPhone && <div>{shippingPhone}</div>}
+            </div>
           </div>
 
           {/* Payment */}

@@ -139,6 +139,7 @@ const createTables = async () => {
         total_amount DECIMAL(10, 2) NOT NULL,
         status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'completed', 'cancelled')),
         shipping_address TEXT NOT NULL,
+        shipping_address_snapshot JSONB,
         shipping_lat DECIMAL(10, 7),
         shipping_lng DECIMAL(10, 7),
         source VARCHAR(20) DEFAULT 'online' CHECK (source IN ('online', 'pos')),
@@ -200,6 +201,10 @@ const createTables = async () => {
     console.log('✅ Addresses table created');
 
     // Backfill shipping coordinates for existing deployments
+    await client.query(`
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS shipping_address_snapshot JSONB;
+    `);
     await client.query(`
       ALTER TABLE orders
       ADD COLUMN IF NOT EXISTS shipping_lat DECIMAL(10, 7);

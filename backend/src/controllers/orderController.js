@@ -5,6 +5,53 @@ import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const STAFF_ROLES = new Set(['admin', 'super_admin', 'owner', 'store_staff', 'cashier', 'manager']);
 
+const ensureOrderAddressSnapshotColumns = async () => {
+  await pool.query(`
+    ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS shipping_address_snapshot JSONB;
+  `).catch((error) => {
+    console.error('Failed to ensure shipping_address_snapshot column:', error);
+  });
+};
+ensureOrderAddressSnapshotColumns();
+
+const normalizeText = (value) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+};
+
+const buildShippingAddressSnapshot = (snapshotInput = {}, shippingAddress) => {
+  const snapshot = {
+    recipient_name: normalizeText(snapshotInput.recipient_name),
+    phone: normalizeText(snapshotInput.phone),
+    street: normalizeText(snapshotInput.street),
+    barangay: normalizeText(snapshotInput.barangay),
+    city: normalizeText(snapshotInput.city),
+    state: normalizeText(snapshotInput.state),
+    postal_code: normalizeText(snapshotInput.postal_code),
+    country: normalizeText(snapshotInput.country) || 'Philippines',
+    address_string: normalizeText(snapshotInput.address_string) || normalizeText(shippingAddress),
+  };
+
+  return snapshot;
+};
+
+const parseShippingAddressSnapshot = (order) => {
+  const snapshot = order.shipping_address_snapshot && typeof order.shipping_address_snapshot === 'object'
+    ? order.shipping_address_snapshot
+    : null;
+
+  return buildShippingAddressSnapshot(snapshot || {}, order.shipping_address);
+};
+
+const mapOrderRecord = (order) => ({
+  ...order,
+  total_amount: parseFloat(order.total_amount),
+  discount_amount: parseFloat(order.discount_amount || 0),
+  shipping_address_snapshot: parseShippingAddressSnapshot(order),
+});
+
 // Get all orders (admin)
 export const getAllOrders = async (req, res) => {
   try {
@@ -20,9 +67,7 @@ export const getAllOrders = async (req, res) => {
     `);
 
     res.json(result.rows.map(order => ({
-      ...order,
-      total_amount: parseFloat(order.total_amount),
-      discount_amount: parseFloat(order.discount_amount || 0),
+      ...mapOrderRecord(order),
       item_count: parseInt(order.item_count)
     })));
   } catch (error) {
@@ -47,9 +92,7 @@ export const getUserOrders = async (req, res) => {
     );
 
     res.json(result.rows.map(order => ({
-      ...order,
-      total_amount: parseFloat(order.total_amount),
-      discount_amount: parseFloat(order.discount_amount || 0),
+      ...mapOrderRecord(order),
       item_count: parseInt(order.item_count)
     })));
   } catch (error) {
@@ -107,9 +150,7 @@ export const getOrderById = async (req, res) => {
     );
 
     res.json({
-      ...order,
-      total_amount: parseFloat(order.total_amount),
-      discount_amount: parseFloat(order.discount_amount || 0),
+      ...mapOrderRecord(order),
       items: itemsResult.rows.map(item => ({
         ...item,
         product_price: parseFloat(item.product_price)
@@ -209,6 +250,7 @@ export const createOrder = async (req, res) => {
     promo_code_used,
     source = 'online',
     payment_method,
+    shipping_address_snapshot,
     amount_tendered,
     change_due,
     cashier_id
@@ -265,6 +307,7 @@ export const createOrder = async (req, res) => {
       ? (payment_method || 'cash')
       : (payment_method || 'stripe');
     const resolvedCashierId = source === 'pos' ? (cashier_id || req.user?.id || null) : null;
+    const resolvedAddressSnapshot = buildShippingAddressSnapshot(shipping_address_snapshot, shipping_address);
 
     // Create order
     const orderResult = await client.query(
@@ -272,8 +315,9 @@ export const createOrder = async (req, res) => {
         user_id, guest_name, guest_email, total_amount, 
         shipping_address, shipping_lat, shipping_lng, payment_intent_id, status, 
         discount_amount, promo_code_used, payment_method, source,
+        shipping_address_snapshot,
         amount_tendered, change_due, cashier_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17) 
       RETURNING *`,
       [
         userId,
@@ -289,6 +333,7 @@ export const createOrder = async (req, res) => {
         promo_code_used || null,
         resolvedPaymentMethod,
         source,
+        JSON.stringify(resolvedAddressSnapshot),
         source === 'pos' ? amount_tendered || null : null,
         source === 'pos' ? change_due || null : null,
         resolvedCashierId
@@ -368,9 +413,7 @@ export const createOrder = async (req, res) => {
     );
 
     const fullOrder = {
-      ...order,
-      total_amount: parseFloat(order.total_amount),
-      discount_amount: parseFloat(order.discount_amount || 0),
+      ...mapOrderRecord(order),
       items: itemsResult.rows.map(item => ({
         ...item,
         product_price: parseFloat(item.product_price)

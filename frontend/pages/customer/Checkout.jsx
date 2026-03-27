@@ -350,6 +350,22 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         return;
       }
 
+      const shippingAddressSnapshot = {
+        recipient_name: usingSavedAddress
+          ? (selectedAddr?.recipient_name || form.name || profile?.name || null)
+          : (form.name || profile?.name || null),
+        phone: usingSavedAddress
+          ? (selectedAddr?.phone || form.phone || profile?.phone || null)
+          : (form.phone || profile?.phone || null),
+        street: usingSavedAddress ? (selectedAddr?.street || null) : (form.street || null),
+        barangay: usingSavedAddress ? (selectedAddr?.barangay || null) : (form.barangay || null),
+        city: usingSavedAddress ? (selectedAddr?.city || null) : (form.city || null),
+        state: usingSavedAddress ? (selectedAddr?.state || null) : (form.state || null),
+        postal_code: usingSavedAddress ? (selectedAddr?.postal_code || null) : (form.postal_code || null),
+        country: usingSavedAddress ? (selectedAddr?.country || 'Philippines') : 'Philippines',
+        address_string: shippingAddress,
+      };
+
       if (paymentMethod === 'card') {
         await createPaymentIntent(Math.round(grandTotal), items.map((i) => ({
           product_id: i.productId,
@@ -367,6 +383,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
           product_price: i.product.is_on_sale && i.product.sale_price ? i.product.sale_price : i.product.price
         })),
         shipping_address: shippingAddress,
+        shipping_address_snapshot: shippingAddressSnapshot,
         shipping_lat: shippingLat,
         shipping_lng: shippingLng,
         shipping_method: shippingMethod,
