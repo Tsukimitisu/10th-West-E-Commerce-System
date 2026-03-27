@@ -1,6 +1,6 @@
 ﻿import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Undo2 } from 'lucide-react';
 
 const ReturnPolicy = () => {
   return (

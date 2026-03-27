@@ -3,6 +3,12 @@ import { Link } from 'react-router-dom';
 import { Phone, Mail, MapPin, Facebook, Instagram, Youtube, Send, CreditCard, Shield, Truck } from 'lucide-react';
 
 const Footer = () => {
+  const socialLinks = [
+    { label: 'Facebook', href: 'https://www.facebook.com/', icon: Facebook },
+    { label: 'Instagram', href: 'https://www.instagram.com/', icon: Instagram },
+    { label: 'YouTube', href: 'https://www.youtube.com/', icon: Youtube },
+  ];
+
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
   const [newsletterConsent, setNewsletterConsent] = useState(false);
@@ -91,7 +97,7 @@ const Footer = () => {
             <h4 className="font-display font-semibold text-white mb-4">Customer Support</h4>
             <ul className="space-y-2.5 text-sm">
               <li><Link to="/orders" className="text-gray-400 hover:text-white transition-colors">Track My Order</Link></li>
-              <li><Link to="/my-returns" className="text-gray-400 hover:text-white transition-colors">Returns & Refunds</Link></li>
+              <li><Link to="/return-policy" className="text-gray-400 hover:text-white transition-colors">Returns & Refunds</Link></li>
               <li><Link to="/faq" className="text-gray-400 hover:text-white transition-colors">Shipping Info</Link></li>
               <li><Link to="/faq" className="text-gray-400 hover:text-white transition-colors">Warranty Info</Link></li>
               <li><Link to="/faq" className="text-gray-400 hover:text-white transition-colors">Size Guide</Link></li>
@@ -103,9 +109,22 @@ const Footer = () => {
           <div>
             <h4 className="font-display font-semibold text-white mb-4">Connect With Us</h4>
             <div className="flex gap-3 mb-6">
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"><Facebook size={18} /></a>
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"><Instagram size={18} /></a>
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"><Youtube size={18} /></a>
+              {socialLinks.map((social) => {
+                const Icon = social.icon;
+                return (
+                  <a
+                    key={social.label}
+                    href={social.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Follow us on ${social.label}`}
+                    title={social.label}
+                    className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"
+                  >
+                    <Icon size={18} />
+                  </a>
+                );
+              })}
             </div>
             <h4 className="font-display font-semibold text-white mb-3">We Accept</h4>
             <div className="flex flex-wrap gap-2">
