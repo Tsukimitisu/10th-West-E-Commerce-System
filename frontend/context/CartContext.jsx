@@ -20,22 +20,51 @@ export const CartProvider = ({ children }) => {
     return localStorage.getItem('shopCoreToken');
   };
 
-  const getCurrentUserFromToken = () => {
-    const token = localStorage.getItem('shopCoreToken');
-    if (!token || !token.startsWith('sb-token-')) return null;
+  const getStoredUser = () => {
     try {
-      return JSON.parse(atob(token.replace('sb-token-', '')));
+      const raw = localStorage.getItem('shopCoreUser');
+      return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
   };
 
+  const decodeJwtPayload = (token) => {
+    try {
+      const [, payload] = token.split('.');
+      if (!payload) return null;
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4);
+      return JSON.parse(atob(padded));
+    } catch {
+      return null;
+    }
+  };
+
+  const getCurrentUserFromToken = () => {
+    const token = localStorage.getItem('shopCoreToken');
+    if (!token) return null;
+    if (token.startsWith('sb-token-')) {
+      try {
+        return JSON.parse(atob(token.replace('sb-token-', '')));
+      } catch {
+        return null;
+      }
+    }
+    return decodeJwtPayload(token);
+  };
+
+  const getCurrentUser = () => {
+    return getStoredUser() || getCurrentUserFromToken();
+  };
+
   const getCartKey = () => {
-    const user = getCurrentUserFromToken();
+    const user = getCurrentUser();
     return user?.id ? `shopCoreCart_${user.id}` : 'shopCoreGuestCart';
   };
 
   const getSelectedKey = () => `${getCartKey()}_selected`;
+  const [cartScopeKey, setCartScopeKey] = useState(getCartKey());
 
   const getOrCreateSupabaseCartId = async (userId) => {
     if (!supabase || !userId) return null;
@@ -78,6 +107,37 @@ export const CartProvider = ({ children }) => {
       if (idA > idB) return 1;
       return 0;
     });
+  };
+
+  const getCsrfToken = async () => {
+    const response = await fetch(`${API_URL}/csrf-token`, {
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to initialize guest session');
+    }
+    const data = await response.json();
+    if (!data?.csrfToken) {
+      throw new Error('Missing CSRF token');
+    }
+    return data.csrfToken;
+  };
+
+  const buildRequestHeaders = async ({ includeJson = false } = {}) => {
+    const token = getToken();
+    const headers = {};
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    } else {
+      headers['x-csrf-token'] = await getCsrfToken();
+    }
+
+    if (includeJson) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    return headers;
   };
 
   // Sync cart from backend when user logs in
@@ -123,11 +183,13 @@ export const CartProvider = ({ children }) => {
     }
 
     try {
+      const headers = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
       const response = await fetch(`${API_URL}/cart`, {
         credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers,
       });
       
       if (response.ok) {
@@ -152,11 +214,14 @@ export const CartProvider = ({ children }) => {
   // Initialize cart on mount and when user logs in
   useEffect(() => {
     syncCart();
-  }, []);
+  }, [cartScopeKey]);
 
   // Monitor localStorage for login changes
   useEffect(() => {
     const handleStorageChange = () => {
+      setCartScopeKey(getCartKey());
+      setSelectedItemIds([]);
+      setHasLoadedSelection(false);
       syncCart();
     };
     window.addEventListener('storage', handleStorageChange);
@@ -175,16 +240,17 @@ export const CartProvider = ({ children }) => {
         const saved = sessionStorage.getItem(getSelectedKey());
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && selectedItemIds.length === 0) {
-            setSelectedItemIds(parsed);
-          }
+          setSelectedItemIds(Array.isArray(parsed) ? parsed : []);
+        } else {
+          setSelectedItemIds([]);
         }
       } catch (e) {
         console.error('Failed to load selected item ids', e);
+        setSelectedItemIds([]);
       }
       setHasLoadedSelection(true);
     }
-  }, [initialized, hasLoadedSelection]);
+  }, [initialized, hasLoadedSelection, cartScopeKey]);
 
   // Save to localStorage as backup
   useEffect(() => {
@@ -198,7 +264,7 @@ export const CartProvider = ({ children }) => {
       }
       sessionStorage.setItem(getSelectedKey(), JSON.stringify(cleanSelected));
     }
-  }, [items, selectedItemIds, initialized, hasLoadedSelection]);
+  }, [items, selectedItemIds, initialized, hasLoadedSelection, cartScopeKey]);
 
   const resolveMaxStock = (product) => {
     const rawStock = Number(product?.stock_quantity);
@@ -284,13 +350,11 @@ export const CartProvider = ({ children }) => {
       // Add to backend if logged in
       try {
         setLoading(true);
+        const headers = await buildRequestHeaders({ includeJson: true });
         const response = await fetch(`${API_URL}/cart/add`, {
           method: 'POST',
           credentials: 'include',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
+          headers,
           body: JSON.stringify({
             product_id: product.id,
             quantity: requestedQty
@@ -412,12 +476,11 @@ export const CartProvider = ({ children }) => {
         setLoading(true);
         const targetItem = items.find((item) => item.productId === productId);
         const cartItemId = targetItem?.cartItemId ?? productId;
+        const headers = await buildRequestHeaders();
         const response = await fetch(`${API_URL}/cart/remove/${cartItemId}`, {
           method: 'DELETE',
           credentials: 'include',
-        headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers,
         });
 
         if (response.ok) {
@@ -498,13 +561,11 @@ export const CartProvider = ({ children }) => {
       try {
         setLoading(true);
         const cartItemId = targetItem?.cartItemId ?? productId;
+        const headers = await buildRequestHeaders({ includeJson: true });
         const response = await fetch(`${API_URL}/cart/update/${cartItemId}`, {
           method: 'PUT',
           credentials: 'include',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
+          headers,
           body: JSON.stringify({ quantity })
         });
 
@@ -577,12 +638,11 @@ export const CartProvider = ({ children }) => {
 
       try {
         setLoading(true);
+        const headers = await buildRequestHeaders();
         const response = await fetch(`${API_URL}/cart/clear`, {
           method: 'DELETE',
           credentials: 'include',
-        headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers,
         });
 
         if (response.ok) {
@@ -644,6 +704,7 @@ export const CartProvider = ({ children }) => {
 
       try {
         setLoading(true);
+        const headers = await buildRequestHeaders();
         // Fallback for REST API - delete one by one
         await Promise.all(selectedItemIds.map(async id => {
           const targetItem = items.find((item) => item.productId === id);
@@ -652,9 +713,7 @@ export const CartProvider = ({ children }) => {
           return fetch(`${API_URL}/cart/remove/${cartItemId}`, {
             method: 'DELETE',
             credentials: 'include',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
+            headers,
           });
         }));
         setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));

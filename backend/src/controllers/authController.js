@@ -6,6 +6,7 @@ import nodemailer from 'nodemailer';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { logActivity } from '../middleware/activityLogger.js';
+import { mergeGuestCartIntoUserCart, rotateGuestSession } from './cartController.js';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
@@ -347,6 +348,7 @@ export const login = async (req, res) => {
   const { email, password } = req.validatedData || req.body;
   const ipAddress = req.clientIp;
   const userAgent = req.clientUa;
+  const guestCartSessionId = req.session?.cartSessionId || null;
 
   try {
     if (await isAccountLocked(email)) {
@@ -389,6 +391,9 @@ export const login = async (req, res) => {
       });
     }
 
+    await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
+    await rotateGuestSession(req);
+
     await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
     await pool.query(
       `DELETE FROM login_attempts
@@ -417,6 +422,7 @@ export const logout = async (req, res) => {
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       await pool.query('UPDATE sessions SET is_active = false WHERE token_hash = $1', [tokenHash]);
     }
+    await rotateGuestSession(req);
     await logActivity({ userId: req.user?.id, action: 'logout', ipAddress: req.clientIp, userAgent: req.clientUa });
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
@@ -909,6 +915,7 @@ export const verifyEmailToken = async (req, res) => {
   const { token } = req.body;
   const ipAddress = req.clientIp;
   const userAgent = req.clientUa;
+  const guestCartSessionId = req.session?.cartSessionId || null;
 
   if (!token) return res.status(400).json({ message: 'Invalid or expired verification link.' });
 
@@ -956,6 +963,8 @@ export const verifyEmailToken = async (req, res) => {
     );
 
     const updatedUser = updatedUserResult.rows[0];
+    await mergeGuestCartIntoUserCart(guestCartSessionId, updatedUser.id);
+    await rotateGuestSession(req);
     const sessionToken = await persistSession(client, updatedUser, ipAddress, userAgent);
 
     await client.query('COMMIT');
