@@ -8,6 +8,7 @@ import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
+const CHECKOUT_TERMS_SESSION_KEY = 'checkoutTermsAccepted';
 
 const Checkout = () => {
   const {
@@ -118,7 +119,14 @@ const Checkout = () => {
   const [error, setError] = useState('');
   const [shippingMethod, setShippingMethod] = useState('standard');
   const [paymentMethod, setPaymentMethod] = useState('card');
-  const [agreeTerms, setAgreeTerms] = useState(true);
+  const [agreeTerms, setAgreeTerms] = useState(() => {
+    try {
+      const storedAgreement = sessionStorage.getItem(CHECKOUT_TERMS_SESSION_KEY);
+      return storedAgreement === null ? true : storedAgreement === 'true';
+    } catch {
+      return true;
+    }
+  });
   const [zipError, setZipError] = useState('');
   const [profile, setProfile] = useState(null);
 
@@ -186,11 +194,10 @@ const Checkout = () => {
   };
 
   useEffect(() => {
-    const persistedAgreement = localStorage.getItem('checkoutTermsAccepted');
-    if (persistedAgreement === 'true') {
-      setAgreeTerms(true);
-    } // If not, defaults to true anyway via useState. Wait, user said "Default checked".
-  }, []);
+    try {
+      sessionStorage.setItem(CHECKOUT_TERMS_SESSION_KEY, String(agreeTerms));
+    } catch {}
+  }, [agreeTerms]);
 
   useEffect(() => {
     const user = localStorage.getItem('shopCoreUser');
@@ -841,22 +848,16 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                   <div className="border-t border-gray-700 pt-2 flex justify-between"><span className="font-semibold text-white">Total</span><span className="font-bold text-xl text-white">{formatPrice(grandTotal)}</span></div>
                 </div>
 
-                  <label className={`flex items-start gap-2 mt-4 cursor-pointer`}>
+                  <label className="mt-4 flex cursor-pointer items-start gap-2.5">
                     <input
                       type="checkbox"
                       checked={agreeTerms}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setAgreeTerms(checked);
-                        if (checked) {
-                          localStorage.setItem('checkoutTermsAccepted', 'true');
-                        } else {
-                          localStorage.setItem('checkoutTermsAccepted', 'false');
-                        }
-                      }}
-                      className="mt-0.5 text-red-500 focus:ring-orange-500 rounded"
+                      onChange={(e) => setAgreeTerms(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border border-gray-500 bg-gray-800 accent-red-500 focus:ring-2 focus:ring-orange-500 focus:ring-offset-0"
                     />
-                    <span className="text-xs text-gray-400">I agree to the <Link to="/terms" className="text-red-500 hover:underline">Terms & Conditions</Link> and <Link to="/privacy" className="text-red-500 hover:underline">Privacy Policy</Link></span>
+                    <span className="text-xs leading-relaxed text-gray-200">
+                      I agree to the <Link to="/terms" className="text-red-500 hover:underline">Terms & Conditions</Link> and <Link to="/privacy" className="text-red-500 hover:underline">Privacy Policy</Link>
+                    </span>
                   </label>
 
                 {error && <p className="text-sm text-red-500 mt-3">{error}</p>}

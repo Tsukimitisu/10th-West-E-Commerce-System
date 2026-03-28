@@ -15,7 +15,7 @@ const Register = () => {
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(true);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState('');
@@ -32,6 +32,7 @@ const Register = () => {
 
   const passwordStrength = checks.filter((check) => check.pass).length;
   const strengthColor = passwordStrength <= 2 ? 'bg-red-500/100' : passwordStrength <= 4 ? 'bg-amber-500' : 'bg-green-500';
+  const checkboxClass = 'mt-0.5 h-4 w-4 shrink-0 rounded border border-gray-500 bg-gray-800 accent-red-500 focus:ring-2 focus:ring-orange-500 focus:ring-offset-0';
 
   const getInputClassName = (field) =>
     `w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent ${
@@ -265,9 +266,9 @@ const Register = () => {
                   type="checkbox"
                   checked={agreeTerms}
                   onChange={(e) => { setAgreeTerms(e.target.checked); clearFieldError('consent_given'); }}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-500 focus:ring-orange-500"
+                  className={checkboxClass}
                 />
-                <span className="text-xs text-gray-600 leading-relaxed">
+                <span className="text-xs text-gray-200 leading-relaxed">
                   I agree to the <Link to="/terms" className="text-red-500 hover:underline font-medium">Terms of Service</Link> and{' '}
                   <Link to="/privacy" className="text-red-500 hover:underline font-medium">Privacy Policy</Link>.
                   I consent to the collection and processing of my personal data as described in the Privacy Policy,
@@ -281,9 +282,9 @@ const Register = () => {
                   type="checkbox"
                   checked={ageConfirmed}
                   onChange={(e) => { setAgeConfirmed(e.target.checked); clearFieldError('age_confirmed'); }}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-500 focus:ring-orange-500"
+                  className={checkboxClass}
                 />
-                <span className="text-xs text-gray-600 leading-relaxed">
+                <span className="text-xs text-gray-200 leading-relaxed">
                   I confirm that I am at least 18 years old or have parental/guardian consent. <span className="text-red-500">*</span>
                 </span>
               </label>
