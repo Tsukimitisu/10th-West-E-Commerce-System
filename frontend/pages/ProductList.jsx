@@ -149,20 +149,34 @@ const ProductList = () => {
     setSearchParams({});
   };
 
+  const pageBackgroundStyle = {
+    backgroundColor: '#f8fafc',
+    backgroundImage: `
+      radial-gradient(circle at 8% 14%, rgba(239, 68, 68, 0.10) 0%, transparent 34%),
+      radial-gradient(circle at 92% 6%, rgba(30, 41, 59, 0.08) 0%, transparent 28%),
+      linear-gradient(140deg, rgba(255, 255, 255, 0.95) 0%, rgba(241, 245, 249, 0.92) 42%, rgba(226, 232, 240, 0.85) 100%)
+    `,
+    backgroundAttachment: 'fixed',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat'
+  };
+
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-              <div className="aspect-square skeleton" />
-              <div className="p-4 space-y-3">
-                <div className="h-3 skeleton rounded w-20" />
-                <div className="h-4 skeleton rounded w-3/4" />
-                <div className="h-5 skeleton rounded w-24" />
+      <div className="min-h-screen" style={pageBackgroundStyle}>
+        <div className="max-w-7xl mx-auto px-4 py-12">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-white/20 backdrop-blur-md rounded-xl border border-white/30 overflow-hidden">
+                <div className="aspect-square skeleton" />
+                <div className="p-4 space-y-3">
+                  <div className="h-3 skeleton rounded w-20" />
+                  <div className="h-4 skeleton rounded w-3/4" />
+                  <div className="h-5 skeleton rounded w-24" />
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -171,14 +185,7 @@ const ProductList = () => {
   return (
     <div 
       className="min-h-screen" 
-      style={{
-        backgroundColor: '#f3f4f6',
-        // Geometric Low-Poly Background Pattern
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800' viewBox='0 0 800 800'%3E%3Cg fill-opacity='0.4'%3E%3Cpath fill='%23d1d5db' d='M0 0l400 0-200 300L0 0z'/%3E%3Cpath fill='%23e5e7eb' d='M400 0l400 0-200 300-200-300z'/%3E%3Cpath fill='%239ca3af' d='M800 0l0 400-300-200 300-200z'/%3E%3Cpath fill='%23d1d5db' d='M800 400l0 400-300-200 300-200z'/%3E%3Cpath fill='%23e5e7eb' d='M800 800l-400 0 200-300 200 300z'/%3E%3Cpath fill='%23f3f4f6' d='M400 800l-400 0 200-300 200 300z'/%3E%3Cpath fill='%239ca3af' d='M0 800l0-400 300 200-300 200z'/%3E%3Cpath fill='%23d1d5db' d='M0 400l0-400 300 200-300 200z'/%3E%3Cpath fill='%23f9fafb' d='M300 200l200 0-100 200-100-200z'/%3E%3Cpath fill='%23e5e7eb' d='M500 200l0 200-200 0 200-200z'/%3E%3Cpath fill='%239ca3af' d='M500 400l-200 200 0-200 200 0z'/%3E%3Cpath fill='%23d1d5db' d='M300 400l200 200-200 0 0-200z'/%3E%3C/g%3E%3C/svg%3E")`,
-        backgroundAttachment: 'fixed',
-        backgroundSize: '600px', 
-        backgroundRepeat: 'repeat'
-      }}
+      style={pageBackgroundStyle}
     >
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="mb-4 bg-white/10 backdrop-blur-md border border-white/25 rounded-2xl px-4 py-3 shadow-lg">

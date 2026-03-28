@@ -1,6 +1,7 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -41,10 +42,11 @@ const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
 
 const AppLayout = ({ user, onLogout, onLogin }) => {
   const location = useLocation();
+  const shouldReduceMotion = useReducedMotion();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     window.scrollTo(0, 0);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   const isSuperAdmin = user?.role === Role.SUPER_ADMIN;
   const hideChrome = location.pathname === '/pos' || location.pathname === '/admin' || location.pathname === '/super-admin';
@@ -59,43 +61,54 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
       {!hideChrome && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
       {!hideChrome && !isSuperAdmin && user && <EmailVerificationBanner user={user} />}
       <div className="flex-1">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/shop" element={<ProductList />} />
-          <Route path="/login" element={
-            user && (user.role === Role.OWNER || user.role === Role.STORE_STAFF || user.role === Role.ADMIN)
-              ? <Navigate to="/admin" replace />
-              : user && user.role === Role.SUPER_ADMIN
-                ? <Navigate to="/super-admin" replace />
-                : user
-                  ? <Navigate to="/" replace />
-                  : <Login onLogin={onLogin} />
-          } />
-          <Route path="/register" element={<Register onLogin={onLogin} />} />
-          <Route path="/verify-email" element={<VerifyEmail onLogin={onLogin} />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/oauth-callback" element={<OAuthCallback onLogin={onLogin} />} />
-          <Route path="/products/:id" element={<ProductDetail />} />
-          <Route path="/cart" element={<Cart />} />
-          <Route path="/checkout" element={user ? <Checkout /> : <Navigate to="/login?redirect=/checkout" />} />
-          <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/faq" element={<FAQ />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/terms" element={<TermsOfService />} />
-          <Route path="/return-policy" element={<ReturnPolicy />} />
-          <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
-          <Route path="/orders" element={user ? <OrderHistory /> : <Navigate to="/login" />} />
-          <Route path="/orders/:id" element={user ? <OrderDetail /> : <Navigate to="/login" />} />
-          <Route path="/orders/:id/return" element={user ? <RequestReturn /> : <Navigate to="/login" />} />
-          <Route path="/my-returns" element={user ? <MyReturns /> : <Navigate to="/login" />} />
-          <Route path="/addresses" element={user ? <AddressBook /> : <Navigate to="/login" />} />
-          <Route path="/wishlist" element={user ? <Wishlist /> : <Navigate to="/login" />} />
-          <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF || user?.role === Role.ADMIN ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
-          <Route path="/super-admin" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
-          <Route path="/pos" element={(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) ? <PosTerminal /> : <Navigate to="/login" replace />} />
-        </Routes>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={`${location.pathname}${location.search}`}
+            initial={shouldReduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={shouldReduceMotion ? { opacity: 1 } : { opacity: 0 }}
+            transition={{ duration: shouldReduceMotion ? 0 : 0.2, ease: 'easeOut' }}
+            className="h-full"
+          >
+            <Routes location={location}>
+              <Route path="/" element={<Home />} />
+              <Route path="/shop" element={<ProductList />} />
+              <Route path="/login" element={
+                user && (user.role === Role.OWNER || user.role === Role.STORE_STAFF || user.role === Role.ADMIN)
+                  ? <Navigate to="/admin" replace />
+                  : user && user.role === Role.SUPER_ADMIN
+                    ? <Navigate to="/super-admin" replace />
+                    : user
+                      ? <Navigate to="/" replace />
+                      : <Login onLogin={onLogin} />
+              } />
+              <Route path="/register" element={<Register onLogin={onLogin} />} />
+              <Route path="/verify-email" element={<VerifyEmail onLogin={onLogin} />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/oauth-callback" element={<OAuthCallback onLogin={onLogin} />} />
+              <Route path="/products/:id" element={<ProductDetail />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/checkout" element={user ? <Checkout /> : <Navigate to="/login?redirect=/checkout" />} />
+              <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/faq" element={<FAQ />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/return-policy" element={<ReturnPolicy />} />
+              <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
+              <Route path="/orders" element={user ? <OrderHistory /> : <Navigate to="/login" />} />
+              <Route path="/orders/:id" element={user ? <OrderDetail /> : <Navigate to="/login" />} />
+              <Route path="/orders/:id/return" element={user ? <RequestReturn /> : <Navigate to="/login" />} />
+              <Route path="/my-returns" element={user ? <MyReturns /> : <Navigate to="/login" />} />
+              <Route path="/addresses" element={user ? <AddressBook /> : <Navigate to="/login" />} />
+              <Route path="/wishlist" element={user ? <Wishlist /> : <Navigate to="/login" />} />
+              <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF || user?.role === Role.ADMIN ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
+              <Route path="/super-admin" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
+              <Route path="/pos" element={(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) ? <PosTerminal /> : <Navigate to="/login" replace />} />
+            </Routes>
+          </motion.div>
+        </AnimatePresence>
       </div>
       {!hideChrome && !isSuperAdmin && <Footer />}
       <PrivacyBanner />
@@ -275,6 +288,9 @@ const App = () => {
 };
 
 export default App;
+
+
+
 
 
 
