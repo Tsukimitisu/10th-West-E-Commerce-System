@@ -1,23 +1,60 @@
-﻿import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import { forgotPassword } from '../services/api';
+
+const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [emailTouched, setEmailTouched] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const validateEmail = (value) => {
+    const normalized = value.trim();
+    if (!normalized) return 'Enter your email address.';
+    if (!EMAIL_REGEX.test(normalized)) return 'Enter a valid email address.';
+    return '';
+  };
+
+  useEffect(() => {
+    if (!emailTouched) return;
+
+    const timer = setTimeout(() => {
+      setEmailError(validateEmail(email));
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [email, emailTouched]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const nextEmailError = validateEmail(normalizedEmail);
+
+    setEmailTouched(true);
+    setEmailError(nextEmailError);
     setError('');
+
+    if (nextEmailError) {
+      return;
+    }
+
     setLoading(true);
     try {
-      await forgotPassword(email);
+      await forgotPassword(normalizedEmail);
+      setEmail(normalizedEmail);
       setSent(true);
     } catch (err) {
-      setError(err.message || 'Failed to send reset email');
+      setError(
+        err.message === 'Email not found'
+          ? 'No account was found for that email address.'
+          : (err.message || 'Unable to send a reset link right now.')
+      );
     } finally {
       setLoading(false);
     }
@@ -60,14 +97,33 @@ const ForgotPassword = () => {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                   <div className="relative">
                     <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="name@example.com"
-                      className="w-full pl-10 pr-4 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                    <input
+                      type="text"
+                      inputMode="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setEmailTouched(true);
+                        setError('');
+                      }}
+                      onBlur={() => {
+                        setEmailTouched(true);
+                        setEmailError(validateEmail(email));
+                      }}
+                      placeholder="name@example.com"
+                      aria-invalid={emailError ? 'true' : 'false'}
+                      className={`w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
+                        emailError ? 'border-red-500 focus:ring-red-500' : 'border-gray-700 focus:ring-orange-500'
+                      }`}
+                    />
                   </div>
+                  {emailError && <p className="mt-1 text-xs text-red-500">{emailError}</p>}
                 </div>
                 <button type="submit" disabled={loading}
                   className="w-full py-3 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors text-sm">
@@ -89,5 +145,3 @@ const ForgotPassword = () => {
 };
 
 export default ForgotPassword;
-
-
