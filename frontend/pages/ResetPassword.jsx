@@ -14,6 +14,7 @@ const ResetPassword = () => {
   const [loading, setLoading] = useState(false);
   const [tokenValid, setTokenValid] = useState(null);
   const [tokenChecking, setTokenChecking] = useState(true);
+  const [tokenInfo, setTokenInfo] = useState(null);
   const [attempts, setAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState(null);
   const navigate = useNavigate();
@@ -29,9 +30,16 @@ const ResetPassword = () => {
     }
     const checkToken = async () => {
       try {
-        await verifyResetToken(token);
+        const verification = await verifyResetToken(token);
+        setTokenInfo(verification);
         setTokenValid(true);
-      } catch {
+      } catch (err) {
+        setTokenInfo(null);
+        setError(
+          err.code === 'RESET_TOKEN_EXPIRED' || err.message?.toLowerCase().includes('expired')
+            ? 'This reset link has expired. Please request a new one.'
+            : 'This reset link is invalid. Please request a new one.'
+        );
         setTokenValid(false);
       } finally {
         setTokenChecking(false);
@@ -142,12 +150,12 @@ const ResetPassword = () => {
             </Link>
           </div>
           <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-sm p-8 text-center">
-            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Clock size={32} className="text-red-500" />
-            </div>
-            <h2 className="font-display font-semibold text-xl text-white mb-2">Link Expired or Invalid</h2>
-            <p className="text-sm text-gray-400 mb-2">This password reset link is invalid or has expired.</p>
-            <p className="text-xs text-gray-400 mb-6">Reset links expire after 1 hour for your security (RA 10173 Â§20).</p>
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Clock size={32} className="text-red-500" />
+              </div>
+              <h2 className="font-display font-semibold text-xl text-white mb-2">Link Expired or Invalid</h2>
+              <p className="text-sm text-gray-400 mb-2">{error || 'This password reset link is invalid or has expired.'}</p>
+              <p className="text-xs text-gray-400 mb-6">Reset links expire after 1 hour for your security (RA 10173 Â§20).</p>
             <Link to="/forgot-password" className="inline-flex items-center gap-2 px-6 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">
               Request New Link
             </Link>
@@ -192,6 +200,9 @@ const ResetPassword = () => {
                 </div>
                 <h2 className="font-display font-semibold text-xl text-white mb-1">Reset Password</h2>
                 <p className="text-sm text-gray-400">Create a strong, unique password for your account.</p>
+                {tokenInfo?.email && (
+                  <p className="mt-2 text-xs text-gray-400">Resetting password for <span className="font-medium text-gray-300">{tokenInfo.email}</span></p>
+                )}
               </div>
 
               {isLocked && (

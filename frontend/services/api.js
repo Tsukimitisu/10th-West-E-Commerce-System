@@ -373,12 +373,6 @@ export const resendVerification = async (email) => {
 };
 
 export const forgotPassword = async (email) => {
-  if (USE_SUPABASE) {
-    // Check user exists
-    const { data: user } = await supabase.from('users').select('id').eq('email', email).single();
-    if (!user) throw new Error('Email not found');
-    return { message: 'Password reset email sent' };
-  }
   return authenticatedFetch(`${API_URL}/auth/forgot-password`, {
     method: 'POST',
     body: JSON.stringify({ email }),
@@ -386,21 +380,6 @@ export const forgotPassword = async (email) => {
 };
 
 export const resetPassword = async (token, newPassword) => {
-  if (USE_SUPABASE) {
-    // In Supabase mode, find user by reset token
-    const { data: user } = await supabase
-      .from('users')
-      .select('id')
-      .eq('password_reset_token', token)
-      .single();
-    if (!user) throw new Error('Invalid or expired reset token');
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
-    const { error } = await supabase.from('users')
-      .update({ password_hash: hashedPassword, password_reset_token: null, password_reset_expires: null })
-      .eq('id', user.id);
-    if (error) throw new Error(error.message);
-    return { message: 'Password reset successful' };
-  }
   return authenticatedFetch(`${API_URL}/auth/reset-password`, {
     method: 'POST',
     body: JSON.stringify({ token, newPassword }),
@@ -409,16 +388,6 @@ export const resetPassword = async (token, newPassword) => {
 
 // Verify reset token validity before showing the form
 export const verifyResetToken = async (token) => {
-  if (USE_SUPABASE) {
-    const { data: user } = await supabase
-      .from('users')
-      .select('id, password_reset_expires')
-      .eq('password_reset_token', token)
-      .single();
-    if (!user) throw new Error('Invalid reset token');
-    if (new Date(user.password_reset_expires) < new Date()) throw new Error('Reset token has expired');
-    return { valid: true };
-  }
   return authenticatedFetch(`${API_URL}/auth/verify-reset-token`, {
     method: 'POST',
     body: JSON.stringify({ token }),

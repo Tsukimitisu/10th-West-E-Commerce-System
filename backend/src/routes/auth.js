@@ -12,7 +12,14 @@ import {
 } from '../controllers/authController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
-import { resendVerificationLimiter, registerLimiter, loginLimiter } from '../middleware/rateLimiter.js';
+import {
+  resendVerificationLimiter,
+  registerLimiter,
+  loginLimiter,
+  forgotPasswordLimiter,
+  verifyResetTokenLimiter,
+  resetPasswordLimiter,
+} from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -57,11 +64,26 @@ router.post('/register',
   register
 );
 router.post('/login', loginLimiter, loginValidation, validate, login);
-router.post('/forgot-password', body('email').isEmail(), validate, forgotPassword);
-router.post('/verify-reset-token', body('token').notEmpty(), validate, verifyResetToken);
+router.post(
+  '/forgot-password',
+  forgotPasswordLimiter,
+  body('email').trim().isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
+  validate,
+  forgotPassword
+);
+router.post(
+  '/verify-reset-token',
+  verifyResetTokenLimiter,
+  body('token').trim().notEmpty().withMessage('Reset token is required'),
+  validate,
+  verifyResetToken
+);
 router.post('/reset-password',
-  body('token').notEmpty(),
-  body('newPassword').isLength({ min: 8 }),
+  resetPasswordLimiter,
+  body('token').trim().notEmpty().withMessage('Reset token is required'),
+  body('newPassword')
+    .isStrongPassword({ minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 1 })
+    .withMessage('Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character'),
   validate,
   resetPassword
 );

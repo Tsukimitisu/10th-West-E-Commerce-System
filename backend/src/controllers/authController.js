@@ -450,7 +450,7 @@ export const getProfile = async (req, res) => {
 
 // ─── FORGOT PASSWORD ───────────────────────────────────────────────
 export const forgotPassword = async (req, res) => {
-  const { email } = req.body;
+  const { email } = req.validatedData || req.body;
 
   try {
     const result = await pool.query('SELECT id, name, email, oauth_provider, password_hash FROM users WHERE email = $1', [email]);
@@ -472,9 +472,10 @@ export const forgotPassword = async (req, res) => {
       [hashedToken, expires, user.id]
     );
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl();
     // Security: token-only URL — no email/PII in URL (RA 10173 §20)
-    const resetUrl = `${frontendUrl}/#/reset-password?token=${resetToken}`;
+    frontendUrl.hash = `/reset-password?token=${encodeURIComponent(resetToken)}`;
+    const resetUrl = frontendUrl.toString();
 
     const transporter = createTransporter();
     await transporter.sendMail({
@@ -516,7 +517,7 @@ export const forgotPassword = async (req, res) => {
 
 // ─── VERIFY RESET TOKEN ────────────────────────────────────────────
 export const verifyResetToken = async (req, res) => {
-  const { token } = req.body;
+  const { token } = req.validatedData || req.body;
 
   try {
     if (!token) return res.status(400).json({ message: 'Token is required' });
@@ -532,13 +533,18 @@ export const verifyResetToken = async (req, res) => {
     }
 
     const user = result.rows[0];
-    if (new Date(user.password_reset_expires) < new Date()) {
-      return res.status(400).json({ message: 'Reset token has expired' });
+    const expiresAt = new Date(user.password_reset_expires);
+    if (expiresAt < new Date()) {
+      await pool.query(
+        'UPDATE users SET password_reset_token = NULL, password_reset_expires = NULL WHERE id = $1',
+        [user.id]
+      );
+      return res.status(400).json({ message: 'Reset token has expired', code: 'RESET_TOKEN_EXPIRED' });
     }
 
     // Return masked email for confirmation (no PII leak)
     const maskedEmail = user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
-    res.json({ valid: true, email: maskedEmail });
+    res.json({ valid: true, email: maskedEmail, expires_at: expiresAt.toISOString() });
   } catch (error) {
     console.error('Verify reset token error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -547,7 +553,7 @@ export const verifyResetToken = async (req, res) => {
 
 // ─── RESET PASSWORD (token-only, no email in request) ──────────────
 export const resetPassword = async (req, res) => {
-  const { token, newPassword } = req.body;
+  const { token, newPassword } = req.validatedData || req.body;
 
   try {
     if (!PASSWORD_REGEX.test(newPassword)) {

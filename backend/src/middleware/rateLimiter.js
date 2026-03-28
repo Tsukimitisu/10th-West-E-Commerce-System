@@ -55,6 +55,26 @@ export const authLimiter = rateLimit(15 * 60 * 1000, 50);
 export const resendVerificationLimiter = rateLimit(5 * 60 * 1000, 3, {
   keyGenerator: authKeyByEmail('resend-verification'),
 });
+// Forgot password limiter
+export const forgotPasswordLimiter = rateLimit(10 * 60 * 1000, 3, {
+  keyGenerator: authKeyByEmail('forgot-password'),
+});
+// Reset token verification limiter
+export const verifyResetTokenLimiter = rateLimit(10 * 60 * 1000, 10, {
+  keyGenerator: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const token = normalizeIdentifier(req.body?.token);
+    return `verify-reset-token:${ip}:${token.slice(0, 32)}`;
+  },
+});
+// Reset password submission limiter
+export const resetPasswordLimiter = rateLimit(15 * 60 * 1000, 5, {
+  keyGenerator: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const token = normalizeIdentifier(req.body?.token);
+    return `reset-password:${ip}:${token.slice(0, 32)}`;
+  },
+});
 // Registration limiter
 export const registerLimiter = rateLimit(15 * 60 * 1000, 5, {
   keyGenerator: authKeyByEmail('register'),
