@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, ChevronDown } from 'lucide-react';
+import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle } from 'lucide-react';
 import { getProductById, getRelatedProducts, getProductReviews, addToWishlist, removeFromWishlist, getWishlist, recordProductView, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useCart } from '../context/CartContext';
 import ProductCard from '../components/ProductCard';
@@ -8,6 +8,84 @@ import StarRating from '../components/StarRating';
 import ReviewCard from '../components/ReviewCard';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
+const PRODUCT_IMAGE_FALLBACK = 'https://via.placeholder.com/600?text=No+Image';
+const DEFAULT_SHARE_METADATA = {
+  title: '10th West Moto Parts',
+  description: 'Shop motorcycle parts, accessories, and riding essentials from 10th West Moto.',
+  image: '/logo.png',
+  url: '/',
+  type: 'website',
+};
+
+const toAbsoluteUrl = (value) => {
+  if (!value) return '';
+
+  try {
+    return new URL(value, window.location.origin).toString();
+  } catch {
+    return value;
+  }
+};
+
+const truncateText = (value, limit) => {
+  if (!value) return '';
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, limit - 1).trimEnd()}…`;
+};
+
+const setMetaTag = (attribute, key, content) => {
+  if (typeof document === 'undefined') return;
+
+  let tag = document.querySelector(`meta[${attribute}="${key}"]`);
+  if (!tag) {
+    tag = document.createElement('meta');
+    tag.setAttribute(attribute, key);
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute('content', content);
+};
+
+const applyPageMetadata = ({ title, description, image, url, type = 'website' }) => {
+  if (typeof document === 'undefined') return;
+
+  document.title = title;
+  setMetaTag('name', 'description', description);
+  setMetaTag('property', 'og:type', type);
+  setMetaTag('property', 'og:site_name', '10th West Moto');
+  setMetaTag('property', 'og:title', title);
+  setMetaTag('property', 'og:description', description);
+  setMetaTag('property', 'og:image', image);
+  setMetaTag('property', 'og:url', url);
+  setMetaTag('name', 'twitter:card', 'summary_large_image');
+  setMetaTag('name', 'twitter:title', title);
+  setMetaTag('name', 'twitter:description', description);
+  setMetaTag('name', 'twitter:image', image);
+};
+
+const writeTextToClipboard = async (value) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textArea = document.createElement('textarea');
+  textArea.value = value;
+  textArea.setAttribute('readonly', '');
+  textArea.style.position = 'absolute';
+  textArea.style.left = '-9999px';
+  document.body.appendChild(textArea);
+  textArea.select();
+
+  try {
+    const copied = document.execCommand('copy');
+    if (!copied) {
+      throw new Error('Copy command was rejected.');
+    }
+  } finally {
+    document.body.removeChild(textArea);
+  }
+};
 const normalizeWishlistIds = (items = []) => (
   items
     .map((item) => Number(item.product_id ?? item.product?.id ?? item.id))
@@ -29,6 +107,8 @@ const ProductDetail = () => {
   const [selectedVariant, setSelectedVariant] = useState({ color: '' });
   const [variantError, setVariantError] = useState('');
   const [quantityError, setQuantityError] = useState('');
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareMessage, setShareMessage] = useState(null);
   const { addToCart } = useCart();
 
   const user = localStorage.getItem('shopCoreUser');
@@ -74,6 +154,9 @@ const ProductDetail = () => {
       try {
         const p = await getProductById(Number(id));
         setProduct(p);
+        setSelectedImage(0);
+        setShareOpen(false);
+        setShareMessage(null);
         const [rel, rev] = await Promise.all([
           getRelatedProducts(Number(id), p.category_id || 0).catch(() => []),
           getProductReviews(Number(id)).catch(() => []),
@@ -95,6 +178,85 @@ const ProductDetail = () => {
   }, [id]);
 
   const hasVariants = product && Array.isArray(product.variants) && product.variants.length > 0;
+  const shareUrl = product
+    ? `${window.location.origin}${window.location.pathname}${window.location.search}#/products/${product.id}`
+    : `${window.location.origin}${window.location.pathname}${window.location.search}`;
+  const shareTitle = product ? `${product.name} | 10th West Moto` : DEFAULT_SHARE_METADATA.title;
+  const shareDescription = product
+    ? truncateText(
+      product.description || `${product.category_name || 'Motorcycle part'} available now at 10th West Moto.`,
+      160,
+    )
+    : DEFAULT_SHARE_METADATA.description;
+  const shareImage = product
+    ? toAbsoluteUrl(product.image || DEFAULT_SHARE_METADATA.image)
+    : toAbsoluteUrl(DEFAULT_SHARE_METADATA.image);
+  const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
+  useEffect(() => {
+    if (!shareMessage) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setShareMessage(null);
+    }, 2800);
+
+    return () => window.clearTimeout(timer);
+  }, [shareMessage]);
+
+  useEffect(() => {
+    if (!shareOpen) return undefined;
+
+    const handleOutsideClick = (event) => {
+      if (!(event.target instanceof Element)) return;
+      if (event.target.closest('[data-share-menu]')) return;
+      setShareOpen(false);
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShareOpen(false);
+      }
+    };
+
+    document.addEventListener('click', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('click', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [shareOpen]);
+
+  useEffect(() => {
+    if (!product) {
+      applyPageMetadata({
+        ...DEFAULT_SHARE_METADATA,
+        image: toAbsoluteUrl(DEFAULT_SHARE_METADATA.image),
+        url: toAbsoluteUrl(DEFAULT_SHARE_METADATA.url),
+      });
+      return undefined;
+    }
+
+    applyPageMetadata({
+      title: shareTitle,
+      description: shareDescription,
+      image: shareImage,
+      url: shareUrl,
+      type: 'product',
+    });
+
+    return () => {
+      applyPageMetadata({
+        ...DEFAULT_SHARE_METADATA,
+        image: toAbsoluteUrl(DEFAULT_SHARE_METADATA.image),
+        url: toAbsoluteUrl(DEFAULT_SHARE_METADATA.url),
+      });
+    };
+  }, [product, shareDescription, shareImage, shareTitle, shareUrl]);
+
+  const showShareFeedback = (type, message) => {
+    setShareMessage({ type, message });
+  };
 
   const validateSelection = () => {
     if (!product) return false;
@@ -188,6 +350,65 @@ const ProductDetail = () => {
     });
   };
 
+  const copyShareLink = async () => {
+    try {
+      await writeTextToClipboard(shareUrl);
+      setShareOpen(false);
+      showShareFeedback('success', 'Product link copied to clipboard.');
+    } catch {
+      showShareFeedback('error', 'Unable to copy the link right now.');
+    }
+  };
+
+  const handleNativeShare = async () => {
+    if (!product) return;
+    if (!canNativeShare) {
+      await copyShareLink();
+      return;
+    }
+
+    try {
+      await navigator.share({
+        title: shareTitle,
+        text: shareDescription,
+        url: shareUrl,
+      });
+      setShareOpen(false);
+      showShareFeedback('success', 'Share sheet opened successfully.');
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+      showShareFeedback('error', 'Unable to open the device share sheet.');
+    }
+  };
+
+  const openSocialShare = (platform) => {
+    if (!product) return;
+
+    const encodedUrl = encodeURIComponent(shareUrl);
+    const encodedText = encodeURIComponent(`${product.name} - ${shareDescription}`);
+    const shareTargets = {
+      facebook: {
+        url: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+        label: 'Facebook',
+      },
+      whatsapp: {
+        url: `https://wa.me/?text=${encodeURIComponent(`${product.name} ${shareUrl}`)}`,
+        label: 'WhatsApp',
+      },
+      x: {
+        url: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
+        label: 'X',
+      },
+    };
+
+    const target = shareTargets[platform];
+    if (!target) return;
+
+    window.open(target.url, '_blank', 'noopener,noreferrer,width=640,height=720');
+    setShareOpen(false);
+    showShareFeedback('success', `${target.label} share opened in a new tab.`);
+  };
+
   const formatPrice = (p) => `\u20B1${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
   if (loading) {
@@ -203,7 +424,7 @@ const ProductDetail = () => {
 
   if (!product) return <div className="text-center py-20 text-gray-600">Product not found.</div>;
 
-  const images = [product.image || 'https://via.placeholder.com/600?text=No+Image'];
+  const images = [product.image || PRODUCT_IMAGE_FALLBACK];
   const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
   const isOutOfStock = maxStock <= 0;
   const hasDiscount = product.is_on_sale && product.sale_price;
@@ -417,10 +638,55 @@ const ProductDetail = () => {
               <button onClick={handleWishlist} className={`p-3 border rounded-lg transition-colors ${isWishlisted ? 'border-red-200 bg-red-500/10 text-red-500' : 'border-white/50 bg-white/20 text-gray-700 hover:text-red-500 hover:border-red-200'}`}>
                 <Heart size={20} className={isWishlisted ? 'fill-orange-500' : ''} />
               </button>
-              <button className="p-3 border border-white/50 bg-white/20 rounded-lg text-gray-700 hover:text-gray-900 transition-colors">
-                <Share2 size={20} />
-              </button>
+              <div className="relative" data-share-menu>
+                <button
+                  type="button"
+                  onClick={() => setShareOpen((open) => !open)}
+                  className={`p-3 border rounded-lg transition-colors ${shareOpen ? 'border-red-200 bg-red-500/10 text-red-500' : 'border-white/50 bg-white/20 text-gray-700 hover:text-gray-900 hover:border-red-200'}`}
+                  aria-label="Share product"
+                  aria-expanded={shareOpen}
+                >
+                  <Share2 size={20} />
+                </button>
+                {shareOpen && (
+                  <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-2xl border border-slate-700/80 bg-slate-950/95 p-2 text-left text-white shadow-2xl">
+                    <div className="border-b border-slate-800 px-3 py-2">
+                      <p className="text-sm font-semibold text-white">Share this product</p>
+                      <p className="text-xs text-slate-300">Send the link directly or open a social share target.</p>
+                    </div>
+                    <div className="py-2">
+                      {canNativeShare && (
+                        <button type="button" onClick={handleNativeShare} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-100 transition-colors hover:bg-slate-800/90">
+                          <Share2 size={16} className="text-red-400" />
+                          <span>Share via device</span>
+                        </button>
+                      )}
+                      <button type="button" onClick={copyShareLink} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-100 transition-colors hover:bg-slate-800/90">
+                        <LinkIcon size={16} className="text-sky-300" />
+                        <span>Copy product link</span>
+                      </button>
+                      <button type="button" onClick={() => openSocialShare('facebook')} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-100 transition-colors hover:bg-slate-800/90">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[11px] font-bold text-white">f</span>
+                        <span>Share to Facebook</span>
+                      </button>
+                      <button type="button" onClick={() => openSocialShare('whatsapp')} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-100 transition-colors hover:bg-slate-800/90">
+                        <MessageCircle size={16} className="text-green-400" />
+                        <span>Share to WhatsApp</span>
+                      </button>
+                      <button type="button" onClick={() => openSocialShare('x')} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-100 transition-colors hover:bg-slate-800/90">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-slate-900">X</span>
+                        <span>Share to X</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
+            {shareMessage && (
+              <p className={`mb-4 text-sm ${shareMessage.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+                {shareMessage.message}
+              </p>
+            )}
             {quantityError && <p className="text-xs text-red-500 -mt-4 mb-6">{quantityError}</p>}
 
             {/* Benefits */}
