@@ -62,12 +62,67 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
       : ''
   );
 
+  const normalizeIncomingNotification = (notification) => {
+    const metadata = notification?.metadata && typeof notification.metadata === 'string'
+      ? (() => {
+          try { return JSON.parse(notification.metadata); } catch { return null; }
+        })()
+      : (notification?.metadata ?? null);
+
+    return {
+      ...notification,
+      metadata,
+      thumbnail_url: notification?.thumbnail_url ?? metadata?.thumbnail_url ?? metadata?.product_image ?? null,
+    };
+  };
+
+  const toSentenceCase = (value) => {
+    if (!value) return '';
+    const normalized = String(value).replace(/[_-]+/g, ' ').trim();
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  };
+
+  const getNotificationTitle = (notification) => {
+    const normalized = normalizeIncomingNotification(notification);
+
+    if (normalized.title) return normalized.title;
+    if (normalized.reference_type === 'order' || normalized.type === 'order.status') {
+      const orderNumber = normalized.metadata?.order_number || normalized.reference_id;
+      return orderNumber ? `Order #${String(orderNumber).padStart(4, '0')} update` : 'Order update';
+    }
+    if (normalized.type === 'return.status') {
+      const returnId = normalized.metadata?.return_id;
+      return returnId ? `Return Request #${returnId} update` : 'Return request update';
+    }
+    return 'Notification';
+  };
+
   const getNotificationSummary = (notification) => {
-    if (notification.message) return notification.message;
-    if (notification.metadata?.status && notification.reference_type === 'order') {
-      return `Order status: ${notification.metadata.status}`;
+    const normalized = normalizeIncomingNotification(notification);
+
+    if (normalized.message) return normalized.message;
+    if (normalized.metadata?.status && normalized.reference_type === 'order') {
+      const statusLabel = toSentenceCase(normalized.metadata.status);
+      const productName = normalized.metadata?.product_name;
+      return productName
+        ? `${statusLabel} for ${productName}.`
+        : `Order status: ${statusLabel}.`;
+    }
+    if (normalized.metadata?.status && normalized.type === 'return.status') {
+      const statusLabel = toSentenceCase(normalized.metadata.status);
+      const productName = normalized.metadata?.product_name;
+      return productName
+        ? `${statusLabel} for ${productName}.`
+        : `Return request ${statusLabel.toLowerCase()}.`;
     }
     return '';
+  };
+
+  const getNotificationTypeLabel = (notification) => {
+    const normalized = normalizeIncomingNotification(notification);
+    if (normalized.reference_type === 'order' || normalized.type === 'order.status') return 'Order';
+    if (normalized.type === 'return.status') return 'Return';
+    return 'Update';
   };
 
   const refreshNotifications = useCallback(async () => {
@@ -337,29 +392,42 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
                       No notifications yet
                     </div>
                   ) : (
-                    notifications.map((n) => (
+                    notifications.map((notification) => {
+                      const n = normalizeIncomingNotification(notification);
+                      const title = getNotificationTitle(n);
+                      const summary = getNotificationSummary(n);
+                      const typeLabel = getNotificationTypeLabel(n);
+
+                      return (
                       <button
                         key={n.id}
                         onClick={() => handleNotificationClick(n)}
-                        className={`w-full text-left px-4 py-3 hover:bg-gray-900 transition-colors border-b border-gray-50 ${!n.is_read ? 'bg-red-500/10/40' : ''}`}
+                        className={`w-full text-left px-4 py-3.5 hover:bg-gray-900 transition-colors border-b border-gray-700 ${!n.is_read ? 'bg-red-500/10' : ''}`}
                       >
-                        <div className="flex gap-3">
+                        <div className="flex items-start gap-3.5">
                           {n.thumbnail_url ? (
-                            <img src={n.thumbnail_url} alt="" className="mt-0.5 shrink-0 w-10 h-10 rounded-lg object-cover bg-gray-900 border border-gray-700" />
+                            <img src={n.thumbnail_url} alt="" className="mt-0.5 shrink-0 w-12 h-12 rounded-xl object-cover bg-gray-900 border border-gray-700 shadow-sm" />
                           ) : (
-                            <div className={`mt-0.5 shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${getNotifColor(n.type)}`}>
+                            <div className={`mt-0.5 shrink-0 w-10 h-10 rounded-xl border border-gray-700 flex items-center justify-center ${getNotifColor(n.type)}`}>
                               {getNotifIcon(n.type)}
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                            <p className={`text-sm leading-snug ${!n.is_read ? 'font-semibold text-white' : 'text-gray-600'}`}>{n.title}</p>
-                            {getNotificationSummary(n) && <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{getNotificationSummary(n)}</p>}
-                            <p className="text-[10px] text-gray-400 mt-1">{formatNotificationTime(n)}</p>
+                            <div className="flex items-start gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-white' : 'font-medium text-gray-100'}`}>{title}</p>
+                                {summary && <p className="mt-1 text-xs leading-5 text-gray-300 line-clamp-2">{summary}</p>}
+                                <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
+                                  <span className="rounded-full border border-gray-600 bg-zinc-900 px-2 py-0.5 font-medium text-gray-300">{typeLabel}</span>
+                                  <span>{formatNotificationTime(n)}</span>
+                                </div>
+                              </div>
+                              {!n.is_read && <div className="mt-1.5 w-2.5 h-2.5 bg-red-500 rounded-full shrink-0" />}
+                            </div>
                           </div>
-                          {!n.is_read && <div className="mt-2 w-2 h-2 bg-red-500/100 rounded-full shrink-0" />}
                         </div>
                       </button>
-                    ))
+                    )})
                   )}
                 </div>
               </div>

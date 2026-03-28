@@ -38,6 +38,17 @@ const mapReturnRecord = (record) => ({
   refund_amount: parseFloat(record.refund_amount || 0),
 });
 
+const getReturnProductThumbnail = async (db, productId) => {
+  if (!productId) return null;
+
+  const result = await db.query(
+    'SELECT image FROM products WHERE id = $1 LIMIT 1',
+    [productId]
+  );
+
+  return result.rows[0]?.image || null;
+};
+
 // Create return request
 export const createReturn = async (req, res) => {
   const { order_id, items, reason, return_type } = req.body;
@@ -328,6 +339,7 @@ export const approveReturn = async (req, res) => {
     emitReturnUpdated(approvedReturn);
 
     const firstItem = approvedReturn.items?.[0] || null;
+    const thumbnailUrl = await getReturnProductThumbnail(client, firstItem?.product_id || null);
     await createUserNotification(client, {
       user_id: approvedReturn.user_id,
       type: 'return.status',
@@ -337,11 +349,13 @@ export const approveReturn = async (req, res) => {
         : 'Your return request was approved.',
       reference_id: approvedReturn.order_id,
       reference_type: 'order',
+      thumbnail_url: thumbnailUrl,
       metadata: {
         return_id: approvedReturn.id,
         status: 'approved',
         order_id: approvedReturn.order_id,
         product_name: firstItem?.name || null,
+        product_image: thumbnailUrl,
       },
     });
 
@@ -399,6 +413,7 @@ export const rejectReturn = async (req, res) => {
     emitReturnUpdated(rejectedReturn);
 
     const firstItem = rejectedReturn.items?.[0] || null;
+    const thumbnailUrl = await getReturnProductThumbnail(client, firstItem?.product_id || null);
     await createUserNotification(client, {
       user_id: rejectedReturn.user_id,
       type: 'return.status',
@@ -408,11 +423,13 @@ export const rejectReturn = async (req, res) => {
         : 'Your return request was rejected.',
       reference_id: rejectedReturn.order_id,
       reference_type: 'order',
+      thumbnail_url: thumbnailUrl,
       metadata: {
         return_id: rejectedReturn.id,
         status: 'rejected',
         order_id: rejectedReturn.order_id,
         product_name: firstItem?.name || null,
+        product_image: thumbnailUrl,
       },
     });
 

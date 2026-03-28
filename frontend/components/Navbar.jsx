@@ -39,20 +39,83 @@ const Navbar = ({ user, onLogout }) => {
       : ''
   );
 
+  const normalizeIncomingNotification = (notification) => {
+    const metadata = notification?.metadata && typeof notification.metadata === 'string'
+      ? (() => {
+          try { return JSON.parse(notification.metadata); } catch { return null; }
+        })()
+      : (notification?.metadata ?? null);
+
+    return {
+      ...notification,
+      metadata,
+      thumbnail_url: notification?.thumbnail_url ?? metadata?.thumbnail_url ?? metadata?.product_image ?? null,
+    };
+  };
+
+  const toSentenceCase = (value) => {
+    if (!value) return '';
+    const normalized = String(value).replace(/[_-]+/g, ' ').trim();
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  };
+
+  const getNotificationTitle = (notification) => {
+    const normalized = normalizeIncomingNotification(notification);
+
+    if (normalized.title) return normalized.title;
+
+    if (normalized.type === 'announcement') return 'Store announcement';
+
+    if (normalized.reference_type === 'order' || normalized.type === 'order.status') {
+      const orderNumber = normalized.metadata?.order_number || normalized.reference_id;
+      return orderNumber ? `Order #${String(orderNumber).padStart(4, '0')} update` : 'Order update';
+    }
+
+    if (normalized.type === 'return.status') {
+      const returnId = normalized.metadata?.return_id;
+      return returnId ? `Return Request #${returnId} update` : 'Return request update';
+    }
+
+    return 'Notification';
+  };
+
   const getNotificationSummary = (notification) => {
-    if (notification.type === 'announcement') {
-      return notification.message || '';
+    const normalized = normalizeIncomingNotification(notification);
+
+    if (normalized.type === 'announcement') {
+      return normalized.message || '';
     }
 
-    if (notification.message) {
-      return notification.message;
+    if (normalized.message) {
+      return normalized.message;
     }
 
-    if (notification.metadata?.status && notification.reference_type === 'order') {
-      return `Order status: ${notification.metadata.status}`;
+    if (normalized.metadata?.status && normalized.reference_type === 'order') {
+      const statusLabel = toSentenceCase(normalized.metadata.status);
+      const productName = normalized.metadata?.product_name;
+      return productName
+        ? `${statusLabel} for ${productName}.`
+        : `Order status: ${statusLabel}.`;
+    }
+
+    if (normalized.metadata?.status && normalized.type === 'return.status') {
+      const statusLabel = toSentenceCase(normalized.metadata.status);
+      const productName = normalized.metadata?.product_name;
+      return productName
+        ? `${statusLabel} for ${productName}.`
+        : `Return request ${statusLabel.toLowerCase()}.`;
     }
 
     return '';
+  };
+
+  const getNotificationTypeLabel = (notification) => {
+    const normalized = normalizeIncomingNotification(notification);
+
+    if (normalized.type === 'announcement') return 'Announcement';
+    if (normalized.reference_type === 'order' || normalized.type === 'order.status') return 'Order';
+    if (normalized.type === 'return.status') return 'Return';
+    return 'Update';
   };
 
   const userMenuItemClass = 'flex items-center gap-3 px-4 py-2.5 text-sm text-gray-100 hover:text-white hover:bg-zinc-800 focus-visible:bg-zinc-800 transition-all duration-200 ease-in-out';
@@ -148,8 +211,9 @@ const Navbar = ({ user, onLogout }) => {
       if (notification.user_id && notification.user_id !== user.id) {
         return;
       }
-      setNotifications((prev) => [notification, ...prev].slice(0, 10));
-      if (notification.is_read === false || notification.is_read == null) {
+      const normalized = normalizeIncomingNotification(notification);
+      setNotifications((prev) => [normalized, ...prev.filter((item) => item.id !== normalized.id)].slice(0, 10));
+      if (normalized.is_read === false || normalized.is_read == null) {
         setUnreadCount((prev) => prev + 1);
       }
     };
@@ -419,30 +483,44 @@ const Navbar = ({ user, onLogout }) => {
                         {notifications.length === 0 ? (
                           <div className="p-8 text-center text-gray-400 text-sm">No notifications</div>
                         ) : (
-                          notifications.map((n, i) => (
-                          <button key={`${n.id || n.title}-${i}`} onClick={() => handleNotificationClick(n)} className={`w-full text-left px-4 py-3 hover:bg-gray-900 transition-all duration-150 border-b border-gray-50 ${!n.is_read ? 'bg-red-50/60' : ''}`}>
-                              <div className="flex gap-3">
+                          notifications.map((notification, i) => {
+                            const n = normalizeIncomingNotification(notification);
+                            const title = getNotificationTitle(n);
+                            const summary = getNotificationSummary(n);
+                            const typeLabel = getNotificationTypeLabel(n);
+
+                            return (
+                            <button key={`${n.id || n.title}-${i}`} onClick={() => handleNotificationClick(n)} className={`w-full text-left px-4 py-3.5 hover:bg-zinc-900/90 transition-all duration-150 border-b border-gray-700 ${!n.is_read ? 'bg-red-500/10' : ''}`}>
+                              <div className="flex items-start gap-3.5">
                                 <div className="mt-0.5 shrink-0">
                                   {n.thumbnail_url ? (
-                                    <img src={n.thumbnail_url} alt="" className="w-10 h-10 rounded-lg object-cover bg-gray-900 border border-gray-700" />
+                                    <img src={n.thumbnail_url} alt="" className="h-12 w-12 rounded-xl object-cover bg-gray-900 border border-gray-700 shadow-sm" />
                                   ) : n.type === 'announcement' ? (
-                                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                                    <div className="h-10 w-10 rounded-xl bg-blue-500/15 text-blue-300 border border-blue-500/20 flex items-center justify-center">
                                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                                     </div>
                                   ) : (
-                                    <div className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+                                    <div className="h-10 w-10 rounded-xl bg-red-500/15 text-red-300 border border-red-500/20 flex items-center justify-center">
                                       <Bell size={16} />
                                     </div>
                                   )}
                                 </div>
-                                <div className="min-w-0">
-                                  <p className={`text-sm ${!n.is_read ? 'font-bold text-white' : 'font-medium text-gray-700'}`}>{n.title || n.message}</p>
-                                  {getNotificationSummary(n) && <p className="text-sm text-gray-400 mt-0.5 line-clamp-2">{getNotificationSummary(n)}</p>}
-                                  <p className="text-xs text-gray-400 mt-1">{formatNotificationTime(n)}</p>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-white' : 'font-medium text-gray-100'}`}>{title}</p>
+                                      {summary && <p className="mt-1 text-xs leading-5 text-gray-300 line-clamp-2">{summary}</p>}
+                                      <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
+                                        <span className="rounded-full border border-gray-600 bg-zinc-900 px-2 py-0.5 font-medium text-gray-300">{typeLabel}</span>
+                                        <span>{formatNotificationTime(n)}</span>
+                                      </div>
+                                    </div>
+                                    {!n.is_read && <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" />}
+                                  </div>
                                 </div>
                               </div>
                             </button>
-                          ))
+                          )})
                         )}
                       </div>
                     </div>

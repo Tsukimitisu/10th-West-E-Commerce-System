@@ -2396,15 +2396,19 @@ export const deleteVariant = async (id) => {
 
 // ==================== NOTIFICATIONS ====================
 
-const normalizeNotification = (notification) => ({
-  ...notification,
-  thumbnail_url: notification?.thumbnail_url ?? notification?.metadata?.thumbnail_url ?? null,
-  metadata: notification?.metadata && typeof notification.metadata === 'string'
+const normalizeNotification = (notification) => {
+  const metadata = notification?.metadata && typeof notification.metadata === 'string'
     ? (() => {
         try { return JSON.parse(notification.metadata); } catch { return null; }
       })()
-    : (notification?.metadata ?? null),
-});
+    : (notification?.metadata ?? null);
+
+  return {
+    ...notification,
+    metadata,
+    thumbnail_url: notification?.thumbnail_url ?? metadata?.thumbnail_url ?? metadata?.product_image ?? null,
+  };
+};
 
 export const getNotifications = async () => {
   if (USE_SUPABASE) {
