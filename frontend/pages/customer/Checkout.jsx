@@ -63,7 +63,7 @@ const Checkout = () => {
     return buyNowSessionStore;
   }, [isBuyNowQuery, buyNowSessionStore, location.state]);
 
-  const isBuyNow = !!buyNowSession?.item;
+  const isBuyNow = isBuyNowQuery;
   const buyNowItem = buyNowSession?.item || null;
 
   const [buyNowQty, setBuyNowQty] = useState(1);
@@ -119,7 +119,7 @@ const Checkout = () => {
     return allCartItems.filter((item) => allowedIds.has(item.productId));
   }, [allCartItems, checkoutItemIds, isBuyNow]);
 
-  const items = isBuyNow && buyNowItem ? [{ ...buyNowItem, quantity: buyNowQty }] : verifiedCartItems;
+  const items = isBuyNow ? (buyNowItem ? [{ ...buyNowItem, quantity: buyNowQty }] : []) : verifiedCartItems;
   const activeDiscount = isBuyNow ? buyNowDiscount : cartDiscount;
   const activeDiscountAmount = isBuyNow ? buyNowDiscountAmount : cartDiscountAmount;
   
@@ -478,8 +478,15 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="font-display font-semibold text-xl text-white mb-2">Your cart is empty</h2>
-          <Link to="/shop" className="text-red-500 hover:text-orange-600 text-sm font-medium">Continue Shopping</Link>
+          <h2 className="font-display font-semibold text-xl text-white mb-2">
+            {isBuyNow ? 'Buy Now session expired' : 'Your cart is empty'}
+          </h2>
+          <Link
+            to={isBuyNow ? (buyNowSessionStore?.returnPath || '/shop') : '/shop'}
+            className="text-red-500 hover:text-orange-600 text-sm font-medium"
+          >
+            {isBuyNow ? 'Return to Product' : 'Continue Shopping'}
+          </Link>
         </div>
       </div>
     );

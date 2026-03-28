@@ -89,7 +89,14 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
               <Route path="/oauth-callback" element={<OAuthCallback onLogin={onLogin} />} />
               <Route path="/products/:id" element={<ProductDetail />} />
               <Route path="/cart" element={<Cart />} />
-              <Route path="/checkout" element={user ? <Checkout /> : <Navigate to="/login?redirect=/checkout" />} />
+              <Route
+                path="/checkout"
+                element={
+                  user
+                    ? <Checkout />
+                    : <Navigate to={`/login?redirect=/checkout${location.search ? `&${location.search.slice(1)}` : ''}`} />
+                }
+              />
               <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/faq" element={<FAQ />} />
