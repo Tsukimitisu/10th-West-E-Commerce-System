@@ -55,6 +55,8 @@ const Navbar = ({ user, onLogout }) => {
     return '';
   };
 
+  const userMenuItemClass = 'flex items-center gap-3 px-4 py-2.5 text-sm text-gray-100 hover:text-white hover:bg-zinc-800 focus-visible:bg-zinc-800 transition-all duration-200 ease-in-out';
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener('scroll', onScroll);
@@ -468,34 +470,34 @@ const Navbar = ({ user, onLogout }) => {
               {/* User menu */}
               {user ? (
                 <div ref={userMenuRef} className="relative">
-                  <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="p-2 text-red-500 hover:text-red-600 ml-2 flex items-center gap-2 hover:bg-red-50 rounded-lg transition-colors">
+                  <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="p-2 text-red-500 hover:text-red-400 ml-2 flex items-center gap-2 hover:bg-zinc-800 rounded-lg transition-colors">
                     <div className="w-8 h-8 bg-gradient-to-br from-red-100 to-red-200 text-red-600 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm">
                       {user.name.charAt(0).toUpperCase()}
                     </div>
-                    <span className="hidden md:block text-sm font-semibold text-gray-700 max-w-20 truncate">{user.name.split(' ')[0]}</span>
-                    <ChevronDown size={14} className="hidden md:block text-gray-400" />
+                    <span className="hidden md:block text-sm font-semibold text-gray-100 max-w-20 truncate">{user.name.split(' ')[0]}</span>
+                    <ChevronDown size={14} className="hidden md:block text-gray-300" />
                   </button>
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-900 rounded-2xl shadow-2xl border border-gray-700 py-2 animate-fade-in">
-                      <div className="px-4 py-3 border-b border-gray-700 mb-1">
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-950/95 backdrop-blur-md rounded-2xl shadow-2xl border border-zinc-700 py-2 animate-fade-in">
+                      <div className="px-4 py-3 border-b border-zinc-700 mb-1">
                         <p className="text-sm font-bold text-white truncate">{user.name}</p>
-                        <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                        <p className="text-xs text-gray-300 truncate">{user.email}</p>
                       </div>
-                      <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><User size={16} /> My Profile</Link>
-                      <Link to="/orders" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><Package size={16} /> My Orders</Link>
-                      <Link to="/wishlist" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><Heart size={16} /> Wishlist</Link>
-                      <Link to="/addresses" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><MapPin size={16} /> Addresses</Link>
-                      <Link to="/my-returns" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><RotateCcw size={16} /> Returns</Link>
+                      <Link to="/profile" className={userMenuItemClass}><User size={16} className="text-red-400" /> My Profile</Link>
+                      <Link to="/orders" className={userMenuItemClass}><Package size={16} className="text-red-400" /> My Orders</Link>
+                      <Link to="/wishlist" className={userMenuItemClass}><Heart size={16} className="text-red-400" /> Wishlist</Link>
+                      <Link to="/addresses" className={userMenuItemClass}><MapPin size={16} className="text-red-400" /> Addresses</Link>
+                      <Link to="/my-returns" className={userMenuItemClass}><RotateCcw size={16} className="text-red-400" /> Returns</Link>
                       {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
                         <>
-                          <div className="border-t border-gray-700 mt-1 pt-1" />
-                          <Link to="/admin" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><Shield size={16} /> Admin Panel</Link>
-                          <Link to="/pos" className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out"><Monitor size={16} /> POS Terminal</Link>
+                          <div className="border-t border-zinc-700 mt-1 pt-1" />
+                          <Link to="/admin" className={userMenuItemClass}><Shield size={16} className="text-red-400" /> Admin Panel</Link>
+                          <Link to="/pos" className={userMenuItemClass}><Monitor size={16} className="text-red-400" /> POS Terminal</Link>
                         </>
                       )}
-                      <div className="border-t border-gray-700 mt-1 pt-1">
-                        <button onClick={() => setShowLogoutConfirm(true)} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 transition-all duration-300 ease-in-out w-full">
-                          <LogOut size={16} /> Sign Out
+                      <div className="border-t border-zinc-700 mt-1 pt-1">
+                        <button onClick={() => setShowLogoutConfirm(true)} className={`${userMenuItemClass} w-full`}>
+                          <LogOut size={16} className="text-red-400" /> Sign Out
                         </button>
                       </div>
                     </div>
