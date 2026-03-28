@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle } from 'lucide-react';
-import { getProductById, getRelatedProducts, getProductReviews, addToWishlist, removeFromWishlist, getWishlist, recordProductView, WISHLIST_SYNC_EVENT } from '../services/api';
+import { getProductById, getRelatedProducts, getProductReviews, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useCart } from '../context/CartContext';
 import ProductCard from '../components/ProductCard';
 import StarRating from '../components/StarRating';
@@ -109,10 +109,16 @@ const ProductDetail = () => {
   const [quantityError, setQuantityError] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
   const [shareMessage, setShareMessage] = useState(null);
+  const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [reviewSuccess, setReviewSuccess] = useState('');
+  const [reviewFieldErrors, setReviewFieldErrors] = useState({});
   const { addToCart } = useCart();
 
   const user = localStorage.getItem('shopCoreUser');
-  const userId = user ? JSON.parse(user).id : null;
+  const currentUser = user ? JSON.parse(user) : null;
+  const userId = currentUser?.id ?? null;
   const isWishlisted = wishlistedIds.includes(Number(id));
 
   useEffect(() => {
@@ -157,6 +163,10 @@ const ProductDetail = () => {
         setSelectedImage(0);
         setShareOpen(false);
         setShareMessage(null);
+        setReviewForm({ rating: 0, comment: '' });
+        setReviewError('');
+        setReviewSuccess('');
+        setReviewFieldErrors({});
         const [rel, rev] = await Promise.all([
           getRelatedProducts(Number(id), p.category_id || 0).catch(() => []),
           getProductReviews(Number(id)).catch(() => []),
@@ -202,6 +212,16 @@ const ProductDetail = () => {
 
     return () => window.clearTimeout(timer);
   }, [shareMessage]);
+
+  useEffect(() => {
+    if (!reviewSuccess) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setReviewSuccess('');
+    }, 3200);
+
+    return () => window.clearTimeout(timer);
+  }, [reviewSuccess]);
 
   useEffect(() => {
     if (!shareOpen) return undefined;
@@ -407,6 +427,37 @@ const ProductDetail = () => {
     window.open(target.url, '_blank', 'noopener,noreferrer,width=640,height=720');
     setShareOpen(false);
     showShareFeedback('success', `${target.label} share opened in a new tab.`);
+  };
+
+  const handleReviewSubmit = async (event) => {
+    event.preventDefault();
+    if (!product || !userId) {
+      setReviewError('Please log in to leave a review.');
+      return;
+    }
+
+    setReviewSubmitting(true);
+    setReviewError('');
+    setReviewSuccess('');
+    setReviewFieldErrors({});
+
+    try {
+      const response = await addReview({
+        product_id: product.id,
+        rating: reviewForm.rating,
+        comment: reviewForm.comment.trim(),
+      });
+
+      setReviewForm({ rating: 0, comment: '' });
+      setReviewSuccess(response?.message || 'Review submitted successfully.');
+      const latestReviews = await getProductReviews(product.id).catch(() => reviews);
+      setReviews(latestReviews);
+    } catch (error) {
+      setReviewFieldErrors(error?.fieldErrors || {});
+      setReviewError(error?.message || 'Failed to submit your review.');
+    } finally {
+      setReviewSubmitting(false);
+    }
   };
 
   const formatPrice = (p) => `\u20B1${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
@@ -755,6 +806,64 @@ const ProductDetail = () => {
 
           {activeTab === 'reviews' && (
             <div className="animate-fade-in">
+              <div className="mb-8 rounded-2xl border border-white/40 bg-white/25 p-5 backdrop-blur-sm">
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h3 className="font-display text-lg font-semibold text-gray-900">Write a review</h3>
+                    <p className="text-sm text-gray-600">Share your experience with this product. Reviews are moderated before they go live.</p>
+                  </div>
+                  {!userId && (
+                    <Link to="/login" className="text-sm font-medium text-red-500 hover:text-red-600">
+                      Log in to review
+                    </Link>
+                  )}
+                </div>
+
+                <form onSubmit={handleReviewSubmit} className="mt-4 space-y-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-900">Your rating</label>
+                    <StarRating
+                      rating={reviewForm.rating}
+                      size={20}
+                      interactive={!!userId}
+                      onChange={(rating) => {
+                        setReviewForm((prev) => ({ ...prev, rating }));
+                        setReviewFieldErrors((prev) => ({ ...prev, rating: '' }));
+                      }}
+                    />
+                    {reviewFieldErrors.rating && <p className="mt-2 text-xs text-red-500">{reviewFieldErrors.rating}</p>}
+                  </div>
+
+                  <div>
+                    <label htmlFor="review-comment" className="mb-2 block text-sm font-medium text-gray-900">Your review</label>
+                    <textarea
+                      id="review-comment"
+                      rows={4}
+                      value={reviewForm.comment}
+                      onChange={(event) => {
+                        setReviewForm((prev) => ({ ...prev, comment: event.target.value }));
+                        setReviewFieldErrors((prev) => ({ ...prev, comment: '' }));
+                      }}
+                      disabled={!userId || reviewSubmitting}
+                      placeholder="Describe the product quality, fit, or overall experience."
+                      className="w-full rounded-xl border border-white/50 bg-white/70 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
+                    />
+                    {reviewFieldErrors.comment && <p className="mt-2 text-xs text-red-500">{reviewFieldErrors.comment}</p>}
+                  </div>
+
+                  {reviewError && <p className="text-sm text-red-500">{reviewError}</p>}
+                  {reviewSuccess && <p className="text-sm text-green-600">{reviewSuccess}</p>}
+
+                  <button
+                    type="submit"
+                    disabled={!userId || reviewSubmitting}
+                    className="inline-flex items-center justify-center rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                  >
+                    {reviewSubmitting ? 'Submitting...' : 'Submit review'}
+                  </button>
+                </form>
+              </div>
+
               {/* Rating summary */}
               <div className="flex flex-col md:flex-row gap-8 mb-8 p-6 bg-white/25 backdrop-blur-sm border border-white/40 rounded-xl">
                 <div className="text-center md:text-left">

@@ -8,6 +8,7 @@ import OrdersView from './OrdersView';
 import CustomersView from './CustomersView';
 import ReturnsView from './ReturnsView';
 import StaffView from './StaffView';
+import ReviewsView from './ReviewsView';
 import ReportsView from './ReportsView';
 import BannersView from './BannersView';
 import PromotionsView from './PromotionsView';
@@ -32,6 +33,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       case 'customers': return <CustomersView />;
       case 'returns': return <ReturnsView />;
       case 'staff': return <StaffView />;
+      case 'reviews': return <ReviewsView />;
       case 'reports': return <ReportsView />;
       case 'promotions': return <PromotionsView />;
       case 'banners': return <BannersView />;

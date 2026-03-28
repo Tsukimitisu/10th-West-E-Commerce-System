@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Boxes, ShoppingCart, Monitor,
-  RotateCcw, UserCog, BarChart3, Users,
+  RotateCcw, UserCog, BarChart3, Users, Star,
   LogOut, Bell, Search, Menu, X,
   ChevronLeft, ExternalLink, Wifi, WifiOff, Image, Tag, Newspaper,
   Settings, CircleHelp, House,
@@ -23,6 +23,7 @@ const createNavItems = (badges = {}) => [
   { id: 'returns', label: 'Returns', icon: RotateCcw, badge: badges.pendingReturns },
   // Owner: Staff & Reports
   { id: 'staff', label: 'Staff', icon: UserCog, divider: true },
+  { id: 'reviews', label: 'Reviews', icon: Star },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   // Owner: Marketing & Content
   { id: 'promotions', label: 'Promotions', icon: Tag, divider: true },
@@ -37,7 +38,7 @@ const STORE_STAFF_NAV = ['inventory', 'orders', 'pos', 'returns'];
 const OWNER_NAV = [
   'dashboard', 'products', 'inventory', 'orders', 'customers',
   'returns',
-  'staff', 'reports',
+  'staff', 'reviews', 'reports',
   'promotions', 'banners', 'content'
 ];
 

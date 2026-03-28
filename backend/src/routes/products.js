@@ -9,6 +9,7 @@ import {
   deleteProduct,
   uploadProductImage
 } from '../controllers/productController.js';
+import { getProductReviews } from '../controllers/reviewController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
 
@@ -31,6 +32,7 @@ router.post(
   express.raw({ type: 'image/*', limit: '5mb' }),
   uploadProductImage
 );
+router.get('/:id/reviews', getProductReviews);
 router.get('/:id', getProductById);
 
 // Protected routes (Admin, Super Admin, Owner)

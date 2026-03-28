@@ -1,33 +1,41 @@
 ﻿import React from 'react';
-import { Star, ThumbsUp, CheckCircle, ImageIcon } from 'lucide-react';
+import { ThumbsUp, CheckCircle } from 'lucide-react';
 import StarRating from './StarRating';
 
 const ReviewCard = ({ review }) => {
   const date = new Date(review.created_at);
   const timeAgo = getTimeAgo(date);
+  const userName = review.user_name || 'Customer';
+  const userInitial = userName.charAt(0).toUpperCase();
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-gray-700 transition-colors">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-sm font-bold text-gray-600">
-            {review.user_name.charAt(0).toUpperCase()}
-          </div>
+          {review.user_avatar ? (
+            <img src={review.user_avatar} alt={userName} className="w-10 h-10 rounded-full object-cover" />
+          ) : (
+            <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-sm font-bold text-gray-600">
+              {userInitial}
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-medium text-white text-sm">{review.user_name}</span>
-              <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
-                <CheckCircle size={10} /> Verified
-              </span>
+              <span className="font-medium text-white text-sm">{userName}</span>
+              {review.verified_purchase && (
+                <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                  <CheckCircle size={10} /> Verified Purchase
+                </span>
+              )}
             </div>
             <span className="text-xs text-gray-400">{timeAgo}</span>
           </div>
         </div>
         <StarRating rating={review.rating} size={14} />
       </div>
-      <p className="text-sm text-gray-600 leading-relaxed">{review.comment}</p>
-      <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-50">
-        <button className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+      <p className="text-sm text-gray-200 leading-relaxed">{review.comment}</p>
+      <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-700">
+        <button className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
           <ThumbsUp size={13} /> Helpful
         </button>
       </div>

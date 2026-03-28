@@ -641,6 +641,8 @@ const mapProductFromSupabase = (p) => ({
   partNumber: p.part_number,
   buyingPrice: p.buying_price,
   boxNumber: p.box_number,
+  rating: Number(p.rating || 0),
+  reviewCount: Number(p.review_count ?? p.reviewCount ?? 0),
 });
 
 const mapProductToSupabase = (product) => ({
@@ -661,6 +663,59 @@ const mapProductToSupabase = (product) => ({
   is_on_sale: product.is_on_sale,
 });
 
+const toApprovedReviewStatus = (review) => {
+  if (!review) return 'pending';
+  if (review.review_status) return review.review_status;
+  return review.is_approved ? 'approved' : 'pending';
+};
+
+const applyReviewStatsToProducts = async (products) => {
+  const items = Array.isArray(products) ? products : [];
+  if (!USE_SUPABASE || items.length === 0) {
+    return items;
+  }
+
+  const productIds = [...new Set(items.map((product) => Number(product.id)).filter((id) => Number.isInteger(id) && id > 0))];
+  if (productIds.length === 0) {
+    return items.map((product) => ({
+      ...product,
+      rating: Number(product.rating || 0),
+      reviewCount: Number(product.reviewCount ?? product.review_count ?? 0),
+    }));
+  }
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('product_id, rating, review_status, is_approved')
+    .in('product_id', productIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const statsMap = new Map();
+  (data || []).forEach((review) => {
+    if (toApprovedReviewStatus(review) !== 'approved') return;
+    const productId = Number(review.product_id);
+    const existing = statsMap.get(productId) || { total: 0, count: 0 };
+    existing.total += Number(review.rating || 0);
+    existing.count += 1;
+    statsMap.set(productId, existing);
+  });
+
+  return items.map((product) => {
+    const stats = statsMap.get(Number(product.id));
+    const fallbackRating = Number(product.rating || 0);
+    const fallbackCount = Number(product.reviewCount ?? product.review_count ?? 0);
+
+    return {
+      ...product,
+      rating: stats?.count ? Number((stats.total / stats.count).toFixed(1)) : fallbackRating,
+      reviewCount: stats?.count ?? fallbackCount,
+    };
+  });
+};
+
 // ==================== PRODUCTS ====================
 
 export const getTopSellers = async (days = null) => {
@@ -677,10 +732,10 @@ export const getTopSellers = async (days = null) => {
       .limit(8);
       
     if (error) throw new Error(error.message);
-    return (data || []).map((p) => ({
+    return applyReviewStatsToProducts((data || []).map((p) => ({
       ...mapProductFromSupabase(p),
       category_name: p.categories?.name,
-    }));
+    })));
   }
 
   const queryParams = new URLSearchParams();
@@ -693,6 +748,7 @@ export const getTopSellers = async (days = null) => {
     partNumber: p.part_number,
     buyingPrice: p.buying_price,
     boxNumber: p.box_number,
+    reviewCount: Number(p.review_count ?? p.reviewCount ?? 0),
   }));
 };
 
@@ -721,10 +777,10 @@ export const getProducts = async (params = {}) => {
 
     if (error) throw new Error(error.message);
 
-    let products = (data || []).map((p) => ({
+    let products = await applyReviewStatsToProducts((data || []).map((p) => ({
       ...mapProductFromSupabase(p),
       category_name: p.categories?.name,
-    }));
+    })));
 
     // Client-side relevance sorting for Supabase search results to match Express backend quality
     if (params.search && products.length > 0) {
@@ -749,6 +805,7 @@ export const getProducts = async (params = {}) => {
     partNumber: p.part_number,
     buyingPrice: p.buying_price,
     boxNumber: p.box_number,
+    reviewCount: Number(p.review_count ?? p.reviewCount ?? 0),
   }));
 };
 
@@ -766,10 +823,12 @@ export const getProductById = async (id) => {
 
     if (error) throw new Error(error.message);
 
-    return {
+    const [product] = await applyReviewStatsToProducts([{
       ...mapProductFromSupabase(data),
       category_name: data.categories?.name,
-    };
+    }]);
+
+    return product;
   }
 
   const product = await authenticatedFetch(`${API_URL}/products/${id}`);
@@ -778,6 +837,7 @@ export const getProductById = async (id) => {
     partNumber: product.part_number,
     buyingPrice: product.buying_price,
     boxNumber: product.box_number,
+    reviewCount: Number(product.review_count ?? product.reviewCount ?? 0),
   };
 };
 
@@ -2150,36 +2210,27 @@ export const removeFromWishlist = async (userId, productId) => {
 };
 
 export const getReviews = async (productId) => {
-  if (USE_SUPABASE) {
-    const { data } = await supabase
-      .from('reviews')
-      .select('*, users(name, avatar)')
-      .eq('product_id', productId)
-      .eq('is_approved', true)
-      .order('created_at', { ascending: false });
-    return data || [];
-  }
   return authenticatedFetch(`${API_URL}/products/${productId}/reviews`).catch(() => []);
 };
 export const getProductReviews = getReviews;
 
 export const addReview = async (review) => {
-  if (USE_SUPABASE) {
-    const currentUser = getCurrentUserFromToken();
-    if (!currentUser) throw new Error('Not authenticated');
-    const { data, error } = await supabase
-      .from('reviews')
-      .insert({ ...review, user_id: currentUser.id })
-      .select()
-      .single();
-    if (error) throw new Error(error.message);
-    return data;
-  }
   return authenticatedFetch(`${API_URL}/reviews`, {
     method: 'POST',
     body: JSON.stringify(review),
   });
 };
+
+export const getReviewModerationQueue = async (status = 'pending') => (
+  authenticatedFetch(`${API_URL}/reviews/moderation?status=${encodeURIComponent(status)}`)
+);
+
+export const moderateReview = async (reviewId, payload) => (
+  authenticatedFetch(`${API_URL}/reviews/${reviewId}/moderate`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+);
 
 export const getDiscounts = async () => {
   if (USE_SUPABASE) {

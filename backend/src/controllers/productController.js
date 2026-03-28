@@ -41,7 +41,19 @@ export const getProducts = async (req, res) => {
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
         WHERE oi.product_id = p.id AND o.status IN ('paid', 'completed')
-      ), 0) as total_sold
+      ), 0) as total_sold,
+      COALESCE((
+        SELECT ROUND(AVG(r.rating)::numeric, 1)
+        FROM reviews r
+        WHERE r.product_id = p.id
+          AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+      ), p.rating, 0) as review_rating,
+      COALESCE((
+        SELECT COUNT(*)
+        FROM reviews r
+        WHERE r.product_id = p.id
+          AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+      ), 0) as review_count
     `;
     let fromClause = 'FROM products p LEFT JOIN categories c ON p.category_id = c.id';
     let whereClause = 'WHERE 1=1';
@@ -97,6 +109,8 @@ export const getProducts = async (req, res) => {
     
     res.json(result.rows.map(product => ({
       ...product,
+      rating: parseFloat(product.review_rating ?? product.rating ?? 0),
+      review_count: parseInt(product.review_count ?? 0, 10),
       price: parseFloat(product.price),
       buying_price: parseFloat(product.buying_price),
       sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
@@ -132,6 +146,18 @@ export const getTopSellers = async (req, res) => {
         p.id, p.name, p.brand, p.part_number, p.image, p.description, 
         p.price, p.sale_price, p.is_on_sale, p.stock_quantity, p.rating, p.created_at,
         c.name as category_name,
+        COALESCE((
+          SELECT ROUND(AVG(r.rating)::numeric, 1)
+          FROM reviews r
+          WHERE r.product_id = p.id
+            AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+        ), p.rating, 0) as review_rating,
+        COALESCE((
+          SELECT COUNT(*)
+          FROM reviews r
+          WHERE r.product_id = p.id
+            AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+        ), 0) as review_count,
         COALESCE(SUM(oi.quantity), 0) as total_sold
       FROM products p
       LEFT JOIN order_items oi ON oi.product_id = p.id
@@ -144,6 +170,8 @@ export const getTopSellers = async (req, res) => {
     
     res.json(result.rows.map(product => ({
       ...product,
+      rating: parseFloat(product.review_rating ?? product.rating ?? 0),
+      review_count: parseInt(product.review_count ?? 0, 10),
       price: parseFloat(product.price),
       sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
       stock_quantity: parseInt(product.stock_quantity),
@@ -161,7 +189,19 @@ export const getProductById = async (req, res) => {
     const { id } = req.params;
     
     const result = await pool.query(
-      `SELECT p.*, c.name as category_name 
+      `SELECT p.*, c.name as category_name,
+              COALESCE((
+                SELECT ROUND(AVG(r.rating)::numeric, 1)
+                FROM reviews r
+                WHERE r.product_id = p.id
+                  AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+              ), p.rating, 0) as review_rating,
+              COALESCE((
+                SELECT COUNT(*)
+                FROM reviews r
+                WHERE r.product_id = p.id
+                  AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+              ), 0) as review_count
        FROM products p 
        LEFT JOIN categories c ON p.category_id = c.id 
        WHERE p.id = $1`,
@@ -175,6 +215,8 @@ export const getProductById = async (req, res) => {
     const product = result.rows[0];
     res.json({
       ...product,
+      rating: parseFloat(product.review_rating ?? product.rating ?? 0),
+      review_count: parseInt(product.review_count ?? 0, 10),
       price: parseFloat(product.price),
       buying_price: parseFloat(product.buying_price),
       sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
