@@ -230,18 +230,18 @@ const Home = () => {
     <div className="min-h-screen bg-white font-sans overflow-x-hidden text-gray-900 relative">
       
       {/* 1. FLOATING TOGGLE BUTTON */}
-      <div className="fixed sm:top-1/2 bottom-6 right-4 sm:right-auto sm:left-0 z-40 transform sm:-translate-y-1/2 flex justify-center">
+      <div className="find-parts-toggle fixed sm:top-1/2 bottom-6 right-4 sm:right-auto sm:left-0 z-40 transform sm:-translate-y-1/2 flex justify-center">
         {!isSidebarOpen && (
           <motion.button
             initial={{ x: -20, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             onClick={() => setIsSidebarOpen(true)}
-            className="flex flex-row sm:flex-col items-center justify-center gap-2 bg-red-600 text-white py-3 px-4 sm:py-4 sm:px-2 rounded-full sm:rounded-r-lg sm:rounded-l-none shadow-2xl hover:bg-red-700 transition-colors cursor-pointer"
+            className="find-parts-toggle-button flex flex-row sm:flex-col items-center justify-center gap-2 bg-red-600 text-white py-3 px-4 sm:py-4 sm:px-2 rounded-full sm:rounded-r-lg sm:rounded-l-none shadow-2xl hover:bg-red-700 transition-colors cursor-pointer"
             style={{ position: 'relative' }}
           >
-            <Settings size={20} className="sm:rotate-90" />
+            <Settings size={20} className="find-parts-toggle-icon sm:rotate-90" />
             <span 
-              className="font-bold uppercase tracking-widest text-sm whitespace-nowrap block [writing-mode:horizontal-tb] sm:[writing-mode:vertical-rl] sm:[text-orientation:mixed]"
+              className="find-parts-toggle-label font-bold uppercase tracking-widest text-sm whitespace-nowrap block [writing-mode:horizontal-tb] sm:[writing-mode:vertical-rl] sm:[text-orientation:mixed]"
             >
               Find Parts
             </span>

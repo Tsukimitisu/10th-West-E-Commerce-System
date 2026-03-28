@@ -67,3 +67,29 @@ html {
   -webkit-backdrop-filter: blur(12px);
   background: rgba(255, 255, 255, 0.85);
 }
+
+@media (min-width: 768px) {
+  .find-parts-toggle {
+    left: auto !important;
+    right: 1.25rem !important;
+    top: auto !important;
+    bottom: 1.5rem !important;
+    transform: none !important;
+    max-width: calc(100vw - 2.5rem);
+  }
+
+  .find-parts-toggle-button {
+    flex-direction: row !important;
+    padding: 0.875rem 1rem !important;
+    border-radius: 9999px !important;
+  }
+
+  .find-parts-toggle-icon {
+    transform: none !important;
+  }
+
+  .find-parts-toggle-label {
+    writing-mode: horizontal-tb !important;
+    text-orientation: mixed !important;
+  }
+}
