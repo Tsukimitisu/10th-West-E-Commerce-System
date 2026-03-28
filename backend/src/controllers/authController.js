@@ -597,6 +597,10 @@ export const changePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   try {
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required.' });
+    }
+
     if (!PASSWORD_REGEX.test(newPassword)) {
       return res.status(400).json({ message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character' });
     }
@@ -604,9 +608,18 @@ export const changePassword = async (req, res) => {
     const result = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
 
-    if (result.rows[0].password_hash) {
-      const isValid = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
-      if (!isValid) return res.status(401).json({ message: 'Current password is incorrect' });
+    const currentPasswordHash = result.rows[0].password_hash;
+
+    if (!currentPasswordHash) {
+      return res.status(400).json({ message: 'This account does not have a password to change. Please use account recovery or set a password from your login provider settings.' });
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, currentPasswordHash);
+    if (!isValid) return res.status(401).json({ message: 'Current password is incorrect' });
+
+    const isSamePassword = await bcrypt.compare(newPassword, currentPasswordHash);
+    if (isSamePassword) {
+      return res.status(400).json({ message: 'New password must be different from your current password.' });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);

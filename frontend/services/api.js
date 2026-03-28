@@ -429,6 +429,7 @@ export const changePassword = async (currentPassword, newPassword) => {
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
+    if (!currentPassword || !newPassword) throw new Error('Current password and new password are required.');
 
     const { data: dbUser, error: fetchErr } = await supabase
       .from('users')
@@ -437,10 +438,15 @@ export const changePassword = async (currentPassword, newPassword) => {
       .single();
     if (fetchErr) throw new Error(fetchErr.message);
 
-    if (dbUser?.password_hash) {
-      const isValidPassword = await bcrypt.compare(currentPassword, dbUser.password_hash);
-      if (!isValidPassword) throw new Error('Current password is incorrect');
+    if (!dbUser?.password_hash) {
+      throw new Error('This account does not have a password to change. Please use account recovery or set a password from your login provider settings.');
     }
+
+    const isValidPassword = await bcrypt.compare(currentPassword, dbUser.password_hash);
+    if (!isValidPassword) throw new Error('Current password is incorrect');
+
+    const isSamePassword = await bcrypt.compare(newPassword, dbUser.password_hash);
+    if (isSamePassword) throw new Error('New password must be different from your current password.');
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
     const { error } = await supabase.from('users').update({ password_hash: hashedPassword }).eq('id', currentUser.id);

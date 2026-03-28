@@ -116,11 +116,11 @@ export const changePassword = async (req, res) => {
   const { oldPassword, newPassword } = req.body;
 
   if (!oldPassword || !newPassword) {
-    return res.status(400).json({ message: 'Old password and new password are required' });
+    return res.status(400).json({ message: 'Current password and new password are required' });
   }
 
-  if (newPassword.length < 6) {
-    return res.status(400).json({ message: 'New password must be at least 6 characters' });
+  if (newPassword.length < 8) {
+    return res.status(400).json({ message: 'New password must be at least 8 characters' });
   }
 
   try {
@@ -135,12 +135,22 @@ export const changePassword = async (req, res) => {
     }
 
     const user = userResult.rows[0];
+    const currentPasswordHash = user.password_hash;
+
+    if (!currentPasswordHash) {
+      return res.status(400).json({ message: 'This account does not have a password to change. Please use account recovery or set a password from your login provider settings.' });
+    }
 
     // Verify old password
-    const isValid = await bcrypt.compare(oldPassword, user.password_hash);
+    const isValid = await bcrypt.compare(oldPassword, currentPasswordHash);
 
     if (!isValid) {
       return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    const isSamePassword = await bcrypt.compare(newPassword, currentPasswordHash);
+    if (isSamePassword) {
+      return res.status(400).json({ message: 'New password must be different from your current password.' });
     }
 
     // Hash new password
