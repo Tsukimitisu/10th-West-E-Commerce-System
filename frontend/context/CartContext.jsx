@@ -18,6 +18,7 @@ export const CartProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const itemsRef = React.useRef(items);
 
   const getToken = () => {
     return localStorage.getItem('shopCoreToken');
@@ -75,6 +76,10 @@ export const CartProvider = ({ children }) => {
     cartScopeKeyRef.current = cartScopeKey;
   }, [cartScopeKey]);
 
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
   const getOrCreateSupabaseCartId = async (userId) => {
     if (!supabase || !userId) return null;
     const { data: existingCart, error: findError } = await supabase
@@ -99,7 +104,7 @@ export const CartProvider = ({ children }) => {
   };
 
   const mapCartItemsFromBackend = (rows = []) => {
-    const mapped = rows.map((item) => ({
+    return rows.map((item) => ({
       cartItemId: item.id,
       productId: item.product_id ?? item.product?.id,
       quantity: item.quantity,
@@ -109,12 +114,33 @@ export const CartProvider = ({ children }) => {
         image: item.product?.image || item.product?.image_url || '',
       },
     }));
-    return mapped.sort((a, b) => {
-      const idA = a.cartItemId || a.productId;
-      const idB = b.cartItemId || b.productId;
-      if (idA < idB) return -1;
-      if (idA > idB) return 1;
-      return 0;
+  };
+
+  const compareItemIdentity = (left, right) => {
+    if (typeof left === 'number' && typeof right === 'number') {
+      return left - right;
+    }
+
+    return String(left ?? '').localeCompare(String(right ?? ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  };
+
+  const orderCartItems = (nextItems = [], previousItems = itemsRef.current) => {
+    const previousOrder = new Map(
+      (Array.isArray(previousItems) ? previousItems : []).map((item, index) => [String(item.productId), index])
+    );
+
+    return [...nextItems].sort((left, right) => {
+      const leftOrder = previousOrder.get(String(left.productId));
+      const rightOrder = previousOrder.get(String(right.productId));
+
+      if (leftOrder != null && rightOrder != null) return leftOrder - rightOrder;
+      if (leftOrder != null) return -1;
+      if (rightOrder != null) return 1;
+
+      return compareItemIdentity(left.cartItemId ?? left.productId, right.cartItemId ?? right.productId);
     });
   };
 
@@ -252,9 +278,10 @@ export const CartProvider = ({ children }) => {
           ...item,
           product: item.products
         })));
+        const stableItems = orderCartItems(mappedItems);
 
-        setItems(mappedItems);
-        sessionStorage.setItem(getCartKey(), JSON.stringify(mappedItems));
+        setItems(stableItems);
+        sessionStorage.setItem(getCartKey(), JSON.stringify(stableItems));
         setInitialized(true);
         return true;
       } catch (err) {
@@ -279,9 +306,10 @@ export const CartProvider = ({ children }) => {
       if (response.ok) {
         const data = await response.json();
         const mappedItems = mapCartItemsFromBackend(data.items || []);
-        setItems(mappedItems);
+        const stableItems = orderCartItems(mappedItems);
+        setItems(stableItems);
         // Save to localStorage as backup
-        sessionStorage.setItem(getCartKey(), JSON.stringify(mappedItems));
+        sessionStorage.setItem(getCartKey(), JSON.stringify(stableItems));
         setInitialized(true);
         return true;
       } else {
