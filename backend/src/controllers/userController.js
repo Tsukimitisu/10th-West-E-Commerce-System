@@ -26,18 +26,63 @@ export const getProfile = async (req, res) => {
 
 // Update user profile
 export const updateProfile = async (req, res) => {
-  const { name, phone, avatar } = req.body;
+  const rawName = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+  const rawEmail = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const rawPhone = typeof req.body.phone === 'string' ? req.body.phone.trim() : '';
+  const avatar = req.body.avatar ?? null;
+
+  const fieldErrors = {};
+
+  if (!rawName) {
+    fieldErrors.name = 'Name is required.';
+  } else if (rawName.length < 2) {
+    fieldErrors.name = 'Name must be at least 2 characters.';
+  } else if (rawName.length > 100) {
+    fieldErrors.name = 'Name must be 100 characters or fewer.';
+  }
+
+  if (!rawEmail) {
+    fieldErrors.email = 'Email is required.';
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+    fieldErrors.email = 'Enter a valid email address.';
+  }
+
+  if (rawPhone && !/^[0-9+\-\s()]{7,20}$/.test(rawPhone)) {
+    fieldErrors.phone = 'Enter a valid phone number.';
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return res.status(400).json({
+      message: 'Please correct the highlighted fields.',
+      fieldErrors,
+    });
+  }
 
   try {
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND id <> $2 LIMIT 1',
+      [rawEmail, req.user.id]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        message: 'That email address is already in use.',
+        fieldErrors: {
+          email: 'That email address is already in use.',
+        },
+      });
+    }
+
     const result = await pool.query(
       `UPDATE users 
-       SET name = COALESCE($1, name),
-           phone = COALESCE($2, phone),
-           avatar = COALESCE($3, avatar),
+       SET name = $1,
+           email = $2,
+           phone = $3,
+           avatar = COALESCE($4, avatar),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4
+       WHERE id = $5
        RETURNING id, name, email, role, phone, avatar, store_credit, created_at`,
-      [name, phone, avatar, req.user.id]
+      [rawName, rawEmail, rawPhone || null, avatar, req.user.id]
     );
 
     if (result.rows.length === 0) {
@@ -54,6 +99,14 @@ export const updateProfile = async (req, res) => {
     });
   } catch (error) {
     console.error('Update profile error:', error);
+    if (error.code === '23505') {
+      return res.status(409).json({
+        message: 'That email address is already in use.',
+        fieldErrors: {
+          email: 'That email address is already in use.',
+        },
+      });
+    }
     res.status(500).json({ message: 'Failed to update profile' });
   }
 };

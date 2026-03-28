@@ -1,11 +1,9 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Lock, Eye, EyeOff, Save, Check, AlertCircle, Shield, Camera, Trash2, AlertTriangle, Download } from 'lucide-react';
 import { updateProfile, changePassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
 
 const Profile = () => {
-  const navigate = useNavigate();
   const userData = localStorage.getItem('shopCoreUser');
   const user = userData ? JSON.parse(userData) : null;
 
@@ -13,8 +11,10 @@ const Profile = () => {
   const [passData, setPassData] = useState({ current: '', new: '', confirm: '' });
   const [showPasswords, setShowPasswords] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState('');
   const [passMessage, setPassMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [passLoading, setPassLoading] = useState(false);
   const [twoFASetup, setTwoFASetup] = useState(null);
   const [totpCode, setTotpCode] = useState('');
@@ -27,17 +27,71 @@ const Profile = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState('');
 
+  const validateProfileForm = () => {
+    const nextErrors = {};
+    const trimmedName = form.name.trim();
+    const trimmedEmail = form.email.trim().toLowerCase();
+    const trimmedPhone = form.phone.trim();
+
+    if (!trimmedName) {
+      nextErrors.name = 'Name is required.';
+    } else if (trimmedName.length < 2) {
+      nextErrors.name = 'Name must be at least 2 characters.';
+    } else if (trimmedName.length > 100) {
+      nextErrors.name = 'Name must be 100 characters or fewer.';
+    }
+
+    if (!trimmedEmail) {
+      nextErrors.email = 'Email is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      nextErrors.email = 'Enter a valid email address.';
+    }
+
+    if (trimmedPhone && !/^[0-9+\-\s()]{7,20}$/.test(trimmedPhone)) {
+      nextErrors.phone = 'Enter a valid phone number.';
+    }
+
+    return {
+      nextErrors,
+      sanitized: {
+        name: trimmedName,
+        email: trimmedEmail,
+        phone: trimmedPhone,
+      },
+    };
+  };
+
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    const { nextErrors, sanitized } = validateProfileForm();
+    setFieldErrors(nextErrors);
     setMessage('');
+    setMessageType('');
+
+    if (Object.keys(nextErrors).length > 0) {
+      setMessageType('error');
+      setMessage('Please correct the highlighted fields.');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const updated = await updateProfile(user?.id, form);
+      const updated = await updateProfile(user?.id, sanitized);
       const saved = { ...user, ...updated };
       localStorage.setItem('shopCoreUser', JSON.stringify(saved));
-      setMessage('Profile updated successfully');
+      window.dispatchEvent(new Event('auth:changed'));
+      setForm({
+        name: updated.name || '',
+        email: updated.email || '',
+        phone: updated.phone || '',
+      });
+      setFieldErrors({});
+      setMessageType('success');
+      setMessage('Profile updated successfully.');
     } catch (err) {
-      setMessage(err.message || 'Failed to update profile');
+      setFieldErrors(err.fieldErrors || {});
+      setMessageType('error');
+      setMessage(err.message || 'Failed to update profile.');
     } finally { setLoading(false); }
   };
 
@@ -150,34 +204,77 @@ const Profile = () => {
           </div>
 
           {message && (
-            <div className={`mb-4 p-3 rounded-lg text-sm flex items-center gap-2 ${message.includes('success') ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-500/10 text-red-500 border border-red-200'}`}>
-              {message.includes('success') ? <Check size={16} /> : <AlertCircle size={16} />} {message}
+            <div className={`mb-4 p-3 rounded-lg text-sm flex items-center gap-2 ${messageType === 'success' ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-500/10 text-red-500 border border-red-200'}`}>
+              {messageType === 'success' ? <Check size={16} /> : <AlertCircle size={16} />} {message}
             </div>
           )}
 
           <form onSubmit={handleProfileUpdate} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                  <div className="relative">
-                    <input type={showPasswords ? "text" : "password"} value={passData.new} onChange={e => setPassData(p => ({...p, new: e.target.value}))} required
-                      className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pr-10" />
-                    <button type="button" onClick={() => setShowPasswords(!showPasswords)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
+              <div>
+                <label htmlFor="profile-name" className="block text-sm font-medium text-gray-200 mb-1">Full Name</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                    <User size={16} />
+                  </span>
+                  <input
+                    id="profile-name"
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, name: e.target.value }));
+                      setFieldErrors((prev) => ({ ...prev, name: '' }));
+                    }}
+                    className={`w-full bg-gray-900 text-white pl-10 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.name ? 'border-red-400' : 'border-gray-700'}`}
+                    placeholder="Your full name"
+                    autoComplete="name"
+                  />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-                  <div className="relative">
-                    <input type={showPasswords ? "text" : "password"} value={passData.confirm} onChange={e => setPassData(p => ({...p, confirm: e.target.value}))} required
-                      className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pr-10" />
-                    <button type="button" onClick={() => setShowPasswords(!showPasswords)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
+                {fieldErrors.name && <p className="mt-1 text-xs text-red-400">{fieldErrors.name}</p>}
               </div>
+              <div>
+                <label htmlFor="profile-email" className="block text-sm font-medium text-gray-200 mb-1">Email Address</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                    <Mail size={16} />
+                  </span>
+                  <input
+                    id="profile-email"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, email: e.target.value }));
+                      setFieldErrors((prev) => ({ ...prev, email: '' }));
+                    }}
+                    className={`w-full bg-gray-900 text-white pl-10 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.email ? 'border-red-400' : 'border-gray-700'}`}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                  />
+                </div>
+                {fieldErrors.email && <p className="mt-1 text-xs text-red-400">{fieldErrors.email}</p>}
+              </div>
+            </div>
+            <div>
+              <label htmlFor="profile-phone" className="block text-sm font-medium text-gray-200 mb-1">Phone Number</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                  <Phone size={16} />
+                </span>
+                <input
+                  id="profile-phone"
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, phone: e.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, phone: '' }));
+                  }}
+                  className={`w-full bg-gray-900 text-white pl-10 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${fieldErrors.phone ? 'border-red-400' : 'border-gray-700'}`}
+                  placeholder="+63 912 345 6789"
+                  autoComplete="tel"
+                />
+              </div>
+              {fieldErrors.phone && <p className="mt-1 text-xs text-red-400">{fieldErrors.phone}</p>}
+            </div>
             <button type="submit" disabled={loading}
               className="px-6 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
               {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={16} />}
