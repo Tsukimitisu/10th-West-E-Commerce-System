@@ -1,5 +1,21 @@
 import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
+import supabaseClient from '../services/supabaseClient.js';
+import fs from 'fs/promises';
+import path from 'path';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const avatarUploadsDir = path.join(__dirname, '..', '..', 'uploads', 'avatars');
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const MIME_EXTENSION_MAP = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 // Get user profile
 export const getProfile = async (req, res) => {
@@ -108,6 +124,61 @@ export const updateProfile = async (req, res) => {
       });
     }
     res.status(500).json({ message: 'Failed to update profile' });
+  }
+};
+
+export const uploadProfileAvatar = async (req, res) => {
+  try {
+    const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(contentType)) {
+      return res.status(400).json({ message: 'Unsupported file type. Use JPG, PNG, or WEBP.' });
+    }
+
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ message: 'Image file is required.' });
+    }
+
+    if (req.body.length > MAX_AVATAR_BYTES) {
+      return res.status(400).json({ message: 'Image must be 2 MB or smaller.' });
+    }
+
+    const ext = MIME_EXTENSION_MAP[contentType] || 'bin';
+    const filename = `avatar-${req.user.id}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${ext}`;
+    let avatarUrl = null;
+
+    if (process.env.SUPABASE_URL) {
+      const { error } = await supabaseClient.storage
+        .from('avatars')
+        .upload(filename, req.body, {
+          contentType,
+          upsert: false,
+        });
+
+      if (!error) {
+        const { data: publicUrlData } = supabaseClient.storage
+          .from('avatars')
+          .getPublicUrl(filename);
+        avatarUrl = publicUrlData?.publicUrl || null;
+      } else {
+        console.warn('Supabase avatar upload failed, falling back to local FS:', error.message);
+      }
+    }
+
+    if (!avatarUrl) {
+      await fs.mkdir(avatarUploadsDir, { recursive: true });
+      const filepath = path.join(avatarUploadsDir, filename);
+      await fs.writeFile(filepath, req.body);
+      avatarUrl = `${req.protocol}://${req.get('host')}/uploads/avatars/${filename}`;
+    }
+
+    res.status(201).json({
+      message: 'Profile picture uploaded successfully.',
+      avatarUrl,
+    });
+  } catch (error) {
+    console.error('Upload profile avatar error:', error);
+    res.status(500).json({ message: 'Failed to upload profile picture.' });
   }
 };
 

@@ -1,7 +1,10 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { User, Mail, Phone, Lock, Eye, EyeOff, Save, Check, AlertCircle, Shield, Camera, Trash2, AlertTriangle, Download } from 'lucide-react';
-import { updateProfile, changePassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData } from '../../services/api';
+import { updateProfile, uploadProfileAvatar, changePassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
+
+const ALLOWED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 const Profile = () => {
   const userData = localStorage.getItem('shopCoreUser');
@@ -26,6 +29,23 @@ const Profile = () => {
   const [deleteError, setDeleteError] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(user?.avatar || '');
+  const [avatarError, setAvatarError] = useState('');
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreview(user?.avatar || '');
+    }
+  }, [user?.avatar, avatarFile]);
+
+  useEffect(() => () => {
+    if (avatarPreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(avatarPreview);
+    }
+  }, [avatarPreview]);
 
   const validateProfileForm = () => {
     const nextErrors = {};
@@ -61,12 +81,57 @@ const Profile = () => {
     };
   };
 
+  const resetAvatarInput = () => {
+    if (avatarInputRef.current) {
+      avatarInputRef.current.value = '';
+    }
+  };
+
+  const handleAvatarChange = (event) => {
+    const file = event.target.files?.[0];
+    setAvatarError('');
+
+    if (!file) return;
+
+    if (!ALLOWED_AVATAR_TYPES.has(file.type)) {
+      setAvatarFile(null);
+      resetAvatarInput();
+      setAvatarError('Use a JPG, PNG, or WEBP image.');
+      return;
+    }
+
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarFile(null);
+      resetAvatarInput();
+      setAvatarError('Image must be 2 MB or smaller.');
+      return;
+    }
+
+    if (avatarPreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(avatarPreview);
+    }
+
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const clearPendingAvatar = () => {
+    if (avatarPreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(avatarPreview);
+    }
+    setAvatarFile(null);
+    setAvatarPreview(user?.avatar || '');
+    setAvatarError('');
+    resetAvatarInput();
+  };
+
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     const { nextErrors, sanitized } = validateProfileForm();
     setFieldErrors(nextErrors);
     setMessage('');
     setMessageType('');
+    setAvatarError('');
 
     if (Object.keys(nextErrors).length > 0) {
       setMessageType('error');
@@ -76,7 +141,13 @@ const Profile = () => {
 
     setLoading(true);
     try {
-      const updated = await updateProfile(user?.id, sanitized);
+      let avatarUrl = user?.avatar || null;
+      if (avatarFile) {
+        setAvatarUploading(true);
+        avatarUrl = await uploadProfileAvatar(avatarFile);
+      }
+
+      const updated = await updateProfile(user?.id, { ...sanitized, avatar: avatarUrl });
       const saved = { ...user, ...updated };
       localStorage.setItem('shopCoreUser', JSON.stringify(saved));
       window.dispatchEvent(new Event('auth:changed'));
@@ -85,14 +156,23 @@ const Profile = () => {
         email: updated.email || '',
         phone: updated.phone || '',
       });
+      setAvatarFile(null);
+      setAvatarPreview(updated.avatar || '');
+      resetAvatarInput();
       setFieldErrors({});
       setMessageType('success');
       setMessage('Profile updated successfully.');
     } catch (err) {
       setFieldErrors(err.fieldErrors || {});
+      if ((err.message || '').toLowerCase().includes('profile picture') || (err.message || '').toLowerCase().includes('image')) {
+        setAvatarError(err.message || 'Failed to upload profile picture.');
+      }
       setMessageType('error');
       setMessage(err.message || 'Failed to update profile.');
-    } finally { setLoading(false); }
+    } finally {
+      setAvatarUploading(false);
+      setLoading(false);
+    }
   };
 
   const handlePasswordChange = async (e) => {
@@ -185,21 +265,62 @@ const Profile = () => {
   return (
     <AccountLayout>
       <div className="space-y-6">
-        {/* Profile Info */}
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
           <h2 className="font-display font-semibold text-lg text-white mb-6 flex items-center gap-2"><User size={20} /> Personal Information</h2>
-          
-          {/* Avatar */}
-          <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-700">
-            <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center text-2xl font-bold font-display relative">
-              {user.name.charAt(0).toUpperCase()}
-              <button className="absolute -bottom-1 -right-1 w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors">
+
+          <div className="flex items-start gap-4 mb-6 pb-6 border-b border-gray-700">
+            <div className="relative shrink-0">
+              {avatarPreview ? (
+                <img
+                  src={avatarPreview}
+                  alt={user.name}
+                  className="w-16 h-16 rounded-full object-cover border border-gray-700 bg-gray-900"
+                />
+              ) : (
+                <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center text-2xl font-bold font-display">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                className="absolute -bottom-1 -right-1 w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors"
+                aria-label="Upload profile picture"
+              >
                 <Camera size={12} />
               </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="font-semibold text-white">{user.name}</p>
               <p className="text-sm text-gray-400">{user.email}</p>
+              <p className="text-xs text-gray-400 mt-1">JPG, PNG, or WEBP up to 2 MB.</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-gray-900 hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  {avatarFile ? 'Choose Different Image' : 'Upload Image'}
+                </button>
+                {avatarFile && (
+                  <button
+                    type="button"
+                    onClick={clearPendingAvatar}
+                    className="px-3 py-1.5 text-xs font-medium text-gray-300 border border-gray-600 hover:bg-gray-900 rounded-lg transition-colors"
+                  >
+                    Cancel Preview
+                  </button>
+                )}
+              </div>
+              {avatarFile && <p className="text-xs text-amber-400 mt-2">Preview ready. Save changes to apply this profile picture.</p>}
+              {avatarError && <p className="text-xs text-red-400 mt-2">{avatarError}</p>}
             </div>
           </div>
 
@@ -275,15 +396,17 @@ const Profile = () => {
               </div>
               {fieldErrors.phone && <p className="mt-1 text-xs text-red-400">{fieldErrors.phone}</p>}
             </div>
-            <button type="submit" disabled={loading}
-              className="px-6 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
-              {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={16} />}
-              Save Changes
+            <button
+              type="submit"
+              disabled={loading || avatarUploading}
+              className="px-6 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+            >
+              {loading || avatarUploading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={16} />}
+              {avatarUploading ? 'Uploading Image...' : loading ? 'Saving...' : 'Save Changes'}
             </button>
           </form>
         </div>
 
-        {/* Change Password */}
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
           <h2 className="font-display font-semibold text-lg text-white mb-6 flex items-center gap-2"><Lock size={20} /> Change Password</h2>
           {passMessage && (
@@ -295,7 +418,7 @@ const Profile = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
               <div className="relative">
-                <input type={showPasswords ? 'text' : 'password'} value={passData.current} onChange={e => setPassData(p => ({...p, current: e.target.value}))} required
+                <input type={showPasswords ? 'text' : 'password'} value={passData.current} onChange={e => setPassData(p => ({ ...p, current: e.target.value }))} required
                   className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pr-10" />
                 <button type="button" onClick={() => setShowPasswords(!showPasswords)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
                   {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -305,12 +428,12 @@ const Profile = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                <input type={showPasswords ? 'text' : 'password'} value={passData.new} onChange={e => setPassData(p => ({...p, new: e.target.value}))} required
+                <input type={showPasswords ? 'text' : 'password'} value={passData.new} onChange={e => setPassData(p => ({ ...p, new: e.target.value }))} required
                   className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-                <input type="password" value={passData.confirm} onChange={e => setPassData(p => ({...p, confirm: e.target.value}))} required
+                <input type="password" value={passData.confirm} onChange={e => setPassData(p => ({ ...p, confirm: e.target.value }))} required
                   className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
               </div>
             </div>
@@ -321,7 +444,6 @@ const Profile = () => {
           </form>
         </div>
 
-        {/* Two-Factor Auth */}
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
           <h2 className="font-display font-semibold text-lg text-white mb-4 flex items-center gap-2"><Shield size={20} /> Two-Factor Authentication</h2>
           {twoFAEnabled ? (
@@ -359,7 +481,6 @@ const Profile = () => {
           )}
         </div>
 
-        {/* Data Portability - RA 10173 Â§18 (Right to Data Portability) */}
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
           <h2 className="font-display font-semibold text-lg text-white mb-4 flex items-center gap-2"><Download size={20} /> Download My Data</h2>
           <p className="text-sm text-gray-600 mb-3">
@@ -381,7 +502,6 @@ const Profile = () => {
           )}
         </div>
 
-        {/* Delete Account - Right to be Forgotten (RA 10173 Â§18) */}
         <div className="bg-gray-800 rounded-xl border border-red-200 p-6">
           <h2 className="font-display font-semibold text-lg text-red-600 mb-4 flex items-center gap-2"><Trash2 size={20} /> Delete My Account</h2>
           <p className="text-sm text-gray-600 mb-3">
@@ -400,7 +520,6 @@ const Profile = () => {
         </div>
       </div>
 
-      {/* Delete Account Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 rounded-2xl max-w-md w-full p-6 shadow-xl">
@@ -454,5 +573,3 @@ const Profile = () => {
 };
 
 export default Profile;
-
-

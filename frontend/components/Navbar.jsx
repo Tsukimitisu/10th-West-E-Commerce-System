@@ -549,9 +549,17 @@ const Navbar = ({ user, onLogout }) => {
               {user ? (
                 <div ref={userMenuRef} className="relative">
                   <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="p-2 text-red-500 hover:text-red-400 ml-2 flex items-center gap-2 hover:bg-zinc-800 rounded-lg transition-colors">
-                    <div className="w-8 h-8 bg-gradient-to-br from-red-100 to-red-200 text-red-600 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
+                    {user.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={user.name}
+                        className="w-8 h-8 rounded-lg object-cover border border-zinc-700 shadow-sm"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 bg-gradient-to-br from-red-100 to-red-200 text-red-600 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm">
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <span className="hidden md:block text-sm font-semibold text-gray-100 max-w-20 truncate">{user.name.split(' ')[0]}</span>
                     <ChevronDown size={14} className="hidden md:block text-gray-300" />
                   </button>

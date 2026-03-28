@@ -33,9 +33,17 @@ const AccountLayout = ({ children }) => {
               {user && (
                 <div className="p-5 border-b border-gray-700">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center font-bold text-lg font-display">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
+                    {user.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={user.name}
+                        className="w-12 h-12 rounded-full object-cover border border-gray-700"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center font-bold text-lg font-display">
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <p className="font-semibold text-white truncate">{user.name}</p>
                       <p className="text-xs text-gray-400 truncate">{user.email}</p>

@@ -2707,6 +2707,37 @@ export const updateProfile = async (userId, updates) => {
   return data.user;
 };
 
+export const uploadProfileAvatar = async (file) => {
+  if (!file) throw new Error('Image file is required.');
+
+  const token = getAuthToken();
+  if (!token) throw new Error('You must be logged in to upload a profile picture.');
+
+  const response = await fetch(`${API_URL}/users/profile/avatar`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': file.type || 'application/octet-stream',
+    },
+    body: file,
+    credentials: 'include',
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || 'Profile picture upload failed.');
+  }
+
+  const avatarUrl = data.avatarUrl || '';
+  if (!avatarUrl) throw new Error('Profile picture upload failed.');
+
+  if (avatarUrl.startsWith('/')) {
+    return `${API_ORIGIN}${avatarUrl}`;
+  }
+
+  return avatarUrl;
+};
+
 // ==================== INVENTORY ====================
 
 export const getInventory = async () => {
