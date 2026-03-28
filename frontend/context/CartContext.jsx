@@ -69,6 +69,11 @@ export const CartProvider = ({ children }) => {
   const getSelectedKey = () => `${getCartKey()}_selected`;
   const getCheckoutSelectionKey = () => `${getCartKey()}_checkout_selection`;
   const [cartScopeKey, setCartScopeKey] = useState(getCartKey());
+  const cartScopeKeyRef = React.useRef(cartScopeKey);
+
+  useEffect(() => {
+    cartScopeKeyRef.current = cartScopeKey;
+  }, [cartScopeKey]);
 
   const getOrCreateSupabaseCartId = async (userId) => {
     if (!supabase || !userId) return null;
@@ -185,6 +190,13 @@ export const CartProvider = ({ children }) => {
     sessionStorage.removeItem(GUEST_CHECKOUT_SELECTION_KEY);
   };
 
+  const clearCartStorageForScope = (scopeKey) => {
+    if (!scopeKey) return;
+    sessionStorage.removeItem(scopeKey);
+    sessionStorage.removeItem(`${scopeKey}_selected`);
+    sessionStorage.removeItem(`${scopeKey}_checkout_selection`);
+  };
+
   const normalizeGuestCartItems = (rawItems = []) => {
     const merged = new Map();
 
@@ -296,10 +308,24 @@ export const CartProvider = ({ children }) => {
   // Monitor localStorage for login changes
   useEffect(() => {
     const handleStorageChange = async () => {
-      setCartScopeKey(getCartKey());
+      const previousScopeKey = cartScopeKeyRef.current;
+      const currentUser = getCurrentUser();
+      const nextScopeKey = currentUser?.id ? `shopCoreCart_${currentUser.id}` : GUEST_CART_KEY;
+
+      setCartScopeKey(nextScopeKey);
       setSelectedItemIds([]);
       setHasLoadedSelection(false);
-      const currentUser = getCurrentUser();
+
+      if (!currentUser?.id) {
+        clearCartStorageForScope(previousScopeKey);
+        clearGuestCartStorage();
+        setItems([]);
+        setDiscount(null);
+        setError(null);
+        setInitialized(true);
+        clearCheckoutSelection();
+        return;
+      }
 
       if (currentUser?.id && USE_SUPABASE) {
         try {
