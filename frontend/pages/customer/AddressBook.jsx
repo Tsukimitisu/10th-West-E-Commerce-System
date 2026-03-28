@@ -23,6 +23,7 @@ const AddressBook = () => {
   const formatPhone = (value) => value.replace(/[^\d+]/g, '');
   const validatePhone = (phone) => /^(09\d{9}|\+639\d{9})$/.test(phone);
   const validateZip = (zip) => /^\d{4}$/.test(zip);
+  const normalizeText = (value) => String(value || '').trim();
 
   useEffect(() => {
     const load = async () => {
@@ -41,16 +42,29 @@ const AddressBook = () => {
     e.preventDefault();
     setSaveError('');
     setPhoneError('');
-    if (!form.name || !form.street || !form.city || !form.state || !form.zip || !form.phone) {
+    setZipError('');
+
+    const trimmedForm = {
+      ...form,
+      name: normalizeText(form.name),
+      phone: normalizeText(form.phone),
+      street: normalizeText(form.street),
+      barangay: normalizeText(form.barangay),
+      city: normalizeText(form.city),
+      state: normalizeText(form.state),
+      zip: digitsOnly(form.zip),
+    };
+
+    if (!trimmedForm.name || !trimmedForm.street || !trimmedForm.city || !trimmedForm.state || !trimmedForm.zip || !trimmedForm.phone) {
       setSaveError('Please fill in all required fields (Name, Phone, Street, City, Province, Zip).');
       return;
     }
-    if (form.country && form.country !== 'Philippines') {
+    if (trimmedForm.country && trimmedForm.country !== 'Philippines') {
       setSaveError('Only Philippine addresses are allowed.');
       return;
     }
     
-    if (!validatePhone(form.phone)) {
+    if (!validatePhone(trimmedForm.phone)) {
       setPhoneError('Invalid phone number. Must start with 09 or +639 and have correct length.');
       if (phoneInputRef.current) {
         phoneInputRef.current.focus();
@@ -59,18 +73,18 @@ const AddressBook = () => {
       return;
     }
 
-    const zipValid = validateZip(form.zip);
+    const zipValid = validateZip(trimmedForm.zip);
     if (!zipValid) {
       setZipError('Zip Code must contain exactly 4 digits.');
       return;
     }
     try {
-      const payload = { ...form };
+      const payload = { ...trimmedForm };
       // Persist geolocation locally as a fallback for legacy rows without coordinates.
-      if (form.lat && form.lng) {
-        const key = `${form.street}|${form.city}|${form.state}`;
+      if (trimmedForm.lat && trimmedForm.lng) {
+        const key = `${trimmedForm.street}|${trimmedForm.city}|${trimmedForm.state}`;
         const stored = JSON.parse(localStorage.getItem('addressGeo') || '{}');
-        stored[key] = { lat: form.lat, lng: form.lng };
+        stored[key] = { lat: trimmedForm.lat, lng: trimmedForm.lng };
         localStorage.setItem('addressGeo', JSON.stringify(stored));
       }
       if (editing) {
@@ -153,21 +167,21 @@ const AddressBook = () => {
               <div className="flex gap-2">
                 {['Home', 'Office', 'Other'].map(l => (
                   <button key={l} type="button" onClick={() => setForm(f => ({...f, label: l}))}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${form.label === l ? 'bg-red-500/10 border-red-200 text-red-500' : 'border-gray-700 text-gray-600 hover:bg-gray-900'}`}>
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${form.label === l ? 'bg-red-500/10 border-red-200 text-red-400' : 'border-gray-700 text-gray-200 hover:bg-gray-900'}`}>
                     {l === 'Home' ? <Home size={14} /> : l === 'Office' ? <Building2 size={14} /> : <MapPin size={14} />} {l}
                   </button>
                 ))}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                  <label className="block text-sm font-medium text-gray-200 mb-1">Full Name</label>
                   <input type="text" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} required
-                    className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                    className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm bg-gray-900 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <label className="block text-sm font-medium text-gray-200 mb-1">Phone</label>
                   <input type="tel" value={form.phone} ref={phoneInputRef} onChange={e => setForm(f => ({...f, phone: formatPhone(e.target.value)}))} required
-                    className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${phoneError ? 'border-red-300 ring-1 ring-red-300 bg-red-50/5' : 'border-gray-700'}`} />
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm bg-gray-900 text-white focus:outline-none focus:ring-2 focus:ring-orange-500 ${phoneError ? 'border-red-300 ring-1 ring-red-300 bg-red-50/5' : 'border-gray-700'}`} />
                   {phoneError && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} /> {phoneError}</p>}
                 </div>
               </div>
@@ -188,7 +202,7 @@ const AddressBook = () => {
                   }}
                 />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Street / House No.</label>
+                  <label className="block text-sm font-medium text-gray-200 mb-1">Street / House No.</label>
                   <AddressAutocomplete
                     value={form.street}
                     onInputChange={(val) => setForm(f => ({ ...f, street: val, lat: null, lng: null }))}
@@ -225,7 +239,7 @@ const AddressBook = () => {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
+                  <label className="block text-sm font-medium text-gray-200 mb-1">ZIP Code</label>
                   <input
                     type="text"
                     value={form.zip}
@@ -237,19 +251,19 @@ const AddressBook = () => {
                     inputMode="numeric"
                     pattern="[0-9]*"
                     required
-                    className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${zipError ? 'border-red-300 focus:ring-red-400' : 'border-gray-700'}`}
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm bg-gray-900 text-white focus:outline-none focus:ring-2 focus:ring-orange-500 ${zipError ? 'border-red-300 focus:ring-red-400' : 'border-gray-700'}`}
                   />
                   {zipError && <p className="text-xs text-red-500 mt-1">{zipError}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
-                  <div className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm bg-gray-900 text-gray-600">
+                  <label className="block text-sm font-medium text-gray-200 mb-1">Country</label>
+                  <div className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm bg-gray-900 text-gray-200">
                     Philippines
                   </div>
                 </div>
               </div>
               {saveError && <p className="text-sm text-red-500">{saveError}</p>}
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm text-gray-200">
                 <input type="checkbox" checked={form.is_default} onChange={e => setForm(f => ({...f, is_default: e.target.checked}))}
                   className="w-4 h-4 text-red-500 border-gray-300 rounded focus:ring-orange-500" />
                 Set as default address
@@ -258,7 +272,7 @@ const AddressBook = () => {
                 <button type="submit" disabled={!!zipError || !validateZip(form.zip)} className="px-5 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors">
                   {editing ? 'Update Address' : 'Save Address'}
                 </button>
-                <button type="button" onClick={resetForm} className="px-5 py-2.5 border border-gray-700 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-900 transition-colors">Cancel</button>
+                <button type="button" onClick={resetForm} className="px-5 py-2.5 border border-gray-700 text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-900 transition-colors">Cancel</button>
               </div>
             </form>
           </div>
@@ -289,7 +303,7 @@ const AddressBook = () => {
                   <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">{addr.label || 'Address'}</span>
                 </div>
                 <p className="font-medium text-white text-sm">{addr.name || addr.recipient_name}</p>
-                <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+                <p className="text-sm text-gray-200 mt-1 leading-relaxed">
                   {addr.street}{addr.barangay ? `, ${addr.barangay}` : ''}<br />
                   {addr.city}{addr.state ? `, ${addr.state}` : ''} {addr.zip || addr.postal_code}<br />
                   {addr.phone}
@@ -311,7 +325,7 @@ const AddressBook = () => {
                 <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
                 <h3 className="text-lg font-bold text-white">Delete Address</h3>
               </div>
-              <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete this address?</p>
+              <p className="text-sm text-gray-200 mb-4">Are you sure you want to delete this address?</p>
               <div className="bg-gray-900 rounded-lg p-3 border border-gray-700 mb-4">
                 <p className="text-sm font-semibold text-white">{deleteTarget.name}</p>
                 <p className="text-xs text-gray-400">{deleteTarget.street}, {deleteTarget.city}</p>

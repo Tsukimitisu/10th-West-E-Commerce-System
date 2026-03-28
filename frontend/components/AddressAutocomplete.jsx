@@ -41,7 +41,7 @@ const AddressAutocomplete = ({
       try {
         // Clean up redundant parts if the user typed their full address
         const queryParts = query.split(',').map(s => s.trim());
-        const allParts = [...queryParts, context.city, context.state, 'Philippines'].filter(Boolean);
+        const allParts = [...queryParts, context.barangay, context.city, context.state, 'Philippines'].filter(Boolean);
         const uniqueParts = Array.from(new Set(allParts));
         const cleanQuery = uniqueParts.join(', ');
 
@@ -131,7 +131,7 @@ const AddressAutocomplete = ({
         }}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+        className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm bg-gray-900 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
         autoComplete="off"
         role="combobox"
         aria-expanded={open}
@@ -151,7 +151,7 @@ const AddressAutocomplete = ({
                 type="button"
                 key={s.place_id}
                 onClick={() => handleSelect(s)}
-                className="w-full text-left px-3 py-2 hover:bg-red-500/10 text-sm text-gray-800"
+                className="w-full text-left px-3 py-2 hover:bg-red-500/10 text-sm text-gray-100"
                 role="option"
               >
                 <div className="font-medium truncate">{label.primary}</div>

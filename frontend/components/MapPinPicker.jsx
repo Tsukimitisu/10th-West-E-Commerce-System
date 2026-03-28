@@ -228,7 +228,7 @@ const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: ex
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-gray-700">Pin exact location</p>
+        <p className="text-sm font-medium text-gray-200">Pin exact location</p>
         {geocoding && <span className="text-xs text-gray-400">Locatingâ€¦</span>}
       </div>
       <div

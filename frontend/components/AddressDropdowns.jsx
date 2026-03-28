@@ -27,21 +27,63 @@ const AddressDropdowns = ({
   const BASE = 'https://psgc.gitlab.io/api';
   const NCR_REGION_CODE = '130000000';
   const NCR_OPTION = { code: 'NCR', name: 'Metro Manila (NCR)', isNcr: true };
+
+  const normalizePlaceName = (value = '') => {
+    const text = String(value)
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[().,-]/g, ' ')
+      .replace(/\b(city|municipality|province|barangay|brgy)\b/g, ' ')
+      .replace(/\bof\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (['ncr', 'metro manila', 'metro manila ncr', 'national capital region'].includes(text)) {
+      return 'metro manila';
+    }
+
+    return text;
+  };
+
+  const findProvinceMatch = (name) => provinces.find((candidate) => {
+    if (candidate.code === NCR_OPTION.code && normalizePlaceName(name) === 'metro manila') return true;
+    return normalizePlaceName(candidate.name) === normalizePlaceName(name);
+  });
+
+  const findCityMatch = (name) => cities.find((candidate) => normalizePlaceName(candidate.name) === normalizePlaceName(name));
+  const findBarangayMatch = (name) => barangays.find((candidate) => normalizePlaceName(candidate.name) === normalizePlaceName(name));
+
   // Sync props to state if they change externally (e.g., from Autocomplete)
   useEffect(() => {
-    if (province && province.toLowerCase() !== selectedProvince.name.toLowerCase()) {
+    if (!province && (selectedProvince.code || selectedProvince.name)) {
+      setSelectedProvince({ code: '', name: '' });
+      return;
+    }
+
+    if (province && normalizePlaceName(province) !== normalizePlaceName(selectedProvince.name)) {
       setSelectedProvince({ code: '', name: province });
     }
   }, [province]);
 
   useEffect(() => {
-    if (city && city.toLowerCase() !== selectedCity.name.toLowerCase()) {
+    if (!city && (selectedCity.code || selectedCity.name)) {
+      setSelectedCity({ code: '', name: '' });
+      return;
+    }
+
+    if (city && normalizePlaceName(city) !== normalizePlaceName(selectedCity.name)) {
       setSelectedCity({ code: '', name: city });
     }
   }, [city]);
 
   useEffect(() => {
-    if (barangay && barangay.toLowerCase() !== selectedBarangay.toLowerCase()) {
+    if (!barangay && selectedBarangay) {
+      setSelectedBarangay('');
+      return;
+    }
+
+    if (barangay && normalizePlaceName(barangay) !== normalizePlaceName(selectedBarangay)) {
       setSelectedBarangay(barangay);
     }
   }, [barangay]);
@@ -78,7 +120,7 @@ const AddressDropdowns = ({
   // When provinces load, try to match existing province name to a code.
   useEffect(() => {
     if (!selectedProvince.code && selectedProvince.name && provinces.length) {
-      const match = provinces.find((p) => p.name.toLowerCase() === selectedProvince.name.toLowerCase());
+      const match = findProvinceMatch(selectedProvince.name);
       if (match) {
         setSelectedProvince({ code: match.code, name: match.name });
       }
@@ -89,10 +131,12 @@ const AddressDropdowns = ({
   useEffect(() => {
     if (!selectedProvince.code) {
       setCities([]);
-      setSelectedCity({ code: '', name: '' });
       setBarangays([]);
-      setSelectedBarangay('');
-      emitChange({ province: '', provinceCode: '', city: '', cityCode: '', barangay: '' });
+      if (!selectedProvince.name) {
+        setSelectedCity({ code: '', name: '' });
+        setSelectedBarangay('');
+        emitChange({ province: '', provinceCode: '', city: '', cityCode: '', barangay: '' });
+      }
       return;
     }
 
@@ -121,7 +165,7 @@ const AddressDropdowns = ({
   // When cities load, try to match existing city name to a code.
   useEffect(() => {
     if (!selectedCity.code && selectedCity.name && cities.length) {
-      const match = cities.find((c) => c.name.toLowerCase() === selectedCity.name.toLowerCase());
+      const match = findCityMatch(selectedCity.name);
       if (match) {
         setSelectedCity({ code: match.code, name: match.name });
       }
@@ -132,8 +176,10 @@ const AddressDropdowns = ({
   useEffect(() => {
     if (!selectedCity.code) {
       setBarangays([]);
-      setSelectedBarangay('');
-      emitChange({ city: '', cityCode: '', barangay: '' });
+      if (!selectedCity.name) {
+        setSelectedBarangay('');
+        emitChange({ city: '', cityCode: '', barangay: '' });
+      }
       return;
     }
 
@@ -159,7 +205,7 @@ const AddressDropdowns = ({
   // When barangays list loads, try to keep existing barangay selection if present.
   useEffect(() => {
     if (selectedBarangay && barangays.length) {
-      const match = barangays.find((b) => b.name.toLowerCase() === selectedBarangay.toLowerCase());
+      const match = findBarangayMatch(selectedBarangay);
       if (!match) {
         setSelectedBarangay('');
       }
@@ -200,12 +246,12 @@ const AddressDropdowns = ({
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{labels.province}</label>
+        <label className="block text-sm font-medium text-gray-200 mb-1">{labels.province}</label>
         <select
           value={selectedProvince.code}
           onChange={(e) => handleProvinceChange(e.target.value)}
           disabled={disabled || loadingProvince}
-          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-800"
+          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-900"
         >
           <option value="">Select a province</option>
           {provinces.map((p) => (
@@ -216,12 +262,12 @@ const AddressDropdowns = ({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{labels.city}</label>
+        <label className="block text-sm font-medium text-gray-200 mb-1">{labels.city}</label>
         <select
           value={selectedCity.code}
           onChange={(e) => handleCityChange(e.target.value)}
           disabled={disabled || !selectedProvince.code || loadingCity}
-          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-800 disabled:bg-gray-900 disabled:text-gray-400"
+          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-900 disabled:bg-gray-900 disabled:text-gray-500"
         >
           <option value="">{selectedProvince.code ? 'Select a city/municipality' : 'Choose province first'}</option>
           {cities.map((c) => (
@@ -232,12 +278,12 @@ const AddressDropdowns = ({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{labels.barangay}</label>
+        <label className="block text-sm font-medium text-gray-200 mb-1">{labels.barangay}</label>
         <select
           value={selectedBarangay}
           onChange={(e) => handleBarangayChange(e.target.value)}
           disabled={disabled || !selectedCity.code || loadingBarangay}
-          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-800 disabled:bg-gray-900 disabled:text-gray-400"
+          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-900 disabled:bg-gray-900 disabled:text-gray-500"
         >
           <option value="">{selectedCity.code ? 'Select a barangay' : 'Choose city/municipality first'}</option>
           {barangays.map((b) => (

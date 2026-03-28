@@ -1,5 +1,14 @@
 import pool from '../config/database.js';
 
+const normalizeText = (value) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+};
+
+const PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
+const ZIP_REGEX = /^\d{4}$/;
+
 // Get all addresses for a user
 export const getUserAddresses = async (req, res) => {
   try {
@@ -40,10 +49,29 @@ export const getAddress = async (req, res) => {
 
 // Create new address
 export const createAddress = async (req, res) => {
-  const { recipient_name, phone, street, barangay, city, state, postal_code, is_default, lat, lng } = req.body;
+  const recipient_name = normalizeText(req.body.recipient_name);
+  const phone = normalizeText(req.body.phone);
+  const street = normalizeText(req.body.street);
+  const barangay = normalizeText(req.body.barangay);
+  const city = normalizeText(req.body.city);
+  const state = normalizeText(req.body.state);
+  const postal_code = normalizeText(req.body.postal_code);
+  const is_default = !!req.body.is_default;
+  const lat = req.body.lat ?? null;
+  const lng = req.body.lng ?? null;
 
-  if (!recipient_name || !phone || !street || !city || !state || !postal_code) {
-    return res.status(400).json({ message: 'All fields are required' });
+  const fieldErrors = {};
+  if (!recipient_name) fieldErrors.recipient_name = 'Recipient name is required.';
+  if (!phone) fieldErrors.phone = 'Phone is required.';
+  else if (!PHONE_REGEX.test(phone)) fieldErrors.phone = 'Phone must start with 09 or +639 and contain 11 digits.';
+  if (!street) fieldErrors.street = 'Street is required.';
+  if (!city) fieldErrors.city = 'City is required.';
+  if (!state) fieldErrors.state = 'Province is required.';
+  if (!postal_code) fieldErrors.postal_code = 'ZIP code is required.';
+  else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 4 digits.';
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return res.status(400).json({ message: 'Please correct the highlighted address fields.', fieldErrors });
   }
 
   const client = await pool.connect();
@@ -64,7 +92,7 @@ export const createAddress = async (req, res) => {
       `INSERT INTO addresses (user_id, recipient_name, phone, street, barangay, city, state, postal_code, address_string, lat, lng, is_default)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [req.user.id, recipient_name, phone, street, barangay ?? null, city, state, postal_code, `${street}, ${barangay ? barangay + ', ' : ''}${city}, ${state} ${postal_code}, Philippines`, lat ?? null, lng ?? null, is_default || false]
+      [req.user.id, recipient_name, phone, street, barangay, city, state, postal_code, `${street}, ${barangay ? `${barangay}, ` : ''}${city}, ${state} ${postal_code}, Philippines`, lat, lng, is_default]
     );
 
     await client.query('COMMIT');
@@ -85,7 +113,30 @@ export const createAddress = async (req, res) => {
 // Update address
 export const updateAddress = async (req, res) => {
   const { id } = req.params;
-  const { recipient_name, phone, street, barangay, city, state, postal_code, is_default, lat, lng } = req.body;
+  const recipient_name = normalizeText(req.body.recipient_name);
+  const phone = normalizeText(req.body.phone);
+  const street = normalizeText(req.body.street);
+  const barangay = normalizeText(req.body.barangay);
+  const city = normalizeText(req.body.city);
+  const state = normalizeText(req.body.state);
+  const postal_code = normalizeText(req.body.postal_code);
+  const is_default = typeof req.body.is_default === 'boolean' ? req.body.is_default : null;
+  const lat = req.body.lat ?? null;
+  const lng = req.body.lng ?? null;
+
+  const fieldErrors = {};
+  if (!recipient_name) fieldErrors.recipient_name = 'Recipient name is required.';
+  if (!phone) fieldErrors.phone = 'Phone is required.';
+  else if (!PHONE_REGEX.test(phone)) fieldErrors.phone = 'Phone must start with 09 or +639 and contain 11 digits.';
+  if (!street) fieldErrors.street = 'Street is required.';
+  if (!city) fieldErrors.city = 'City is required.';
+  if (!state) fieldErrors.state = 'Province is required.';
+  if (!postal_code) fieldErrors.postal_code = 'ZIP code is required.';
+  else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 4 digits.';
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return res.status(400).json({ message: 'Please correct the highlighted address fields.', fieldErrors });
+  }
 
   const client = await pool.connect();
 
@@ -128,7 +179,7 @@ export const updateAddress = async (req, res) => {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $12
        RETURNING *`,
-       [recipient_name, phone, street, barangay, city, state, postal_code, `${street}, ${barangay ? barangay + ', ' : ''}${city}, ${state} ${postal_code}, Philippines`, lat, lng, is_default, id]
+       [recipient_name, phone, street, barangay, city, state, postal_code, `${street}, ${barangay ? `${barangay}, ` : ''}${city}, ${state} ${postal_code}, Philippines`, lat, lng, is_default, id]
     );
 
     await client.query('COMMIT');
