@@ -20,6 +20,7 @@ const Checkout = () => {
     removeDiscount: removeCartDiscount,
     clearSelectedItems,
     updateQuantity,
+    persistCheckoutSelection,
     getCheckoutSelection,
     clearCheckoutSelection,
   } = useCart();
@@ -28,7 +29,7 @@ const Checkout = () => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const isBuyNowQuery = searchParams.get('buyNow') === '1';
-  const [checkoutItemIds] = useState(() => {
+  const [checkoutItemIds, setCheckoutItemIds] = useState(() => {
     const routeSelection = Array.isArray(location.state?.checkoutSelectionIds)
       ? location.state.checkoutSelectionIds
       : null;
@@ -86,6 +87,31 @@ const Checkout = () => {
       clearCheckoutSelection();
     }
   }, [clearCheckoutSelection, checkoutItemIds, isBuyNow]);
+
+  useEffect(() => {
+    if (isBuyNow) return;
+
+    if (checkoutItemIds.length === 0) {
+      clearCheckoutSelection();
+      return;
+    }
+
+    persistCheckoutSelection(checkoutItemIds);
+  }, [checkoutItemIds, clearCheckoutSelection, isBuyNow, persistCheckoutSelection]);
+
+  useEffect(() => {
+    if (isBuyNow) return;
+
+    const availableIds = new Set(allCartItems.map((item) => item.productId));
+
+    setCheckoutItemIds((current) => {
+      const filtered = current.filter((id) => availableIds.has(id));
+      if (filtered.length === current.length && filtered.every((id, index) => id === current[index])) {
+        return current;
+      }
+      return filtered;
+    });
+  }, [allCartItems, isBuyNow]);
 
   const verifiedCartItems = useMemo(() => {
     if (isBuyNow) return [];
@@ -156,7 +182,7 @@ const Checkout = () => {
 
     if (rawVal === '' || isNaN(parseInt(rawVal, 10))) {
       setLocalQuantities(prev => ({ ...prev, [item.productId]: 1 }));
-      updateQuantity(item.productId, 1);
+      updateCheckoutQuantity(item.productId, 1);
       setQuantityErrors(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
       return;
     }
@@ -189,8 +215,15 @@ const Checkout = () => {
     });
 
     if (val !== item.quantity) {
-       updateQuantity(item.productId, val);
+       updateCheckoutQuantity(item.productId, val);
     }
+  };
+
+  const updateCheckoutQuantity = (productId, quantity) => {
+    if (!isBuyNow) {
+      persistCheckoutSelection(checkoutItemIds);
+    }
+    updateQuantity(productId, quantity);
   };
 
   useEffect(() => {
@@ -769,7 +802,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                                 type="button"
                                 disabled={item.quantity <= 1}
                                 onClick={() => {
-                                  updateQuantity(item.productId, item.quantity - 1);
+                                  updateCheckoutQuantity(item.productId, item.quantity - 1);
                                   setQuantityErrors(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
                                 }}
                                 className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
@@ -799,7 +832,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                                     setQuantityErrors(prev => ({ ...prev, [item.productId]: `Cannot exceed stock (${stock}).` }));
                                     return;
                                   }
-                                  updateQuantity(item.productId, item.quantity + 1);
+                                  updateCheckoutQuantity(item.productId, item.quantity + 1);
                                   setQuantityErrors(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
                                 }}
                                 className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
