@@ -27,7 +27,10 @@ export const validateCsrf = (req, res, next) => {
   const stored = tokens.get(scope);
 
   if (!stored || stored.token !== token || Date.now() > stored.expires) {
-    return res.status(403).json({ message: 'Invalid CSRF token' });
+    return res.status(403).json({
+      message: 'Invalid CSRF token',
+      code: 'CSRF_INVALID_TOKEN',
+    });
   }
 
   next();

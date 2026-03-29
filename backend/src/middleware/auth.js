@@ -2,9 +2,15 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../config/database.js';
 
+const extractBearerToken = (authHeader) => {
+  if (typeof authHeader !== 'string') return null;
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : null;
+};
+
 export const authenticateOptional = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = extractBearerToken(authHeader);
 
   if (!token) {
     return next();
@@ -37,15 +43,40 @@ export const authenticateOptional = async (req, res, next) => {
 
 export const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = extractBearerToken(authHeader);
 
   if (!token) {
-    return res.status(401).json({ message: 'Access token required' });
+    return res.status(401).json({
+      message: 'Access token required',
+      code: 'AUTH_TOKEN_REQUIRED',
+    });
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET, { clockTolerance: 30 });
+  } catch (err) {
+    if (err?.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        message: 'Access token expired. Please log in again.',
+        code: 'AUTH_TOKEN_EXPIRED',
+      });
+    }
+
+    if (err?.name === 'JsonWebTokenError' || err?.name === 'NotBeforeError') {
+      return res.status(401).json({
+        message: 'Invalid access token.',
+        code: 'AUTH_INVALID_TOKEN',
+      });
+    }
+
+    return res.status(500).json({
+      message: 'Failed to validate authentication token.',
+      code: 'AUTH_VALIDATION_FAILED',
+    });
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
     // Validate session is still active
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const sessionResult = await pool.query(
@@ -57,7 +88,10 @@ export const authenticateToken = async (req, res, next) => {
     if (sessionResult.rows.length === 0) {
       const anySession = await pool.query('SELECT COUNT(*) FROM sessions WHERE user_id = $1', [decoded.id]);
       if (parseInt(anySession.rows[0].count) > 0) {
-        return res.status(403).json({ message: 'Session expired or revoked. Please log in again.' });
+        return res.status(401).json({
+          message: 'Session expired or revoked. Please log in again.',
+          code: 'AUTH_SESSION_EXPIRED',
+        });
       }
     } else {
       // Touch last_active
@@ -67,13 +101,20 @@ export const authenticateToken = async (req, res, next) => {
     // Check user is_active
     const userResult = await pool.query('SELECT is_active FROM users WHERE id = $1', [decoded.id]);
     if (userResult.rows.length > 0 && !userResult.rows[0].is_active) {
-      return res.status(403).json({ message: 'Account deactivated. Contact support.' });
+      return res.status(403).json({
+        message: 'Account deactivated. Contact support.',
+        code: 'AUTH_ACCOUNT_DEACTIVATED',
+      });
     }
 
     req.user = decoded;
     next();
-  } catch (err) {
-    return res.status(403).json({ message: 'Invalid or expired token' });
+  } catch (error) {
+    console.error('Authentication middleware error:', error);
+    return res.status(500).json({
+      message: 'Authentication check failed. Please try again.',
+      code: 'AUTH_VALIDATION_FAILED',
+    });
   }
 };
 
@@ -128,7 +169,7 @@ export const requirePermission = (permissionName) => {
 
 export const optionalAuth = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = extractBearerToken(authHeader);
 
   if (!token) {
     req.user = null;

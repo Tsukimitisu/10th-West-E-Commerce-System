@@ -29,6 +29,43 @@ const clearAuthSession = () => {
   window.dispatchEvent(new Event('auth:changed'));
 };
 
+const AUTH_FAILURE_CODES = new Set([
+  'AUTH_TOKEN_REQUIRED',
+  'AUTH_TOKEN_EXPIRED',
+  'AUTH_INVALID_TOKEN',
+  'AUTH_SESSION_EXPIRED',
+  'AUTH_ACCOUNT_DEACTIVATED',
+]);
+
+const isSessionAuthFailure = (status, responseBody = {}) => {
+  const code = String(responseBody.code || '').toUpperCase();
+  if (code.startsWith('CSRF_')) return false;
+
+  if (AUTH_FAILURE_CODES.has(code)) {
+    return true;
+  }
+
+  const message = String(responseBody.message || '').toLowerCase();
+  if (!message || message.includes('csrf')) {
+    return false;
+  }
+
+  const tokenHint = /(invalid|expired).{0,20}token|token.{0,20}(invalid|expired)/.test(message);
+  const sessionHint = message.includes('session') && (message.includes('expired') || message.includes('revoked'));
+  const reauthHint = message.includes('log in again') || message.includes('login again') || message.includes('access token required');
+  const deactivatedHint = message.includes('account deactivated');
+
+  if (status === 401) {
+    return tokenHint || sessionHint || reauthHint || deactivatedHint;
+  }
+
+  if (status === 403) {
+    return sessionHint || reauthHint || deactivatedHint || tokenHint;
+  }
+
+  return false;
+};
+
 // Helper: get current user info from token (for Supabase custom auth)
 const getCurrentUserFromToken = () => {
   const token = getAuthToken();
@@ -78,7 +115,7 @@ const authenticatedFetch = async (url, options = {}) => {
     headers['Authorization'] = `Bearer ${token}`;
   } else if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase())) {
     try {
-      const csrfRes = await fetch(`${API_URL}/csrf-token`);
+      const csrfRes = await fetch(`${API_URL}/csrf-token`, { credentials: 'include' });
       if (csrfRes.ok) {
         const { csrfToken } = await csrfRes.json();
         if (csrfToken) headers['x-csrf-token'] = csrfToken;
@@ -97,15 +134,9 @@ const authenticatedFetch = async (url, options = {}) => {
   const responseBody = await response.json().catch(() => ({ message: 'Request failed' }));
 
   if (!response.ok) {
-    if (token && response.status === 401) {
+    if (token && isSessionAuthFailure(response.status, responseBody)) {
       clearAuthSession();
       window.dispatchEvent(new Event('auth:session-expired'));
-    } else if (token && response.status === 403) {
-      const msg = (responseBody.message || '').toLowerCase();
-      if (msg.includes('session') || msg.includes('expired') || msg.includes('invalid') || msg.includes('deactivated') || msg.includes('log in')) {
-        clearAuthSession();
-        window.dispatchEvent(new Event('auth:session-expired'));
-      }
     }
     const apiError = new Error(responseBody.message || 'Request failed');
     Object.assign(apiError, responseBody, {
