@@ -3213,6 +3213,87 @@ export const recordProductView = async (productId) => {
 
 // User profile functions
 export const updateProfile = async (userId, updates) => {
+  if (USE_SUPABASE) {
+    const currentUser = getCurrentUserFromToken();
+    if (!currentUser?.id) throw new Error('Not authenticated');
+
+    const name = typeof updates?.name === 'string' ? updates.name.trim() : '';
+    const email = typeof updates?.email === 'string' ? updates.email.trim().toLowerCase() : '';
+    const phone = typeof updates?.phone === 'string' ? updates.phone.trim() : '';
+    const fieldErrors = {};
+
+    if (!name) {
+      fieldErrors.name = 'Name is required.';
+    } else if (name.length < 2) {
+      fieldErrors.name = 'Name must be at least 2 characters.';
+    } else if (name.length > 100) {
+      fieldErrors.name = 'Name must be 100 characters or fewer.';
+    }
+
+    if (!email) {
+      fieldErrors.email = 'Email is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      fieldErrors.email = 'Enter a valid email address.';
+    }
+
+    if (phone && !/^[0-9+\-\s()]{7,20}$/.test(phone)) {
+      fieldErrors.phone = 'Enter a valid phone number.';
+    }
+
+    if (Object.keys(fieldErrors).length > 0) {
+      const validationError = new Error('Please correct the highlighted fields.');
+      validationError.fieldErrors = fieldErrors;
+      throw validationError;
+    }
+
+    const { data: emailOwner, error: emailOwnerError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .neq('id', currentUser.id)
+      .maybeSingle();
+
+    if (emailOwnerError) throw new Error(emailOwnerError.message);
+    if (emailOwner?.id) {
+      const duplicateError = new Error('That email address is already in use.');
+      duplicateError.fieldErrors = { email: 'That email address is already in use.' };
+      throw duplicateError;
+    }
+
+    const payload = {
+      name,
+      email,
+      phone: phone || null,
+    };
+
+    if (Object.prototype.hasOwnProperty.call(updates || {}, 'avatar')) {
+      payload.avatar = updates?.avatar || null;
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update(payload)
+      .eq('id', currentUser.id)
+      .select('*')
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    return {
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      role: data.role,
+      phone: data.phone,
+      avatar: data.avatar,
+      store_credit: data.store_credit,
+      is_active: data.is_active,
+      last_login: data.last_login,
+      email_verified: data.email_verified,
+      two_factor_enabled: data.two_factor_enabled,
+    };
+  }
+
   const data = await authenticatedFetch(`${API_URL}/users/profile`, {
     method: 'PUT',
     body: JSON.stringify(updates),
@@ -3234,11 +3315,22 @@ export const uploadProfileAvatar = async (file) => {
     body: file,
   });
 
-  const avatarUrl = data.avatarUrl || '';
+  const rawAvatarUrl = data.avatarUrl || data?.user?.avatar || '';
+  const avatarUrl = rawAvatarUrl.startsWith('/') ? `${API_ORIGIN}${rawAvatarUrl}` : rawAvatarUrl;
   if (!avatarUrl) throw new Error('Profile picture upload failed.');
 
-  if (avatarUrl.startsWith('/')) {
-    return `${API_ORIGIN}${avatarUrl}`;
+  if (USE_SUPABASE) {
+    const currentUser = getCurrentUserFromToken();
+    if (currentUser?.id) {
+      const { error } = await supabase
+        .from('users')
+        .update({ avatar: avatarUrl })
+        .eq('id', currentUser.id);
+
+      if (error) {
+        throw new Error(error.message || 'Profile picture uploaded but failed to sync profile avatar.');
+      }
+    }
   }
 
   return avatarUrl;
