@@ -6,10 +6,10 @@ import VariantsModal from '../../components/owner/VariantsModal';
 import { useSocketEvent } from '../../context/SocketContext';
 
 const InputField = ({ label, required, children }) => (
-  <div><label className="block text-xs font-medium text-gray-600 mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>{children}</div>
+  <div><label className="block text-xs font-medium text-gray-300 mb-1">{label}{required && <span className="text-red-400 ml-0.5">*</span>}</label>{children}</div>
 );
 
-const inputClass = "w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300";
+const inputClass = "w-full px-3 py-2 border border-white/10 bg-[#202430] text-gray-100 rounded-lg text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400";
 
 const ProductsView = () => {
   const [products, setProducts] = useState([]);
@@ -348,13 +348,13 @@ const ProductsView = () => {
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Search products, SKU, barcode..." value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300" />
+            className="w-full pl-9 pr-3 py-2 border border-white/10 bg-[#202430] text-gray-100 rounded-lg text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400" />
         </div>
-        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20">
+        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="px-3 py-2 border border-white/10 bg-[#202430] text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20">
           <option value="">All Categories</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select value={filterStock} onChange={e => setFilterStock(e.target.value)} className="px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20">
+        <select value={filterStock} onChange={e => setFilterStock(e.target.value)} className="px-3 py-2 border border-white/10 bg-[#202430] text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20">
           <option value="">All Stock</option>
           <option value="in">In Stock</option>
           <option value="low">Low Stock</option>
@@ -363,9 +363,9 @@ const ProductsView = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5 overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
+          <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-white/10 border-t-red-500 rounded-full animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
             <Package size={40} className="mx-auto text-gray-300 mb-3" />
@@ -374,24 +374,24 @@ const ProductsView = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50/80 border-b border-gray-700">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Product</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">SKU / Barcode</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Category</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Price</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Stock</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Status</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-24">Actions</th>
+              <thead><tr className="bg-[#202430]/80 border-b border-white/10">
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-300">Product</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-300 hidden md:table-cell">SKU / Barcode</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-300">Category</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-300">Price</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-300">Stock</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-300">Status</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-300 w-24">Actions</th>
               </tr></thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-white/10">
                 {filtered.map(p => {
                   const cat = categories.find(c => c.id === p.category_id);
                   const subcat = subcategories.find(s => s.id === p.subcategory_id);
                   return (
-                    <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={p.id} className="hover:bg-[#202430]/60 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700">
+                          <div className="w-10 h-10 bg-[#202430] rounded-lg overflow-hidden flex-shrink-0 border border-white/10">
                             {p.image ? <img src={p.image} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={16} className="m-auto text-gray-400 mt-2.5" />}
                           </div>
                           <div className="min-w-0">
@@ -402,12 +402,12 @@ const ProductsView = () => {
                         </div>
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">
-                        <p className="text-xs font-mono text-gray-600">{p.sku || 'â€”'}</p>
+                        <p className="text-xs font-mono text-gray-500">{p.sku || 'â€”'}</p>
                         <p className="text-[10px] font-mono text-gray-400">{p.barcode || 'â€”'}</p>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs text-gray-300 block">{cat?.name || '—'}</span>
-                        {subcat && <span className="text-[10px] text-gray-500 block">{subcat.name}</span>}
+                        {subcat && <span className="text-[10px] text-gray-400 block">{subcat.name}</span>}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {p.is_on_sale ? (
@@ -415,21 +415,21 @@ const ProductsView = () => {
                         ) : <span className="font-medium text-white">₱{p.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className={`font-bold text-sm ${p.stock_quantity === 0 ? 'text-red-500' : p.stock_quantity <= p.low_stock_threshold ? 'text-amber-600' : 'text-white'}`}>
+                        <span className={`font-bold text-sm ${p.stock_quantity === 0 ? 'text-red-400' : p.stock_quantity <= p.low_stock_threshold ? 'text-amber-400' : 'text-white'}`}>
                           {p.stock_quantity}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${p.stock_quantity === 0 ? 'bg-red-500/10 text-red-500' : p.stock_quantity <= p.low_stock_threshold ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${p.stock_quantity === 0 ? 'bg-red-500/20 text-red-400' : p.stock_quantity <= p.low_stock_threshold ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'}`}>
                           {p.stock_quantity === 0 ? 'Out of Stock' : p.stock_quantity <= p.low_stock_threshold ? 'Low Stock' : 'In Stock'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => { setSelectedProductVariants(p); setVariantsModalOpen(true); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-green-500 transition-colors" title="Manage Variants"><Layers size={14} /></button>
-                          <button onClick={() => openEdit(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => handleDuplicate(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-purple-600 transition-colors" title="Duplicate"><Copy size={14} /></button>
-                          <button onClick={() => handleDelete(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-500 transition-colors" title="Delete"><Trash2 size={14} /></button>
+                          <button onClick={() => { setSelectedProductVariants(p); setVariantsModalOpen(true); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-500 hover:text-green-400 transition-colors" title="Manage Variants"><Layers size={14} /></button>
+                          <button onClick={() => openEdit(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-500 hover:text-blue-400 transition-colors" title="Edit"><Pencil size={14} /></button>
+                          <button onClick={() => handleDuplicate(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-500 hover:text-purple-400 transition-colors" title="Duplicate"><Copy size={14} /></button>
+                          <button onClick={() => handleDelete(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-500 hover:text-red-400 transition-colors" title="Delete"><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
@@ -464,7 +464,7 @@ const ProductsView = () => {
                   <button
                     type="button"
                     onClick={openCategoryModal}
-                    className="text-xs font-medium text-orange-600 hover:text-orange-700"
+                    className="text-xs font-medium text-red-400 hover:text-red-300"
                   >
                     + Manage Categories
                   </button>
@@ -481,7 +481,7 @@ const ProductsView = () => {
                   <button
                     type="button"
                     onClick={() => setSubcategoryModalOpen(true)}
-                    className="text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50"
+                    className="text-xs font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
                     disabled={!form.category_id}
                   >
                     + Manage Subcategories
@@ -526,7 +526,7 @@ const ProductsView = () => {
                 <div className="mt-2 flex items-start gap-3">
                   <img src={imagePreviewUrl || form.image} alt="Preview" className="w-20 h-20 rounded-lg object-cover border border-gray-700" />
                   {selectedImageFile && (
-                    <button type="button" onClick={clearSelectedImage} className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg">
+                    <button type="button" onClick={clearSelectedImage} className="px-3 py-1.5 text-xs text-gray-300 hover:bg-[#202430] rounded-lg">
                       Remove Selected
                     </button>
                   )}
@@ -535,9 +535,9 @@ const ProductsView = () => {
             </InputField>
 
             {/* Sale */}
-            <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-red-500/10 border-red-200' : 'bg-gray-900 border-gray-700'}`}>
-              <label className="flex items-center gap-2 font-medium text-sm cursor-pointer">
-                <input type="checkbox" checked={form.is_on_sale} onChange={e => setForm(f => ({ ...f, is_on_sale: e.target.checked }))} className="w-4 h-4 text-red-500 rounded focus:ring-orange-500" />
+            <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-red-500/10 border-red-500/30' : 'bg-[#202430]/40 border-white/10'}`}>
+              <label className="flex items-center gap-2 font-medium text-sm text-gray-200 cursor-pointer">
+                <input type="checkbox" checked={form.is_on_sale} onChange={e => setForm(f => ({ ...f, is_on_sale: e.target.checked }))} className="w-4 h-4 text-red-500 rounded focus:ring-red-500" />
                 Put on Sale
               </label>
               {form.is_on_sale && (
@@ -550,13 +550,13 @@ const ProductsView = () => {
             </div>
 
             {formError && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
                 {formError}
               </div>
             )}
 
             <div className="flex justify-end gap-2 pt-4 border-t border-gray-700">
-              <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+              <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2 text-sm text-gray-300 hover:bg-[#202430] rounded-lg transition-colors">Cancel</button>
               <button type="submit" disabled={submitting} className="px-5 py-2 bg-red-500/100 hover:bg-red-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors">
                 {submitting ? 'Saving...' : editing ? 'Update Product' : 'Add Product'}
               </button>
@@ -596,8 +596,8 @@ const ProductsView = () => {
             </form>
 
             <div className="border border-gray-700 rounded-lg overflow-hidden">
-              <div className="px-3 py-2 bg-gray-900 border-b border-gray-700 text-xs font-semibold text-gray-600">Existing Categories</div>
-              <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+              <div className="px-3 py-2 bg-[#202430]/40 border-b border-white/10 text-xs font-semibold text-gray-300">Existing Categories</div>
+              <div className="max-h-64 overflow-y-auto divide-y divide-white/10">
                 {categories.length === 0 ? (
                   <p className="px-3 py-3 text-sm text-gray-400">No categories yet.</p>
                 ) : (
@@ -623,19 +623,19 @@ const ProductsView = () => {
                             type="button"
                             onClick={cancelEditCategory}
                             disabled={categorySubmitting}
-                            className="px-2.5 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md disabled:opacity-70"
+                            className="px-2.5 py-1.5 text-xs bg-[#202430] hover:bg-[#2a3244] text-gray-200 rounded-md disabled:opacity-70"
                           >
                             Cancel
                           </button>
                         </>
                       ) : (
                         <>
-                          <span className="flex-1 text-sm text-gray-700">{category.name}</span>
+                          <span className="flex-1 text-sm text-gray-200">{category.name}</span>
                           <button
                             type="button"
                             onClick={() => startEditCategory(category)}
                             disabled={categorySubmitting}
-                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-400 hover:text-blue-600 disabled:opacity-70"
+                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-[#202430] text-gray-400 hover:text-blue-400 disabled:opacity-70"
                             title="Edit category"
                           >
                             <Pencil size={14} />
@@ -644,7 +644,7 @@ const ProductsView = () => {
                             type="button"
                             onClick={() => handleDeleteCategory(category)}
                             disabled={categorySubmitting}
-                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-400 hover:text-red-600 disabled:opacity-70"
+                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-[#202430] text-gray-400 hover:text-red-400 disabled:opacity-70"
                             title="Delete category"
                           >
                             <Trash2 size={14} />
@@ -658,7 +658,7 @@ const ProductsView = () => {
             </div>
 
             {categoryError && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
                 {categoryError}
               </div>
             )}
@@ -667,7 +667,7 @@ const ProductsView = () => {
               <button
                 type="button"
                 onClick={() => setCategoryModalOpen(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-gray-300 hover:bg-[#202430] rounded-lg transition-colors"
               >
                 Done
               </button>
@@ -686,13 +686,13 @@ const ProductsView = () => {
                 value={newSubcategoryName}
                 onChange={(e) => setNewSubcategoryName(e.target.value)}
                 placeholder="New subcategory name"
-                className="flex-1 px-3 py-2 border border-gray-700 bg-gray-900 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                className="flex-1 px-3 py-2 border border-white/10 bg-[#202430] rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500/20"
                 disabled={categorySubmitting}
               />
               <button
                 type="submit"
                 disabled={!newSubcategoryName.trim() || categorySubmitting}
-                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
               >
                 <Plus size={16} /> Add
               </button>
@@ -764,7 +764,7 @@ const ProductsView = () => {
             </div>
 
             {categoryError && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
                 {categoryError}
               </div>
             )}
@@ -773,7 +773,7 @@ const ProductsView = () => {
               <button
                 type="button"
                 onClick={() => setSubcategoryModalOpen(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm text-gray-300 hover:bg-[#202430] rounded-lg transition-colors"
               >
                 Done
               </button>
@@ -789,12 +789,12 @@ const ProductsView = () => {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
+              <div className="w-10 h-10 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center"><AlertTriangle size={20} className="text-red-400" /></div>
               <h3 className="text-lg font-bold text-white">Delete Product</h3>
             </div>
-            <p className="text-sm text-gray-600 mb-4">Are you sure you want to delete <strong>"{deleteTarget.name}"</strong>? This cannot be undone.</p>
+            <p className="text-sm text-gray-300 mb-4">Are you sure you want to delete <strong>"{deleteTarget.name}"</strong>? This cannot be undone.</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-[#202430] hover:bg-[#2a3244] text-gray-200 text-sm font-medium rounded-xl">Cancel</button>
               <button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl">Delete</button>
             </div>
           </div>

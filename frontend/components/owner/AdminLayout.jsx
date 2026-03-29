@@ -261,7 +261,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
             </div>
           )}
         </div>
-        {mobile && <button onClick={() => setMobileOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>}
+        {mobile && <button onClick={() => setMobileOpen(false)} className="text-gray-400 hover:text-white transition-colors"><X size={20} /></button>}
       </div>
 
       {/* Nav */}
@@ -271,15 +271,15 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
           const isActive = activeView === item.id;
           return (
             <React.Fragment key={item.id}>
-              {item.divider && idx > 0 && <div className="my-2 border-t border-white/10" />}
+              {item.divider && idx > 0 && <div className="my-2 border-t border-white/8" />}
               <button
                 onClick={() => handleNav(item)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all
-                  ${isActive ? 'bg-[#2a2d34] text-[#ff6b47] border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]' : 'text-gray-300 hover:bg-[#20242c] hover:text-white'}
+                  ${isActive ? 'bg-gradient-to-r from-[#2a2f3a] to-[#252b36] text-[#ff5f3c] border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'text-gray-200 hover:bg-[#202430] hover:text-white'}
                   ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
                 title={collapsed && !mobile ? item.label : undefined}
               >
-                <Icon size={17} className={`flex-shrink-0 ${isActive ? 'text-[#ff6b47]' : 'text-gray-400'}`} />
+                <Icon size={17} className={`flex-shrink-0 ${isActive ? 'text-[#ff5f3c]' : 'text-gray-400'}`} />
                 {(!collapsed || mobile) && (
                   <>
                     <span className="flex-1 text-left">{item.label}</span>
@@ -297,14 +297,14 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
       <div className="px-2 pb-2 space-y-1 flex-shrink-0">
         <button
           type="button"
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all text-gray-300 hover:bg-[#20242c] hover:text-white ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all text-gray-200 hover:bg-[#202430] hover:text-white ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
         >
           <Settings size={17} className="flex-shrink-0 text-gray-400" />
           {(!collapsed || mobile) && <span className="flex-1 text-left">Settings</span>}
         </button>
         <button
           type="button"
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all text-gray-300 hover:bg-[#20242c] hover:text-white ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all text-gray-200 hover:bg-[#202430] hover:text-white ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
         >
           <CircleHelp size={17} className="flex-shrink-0 text-gray-400" />
           {(!collapsed || mobile) && <span className="flex-1 text-left">Help Center</span>}
