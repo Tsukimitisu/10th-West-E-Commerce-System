@@ -11,7 +11,7 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', children }) => {
       <div className={`relative bg-gray-800 rounded-xl shadow-2xl w-full ${sizeMap[size]} max-h-[80vh] flex flex-col animate-fade-in`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700 flex-shrink-0">
           <h3 className="font-display font-semibold text-white">{title}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-400 transition-colors">
             <X size={18} />
           </button>
         </div>

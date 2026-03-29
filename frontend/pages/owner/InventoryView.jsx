@@ -89,14 +89,14 @@ const InventoryView = () => {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 ">
         {[
-          { label: 'Total Units', value: totalStock.toLocaleString(), icon: <Boxes size={18} />, color: 'bg-blue-50 text-blue-600' },
+          { label: 'Total Units', value: totalStock.toLocaleString(), icon: <Boxes size={18} />, color: 'bg-blue-50 text-blue-600 ' },
           { label: 'Inventory Value', value: `â‚±${totalValue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <TrendingUp size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Low Stock', value: lowStock.length.toString(), icon: <AlertTriangle size={18} />, color: 'bg-amber-50 text-amber-600' },
           { label: 'Out of Stock', value: outOfStock.toString(), icon: <Package size={18} />, color: 'bg-red-500/10 text-red-500' },
         ].map((kpi, i) => (
-          <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+          <div key={i} className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-4">
             <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
             <p className="text-lg font-bold text-white">{kpi.value}</p>
             <p className="text-xs text-gray-400">{kpi.label}</p>
@@ -105,7 +105,7 @@ const InventoryView = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-800 rounded-lg border border-gray-700 p-1 w-fit">
+      <div className="flex gap-1 bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-lg border-b border-white/10 p-1 w-fit">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
             <t.icon size={14} />
@@ -126,8 +126,8 @@ const InventoryView = () => {
 
       {/* Stock Levels Tab */}
       {tab === 'stock' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-          <div className="p-3 border-b border-gray-700">
+        <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 overflow-hidden">
+          <div className="p-3 border-b border-white/10">
             <div className="relative max-w-xs">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" placeholder="Search inventory..." value={search} onChange={e => setSearch(e.target.value)}
@@ -138,7 +138,7 @@ const InventoryView = () => {
             <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
           ) : (
             <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50/80 border-b border-gray-700">
+              <thead><tr className="bg-[#202430]/80 border-b border-white/10">
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Product</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Current Stock</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Threshold</th>
@@ -146,12 +146,12 @@ const InventoryView = () => {
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Value</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-24">Adjust</th>
               </tr></thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-white/10">
                 {filtered.map(p => {
                   const status = p.stock_quantity === 0 ? 'out' : p.stock_quantity <= p.low_stock_threshold ? 'low' : 'ok';
                   const pct = p.low_stock_threshold > 0 ? Math.min((p.stock_quantity / (p.low_stock_threshold * 3)) * 100, 100) : 100;
                   return (
-                    <tr key={p.id} className="hover:bg-gray-50/50">
+                    <tr key={p.id} className="hover:bg-[#202430]/60">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-700">
@@ -174,7 +174,7 @@ const InventoryView = () => {
                           {status === 'out' ? 'Out of Stock' : status === 'low' ? 'Low Stock' : 'In Stock'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right font-medium text-white hidden md:table-cell">â‚±{(p.stock_quantity * p.price).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right font-medium text-white hidden md:table-cell">₱{(p.stock_quantity * p.price).toLocaleString()}</td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={() => openAdjust(p)} className="px-2.5 py-1 bg-gray-900 hover:bg-gray-100 border border-gray-700 rounded-lg text-xs font-medium text-gray-600 transition-colors">Adjust</button>
                       </td>
