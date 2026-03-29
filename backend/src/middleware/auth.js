@@ -8,6 +8,31 @@ const extractBearerToken = (authHeader) => {
   return match ? match[1].trim() : null;
 };
 
+const decodeSupabaseFallbackToken = (token) => {
+  if (typeof token !== 'string' || !token.startsWith('sb-token-')) {
+    return null;
+  }
+
+  const payloadBase64 = token.slice('sb-token-'.length);
+  if (!payloadBase64) return null;
+
+  try {
+    const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
+    if (!payload || typeof payload !== 'object') return null;
+
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) return null;
+
+    return {
+      id,
+      email: payload.email || null,
+      role: payload.role || null,
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const authenticateOptional = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = extractBearerToken(authHeader);
@@ -183,4 +208,59 @@ export const optionalAuth = async (req, res, next) => {
     req.user = null;
   }
   next();
+};
+
+export const authenticateTokenOrSupabaseToken = async (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = extractBearerToken(authHeader);
+
+  if (!token) {
+    return res.status(401).json({
+      message: 'Access token required',
+      code: 'AUTH_TOKEN_REQUIRED',
+    });
+  }
+
+  const fallbackPayload = decodeSupabaseFallbackToken(token);
+  if (!fallbackPayload) {
+    return authenticateToken(req, res, next);
+  }
+
+  try {
+    const userResult = await pool.query(
+      'SELECT id, name, email, role, avatar, is_active FROM users WHERE id = $1 LIMIT 1',
+      [fallbackPayload.id],
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({
+        message: 'User not found for access token.',
+        code: 'AUTH_INVALID_TOKEN',
+      });
+    }
+
+    const user = userResult.rows[0];
+    if (!user.is_active) {
+      return res.status(403).json({
+        message: 'Account deactivated. Contact support.',
+        code: 'AUTH_ACCOUNT_DEACTIVATED',
+      });
+    }
+
+    req.user = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      avatar: user.avatar,
+    };
+
+    return next();
+  } catch (error) {
+    console.error('Hybrid token authentication error:', error);
+    return res.status(500).json({
+      message: 'Authentication check failed. Please try again.',
+      code: 'AUTH_VALIDATION_FAILED',
+    });
+  }
 };

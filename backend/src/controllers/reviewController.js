@@ -1,9 +1,30 @@
 import pool from '../config/database.js';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import supabaseClient from '../services/supabaseClient.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const reviewUploadsDir = path.join(__dirname, '..', '..', 'uploads', 'reviews');
 
 const REVIEW_STATUS = {
   PENDING: 'pending',
   APPROVED: 'approved',
   REJECTED: 'rejected',
+};
+
+const REVIEW_MEDIA_BUCKET = 'review-media';
+const REVIEW_MEDIA_MAX_BYTES = 25 * 1024 * 1024;
+const REVIEW_MEDIA_CONTENT_TYPES = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'video/ogg': 'ogg',
 };
 
 let reviewSchemaEnsured = false;
@@ -129,6 +150,32 @@ const getVerifiedPurchaseExpression = `
     LIMIT 1
   )
 `;
+
+const hasSupabaseStorageConfig = () => {
+  return Boolean(
+    process.env.SUPABASE_URL &&
+    (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY),
+  );
+};
+
+const ensureReviewMediaBucket = async () => {
+  if (!hasSupabaseStorageConfig()) return;
+
+  const { data: bucket, error: getBucketError } = await supabaseClient.storage.getBucket(REVIEW_MEDIA_BUCKET);
+  if (!getBucketError && bucket?.id) {
+    return;
+  }
+
+  const { error: createBucketError } = await supabaseClient.storage.createBucket(REVIEW_MEDIA_BUCKET, {
+    public: true,
+    fileSizeLimit: `${REVIEW_MEDIA_MAX_BYTES}`,
+    allowedMimeTypes: Object.keys(REVIEW_MEDIA_CONTENT_TYPES),
+  });
+
+  if (createBucketError && !String(createBucketError.message || '').toLowerCase().includes('already exists')) {
+    throw createBucketError;
+  }
+};
 
 export const getProductReviews = async (req, res) => {
   const productId = Number(req.params.id ?? req.params.productId);
@@ -284,6 +331,72 @@ export const createReview = async (req, res) => {
     console.error('Create review error:', error);
     res.status(500).json({ message: 'Failed to submit review.' });
   }
+};
+
+export const uploadReviewMedia = async (req, res) => {
+  const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const extension = REVIEW_MEDIA_CONTENT_TYPES[contentType];
+
+  if (!extension) {
+    return res.status(400).json({
+      message: 'Unsupported media type. Allowed: JPG, PNG, WEBP, GIF, MP4, WEBM, MOV, OGG.',
+    });
+  }
+
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).json({ message: 'Media file is required.' });
+  }
+
+  if (req.body.length > REVIEW_MEDIA_MAX_BYTES) {
+    return res.status(400).json({ message: 'Media file must be 25 MB or smaller.' });
+  }
+
+  const kind = contentType.startsWith('video/') ? 'video' : 'image';
+  const productId = Number(req.query.product_id || req.query.productId || 0);
+  const filename = `review-${req.user.id}-${Date.now()}-${Math.floor(Math.random() * 1_000_000_000)}.${extension}`;
+  const folder = Number.isInteger(productId) && productId > 0 ? `product-${productId}` : 'general';
+
+  let mediaUrl = null;
+
+  if (hasSupabaseStorageConfig()) {
+    try {
+      await ensureReviewMediaBucket();
+
+      const objectPath = `user-${req.user.id}/${folder}/${filename}`;
+      const { error: uploadError } = await supabaseClient.storage
+        .from(REVIEW_MEDIA_BUCKET)
+        .upload(objectPath, req.body, {
+          contentType,
+          upsert: false,
+        });
+
+      if (!uploadError) {
+        const { data: publicUrlData } = supabaseClient.storage
+          .from(REVIEW_MEDIA_BUCKET)
+          .getPublicUrl(objectPath);
+        mediaUrl = publicUrlData?.publicUrl || null;
+      } else {
+        console.warn('Supabase review media upload failed, falling back to local FS:', uploadError.message);
+      }
+    } catch (storageError) {
+      console.warn('Supabase review media setup/upload failed, falling back to local FS:', storageError.message || storageError);
+    }
+  }
+
+  if (!mediaUrl) {
+    await fs.mkdir(reviewUploadsDir, { recursive: true });
+    const filepath = path.join(reviewUploadsDir, filename);
+    await fs.writeFile(filepath, req.body);
+    mediaUrl = `${req.protocol}://${req.get('host')}/uploads/reviews/${filename}`;
+  }
+
+  return res.status(201).json({
+    message: 'Review media uploaded successfully.',
+    media: {
+      url: mediaUrl,
+      kind,
+    },
+  });
 };
 
 export const getModerationReviews = async (req, res) => {

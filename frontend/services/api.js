@@ -779,11 +779,37 @@ const validateReviewMediaFiles = (files = []) => {
 
 const uploadReviewMediaFiles = async ({ files = [], userId, productId }) => {
   if (!Array.isArray(files) || files.length === 0) return [];
-  if (!supabase) {
-    throw new Error('Review media upload is unavailable right now.');
-  }
 
   validateReviewMediaFiles(files);
+
+  const uploadReviewMediaViaBackend = async (file) => {
+    const queryParams = new URLSearchParams();
+    if (Number.isInteger(Number(productId)) && Number(productId) > 0) {
+      queryParams.set('product_id', String(productId));
+    }
+    const querySuffix = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+    const result = await authenticatedFetch(`${API_URL}/reviews/upload-media${querySuffix}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type,
+      },
+      body: file,
+    });
+
+    const media = result?.media || {};
+    const url = typeof media.url === 'string' ? media.url.trim() : '';
+    if (!url) {
+      throw new Error('Review media upload failed to return a file URL.');
+    }
+
+    return {
+      url,
+      kind: media.kind === 'video' || media.kind === 'image'
+        ? media.kind
+        : (String(file?.type || '').toLowerCase().startsWith('video/') ? 'video' : 'image'),
+    };
+  };
 
   const uploads = [];
   for (let index = 0; index < files.length; index += 1) {
@@ -794,30 +820,50 @@ const uploadReviewMediaFiles = async ({ files = [], userId, productId }) => {
     const extension = rawExt.toLowerCase().replace(/[^a-z0-9]/g, '') || (kind === 'video' ? 'mp4' : 'jpg');
     const objectPath = `user-${userId}/product-${productId}/${Date.now()}-${index}-${Math.random().toString(36).slice(2)}.${extension}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(REVIEW_MEDIA_BUCKET)
-      .upload(objectPath, file, {
-        cacheControl: '3600',
-        upsert: false,
-        contentType: file.type,
-      });
+    let uploadedMedia = null;
 
-    if (uploadError) {
-      const message = String(uploadError.message || 'Failed to upload review media.');
-      if (message.toLowerCase().includes('bucket')) {
-        throw new Error('Review media storage is not configured yet. Please create the public "review-media" bucket.');
+    if (supabase) {
+      try {
+        const { error: uploadError } = await supabase.storage
+          .from(REVIEW_MEDIA_BUCKET)
+          .upload(objectPath, file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: file.type,
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: publicData } = supabase.storage
+          .from(REVIEW_MEDIA_BUCKET)
+          .getPublicUrl(objectPath);
+
+        if (publicData?.publicUrl) {
+          uploadedMedia = {
+            url: publicData.publicUrl,
+            kind,
+          };
+        }
+      } catch (supabaseUploadError) {
+        const fallbackMedia = await uploadReviewMediaViaBackend(file).catch((backendUploadError) => {
+          const supabaseMessage = String(supabaseUploadError?.message || 'Supabase storage upload failed.');
+          const backendMessage = String(backendUploadError?.message || 'Backend upload fallback failed.');
+
+          if (backendMessage.toLowerCase().includes('failed to fetch')) {
+            throw new Error('Review media upload failed. Supabase storage is unavailable and backend fallback is unreachable. Start the backend server and try again.');
+          }
+
+          throw new Error(`Failed to upload review media. ${supabaseMessage} ${backendMessage}`.trim());
+        });
+        uploadedMedia = fallbackMedia;
       }
-      throw new Error(message);
+    } else {
+      uploadedMedia = await uploadReviewMediaViaBackend(file);
     }
 
-    const { data: publicData } = supabase.storage
-      .from(REVIEW_MEDIA_BUCKET)
-      .getPublicUrl(objectPath);
-
-    uploads.push({
-      url: publicData?.publicUrl,
-      kind,
-    });
+    uploads.push(uploadedMedia);
   }
 
   return normalizeReviewMedia(uploads);
