@@ -1,11 +1,11 @@
 import express from 'express';
 import { getProfile, updateProfile, uploadProfileAvatar, changePassword } from '../controllers/userController.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateTokenOrSupabaseToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // All routes require authentication
-router.use(authenticateToken);
+router.use(authenticateTokenOrSupabaseToken);
 
 // Get user profile
 router.get('/profile', getProfile);
