@@ -20,7 +20,8 @@ export const validateCsrf = (req, res, next) => {
   // Skip for GET, HEAD, OPTIONS
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   // Skip for API calls with Bearer token (already authenticated)
-  if (req.headers.authorization?.startsWith('Bearer')) return next();
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === 'string' && /^Bearer\s+/i.test(authHeader)) return next();
 
   const token = req.headers['x-csrf-token'] || req.body?._csrf;
   const scope = getCsrfScope(req);
