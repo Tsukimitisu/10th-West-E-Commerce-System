@@ -32,14 +32,20 @@ const clearAuthSession = () => {
 const AUTH_FAILURE_CODES = new Set([
   'AUTH_TOKEN_REQUIRED',
   'AUTH_TOKEN_EXPIRED',
-  'AUTH_INVALID_TOKEN',
   'AUTH_SESSION_EXPIRED',
   'AUTH_ACCOUNT_DEACTIVATED',
 ]);
 
-const isSessionAuthFailure = (status, responseBody = {}) => {
+const isSessionAuthFailure = (status, responseBody = {}, token = '') => {
   const code = String(responseBody.code || '').toUpperCase();
+  const isSupabaseToken = typeof token === 'string' && token.startsWith('sb-token-');
   if (code.startsWith('CSRF_')) return false;
+
+  // Supabase fallback mode stores a local token shape (`sb-token-*`) that is not a backend JWT.
+  // Treat backend AUTH_INVALID_TOKEN as a request-level error, not a global session-expiry event.
+  if (isSupabaseToken && code === 'AUTH_INVALID_TOKEN') {
+    return false;
+  }
 
   if (AUTH_FAILURE_CODES.has(code)) {
     return true;
@@ -54,6 +60,10 @@ const isSessionAuthFailure = (status, responseBody = {}) => {
   const sessionHint = message.includes('session') && (message.includes('expired') || message.includes('revoked'));
   const reauthHint = message.includes('log in again') || message.includes('login again') || message.includes('access token required');
   const deactivatedHint = message.includes('account deactivated');
+
+  if (isSupabaseToken && tokenHint) {
+    return false;
+  }
 
   if (status === 401) {
     return tokenHint || sessionHint || reauthHint || deactivatedHint;
@@ -134,7 +144,7 @@ const authenticatedFetch = async (url, options = {}) => {
   const responseBody = await response.json().catch(() => ({ message: 'Request failed' }));
 
   if (!response.ok) {
-    if (token && isSessionAuthFailure(response.status, responseBody)) {
+    if (token && isSessionAuthFailure(response.status, responseBody, token)) {
       clearAuthSession();
       window.dispatchEvent(new Event('auth:session-expired'));
     }
@@ -2241,11 +2251,177 @@ export const removeFromWishlist = async (userId, productId) => {
 };
 
 export const getReviews = async (productId) => {
+  if (USE_SUPABASE) {
+    const normalizedProductId = Number(productId);
+    if (!Number.isInteger(normalizedProductId) || normalizedProductId <= 0) {
+      return [];
+    }
+
+    const { data: reviewRows, error: reviewError } = await supabase
+      .from('reviews')
+      .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved')
+      .eq('product_id', normalizedProductId)
+      .order('created_at', { ascending: false });
+
+    if (reviewError) {
+      throw new Error(reviewError.message);
+    }
+
+    const approvedRows = (reviewRows || []).filter((review) => toApprovedReviewStatus(review) === 'approved');
+    if (approvedRows.length === 0) {
+      return [];
+    }
+
+    const userIds = [...new Set(approvedRows.map((review) => Number(review.user_id)).filter((id) => Number.isInteger(id) && id > 0))];
+    let userMap = new Map();
+
+    if (userIds.length > 0) {
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, avatar')
+        .in('id', userIds);
+
+      if (!usersError) {
+        userMap = new Map((users || []).map((user) => [Number(user.id), user]));
+      }
+    }
+
+    return approvedRows.map((review) => {
+      const user = userMap.get(Number(review.user_id));
+      return {
+        ...review,
+        rating: Number(review.rating || 0),
+        review_status: toApprovedReviewStatus(review),
+        verified_purchase: false,
+        user_name: user?.name || 'Customer',
+        user_avatar: user?.avatar || null,
+      };
+    });
+  }
+
   return authenticatedFetch(`${API_URL}/products/${productId}/reviews`).catch(() => []);
 };
 export const getProductReviews = getReviews;
 
 export const addReview = async (review) => {
+  if (USE_SUPABASE) {
+    const currentUser = getCurrentUserFromToken();
+    if (!currentUser?.id) {
+      const authError = new Error('Please log in to leave a review.');
+      authError.status = 401;
+      throw authError;
+    }
+
+    const productId = Number(review?.product_id ?? review?.productId);
+    const rating = Number(review?.rating);
+    const comment = typeof review?.comment === 'string' ? review.comment.trim() : '';
+    const fieldErrors = {};
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      fieldErrors.product = 'Invalid product.';
+    }
+
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      fieldErrors.rating = 'Please select a rating from 1 to 5.';
+    }
+
+    if (!comment) {
+      fieldErrors.comment = 'Please enter a review comment.';
+    } else if (comment.length < 5) {
+      fieldErrors.comment = 'Review comment must be at least 5 characters.';
+    } else if (comment.length > 1000) {
+      fieldErrors.comment = 'Review comment must be 1000 characters or fewer.';
+    }
+
+    if (Object.keys(fieldErrors).length > 0) {
+      const validationError = new Error('Please correct the highlighted review fields.');
+      validationError.status = 400;
+      validationError.fieldErrors = fieldErrors;
+      throw validationError;
+    }
+
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('id')
+      .eq('id', productId)
+      .maybeSingle();
+
+    if (productError) {
+      throw new Error(productError.message);
+    }
+
+    if (!product) {
+      const notFoundError = new Error('Product not found.');
+      notFoundError.status = 404;
+      throw notFoundError;
+    }
+
+    const { data: existingReview, error: existingError } = await supabase
+      .from('reviews')
+      .select('id')
+      .eq('user_id', currentUser.id)
+      .eq('product_id', productId)
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(existingError.message);
+    }
+
+    let savedReview;
+    if (existingReview?.id) {
+      const { data: updatedReview, error: updateError } = await supabase
+        .from('reviews')
+        .update({
+          rating,
+          comment,
+          review_status: 'pending',
+          is_approved: false,
+          moderation_note: null,
+          moderated_by: null,
+          moderated_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingReview.id)
+        .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved')
+        .single();
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      savedReview = updatedReview;
+    } else {
+      const { data: insertedReview, error: insertError } = await supabase
+        .from('reviews')
+        .insert({
+          user_id: currentUser.id,
+          product_id: productId,
+          rating,
+          comment,
+          review_status: 'pending',
+          is_approved: false,
+        })
+        .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved')
+        .single();
+
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
+
+      savedReview = insertedReview;
+    }
+
+    return {
+      message: 'Review submitted and is pending moderation.',
+      review: {
+        ...savedReview,
+        rating: Number(savedReview.rating || 0),
+        review_status: toApprovedReviewStatus(savedReview),
+        verified_purchase: false,
+      },
+    };
+  }
+
   return authenticatedFetch(`${API_URL}/reviews`, {
     method: 'POST',
     body: JSON.stringify(review),
