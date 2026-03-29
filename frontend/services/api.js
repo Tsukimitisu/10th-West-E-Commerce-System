@@ -23,6 +23,57 @@ const getAuthToken = () => {
   return localStorage.getItem('shopCoreToken');
 };
 
+let csrfTokenCache = {
+  token: '',
+  expiresAt: 0,
+};
+
+const getCookieValue = (name) => {
+  if (typeof document === 'undefined') return '';
+  const escapedName = String(name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : '';
+};
+
+const getCsrfToken = async ({ forceRefresh = false } = {}) => {
+  const now = Date.now();
+  if (!forceRefresh && csrfTokenCache.token && csrfTokenCache.expiresAt > now) {
+    return csrfTokenCache.token;
+  }
+
+  try {
+    const csrfRes = await fetch(`${API_URL}/csrf-token`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+
+    if (csrfRes.ok) {
+      const body = await csrfRes.json().catch(() => ({}));
+      const csrfToken = String(body?.csrfToken || '').trim() || getCookieValue('csrf-token');
+      if (csrfToken) {
+        csrfTokenCache = {
+          token: csrfToken,
+          expiresAt: Date.now() + (55 * 60 * 1000),
+        };
+        return csrfToken;
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to refresh CSRF token:', error);
+  }
+
+  const cookieToken = getCookieValue('csrf-token');
+  if (cookieToken) {
+    csrfTokenCache = {
+      token: cookieToken,
+      expiresAt: Date.now() + (15 * 60 * 1000),
+    };
+    return cookieToken;
+  }
+
+  return '';
+};
+
 const clearAuthSession = () => {
   localStorage.removeItem('shopCoreUser');
   localStorage.removeItem('shopCoreToken');
@@ -113,7 +164,10 @@ const authenticatedFetch = async (url, options = {}) => {
   const headers = {
     ...(options.headers || {}),
   };
+  const method = String(options.method || 'GET').toUpperCase();
+  const isStateChangingMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method);
   const hasContentTypeHeader = Object.keys(headers).some((key) => key.toLowerCase() === 'content-type');
+  const hasCsrfHeader = Object.keys(headers).some((key) => key.toLowerCase() === 'x-csrf-token' || key.toLowerCase() === 'x-xsrf-token');
   const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const isBlobBody = typeof Blob !== 'undefined' && options.body instanceof Blob;
 
@@ -123,15 +177,12 @@ const authenticatedFetch = async (url, options = {}) => {
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
-  } else if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase())) {
-    try {
-      const csrfRes = await fetch(`${API_URL}/csrf-token`, { credentials: 'include' });
-      if (csrfRes.ok) {
-        const { csrfToken } = await csrfRes.json();
-        if (csrfToken) headers['x-csrf-token'] = csrfToken;
-      }
-    } catch (e) {
-      console.warn('Failed to fetch CSRF token:', e);
+  }
+
+  if (isStateChangingMethod && !hasCsrfHeader) {
+    const csrfToken = await getCsrfToken();
+    if (csrfToken) {
+      headers['x-csrf-token'] = csrfToken;
     }
   }
 
@@ -1174,19 +1225,13 @@ export const uploadProductImage = async (file) => {
   const token = getAuthToken();
   if (!token) throw new Error('You must be logged in to upload images');
 
-  const response = await fetch(`${API_URL}/products/upload-image`, {
+  const data = await authenticatedFetch(`${API_URL}/products/upload-image`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': file.type || 'application/octet-stream',
     },
     body: file,
   });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.message || 'Image upload failed');
-  }
 
   const imageUrl = data.imageUrl || '';
   if (!imageUrl) throw new Error('Image upload failed');
@@ -3181,20 +3226,13 @@ export const uploadProfileAvatar = async (file) => {
   const token = getAuthToken();
   if (!token) throw new Error('You must be logged in to upload a profile picture.');
 
-  const response = await fetch(`${API_URL}/users/profile/avatar`, {
+  const data = await authenticatedFetch(`${API_URL}/users/profile/avatar`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': file.type || 'application/octet-stream',
     },
     body: file,
-    credentials: 'include',
   });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.message || 'Profile picture upload failed.');
-  }
 
   const avatarUrl = data.avatarUrl || '';
   if (!avatarUrl) throw new Error('Profile picture upload failed.');
