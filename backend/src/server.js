@@ -124,6 +124,7 @@ app.use(helmet({
     preload: true,
   },
   crossOriginEmbedderPolicy: false, // allow loading external images
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
 // C9: HTTPS redirect in production
@@ -168,6 +169,10 @@ app.use(session({
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 }));
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+});
 app.use('/uploads', express.static(uploadsDir));
 app.use(passport.initialize());
 app.use(activityLogger);
