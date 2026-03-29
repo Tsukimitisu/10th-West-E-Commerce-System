@@ -127,11 +127,61 @@ const Profile = () => {
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
-    const { nextErrors, sanitized } = validateProfileForm();
-    setFieldErrors(nextErrors);
+
+    const sanitizedInput = {
+      name: form.name.trim(),
+      email: form.email.trim().toLowerCase(),
+      phone: form.phone.trim(),
+    };
+    const currentProfile = {
+      name: String(user?.name || '').trim(),
+      email: String(user?.email || '').trim().toLowerCase(),
+      phone: String(user?.phone || '').trim(),
+    };
+    const hasProfileChanges = (
+      sanitizedInput.name !== currentProfile.name ||
+      sanitizedInput.email !== currentProfile.email ||
+      sanitizedInput.phone !== currentProfile.phone
+    );
+    const hasAvatarChange = Boolean(avatarFile);
+
+    setFieldErrors({});
     setMessage('');
     setMessageType('');
     setAvatarError('');
+
+    if (!hasProfileChanges && !hasAvatarChange) {
+      setMessageType('success');
+      setMessage('No changes to save.');
+      return;
+    }
+
+    if (hasAvatarChange && !hasProfileChanges) {
+      setLoading(true);
+      setAvatarUploading(true);
+      try {
+        const avatarUrl = await uploadProfileAvatar(avatarFile);
+        const saved = { ...user, avatar: avatarUrl };
+        localStorage.setItem('shopCoreUser', JSON.stringify(saved));
+        window.dispatchEvent(new Event('auth:changed'));
+        setAvatarFile(null);
+        setAvatarPreview(avatarUrl || '');
+        resetAvatarInput();
+        setMessageType('success');
+        setMessage('Profile picture updated successfully.');
+      } catch (err) {
+        setAvatarError(err.message || 'Failed to upload profile picture.');
+        setMessageType('error');
+        setMessage(err.message || 'Failed to update profile picture.');
+      } finally {
+        setAvatarUploading(false);
+        setLoading(false);
+      }
+      return;
+    }
+
+    const { nextErrors, sanitized } = validateProfileForm();
+    setFieldErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
       setMessageType('error');

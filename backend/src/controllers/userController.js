@@ -16,6 +16,44 @@ const MIME_EXTENSION_MAP = {
   'image/webp': 'webp',
 };
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+const AVATAR_BUCKET = 'avatars';
+
+const hasSupabaseStorageConfig = () => {
+  return Boolean(
+    process.env.SUPABASE_URL &&
+    (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY),
+  );
+};
+
+const ensureAvatarBucketIsPublic = async () => {
+  if (!hasSupabaseStorageConfig()) return;
+
+  const { data: bucket, error: getBucketError } = await supabaseClient.storage.getBucket(AVATAR_BUCKET);
+  if (getBucketError) {
+    const { error: createBucketError } = await supabaseClient.storage.createBucket(AVATAR_BUCKET, {
+      public: true,
+      fileSizeLimit: `${MAX_AVATAR_BYTES}`,
+      allowedMimeTypes: [...ALLOWED_IMAGE_MIME_TYPES],
+    });
+
+    if (createBucketError && !String(createBucketError.message || '').toLowerCase().includes('already exists')) {
+      throw createBucketError;
+    }
+    return;
+  }
+
+  if (bucket && bucket.public === false) {
+    const { error: updateBucketError } = await supabaseClient.storage.updateBucket(AVATAR_BUCKET, {
+      public: true,
+      fileSizeLimit: `${MAX_AVATAR_BYTES}`,
+      allowedMimeTypes: [...ALLOWED_IMAGE_MIME_TYPES],
+    });
+
+    if (updateBucketError) {
+      throw updateBucketError;
+    }
+  }
+};
 
 // Get user profile
 export const getProfile = async (req, res) => {
@@ -148,17 +186,24 @@ export const uploadProfileAvatar = async (req, res) => {
     let avatarUrl = null;
 
     if (process.env.SUPABASE_URL) {
+      try {
+        await ensureAvatarBucketIsPublic();
+      } catch (bucketError) {
+        console.warn('Failed to ensure avatars bucket visibility, falling back to local FS:', bucketError.message || bucketError);
+      }
+
+      const objectPath = `user-${req.user.id}/${filename}`;
       const { error } = await supabaseClient.storage
-        .from('avatars')
-        .upload(filename, req.body, {
+        .from(AVATAR_BUCKET)
+        .upload(objectPath, req.body, {
           contentType,
           upsert: false,
         });
 
       if (!error) {
         const { data: publicUrlData } = supabaseClient.storage
-          .from('avatars')
-          .getPublicUrl(filename);
+          .from(AVATAR_BUCKET)
+          .getPublicUrl(objectPath);
         avatarUrl = publicUrlData?.publicUrl || null;
       } else {
         console.warn('Supabase avatar upload failed, falling back to local FS:', error.message);
@@ -172,9 +217,24 @@ export const uploadProfileAvatar = async (req, res) => {
       avatarUrl = `${req.protocol}://${req.get('host')}/uploads/avatars/${filename}`;
     }
 
+    const updatedResult = await pool.query(
+      `UPDATE users
+       SET avatar = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id, name, email, role, phone, avatar, store_credit, created_at`,
+      [avatarUrl, req.user.id],
+    );
+
+    const updatedUser = updatedResult.rows[0] || null;
+
     res.status(201).json({
       message: 'Profile picture uploaded successfully.',
       avatarUrl,
+      user: updatedUser ? {
+        ...updatedUser,
+        store_credit: parseFloat(updatedUser.store_credit || 0),
+      } : null,
     });
   } catch (error) {
     console.error('Upload profile avatar error:', error);
