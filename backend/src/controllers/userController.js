@@ -55,6 +55,13 @@ const ensureAvatarBucketIsPublic = async () => {
   }
 };
 
+const persistAvatarToLocal = async (req, filename, fileBuffer) => {
+  await fs.mkdir(avatarUploadsDir, { recursive: true });
+  const filepath = path.join(avatarUploadsDir, filename);
+  await fs.writeFile(filepath, fileBuffer);
+  return `${req.protocol}://${req.get('host')}/uploads/avatars/${filename}`;
+};
+
 // Get user profile
 export const getProfile = async (req, res) => {
   try {
@@ -185,36 +192,50 @@ export const uploadProfileAvatar = async (req, res) => {
     const filename = `avatar-${req.user.id}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${ext}`;
     let avatarUrl = null;
 
-    if (process.env.SUPABASE_URL) {
+    if (process.env.SUPABASE_URL && hasSupabaseStorageConfig()) {
+      let canUseSupabaseStorage = true;
       try {
         await ensureAvatarBucketIsPublic();
       } catch (bucketError) {
+        canUseSupabaseStorage = false;
         console.warn('Failed to ensure avatars bucket visibility, falling back to local FS:', bucketError.message || bucketError);
       }
 
-      const objectPath = `user-${req.user.id}/${filename}`;
-      const { error } = await supabaseClient.storage
-        .from(AVATAR_BUCKET)
-        .upload(objectPath, req.body, {
-          contentType,
-          upsert: false,
-        });
-
-      if (!error) {
-        const { data: publicUrlData } = supabaseClient.storage
+      if (canUseSupabaseStorage) {
+        const objectPath = `user-${req.user.id}/${filename}`;
+        const { error } = await supabaseClient.storage
           .from(AVATAR_BUCKET)
-          .getPublicUrl(objectPath);
-        avatarUrl = publicUrlData?.publicUrl || null;
-      } else {
-        console.warn('Supabase avatar upload failed, falling back to local FS:', error.message);
+          .upload(objectPath, req.body, {
+            contentType,
+            upsert: false,
+          });
+
+        if (!error) {
+          const { data: publicUrlData } = supabaseClient.storage
+            .from(AVATAR_BUCKET)
+            .getPublicUrl(objectPath);
+
+          const publicUrl = publicUrlData?.publicUrl || '';
+          if (publicUrl) {
+            try {
+              const headResponse = await fetch(publicUrl, { method: 'HEAD' });
+              if (headResponse.ok) {
+                avatarUrl = publicUrl;
+              } else {
+                console.warn(`Supabase avatar URL is not publicly reachable (status ${headResponse.status}), falling back to local FS.`);
+              }
+            } catch (publicCheckError) {
+              console.warn('Unable to verify Supabase avatar URL reachability, falling back to local FS:', publicCheckError.message || publicCheckError);
+            }
+          }
+        } else {
+          console.warn('Supabase avatar upload failed, falling back to local FS:', error.message);
+        }
       }
     }
 
     if (!avatarUrl) {
-      await fs.mkdir(avatarUploadsDir, { recursive: true });
-      const filepath = path.join(avatarUploadsDir, filename);
-      await fs.writeFile(filepath, req.body);
-      avatarUrl = `${req.protocol}://${req.get('host')}/uploads/avatars/${filename}`;
+      avatarUrl = await persistAvatarToLocal(req, filename, req.body);
     }
 
     const updatedResult = await pool.query(
