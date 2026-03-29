@@ -410,9 +410,13 @@ CREATE TABLE IF NOT EXISTS reviews (
   product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
   rating INTEGER CHECK (rating >= 1 AND rating <= 5),
   comment TEXT,
+  media_urls JSONB DEFAULT '[]'::jsonb,
   is_approved BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE IF EXISTS reviews
+  ADD COLUMN IF NOT EXISTS media_urls JSONB DEFAULT '[]'::jsonb;
 
 -- 31. Discounts / Promo Codes
 CREATE TABLE IF NOT EXISTS discounts (
@@ -1008,6 +1012,46 @@ CREATE POLICY select_policy ON backup_history FOR SELECT USING (true);
 CREATE POLICY insert_policy ON backup_history FOR INSERT WITH CHECK (app_access_check());
 CREATE POLICY update_policy ON backup_history FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
 CREATE POLICY delete_policy ON backup_history FOR DELETE USING (app_access_check());
+
+-- Storage: review media uploads
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('review-media', 'review-media', true)
+ON CONFLICT (id) DO UPDATE
+SET public = EXCLUDED.public;
+
+DROP POLICY IF EXISTS review_media_select_policy ON storage.objects;
+DROP POLICY IF EXISTS review_media_insert_policy ON storage.objects;
+DROP POLICY IF EXISTS review_media_update_policy ON storage.objects;
+DROP POLICY IF EXISTS review_media_delete_policy ON storage.objects;
+
+CREATE POLICY review_media_select_policy
+ON storage.objects FOR SELECT
+USING (bucket_id = 'review-media');
+
+CREATE POLICY review_media_insert_policy
+ON storage.objects FOR INSERT
+WITH CHECK (
+  bucket_id = 'review-media'
+  AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role'])
+);
+
+CREATE POLICY review_media_update_policy
+ON storage.objects FOR UPDATE
+USING (
+  bucket_id = 'review-media'
+  AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role'])
+)
+WITH CHECK (
+  bucket_id = 'review-media'
+  AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role'])
+);
+
+CREATE POLICY review_media_delete_policy
+ON storage.objects FOR DELETE
+USING (
+  bucket_id = 'review-media'
+  AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role'])
+);
 
 -- ==================== SEED DATA ====================
 

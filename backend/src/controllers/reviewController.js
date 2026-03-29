@@ -15,11 +15,42 @@ const normalizeReviewStatus = (review) => {
   return review.is_approved ? REVIEW_STATUS.APPROVED : REVIEW_STATUS.PENDING;
 };
 
+const normalizeReviewMedia = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (typeof item === 'string' && item.trim()) {
+        return {
+          url: item.trim(),
+          kind: /\.(mp4|webm|mov|ogg|m4v)(\?.*)?$/i.test(item) ? 'video' : 'image',
+        };
+      }
+
+      if (item && typeof item === 'object' && typeof item.url === 'string' && item.url.trim()) {
+        const kindHint = String(item.kind || item.type || item.media_type || '').toLowerCase();
+        const kind = kindHint === 'video' || kindHint === 'image'
+          ? kindHint
+          : (/\.(mp4|webm|mov|ogg|m4v)(\?.*)?$/i.test(item.url) ? 'video' : 'image');
+
+        return {
+          url: item.url.trim(),
+          kind,
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+};
+
 const mapReviewRow = (row) => ({
   ...row,
   rating: Number(row.rating),
   verified_purchase: Boolean(row.verified_purchase),
   review_status: normalizeReviewStatus(row),
+  media_urls: normalizeReviewMedia(row.media_urls),
 });
 
 const ensureReviewSchema = async () => {
@@ -36,6 +67,7 @@ const ensureReviewSchema = async () => {
       ADD COLUMN IF NOT EXISTS moderated_by INTEGER REFERENCES users(id),
       ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS moderation_note TEXT,
+      ADD COLUMN IF NOT EXISTS media_urls JSONB DEFAULT '[]'::jsonb,
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
     `);
 
@@ -115,6 +147,7 @@ export const getProductReviews = async (req, res) => {
           r.product_id,
           r.rating,
           r.comment,
+          r.media_urls,
           r.created_at,
           r.updated_at,
           r.review_status,
@@ -142,6 +175,8 @@ export const createReview = async (req, res) => {
   const productId = Number(req.body.product_id ?? req.body.productId);
   const rating = Number(req.body.rating);
   const comment = typeof req.body.comment === 'string' ? req.body.comment.trim() : '';
+  const rawMediaUrls = req.body.media_urls ?? req.body.mediaUrls;
+  const mediaUrls = normalizeReviewMedia(rawMediaUrls);
   const fieldErrors = {};
 
   if (!Number.isInteger(productId) || productId <= 0) {
@@ -158,6 +193,10 @@ export const createReview = async (req, res) => {
     fieldErrors.comment = 'Review comment must be at least 5 characters.';
   } else if (comment.length > 1000) {
     fieldErrors.comment = 'Review comment must be 1000 characters or fewer.';
+  }
+
+  if (Array.isArray(rawMediaUrls) && rawMediaUrls.length > 4) {
+    fieldErrors.media = 'You can attach up to 4 media files per review.';
   }
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -180,27 +219,33 @@ export const createReview = async (req, res) => {
     }
 
     const existingReviewResult = await pool.query(
-      'SELECT id FROM reviews WHERE user_id = $1 AND product_id = $2 LIMIT 1',
+      'SELECT id, media_urls FROM reviews WHERE user_id = $1 AND product_id = $2 LIMIT 1',
       [req.user.id, productId],
     );
 
     let review;
     if (existingReviewResult.rows.length > 0) {
+      const hasIncomingMedia = Array.isArray(rawMediaUrls);
+      const mediaPayload = hasIncomingMedia
+        ? mediaUrls
+        : normalizeReviewMedia(existingReviewResult.rows[0].media_urls);
+
       const updated = await pool.query(
         `
           UPDATE reviews
           SET rating = $1,
               comment = $2,
-              review_status = $3,
+              media_urls = $3,
+              review_status = $4,
               is_approved = false,
               moderated_by = NULL,
               moderated_at = NULL,
               moderation_note = NULL,
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = $4
+          WHERE id = $5
           RETURNING *
         `,
-        [rating, comment, REVIEW_STATUS.PENDING, existingReviewResult.rows[0].id],
+        [rating, comment, JSON.stringify(mediaPayload), REVIEW_STATUS.PENDING, existingReviewResult.rows[0].id],
       );
       review = updated.rows[0];
     } else {
@@ -211,14 +256,15 @@ export const createReview = async (req, res) => {
             product_id,
             rating,
             comment,
+            media_urls,
             is_approved,
             review_status,
             created_at,
             updated_at
-          ) VALUES ($1, $2, $3, $4, false, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ) VALUES ($1, $2, $3, $4, $5, false, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           RETURNING *
         `,
-        [req.user.id, productId, rating, comment, REVIEW_STATUS.PENDING],
+        [req.user.id, productId, rating, comment, JSON.stringify(mediaUrls), REVIEW_STATUS.PENDING],
       );
       review = inserted.rows[0];
     }
@@ -265,6 +311,7 @@ export const getModerationReviews = async (req, res) => {
           r.product_id,
           r.rating,
           r.comment,
+          r.media_urls,
           r.created_at,
           r.updated_at,
           r.review_status,

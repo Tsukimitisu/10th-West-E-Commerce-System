@@ -16,6 +16,9 @@ const DEFAULT_SHARE_METADATA = {
   url: '/',
   type: 'website',
 };
+const REVIEW_MAX_MEDIA_FILES = 4;
+const REVIEW_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const REVIEW_MAX_VIDEO_BYTES = 25 * 1024 * 1024;
 
 const toAbsoluteUrl = (value) => {
   if (!value) return '';
@@ -110,6 +113,8 @@ const ProductDetail = () => {
   const [shareOpen, setShareOpen] = useState(false);
   const [shareMessage, setShareMessage] = useState(null);
   const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
+  const [reviewMediaFiles, setReviewMediaFiles] = useState([]);
+  const [reviewMediaError, setReviewMediaError] = useState('');
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState('');
   const [reviewSuccess, setReviewSuccess] = useState('');
@@ -164,6 +169,8 @@ const ProductDetail = () => {
         setShareOpen(false);
         setShareMessage(null);
         setReviewForm({ rating: 0, comment: '' });
+        setReviewMediaFiles([]);
+        setReviewMediaError('');
         setReviewError('');
         setReviewSuccess('');
         setReviewFieldErrors({});
@@ -437,6 +444,7 @@ const ProductDetail = () => {
     }
 
     setReviewSubmitting(true);
+    setReviewMediaError('');
     setReviewError('');
     setReviewSuccess('');
     setReviewFieldErrors({});
@@ -446,18 +454,73 @@ const ProductDetail = () => {
         product_id: product.id,
         rating: reviewForm.rating,
         comment: reviewForm.comment.trim(),
+        media: reviewMediaFiles,
       });
 
       setReviewForm({ rating: 0, comment: '' });
+      setReviewMediaFiles([]);
       setReviewSuccess(response?.message || 'Review submitted successfully.');
       const latestReviews = await getProductReviews(product.id).catch(() => reviews);
-      setReviews(latestReviews);
+      if (response?.review?.id) {
+        const submittedReview = {
+          ...response.review,
+          user_name: currentUser?.name || 'You',
+          user_avatar: currentUser?.avatar || null,
+          is_mine: true,
+        };
+        const hasSubmitted = latestReviews.some((item) => Number(item.id) === Number(submittedReview.id));
+        setReviews(hasSubmitted ? latestReviews : [submittedReview, ...latestReviews]);
+      } else {
+        setReviews(latestReviews);
+      }
     } catch (error) {
       setReviewFieldErrors(error?.fieldErrors || {});
+      if (error?.fieldErrors?.media) {
+        setReviewMediaError(error.fieldErrors.media);
+      }
       setReviewError(error?.message || 'Failed to submit your review.');
     } finally {
       setReviewSubmitting(false);
     }
+  };
+
+  const handleReviewMediaChange = (event) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (selectedFiles.length === 0) return;
+
+    const combined = [...reviewMediaFiles, ...selectedFiles];
+    if (combined.length > REVIEW_MAX_MEDIA_FILES) {
+      setReviewMediaError(`You can attach up to ${REVIEW_MAX_MEDIA_FILES} files only.`);
+      return;
+    }
+
+    for (const file of combined) {
+      const mime = String(file.type || '').toLowerCase();
+      const fileSize = Number(file.size || 0);
+      if (mime.startsWith('image/') && fileSize > REVIEW_MAX_IMAGE_BYTES) {
+        setReviewMediaError('Each image must be 5 MB or smaller.');
+        return;
+      }
+      if (mime.startsWith('video/') && fileSize > REVIEW_MAX_VIDEO_BYTES) {
+        setReviewMediaError('Each video must be 25 MB or smaller.');
+        return;
+      }
+      if (!mime.startsWith('image/') && !mime.startsWith('video/')) {
+        setReviewMediaError('Only image and video files are supported.');
+        return;
+      }
+    }
+
+    setReviewMediaError('');
+    setReviewFieldErrors((prev) => ({ ...prev, media: '' }));
+    setReviewMediaFiles(combined);
+  };
+
+  const removeReviewMediaFile = (index) => {
+    setReviewMediaFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
+    setReviewMediaError('');
+    setReviewFieldErrors((prev) => ({ ...prev, media: '' }));
   };
 
   const formatPrice = (p) => `\u20B1${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
@@ -849,6 +912,44 @@ const ProductDetail = () => {
                       className="w-full rounded-xl border border-white/50 bg-white/70 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
                     />
                     {reviewFieldErrors.comment && <p className="mt-2 text-xs text-red-500">{reviewFieldErrors.comment}</p>}
+                  </div>
+
+                  <div>
+                    <label htmlFor="review-media" className="mb-2 block text-sm font-medium text-gray-900">
+                      Photos or videos (optional)
+                    </label>
+                    <input
+                      id="review-media"
+                      type="file"
+                      accept="image/*,video/*"
+                      multiple
+                      disabled={!userId || reviewSubmitting}
+                      onChange={handleReviewMediaChange}
+                      className="block w-full rounded-xl border border-white/50 bg-white/70 px-3 py-2 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-red-500 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-100"
+                    />
+                    <p className="mt-2 text-xs text-gray-600">
+                      Up to {REVIEW_MAX_MEDIA_FILES} files. Images up to 5 MB, videos up to 25 MB.
+                    </p>
+                    {(reviewFieldErrors.media || reviewMediaError) && (
+                      <p className="mt-2 text-xs text-red-500">{reviewFieldErrors.media || reviewMediaError}</p>
+                    )}
+
+                    {reviewMediaFiles.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {reviewMediaFiles.map((file, index) => (
+                          <div key={`${file.name}-${index}`} className="flex items-center justify-between rounded-lg border border-white/40 bg-white/60 px-3 py-2 text-xs text-gray-700">
+                            <span className="truncate pr-3">{file.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeReviewMediaFile(index)}
+                              className="rounded-md bg-red-50 px-2 py-1 font-medium text-red-600 hover:bg-red-100"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {reviewError && <p className="text-sm text-red-500">{reviewError}</p>}

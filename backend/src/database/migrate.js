@@ -478,6 +478,7 @@ const createTables = async () => {
         product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
         rating INTEGER CHECK (rating >= 1 AND rating <= 5),
         comment TEXT,
+        media_urls JSONB DEFAULT '[]'::jsonb,
         is_approved BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );

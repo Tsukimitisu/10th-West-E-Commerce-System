@@ -710,6 +710,119 @@ const toApprovedReviewStatus = (review) => {
   return review.is_approved ? 'approved' : 'pending';
 };
 
+const REVIEW_MEDIA_BUCKET = 'review-media';
+const REVIEW_MEDIA_MAX_FILES = 4;
+const REVIEW_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const REVIEW_VIDEO_MAX_BYTES = 25 * 1024 * 1024;
+
+const isReviewVideo = (value = '') => /\.(mp4|webm|mov|ogg|m4v)(\?.*)?$/i.test(String(value));
+
+const normalizeReviewMedia = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (typeof item === 'string' && item.trim()) {
+        return {
+          url: item.trim(),
+          kind: isReviewVideo(item) ? 'video' : 'image',
+        };
+      }
+
+      if (item && typeof item === 'object' && typeof item.url === 'string' && item.url.trim()) {
+        const kindHint = String(item.kind || item.type || item.media_type || '').toLowerCase();
+        const kind = kindHint === 'video' || kindHint === 'image'
+          ? kindHint
+          : (isReviewVideo(item.url) ? 'video' : 'image');
+        return {
+          url: item.url.trim(),
+          kind,
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean)
+    .slice(0, REVIEW_MEDIA_MAX_FILES);
+};
+
+const parseReviewMediaPayload = (review = {}) => {
+  return normalizeReviewMedia(review.media_urls || review.mediaUrls || []);
+};
+
+const validateReviewMediaFiles = (files = []) => {
+  if (files.length > REVIEW_MEDIA_MAX_FILES) {
+    throw new Error(`You can attach up to ${REVIEW_MEDIA_MAX_FILES} files per review.`);
+  }
+
+  files.forEach((file) => {
+    const mime = String(file?.type || '').toLowerCase();
+    const size = Number(file?.size || 0);
+
+    if (mime.startsWith('image/')) {
+      if (size > REVIEW_IMAGE_MAX_BYTES) {
+        throw new Error('Each image must be 5 MB or smaller.');
+      }
+      return;
+    }
+
+    if (mime.startsWith('video/')) {
+      if (size > REVIEW_VIDEO_MAX_BYTES) {
+        throw new Error('Each video must be 25 MB or smaller.');
+      }
+      return;
+    }
+
+    throw new Error('Only image and video files are allowed for review attachments.');
+  });
+};
+
+const uploadReviewMediaFiles = async ({ files = [], userId, productId }) => {
+  if (!Array.isArray(files) || files.length === 0) return [];
+  if (!supabase) {
+    throw new Error('Review media upload is unavailable right now.');
+  }
+
+  validateReviewMediaFiles(files);
+
+  const uploads = [];
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    const mime = String(file?.type || '').toLowerCase();
+    const kind = mime.startsWith('video/') ? 'video' : 'image';
+    const rawExt = String(file?.name || '').split('.').pop() || (kind === 'video' ? 'mp4' : 'jpg');
+    const extension = rawExt.toLowerCase().replace(/[^a-z0-9]/g, '') || (kind === 'video' ? 'mp4' : 'jpg');
+    const objectPath = `user-${userId}/product-${productId}/${Date.now()}-${index}-${Math.random().toString(36).slice(2)}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(REVIEW_MEDIA_BUCKET)
+      .upload(objectPath, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type,
+      });
+
+    if (uploadError) {
+      const message = String(uploadError.message || 'Failed to upload review media.');
+      if (message.toLowerCase().includes('bucket')) {
+        throw new Error('Review media storage is not configured yet. Please create the public "review-media" bucket.');
+      }
+      throw new Error(message);
+    }
+
+    const { data: publicData } = supabase.storage
+      .from(REVIEW_MEDIA_BUCKET)
+      .getPublicUrl(objectPath);
+
+    uploads.push({
+      url: publicData?.publicUrl,
+      kind,
+    });
+  }
+
+  return normalizeReviewMedia(uploads);
+};
+
 const applyReviewStatsToProducts = async (products) => {
   const items = Array.isArray(products) ? products : [];
   if (!USE_SUPABASE || items.length === 0) {
@@ -2257,9 +2370,12 @@ export const getReviews = async (productId) => {
       return [];
     }
 
+    const currentUser = getCurrentUserFromToken();
+    const currentUserId = Number(currentUser?.id || 0);
+
     const { data: reviewRows, error: reviewError } = await supabase
       .from('reviews')
-      .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved')
+      .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved, media_urls')
       .eq('product_id', normalizedProductId)
       .order('created_at', { ascending: false });
 
@@ -2267,12 +2383,17 @@ export const getReviews = async (productId) => {
       throw new Error(reviewError.message);
     }
 
-    const approvedRows = (reviewRows || []).filter((review) => toApprovedReviewStatus(review) === 'approved');
-    if (approvedRows.length === 0) {
+    const visibleRows = (reviewRows || []).filter((review) => {
+      const status = toApprovedReviewStatus(review);
+      const isMine = currentUserId > 0 && Number(review.user_id) === currentUserId;
+      return status === 'approved' || isMine;
+    });
+
+    if (visibleRows.length === 0) {
       return [];
     }
 
-    const userIds = [...new Set(approvedRows.map((review) => Number(review.user_id)).filter((id) => Number.isInteger(id) && id > 0))];
+    const userIds = [...new Set(visibleRows.map((review) => Number(review.user_id)).filter((id) => Number.isInteger(id) && id > 0))];
     let userMap = new Map();
 
     if (userIds.length > 0) {
@@ -2286,15 +2407,18 @@ export const getReviews = async (productId) => {
       }
     }
 
-    return approvedRows.map((review) => {
+    return visibleRows.map((review) => {
       const user = userMap.get(Number(review.user_id));
+      const isMine = currentUserId > 0 && Number(review.user_id) === currentUserId;
       return {
         ...review,
         rating: Number(review.rating || 0),
         review_status: toApprovedReviewStatus(review),
+        media_urls: normalizeReviewMedia(review.media_urls),
         verified_purchase: false,
-        user_name: user?.name || 'Customer',
-        user_avatar: user?.avatar || null,
+        user_name: user?.name || (isMine ? (currentUser?.name || 'You') : 'Customer'),
+        user_avatar: user?.avatar || (isMine ? (currentUser?.avatar || null) : null),
+        is_mine: isMine,
       };
     });
   }
@@ -2315,6 +2439,7 @@ export const addReview = async (review) => {
     const productId = Number(review?.product_id ?? review?.productId);
     const rating = Number(review?.rating);
     const comment = typeof review?.comment === 'string' ? review.comment.trim() : '';
+    const reviewMediaFiles = Array.isArray(review?.media) ? review.media : [];
     const fieldErrors = {};
 
     if (!Number.isInteger(productId) || productId <= 0) {
@@ -2333,12 +2458,18 @@ export const addReview = async (review) => {
       fieldErrors.comment = 'Review comment must be 1000 characters or fewer.';
     }
 
+    if (reviewMediaFiles.length > REVIEW_MEDIA_MAX_FILES) {
+      fieldErrors.media = `You can attach up to ${REVIEW_MEDIA_MAX_FILES} files per review.`;
+    }
+
     if (Object.keys(fieldErrors).length > 0) {
       const validationError = new Error('Please correct the highlighted review fields.');
       validationError.status = 400;
       validationError.fieldErrors = fieldErrors;
       throw validationError;
     }
+
+    let mediaUrls = parseReviewMediaPayload(review);
 
     const { data: product, error: productError } = await supabase
       .from('products')
@@ -2358,13 +2489,32 @@ export const addReview = async (review) => {
 
     const { data: existingReview, error: existingError } = await supabase
       .from('reviews')
-      .select('id')
+      .select('id, media_urls')
       .eq('user_id', currentUser.id)
       .eq('product_id', productId)
       .maybeSingle();
 
     if (existingError) {
       throw new Error(existingError.message);
+    }
+
+    if (reviewMediaFiles.length > 0) {
+      try {
+        mediaUrls = await uploadReviewMediaFiles({
+          files: reviewMediaFiles,
+          userId: currentUser.id,
+          productId,
+        });
+      } catch (mediaError) {
+        const uploadError = new Error(mediaError?.message || 'Failed to upload review media.');
+        uploadError.status = 400;
+        uploadError.fieldErrors = {
+          media: uploadError.message,
+        };
+        throw uploadError;
+      }
+    } else if (mediaUrls.length === 0 && existingReview?.media_urls) {
+      mediaUrls = normalizeReviewMedia(existingReview.media_urls);
     }
 
     let savedReview;
@@ -2374,6 +2524,7 @@ export const addReview = async (review) => {
         .update({
           rating,
           comment,
+          media_urls: mediaUrls,
           review_status: 'pending',
           is_approved: false,
           moderation_note: null,
@@ -2382,10 +2533,13 @@ export const addReview = async (review) => {
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingReview.id)
-        .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved')
+        .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved, media_urls')
         .single();
 
       if (updateError) {
+        if (String(updateError.message || '').toLowerCase().includes('media_urls')) {
+          throw new Error('Review media column is missing. Run the latest database migration first.');
+        }
         throw new Error(updateError.message);
       }
 
@@ -2398,13 +2552,17 @@ export const addReview = async (review) => {
           product_id: productId,
           rating,
           comment,
+          media_urls: mediaUrls,
           review_status: 'pending',
           is_approved: false,
         })
-        .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved')
+        .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved, media_urls')
         .single();
 
       if (insertError) {
+        if (String(insertError.message || '').toLowerCase().includes('media_urls')) {
+          throw new Error('Review media column is missing. Run the latest database migration first.');
+        }
         throw new Error(insertError.message);
       }
 
@@ -2417,9 +2575,15 @@ export const addReview = async (review) => {
         ...savedReview,
         rating: Number(savedReview.rating || 0),
         review_status: toApprovedReviewStatus(savedReview),
+        media_urls: normalizeReviewMedia(savedReview.media_urls),
         verified_purchase: false,
+        is_mine: true,
       },
     };
+  }
+
+  if (Array.isArray(review?.media) && review.media.length > 0) {
+    throw new Error('Review media upload is currently available in Supabase mode only.');
   }
 
   return authenticatedFetch(`${API_URL}/reviews`, {
