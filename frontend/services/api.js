@@ -28,6 +28,12 @@ let csrfTokenCache = {
   expiresAt: 0,
 };
 
+const isCsrfFailure = (status, responseBody = {}) => {
+  const code = String(responseBody?.code || '').toUpperCase();
+  const message = String(responseBody?.message || '').toLowerCase();
+  return status === 403 && (code.startsWith('CSRF_') || message.includes('csrf'));
+};
+
 const getCookieValue = (name) => {
   if (typeof document === 'undefined') return '';
   const escapedName = String(name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -186,13 +192,31 @@ const authenticatedFetch = async (url, options = {}) => {
     }
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include'
-  });
+  const executeRequest = async (requestHeaders) => {
+    const response = await fetch(url, {
+      ...options,
+      headers: requestHeaders,
+      credentials: 'include'
+    });
+    const responseBody = await response.json().catch(() => ({ message: 'Request failed' }));
+    return { response, responseBody };
+  };
 
-  const responseBody = await response.json().catch(() => ({ message: 'Request failed' }));
+  let { response, responseBody } = await executeRequest(headers);
+
+  // Refresh and retry once when CSRF token is expired/invalid.
+  if (isStateChangingMethod && isCsrfFailure(response.status, responseBody)) {
+    const refreshedCsrf = await getCsrfToken({ forceRefresh: true });
+    if (refreshedCsrf) {
+      const retryHeaders = {
+        ...headers,
+        'x-csrf-token': refreshedCsrf,
+      };
+      const retryResult = await executeRequest(retryHeaders);
+      response = retryResult.response;
+      responseBody = retryResult.responseBody;
+    }
+  }
 
   if (!response.ok) {
     if (token && isSessionAuthFailure(response.status, responseBody, token)) {
@@ -465,8 +489,10 @@ export const resendVerification = async (email) => {
 };
 
 export const forgotPassword = async (email) => {
+  const csrfToken = await getCsrfToken({ forceRefresh: true });
   return authenticatedFetch(`${API_URL}/auth/forgot-password`, {
     method: 'POST',
+    headers: csrfToken ? { 'x-csrf-token': csrfToken } : undefined,
     body: JSON.stringify({ email }),
   });
 };
