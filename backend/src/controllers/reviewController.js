@@ -112,6 +112,31 @@ const ensureReviewSchema = async () => {
     `);
 
     await pool.query(`
+      DO $$
+      DECLARE
+        review_unique_constraint TEXT;
+      BEGIN
+        SELECT c.conname
+        INTO review_unique_constraint
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE c.contype = 'u'
+          AND t.relname = 'reviews'
+          AND n.nspname = 'public'
+          AND (
+            SELECT array_agg(a.attname ORDER BY a.attname)
+            FROM unnest(c.conkey) AS colnum
+            JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = colnum
+          ) = ARRAY['product_id', 'user_id'];
+
+        IF review_unique_constraint IS NOT NULL THEN
+          EXECUTE format('ALTER TABLE public.reviews DROP CONSTRAINT IF EXISTS %I', review_unique_constraint);
+        END IF;
+      END $$;
+    `);
+
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(review_status);
     `);
 
@@ -210,7 +235,6 @@ export const getProductReviews = async (req, res) => {
         FROM reviews r
         JOIN users u ON u.id = r.user_id
         WHERE r.product_id = $1
-          AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN '${REVIEW_STATUS.APPROVED}' ELSE '${REVIEW_STATUS.PENDING}' END) = '${REVIEW_STATUS.APPROVED}'
         ORDER BY r.created_at DESC
       `,
       [productId],

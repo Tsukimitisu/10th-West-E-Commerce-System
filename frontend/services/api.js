@@ -2481,32 +2481,7 @@ export const getReviews = async (productId) => {
     const backendReviews = await authenticatedFetch(`${API_URL}/products/${normalizedProductId}/reviews`).catch(() => null);
 
     if (Array.isArray(backendReviews)) {
-      let combinedReviews = backendReviews.map((review) => mapReviewForDisplay(review, { currentUser, currentUserId }));
-
-      if (currentUserId > 0) {
-        const { data: ownReviewRows, error: ownReviewError } = await supabase
-          .from('reviews')
-          .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved, media_urls')
-          .eq('product_id', normalizedProductId)
-          .eq('user_id', currentUserId)
-          .order('updated_at', { ascending: false })
-          .limit(1);
-
-        if (!ownReviewError && Array.isArray(ownReviewRows) && ownReviewRows.length > 0) {
-          const ownReview = ownReviewRows[0];
-          const ownStatus = toApprovedReviewStatus(ownReview);
-          const alreadyIncluded = combinedReviews.some((item) => Number(item.id) === Number(ownReview.id));
-
-          if (!alreadyIncluded && ownStatus !== 'approved') {
-            combinedReviews = [
-              mapReviewForDisplay(ownReview, { currentUser, currentUserId }),
-              ...combinedReviews,
-            ];
-          }
-        }
-      }
-
-      return combinedReviews;
+      return backendReviews.map((review) => mapReviewForDisplay(review, { currentUser, currentUserId }));
     }
 
     const { data: reviewRows, error: reviewError } = await supabase
@@ -2519,11 +2494,7 @@ export const getReviews = async (productId) => {
       throw new Error(reviewError.message);
     }
 
-    const visibleRows = (reviewRows || []).filter((review) => {
-      const status = toApprovedReviewStatus(review);
-      const isMine = currentUserId > 0 && Number(review.user_id) === currentUserId;
-      return status === 'approved' || isMine;
-    });
+    const visibleRows = reviewRows || [];
 
     if (visibleRows.length === 0) {
       return [];
