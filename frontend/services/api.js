@@ -887,7 +887,7 @@ const uploadReviewMediaFiles = async ({ files = [], userId, productId }) => {
 
     let uploadedMedia = null;
 
-    if (supabase) {
+    if (USE_SUPABASE && supabase) {
       try {
         const { error: uploadError } = await supabase.storage
           .from(REVIEW_MEDIA_BUCKET)
@@ -2637,13 +2637,27 @@ export const addReview = async (review) => {
     };
   }
 
-  if (Array.isArray(review?.media) && review.media.length > 0) {
-    throw new Error('Review media upload is currently available in Supabase mode only.');
+  const productId = Number(review?.product_id ?? review?.productId);
+  const reviewMediaFiles = Array.isArray(review?.media) ? review.media : [];
+  let mediaUrls = parseReviewMediaPayload(review);
+
+  if (reviewMediaFiles.length > 0) {
+    mediaUrls = await uploadReviewMediaFiles({
+      files: reviewMediaFiles,
+      userId: 0,
+      productId,
+    });
   }
+
+  const reviewPayload = {
+    ...review,
+    media_urls: mediaUrls,
+  };
+  delete reviewPayload.media;
 
   return authenticatedFetch(`${API_URL}/reviews`, {
     method: 'POST',
-    body: JSON.stringify(review),
+    body: JSON.stringify(reviewPayload),
   });
 };
 
