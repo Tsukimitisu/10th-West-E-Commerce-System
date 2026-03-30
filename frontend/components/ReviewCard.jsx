@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ThumbsUp, CheckCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import StarRating from './StarRating';
 
@@ -38,6 +38,8 @@ const ReviewCard = ({ review }) => {
   const reviewStatus = String(review.review_status || '').toLowerCase();
   const mediaItems = normalizeReviewMedia(review.media_urls || review.media || []);
   const [previewIndex, setPreviewIndex] = useState(-1);
+  const previewTouchStartX = useRef(null);
+  const previewTouchEndX = useRef(null);
 
   const activePreviewItem = useMemo(() => {
     if (previewIndex < 0 || previewIndex >= mediaItems.length) return null;
@@ -86,9 +88,34 @@ const ReviewCard = ({ review }) => {
     setPreviewIndex((prev) => (prev + 1) % mediaItems.length);
   };
 
+  const handlePreviewTouchStart = (event) => {
+    previewTouchStartX.current = event.changedTouches?.[0]?.clientX ?? null;
+    previewTouchEndX.current = null;
+  };
+
+  const handlePreviewTouchMove = (event) => {
+    previewTouchEndX.current = event.changedTouches?.[0]?.clientX ?? null;
+  };
+
+  const handlePreviewTouchEnd = () => {
+    const startX = previewTouchStartX.current;
+    const endX = previewTouchEndX.current;
+    if (!Number.isFinite(startX) || !Number.isFinite(endX) || mediaItems.length <= 1) return;
+
+    const deltaX = startX - endX;
+    const minSwipeDistance = 45;
+
+    if (Math.abs(deltaX) < minSwipeDistance) return;
+    if (deltaX > 0) {
+      showNextPreview();
+    } else {
+      showPreviousPreview();
+    }
+  };
+
   return (
     <>
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 hover:border-gray-700 transition-colors">
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 md:p-5 hover:border-gray-700 transition-colors">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
             {review.user_avatar ? (
@@ -120,21 +147,21 @@ const ReviewCard = ({ review }) => {
         <p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{review.comment}</p>
 
         {mediaItems.length > 0 && (
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             {mediaItems.map((item, index) => (
               <button
                 key={`${item.url}-${index}`}
                 type="button"
                 onClick={() => openPreview(index)}
-                className="group relative overflow-hidden rounded-lg border border-gray-700 bg-black/20 text-left"
+                className="group relative overflow-hidden rounded-lg border border-gray-700 bg-black/20 text-left focus:outline-none focus:ring-2 focus:ring-red-400/60"
               >
                 {item.kind === 'video' ? (
-                  <video src={item.url} className="h-40 w-full object-cover" preload="metadata" muted playsInline />
+                  <video src={item.url} className="h-44 sm:h-40 w-full object-cover" preload="metadata" muted playsInline />
                 ) : (
-                  <img src={item.url} alt="Review attachment" className="h-40 w-full object-cover" loading="lazy" />
+                  <img src={item.url} alt="Review attachment" className="h-44 sm:h-40 w-full object-cover" loading="lazy" />
                 )}
-                <span className="absolute inset-x-0 bottom-0 bg-black/60 px-2 py-1 text-[11px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
-                  {item.kind === 'video' ? 'Preview video' : 'Preview image'}
+                <span className="absolute inset-x-0 bottom-0 bg-black/60 px-2 py-1 text-[11px] font-medium text-white opacity-100 sm:opacity-0 transition-opacity sm:group-hover:opacity-100">
+                  {item.kind === 'video' ? 'Tap to preview video' : 'Tap to preview image'}
                 </span>
               </button>
             ))}
@@ -150,29 +177,34 @@ const ReviewCard = ({ review }) => {
 
       {activePreviewItem && (
         <div
-          className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm p-4 md:p-8"
+          className="fixed inset-0 z-[90] bg-black/85 backdrop-blur-sm p-2 sm:p-4 md:p-8"
           role="dialog"
           aria-modal="true"
           onClick={closePreview}
         >
           <div className="mx-auto flex h-full w-full max-w-5xl flex-col" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-3 flex items-start justify-between gap-4 text-white">
+            <div className="mb-2 sm:mb-3 flex items-start justify-between gap-4 text-white">
               <div className="min-w-0">
-                <p className="text-sm font-semibold truncate">{userName}</p>
+                <p className="text-sm sm:text-base font-semibold truncate">{userName}</p>
                 <p className="text-xs text-gray-300">{timeAgo}</p>
               </div>
               <button
                 type="button"
                 onClick={closePreview}
-                className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+                className="rounded-full bg-white/10 p-2.5 text-white hover:bg-white/20"
                 aria-label="Close preview"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="relative flex-1 overflow-hidden rounded-xl border border-white/20 bg-black/60">
-              <div className="flex h-full w-full items-center justify-center p-3 md:p-6">
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-white/20 bg-black/60">
+              <div
+                className="flex h-full w-full items-center justify-center p-2 sm:p-3 md:p-6"
+                onTouchStart={handlePreviewTouchStart}
+                onTouchMove={handlePreviewTouchMove}
+                onTouchEnd={handlePreviewTouchEnd}
+              >
                 {activePreviewItem.kind === 'video' ? (
                   <video
                     src={activePreviewItem.url}
@@ -195,7 +227,7 @@ const ReviewCard = ({ review }) => {
                   <button
                     type="button"
                     onClick={showPreviousPreview}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white hover:bg-black/70"
                     aria-label="Previous media"
                   >
                     <ChevronLeft size={20} />
@@ -203,7 +235,7 @@ const ReviewCard = ({ review }) => {
                   <button
                     type="button"
                     onClick={showNextPreview}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white hover:bg-black/70"
                     aria-label="Next media"
                   >
                     <ChevronRight size={20} />
@@ -216,8 +248,29 @@ const ReviewCard = ({ review }) => {
               </div>
             </div>
 
-            <div className="mt-3 rounded-lg bg-black/40 p-3 text-white">
+            {mediaItems.length > 1 && (
+              <div className="mt-2 flex gap-2 overflow-x-auto rounded-lg bg-black/35 p-2">
+                {mediaItems.map((item, index) => (
+                  <button
+                    key={`preview-thumb-${item.url}-${index}`}
+                    type="button"
+                    onClick={() => setPreviewIndex(index)}
+                    className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-md border ${index === previewIndex ? 'border-red-400' : 'border-white/20'} focus:outline-none focus:ring-2 focus:ring-red-400/60`}
+                    aria-label={`Preview media ${index + 1}`}
+                  >
+                    {item.kind === 'video' ? (
+                      <video src={item.url} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                    ) : (
+                      <img src={item.url} alt={`Review media thumbnail ${index + 1}`} className="h-full w-full object-cover" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-2 sm:mt-3 rounded-lg bg-black/40 p-3 text-white max-h-[30vh] overflow-auto">
               <StarRating rating={review.rating} size={14} />
+              <p className="mt-1 text-[11px] text-gray-300">Swipe left or right to view more media.</p>
               <p className="mt-2 text-sm text-gray-100 whitespace-pre-wrap">{review.comment}</p>
             </div>
           </div>
