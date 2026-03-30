@@ -2613,17 +2613,6 @@ export const addReview = async (review) => {
       throw notFoundError;
     }
 
-    const { data: existingReview, error: existingError } = await supabase
-      .from('reviews')
-      .select('id, media_urls')
-      .eq('user_id', currentUser.id)
-      .eq('product_id', productId)
-      .maybeSingle();
-
-    if (existingError) {
-      throw new Error(existingError.message);
-    }
-
     if (reviewMediaFiles.length > 0) {
       try {
         mediaUrls = await uploadReviewMediaFiles({
@@ -2639,61 +2628,30 @@ export const addReview = async (review) => {
         };
         throw uploadError;
       }
-    } else if (mediaUrls.length === 0 && existingReview?.media_urls) {
-      mediaUrls = normalizeReviewMedia(existingReview.media_urls);
     }
 
-    let savedReview;
-    if (existingReview?.id) {
-      const { data: updatedReview, error: updateError } = await supabase
-        .from('reviews')
-        .update({
-          rating,
-          comment,
-          media_urls: mediaUrls,
-          review_status: 'pending',
-          is_approved: false,
-          moderation_note: null,
-          moderated_by: null,
-          moderated_at: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingReview.id)
-        .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved, media_urls')
-        .single();
+    const { data: insertedReview, error: insertError } = await supabase
+      .from('reviews')
+      .insert({
+        user_id: currentUser.id,
+        product_id: productId,
+        rating,
+        comment,
+        media_urls: mediaUrls,
+        review_status: 'pending',
+        is_approved: false,
+      })
+      .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved, media_urls')
+      .single();
 
-      if (updateError) {
-        if (String(updateError.message || '').toLowerCase().includes('media_urls')) {
-          throw new Error('Review media column is missing. Run the latest database migration first.');
-        }
-        throw new Error(updateError.message);
+    if (insertError) {
+      if (String(insertError.message || '').toLowerCase().includes('media_urls')) {
+        throw new Error('Review media column is missing. Run the latest database migration first.');
       }
-
-      savedReview = updatedReview;
-    } else {
-      const { data: insertedReview, error: insertError } = await supabase
-        .from('reviews')
-        .insert({
-          user_id: currentUser.id,
-          product_id: productId,
-          rating,
-          comment,
-          media_urls: mediaUrls,
-          review_status: 'pending',
-          is_approved: false,
-        })
-        .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved, media_urls')
-        .single();
-
-      if (insertError) {
-        if (String(insertError.message || '').toLowerCase().includes('media_urls')) {
-          throw new Error('Review media column is missing. Run the latest database migration first.');
-        }
-        throw new Error(insertError.message);
-      }
-
-      savedReview = insertedReview;
+      throw new Error(insertError.message);
     }
+
+    const savedReview = insertedReview;
 
     return {
       message: 'Review submitted and is pending moderation.',

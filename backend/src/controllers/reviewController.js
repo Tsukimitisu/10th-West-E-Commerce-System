@@ -107,6 +107,11 @@ const ensureReviewSchema = async () => {
     `);
 
     await pool.query(`
+      ALTER TABLE reviews
+      DROP CONSTRAINT IF EXISTS reviews_user_id_product_id_key;
+    `);
+
+    await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(review_status);
     `);
 
@@ -265,56 +270,24 @@ export const createReview = async (req, res) => {
       return res.status(404).json({ message: 'Product not found.' });
     }
 
-    const existingReviewResult = await pool.query(
-      'SELECT id, media_urls FROM reviews WHERE user_id = $1 AND product_id = $2 LIMIT 1',
-      [req.user.id, productId],
+    const inserted = await pool.query(
+      `
+        INSERT INTO reviews (
+          user_id,
+          product_id,
+          rating,
+          comment,
+          media_urls,
+          is_approved,
+          review_status,
+          created_at,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, $5, false, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        RETURNING *
+      `,
+      [req.user.id, productId, rating, comment, JSON.stringify(mediaUrls), REVIEW_STATUS.PENDING],
     );
-
-    let review;
-    if (existingReviewResult.rows.length > 0) {
-      const hasIncomingMedia = Array.isArray(rawMediaUrls);
-      const mediaPayload = hasIncomingMedia
-        ? mediaUrls
-        : normalizeReviewMedia(existingReviewResult.rows[0].media_urls);
-
-      const updated = await pool.query(
-        `
-          UPDATE reviews
-          SET rating = $1,
-              comment = $2,
-              media_urls = $3,
-              review_status = $4,
-              is_approved = false,
-              moderated_by = NULL,
-              moderated_at = NULL,
-              moderation_note = NULL,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = $5
-          RETURNING *
-        `,
-        [rating, comment, JSON.stringify(mediaPayload), REVIEW_STATUS.PENDING, existingReviewResult.rows[0].id],
-      );
-      review = updated.rows[0];
-    } else {
-      const inserted = await pool.query(
-        `
-          INSERT INTO reviews (
-            user_id,
-            product_id,
-            rating,
-            comment,
-            media_urls,
-            is_approved,
-            review_status,
-            created_at,
-            updated_at
-          ) VALUES ($1, $2, $3, $4, $5, false, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          RETURNING *
-        `,
-        [req.user.id, productId, rating, comment, JSON.stringify(mediaUrls), REVIEW_STATUS.PENDING],
-      );
-      review = inserted.rows[0];
-    }
+    const review = inserted.rows[0];
 
     await syncProductRating(productId);
 
