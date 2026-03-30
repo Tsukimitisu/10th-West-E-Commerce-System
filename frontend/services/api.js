@@ -761,6 +761,20 @@ const toApprovedReviewStatus = (review) => {
   return review.is_approved ? 'approved' : 'pending';
 };
 
+const mapReviewForDisplay = (review, { currentUser, currentUserId, user } = {}) => {
+  const isMine = currentUserId > 0 && Number(review?.user_id) === currentUserId;
+  return {
+    ...review,
+    rating: Number(review?.rating || 0),
+    review_status: toApprovedReviewStatus(review),
+    media_urls: normalizeReviewMedia(review?.media_urls),
+    verified_purchase: Boolean(review?.verified_purchase),
+    user_name: user?.name || review?.user_name || (isMine ? (currentUser?.name || 'You') : 'Customer'),
+    user_avatar: user?.avatar || review?.user_avatar || (isMine ? (currentUser?.avatar || null) : null),
+    is_mine: isMine,
+  };
+};
+
 const REVIEW_MEDIA_BUCKET = 'review-media';
 const REVIEW_MEDIA_MAX_FILES = 4;
 const REVIEW_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
@@ -2455,14 +2469,45 @@ export const removeFromWishlist = async (userId, productId) => {
 };
 
 export const getReviews = async (productId) => {
-  if (USE_SUPABASE) {
-    const normalizedProductId = Number(productId);
-    if (!Number.isInteger(normalizedProductId) || normalizedProductId <= 0) {
-      return [];
-    }
+  const normalizedProductId = Number(productId);
+  if (!Number.isInteger(normalizedProductId) || normalizedProductId <= 0) {
+    return [];
+  }
 
-    const currentUser = getCurrentUserFromToken();
-    const currentUserId = Number(currentUser?.id || 0);
+  const currentUser = getCurrentUserFromToken();
+  const currentUserId = Number(currentUser?.id || 0);
+
+  if (USE_SUPABASE) {
+    const backendReviews = await authenticatedFetch(`${API_URL}/products/${normalizedProductId}/reviews`).catch(() => null);
+
+    if (Array.isArray(backendReviews)) {
+      let combinedReviews = backendReviews.map((review) => mapReviewForDisplay(review, { currentUser, currentUserId }));
+
+      if (currentUserId > 0) {
+        const { data: ownReviewRows, error: ownReviewError } = await supabase
+          .from('reviews')
+          .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved, media_urls')
+          .eq('product_id', normalizedProductId)
+          .eq('user_id', currentUserId)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+
+        if (!ownReviewError && Array.isArray(ownReviewRows) && ownReviewRows.length > 0) {
+          const ownReview = ownReviewRows[0];
+          const ownStatus = toApprovedReviewStatus(ownReview);
+          const alreadyIncluded = combinedReviews.some((item) => Number(item.id) === Number(ownReview.id));
+
+          if (!alreadyIncluded && ownStatus !== 'approved') {
+            combinedReviews = [
+              mapReviewForDisplay(ownReview, { currentUser, currentUserId }),
+              ...combinedReviews,
+            ];
+          }
+        }
+      }
+
+      return combinedReviews;
+    }
 
     const { data: reviewRows, error: reviewError } = await supabase
       .from('reviews')
@@ -2500,21 +2545,11 @@ export const getReviews = async (productId) => {
 
     return visibleRows.map((review) => {
       const user = userMap.get(Number(review.user_id));
-      const isMine = currentUserId > 0 && Number(review.user_id) === currentUserId;
-      return {
-        ...review,
-        rating: Number(review.rating || 0),
-        review_status: toApprovedReviewStatus(review),
-        media_urls: normalizeReviewMedia(review.media_urls),
-        verified_purchase: false,
-        user_name: user?.name || (isMine ? (currentUser?.name || 'You') : 'Customer'),
-        user_avatar: user?.avatar || (isMine ? (currentUser?.avatar || null) : null),
-        is_mine: isMine,
-      };
+      return mapReviewForDisplay(review, { currentUser, currentUserId, user });
     });
   }
 
-  return authenticatedFetch(`${API_URL}/products/${productId}/reviews`).catch(() => []);
+  return authenticatedFetch(`${API_URL}/products/${normalizedProductId}/reviews`).catch(() => []);
 };
 export const getProductReviews = getReviews;
 
