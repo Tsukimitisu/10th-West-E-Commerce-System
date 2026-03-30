@@ -28,6 +28,30 @@ let csrfTokenCache = {
   expiresAt: 0,
 };
 
+const CSRF_META_NAME = 'csrf-token';
+
+const setCsrfMetaToken = (token) => {
+  if (typeof document === 'undefined') return;
+
+  const normalized = String(token || '').trim();
+  if (!normalized) return;
+
+  let tag = document.querySelector(`meta[name="${CSRF_META_NAME}"]`);
+  if (!tag) {
+    tag = document.createElement('meta');
+    tag.setAttribute('name', CSRF_META_NAME);
+    document.head.appendChild(tag);
+  }
+
+  tag.setAttribute('content', normalized);
+};
+
+const getCsrfMetaToken = () => {
+  if (typeof document === 'undefined') return '';
+  const tag = document.querySelector(`meta[name="${CSRF_META_NAME}"]`);
+  return String(tag?.getAttribute('content') || '').trim();
+};
+
 const isCsrfFailure = (status, responseBody = {}) => {
   const code = String(responseBody?.code || '').toUpperCase();
   const message = String(responseBody?.message || '').toLowerCase();
@@ -47,6 +71,17 @@ const getCsrfToken = async ({ forceRefresh = false } = {}) => {
     return csrfTokenCache.token;
   }
 
+  if (!forceRefresh) {
+    const metaToken = getCsrfMetaToken();
+    if (metaToken) {
+      csrfTokenCache = {
+        token: metaToken,
+        expiresAt: Date.now() + (15 * 60 * 1000),
+      };
+      return metaToken;
+    }
+  }
+
   try {
     const csrfRes = await fetch(`${API_URL}/csrf-token`, {
       credentials: 'include',
@@ -61,6 +96,7 @@ const getCsrfToken = async ({ forceRefresh = false } = {}) => {
           token: csrfToken,
           expiresAt: Date.now() + (55 * 60 * 1000),
         };
+        setCsrfMetaToken(csrfToken);
         return csrfToken;
       }
     }
@@ -74,10 +110,100 @@ const getCsrfToken = async ({ forceRefresh = false } = {}) => {
       token: cookieToken,
       expiresAt: Date.now() + (15 * 60 * 1000),
     };
+    setCsrfMetaToken(cookieToken);
     return cookieToken;
   }
 
   return '';
+};
+
+export const ensureCsrfToken = async ({ forceRefresh = false } = {}) => getCsrfToken({ forceRefresh });
+
+export const initializeSecurityContext = ({
+  csrfRefreshMs = 15 * 60 * 1000,
+  sessionTouchMs = 5 * 60 * 1000,
+  activityWindowMs = 15 * 60 * 1000,
+} = {}) => {
+  if (typeof window === 'undefined') {
+    return () => {};
+  }
+
+  let disposed = false;
+  let lastActivityAt = Date.now();
+  let lastCsrfRefreshAt = 0;
+  let lastSessionTouchAt = 0;
+
+  const noteActivity = () => {
+    lastActivityAt = Date.now();
+  };
+
+  const touchSession = async () => {
+    try {
+      await fetch(`${API_URL}/health`, {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+    } catch {
+      // Intentionally ignore background keepalive failures.
+    }
+  };
+
+  const refreshCsrf = async ({ force = false } = {}) => {
+    try {
+      await getCsrfToken({ forceRefresh: force });
+      lastCsrfRefreshAt = Date.now();
+    } catch {
+      // Intentionally ignore background refresh failures.
+    }
+  };
+
+  const heartbeat = async ({ force = false } = {}) => {
+    if (disposed) return;
+    const now = Date.now();
+    if (!force && now - lastActivityAt > activityWindowMs) return;
+
+    if (force || now - lastSessionTouchAt >= sessionTouchMs) {
+      await touchSession();
+      lastSessionTouchAt = Date.now();
+    }
+
+    if (force || now - lastCsrfRefreshAt >= csrfRefreshMs) {
+      await refreshCsrf({ force });
+    }
+  };
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      noteActivity();
+      heartbeat({ force: true });
+    }
+  };
+
+  const handleFocus = () => {
+    heartbeat({ force: true });
+  };
+
+  const activityEvents = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+  activityEvents.forEach((eventName) => {
+    window.addEventListener(eventName, noteActivity, { passive: true });
+  });
+  window.addEventListener('focus', handleFocus);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  heartbeat({ force: true });
+  const intervalId = window.setInterval(() => {
+    heartbeat();
+  }, 60 * 1000);
+
+  return () => {
+    disposed = true;
+    window.clearInterval(intervalId);
+    activityEvents.forEach((eventName) => {
+      window.removeEventListener(eventName, noteActivity);
+    });
+    window.removeEventListener('focus', handleFocus);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
 };
 
 const clearAuthSession = () => {
@@ -2276,15 +2402,10 @@ export const getTickets = async () => {
 };
 
 export const createTicket = async (ticket) => {
-  const data = await fetch(`${API_URL}/support`, {
+  const result = await authenticatedFetch(`${API_URL}/support`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(ticket),
   });
-  if (!data.ok) {
-    throw new Error('Failed to create ticket');
-  }
-  const result = await data.json();
   return result.ticket;
 };
 

@@ -1,8 +1,11 @@
 ﻿import React, { createContext, useContext, useState, useEffect } from 'react';
-import { validateDiscountCode } from '../services/api';
+import { validateDiscountCode, ensureCsrfToken } from '../services/api';
 import { supabase } from '../services/supabase.js';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || (() => {
+  const host = window.location.hostname;
+  return `http://${host}:5000/api`;
+})();
 const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
 const GUEST_CART_KEY = 'shopCoreGuestCart';
 const GUEST_SELECTED_KEY = `${GUEST_CART_KEY}_selected`;
@@ -144,28 +147,23 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  const getCsrfToken = async () => {
-    const response = await fetch(`${API_URL}/csrf-token`, {
-      credentials: 'include',
-    });
-    if (!response.ok) {
-      throw new Error('Failed to initialize guest session');
-    }
-    const data = await response.json();
-    if (!data?.csrfToken) {
-      throw new Error('Missing CSRF token');
-    }
-    return data.csrfToken;
+  const isCsrfFailure = (status, payload = {}) => {
+    const code = String(payload?.code || '').toUpperCase();
+    const message = String(payload?.message || '').toLowerCase();
+    return status === 403 && (code.startsWith('CSRF_') || message.includes('csrf'));
   };
 
-  const buildRequestHeaders = async ({ includeJson = false } = {}) => {
+  const buildRequestHeaders = async ({ includeJson = false, forceRefresh = false } = {}) => {
     const token = getToken();
     const headers = {};
 
+    const csrfToken = await ensureCsrfToken({ forceRefresh });
+    if (csrfToken) {
+      headers['x-csrf-token'] = csrfToken;
+    }
+
     if (token) {
       headers.Authorization = `Bearer ${token}`;
-    } else {
-      headers['x-csrf-token'] = await getCsrfToken();
     }
 
     if (includeJson) {
@@ -173,6 +171,27 @@ export const CartProvider = ({ children }) => {
     }
 
     return headers;
+  };
+
+  const fetchCartWithCsrfRetry = async (url, options = {}, { includeJson = false } = {}) => {
+    const execute = async (forceRefresh = false) => {
+      const headers = await buildRequestHeaders({ includeJson, forceRefresh });
+      return fetch(url, {
+        ...options,
+        credentials: 'include',
+        headers,
+      });
+    };
+
+    let response = await execute(false);
+    if (!response.ok) {
+      const payload = await response.clone().json().catch(() => ({}));
+      if (isCsrfFailure(response.status, payload)) {
+        response = await execute(true);
+      }
+    }
+
+    return response;
   };
 
   const normalizeSelectionIds = (ids, sourceItems = items) => {
@@ -558,16 +577,13 @@ export const CartProvider = ({ children }) => {
       // Add to backend if logged in
       try {
         setLoading(true);
-        const headers = await buildRequestHeaders({ includeJson: true });
-        const response = await fetch(`${API_URL}/cart/add`, {
+        const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/add`, {
           method: 'POST',
-          credentials: 'include',
-          headers,
           body: JSON.stringify({
             product_id: product.id,
             quantity: requestedQty
           })
-        });
+        }, { includeJson: true });
 
         if (response.ok) {
           await syncCart();
@@ -685,11 +701,8 @@ export const CartProvider = ({ children }) => {
         setLoading(true);
         const targetItem = items.find((item) => item.productId === productId);
         const cartItemId = targetItem?.cartItemId ?? productId;
-        const headers = await buildRequestHeaders();
-        const response = await fetch(`${API_URL}/cart/remove/${cartItemId}`, {
+        const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/remove/${cartItemId}`, {
           method: 'DELETE',
-          credentials: 'include',
-          headers,
         });
 
         if (response.ok) {
@@ -771,13 +784,10 @@ export const CartProvider = ({ children }) => {
       try {
         setLoading(true);
         const cartItemId = targetItem?.cartItemId ?? productId;
-        const headers = await buildRequestHeaders({ includeJson: true });
-        const response = await fetch(`${API_URL}/cart/update/${cartItemId}`, {
+        const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/update/${cartItemId}`, {
           method: 'PUT',
-          credentials: 'include',
-          headers,
           body: JSON.stringify({ quantity })
-        });
+        }, { includeJson: true });
 
         if (response.ok) {
           await syncCart();
@@ -849,11 +859,8 @@ export const CartProvider = ({ children }) => {
 
       try {
         setLoading(true);
-        const headers = await buildRequestHeaders();
-        const response = await fetch(`${API_URL}/cart/clear`, {
+        const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/clear`, {
           method: 'DELETE',
-          credentials: 'include',
-          headers,
         });
 
         if (response.ok) {
@@ -917,16 +924,13 @@ export const CartProvider = ({ children }) => {
 
       try {
         setLoading(true);
-        const headers = await buildRequestHeaders();
         // Fallback for REST API - delete one by one
         await Promise.all(selectedItemIds.map(async id => {
           const targetItem = items.find((item) => item.productId === id);
           if (!targetItem) return;
           const cartItemId = targetItem?.cartItemId ?? id;
-          return fetch(`${API_URL}/cart/remove/${cartItemId}`, {
+          return fetchCartWithCsrfRetry(`${API_URL}/cart/remove/${cartItemId}`, {
             method: 'DELETE',
-            credentials: 'include',
-            headers,
           });
         }));
         setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));

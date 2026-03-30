@@ -33,7 +33,7 @@ import Wishlist from './pages/customer/Wishlist';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import OAuthCallback from './pages/OAuthCallback';
-import { getProfile, logoutApi } from './services/api.js';
+import { getProfile, logoutApi, initializeSecurityContext } from './services/api.js';
 import { supabase, onAuthStateChange } from './services/supabase.js';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { Role } from './types.js';
@@ -126,6 +126,13 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
 const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const disposeSecurity = initializeSecurityContext();
+    return () => {
+      disposeSecurity?.();
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;

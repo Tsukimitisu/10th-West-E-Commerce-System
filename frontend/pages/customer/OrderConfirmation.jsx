@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { CheckCircle2, Package, Truck, Calendar, ArrowRight, Home, ShoppingBag, Printer } from 'lucide-react';
+import { getOrderById } from '../../services/api';
 
 const API = window.__API_URL__ || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -12,9 +13,9 @@ const OrderConfirmation = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const token = localStorage.getItem('shopCoreToken');
-        const res = await fetch(`${API}/orders/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (res.ok) setOrder(await res.json());
+        if (!id) return;
+        const loadedOrder = await getOrderById(Number(id));
+        setOrder(loadedOrder || null);
       } catch {}
       setLoading(false);
     };

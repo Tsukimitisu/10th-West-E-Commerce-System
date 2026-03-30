@@ -163,9 +163,11 @@ app.use(session({
   secret: process.env.SESSION_SECRET || '10th_west_moto_secret_super_secure',
   resave: false,
   saveUninitialized: true,
+  rolling: true,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 }));
