@@ -489,7 +489,16 @@ const ProductDetail = () => {
     event.target.value = '';
     if (selectedFiles.length === 0) return;
 
-    const combined = [...reviewMediaFiles, ...selectedFiles];
+    const dedupedFiles = [];
+    const seen = new Set();
+    [...reviewMediaFiles, ...selectedFiles].forEach((file) => {
+      const key = `${file.name}::${file.size}::${file.lastModified}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      dedupedFiles.push(file);
+    });
+
+    const combined = dedupedFiles;
     if (combined.length > REVIEW_MAX_MEDIA_FILES) {
       setReviewMediaError(`You can attach up to ${REVIEW_MAX_MEDIA_FILES} files only.`);
       return;
@@ -522,6 +531,23 @@ const ProductDetail = () => {
     setReviewMediaError('');
     setReviewFieldErrors((prev) => ({ ...prev, media: '' }));
   };
+
+  const formatReviewFileSize = (value) => {
+    const bytes = Number(value || 0);
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getReviewFileTypeLabel = (file) => {
+    const mime = String(file?.type || '').toLowerCase();
+    if (mime.startsWith('video/')) return 'Video';
+    if (mime.startsWith('image/')) return 'Image';
+    return 'File';
+  };
+
+  const selectedReviewMediaCount = reviewMediaFiles.length;
+  const remainingReviewMediaSlots = Math.max(0, REVIEW_MAX_MEDIA_FILES - selectedReviewMediaCount);
 
   const formatPrice = (p) => `\u20B1${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
@@ -918,6 +944,22 @@ const ProductDetail = () => {
                     <label htmlFor="review-media" className="mb-2 block text-sm font-medium text-gray-900">
                       Photos or videos (optional)
                     </label>
+                    <label
+                      htmlFor="review-media"
+                      className={`block w-full rounded-xl border-2 border-dashed px-4 py-4 transition ${(!userId || reviewSubmitting) ? 'cursor-not-allowed border-gray-300 bg-gray-100' : 'cursor-pointer border-red-200 bg-white/80 hover:border-red-300 hover:bg-white'}`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">Tap to add photos or videos</p>
+                          <p className="mt-1 text-xs text-gray-600">
+                            {selectedReviewMediaCount} selected. {remainingReviewMediaSlots} slot{remainingReviewMediaSlots !== 1 ? 's' : ''} remaining.
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white">
+                          Choose files
+                        </span>
+                      </div>
+                    </label>
                     <input
                       id="review-media"
                       type="file"
@@ -925,27 +967,34 @@ const ProductDetail = () => {
                       multiple
                       disabled={!userId || reviewSubmitting}
                       onChange={handleReviewMediaChange}
-                      className="block w-full rounded-xl border border-white/50 bg-white/70 px-3 py-2 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-red-500 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-100"
+                      className="sr-only"
                     />
                     <p className="mt-2 text-xs text-gray-600">
-                      Up to {REVIEW_MAX_MEDIA_FILES} files. Images up to 5 MB, videos up to 25 MB.
+                      You can attach up to {REVIEW_MAX_MEDIA_FILES} files per review. Image limit: 5 MB each. Video limit: 25 MB each.
                     </p>
                     {(reviewFieldErrors.media || reviewMediaError) && (
                       <p className="mt-2 text-xs text-red-500">{reviewFieldErrors.media || reviewMediaError}</p>
                     )}
 
                     {reviewMediaFiles.length > 0 && (
-                      <div className="mt-3 space-y-2">
+                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {reviewMediaFiles.map((file, index) => (
-                          <div key={`${file.name}-${index}`} className="flex items-center justify-between rounded-lg border border-white/40 bg-white/60 px-3 py-2 text-xs text-gray-700">
-                            <span className="truncate pr-3">{file.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => removeReviewMediaFile(index)}
-                              className="rounded-md bg-red-50 px-2 py-1 font-medium text-red-600 hover:bg-red-100"
-                            >
-                              Remove
-                            </button>
+                          <div key={`${file.name}-${index}`} className="rounded-xl border border-white/50 bg-white/70 p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-semibold text-gray-900">{file.name}</p>
+                                <p className="mt-1 text-[11px] text-gray-600">
+                                  {getReviewFileTypeLabel(file)} - {formatReviewFileSize(file.size)}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeReviewMediaFile(index)}
+                                className="rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -958,7 +1007,7 @@ const ProductDetail = () => {
                   <button
                     type="submit"
                     disabled={!userId || reviewSubmitting}
-                    className="inline-flex items-center justify-center rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-300"
                   >
                     {reviewSubmitting ? 'Submitting...' : 'Submit review'}
                   </button>
