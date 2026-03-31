@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
 import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements, getProducts } from '../services/api';
@@ -569,16 +569,16 @@ const Navbar = ({ user, onLogout }) => {
                         <p className="text-sm font-bold text-white truncate">{user.name}</p>
                         <p className="text-xs text-gray-300 truncate">{user.email}</p>
                       </div>
-                      <Link to="/profile" className={userMenuItemClass}><User size={16} className="text-red-400" /> My Profile</Link>
-                      <Link to="/orders" className={userMenuItemClass}><Package size={16} className="text-red-400" /> My Orders</Link>
-                      <Link to="/wishlist" className={userMenuItemClass}><Heart size={16} className="text-red-400" /> Wishlist</Link>
-                      <Link to="/addresses" className={userMenuItemClass}><MapPin size={16} className="text-red-400" /> Addresses</Link>
-                      <Link to="/my-returns" className={userMenuItemClass}><RotateCcw size={16} className="text-red-400" /> Returns</Link>
+                      <Link to="/profile" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><User size={16} className="text-red-400" /> My Profile</Link>
+                      <Link to="/orders" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Package size={16} className="text-red-400" /> My Orders</Link>
+                      <Link to="/wishlist" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Heart size={16} className="text-red-400" /> Wishlist</Link>
+                      <Link to="/addresses" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><MapPin size={16} className="text-red-400" /> Addresses</Link>
+                      <Link to="/my-returns" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><RotateCcw size={16} className="text-red-400" /> Returns</Link>
                       {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
                         <>
                           <div className="border-t border-zinc-700 mt-1 pt-1" />
-                          <Link to="/admin" className={userMenuItemClass}><Shield size={16} className="text-red-400" /> Admin Panel</Link>
-                          <Link to="/pos" className={userMenuItemClass}><Monitor size={16} className="text-red-400" /> POS Terminal</Link>
+                          <Link to="/admin" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Shield size={16} className="text-red-400" /> Admin Panel</Link>
+                          <Link to="/pos" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Monitor size={16} className="text-red-400" /> POS Terminal</Link>
                         </>
                       )}
                       <div className="border-t border-zinc-700 mt-1 pt-1">
