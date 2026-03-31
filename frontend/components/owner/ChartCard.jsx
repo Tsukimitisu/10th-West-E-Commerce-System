@@ -1,7 +1,7 @@
 ﻿import React from 'react';
 
 const ChartCard = ({ title, subtitle, action, children, className = '' }) => (
-  <div className={`bg-gray-800 rounded-xl border border-gray-700 p-5 ${className}`}>
+  <div className={`bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5 p-5 shadow-[0_18px_45px_rgba(0,0,0,0.5)] p-5 ${className}`}>
     <div className="flex items-start justify-between mb-4">
       <div>
         <h3 className="font-display font-semibold text-sm text-white">{title}</h3>
