@@ -88,9 +88,9 @@ const Wishlist = () => {
     <AccountLayout>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-display font-semibold text-lg text-white flex items-center gap-2"><Heart size={20} /> Wishlist ({items.length})</h2>
+          <h2 className="font-display font-semibold text-lg text-gray-900 flex items-center gap-2"><Heart size={20} className="text-red-500" /> Wishlist ({items.length})</h2>
           {items.length > 0 && (
-            <Link to="/shop" className="text-sm text-red-500 hover:text-orange-600 font-medium">Continue Shopping</Link>
+            <Link to="/shop" className="text-sm text-red-600 hover:text-red-700 font-medium">Continue Shopping</Link>
           )}
         </div>
 
@@ -101,11 +101,11 @@ const Wishlist = () => {
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-sm">
             <Heart size={48} className="mx-auto text-gray-300 mb-3" />
-            <h3 className="font-semibold text-white mb-1">Your wishlist is empty</h3>
-            <p className="text-sm text-gray-400 mb-4">Save items you love to your wishlist.</p>
-            <Link to="/shop" className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">
+            <h3 className="font-semibold text-gray-900 mb-1">Your wishlist is empty</h3>
+            <p className="text-sm text-gray-500 mb-4">Save items you love to your wishlist.</p>
+            <Link to="/shop" className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-all duration-300 ease-in-out">
               Browse Products
             </Link>
           </div>
@@ -128,8 +128,8 @@ const Wishlist = () => {
               const canAdd = inStock && !hasQtyError && selectedQty <= availableQty;
 
               return (
-                <div key={productId} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden group hover:shadow-md transition-all">
-                  <div className="relative aspect-square bg-gray-900 overflow-hidden">
+                <div key={productId} className="bg-white rounded-xl border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
+                  <div className="relative aspect-square bg-gray-100 overflow-hidden">
                     {imageUrl ? (
                       <img src={imageUrl} alt={name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     ) : (
@@ -147,7 +147,7 @@ const Wishlist = () => {
                     )}
                     <button
                       onClick={() => handleRemove(productId)}
-                      className="absolute top-2 right-2 w-8 h-8 bg-white/90 hover:bg-red-500/10 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors shadow-sm"
+                      className="absolute top-2 right-2 w-8 h-8 bg-white hover:bg-red-50 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 transition-all duration-300 ease-in-out shadow-sm border border-slate-200"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -155,10 +155,10 @@ const Wishlist = () => {
 
                   <div className="p-3 space-y-2">
                     <Link to={`/products/${productId}`} className="block">
-                      <h3 className="text-sm font-medium text-white hover:text-red-500 line-clamp-2 transition-colors">{name}</h3>
+                      <h3 className="text-sm font-medium text-gray-900 hover:text-red-600 line-clamp-2 transition-all duration-300 ease-in-out">{name}</h3>
                     </Link>
                     <div className="flex items-center gap-2">
-                      <p className="text-xs text-gray-400">Stock: {stockQuantity}</p>
+                      <p className="text-xs text-gray-500">Stock: {stockQuantity}</p>
                       {isLowStock && <span className="text-[10px] text-amber-600 flex items-center gap-0.5"><AlertTriangle size={10} /> Low stock</span>}
                     </div>
                     <div className="flex items-center gap-2">
@@ -168,12 +168,12 @@ const Wishlist = () => {
                           <span className="text-xs text-gray-400 line-through">PHP {price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                         </>
                       ) : (
-                        <span className="font-semibold text-white">PHP {price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                        <span className="font-semibold text-gray-900">PHP {price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-2">
-                        <label className="text-[11px] text-gray-400">Qty</label>
+                        <label className="text-[11px] text-gray-500">Qty</label>
                         <input
                           type="number"
                           min={1}
@@ -196,17 +196,17 @@ const Wishlist = () => {
                               }));
                             }
                           }}
-                          className="w-16 px-2 py-1 border border-gray-700 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                          className="w-16 px-2 py-1 border border-slate-300 rounded-md text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-200"
                         />
                       </div>
                       <button
                         onClick={() => handleAddToCart(item, selectedQty)}
                         disabled={!canAdd}
-                        className="flex-1 px-3 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1"
+                        className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-xs font-medium rounded-lg transition-all duration-300 ease-in-out flex items-center justify-center gap-1"
                       >
                         <ShoppingCart size={13} /> Add to Cart
                       </button>
-                      <Link to={`/products/${productId}`} className="px-3 py-2 border border-gray-700 text-gray-600 hover:bg-gray-900 rounded-lg transition-colors flex items-center justify-center">
+                      <Link to={`/products/${productId}`} className="px-3 py-2 border border-slate-300 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out flex items-center justify-center">
                         <Eye size={14} />
                       </Link>
                     </div>
@@ -228,5 +228,7 @@ const Wishlist = () => {
 };
 
 export default Wishlist;
+
+
 
 

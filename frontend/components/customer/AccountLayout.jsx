@@ -1,5 +1,6 @@
 ﻿import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+
 import { User as UserIcon, Package, MapPin, Heart, RotateCcw, Wallet, ChevronRight } from 'lucide-react';
 
 const menuItems = [
@@ -16,43 +17,43 @@ const AccountLayout = ({ children }) => {
   const user = userData ? JSON.parse(userData) : null;
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-slate-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
-          <Link to="/" className="hover:text-red-500 transition-colors">Home</Link>
+        <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
+          <Link to="/" className="hover:text-red-500">Home</Link>
           <ChevronRight size={14} />
-          <span className="text-white font-medium">My Account</span>
+          <span className="text-gray-900 font-semibold">My Account</span>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Sidebar */}
           <aside className="lg:w-64 flex-shrink-0">
-            <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
               {/* Profile header */}
               {user && (
-                <div className="p-5 border-b border-gray-700">
+                <div className="p-5 border-b border-slate-200">
                   <div className="flex items-center gap-3">
                     {user.avatar ? (
                       <img
                         src={user.avatar}
                         alt={user.name}
-                        className="w-12 h-12 rounded-full object-cover border border-gray-700"
+                        className="w-12 h-12 rounded-full object-cover border border-slate-200"
                       />
                     ) : (
-                      <div className="w-12 h-12 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center font-bold text-lg font-display">
+                      <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold text-lg font-display">
                         {user.name.charAt(0).toUpperCase()}
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="font-semibold text-white truncate">{user.name}</p>
-                      <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                      <p className="font-semibold text-gray-900 truncate">{user.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{user.email}</p>
                     </div>
                   </div>
                   {user.store_credit !== undefined && user.store_credit > 0 && (
                     <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
                       <Wallet size={16} className="text-green-600" />
-                      <span className="text-sm font-medium text-green-700">₱{user.store_credit.toFixed(2)} credit</span>
+                      <span className="text-sm font-medium text-green-700">?{user.store_credit.toFixed(2)} credit</span>
                     </div>
                   )}
                 </div>
@@ -66,7 +67,7 @@ const AccountLayout = ({ children }) => {
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-0.5 ${isActive ? 'bg-red-500/10 text-red-500' : 'text-gray-600 hover:text-white hover:bg-gray-900'}`}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium mb-0.5 ${isActive ? 'bg-red-50 text-red-600' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
                     >
                       <Icon size={18} />
                       {item.label}
@@ -88,6 +89,12 @@ const AccountLayout = ({ children }) => {
 };
 
 export default AccountLayout;
+
+
+
+
+
+
 
 
 
