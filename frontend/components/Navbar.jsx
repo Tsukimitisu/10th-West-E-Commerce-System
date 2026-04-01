@@ -472,16 +472,16 @@ const Navbar = ({ user, onLogout }) => {
                     )}
                   </button>
                   {notifOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-96 bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 animate-fade-in z-50">
-                      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-700">
-                        <h3 className="font-bold text-white text-sm">Notifications</h3>
+                    <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 animate-fade-in z-50">
+                      <div className="flex items-center justify-between px-4 py-4 border-b border-slate-200">
+                        <h3 className="font-bold text-gray-900 text-sm">Notifications</h3>
                         {unreadCount > 0 && (
                           <button onClick={handleMarkAllRead} className="text-xs text-red-600 hover:text-red-700 font-semibold hover:underline">Mark all read</button>
                         )}
                       </div>
                       <div className="max-h-96 overflow-y-auto">
                         {notifications.length === 0 ? (
-                          <div className="p-8 text-center text-gray-400 text-sm">No notifications</div>
+                          <div className="p-8 text-center text-gray-500 text-sm">No notifications</div>
                         ) : (
                           notifications.map((notification, i) => {
                             const n = normalizeIncomingNotification(notification);
@@ -490,17 +490,17 @@ const Navbar = ({ user, onLogout }) => {
                             const typeLabel = getNotificationTypeLabel(n);
 
                             return (
-                            <button key={`${n.id || n.title}-${i}`} onClick={() => handleNotificationClick(n)} className={`w-full text-left px-4 py-3.5 hover:bg-zinc-900/90 transition-all duration-150 border-b border-gray-700 ${!n.is_read ? 'bg-red-500/10' : ''}`}>
+                            <button key={`${n.id || n.title}-${i}`} onClick={() => handleNotificationClick(n)} className={`w-full text-left px-4 py-3.5 hover:bg-gray-50 transition-all duration-150 border-b border-slate-200 ${!n.is_read ? 'bg-red-50' : ''}`}>
                               <div className="flex items-start gap-3.5">
                                 <div className="mt-0.5 shrink-0">
                                   {n.thumbnail_url ? (
-                                    <img src={n.thumbnail_url} alt="" className="h-12 w-12 rounded-xl object-cover bg-gray-900 border border-gray-700 shadow-sm" />
+                                    <img src={n.thumbnail_url} alt="" className="h-12 w-12 rounded-xl object-cover bg-gray-100 border border-slate-200 shadow-sm" />
                                   ) : n.type === 'announcement' ? (
-                                    <div className="h-10 w-10 rounded-xl bg-blue-500/15 text-blue-300 border border-blue-500/20 flex items-center justify-center">
+                                    <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-500 border border-blue-200 flex items-center justify-center">
                                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                                     </div>
                                   ) : (
-                                    <div className="h-10 w-10 rounded-xl bg-red-500/15 text-red-300 border border-red-500/20 flex items-center justify-center">
+                                    <div className="h-10 w-10 rounded-xl bg-red-50 text-red-500 border border-red-200 flex items-center justify-center">
                                       <Bell size={16} />
                                     </div>
                                   )}
@@ -508,10 +508,10 @@ const Navbar = ({ user, onLogout }) => {
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-start gap-2">
                                     <div className="min-w-0 flex-1">
-                                      <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-white' : 'font-medium text-gray-100'}`}>{title}</p>
-                                      {summary && <p className="mt-1 text-xs leading-5 text-gray-300 line-clamp-2">{summary}</p>}
-                                      <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
-                                        <span className="rounded-full border border-gray-600 bg-zinc-900 px-2 py-0.5 font-medium text-gray-300">{typeLabel}</span>
+                                      <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>{title}</p>
+                                      {summary && <p className="mt-1 text-xs leading-5 text-gray-500 line-clamp-2">{summary}</p>}
+                                      <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-500">
+                                        <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 font-medium text-gray-600">{typeLabel}</span>
                                         <span>{formatNotificationTime(n)}</span>
                                       </div>
                                     </div>
