@@ -1,9 +1,30 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, Check, X } from 'lucide-react';
 import { register, resendVerificationEmail, API_ORIGIN } from '../services/api';
 
-const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
+const EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
+const GMAIL_TYPO_DOMAINS = new Set([
+  'gmai.com',
+  'gmial.com',
+  'gmail.co',
+  'gmail.con',
+  'gmail.cm',
+  'gnail.com',
+  'gmailcom',
+]);
+
+const getEmailValidationError = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+
+  if (!normalized) return 'Email is required.';
+  if (!EMAIL_REGEX.test(normalized)) return 'Please enter a valid email address.';
+
+  const domain = normalized.split('@')[1] || '';
+  if (GMAIL_TYPO_DOMAINS.has(domain)) return 'Did you mean @gmail.com?';
+
+  return '';
+};
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -21,6 +42,8 @@ const Register = () => {
   const [verificationMessage, setVerificationMessage] = useState('');
   const [resending, setResending] = useState(false);
   const [resendStatus, setResendStatus] = useState('');
+  const errorBannerRef = useRef(null);
+  const emailInputRef = useRef(null);
 
   const checks = [
     { key: 'length', label: 'At least 8 characters', pass: password.length >= 8 },
@@ -48,14 +71,28 @@ const Register = () => {
     });
   };
 
+  const scrollToErrorBanner = () => {
+    requestAnimationFrame(() => {
+      errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
+
+  const focusEmailField = () => {
+    requestAnimationFrame(() => {
+      if (!emailInputRef.current) return;
+      emailInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      emailInputRef.current.focus({ preventScroll: true });
+    });
+  };
+
   const validateForm = () => {
     const nextErrors = {};
 
     if (!name.trim()) nextErrors.name = 'Name is required.';
     else if (name.trim().length < 2) nextErrors.name = 'Name must be at least 2 characters.';
 
-    if (!email.trim()) nextErrors.email = 'Email is required.';
-    else if (!EMAIL_REGEX.test(email.trim())) nextErrors.email = 'Please enter a valid email address.';
+    const emailError = getEmailValidationError(email);
+    if (emailError) nextErrors.email = emailError;
 
     if (!password) nextErrors.password = 'Password is required.';
     else if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)) {
@@ -81,6 +118,8 @@ const Register = () => {
 
     if (Object.keys(nextErrors).length > 0) {
       setError('Please correct the highlighted fields.');
+      if (nextErrors.email) focusEmailField();
+      else scrollToErrorBanner();
       return;
     }
 
@@ -112,12 +151,33 @@ const Register = () => {
         return;
       }
 
+      const hasDuplicateEmailError =
+        Boolean(nextFieldErrors.email && /already|in use|registered/i.test(nextFieldErrors.email)) ||
+        err.status === 409 ||
+        /already.*(registered|in use)|duplicate/.test(String(err.message || '').toLowerCase());
+
+      if (hasDuplicateEmailError) {
+        if (!nextFieldErrors.email) {
+          setFieldErrors((current) => ({
+            ...current,
+            email: 'This email is already in use.',
+          }));
+        }
+        setError(nextFieldErrors.email || 'This email is already in use. Please sign in or use a different email.');
+        scrollToErrorBanner();
+        focusEmailField();
+        return;
+      }
+
       if (Object.keys(nextFieldErrors).length > 0) {
         setError('Please correct the highlighted fields.');
+        if (nextFieldErrors.email) focusEmailField();
+        else scrollToErrorBanner();
         return;
       }
 
       setError(err.message || 'Registration failed.');
+      scrollToErrorBanner();
     } finally {
       setLoading(false);
     }
@@ -156,7 +216,7 @@ const Register = () => {
 
         <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-sm p-8">
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex items-center gap-2">
+            <div ref={errorBannerRef} role="alert" aria-live="assertive" className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex items-center gap-2">
               <AlertCircle size={16} /> {error}
             </div>
           )}
@@ -198,14 +258,21 @@ const Register = () => {
               <div className="relative">
                 <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
+                  ref={emailInputRef}
                   type="email"
                   value={email}
-                  onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    clearFieldError('email');
+                    if (error) setError('');
+                  }}
                   placeholder="name@example.com"
+                  aria-invalid={Boolean(fieldErrors.email)}
                   className={getInputClassName('email')}
                 />
               </div>
               {fieldErrors.email && <p className="text-xs text-red-500 mt-1">{fieldErrors.email}</p>}
+              {!fieldErrors.email && <p className="text-xs text-gray-400 mt-1">Use an active email address so you can receive your verification link.</p>}
             </div>
 
             <div>

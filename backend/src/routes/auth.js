@@ -23,6 +23,43 @@ import {
 
 const router = express.Router();
 
+const GMAIL_TYPO_DOMAINS = new Set([
+  'gmai.com',
+  'gmial.com',
+  'gmail.co',
+  'gmail.con',
+  'gmail.cm',
+  'gnail.com',
+  'gmailcom',
+]);
+
+const emailValidation = () =>
+  body('email')
+    .trim()
+    .customSanitizer((value) => String(value || '').trim().toLowerCase())
+    .isEmail({
+      allow_display_name: false,
+      require_tld: true,
+      ignore_max_length: false,
+      domain_specific_validation: true,
+    })
+    .withMessage('Please enter a valid email address')
+    .bail()
+    .custom((value) => {
+      const normalized = String(value || '').toLowerCase();
+
+      if (normalized.includes('..')) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      const domain = normalized.split('@')[1] || '';
+      if (GMAIL_TYPO_DOMAINS.has(domain)) {
+        throw new Error('Did you mean @gmail.com?');
+      }
+
+      return true;
+    });
+
 // ─── Validation rules ──────────────────────────────────────────────
 const registerValidation = [
   body('name')
@@ -30,10 +67,7 @@ const registerValidation = [
     .notEmpty().withMessage('Name is required')
     .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters')
     .escape(),
-  body('email')
-    .trim()
-    .isEmail().withMessage('Please enter a valid email address')
-    .normalizeEmail(),
+  emailValidation(),
   body('password').isStrongPassword({
     minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 0
   }).withMessage('Password must be at least 8 characters and include uppercase, lowercase, and a number'),
@@ -50,7 +84,7 @@ const registerValidation = [
 ];
 
 const loginValidation = [
-  body('email').trim().isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
+  emailValidation(),
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
@@ -67,7 +101,7 @@ router.post('/login', loginLimiter, loginValidation, validate, login);
 router.post(
   '/forgot-password',
   forgotPasswordLimiter,
-  body('email').trim().isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
+  emailValidation(),
   validate,
   forgotPassword
 );
@@ -144,7 +178,7 @@ router.get('/export-data', authenticateToken, exportUserData);
 // ─── Email verification ────────────────────────────────────────────
 router.post('/resend-verification',
   resendVerificationLimiter,
-  body('email').trim().isEmail().normalizeEmail().withMessage('Please enter a valid email address'),
+  emailValidation(),
   validate,
   resendVerification
 );

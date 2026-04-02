@@ -12,6 +12,29 @@ const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK === 'true';
 export const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
 
+const REGISTRATION_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
+const GMAIL_TYPO_DOMAINS = new Set([
+  'gmai.com',
+  'gmial.com',
+  'gmail.co',
+  'gmail.con',
+  'gmail.cm',
+  'gnail.com',
+  'gmailcom',
+]);
+
+const getRegistrationEmailError = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+
+  if (!normalized) return 'Email is required.';
+  if (!REGISTRATION_EMAIL_REGEX.test(normalized)) return 'Please enter a valid email address.';
+
+  const domain = normalized.split('@')[1] || '';
+  if (GMAIL_TYPO_DOMAINS.has(domain)) return 'Did you mean @gmail.com?';
+
+  return '';
+};
+
 const toNullableString = (value) => {
   if (value === undefined || value === null) return null;
   const text = String(value).trim();
@@ -446,8 +469,28 @@ export const login = async (email, password, totp_code) => {
 };
 
 export const register = async (name, email, password, confirmPassword, consentData = {}, otp = '') => {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const trimmedName = String(name || '').trim();
+
+  const fieldErrors = {};
+  const emailError = getRegistrationEmailError(normalizedEmail);
+
+  if (!trimmedName) fieldErrors.name = 'Name is required.';
+  if (emailError) fieldErrors.email = emailError;
+  if (!password) fieldErrors.password = 'Password is required.';
+  if (!confirmPassword) fieldErrors.confirmPassword = 'Please confirm your password.';
+  if (password && confirmPassword && password !== confirmPassword) {
+    fieldErrors.confirmPassword = 'Passwords do not match.';
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    const validationError = new Error('Please correct the highlighted fields.');
+    validationError.fieldErrors = fieldErrors;
+    throw validationError;
+  }
+
   if (USE_MOCK_DATA) {
-    return registerMock(name, email, password);
+    return registerMock(trimmedName, normalizedEmail, password);
   }
 
   if (USE_SUPABASE) {
@@ -455,7 +498,7 @@ export const register = async (name, email, password, confirmPassword, consentDa
       const { data: existing } = await supabase
         .from("users")
         .select("id, email_verified")
-        .eq("email", email)
+        .eq("email", normalizedEmail)
         .maybeSingle();
 
       if (existing) {
@@ -467,7 +510,7 @@ export const register = async (name, email, password, confirmPassword, consentDa
           try {
             await authenticatedFetch(`${API_URL}/auth/resend-verification`, {
               method: "POST",
-              body: JSON.stringify({ email })
+              body: JSON.stringify({ email: normalizedEmail })
             });
           } catch (e) {
             console.error("Failed to trigger backend verification email:", e);
@@ -486,8 +529,8 @@ export const register = async (name, email, password, confirmPassword, consentDa
     const { data: newUser, error } = await supabase
       .from('users')
       .insert({
-        name,
-        email,
+        name: trimmedName,
+        email: normalizedEmail,
         password_hash: hashedPassword,
         role: 'customer',
         is_active: true,
@@ -498,16 +541,45 @@ export const register = async (name, email, password, confirmPassword, consentDa
       .select()
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      const normalizedMessage = String(error.message || '').toLowerCase();
+      if (String(error.code || '') === '23505' || normalizedMessage.includes('duplicate') || normalizedMessage.includes('already exists')) {
+        const duplicateError = new Error('Email already in use.');
+        duplicateError.fieldErrors = { email: 'This email is already in use.' };
+        duplicateError.status = 409;
+        throw duplicateError;
+      }
+
+      throw new Error(error.message || 'Registration failed.');
+    }
 
     // Call the backend to generate the token and physically send the email
     try {
       await authenticatedFetch(`${API_URL}/auth/resend-verification`, {
         method: 'POST',
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: normalizedEmail })
       });
     } catch (emailErr) {
       console.error('Failed to trigger backend verification email:', emailErr);
+
+      // Avoid leaving an unusable account when verification email cannot be delivered.
+      if (newUser?.id) {
+        const { error: cleanupError } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', newUser.id);
+
+        if (cleanupError) {
+          console.error('Failed to roll back user after verification email failure:', cleanupError);
+        }
+      }
+
+      const verificationError = new Error('We could not send a verification email to that address. Please check the email and try again.');
+      verificationError.fieldErrors = {
+        email: 'We could not send a verification email to this address. Please check it and try again.',
+      };
+      verificationError.code = 'EMAIL_VERIFICATION_DELIVERY_FAILED';
+      throw verificationError;
     }
 
     return {
@@ -518,7 +590,7 @@ export const register = async (name, email, password, confirmPassword, consentDa
 
   return await authenticatedFetch(`${API_URL}/auth/register`, {
     method: 'POST',
-    body: JSON.stringify({ name, email, password, confirmPassword, otp, ...consentData }),
+    body: JSON.stringify({ name: trimmedName, email: normalizedEmail, password, confirmPassword, otp, ...consentData }),
   });
 };
 
