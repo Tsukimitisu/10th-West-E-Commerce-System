@@ -246,51 +246,51 @@ const AddressDropdowns = ({
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-gray-200 mb-1">{labels.province}</label>
+        <label className="block text-sm font-medium text-gray-600 mb-1">{labels.province}</label>
         <select
           value={selectedProvince.code}
           onChange={(e) => handleProvinceChange(e.target.value)}
           disabled={disabled || loadingProvince}
-          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-900"
+          className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-50"
         >
           <option value="">Select a province</option>
           {provinces.map((p) => (
             <option key={p.code} value={p.code}>{p.name}</option>
           ))}
         </select>
-        {loadingProvince && <p className="text-xs text-gray-400 mt-1">Loading provinces...</p>}
+        {loadingProvince && <p className="text-xs text-gray-500 mt-1">Loading provinces...</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-200 mb-1">{labels.city}</label>
+        <label className="block text-sm font-medium text-gray-600 mb-1">{labels.city}</label>
         <select
           value={selectedCity.code}
           onChange={(e) => handleCityChange(e.target.value)}
           disabled={disabled || !selectedProvince.code || loadingCity}
-          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-900 disabled:bg-gray-900 disabled:text-gray-500"
+          className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500"
         >
           <option value="">{selectedProvince.code ? 'Select a city/municipality' : 'Choose province first'}</option>
           {cities.map((c) => (
             <option key={c.code} value={c.code}>{c.name}</option>
           ))}
         </select>
-        {loadingCity && <p className="text-xs text-gray-400 mt-1">Loading cities/municipalities...</p>}
+        {loadingCity && <p className="text-xs text-gray-500 mt-1">Loading cities/municipalities...</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-200 mb-1">{labels.barangay}</label>
+        <label className="block text-sm font-medium text-gray-600 mb-1">{labels.barangay}</label>
         <select
           value={selectedBarangay}
           onChange={(e) => handleBarangayChange(e.target.value)}
           disabled={disabled || !selectedCity.code || loadingBarangay}
-          className="w-full px-3 py-2.5 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 bg-gray-900 disabled:bg-gray-900 disabled:text-gray-500"
+          className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500"
         >
           <option value="">{selectedCity.code ? 'Select a barangay' : 'Choose city/municipality first'}</option>
           {barangays.map((b) => (
             <option key={b.code} value={b.name}>{b.name}</option>
           ))}
         </select>
-        {loadingBarangay && <p className="text-xs text-gray-400 mt-1">Loading barangays...</p>}
+        {loadingBarangay && <p className="text-xs text-gray-500 mt-1">Loading barangays...</p>}
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}

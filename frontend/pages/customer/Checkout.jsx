@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
@@ -476,14 +476,14 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="font-display font-semibold text-xl text-white mb-2">
+          <h2 className="font-display font-semibold text-xl text-gray-900 mb-2">
             {isBuyNow ? 'Buy Now session expired' : 'Your cart is empty'}
           </h2>
           <Link
             to={isBuyNow ? (buyNowSessionStore?.returnPath || '/shop') : '/shop'}
-            className="text-red-500 hover:text-orange-600 text-sm font-medium"
+            className="text-red-500 hover:text-red-600 text-sm font-medium"
           >
             {isBuyNow ? 'Return to Product' : 'Continue Shopping'}
           </Link>
@@ -493,9 +493,9 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
   }
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-slate-50 text-gray-900">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
+        <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
           <Link to="/" className="hover:text-red-500">Home</Link>
           <ChevronRight size={14} />
           {isBuyNow && items.length > 0 ? (
@@ -509,10 +509,10 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
               <ChevronRight size={14} />
             </>
           )}
-          <span className="text-white font-medium">Checkout</span>
+          <span className="text-gray-900 font-semibold">Checkout</span>
         </div>
 
-        <h1 className="font-display font-bold text-2xl text-white mb-8">Checkout</h1>
+        <h1 className="font-display font-bold text-3xl text-gray-900 mb-8">Checkout</h1>
 
         <form onSubmit={handleSubmit}>
           <div className="flex flex-col lg:flex-row gap-8">
@@ -537,7 +537,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                 {addresses.length > 0 && (
                   <div className="space-y-2 mb-4">
                     {addresses.map((addr) => (
-                      <label key={addr.id} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${selectedAddress === addr.id ? 'border-red-500 bg-red-500/10' : 'border-gray-700 hover:border-gray-300'}`}>
+                      <label key={addr.id} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${selectedAddress === addr.id ? 'border-red-500 bg-red-500/10' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
                         <input
                           type="radio"
                           name="address"
@@ -553,10 +553,10 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                               phone: addr.phone || f.phone
                             }));
                           }}
-                          className="mt-1 text-red-500 focus:ring-orange-500"
+                          className="mt-1 text-red-500 focus:ring-red-500"
                         />
                         <div>
-                          <p className="text-sm font-medium text-white">{addr.recipient_name} {addr.is_default && <span className="text-xs text-red-500 ml-1">Default</span>}</p>
+                          <p className="text-sm font-medium text-gray-900">{addr.recipient_name} {addr.is_default && <span className="text-xs text-red-500 ml-1">Default</span>}</p>
                           <p className="text-sm text-gray-400">{addr.street}, {addr.city}, {addr.state} {addr.postal_code}</p>
                           {addr.phone && <p className="text-sm text-gray-400">{addr.phone}</p>}
                         </div>
@@ -574,7 +574,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                           phone: profile?.phone || f.phone
                         }));
                       }}
-                      className="text-sm text-red-500 hover:text-orange-600 font-medium"
+                      className="text-sm text-red-500 hover:text-red-600 font-medium"
                     >
                       + Use a different address
                     </button>
@@ -614,7 +614,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Street / House No.</label>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Street / House No.</label>
                       <AddressAutocomplete
                         value={form.street}
                         onInputChange={(val) => setForm((f) => ({ ...f, street: val, lat: null, lng: null }))}
@@ -677,15 +677,15 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                     { id: 'express', label: 'Express Shipping', desc: '1-2 business days', price: 'PHP 300.00' },
                     { id: 'pickup', label: 'Store Pickup', desc: 'Pick up at our store', price: 'Free' },
                   ].map((method) => (
-                    <label key={method.id} className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-colors ${shippingMethod === method.id ? 'border-red-500 bg-red-500/10' : 'border-gray-700 hover:border-gray-300'}`}>
+                    <label key={method.id} className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-colors ${shippingMethod === method.id ? 'border-red-500 bg-red-500/10' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
                       <div className="flex items-center gap-3">
-                        <input type="radio" name="shipping" checked={shippingMethod === method.id} onChange={() => setShippingMethod(method.id)} className="text-red-500 focus:ring-orange-500" />
+                        <input type="radio" name="shipping" checked={shippingMethod === method.id} onChange={() => setShippingMethod(method.id)} className="text-red-500 focus:ring-red-500" />
                         <div>
-                          <p className="text-sm font-medium text-white">{method.label}</p>
-                          <p className="text-xs text-gray-400">{method.desc}</p>
+                          <p className="text-sm font-medium text-gray-900">{method.label}</p>
+                          <p className="text-xs text-gray-500">{method.desc}</p>
                         </div>
                       </div>
-                      <span className={`text-sm font-medium ${method.price === 'Free' ? 'text-green-600' : 'text-white'}`}>{method.price}</span>
+                      <span className={`text-sm font-medium ${method.price === 'Free' ? 'text-green-600' : 'text-gray-900'}`}>{method.price}</span>
                     </label>
                   ))}
                 </div>
@@ -699,30 +699,30 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                     { id: 'bank_transfer', label: 'Bank Transfer', desc: 'BDO, BPI, UnionBank, etc.' },
                     { id: 'cod', label: 'Cash on Delivery', desc: 'Pay when you receive' },
                   ].map((method) => (
-                    <label key={method.id} className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${paymentMethod === method.id ? 'border-red-500 bg-red-500/10' : 'border-gray-700 hover:border-gray-300'}`}>
-                      <input type="radio" name="payment" checked={paymentMethod === method.id} onChange={() => setPaymentMethod(method.id)} className="text-red-500 focus:ring-orange-500" />
+                    <label key={method.id} className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${paymentMethod === method.id ? 'border-red-500 bg-red-500/10' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                      <input type="radio" name="payment" checked={paymentMethod === method.id} onChange={() => setPaymentMethod(method.id)} className="text-red-500 focus:ring-red-500" />
                       <div>
-                        <p className="text-sm font-medium text-white">{method.label}</p>
-                        <p className="text-xs text-gray-400">{method.desc}</p>
+                        <p className="text-sm font-medium text-gray-900">{method.label}</p>
+                        <p className="text-xs text-gray-500">{method.desc}</p>
                       </div>
                     </label>
                   ))}
                 </div>
 
                 {paymentMethod === 'card' && (
-                  <div className="p-4 bg-gray-900 rounded-xl border border-gray-700">
+                  <div className="p-4 bg-gray-50/80 rounded-xl border border-slate-200">
                     <div className="flex items-center gap-2 mb-3">
                       <Shield size={16} className="text-green-600" />
                       <p className="text-sm font-medium text-gray-700">Secure Card Payment via Stripe</p>
                     </div>
-                    <p className="text-xs text-gray-400 mb-3">
+                    <p className="text-xs text-gray-500 mb-3">
                       Your card details are collected and processed securely by Stripe. Card numbers never touch our servers - fully PCI-DSS compliant.
                     </p>
-                    <div className="bg-gray-800 border border-gray-300 rounded-lg p-4 text-center text-sm text-gray-400" id="stripe-card-element">
-                      <CreditCard size={24} className="mx-auto mb-2 text-gray-300" />
+                    <div className="bg-white border border-slate-200 rounded-lg p-4 text-center text-sm text-gray-500" id="stripe-card-element">
+                      <CreditCard size={24} className="mx-auto mb-2 text-gray-600" />
                       Stripe Card Element loads here
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-2 text-center">Protected by Stripe - 256-bit SSL encryption</p>
+                    <p className="text-[10px] text-gray-500 mt-2 text-center">Protected by Stripe - 256-bit SSL encryption</p>
                   </div>
                 )}
 
@@ -744,24 +744,24 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
             </div>
 
             <div className="lg:w-96">
-              <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 sticky top-24">
-                <h2 className="font-display font-semibold text-lg text-white mb-4">Order Summary</h2>
+              <div className="bg-white rounded-xl border border-slate-200 p-6 sticky top-24 shadow-sm">
+                <h2 className="font-display font-semibold text-lg text-gray-900 mb-4">Order Summary</h2>
 
                 <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
                   {items.map((item) => (
                     <div key={item.productId} className="flex gap-3">
-                      <div className="w-14 h-14 bg-gray-900 rounded-lg overflow-hidden flex-shrink-0">
+                      <div className="w-14 h-14 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0 border border-slate-200">
                         <img src={item.product.image || 'https://via.placeholder.com/56'} alt="" className="w-full h-full object-cover" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white line-clamp-1">{item.product.name}</p>
+                        <p className="text-sm text-gray-900 line-clamp-1">{item.product.name}</p>
                         {isBuyNow ? (
                           <div className="flex items-center gap-2 mt-1">
                             <button
                               type="button"
                               disabled={buyNowQty <= 1}
                               onClick={() => setBuyNowQty(Math.max(1, buyNowQty - 1))}
-                              className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
+                              className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-700 text-xs transition-colors"
                             >
                               -
                             </button>
@@ -791,13 +791,13 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                                   setBuyNowQty(1);
                                 }
                               }}
-                              className="text-xs text-white font-medium w-8 text-center bg-transparent border-none rounded focus:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-600 px-0 transition-colors"
+                              className="text-xs text-gray-900 font-medium w-8 text-center bg-transparent border-none rounded focus:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-red-300 px-0 transition-colors"
                             />
                             <button
                               type="button"
                               disabled={buyNowQty >= (item.product.stock_quantity || 100) || buyNowQty >= 50}
                               onClick={() => setBuyNowQty(Math.min((item.product.stock_quantity || 100), Math.min(50, buyNowQty + 1)))}
-                              className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
+                              className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-700 text-xs transition-colors"
                             >
                               +
                             </button>
@@ -812,7 +812,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                                   updateCheckoutQuantity(item.productId, item.quantity - 1);
                                   setQuantityErrors(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
                                 }}
-                                className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
+                                className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-700 text-xs transition-colors"
                               >
                                 -
                               </button>
@@ -823,7 +823,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                                 value={localQuantities[item.productId] !== undefined ? localQuantities[item.productId] : item.quantity} 
                                 onChange={(e) => handleQuantityInputChange(item, e.target.value)} 
                                 onBlur={() => handleQuantityBlur(item)}
-                                className="text-xs text-white font-medium w-8 text-center bg-transparent border-none rounded focus:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-600 px-0 transition-colors"
+                                className="text-xs text-gray-900 font-medium w-8 text-center bg-transparent border-none rounded focus:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-red-300 px-0 transition-colors"
                               />
                               <button
                                 type="button"
@@ -842,7 +842,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                                   updateCheckoutQuantity(item.productId, item.quantity + 1);
                                   setQuantityErrors(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
                                 }}
-                                className="w-5 h-5 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-300 text-xs transition-colors"
+                                className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-700 text-xs transition-colors"
                               >
                                 +
                               </button>
@@ -853,23 +853,23 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                           </>
                         )}
                       </div>
-                      <span className="text-sm font-medium text-white">{formatPrice((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity)}</span>
+                      <span className="text-sm font-medium text-gray-900">{formatPrice((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity)}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="mb-4 pb-4 border-b border-gray-700">
+                <div className="mb-4 pb-4 border-b border-slate-200">
                   <div className="flex gap-2">
                     <div className="flex-1 relative">
-                      <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                       <input
                         value={promoCode}
                         onChange={(e) => setPromoCode(e.target.value)}
                         placeholder="Promo code"
-                        className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="w-full pl-9 pr-3 py-2 border border-slate-200 bg-gray-50 text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </div>
-                    <button type="button" onClick={handleApplyPromo} className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors">Apply</button>
+                    <button type="button" onClick={handleApplyPromo} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors">Apply</button>
                   </div>
                   {promoError && <p className="text-xs text-red-500 mt-1">{promoError}</p>}
                   {activeDiscount && (
@@ -881,11 +881,11 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                 </div>
 
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
+                  <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
                   {activeDiscountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(activeDiscountAmount)}</span></div>}
-                  <div className="flex justify-between text-gray-600"><span>Shipping</span><span className={shippingCost === 0 ? 'text-green-600 font-medium' : ''}>{shippingCost === 0 ? 'Free' : formatPrice(shippingCost)}</span></div>
+                  <div className="flex justify-between text-gray-500"><span>Shipping</span><span className={shippingCost === 0 ? 'text-green-500 font-medium' : 'text-gray-600'}>{shippingCost === 0 ? 'Free' : formatPrice(shippingCost)}</span></div>
                   <div className="flex justify-between text-gray-400 text-xs"><span>VAT (12% included)</span><span>{formatPrice((grandTotal / 1.12) * 0.12)}</span></div>
-                  <div className="border-t border-gray-700 pt-2 flex justify-between"><span className="font-semibold text-white">Total</span><span className="font-bold text-xl text-white">{formatPrice(grandTotal)}</span></div>
+                  <div className="border-t border-slate-200 pt-2 flex justify-between"><span className="font-semibold text-gray-900">Total</span><span className="font-bold text-2xl text-gray-900">{formatPrice(grandTotal)}</span></div>
                 </div>
 
                   <label className="mt-4 flex cursor-pointer items-start gap-2.5">
@@ -893,9 +893,9 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                       type="checkbox"
                       checked={agreeTerms}
                       onChange={(e) => setAgreeTerms(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 shrink-0 rounded border border-gray-500 bg-gray-800 accent-red-500 focus:ring-2 focus:ring-orange-500 focus:ring-offset-0"
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border border-slate-300 bg-white accent-red-500 focus:ring-2 focus:ring-red-500 focus:ring-offset-0"
                     />
-                    <span className="text-xs leading-relaxed text-gray-200">
+                    <span className="text-xs leading-relaxed text-gray-700">
                       I agree to the <Link to="/terms" className="text-red-500 hover:underline">Terms & Conditions</Link> and <Link to="/privacy" className="text-red-500 hover:underline">Privacy Policy</Link>
                     </span>
                   </label>
@@ -905,7 +905,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                 <button
                   type="submit"
                   disabled={processing || !agreeTerms}
-                  className="w-full mt-4 py-3.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
+                  className="w-full mt-4 py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
                 >
                   {processing ? (
                     <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing...</span>
@@ -923,15 +923,15 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
 };
 
 const Section = ({ title, icon, children }) => (
-  <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
-    <h2 className="font-display font-semibold text-white mb-4 flex items-center gap-2">{icon} {title}</h2>
+  <div className="bg-white rounded-xl border border-slate-200 p-6">
+    <h2 className="font-display font-semibold text-gray-900 mb-4 flex items-center gap-2">{icon} {title}</h2>
     {children}
   </div>
 );
 
 const Input = ({ label, value, onChange, type = 'text', required, placeholder, className = '', inputMode, pattern, error }) => (
   <div className={className}>
-    <label className="block text-sm font-medium text-gray-700 mb-1">{label} {required && <span className="text-red-500">*</span>}</label>
+    <label className="block text-sm font-medium text-gray-600 mb-1">{label} {required && <span className="text-red-500">*</span>}</label>
     <input
       type={type}
       value={value}
@@ -940,12 +940,13 @@ const Input = ({ label, value, onChange, type = 'text', required, placeholder, c
       placeholder={placeholder}
       inputMode={inputMode}
       pattern={pattern}
-      className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${error ? 'border-red-300 focus:ring-red-400' : 'border-gray-700 focus:ring-orange-500'}`}
+      className={`w-full px-3 py-2.5 border rounded-lg text-sm text-gray-900 bg-gray-50 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-transparent ${error ? 'border-red-400 focus:ring-red-400' : 'border-slate-200 focus:ring-red-500'}`}
     />
     {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
   </div>
 );
 
 export default Checkout;
+
 
 

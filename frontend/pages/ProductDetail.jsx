@@ -37,6 +37,59 @@ const truncateText = (value, limit) => {
   return `${normalized.slice(0, limit - 1).trimEnd()}…`;
 };
 
+const parseImageList = (value) => {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item : item?.url || item?.image || item?.image_url || ''))
+      .map((item) => String(item || '').trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parseImageList(parsed);
+      }
+    } catch {
+      // Fall through to delimiter parsing for non-JSON strings.
+    }
+
+    return trimmed
+      .split(/[\n,|]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
+const extractProductImages = (product) => {
+  if (!product) return [PRODUCT_IMAGE_FALLBACK];
+
+  const candidates = [
+    product.image,
+    product.images,
+    product.image_urls,
+    product.additional_images,
+    product.gallery_images,
+    product.media,
+  ];
+
+  const unique = new Set();
+  candidates.forEach((value) => {
+    parseImageList(value).forEach((url) => unique.add(url));
+  });
+
+  const images = Array.from(unique);
+  return images.length > 0 ? images : [PRODUCT_IMAGE_FALLBACK];
+};
+
 const setMetaTag = (attribute, key, content) => {
   if (typeof document === 'undefined') return;
 
@@ -564,7 +617,7 @@ const ProductDetail = () => {
 
   if (!product) return <div className="text-center py-20 text-gray-600">Product not found.</div>;
 
-  const images = [product.image || PRODUCT_IMAGE_FALLBACK];
+  const images = extractProductImages(product);
   const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
   const isOutOfStock = maxStock <= 0;
   const hasDiscount = product.is_on_sale && product.sale_price;
@@ -581,13 +634,13 @@ const ProductDetail = () => {
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen text-slate-900"
       style={{
         backgroundColor: '#f8fafc',
         backgroundImage: `
-          radial-gradient(circle at 8% 14%, rgba(239, 68, 68, 0.10) 0%, transparent 34%),
-          radial-gradient(circle at 92% 6%, rgba(30, 41, 59, 0.08) 0%, transparent 28%),
-          linear-gradient(140deg, rgba(255, 255, 255, 0.95) 0%, rgba(241, 245, 249, 0.92) 42%, rgba(226, 232, 240, 0.85) 100%)
+          radial-gradient(circle at 8% 14%, rgba(239, 68, 68, 0.08) 0%, transparent 34%),
+          radial-gradient(circle at 92% 6%, rgba(15, 23, 42, 0.07) 0%, transparent 28%),
+          linear-gradient(140deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 42%, rgba(241, 245, 249, 0.92) 100%)
         `,
         backgroundAttachment: 'fixed',
         backgroundSize: 'cover',
@@ -596,38 +649,38 @@ const ProductDetail = () => {
     >
       {/* Breadcrumb */}
       <div className="max-w-7xl mx-auto px-4 pt-6">
-        <div className="flex items-center gap-2 text-sm text-gray-700 bg-white/15 backdrop-blur-md border border-white/30 rounded-2xl px-4 py-3 shadow-lg">
-          <Link to="/" className="hover:text-red-500 transition-colors">Home</Link>
+        <div className="flex items-center gap-2 text-sm text-slate-600 bg-white border border-slate-200/80 rounded-2xl px-4 py-3 shadow-sm">
+          <Link to="/" className="hover:text-red-600 transition-colors">Home</Link>
           <ChevronRight size={14} />
-          <Link to="/shop" className="hover:text-red-500 transition-colors">Shop</Link>
+          <Link to="/shop" className="hover:text-red-600 transition-colors">Shop</Link>
           <ChevronRight size={14} />
-          {product.category_name && <><Link to={`/shop?category=${product.category_id}`} className="hover:text-red-500 transition-colors">{product.category_name}</Link><ChevronRight size={14} /></>}
-          <span className="text-gray-900 font-medium line-clamp-1">{product.name}</span>
+          {product.category_name && <><Link to={`/shop?category=${product.category_id}`} className="hover:text-red-600 transition-colors">{product.category_name}</Link><ChevronRight size={14} /></>}
+          <span className="text-slate-900 font-medium line-clamp-1">{product.name}</span>
         </div>
       </div>
 
       {/* Product Section */}
       <div className="max-w-7xl mx-auto px-4 pb-16 pt-4">
-        <div className="grid md:grid-cols-2 gap-8 lg:gap-12 bg-white/15 backdrop-blur-md border border-white/30 rounded-2xl p-5 md:p-8 shadow-lg">
+        <div className="grid md:grid-cols-2 gap-8 lg:gap-12 bg-white border border-slate-200/80 rounded-3xl p-5 md:p-8 shadow-[0_20px_55px_-32px_rgba(15,23,42,0.35)]">
           {/* Images */}
-          <div className="space-y-3">
-            <div className="aspect-square bg-white/50 rounded-2xl overflow-hidden zoom-container relative border border-white/40">
+          <div className="space-y-4">
+            <div className="aspect-square bg-gradient-to-b from-slate-50 to-slate-100 rounded-3xl overflow-hidden zoom-container relative border border-slate-200/90">
               <img src={images[selectedImage]} alt={product.name} className="w-full h-full object-cover" />
               {hasDiscount && (
-                <span className="absolute top-4 left-4 bg-red-500/100 text-white text-sm font-bold px-3 py-1.5 rounded-lg">
+                <span className="absolute top-4 left-4 bg-red-600 text-white text-sm font-bold px-3 py-1.5 rounded-full shadow-sm">
                   -{Math.round((1 - product.sale_price / product.price) * 100)}% OFF
                 </span>
               )}
               {isOutOfStock && (
-                <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
-                  <span className="bg-gray-900 text-white text-sm font-bold px-6 py-3 rounded-lg">SOLD OUT</span>
+                <div className="absolute inset-0 bg-white/75 backdrop-blur-[1px] flex items-center justify-center">
+                  <span className="bg-slate-900 text-white text-sm font-bold px-6 py-3 rounded-xl">SOLD OUT</span>
                 </div>
               )}
             </div>
             {images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
                 {images.map((img, i) => (
-                  <button key={i} onClick={() => setSelectedImage(i)} className={`w-20 h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 transition-colors ${i === selectedImage ? 'border-red-500' : 'border-white/50 hover:border-red-200'}`}>
+                  <button key={i} onClick={() => setSelectedImage(i)} className={`w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition-colors ${i === selectedImage ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 hover:border-red-200'}`}>
                     <img src={img} alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
@@ -636,47 +689,47 @@ const ProductDetail = () => {
           </div>
 
           {/* Info */}
-          <div>
-            {product.category_name && <span className="text-sm font-semibold text-red-500 uppercase tracking-wide">{product.category_name}</span>}
-            <h1 className="font-display font-bold text-2xl lg:text-3xl text-black mt-1 mb-3">{product.name}</h1>
+          <div className="lg:pt-1">
+            {product.category_name && <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]">{product.category_name}</span>}
+            <h1 className="font-display font-bold text-2xl lg:text-4xl text-slate-950 mt-3 mb-3 leading-tight">{product.name}</h1>
 
             {/* Rating */}
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-6">
               <StarRating rating={avgRating} count={reviews.length || product.reviewCount} size={18} />
-              <button onClick={() => setActiveTab('reviews')} className="text-sm text-red-500 hover:underline">{reviews.length || product.reviewCount || 0} reviews</button>
+              <button onClick={() => setActiveTab('reviews')} className="text-sm text-red-600 hover:text-red-700 hover:underline">{reviews.length || product.reviewCount || 0} reviews</button>
             </div>
 
             {/* Price */}
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-end gap-3 mb-3">
               {hasDiscount ? (
                 <>
-                  <span className="text-3xl font-bold text-red-500">{formatPrice(product.sale_price)}</span>
-                  <span className="text-lg text-gray-400 line-through">{formatPrice(product.price)}</span>
+                  <span className="text-4xl font-black tracking-tight text-slate-950">{formatPrice(product.sale_price)}</span>
+                  <span className="text-lg text-slate-400 line-through mb-1">{formatPrice(product.price)}</span>
                 </>
               ) : (
-                <span className="text-3xl font-bold text-gray-900">{formatPrice(product.price)}</span>
+                <span className="text-4xl font-black tracking-tight text-slate-950">{formatPrice(product.price)}</span>
               )}
             </div>
 
             {/* Stock indicator */}
-            <div className="flex items-center gap-2 mb-6">
+            <div className="flex items-center gap-2 mb-2">
               {isOutOfStock ? (
-                <span className="flex items-center gap-1.5 text-sm text-red-500 font-medium"><Info size={16} /> Out of stock</span>
+                <span className="inline-flex items-center gap-1.5 text-sm text-red-700 font-semibold bg-red-50 border border-red-200 px-3 py-1.5 rounded-full"><Info size={15} /> Out of stock</span>
               ) : product.stock_quantity <= (product.low_stock_threshold || 5) ? (
-                <span className="flex items-center gap-1.5 text-sm text-amber-600 font-medium"><Info size={16} /> Only {product.stock_quantity} left in stock</span>
+                <span className="inline-flex items-center gap-1.5 text-sm text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full"><Info size={15} /> Only {product.stock_quantity} left in stock</span>
               ) : (
-                <span className="flex items-center gap-1.5 text-sm text-green-600 font-medium"><Check size={16} /> In Stock</span>
+                <span className="inline-flex items-center gap-1.5 text-sm text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full"><Check size={15} /> In Stock</span>
               )}
             </div>
-            <p className="text-xs text-gray-500 -mt-4 mb-6">Stock level: {Math.max(0, Number(product.stock_quantity ?? 0))}</p>
+            <p className="text-xs text-slate-500 mb-6">Stock level: {Math.max(0, Number(product.stock_quantity ?? 0))}</p>
 
             {/* SKU / Barcode */}
             {(product.sku || product.barcode || product.partNumber) && (
-              <div className="flex flex-wrap gap-4 text-xs text-gray-600 mb-6 pb-6 border-b border-white/40">
-                {product.sku && <span>SKU: <strong className="text-gray-800">{product.sku}</strong></span>}
-                {product.partNumber && <span>Part#: <strong className="text-gray-800">{product.partNumber}</strong></span>}
-                {product.barcode && <span>Barcode: <strong className="text-gray-800">{product.barcode}</strong></span>}
-                {product.brand && <span>Brand: <strong className="text-gray-800">{product.brand}</strong></span>}
+              <div className="flex flex-wrap gap-2 text-xs text-slate-600 mb-6 pb-6 border-b border-slate-200">
+                {product.sku && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">SKU: <strong className="text-slate-800">{product.sku}</strong></span>}
+                {product.partNumber && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">Part#: <strong className="text-slate-800">{product.partNumber}</strong></span>}
+                {product.barcode && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">Barcode: <strong className="text-slate-800">{product.barcode}</strong></span>}
+                {product.brand && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">Brand: <strong className="text-slate-800">{product.brand}</strong></span>}
               </div>
             )}
 
@@ -684,11 +737,11 @@ const ProductDetail = () => {
             {colors.length > 0 && (
             <div className="space-y-4 mb-6">
               <div>
-                <label className="text-sm font-medium text-gray-900 mb-2 block">Color <span className="text-red-500">*</span></label>
+                <label className="text-sm font-medium text-slate-900 mb-2 block">Color <span className="text-red-500">*</span></label>
                 <div className="flex gap-2">
                   {colors.map(c => (
                     <button key={c} onClick={() => { setSelectedVariant(prev => ({...prev, color: c})); setVariantError(''); }}
-                      className={`px-4 py-2 border rounded-lg text-sm transition-colors ${selectedVariant.color === c ? 'border-red-500 bg-red-500/10 text-red-600' : 'border-white/50 text-gray-700 hover:border-red-200'}`}
+                      className={`px-4 py-2 border rounded-xl text-sm transition-colors ${selectedVariant.color === c ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-slate-300 text-slate-700 hover:border-red-200 bg-white'}`}
                     >{c}</button>
                   ))}
                 </div>
@@ -699,8 +752,8 @@ const ProductDetail = () => {
 
             {/* Quantity & Actions */}
             <div className="flex flex-wrap gap-3 mb-6">
-              <div className="flex items-center border border-white/50 rounded-lg bg-white/25 backdrop-blur-sm">
-                <button onClick={() => { setQuantity(q => Math.max(1, q - 1)); setQuantityError(''); }} className="px-3 py-3 text-gray-600 hover:text-gray-900 hover:bg-white/40 transition-colors" disabled={quantity <= 1}><Minus size={16} /></button>
+              <div className="flex items-center border border-slate-300 rounded-xl bg-slate-50">
+                <button onClick={() => { setQuantity(q => Math.max(1, q - 1)); setQuantityError(''); }} className="px-3 py-3 text-slate-600 hover:text-slate-900 hover:bg-white transition-colors rounded-l-xl" disabled={quantity <= 1}><Minus size={16} /></button>
                 <input 
                   type="text" 
                   inputMode="numeric" 
@@ -737,7 +790,7 @@ const ProductDetail = () => {
                       setQuantityError('');
                     }
                   }}
-                  className="w-12 text-center font-medium bg-transparent text-gray-900 focus:outline-none focus:bg-white/40 py-1 transition-colors" 
+                  className="w-12 text-center font-semibold bg-transparent text-slate-900 focus:outline-none focus:bg-white py-1 transition-colors" 
                 />
                 <button
                   onClick={() => {
@@ -755,7 +808,7 @@ const ProductDetail = () => {
                       return q + 1;
                     });
                   }}
-                  className="px-3 py-3 text-gray-600 hover:text-gray-900 hover:bg-white/40 transition-colors"
+                  className="px-3 py-3 text-slate-600 hover:text-slate-900 hover:bg-white transition-colors rounded-r-xl"
                 >
                   <Plus size={16} />
                 </button>
@@ -763,7 +816,7 @@ const ProductDetail = () => {
               <button
                 onClick={handleAddToCart}
                 disabled={isOutOfStock}
-                className="h-12 w-12 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-all flex items-center justify-center"
+                className="h-12 w-12 bg-slate-900 hover:bg-slate-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl transition-all flex items-center justify-center shadow-sm"
                 title="Add to cart"
               >
                 {addedToCart ? <Check size={18} /> : <ShoppingCart size={18} />}
@@ -771,18 +824,18 @@ const ProductDetail = () => {
               <button
                 onClick={handleBuyNow}
                 disabled={isOutOfStock}
-                className="flex-1 py-3 border border-white/50 bg-white/20 hover:bg-white/35 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-gray-900 font-semibold rounded-lg transition-all"
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:text-gray-100 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all shadow-sm"
               >
                 Buy Now
               </button>
-              <button onClick={handleWishlist} className={`p-3 border rounded-lg transition-colors ${isWishlisted ? 'border-red-200 bg-red-500/10 text-red-500' : 'border-white/50 bg-white/20 text-gray-700 hover:text-red-500 hover:border-red-200'}`}>
+              <button onClick={handleWishlist} className={`p-3 border rounded-xl transition-colors ${isWishlisted ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-300 bg-white text-slate-700 hover:text-red-500 hover:border-red-200'}`}>
                 <Heart size={20} className={isWishlisted ? 'fill-orange-500' : ''} />
               </button>
               <div className="relative" data-share-menu>
                 <button
                   type="button"
                   onClick={() => setShareOpen((open) => !open)}
-                  className={`p-3 border rounded-lg transition-colors ${shareOpen ? 'border-red-200 bg-red-500/10 text-red-500' : 'border-white/50 bg-white/20 text-gray-700 hover:text-gray-900 hover:border-red-200'}`}
+                  className={`p-3 border rounded-xl transition-colors ${shareOpen ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-300 bg-white text-slate-700 hover:text-slate-900 hover:border-red-200'}`}
                   aria-label="Share product"
                   aria-expanded={shareOpen}
                 >
@@ -830,42 +883,48 @@ const ProductDetail = () => {
             {quantityError && <p className="text-xs text-red-500 -mt-4 mb-6">{quantityError}</p>}
 
             {/* Benefits */}
-            <div className="grid grid-cols-3 gap-3 p-4 bg-white/25 backdrop-blur-sm border border-white/40 rounded-xl">
-              <div className="text-center">
-                <Truck size={20} className="mx-auto text-gray-700 mb-1" />
-                <p className="text-xs text-gray-800 font-medium">Free Shipping</p>
-                <p className="text-[10px] text-gray-600">Orders \u20B12,500+</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+              <div className="text-center p-2">
+                <span className="inline-flex w-9 h-9 items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm mb-2">
+                  <Truck size={18} className="text-slate-700" />
+                </span>
+                <p className="text-xs text-slate-800 font-semibold">Free Shipping</p>
+                <p className="text-[11px] text-slate-500">Orders \u20B12,500+</p>
               </div>
-              <div className="text-center border-x border-white/40">
-                <Shield size={20} className="mx-auto text-gray-700 mb-1" />
-                <p className="text-xs text-gray-800 font-medium">Warranty</p>
-                <p className="text-[10px] text-gray-600">100% authentic</p>
+              <div className="text-center p-2 sm:border-x border-slate-200">
+                <span className="inline-flex w-9 h-9 items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm mb-2">
+                  <Shield size={18} className="text-slate-700" />
+                </span>
+                <p className="text-xs text-slate-800 font-semibold">Warranty</p>
+                <p className="text-[11px] text-slate-500">100% authentic</p>
               </div>
-              <div className="text-center">
-                <RotateCcw size={20} className="mx-auto text-gray-700 mb-1" />
-                <p className="text-xs text-gray-800 font-medium">Easy Returns</p>
-                <p className="text-[10px] text-gray-600">7-day return</p>
+              <div className="text-center p-2">
+                <span className="inline-flex w-9 h-9 items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm mb-2">
+                  <RotateCcw size={18} className="text-slate-700" />
+                </span>
+                <p className="text-xs text-slate-800 font-semibold">Easy Returns</p>
+                <p className="text-[11px] text-slate-500">7-day return</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="mt-8 bg-white/15 backdrop-blur-md border border-white/30 rounded-2xl p-5 md:p-8 shadow-lg">
-          <div className="flex gap-1 border-b border-white/40 mb-8">
+        <div className="mt-8 bg-white border border-slate-200/80 rounded-3xl p-5 md:p-8 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.35)]">
+          <div className="inline-flex gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-8">
             {(['description', 'specs', 'reviews']).map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 capitalize ${activeTab === tab ? 'border-red-500 text-red-500' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
+                className={`px-4 md:px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors capitalize ${activeTab === tab ? 'bg-white text-red-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
               >{tab === 'reviews' ? `Reviews (${reviews.length || product.reviewCount || 0})` : tab}</button>
             ))}
           </div>
 
           {activeTab === 'description' && (
-            <div className="prose prose-sm max-w-none text-gray-600 leading-relaxed animate-fade-in">
+            <div className="prose prose-sm max-w-none text-slate-600 leading-relaxed animate-fade-in">
               <p>{product.description || 'No description available for this product.'}</p>
               {product.category_name && (
-                <div className="mt-6 p-4 bg-white/25 backdrop-blur-sm border border-white/40 rounded-xl">
-                  <h4 className="font-display font-semibold text-gray-900 mb-2 flex items-center gap-2"><Package size={16} /> Motorcycle Compatibility</h4>
+                <div className="mt-6 p-5 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <h4 className="font-display font-semibold text-slate-900 mb-2 flex items-center gap-2"><Package size={16} /> Motorcycle Compatibility</h4>
                   <p className="text-sm">Compatible with: <strong>{product.category_name}</strong></p>
                 </div>
               )}
@@ -874,7 +933,7 @@ const ProductDetail = () => {
 
           {activeTab === 'specs' && (
             <div className="animate-fade-in">
-              <div className="bg-white/25 backdrop-blur-sm border border-white/40 rounded-xl overflow-hidden">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden">
                 {[
                   ['Part Number', product.partNumber],
                   ['SKU', product.sku],
@@ -884,9 +943,9 @@ const ProductDetail = () => {
                   ['Box Number', product.boxNumber],
                   ['Stock Quantity', String(product.stock_quantity)],
                 ].filter(([, v]) => v).map(([label, value], i) => (
-                  <div key={label} className={`flex justify-between px-5 py-3 text-sm ${i % 2 === 0 ? 'bg-white/20' : 'bg-white/35'}`}>
-                    <span className="text-gray-700 font-medium">{label}</span>
-                    <span className="text-gray-900 font-medium">{value}</span>
+                  <div key={label} className={`flex justify-between px-5 py-3 text-sm ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                    <span className="text-slate-600 font-medium">{label}</span>
+                    <span className="text-slate-900 font-semibold">{value}</span>
                   </div>
                 ))}
               </div>
@@ -895,7 +954,7 @@ const ProductDetail = () => {
 
           {activeTab === 'reviews' && (
             <div className="animate-fade-in">
-              <div className="mb-8 rounded-2xl border border-white/40 bg-white/25 p-5 backdrop-blur-sm">
+              <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-5">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h3 className="font-display text-lg font-semibold text-gray-900">Write a review</h3>
@@ -935,7 +994,7 @@ const ProductDetail = () => {
                       }}
                       disabled={!userId || reviewSubmitting}
                       placeholder="Describe the product quality, fit, or overall experience."
-                      className="w-full rounded-xl border border-white/50 bg-white/70 px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
                     />
                     {reviewFieldErrors.comment && <p className="mt-2 text-xs text-red-500">{reviewFieldErrors.comment}</p>}
                   </div>
@@ -946,7 +1005,7 @@ const ProductDetail = () => {
                     </label>
                     <label
                       htmlFor="review-media"
-                      className={`block w-full rounded-xl border-2 border-dashed px-4 py-4 transition ${(!userId || reviewSubmitting) ? 'cursor-not-allowed border-gray-300 bg-gray-100' : 'cursor-pointer border-red-200 bg-white/80 hover:border-red-300 hover:bg-white'}`}
+                      className={`block w-full rounded-xl border-2 border-dashed px-4 py-4 transition ${(!userId || reviewSubmitting) ? 'cursor-not-allowed border-gray-300 bg-gray-100' : 'cursor-pointer border-red-200 bg-white hover:border-red-300 hover:bg-red-50/30'}`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
@@ -979,7 +1038,7 @@ const ProductDetail = () => {
                     {reviewMediaFiles.length > 0 && (
                       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {reviewMediaFiles.map((file, index) => (
-                          <div key={`${file.name}-${index}`} className="rounded-xl border border-white/50 bg-white/70 p-3">
+                          <div key={`${file.name}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <p className="truncate text-xs font-semibold text-gray-900">{file.name}</p>
@@ -1015,7 +1074,7 @@ const ProductDetail = () => {
               </div>
 
               {/* Rating summary */}
-              <div className="flex flex-col md:flex-row gap-8 mb-8 p-6 bg-white/25 backdrop-blur-sm border border-white/40 rounded-xl">
+              <div className="flex flex-col md:flex-row gap-8 mb-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl">
                 <div className="text-center md:text-left">
                   <div className="text-5xl font-bold text-gray-900">{avgRating.toFixed(1)}</div>
                   <StarRating rating={avgRating} size={20} />
@@ -1025,7 +1084,7 @@ const ProductDetail = () => {
                   {ratingDist.map(d => (
                     <div key={d.star} className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 w-6">{d.star}★</span>
-                      <div className="flex-1 h-2 bg-gray-300 rounded-full overflow-hidden">
+                      <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                         <div className="h-full bg-yellow-400 rounded-full transition-all" style={{ width: `${d.pct}%` }} />
                       </div>
                       <span className="text-xs text-gray-600 w-8">{d.count}</span>
@@ -1048,8 +1107,8 @@ const ProductDetail = () => {
 
         {/* Related Productssss */}
         {related.length > 0 && (
-          <div className="mt-8 bg-white/15 backdrop-blur-md border border-white/30 rounded-2xl p-5 md:p-8 shadow-lg">
-            <h2 className="font-display font-bold text-xl text-gray-900 mb-6">Related Products</h2>
+          <div className="mt-8 bg-white border border-slate-200/80 rounded-3xl p-5 md:p-8 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.35)]">
+            <h2 className="font-display font-bold text-xl text-slate-900 mb-6">Related Products</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {related.slice(0, 4).map((relatedProduct) => (
                 <ProductCard

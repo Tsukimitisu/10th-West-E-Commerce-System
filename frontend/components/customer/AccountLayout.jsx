@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import { User as UserIcon, Package, MapPin, Heart, RotateCcw, Wallet, ChevronRight } from 'lucide-react';
@@ -11,10 +11,30 @@ const menuItems = [
   { path: '/wishlist', label: 'Wishlist', icon: Heart },
 ];
 
+const getMenuIndex = (pathname) => menuItems.findIndex((item) => item.path === pathname);
+
 const AccountLayout = ({ children }) => {
   const location = useLocation();
   const userData = localStorage.getItem('shopCoreUser');
   const user = userData ? JSON.parse(userData) : null;
+  const previousPathRef = useRef(location.pathname);
+
+  const previousPath = previousPathRef.current;
+  const previousIndex = getMenuIndex(previousPath);
+  const currentIndex = getMenuIndex(location.pathname);
+
+  let contentTransitionClass = 'animate-accountContentIn';
+  if (previousIndex !== -1 && currentIndex !== -1) {
+    if (currentIndex > previousIndex) {
+      contentTransitionClass = 'animate-accountContentInUp';
+    } else if (currentIndex < previousIndex) {
+      contentTransitionClass = 'animate-accountContentInDown';
+    }
+  }
+
+  useEffect(() => {
+    previousPathRef.current = location.pathname;
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -79,7 +99,7 @@ const AccountLayout = ({ children }) => {
           </aside>
 
           {/* Content */}
-          <main className="flex-1 min-w-0">
+          <main key={location.pathname} className={`flex-1 min-w-0 ${contentTransitionClass} motion-reduce:animate-none`}>
             {children}
           </main>
         </div>
@@ -89,12 +109,3 @@ const AccountLayout = ({ children }) => {
 };
 
 export default AccountLayout;
-
-
-
-
-
-
-
-
-
