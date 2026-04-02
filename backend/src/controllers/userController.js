@@ -17,6 +17,11 @@ const MIME_EXTENSION_MAP = {
 };
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const AVATAR_BUCKET = 'avatars';
+const PROFILE_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
+const PROFILE_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
+
+const normalizeProfilePhone = (value) => String(value || '').trim().replace(/[\s()-]/g, '');
 
 const hasSupabaseStorageConfig = () => {
   return Boolean(
@@ -90,6 +95,7 @@ export const updateProfile = async (req, res) => {
   const rawName = typeof req.body.name === 'string' ? req.body.name.trim() : '';
   const rawEmail = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const rawPhone = typeof req.body.phone === 'string' ? req.body.phone.trim() : '';
+  const normalizedPhone = normalizeProfilePhone(rawPhone);
   const avatar = req.body.avatar ?? null;
 
   const fieldErrors = {};
@@ -104,12 +110,16 @@ export const updateProfile = async (req, res) => {
 
   if (!rawEmail) {
     fieldErrors.email = 'Email is required.';
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+  } else if (!PROFILE_EMAIL_REGEX.test(rawEmail)) {
     fieldErrors.email = 'Enter a valid email address.';
   }
 
-  if (rawPhone && !/^[0-9+\-\s()]{7,20}$/.test(rawPhone)) {
-    fieldErrors.phone = 'Enter a valid phone number.';
+  if (rawPhone) {
+    if (normalizedPhone.length > 13) {
+      fieldErrors.phone = 'Phone number must not exceed 13 characters.';
+    } else if (!PROFILE_PHONE_REGEX.test(normalizedPhone)) {
+      fieldErrors.phone = 'Enter a valid phone number (09XXXXXXXXX or +639XXXXXXXXX).';
+    }
   }
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -143,7 +153,7 @@ export const updateProfile = async (req, res) => {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $5
        RETURNING id, name, email, role, phone, avatar, store_credit, created_at`,
-      [rawName, rawEmail, rawPhone || null, avatar, req.user.id]
+      [rawName, rawEmail, normalizedPhone || null, avatar, req.user.id]
     );
 
     if (result.rows.length === 0) {
@@ -265,14 +275,17 @@ export const uploadProfileAvatar = async (req, res) => {
 
 // Change password
 export const changePassword = async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
+  const currentPassword = typeof req.body.currentPassword === 'string'
+    ? req.body.currentPassword
+    : req.body.oldPassword;
+  const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
 
-  if (!oldPassword || !newPassword) {
+  if (!currentPassword || !newPassword) {
     return res.status(400).json({ message: 'Current password and new password are required' });
   }
 
-  if (newPassword.length < 8) {
-    return res.status(400).json({ message: 'New password must be at least 8 characters' });
+  if (!STRONG_PASSWORD_REGEX.test(newPassword)) {
+    return res.status(400).json({ message: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.' });
   }
 
   try {
@@ -294,7 +307,7 @@ export const changePassword = async (req, res) => {
     }
 
     // Verify old password
-    const isValid = await bcrypt.compare(oldPassword, currentPasswordHash);
+    const isValid = await bcrypt.compare(currentPassword, currentPasswordHash);
 
     if (!isValid) {
       return res.status(401).json({ message: 'Current password is incorrect' });
@@ -306,7 +319,7 @@ export const changePassword = async (req, res) => {
     }
 
     // Hash new password
-    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
 
     // Update password
     await pool.query(

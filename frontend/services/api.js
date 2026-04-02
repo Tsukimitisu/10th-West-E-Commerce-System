@@ -13,6 +13,8 @@ const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK === 'true';
 export const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
 
 const REGISTRATION_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
+const PROFILE_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const GMAIL_TYPO_DOMAINS = new Set([
   'gmai.com',
   'gmial.com',
@@ -32,6 +34,16 @@ const getRegistrationEmailError = (value) => {
   const domain = normalized.split('@')[1] || '';
   if (GMAIL_TYPO_DOMAINS.has(domain)) return 'Did you mean @gmail.com?';
 
+  return '';
+};
+
+const normalizeProfilePhone = (value) => String(value || '').trim().replace(/[\s()-]/g, '');
+
+const getProfilePhoneError = (value) => {
+  const normalized = normalizeProfilePhone(value);
+  if (!normalized) return '';
+  if (normalized.length > 13) return 'Phone number must not exceed 13 characters.';
+  if (!PROFILE_PHONE_REGEX.test(normalized)) return 'Enter a valid phone number (09XXXXXXXXX or +639XXXXXXXXX).';
   return '';
 };
 
@@ -711,10 +723,17 @@ export const verifyResetToken = async (token) => {
 };
 
 export const changePassword = async (currentPassword, newPassword) => {
+  if (!currentPassword || !newPassword) {
+    throw new Error('Current password and new password are required.');
+  }
+
+  if (!STRONG_PASSWORD_REGEX.test(String(newPassword))) {
+    throw new Error('Password must be at least 8 characters and include uppercase, lowercase, number, and special character.');
+  }
+
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
-    if (!currentPassword || !newPassword) throw new Error('Current password and new password are required.');
 
     const { data: dbUser, error: fetchErr } = await supabase
       .from('users')
@@ -3410,38 +3429,49 @@ export const recordProductView = async (productId) => {
 
 // User profile functions
 export const updateProfile = async (userId, updates) => {
+  const name = typeof updates?.name === 'string' ? updates.name.trim() : '';
+  const email = typeof updates?.email === 'string' ? updates.email.trim().toLowerCase() : '';
+  const rawPhone = typeof updates?.phone === 'string' ? updates.phone.trim() : '';
+  const normalizedPhone = normalizeProfilePhone(rawPhone);
+  const fieldErrors = {};
+
+  if (!name) {
+    fieldErrors.name = 'Name is required.';
+  } else if (name.length < 2) {
+    fieldErrors.name = 'Name must be at least 2 characters.';
+  } else if (name.length > 100) {
+    fieldErrors.name = 'Name must be 100 characters or fewer.';
+  }
+
+  const emailError = getRegistrationEmailError(email);
+  if (emailError) {
+    fieldErrors.email = emailError;
+  }
+
+  const phoneError = getProfilePhoneError(rawPhone);
+  if (phoneError) {
+    fieldErrors.phone = phoneError;
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    const validationError = new Error('Please correct the highlighted fields.');
+    validationError.fieldErrors = fieldErrors;
+    throw validationError;
+  }
+
+  const payload = {
+    name,
+    email,
+    phone: normalizedPhone || null,
+  };
+
+  if (Object.prototype.hasOwnProperty.call(updates || {}, 'avatar')) {
+    payload.avatar = updates?.avatar || null;
+  }
+
   if (USE_SUPABASE) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser?.id) throw new Error('Not authenticated');
-
-    const name = typeof updates?.name === 'string' ? updates.name.trim() : '';
-    const email = typeof updates?.email === 'string' ? updates.email.trim().toLowerCase() : '';
-    const phone = typeof updates?.phone === 'string' ? updates.phone.trim() : '';
-    const fieldErrors = {};
-
-    if (!name) {
-      fieldErrors.name = 'Name is required.';
-    } else if (name.length < 2) {
-      fieldErrors.name = 'Name must be at least 2 characters.';
-    } else if (name.length > 100) {
-      fieldErrors.name = 'Name must be 100 characters or fewer.';
-    }
-
-    if (!email) {
-      fieldErrors.email = 'Email is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      fieldErrors.email = 'Enter a valid email address.';
-    }
-
-    if (phone && !/^[0-9+\-\s()]{7,20}$/.test(phone)) {
-      fieldErrors.phone = 'Enter a valid phone number.';
-    }
-
-    if (Object.keys(fieldErrors).length > 0) {
-      const validationError = new Error('Please correct the highlighted fields.');
-      validationError.fieldErrors = fieldErrors;
-      throw validationError;
-    }
 
     const { data: emailOwner, error: emailOwnerError } = await supabase
       .from('users')
@@ -3455,16 +3485,6 @@ export const updateProfile = async (userId, updates) => {
       const duplicateError = new Error('That email address is already in use.');
       duplicateError.fieldErrors = { email: 'That email address is already in use.' };
       throw duplicateError;
-    }
-
-    const payload = {
-      name,
-      email,
-      phone: phone || null,
-    };
-
-    if (Object.prototype.hasOwnProperty.call(updates || {}, 'avatar')) {
-      payload.avatar = updates?.avatar || null;
     }
 
     const { data, error } = await supabase
@@ -3493,7 +3513,7 @@ export const updateProfile = async (userId, updates) => {
 
   const data = await authenticatedFetch(`${API_URL}/users/profile`, {
     method: 'PUT',
-    body: JSON.stringify(updates),
+    body: JSON.stringify(payload),
   });
   return data.user;
 };

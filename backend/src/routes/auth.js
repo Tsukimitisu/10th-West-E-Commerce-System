@@ -146,8 +146,10 @@ router.post('/logout', authenticateToken, logout);
 router.get('/profile', authenticateToken, getProfile);
 router.put('/change-password',
   authenticateToken,
-  body('currentPassword').notEmpty(),
-  body('newPassword').isLength({ min: 8 }),
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword')
+    .isStrongPassword({ minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 1 })
+    .withMessage('Password must be at least 8 characters and include uppercase, lowercase, number, and special character'),
   validate,
   changePassword
 );

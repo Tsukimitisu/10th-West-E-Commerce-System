@@ -5,6 +5,11 @@ import AccountLayout from '../../components/customer/AccountLayout';
 
 const ALLOWED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+const PROFILE_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
+const PROFILE_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
+
+const normalizePhoneInput = (value) => String(value || '').trim().replace(/[\s()-]/g, '');
 
 const Profile = () => {
   const userData = localStorage.getItem('shopCoreUser');
@@ -51,7 +56,8 @@ const Profile = () => {
     const nextErrors = {};
     const trimmedName = form.name.trim();
     const trimmedEmail = form.email.trim().toLowerCase();
-    const trimmedPhone = form.phone.trim();
+    const rawPhone = form.phone.trim();
+    const normalizedPhone = normalizePhoneInput(rawPhone);
 
     if (!trimmedName) {
       nextErrors.name = 'Name is required.';
@@ -63,12 +69,16 @@ const Profile = () => {
 
     if (!trimmedEmail) {
       nextErrors.email = 'Email is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+    } else if (!PROFILE_EMAIL_REGEX.test(trimmedEmail)) {
       nextErrors.email = 'Enter a valid email address.';
     }
 
-    if (trimmedPhone && !/^[0-9+\-\s()]{7,20}$/.test(trimmedPhone)) {
-      nextErrors.phone = 'Enter a valid phone number.';
+    if (rawPhone) {
+      if (normalizedPhone.length > 13) {
+        nextErrors.phone = 'Phone number must not exceed 13 characters.';
+      } else if (!PROFILE_PHONE_REGEX.test(normalizedPhone)) {
+        nextErrors.phone = 'Enter a valid phone number (09XXXXXXXXX or +639XXXXXXXXX).';
+      }
     }
 
     return {
@@ -76,7 +86,7 @@ const Profile = () => {
       sanitized: {
         name: trimmedName,
         email: trimmedEmail,
-        phone: trimmedPhone,
+        phone: normalizedPhone,
       },
     };
   };
@@ -131,12 +141,12 @@ const Profile = () => {
     const sanitizedInput = {
       name: form.name.trim(),
       email: form.email.trim().toLowerCase(),
-      phone: form.phone.trim(),
+      phone: normalizePhoneInput(form.phone),
     };
     const currentProfile = {
       name: String(user?.name || '').trim(),
       email: String(user?.email || '').trim().toLowerCase(),
-      phone: String(user?.phone || '').trim(),
+      phone: normalizePhoneInput(user?.phone || ''),
     };
     const hasProfileChanges = (
       sanitizedInput.name !== currentProfile.name ||
@@ -227,7 +237,26 @@ const Profile = () => {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
-    if (passData.new !== passData.confirm) { setPassMessage('Passwords do not match'); return; }
+    if (!passData.current || !passData.new || !passData.confirm) {
+      setPassMessage('Current password, new password, and confirmation are required.');
+      return;
+    }
+
+    if (!STRONG_PASSWORD_REGEX.test(passData.new)) {
+      setPassMessage('Password must be at least 8 characters and include uppercase, lowercase, number, and special character.');
+      return;
+    }
+
+    if (passData.new !== passData.confirm) {
+      setPassMessage('Passwords do not match');
+      return;
+    }
+
+    if (passData.new === passData.current) {
+      setPassMessage('New password must be different from your current password.');
+      return;
+    }
+
     setPassLoading(true);
     setPassMessage('');
     try {
@@ -442,9 +471,11 @@ const Profile = () => {
                   className={`w-full bg-white text-gray-900 pl-10 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${fieldErrors.phone ? 'border-red-400' : 'border-slate-300'}`}
                   placeholder="+63 912 345 6789"
                   autoComplete="tel"
+                  maxLength={16}
                 />
               </div>
               {fieldErrors.phone && <p className="mt-1 text-xs text-red-500">{fieldErrors.phone}</p>}
+              {!fieldErrors.phone && <p className="mt-1 text-xs text-gray-500">Accepted format: 09XXXXXXXXX or +639XXXXXXXXX</p>}
             </div>
             <button
               type="submit"
@@ -480,6 +511,7 @@ const Profile = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
                 <input type={showPasswords ? 'text' : 'password'} value={passData.new} onChange={e => setPassData(p => ({ ...p, new: e.target.value }))} required
                   className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                <p className="mt-1 text-xs text-gray-500">Use at least 8 characters with uppercase, lowercase, number, and special character.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>

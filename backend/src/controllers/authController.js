@@ -40,7 +40,7 @@ const sanitizeUser = (row) => ({
   email_verified: row.email_verified || false,
 });
 
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 15;
 const EMAIL_VERIFICATION_WINDOW_MINUTES = 60;
