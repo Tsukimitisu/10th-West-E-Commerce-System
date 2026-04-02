@@ -50,6 +50,14 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
 
   const isSuperAdmin = user?.role === Role.SUPER_ADMIN;
   const hideChrome = location.pathname === '/pos' || location.pathname === '/admin' || location.pathname === '/super-admin';
+  const isAccountRoute = (
+    location.pathname === '/profile' ||
+    location.pathname === '/orders' ||
+    location.pathname.startsWith('/orders/') ||
+    location.pathname === '/my-returns' ||
+    location.pathname === '/addresses' ||
+    location.pathname === '/wishlist'
+  );
 
   // Super Admin can ONLY access /super-admin — redirect everything else
   if (isSuperAdmin && location.pathname !== '/super-admin' && location.pathname !== '/login') {
@@ -57,18 +65,18 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-900 flex flex-col">
+    <div className={`min-h-screen flex flex-col ${isAccountRoute ? 'bg-slate-50' : 'bg-zinc-900'}`}>
       {!hideChrome && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
       {!hideChrome && !isSuperAdmin && user && <EmailVerificationBanner user={user} />}
       <div className="flex-1">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={`${location.pathname}${location.search}`}
-            initial={shouldReduceMotion ? false : { opacity: 0 }}
+            initial={shouldReduceMotion || isAccountRoute ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={shouldReduceMotion ? { opacity: 1 } : { opacity: 0 }}
-            transition={{ duration: shouldReduceMotion ? 0 : 0.2, ease: 'easeOut' }}
-            className="h-full"
+            exit={shouldReduceMotion || isAccountRoute ? { opacity: 1 } : { opacity: 0 }}
+            transition={{ duration: shouldReduceMotion || isAccountRoute ? 0 : 0.2, ease: 'easeOut' }}
+            className={`h-full ${isAccountRoute ? 'bg-slate-50' : ''}`}
           >
             <Routes location={location}>
               <Route path="/" element={<Home />} />
