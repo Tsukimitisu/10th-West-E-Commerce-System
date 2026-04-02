@@ -136,6 +136,70 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return () => {};
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return () => {};
+
+    const root = document.documentElement;
+    const proximityThreshold = 72;
+    const hoverThreshold = 20;
+    let rafId = 0;
+    let currentProximity = false;
+    let currentHover = false;
+
+    const applyState = (clientX, clientY) => {
+      const nearRightEdge = (window.innerWidth - clientX) <= proximityThreshold;
+      const nearBottomEdge = (window.innerHeight - clientY) <= proximityThreshold;
+      const nearRightHover = (window.innerWidth - clientX) <= hoverThreshold;
+      const nearBottomHover = (window.innerHeight - clientY) <= hoverThreshold;
+
+      const nextProximity = nearRightEdge || nearBottomEdge;
+      const nextHover = nearRightHover || nearBottomHover;
+
+      if (nextProximity !== currentProximity) {
+        currentProximity = nextProximity;
+        root.classList.toggle('scrollbar-proximity-active', nextProximity);
+      }
+
+      if (nextHover !== currentHover) {
+        currentHover = nextHover;
+        root.classList.toggle('scrollbar-hover-active', nextHover);
+      }
+    };
+
+    const handleMouseMove = (event) => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+
+      rafId = window.requestAnimationFrame(() => {
+        applyState(event.clientX, event.clientY);
+      });
+    };
+
+    const clearState = () => {
+      currentProximity = false;
+      currentHover = false;
+      root.classList.remove('scrollbar-proximity-active', 'scrollbar-hover-active');
+
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    window.addEventListener('blur', clearState);
+    document.addEventListener('mouseleave', clearState);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('blur', clearState);
+      document.removeEventListener('mouseleave', clearState);
+      clearState();
+    };
+  }, []);
+
+  useEffect(() => {
     const disposeSecurity = initializeSecurityContext();
     return () => {
       disposeSecurity?.();

@@ -9,24 +9,64 @@ input[type="password"]::-ms-clear {
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
+:root {
+  --scrollbar-size-base: 6px;
+  --scrollbar-size-near: 10px;
+  --scrollbar-size-hover: 13px;
+  --scrollbar-size-current: var(--scrollbar-size-base);
+  --scrollbar-track-color: rgba(148, 163, 184, 0.12);
+  --scrollbar-thumb-color: rgba(100, 116, 139, 0.45);
+  --scrollbar-thumb-hover-color: rgba(71, 85, 105, 0.68);
+  --scrollbar-thumb-active-color: rgba(51, 65, 85, 0.8);
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
+html.scrollbar-proximity-active {
+  --scrollbar-size-current: var(--scrollbar-size-near);
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb-hover-color) var(--scrollbar-track-color);
 }
 
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+html.scrollbar-hover-active {
+  --scrollbar-size-current: var(--scrollbar-size-hover);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+@media (hover: hover) and (pointer: fine) {
+  *::-webkit-scrollbar {
+    width: var(--scrollbar-size-current);
+    height: var(--scrollbar-size-current);
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  html.scrollbar-proximity-active *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track-color);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-color);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    min-height: 34px;
+    transition: background-color 160ms ease, border-width 160ms ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover-color);
+    border-width: 1px;
+  }
+
+  *::-webkit-scrollbar-thumb:active {
+    background: var(--scrollbar-thumb-active-color);
+    border-width: 0;
+  }
 }
 
 /* Focus styles */
