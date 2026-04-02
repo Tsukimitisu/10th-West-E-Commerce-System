@@ -88,6 +88,10 @@ const OrderDetail = () => {
     : [];
   const addressLines = shippingAddressLines.length > 0 ? shippingAddressLines : fallbackAddressLines;
   const shippingPhone = shippingSnapshot.phone || order.shipping_phone || order.address?.phone || '';
+  const resolveOrderItemProductId = (item) => {
+    const candidate = Number(item?.productReferenceId ?? item?.productId ?? item?.product_id ?? item?.product?.id);
+    return Number.isInteger(candidate) && candidate > 0 ? candidate : null;
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -243,20 +247,40 @@ const OrderDetail = () => {
             <h3 className="font-semibold text-white text-sm">Items ({items.length})</h3>
           </div>
           <div className="divide-y divide-gray-100">
-            {items.map((item, i) => (
-              <div key={i} className="flex items-center gap-4 p-4">
-                <div className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0">
-                  {(item.image_url || item.product?.image) ? <img src={item.image_url || item.product?.image} alt={item.name || item.product?.name} className="w-full h-full object-cover" /> :
-                    <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
+            {items.map((item, i) => {
+              const productId = resolveOrderItemProductId(item);
+              const itemTitle = item.name || item.product_name || item.product?.name;
+              const itemImage = item.image_url || item.product?.image;
+              const lineTotal = Number(item.price ?? item.product?.price ?? 0) * item.quantity;
+
+              return (
+                <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-4 p-4">
+                  {productId ? (
+                    <Link to={`/products/${productId}`} className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-red-500/40 transition-all" title="View product">
+                      {itemImage ? <img src={itemImage} alt={itemTitle} className="w-full h-full object-cover" /> :
+                        <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
+                    </Link>
+                  ) : (
+                    <div className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0">
+                      {itemImage ? <img src={itemImage} alt={itemTitle} className="w-full h-full object-cover" /> :
+                        <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    {productId ? (
+                      <Link to={`/products/${productId}`} className="text-sm font-medium text-white truncate hover:text-red-500 transition-colors inline-block" title="View product">
+                        {itemTitle}
+                      </Link>
+                    ) : (
+                      <p className="text-sm font-medium text-white truncate">{itemTitle}</p>
+                    )}
+                    {(item.sku || item.product?.sku) && <p className="text-xs text-gray-400">SKU: {item.sku || item.product?.sku}</p>}
+                    <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
+                  </div>
+                  <p className="text-sm font-semibold text-white">₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{item.name || item.product_name || item.product?.name}</p>
-                  {(item.sku || item.product?.sku) && <p className="text-xs text-gray-400">SKU: {item.sku || item.product?.sku}</p>}
-                  <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
-                </div>
-                <p className="text-sm font-semibold text-white">₱{(Number(item.price ?? item.product?.price ?? 0) * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

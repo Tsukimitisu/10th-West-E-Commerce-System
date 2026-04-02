@@ -10,6 +10,11 @@ const OrderConfirmation = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const resolveOrderItemProductId = (item) => {
+    const candidate = Number(item?.productReferenceId ?? item?.productId ?? item?.product_id ?? item?.product?.id);
+    return Number.isInteger(candidate) && candidate > 0 ? candidate : null;
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -61,19 +66,39 @@ const OrderConfirmation = () => {
           <div className="p-6">
             <h3 className="font-semibold text-sm text-white mb-3">Order Summary</h3>
             <div className="space-y-3">
-              {(order.items || []).map((item, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700">
-                    {item.image_url ? <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center"><Package size={16} className="text-gray-400" /></div>}
+              {(order.items || []).map((item, i) => {
+                const productId = resolveOrderItemProductId(item);
+                const itemTitle = item.name || item.product_name;
+                const itemImage = item.image_url || item.product?.image;
+                const lineTotal = Number(item.price ?? item.product?.price ?? 0) * item.quantity;
+
+                return (
+                  <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-3">
+                    {productId ? (
+                      <Link to={`/products/${productId}`} className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700 hover:ring-2 hover:ring-red-500/40 transition-all" title="View product">
+                        {itemImage ? <img src={itemImage} alt={itemTitle} className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center"><Package size={16} className="text-gray-400" /></div>}
+                      </Link>
+                    ) : (
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700">
+                        {itemImage ? <img src={itemImage} alt={itemTitle} className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center"><Package size={16} className="text-gray-400" /></div>}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      {productId ? (
+                        <Link to={`/products/${productId}`} className="text-sm text-white truncate hover:text-red-500 transition-colors inline-block" title="View product">
+                          {itemTitle}
+                        </Link>
+                      ) : (
+                        <p className="text-sm text-white truncate">{itemTitle}</p>
+                      )}
+                      <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
+                    </div>
+                    <p className="text-sm font-medium text-white">₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white truncate">{item.name || item.product_name}</p>
-                    <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
-                  </div>
-                  <p className="text-sm font-medium text-white">₱{(Number(item.price) * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="mt-4 pt-4 border-t border-gray-700 flex justify-between font-semibold text-white">
               <span>Total</span>

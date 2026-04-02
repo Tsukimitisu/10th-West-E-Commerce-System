@@ -1925,7 +1925,10 @@ const deleteCategoryMock = async (id) => {
 // ==================== ORDERS ====================
 
 const mapOrderItemToCartItem = (item) => {
-  const productId = item.product_id ?? item.productId ?? item.product?.id ?? 0;
+  const rawProductReference = item.product_id ?? item.productId ?? item.product?.id ?? null;
+  const parsedProductId = Number(rawProductReference);
+  const hasProductReference = Number.isInteger(parsedProductId) && parsedProductId > 0;
+  const productId = hasProductReference ? parsedProductId : 0;
   const product = {
     id: productId,
     partNumber: item.product_part_number ?? item.product?.partNumber ?? item.product?.part_number ?? '',
@@ -1946,6 +1949,7 @@ const mapOrderItemToCartItem = (item) => {
 
   return {
     productId,
+    productReferenceId: hasProductReference ? productId : null,
     product,
     quantity: item.quantity ?? item.qty ?? 1,
   };
