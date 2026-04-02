@@ -992,9 +992,22 @@ export const CartProvider = ({ children }) => {
     const selectedItems = items.filter(i => selectedItemIds.includes(i.productId));
     const selectedItemCount = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
 
+    const getEffectiveItemUnitPrice = (item) => {
+      const regularPrice = Number(item?.product?.price);
+      const salePrice = Number(item?.product?.sale_price);
+      const isOnSale = Boolean(item?.product?.is_on_sale);
+
+      if (isOnSale && Number.isFinite(salePrice)) {
+        return salePrice;
+      }
+
+      return Number.isFinite(regularPrice) ? regularPrice : 0;
+    };
+
     const subtotal = selectedItems.reduce((sum, item) => {
-        const price = item.product.is_on_sale ? item.product.sale_price : item.product.price;
-        return sum + (price * item.quantity);
+      const quantity = Number(item?.quantity || 0);
+      const unitPrice = getEffectiveItemUnitPrice(item);
+      return sum + (unitPrice * quantity);
     }, 0);
 
   let discountAmount = 0;
