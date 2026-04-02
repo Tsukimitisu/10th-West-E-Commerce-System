@@ -185,16 +185,18 @@ export const getProducts = async (req, res) => {
 export const getTopSellers = async (req, res) => {
   try {
     const { days, limit = 8 } = req.query;
-    
-    let dateFilter = '';
-    const params = [];
-    params.push(parseInt(limit));
-    
+
+    const parsedLimit = Number.parseInt(String(limit), 10);
+    const safeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 8;
+
+    const params = [safeLimit];
+    let whereClause = `WHERE o.status = 'completed'`;
+
     if (days && days !== 'all') {
-      const parsedDays = parseInt(days);
-      if (!isNaN(parsedDays) && parsedDays > 0) {
+      const parsedDays = Number.parseInt(String(days), 10);
+      if (Number.isFinite(parsedDays) && parsedDays > 0) {
         params.push(parsedDays);
-        dateFilter = `AND o.created_at >= NOW() - INTERVAL '${parsedDays} days'`;
+        whereClause += ` AND o.created_at >= NOW() - ($${params.length}::int * INTERVAL '1 day')`;
       }
     }
 
@@ -216,11 +218,12 @@ export const getTopSellers = async (req, res) => {
           WHERE r.product_id = p.id
             AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
         ), 0) as review_count,
-        COALESCE(SUM(oi.quantity), 0) as total_sold
-      FROM products p
-      LEFT JOIN order_items oi ON oi.product_id = p.id
-      LEFT JOIN orders o ON oi.order_id = o.id AND o.status IN ('paid', 'completed') ${dateFilter}
+        SUM(oi.quantity) as total_sold
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN products p ON p.id = oi.product_id
       LEFT JOIN categories c ON p.category_id = c.id
+      ${whereClause}
       GROUP BY p.id, c.name
       ORDER BY total_sold DESC, p.id DESC
       LIMIT $1

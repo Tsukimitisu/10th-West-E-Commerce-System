@@ -1336,16 +1336,53 @@ export const getTopSellers = async (days = null) => {
   }
 
   if (USE_SUPABASE) {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*, categories(name)')
-      .order('id', { ascending: false })
-      .limit(8);
-      
+    let query = supabase
+      .from('orders')
+      .select('id, created_at, order_items(quantity, product_id, products(id, name, part_number, image, description, price, sale_price, is_on_sale, stock_quantity, rating, brand, created_at, categories(name)))')
+      .eq('status', 'completed');
+
+    if (days && days !== 'all') {
+      const parsedDays = Number.parseInt(String(days), 10);
+      if (Number.isFinite(parsedDays) && parsedDays > 0) {
+        const since = new Date();
+        since.setDate(since.getDate() - parsedDays);
+        query = query.gte('created_at', since.toISOString());
+      }
+    }
+
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
-    return applyReviewStatsToProducts((data || []).map((p) => ({
+
+    const topSellerMap = new Map();
+    (data || []).forEach((order) => {
+      (order.order_items || []).forEach((item) => {
+        const product = item.products;
+        const productId = Number(item.product_id || product?.id);
+        if (!product || !productId) return;
+
+        const existing = topSellerMap.get(productId) || {
+          ...product,
+          category_name: product.categories?.name || null,
+          total_sold: 0,
+        };
+
+        existing.total_sold += Number(item.quantity || 0);
+        topSellerMap.set(productId, existing);
+      });
+    });
+
+    const topProducts = Array.from(topSellerMap.values())
+      .sort((a, b) => {
+        const soldDiff = Number(b.total_sold || 0) - Number(a.total_sold || 0);
+        if (soldDiff !== 0) return soldDiff;
+        return Number(b.id || 0) - Number(a.id || 0);
+      })
+      .slice(0, 8);
+
+    return applyReviewStatsToProducts(topProducts.map((p) => ({
       ...mapProductFromSupabase(p),
-      category_name: p.categories?.name,
+      category_name: p.category_name,
+      total_sold: Number(p.total_sold || 0),
     })));
   }
 
