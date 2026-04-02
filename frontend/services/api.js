@@ -1224,6 +1224,109 @@ const applyReviewStatsToProducts = async (products) => {
   });
 };
 
+const tokenizeProductSearchTerms = (value) => {
+  const normalized = String(value || '')
+    .toLowerCase()
+    .replace(/[#,/|]+/g, ' ')
+    .replace(/[^a-z0-9\s-]+/g, ' ')
+    .trim();
+
+  if (!normalized) return [];
+
+  const seen = new Set();
+  const terms = [];
+  normalized.split(/\s+/).forEach((term) => {
+    if (!term || term.length < 2 || seen.has(term)) return;
+    seen.add(term);
+    terms.push(term);
+  });
+
+  return terms.slice(0, 8);
+};
+
+const buildProductSearchableText = (product) => {
+  const tagText = Array.isArray(product?.tags)
+    ? product.tags.join(' ')
+    : String(product?.tags || '');
+  const keywordText = Array.isArray(product?.keywords)
+    ? product.keywords.join(' ')
+    : String(product?.keywords || '');
+
+  return [
+    product?.name,
+    product?.description,
+    product?.brand,
+    product?.sku,
+    product?.part_number,
+    product?.partNumber,
+    product?.category_name,
+    product?.categoryName,
+    tagText,
+    keywordText,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+};
+
+const normalizeSearchPhrase = (value) => (
+  String(value || '')
+    .toLowerCase()
+    .replace(/[#,/|]+/g, ' ')
+    .replace(/[^a-z0-9\s-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+);
+
+const getProductSearchScore = (product, searchTerms, searchPhrase) => {
+  const name = String(product?.name || '').toLowerCase();
+  const partNumber = String(product?.part_number || product?.partNumber || '').toLowerCase();
+  const brand = String(product?.brand || '').toLowerCase();
+  const sku = String(product?.sku || '').toLowerCase();
+  const category = String(product?.category_name || product?.categoryName || '').toLowerCase();
+  const description = String(product?.description || '').toLowerCase();
+  const tags = Array.isArray(product?.tags)
+    ? product.tags.join(' ').toLowerCase()
+    : String(product?.tags || '').toLowerCase();
+  const keywords = Array.isArray(product?.keywords)
+    ? product.keywords.join(' ').toLowerCase()
+    : String(product?.keywords || '').toLowerCase();
+
+  let score = 0;
+
+  if (searchPhrase) {
+    if (name === searchPhrase) score += 250;
+    if (name.startsWith(searchPhrase)) score += 170;
+    if (name.includes(searchPhrase)) score += 120;
+    if (partNumber === searchPhrase) score += 180;
+    if (partNumber.includes(searchPhrase)) score += 110;
+    if (tags.includes(searchPhrase) || keywords.includes(searchPhrase)) score += 120;
+  }
+
+  searchTerms.forEach((term) => {
+    if (name === term) score += 120;
+    if (name.startsWith(term)) score += 60;
+    if (name.includes(term)) score += 36;
+    if (partNumber.startsWith(term)) score += 32;
+    if (partNumber.includes(term)) score += 24;
+    if (sku.includes(term)) score += 20;
+    if (brand.includes(term)) score += 16;
+    if (category.includes(term)) score += 14;
+    if (tags.includes(term) || keywords.includes(term)) score += 40;
+    if (description.includes(term)) score += 8;
+  });
+
+  return score;
+};
+
+const parseProductSearchLimit = (value, fallback = null, max = 80) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (parsed < 1) return 1;
+  return Math.min(parsed, max);
+};
+
 // ==================== PRODUCTS ====================
 
 export const getTopSellers = async (days = null) => {
@@ -1265,20 +1368,27 @@ export const getProducts = async (params = {}) => {
     return getProductsMock(params);
   }
 
+  const searchTerms = tokenizeProductSearchTerms(params.search);
+  const searchPhrase = normalizeSearchPhrase(params.search);
+  const resultLimit = parseProductSearchLimit(params.limit, null, 80);
+
   if (USE_SUPABASE) {
     let query = supabase
       .from('products')
       .select('*, categories(name)')
       .order('id', { ascending: false });
       
-    if (params.search) {
-      const words = params.search.trim().split(/\s+/).filter(w => w.length > 0);
-      words.forEach(word => {
+    if (searchTerms.length > 0) {
+      searchTerms.forEach((term) => {
         // We use inner quotes to prevent any issues with comma, but simple ilike allows commas
         // .or() concatenates multiple conditions with OR. 
         // Multiple .or() chains essentially operate as ANDs between the groups.
-        query = query.or(`name.ilike.%${word}%,part_number.ilike.%${word}%,description.ilike.%${word}%,brand.ilike.%${word}%,sku.ilike.%${word}%`);
+        query = query.or(`name.ilike.%${term}%,part_number.ilike.%${term}%,description.ilike.%${term}%,brand.ilike.%${term}%,sku.ilike.%${term}%`);
       });
+    }
+
+    if (resultLimit) {
+      query = query.limit(resultLimit);
     }
 
     const { data, error } = await query;
@@ -1290,14 +1400,23 @@ export const getProducts = async (params = {}) => {
       category_name: p.categories?.name,
     })));
 
-    // Client-side relevance sorting for Supabase search results to match Express backend quality
-    if (params.search && products.length > 0) {
-      const exactSearch = params.search.trim().toLowerCase();
-      products.sort((a, b) => {
-        let scoreA = (a.name?.toLowerCase().includes(exactSearch) ? 15 : 0) + (a.part_number?.toLowerCase() === exactSearch ? 20 : 0);
-        let scoreB = (b.name?.toLowerCase().includes(exactSearch) ? 15 : 0) + (b.part_number?.toLowerCase() === exactSearch ? 20 : 0);
-        return scoreB - scoreA;
+    // Client-side relevance filtering/sorting for Supabase mode to match backend behavior.
+    if (searchTerms.length > 0 && products.length > 0) {
+      products = products.filter((product) => {
+        const searchable = buildProductSearchableText(product);
+        return searchTerms.every((term) => searchable.includes(term));
       });
+
+      products.sort((a, b) => {
+        const scoreA = getProductSearchScore(a, searchTerms, searchPhrase);
+        const scoreB = getProductSearchScore(b, searchTerms, searchPhrase);
+        if (scoreA !== scoreB) return scoreB - scoreA;
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      });
+    }
+
+    if (resultLimit) {
+      products = products.slice(0, resultLimit);
     }
 
     return products;
@@ -1305,6 +1424,8 @@ export const getProducts = async (params = {}) => {
 
   const queryParams = new URLSearchParams();
   if (params.search) queryParams.append('search', params.search);
+  if (params.category) queryParams.append('category', params.category);
+  if (resultLimit) queryParams.append('limit', String(resultLimit));
   const qString = queryParams.toString() ? `?${queryParams.toString()}` : '';
 
   const products = await authenticatedFetch(`${API_URL}/products${qString}`);
@@ -1674,20 +1795,29 @@ const registerMock = async (name, email, password) => {
 const getProductsMock = async (params = {}) => {
   await new Promise((resolve) => setTimeout(resolve, 300));
   let result = [...MOCK_PRODUCTS];
+  const searchTerms = tokenizeProductSearchTerms(params.search);
+  const searchPhrase = normalizeSearchPhrase(params.search);
+  const resultLimit = parseProductSearchLimit(params.limit, null, 80);
 
-  if (params.search) {
-    const words = params.search.toLowerCase().trim().split(/\s+/).filter(w => w.length > 0);
+  if (searchTerms.length > 0) {
     result = result.filter(p => {
-      return words.every(word => {
-        return (
-          p.name?.toLowerCase().includes(word) ||
-          p.description?.toLowerCase().includes(word) ||
-          p.brand?.toLowerCase().includes(word) ||
-          p.part_number?.toLowerCase().includes(word) ||
-          p.sku?.toLowerCase().includes(word)
-        );
-      });
+      const searchable = buildProductSearchableText(p);
+      return searchTerms.every((term) => searchable.includes(term));
     });
+
+    result.sort((a, b) => {
+      const scoreA = getProductSearchScore(a, searchTerms, searchPhrase);
+      const scoreB = getProductSearchScore(b, searchTerms, searchPhrase);
+      return scoreB - scoreA;
+    });
+  }
+
+  if (params.category) {
+    result = result.filter((p) => String(p.category_id) === String(params.category));
+  }
+
+  if (resultLimit) {
+    result = result.slice(0, resultLimit);
   }
 
   return result;

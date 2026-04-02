@@ -29,10 +29,50 @@ const toNullableNumber = (value) => {
   return Number.isFinite(num) ? num : null;
 };
 
+const tokenizeSearchTerms = (value) => {
+  const normalized = String(value || '')
+    .toLowerCase()
+    .replace(/[#,/|]+/g, ' ')
+    .replace(/[^a-z0-9\s-]+/g, ' ')
+    .trim();
+
+  if (!normalized) return [];
+
+  const seen = new Set();
+  const terms = [];
+  normalized.split(/\s+/).forEach((term) => {
+    if (!term || term.length < 2 || seen.has(term)) return;
+    seen.add(term);
+    terms.push(term);
+  });
+
+  return terms.slice(0, 8);
+};
+
+const normalizeSearchPhrase = (value) => (
+  String(value || '')
+    .toLowerCase()
+    .replace(/[#,/|]+/g, ' ')
+    .replace(/[^a-z0-9\s-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+);
+
+const parseResultLimit = (value, fallback = null, max = 80) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (parsed < 1) return 1;
+  return Math.min(parsed, max);
+};
+
 // Get all products
 export const getProducts = async (req, res) => {
   try {
-    const { category, search } = req.query;
+    const { category, search, limit: limitParam } = req.query;
+    const searchTerms = tokenizeSearchTerms(search);
+    const searchPhrase = normalizeSearchPhrase(search);
+    const resultLimit = parseResultLimit(limitParam, null, 80);
     
     let selectClause = `
       SELECT p.*, c.name as category_name,
@@ -66,42 +106,60 @@ export const getProducts = async (req, res) => {
       whereClause += ` AND p.category_id = $${params.length}`;
     }
 
-    // Search by name, description, brand, sku, part number or category
-    if (search) {
-      const words = search.trim().split(/\s+/).filter(w => w.length > 0);
+    // Search by name and keyword/tag-style terms (e.g. "helmet, #modular")
+    if (searchTerms.length > 0) {
       let relevanceScores = [];
 
-      words.forEach(word => {
-        params.push(`%${word}%`);
-        const idx = params.length;
+      searchTerms.forEach((term) => {
+        params.push(`%${term}%`);
+        const containsIdx = params.length;
+        params.push(`${term}%`);
+        const prefixIdx = params.length;
+        params.push(term);
+        const exactIdx = params.length;
         
         whereClause += ` AND (
-          p.name ILIKE $${idx} OR 
-          p.part_number ILIKE $${idx} OR 
-          p.description ILIKE $${idx} OR 
-          p.brand ILIKE $${idx} OR 
-          p.sku ILIKE $${idx} OR 
-          c.name ILIKE $${idx}
+          p.name ILIKE $${containsIdx} OR 
+          p.part_number ILIKE $${containsIdx} OR 
+          p.description ILIKE $${containsIdx} OR 
+          p.brand ILIKE $${containsIdx} OR 
+          p.sku ILIKE $${containsIdx} OR 
+          c.name ILIKE $${containsIdx}
         )`;
 
         relevanceScores.push(`
-          (CASE WHEN p.name ILIKE $${idx} THEN 10 ELSE 0 END) +
-          (CASE WHEN p.part_number ILIKE $${idx} THEN 8 ELSE 0 END) +
-          (CASE WHEN p.brand ILIKE $${idx} THEN 5 ELSE 0 END) +
-          (CASE WHEN c.name ILIKE $${idx} THEN 3 ELSE 0 END) +
-          (CASE WHEN p.description ILIKE $${idx} THEN 1 ELSE 0 END)
+          (CASE WHEN LOWER(p.name) = $${exactIdx} THEN 160 ELSE 0 END) +
+          (CASE WHEN LOWER(p.name) LIKE $${prefixIdx} THEN 65 ELSE 0 END) +
+          (CASE WHEN p.name ILIKE $${containsIdx} THEN 35 ELSE 0 END) +
+          (CASE WHEN p.part_number ILIKE $${containsIdx} THEN 28 ELSE 0 END) +
+          (CASE WHEN p.sku ILIKE $${containsIdx} THEN 22 ELSE 0 END) +
+          (CASE WHEN p.brand ILIKE $${containsIdx} THEN 16 ELSE 0 END) +
+          (CASE WHEN c.name ILIKE $${containsIdx} THEN 12 ELSE 0 END) +
+          (CASE WHEN p.description ILIKE $${containsIdx} THEN 7 ELSE 0 END)
         `);
       });
 
-      // Exact match boost
-      params.push(`%${search.trim()}%`);
-      const exactIdx = params.length;
-      relevanceScores.push(`(CASE WHEN p.name ILIKE $${exactIdx} THEN 15 ELSE 0 END)`);
+      if (searchPhrase) {
+        params.push(`%${searchPhrase}%`);
+        const phraseContainsIdx = params.length;
+        params.push(`${searchPhrase}%`);
+        const phrasePrefixIdx = params.length;
+        relevanceScores.push(`
+          (CASE WHEN LOWER(p.name) LIKE $${phrasePrefixIdx} THEN 120 ELSE 0 END) +
+          (CASE WHEN LOWER(p.name) LIKE $${phraseContainsIdx} THEN 70 ELSE 0 END) +
+          (CASE WHEN LOWER(p.description) LIKE $${phraseContainsIdx} THEN 24 ELSE 0 END)
+        `);
+      }
 
       selectClause += `, (${relevanceScores.join(' + ')}) as relevance_score`;
       orderByClause = 'ORDER BY relevance_score DESC, p.id DESC';
     } else {
       orderByClause = 'ORDER BY p.id DESC';
+    }
+
+    if (resultLimit) {
+      params.push(resultLimit);
+      orderByClause += ` LIMIT $${params.length}`;
     }
 
     const query = `${selectClause} ${fromClause} ${whereClause} ${orderByClause}`;

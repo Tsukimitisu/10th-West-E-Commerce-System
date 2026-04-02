@@ -32,6 +32,8 @@ const Navbar = ({ user, onLogout }) => {
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
   const moreMenuRef = useRef(null);
+  const searchRequestRef = useRef(0);
+  const searchCacheRef = useRef(new Map());
 
   const formatNotificationTime = (notification) => (
     notification.created_at || notification.published_at
@@ -142,26 +144,54 @@ const Navbar = ({ user, onLogout }) => {
   }, []);
 
   useEffect(() => {
-    if (!globalSearch || globalSearch.trim().length < 2) {
+    const query = String(globalSearch || '').trim();
+
+    if (!query || query.length < 2) {
       setSearchResults([]);
       setShowDropdown(false);
+      setSearchError(null);
+      setIsSearching(false);
       return;
     }
+
+    const normalizedQuery = query.toLowerCase();
+    const cachedResults = searchCacheRef.current.get(normalizedQuery);
+    if (cachedResults) {
+      setSearchResults(cachedResults);
+      setSearchError(null);
+      setShowDropdown(true);
+      setIsSearching(false);
+      return;
+    }
+
+    const requestId = ++searchRequestRef.current;
 
     const delayDebounceFn = setTimeout(async () => {
       setIsSearching(true);
       setSearchError(null);
       try {
-        const results = await getProducts({ search: globalSearch.trim() });
-        setSearchResults(results.slice(0, 5));
+        const results = await getProducts({ search: query, limit: 8 });
+        if (requestId !== searchRequestRef.current) return;
+
+        const nextResults = (results || []).slice(0, 8);
+        searchCacheRef.current.set(normalizedQuery, nextResults);
+        if (searchCacheRef.current.size > 40) {
+          const oldestKey = searchCacheRef.current.keys().next().value;
+          if (oldestKey) searchCacheRef.current.delete(oldestKey);
+        }
+
+        setSearchResults(nextResults);
         setShowDropdown(true);
       } catch (err) {
+        if (requestId !== searchRequestRef.current) return;
         console.error("Search error:", err);
         setSearchError("Failed to fetch products");
       } finally {
-        setIsSearching(false);
+        if (requestId === searchRequestRef.current) {
+          setIsSearching(false);
+        }
       }
-    }, 400);
+    }, 220);
 
     return () => clearTimeout(delayDebounceFn);
   }, [globalSearch]);
