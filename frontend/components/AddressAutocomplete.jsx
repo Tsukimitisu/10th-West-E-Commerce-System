@@ -131,7 +131,7 @@ const AddressAutocomplete = ({
         }}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-gray-50 text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500"
         autoComplete="off"
         role="combobox"
         aria-expanded={open}
@@ -139,7 +139,7 @@ const AddressAutocomplete = ({
         aria-haspopup="listbox"
       />
       {loading && (
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">Loading...</div>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-700">Loading...</div>
       )}
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
       {open && suggestions.length > 0 && (
@@ -155,14 +155,14 @@ const AddressAutocomplete = ({
                 role="option"
               >
                 <div className="font-medium truncate">{label.primary}</div>
-                {label.secondary && <div className="text-xs text-gray-500 truncate">{label.secondary}</div>}
+                {label.secondary && <div className="text-xs text-gray-700 truncate">{label.secondary}</div>}
               </button>
             );
           })}
         </div>
       )}
       {open && !loading && !error && suggestions.length === 0 && query.trim().length >= 3 && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg text-sm text-gray-500 px-3 py-2">
+        <div className="absolute z-20 mt-1 w-full bg-white border border-slate-300 rounded-lg shadow-lg text-sm text-gray-700 px-3 py-2">
           No suggestions found. Try refining your search.
         </div>
       )}

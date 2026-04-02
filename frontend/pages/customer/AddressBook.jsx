@@ -6,24 +6,74 @@ import AddressDropdowns from '../../components/AddressDropdowns';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
 
+const buildAddressForm = (overrides = {}) => ({
+  label: 'Home',
+  name: '',
+  phone: '',
+  street: '',
+  barangay: '',
+  city: '',
+  state: '',
+  zip: '',
+  country: 'Philippines',
+  is_default: false,
+  lat: null,
+  lng: null,
+  ...overrides,
+});
+
 const AddressBook = () => {
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false, lat: null, lng: null });
+  const [form, setForm] = useState(buildAddressForm());
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [saveError, setSaveError] = useState('');
   const [zipError, setZipError] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const phoneInputRef = useRef(null);
 
-  const resetForm = () => { setForm({ label: 'Home', name: '', phone: '', street: '', barangay: '', city: '', state: '', zip: '', country: 'Philippines', is_default: false, lat: null, lng: null }); setEditing(null); setShowForm(false); setSaveError(''); setZipError(''); setPhoneError(''); };
   const digitsOnly = (value) => value.replace(/\D/g, '');
   const formatPhone = (value) => value.replace(/[^\d+]/g, '');
   const validatePhone = (phone) => /^(09\d{9}|\+639\d{9})$/.test(phone);
   const validateZip = (zip) => /^\d{4}$/.test(zip);
   const normalizeText = (value) => String(value || '').trim();
+
+  const getAccountContactDefaults = () => {
+    try {
+      const rawUser = localStorage.getItem('shopCoreUser');
+      const user = rawUser ? JSON.parse(rawUser) : null;
+      return {
+        name: normalizeText(user?.name || ''),
+        phone: formatPhone(user?.phone || ''),
+      };
+    } catch {
+      return { name: '', phone: '' };
+    }
+  };
+
+  const resetForm = () => {
+    setForm(buildAddressForm());
+    setEditing(null);
+    setShowForm(false);
+    setSaveError('');
+    setZipError('');
+    setPhoneError('');
+  };
+
+  const openCreateForm = () => {
+    const defaults = getAccountContactDefaults();
+    setForm(buildAddressForm({
+      name: defaults.name,
+      phone: defaults.phone,
+    }));
+    setEditing(null);
+    setSaveError('');
+    setZipError('');
+    setPhoneError('');
+    setShowForm(true);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -44,10 +94,14 @@ const AddressBook = () => {
     setPhoneError('');
     setZipError('');
 
+    const accountDefaults = getAccountContactDefaults();
+    const resolvedName = normalizeText(form.name) || accountDefaults.name;
+    const resolvedPhone = formatPhone(normalizeText(form.phone) || accountDefaults.phone);
+
     const trimmedForm = {
       ...form,
-      name: normalizeText(form.name),
-      phone: normalizeText(form.phone),
+      name: resolvedName,
+      phone: resolvedPhone,
       street: normalizeText(form.street),
       barangay: normalizeText(form.barangay),
       city: normalizeText(form.city),
@@ -55,10 +109,16 @@ const AddressBook = () => {
       zip: digitsOnly(form.zip),
     };
 
-    if (!trimmedForm.name || !trimmedForm.street || !trimmedForm.city || !trimmedForm.state || !trimmedForm.zip || !trimmedForm.phone) {
-      setSaveError('Please fill in all required fields (Name, Phone, Street, City, Province, Zip).');
+    if (!trimmedForm.street || !trimmedForm.city || !trimmedForm.state || !trimmedForm.zip) {
+      setSaveError('Please fill in all required fields (Street, City, Province, ZIP).');
       return;
     }
+
+    if (!trimmedForm.name || !trimmedForm.phone) {
+      setSaveError('Name and phone are missing. They can be auto-filled from your account, or you can enter them manually.');
+      return;
+    }
+
     if (trimmedForm.country && trimmedForm.country !== 'Philippines') {
       setSaveError('Only Philippine addresses are allowed.');
       return;
@@ -117,10 +177,11 @@ const AddressBook = () => {
   };
 
   const startEdit = (addr) => {
+    const defaults = getAccountContactDefaults();
     setForm({
       label: addr.label || 'Home',
-      name: addr.name || addr.recipient_name || '',
-      phone: addr.phone || '',
+      name: addr.name || addr.recipient_name || defaults.name,
+      phone: addr.phone || defaults.phone,
       street: addr.street || '',
       barangay: addr.barangay || '',
       city: addr.city || '',
@@ -151,7 +212,7 @@ const AddressBook = () => {
         <div className="flex items-center justify-between">
           <h2 className="font-display font-semibold text-lg text-gray-900 flex items-center gap-2"><MapPin size={20} className="text-red-500" /> Address Book</h2>
           {!showForm && (
-            <button onClick={() => { resetForm(); setShowForm(true); }}
+            <button onClick={openCreateForm}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-all duration-300 ease-in-out flex items-center gap-1.5">
               <Plus size={16} /> Add Address
             </button>
@@ -175,14 +236,16 @@ const AddressBook = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                  <input type="text" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} required
+                  <input type="text" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))}
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <p className="mt-1 text-xs text-gray-600">Auto-filled from your account. You can edit it for this address.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input type="tel" value={form.phone} ref={phoneInputRef} onChange={e => setForm(f => ({...f, phone: formatPhone(e.target.value)}))} required
+                  <input type="tel" value={form.phone} ref={phoneInputRef} onChange={e => setForm(f => ({...f, phone: formatPhone(e.target.value)}))}
                     className={`w-full px-3 py-2.5 border rounded-lg text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 ${phoneError ? 'border-red-300 ring-1 ring-red-300 bg-red-50' : 'border-slate-300'}`} />
                   {phoneError && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertTriangle size={12} /> {phoneError}</p>}
+                  {!phoneError && <p className="mt-1 text-xs text-gray-600">Auto-filled from your account. Accepted: 09XXXXXXXXX or +639XXXXXXXXX.</p>}
                 </div>
               </div>
               <div className="space-y-4">
@@ -287,7 +350,7 @@ const AddressBook = () => {
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-sm">
             <MapPin size={48} className="mx-auto text-gray-300 mb-3" />
             <h3 className="font-semibold text-gray-900 mb-1">No saved addresses</h3>
-            <p className="text-sm text-gray-500">Add an address to speed up your checkout.</p>
+            <p className="text-sm text-gray-700">Add an address to speed up your checkout.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -299,8 +362,8 @@ const AddressBook = () => {
                   </span>
                 )}
                 <div className="flex items-center gap-2 mb-2">
-                  {addr.label === 'Home' ? <Home size={14} className="text-gray-500" /> : addr.label === 'Office' ? <Building2 size={14} className="text-gray-500" /> : <MapPin size={14} className="text-gray-500" />}
-                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">{addr.label || 'Address'}</span>
+                  {addr.label === 'Home' ? <Home size={14} className="text-gray-700" /> : addr.label === 'Office' ? <Building2 size={14} className="text-gray-700" /> : <MapPin size={14} className="text-gray-700" />}
+                  <span className="text-xs font-medium text-gray-700 uppercase tracking-wider">{addr.label || 'Address'}</span>
                 </div>
                 <p className="font-medium text-gray-900 text-sm">{addr.name || addr.recipient_name}</p>
                 <p className="text-sm text-gray-700 mt-1 leading-relaxed">
@@ -309,8 +372,8 @@ const AddressBook = () => {
                   {addr.phone}
                 </p>
                 <div className="flex gap-2 mt-3 pt-3 border-t border-slate-200">
-                  <button onClick={() => startEdit(addr)} className="text-sm text-gray-500 hover:text-red-600 flex items-center gap-1 transition-all duration-300 ease-in-out"><Edit3 size={13} /> Edit</button>
-                  <button onClick={() => handleDelete(addr)} className="text-sm text-gray-500 hover:text-red-600 flex items-center gap-1 transition-all duration-300 ease-in-out"><Trash2 size={13} /> Delete</button>
+                  <button onClick={() => startEdit(addr)} className="text-sm text-gray-700 hover:text-red-700 flex items-center gap-1 transition-all duration-300 ease-in-out"><Edit3 size={13} /> Edit</button>
+                  <button onClick={() => handleDelete(addr)} className="text-sm text-gray-700 hover:text-red-700 flex items-center gap-1 transition-all duration-300 ease-in-out"><Trash2 size={13} /> Delete</button>
                 </div>
               </div>
             ))}
@@ -327,8 +390,8 @@ const AddressBook = () => {
               </div>
               <p className="text-sm text-gray-700 mb-4">Are you sure you want to delete this address?</p>
               <div className="bg-gray-50 rounded-lg p-3 border border-slate-200 mb-4">
-                <p className="text-sm font-semibold text-gray-900">{deleteTarget.name}</p>
-                <p className="text-xs text-gray-500">{deleteTarget.street}, {deleteTarget.city}</p>
+                <p className="text-sm font-semibold text-gray-900">{deleteTarget.name || deleteTarget.recipient_name}</p>
+                <p className="text-xs text-gray-700">{deleteTarget.street}, {deleteTarget.city}</p>
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
