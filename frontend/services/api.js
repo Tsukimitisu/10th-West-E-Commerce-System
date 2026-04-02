@@ -3247,8 +3247,77 @@ export const deleteBanner = async (id) => {
 
 // ==================== ANNOUNCEMENTS ====================
 
+const ANNOUNCEMENTS_SETTINGS_CATEGORY = 'home';
+const ANNOUNCEMENTS_SETTINGS_KEY = 'announcements_enabled';
+
+const parseBooleanSetting = (value, fallback = true) => {
+  if (typeof value === 'boolean') return value;
+
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+
+  return fallback;
+};
+
+export const getAnnouncementToggle = async () => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('category', ANNOUNCEMENTS_SETTINGS_CATEGORY)
+      .eq('key', ANNOUNCEMENTS_SETTINGS_KEY)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('Failed to load announcement toggle from system settings:', error.message);
+      return true;
+    }
+
+    return parseBooleanSetting(data?.value, true);
+  }
+
+  try {
+    const response = await authenticatedFetch(`${API_URL}/announcements/toggle`);
+    return parseBooleanSetting(response?.enabled, true);
+  } catch {
+    // Fail open for management views if endpoint is temporarily unreachable.
+    return true;
+  }
+};
+
+export const updateAnnouncementToggle = async (enabled) => {
+  const normalizedEnabled = Boolean(enabled);
+
+  if (USE_SUPABASE) {
+    const { error } = await supabase
+      .from('system_settings')
+      .upsert(
+        {
+          category: ANNOUNCEMENTS_SETTINGS_CATEGORY,
+          key: ANNOUNCEMENTS_SETTINGS_KEY,
+          value: String(normalizedEnabled),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'category,key' },
+      );
+
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('announcement.toggle_visibility', 'system_settings', null, { enabled: normalizedEnabled });
+    return { enabled: normalizedEnabled };
+  }
+
+  return authenticatedFetch(`${API_URL}/announcements/toggle`, {
+    method: 'PUT',
+    body: JSON.stringify({ enabled: normalizedEnabled }),
+  });
+};
+
 export const getAnnouncements = async () => {
   if (USE_SUPABASE) {
+    const enabled = await getAnnouncementToggle();
+    if (!enabled) return [];
+
     const { data } = await supabase.from('announcements').select('*').eq('is_published', true).order('published_at', { ascending: false });
     return data || [];
   }

@@ -1147,7 +1147,7 @@ FROM (VALUES
 ) AS v(question, answer, is_active, display_order)
 WHERE NOT EXISTS (SELECT 1 FROM faqs f WHERE f.question = v.question);
 
--- System Settings (36 config values)
+-- System Settings (37 config values)
 INSERT INTO system_settings (category, key, value) VALUES
   ('security', 'max_login_attempts',         '5'),
   ('security', 'lockout_duration_minutes',    '15'),
@@ -1158,6 +1158,7 @@ INSERT INTO system_settings (category, key, value) VALUES
   ('security', 'password_require_special',    'true'),
   ('security', 'session_timeout_minutes',     '30'),
   ('security', '2fa_enforcement',             'optional'),
+  ('home',     'announcements_enabled',       'true'),
   ('store',    'name',     '10th West Moto'),
   ('store',    'tagline',  'Motorcycle Parts & Accessories'),
   ('store',    'email',    'admin@10thwestmoto.com'),

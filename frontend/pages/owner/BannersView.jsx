@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { Image, Plus, Edit3, Trash2, Eye, EyeOff, X, Check, AlertCircle, GripVertical, Megaphone, ArrowUp, ArrowDown, AlertTriangle, Upload, Link as LinkIcon, SlidersHorizontal, Save } from 'lucide-react';
-import { getAllBanners, createBanner, updateBanner, deleteBanner, getAllAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, uploadProductImage, getSystemSettings, updateSystemSettings } from '../../services/api';
+import { getAllBanners, createBanner, updateBanner, deleteBanner, getAllAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, uploadProductImage, getSystemSettings, updateSystemSettings, getAnnouncementToggle, updateAnnouncementToggle } from '../../services/api';
 
 const LINK_OPTIONS = [
   { value: '/shop', label: 'Shop - All Products' },
@@ -36,6 +36,8 @@ const BannersView = () => {
     hero_show_arrows: true,
     hero_pause_on_hover: true,
   });
+  const [announcementsEnabled, setAnnouncementsEnabled] = useState(true);
+  const [savingAnnouncementsToggle, setSavingAnnouncementsToggle] = useState(false);
   const [savingCarousel, setSavingCarousel] = useState(false);
   const [carouselSaved, setCarouselSaved] = useState(false);
   const fileInputRef = useRef(null);
@@ -44,13 +46,16 @@ const BannersView = () => {
 
   const loadData = async () => {
     try {
-      const [b, a, homeSettings] = await Promise.all([
+      const [b, a, homeSettings, announcementsEnabledValue] = await Promise.all([
         getAllBanners(),
         getAllAnnouncements(),
         getSystemSettings('home').catch(() => []),
+        getAnnouncementToggle().catch(() => true),
       ]);
+
       setBanners(b || []);
       setAnnouncements(a || []);
+      setAnnouncementsEnabled(announcementsEnabledValue !== false);
 
       const map = {};
       (Array.isArray(homeSettings) ? homeSettings : []).forEach((row) => {
@@ -193,6 +198,24 @@ const BannersView = () => {
     } catch (e) { console.error(e); }
   };
 
+  const handleAnnouncementVisibilityToggle = async () => {
+    const previousValue = announcementsEnabled;
+    const nextValue = !previousValue;
+
+    setAnnouncementsEnabled(nextValue);
+    setSavingAnnouncementsToggle(true);
+    try {
+      const result = await updateAnnouncementToggle(nextValue);
+      if (typeof result?.enabled !== 'undefined') {
+        setAnnouncementsEnabled(Boolean(result.enabled));
+      }
+    } catch (e) {
+      console.error(e);
+      setAnnouncementsEnabled(previousValue);
+    }
+    setSavingAnnouncementsToggle(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -268,38 +291,55 @@ const BannersView = () => {
         )
       ) : tab === 'announcements' ? (
         /* Announcements List */
-        announcements.length === 0 ? (
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-12 text-center">
-            <Megaphone size={48} className="mx-auto text-gray-300 mb-3" />
-            <h3 className="font-semibold text-white mb-1">No announcements</h3>
-            <p className="text-sm text-gray-400">Create announcements to keep customers informed.</p>
+        <div className="space-y-3">
+          <div className={`border rounded-xl p-4 flex items-start justify-between gap-3 ${announcementsEnabled ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-gray-800 border-gray-700'}`}>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Announcement Visibility</h3>
+              <p className="text-xs text-gray-300 mt-1">
+                {announcementsEnabled
+                  ? 'Announcements are ON. Published announcements are visible to customers.'
+                  : 'Announcements are OFF. Customers will not see any announcements.'}
+              </p>
+            </div>
+            <button
+              onClick={handleAnnouncementVisibilityToggle}
+              disabled={savingAnnouncementsToggle}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors disabled:opacity-60 ${announcementsEnabled ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200 hover:bg-emerald-500/30' : 'bg-gray-900 border-gray-600 text-gray-200 hover:bg-gray-700'}`}
+            >
+              {announcementsEnabled ? <Eye size={13} /> : <EyeOff size={13} />}
+              {savingAnnouncementsToggle ? 'Saving...' : (announcementsEnabled ? 'ON' : 'OFF')}
+            </button>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {announcements.map(ann => (
-              <div key={ann.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-white text-sm">{ann.title}</h3>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${ann.is_published ? 'bg-green-50 text-green-600' : 'bg-yellow-50 text-yellow-600'}`}>
-                        {ann.is_published ? 'Published' : 'Draft'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1 line-clamp-2">{ann.content}</p>
-                    <p className="text-[10px] text-gray-400 mt-1">{ann.published_at ? new Date(ann.published_at).toLocaleDateString() : 'Not published'}</p>
+
+          {announcements.length === 0 ? (
+            <div className="bg-gray-800 border border-gray-700 rounded-xl p-12 text-center">
+              <Megaphone size={48} className="mx-auto text-gray-300 mb-3" />
+              <h3 className="font-semibold text-white mb-1">No announcements</h3>
+              <p className="text-sm text-gray-400">Create announcements to keep customers informed.</p>
+            </div>
+          ) : announcements.map(ann => (
+            <div key={ann.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-white text-sm">{ann.title}</h3>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${ann.is_published ? 'bg-green-50 text-green-600' : 'bg-yellow-50 text-yellow-600'}`}>
+                      {ann.is_published ? 'Published' : 'Draft'}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1 ml-4">
-                    <button onClick={() => { setAnnouncementForm({ title: ann.title || '', content: ann.content || '', is_published: ann.is_published }); setEditing(ann); setModalType('announcement'); setShowModal(true); }}
-                      className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"><Edit3 size={14} /></button>
-                    <button onClick={() => handleDeleteAnnouncement(ann)}
-                      className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
-                  </div>
+                  <p className="text-xs text-gray-400 mt-1 line-clamp-2">{ann.content}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{ann.published_at ? new Date(ann.published_at).toLocaleDateString() : 'Not published'}</p>
+                </div>
+                <div className="flex items-center gap-1 ml-4">
+                  <button onClick={() => { setAnnouncementForm({ title: ann.title || '', content: ann.content || '', is_published: ann.is_published }); setEditing(ann); setModalType('announcement'); setShowModal(true); }}
+                    className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"><Edit3 size={14} /></button>
+                  <button onClick={() => handleDeleteAnnouncement(ann)}
+                    className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                 </div>
               </div>
-            ))}
-          </div>
-        )
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 space-y-4">
           <div>
