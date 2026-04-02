@@ -182,6 +182,15 @@ router.post('/resend-verification',
   validate,
   resendVerification
 );
-router.post('/verify-email', body('token').notEmpty(), validate, verifyEmailToken);
+router.post(
+  '/verify-email',
+  body('token')
+    .trim()
+    .notEmpty().withMessage('Verification token is required')
+    .isLength({ min: 64, max: 64 }).withMessage('Invalid verification token format')
+    .matches(/^[a-f0-9]+$/i).withMessage('Invalid verification token format'),
+  validate,
+  verifyEmailToken
+);
 
 export default router;

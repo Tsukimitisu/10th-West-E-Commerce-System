@@ -1,7 +1,40 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, X, Loader, Mail } from 'lucide-react';
 import { verifyEmailToken, resendVerificationEmail } from '../services/api';
+
+const VERIFY_REQUEST_CACHE_MS = 30 * 1000;
+const verifyRequestCache = new Map();
+
+const getPostVerifyRedirect = (user) => {
+  const role = String(user?.role || '').toLowerCase();
+
+  if (role === 'super_admin') return '/super-admin';
+  if (role === 'owner' || role === 'admin' || role === 'store_staff') return '/admin';
+
+  return '/';
+};
+
+const verifyTokenOnce = (token) => {
+  const normalizedToken = String(token || '').trim();
+  if (!normalizedToken) {
+    const tokenError = new Error('Invalid verification link.');
+    tokenError.code = 'VERIFICATION_TOKEN_INVALID';
+    return Promise.reject(tokenError);
+  }
+
+  const cachedRequest = verifyRequestCache.get(normalizedToken);
+  if (cachedRequest) return cachedRequest;
+
+  const request = verifyEmailToken(normalizedToken).finally(() => {
+    window.setTimeout(() => {
+      verifyRequestCache.delete(normalizedToken);
+    }, VERIFY_REQUEST_CACHE_MS);
+  });
+
+  verifyRequestCache.set(normalizedToken, request);
+  return request;
+};
 
 const VerifyEmail = ({ onLogin }) => {
   const navigate = useNavigate();
@@ -10,16 +43,19 @@ const VerifyEmail = ({ onLogin }) => {
   const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('Verifying your email...');
   const [email, setEmail] = useState('');
+  const [nextRoute, setNextRoute] = useState('/');
   const [resendStatus, setResendStatus] = useState('');
   const [isResending, setIsResending] = useState(false);
+  const redirectTimeoutRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
 
     const runVerification = async () => {
-      if (!token) {
+      const normalizedToken = String(token || '').trim();
+      if (!normalizedToken) {
         setStatus('error');
-        setMessage('Invalid or expired verification link.');
+        setMessage('Verification token is missing. Please use the latest link from your email.');
         return;
       }
 
@@ -27,22 +63,53 @@ const VerifyEmail = ({ onLogin }) => {
       setMessage('Verifying your email...');
 
       try {
-        const result = await verifyEmailToken(token);
+        const result = await verifyTokenOnce(normalizedToken);
         if (cancelled) return;
 
         setStatus('success');
-        setMessage('Your account has been successfully verified. Logging you in...');
 
-        if (result.token && result.user && onLogin) {
+        if (result?.token && result?.user && onLogin) {
+          const destination = getPostVerifyRedirect(result.user);
+          setNextRoute(destination);
+          setMessage(result?.message || 'Your account has been successfully verified. Logging you in...');
           onLogin(result.user, result.token);
-          window.setTimeout(() => {
-            if (!cancelled) navigate('/');
+          redirectTimeoutRef.current = window.setTimeout(() => {
+            if (!cancelled) navigate(destination, { replace: true });
           }, 1000);
+          return;
         }
+
+        setNextRoute('/login');
+        setMessage(result?.message || 'Your account has been successfully verified. Please continue to login.');
+        redirectTimeoutRef.current = window.setTimeout(() => {
+          if (!cancelled) navigate('/login?verified=1', { replace: true });
+        }, 1200);
       } catch (err) {
         if (cancelled) return;
+
+        const code = String(err?.code || '').toUpperCase();
+        const fieldTokenError = String(err?.fieldErrors?.token || '').trim();
+        const fallbackMessage = fieldTokenError || String(err?.message || 'Invalid or expired verification link.');
+
         setStatus('error');
-        setMessage(err.message || 'Invalid or expired verification link.');
+
+        if (code === 'VERIFICATION_TOKEN_EXPIRED') {
+          setMessage('This verification link has expired. Enter your email below and we will send a new one.');
+          if (err?.email) setEmail(String(err.email).trim().toLowerCase());
+          return;
+        }
+
+        if (code === 'VERIFICATION_TOKEN_INVALID') {
+          setMessage('This verification link is invalid. You can request a new one below.');
+          return;
+        }
+
+        if (code === 'VERIFICATION_TOKEN_REQUIRED') {
+          setMessage('Verification token is missing. Please use the latest link from your email.');
+          return;
+        }
+
+        setMessage(fallbackMessage);
       }
     };
 
@@ -50,18 +117,23 @@ const VerifyEmail = ({ onLogin }) => {
 
     return () => {
       cancelled = true;
+      if (redirectTimeoutRef.current) {
+        window.clearTimeout(redirectTimeoutRef.current);
+      }
     };
   }, [navigate, onLogin, token]);
 
   const handleResend = async (e) => {
     e.preventDefault();
-    if (!email) return;
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!normalizedEmail) return;
 
     setIsResending(true);
     setResendStatus('');
 
     try {
-      await resendVerificationEmail(email);
+      await resendVerificationEmail(normalizedEmail);
+      setEmail(normalizedEmail);
       setResendStatus('Verification email resent successfully. Please check your inbox.');
     } catch (err) {
       setResendStatus(err.message || 'Failed to resend verification email.');
@@ -89,10 +161,10 @@ const VerifyEmail = ({ onLogin }) => {
             <h2 className="text-xl font-bold text-white mb-2">Email Verified</h2>
             <p className="text-gray-400 mb-6">{message}</p>
             <Link
-              to="/login"
+              to={nextRoute}
               className="w-full py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors flex items-center justify-center"
             >
-              Go to Login
+              Continue
             </Link>
           </>
         )}
@@ -113,7 +185,10 @@ const VerifyEmail = ({ onLogin }) => {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (resendStatus) setResendStatus('');
+                    }}
                     placeholder="Enter your registered email"
                     required
                     className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white text-sm"

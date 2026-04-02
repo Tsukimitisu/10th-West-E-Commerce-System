@@ -4045,9 +4045,16 @@ export const resendVerificationEmail = async (email) => {
 };
 
 export const verifyEmailToken = async (token) => {
+  const normalizedToken = String(token || '').trim();
+  if (!/^[a-f0-9]{64}$/i.test(normalizedToken)) {
+    const tokenError = new Error('This verification link is invalid.');
+    tokenError.code = 'VERIFICATION_TOKEN_INVALID';
+    throw tokenError;
+  }
+
   const data = await authenticatedFetch(`${API_URL}/auth/verify-email`, {
     method: 'POST',
-    body: JSON.stringify({ token })
+    body: JSON.stringify({ token: normalizedToken })
   });
 
   if (USE_SUPABASE && data && data.user) {

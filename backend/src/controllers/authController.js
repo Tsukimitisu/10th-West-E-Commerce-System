@@ -931,19 +931,24 @@ export const deleteAccountHandler = async (req, res) => {
 // ─── RESEND EMAIL VERIFICATION ─────────────────────────────────────
 
 export const verifyEmailToken = async (req, res) => {
-  const { token } = req.body;
+  const { token } = req.validatedData || req.body;
   const ipAddress = req.clientIp;
   const userAgent = req.clientUa;
   const guestCartSessionId = req.session?.cartSessionId || null;
 
-  if (!token) return res.status(400).json({ message: 'Invalid or expired verification link.' });
+  if (!token) {
+    return res.status(400).json({
+      message: 'Verification token is required.',
+      code: 'VERIFICATION_TOKEN_REQUIRED',
+    });
+  }
 
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
-    const tokenHash = hashToken(token);
+    const tokenHash = hashToken(String(token).trim());
     const result = await client.query(
       `SELECT id, name, email, role, phone, avatar, store_credit, is_active,
               two_factor_enabled, oauth_provider, last_login, email_verified,
@@ -956,18 +961,57 @@ export const verifyEmailToken = async (req, res) => {
 
     if (result.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Invalid or expired verification link.' });
+      return res.status(400).json({
+        message: 'This verification link is invalid. Please request a new one.',
+        code: 'VERIFICATION_TOKEN_INVALID',
+      });
     }
 
     const user = result.rows[0];
 
-    if (user.email_verified || !user.email_verification_expires || new Date(user.email_verification_expires) <= new Date()) {
+    if (!user.is_active) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        message: 'Your account is currently unavailable. Please contact support.',
+        code: 'ACCOUNT_UNAVAILABLE',
+      });
+    }
+
+    if (user.email_verified) {
+      await client.query(
+        'UPDATE users SET email_verification_token = NULL, email_verification_expires = NULL WHERE id = $1',
+        [user.id]
+      );
+
+      await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
+      await rotateGuestSession(req);
+      const sessionToken = await persistSession(client, user, ipAddress, userAgent);
+
+      await client.query('COMMIT');
+      await logActivity({ userId: user.id, action: 'email_verified', ipAddress, userAgent });
+
+      return res.json({
+        message: 'Your email is already verified. Logging you in...',
+        user: sanitizeUser(user),
+        token: sessionToken,
+        autoLogin: true,
+        alreadyVerified: true,
+      });
+    }
+
+    const expiresAt = user.email_verification_expires ? new Date(user.email_verification_expires) : null;
+    if (!expiresAt || expiresAt <= new Date()) {
       await client.query(
         'UPDATE users SET email_verification_token = NULL, email_verification_expires = NULL WHERE id = $1',
         [user.id]
       );
       await client.query('COMMIT');
-      return res.status(400).json({ message: 'Invalid or expired verification link.' });
+      return res.status(410).json({
+        message: 'This verification link has expired. Request a new verification email to continue.',
+        code: 'VERIFICATION_TOKEN_EXPIRED',
+        requiresResend: true,
+        email: user.email,
+      });
     }
 
     const updatedUserResult = await client.query(
@@ -994,6 +1038,7 @@ export const verifyEmailToken = async (req, res) => {
       user: sanitizeUser(updatedUser),
       token: sessionToken,
       autoLogin: true,
+      alreadyVerified: false,
     });
   } catch (err) {
     try {
