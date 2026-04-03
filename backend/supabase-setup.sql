@@ -601,6 +601,9 @@ RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER
 AS $$ SELECT current_setting('role', true) = ANY(ARRAY['anon', 'authenticated', 'service_role']) $$;
 
+-- Runtime-created auth table: keep client access denied by enabling RLS with no policies.
+ALTER TABLE IF EXISTS registration_otps ENABLE ROW LEVEL SECURITY;
+
 -- 1. users
 ALTER TABLE IF EXISTS users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON users;

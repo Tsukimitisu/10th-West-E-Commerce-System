@@ -68,6 +68,21 @@ const migrateAuth = async () => {
     `);
     console.log('✅ Login Attempts table created');
 
+    // ── 3b. Registration OTP table (email verification) ───────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS registration_otps (
+        email VARCHAR(255) PRIMARY KEY,
+        otp_hash VARCHAR(255) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_registration_otps_expires ON registration_otps(expires_at);
+      ALTER TABLE IF EXISTS registration_otps ENABLE ROW LEVEL SECURITY;
+    `);
+    console.log('✅ Registration OTP table secured with RLS');
+
     // ── 4. Staff permissions table ─────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS permissions (

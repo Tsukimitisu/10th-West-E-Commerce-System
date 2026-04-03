@@ -153,6 +153,8 @@ const initOtpTable = async () => {
       expires_at TIMESTAMP NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE IF EXISTS registration_otps ENABLE ROW LEVEL SECURITY;
   `).catch(err => console.error("Error creating OTP table:", err));
 };
 initOtpTable();
