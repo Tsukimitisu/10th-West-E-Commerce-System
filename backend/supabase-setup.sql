@@ -599,6 +599,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
 CREATE OR REPLACE FUNCTION public.app_access_check()
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog
 AS $$ SELECT current_setting('role', true) = ANY(ARRAY['anon', 'authenticated', 'service_role']) $$;
 
 -- Runtime-created auth table: keep client access denied by enabling RLS with no policies.
