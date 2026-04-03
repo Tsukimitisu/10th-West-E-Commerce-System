@@ -266,64 +266,113 @@ const Home = () => {
               animate="open"
               exit="closed"
               variants={sidebarVariants}
-              className="fixed top-0 left-0 h-full w-[320px] bg-zinc-900 text-gray-900 shadow-2xl z-[70] p-6 flex flex-col overflow-y-auto border-r-4 border-red-600"
+              className="fixed top-0 left-0 h-full w-[92vw] max-w-[390px] bg-[#090d17] text-white shadow-2xl z-[70] flex flex-col overflow-y-auto border-r border-red-500/40"
             >
-              <div className="flex justify-between items-center mb-8 shrink-0">
-                <h3 className="text-xl text-white font-black font-bold italic uppercase">My Garage</h3>
-                <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                  <X size={24} />
-                </button>
+              <div className="px-5 sm:px-6 pt-6 pb-5 bg-gradient-to-r from-[#0b1222] via-[#0f1729] to-[#131d34] border-b border-white/10 relative overflow-hidden">
+                <div className="absolute -right-10 -top-10 w-36 h-36 rounded-full bg-red-600/20 blur-sm" />
+                <div className="absolute right-6 top-5 h-1.5 w-10 rounded-full bg-red-500/80" />
+                <div className="relative flex justify-between items-start gap-3">
+                  <div>
+                    <p className="text-[11px] tracking-[0.2em] uppercase text-red-300 font-semibold">Garage Match</p>
+                    <h3 className="text-2xl font-black italic uppercase leading-tight mt-1">My Garage</h3>
+                    <p className="text-xs text-slate-300 mt-1">Set bike details to narrow down compatible parts.</p>
+                  </div>
+                  <button
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-200 hover:text-white"
+                    aria-label="Close garage panel"
+                  >
+                    <X size={22} />
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-6">
-                <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase block mb-2">Select Brand</label>
-                  <select className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-gray-900 font-bold focus:ring-2 focus:ring-red-600 outline-none">
-                    <option>Honda</option>
-                    <option>Yamaha</option>
-                    <option>Kawasaki</option>
-                    <option>Suzuki</option>
-                    <option>Ducati</option>
-                  </select>
+              <div className="px-5 sm:px-6 py-5 space-y-5">
+                <div className="rounded-xl bg-[#101827] border border-white/10 p-3">
+                  <p className="text-[11px] uppercase tracking-[0.13em] text-slate-400 font-semibold mb-2">Quick Brands</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {['Honda', 'Yamaha', 'Kawasaki', 'Suzuki', 'Ducati'].map((brand) => (
+                      <button
+                        key={brand}
+                        type="button"
+                        className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border border-white/15 bg-white/5 text-slate-200 hover:bg-red-500 hover:border-red-500 hover:text-white transition-colors"
+                      >
+                        {brand}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase block mb-2">Select Model</label>
-                  <select className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-gray-900 font-bold focus:ring-2 focus:ring-red-600 outline-none">
-                    <option>Select Model</option>
-                  </select>
+                <div className="rounded-2xl border border-white/10 bg-[#0f1728] p-4 sm:p-5 space-y-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-[0.12em] block mb-2">Select Brand</label>
+                    <select className="text-[14px] w-full p-2.5 bg-[#0a1220] text-white rounded-xl border border-white/15 font-semibold focus:ring-2 focus:ring-red-500/50 focus:border-red-500 outline-none transition-all">
+                      <option>Honda</option>
+                      <option>Yamaha</option>
+                      <option>Kawasaki</option>
+                      <option>Suzuki</option>
+                      <option>Ducati</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-3">
+                    <div className="col-span-3">
+                      <label className="text-[11px] font-bold text-slate-300 uppercase tracking-[0.12em] block mb-2">Select Model</label>
+                      <select className="text-[14px] w-full p-2.5 bg-[#0a1220] text-white rounded-xl border border-white/15 font-semibold focus:ring-2 focus:ring-red-500/50 focus:border-red-500 outline-none transition-all">
+                        <option>Select Model</option>
+                      </select>
+                    </div>
+
+                    <div className="col-span-2">
+                      <label className="text-[11px] font-bold text-slate-300 uppercase tracking-[0.12em] block mb-2">Year</label>
+                      <select className="text-[14px] w-full p-2.5 bg-[#0a1220] text-white rounded-xl border border-white/15 font-semibold focus:ring-2 focus:ring-red-500/50 focus:border-red-500 outline-none transition-all">
+                        <option>2024</option>
+                        <option>2023</option>
+                        <option>2022</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="relative pt-2">
+                    <input
+                      type="text"
+                      placeholder="Search parts..."
+                      className="w-full p-3.5 bg-[#0a1220] border border-white/15 rounded-xl text-white placeholder:text-slate-500 font-semibold focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all text-sm pr-10"
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.96 }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-400 transition-colors duration-200 cursor-pointer"
+                      aria-label="Search parts"
+                    >
+                      <Search size={18} />
+                    </motion.button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-bold text-gray-400 uppercase block mb-2">Year</label>
-                  <select className="w-full p-3 bg-gray-50 rounded border border-gray-300 text-gray-900 font-bold focus:ring-2 focus:ring-red-600 outline-none">
-                    <option>2024</option>
-                    <option>2023</option>
-                    <option>2022</option>
-                  </select>
+                <div className="rounded-xl border border-white/10 bg-[#101827] p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-300">Popular Searches</p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {['Brakes', 'Exhaust', 'Tires', 'Oil'].map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="px-3 py-1.5 bg-white/5 text-slate-200 text-xs rounded-full border border-white/15 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="relative mt-6">
-                  <input
-                    type="text"
-                    placeholder="Search parts..."
-                    className="w-full p-3.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 focus:bg-white transition-all duration-200 hover:border-gray-400 text-sm pl-10"
-                  />
-                  <motion.button 
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white hover:text-white/80 transition-colors duration-200 cursor-pointer"
-                  >
-                    <Search size={18} />
-                  </motion.button>
-                </div>
-                
-                <div className="mt-8 pt-8 border-t border-gray-300">
-                  <p className="text-xs text-gray-200 mb-4">Popular Searches:</p>
-                  <div className="flex flex-wrap gap-2">
-                      {['Brakes', 'Exhaust', 'Tires', 'Oil'].map(tag => (
-                          <span key={tag} className="px-3 py-1 bg-gray-100 text-xs rounded-full text-gray-700 hover:text-gray-900 hover:bg-gray-200 cursor-pointer">{tag}</span>
-                      ))}
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.11em] text-red-200">Fitment Tip</p>
+                      <p className="text-xs text-red-100/90 mt-1 leading-relaxed">
+                        Save your exact bike profile once so future searches are faster.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -394,7 +443,7 @@ const Home = () => {
                   initial="rest"
                   whileHover="hover"
                   whileTap="tap"
-                  className="px-8 py-4 bg-red-600 text-white font-bold uppercase tracking-wider hover:bg-red-700 transition-colors"
+                  className="px-8 py-4 bg-red-600 text-white font-bold uppercase tracking-wider skew-x-[-10deg] hover:bg-red-700 transition-colors"
                 >
                   <span className="block skew-x-[10deg] flex items-center gap-2">
                     {activeBanners[currentBanner]?.button_text || 'Shop Parts'} <ArrowRight size={18} />
