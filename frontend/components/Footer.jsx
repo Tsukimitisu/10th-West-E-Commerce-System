@@ -1,13 +1,41 @@
 ﻿import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, Mail, MapPin, Facebook, Instagram, Youtube, Send, CreditCard, Shield, Truck } from 'lucide-react';
+import { Phone, Mail, MapPin, Facebook, Instagram, Youtube, Send, CreditCard, Shield, Truck, Globe, Music2 } from 'lucide-react';
+
+const normalizeExternalUrl = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/+/, '')}`;
+};
 
 const Footer = () => {
   const socialLinks = [
-    { label: 'Facebook', href: 'https://www.facebook.com/', icon: Facebook },
-    { label: 'Instagram', href: 'https://www.instagram.com/', icon: Instagram },
-    { label: 'YouTube', href: 'https://www.youtube.com/', icon: Youtube },
-  ];
+    {
+      label: 'Facebook',
+      href: normalizeExternalUrl(import.meta.env.VITE_SOCIAL_FACEBOOK || 'https://www.facebook.com/10thwestmoto'),
+      handle: '/10thwestmoto',
+      icon: Facebook,
+    },
+    {
+      label: 'Instagram',
+      href: normalizeExternalUrl(import.meta.env.VITE_SOCIAL_INSTAGRAM || 'https://www.instagram.com/10thwestmoto'),
+      handle: '@10thwestmoto',
+      icon: Instagram,
+    },
+    {
+      label: 'YouTube',
+      href: normalizeExternalUrl(import.meta.env.VITE_SOCIAL_YOUTUBE || 'https://www.youtube.com/@10thwestmoto'),
+      handle: '@10thwestmoto',
+      icon: Youtube,
+    },
+    {
+      label: 'TikTok',
+      href: normalizeExternalUrl(import.meta.env.VITE_SOCIAL_TIKTOK || 'https://www.tiktok.com/@10thwestmoto'),
+      handle: '@10thwestmoto',
+      icon: Music2,
+    },
+  ].filter((social) => Boolean(social.href));
 
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
@@ -70,12 +98,13 @@ const Footer = () => {
               </div>
             </Link>
             <p className="text-sm text-gray-400 mb-4 leading-relaxed">
-              Your trusted source for quality motorcycle parts, accessories, and gear. Ride with confidence.
+              Ride farther with trusted parts, proven support, and a community built for Philippine riders.
             </p>
             <div className="space-y-2 text-sm">
               <a href="tel:0288881234" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"><Phone size={14} /> (02) 8888-1234</a>
               <a href="mailto:support@10thwestmoto.com" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"><Mail size={14} /> support@10thwestmoto.com</a>
               <span className="flex items-center gap-2 text-gray-400"><MapPin size={14} /> Manila, Philippines</span>
+              <a href="https://www.10thwestmoto.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"><Globe size={14} /> www.10thwestmoto.com</a>
             </div>
           </div>
 
@@ -108,7 +137,8 @@ const Footer = () => {
           {/* Connect */}
           <div>
             <h4 className="font-display font-semibold text-white mb-4">Connect With Us</h4>
-            <div className="flex gap-3 mb-6">
+            <p className="text-xs uppercase tracking-[0.18em] text-red-500/90 mb-3">Follow 10th West Moto</p>
+            <div className="flex flex-wrap gap-3 mb-4">
               {socialLinks.map((social) => {
                 const Icon = social.icon;
                 return (
@@ -125,6 +155,20 @@ const Footer = () => {
                   </a>
                 );
               })}
+            </div>
+            <div className="space-y-2 mb-6">
+              {socialLinks.map((social) => (
+                <a
+                  key={`${social.label}-text`}
+                  href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between text-sm text-gray-400 hover:text-white transition-colors"
+                >
+                  <span>{social.label}</span>
+                  <span className="text-xs text-gray-500">{social.handle}</span>
+                </a>
+              ))}
             </div>
             <h4 className="font-display font-semibold text-white mb-3">We Accept</h4>
             <div className="flex flex-wrap gap-2">
