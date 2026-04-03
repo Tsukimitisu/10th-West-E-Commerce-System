@@ -1022,6 +1022,16 @@ const REVIEW_MEDIA_BUCKET = 'review-media';
 const REVIEW_MEDIA_MAX_FILES = 4;
 const REVIEW_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const REVIEW_VIDEO_MAX_BYTES = 25 * 1024 * 1024;
+const REVIEW_ELIGIBLE_ORDER_STATUSES = ['delivered', 'completed'];
+
+const buildReviewEligibilityError = () => {
+  const eligibilityError = new Error('Only customers with delivered orders for this product can leave a review.');
+  eligibilityError.status = 403;
+  eligibilityError.fieldErrors = {
+    product: 'Only delivered purchases can be reviewed.',
+  };
+  return eligibilityError;
+};
 
 const isReviewVideo = (value = '') => /\.(mp4|webm|mov|ogg|m4v)(\?.*)?$/i.test(String(value));
 
@@ -1175,6 +1185,49 @@ const uploadReviewMediaFiles = async ({ files = [], userId, productId }) => {
   }
 
   return normalizeReviewMedia(uploads);
+};
+
+const assertSupabaseReviewEligibility = async ({ userId, productId }) => {
+  const normalizedUserId = Number(userId);
+  const normalizedProductId = Number(productId);
+
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || !Number.isInteger(normalizedProductId) || normalizedProductId <= 0) {
+    throw buildReviewEligibilityError();
+  }
+
+  const { data: deliveredOrders, error: deliveredOrdersError } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('user_id', normalizedUserId)
+    .in('status', REVIEW_ELIGIBLE_ORDER_STATUSES);
+
+  if (deliveredOrdersError) {
+    throw new Error(deliveredOrdersError.message);
+  }
+
+  const deliveredOrderIds = (deliveredOrders || [])
+    .map((order) => Number(order.id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+
+  if (deliveredOrderIds.length === 0) {
+    throw buildReviewEligibilityError();
+  }
+
+  const { data: purchasedItem, error: purchasedItemError } = await supabase
+    .from('order_items')
+    .select('id')
+    .eq('product_id', normalizedProductId)
+    .in('order_id', deliveredOrderIds)
+    .limit(1)
+    .maybeSingle();
+
+  if (purchasedItemError) {
+    throw new Error(purchasedItemError.message);
+  }
+
+  if (!purchasedItem) {
+    throw buildReviewEligibilityError();
+  }
 };
 
 const applyReviewStatsToProducts = async (products) => {
@@ -3241,6 +3294,11 @@ export const addReview = async (review) => {
       throw notFoundError;
     }
 
+    await assertSupabaseReviewEligibility({
+      userId: currentUser.id,
+      productId,
+    });
+
     if (reviewMediaFiles.length > 0) {
       try {
         mediaUrls = await uploadReviewMediaFiles({
@@ -3288,7 +3346,7 @@ export const addReview = async (review) => {
         rating: Number(savedReview.rating || 0),
         review_status: toApprovedReviewStatus(savedReview),
         media_urls: normalizeReviewMedia(savedReview.media_urls),
-        verified_purchase: false,
+        verified_purchase: true,
         is_mine: true,
       },
     };

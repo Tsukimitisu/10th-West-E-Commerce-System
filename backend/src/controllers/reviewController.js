@@ -176,7 +176,7 @@ const getVerifiedPurchaseExpression = `
     JOIN orders o ON o.id = oi.order_id
     WHERE oi.product_id = r.product_id
       AND o.user_id = r.user_id
-      AND o.status IN ('paid', 'completed')
+      AND o.status IN ('delivered', 'completed')
     LIMIT 1
   )
 `;
@@ -294,6 +294,25 @@ export const createReview = async (req, res) => {
       return res.status(404).json({ message: 'Product not found.' });
     }
 
+    const deliveredPurchaseResult = await pool.query(
+      `
+        SELECT 1
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE oi.product_id = $1
+          AND o.user_id = $2
+          AND o.status IN ('delivered', 'completed')
+        LIMIT 1
+      `,
+      [productId, req.user.id],
+    );
+
+    if (deliveredPurchaseResult.rows.length === 0) {
+      return res.status(403).json({
+        message: 'You can only review products from orders that have been delivered.',
+      });
+    }
+
     const inserted = await pool.query(
       `
         INSERT INTO reviews (
@@ -321,7 +340,7 @@ export const createReview = async (req, res) => {
         ...review,
         user_name: req.user.name || 'You',
         user_avatar: req.user.avatar || null,
-        verified_purchase: false,
+        verified_purchase: true,
       }),
     });
   } catch (error) {
