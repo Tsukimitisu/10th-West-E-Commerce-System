@@ -1969,7 +1969,11 @@ const mapOrderFromApi = (order) => ({
   created_at: order.created_at ?? new Date().toISOString(),
   source: order.source ?? 'online',
   payment_method: order.payment_method,
+  tracking_number: order.tracking_number ?? undefined,
   delivered_at: order.delivered_at ?? undefined,
+  rider_confirmed_delivery_at: order.rider_confirmed_delivery_at ?? undefined,
+  rider_confirmed_by: order.rider_confirmed_by ?? undefined,
+  customer_confirmed_receipt_at: order.customer_confirmed_receipt_at ?? undefined,
   amount_tendered: order.amount_tendered != null ? Number(order.amount_tendered) : undefined,
   change_due: order.change_due != null ? Number(order.change_due) : undefined,
   cashier_id: order.cashier_id ?? undefined,
@@ -1983,6 +1987,21 @@ const mapOrderFromApi = (order) => ({
   return_deadline_at: order.return_deadline_at ?? null,
   return_request: order.return_request ?? null,
 });
+
+const STAFF_ORDER_STATUS_TRANSITIONS = {
+  pending: new Set(['paid', 'preparing', 'cancelled']),
+  paid: new Set(['preparing', 'cancelled']),
+  preparing: new Set(['shipped', 'cancelled']),
+  shipped: new Set([]),
+  delivered: new Set([]),
+  completed: new Set([]),
+  cancelled: new Set([]),
+};
+
+const canTransitionStaffOrderStatus = (currentStatus, nextStatus) => {
+  const allowed = STAFF_ORDER_STATUS_TRANSITIONS[String(currentStatus || '').toLowerCase()] || new Set();
+  return allowed.has(String(nextStatus || '').toLowerCase());
+};
 
 let MOCK_ORDERS = [];
 
@@ -2230,25 +2249,63 @@ export const createOrder = async (order) => {
   return mapped;
 };
 
-export const updateOrderStatus = async (id, status) => {
+export const updateOrderStatus = async (id, status, trackingNumber = '') => {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  const normalizedTrackingNumber = String(trackingNumber || '').trim();
+
   if (USE_MOCK_DATA) {
     await new Promise(resolve => setTimeout(resolve, 300));
     const order = MOCK_ORDERS.find(o => o.id === id);
     if (!order) throw new Error('Order not found');
-    order.status = status;
+    if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
+      throw new Error('Use delivery and receipt confirmations for delivered/completed statuses.');
+    }
+    if (!canTransitionStaffOrderStatus(order.status, normalizedStatus)) {
+      throw new Error(`Invalid status transition from ${order.status} to ${normalizedStatus}`);
+    }
+    order.status = normalizedStatus;
+    if (normalizedStatus === 'shipped' && normalizedTrackingNumber) {
+      order.tracking_number = normalizedTrackingNumber;
+    }
     return order;
   }
 
   if (USE_SUPABASE) {
+    if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
+      throw new Error('Use delivery and receipt confirmations for delivered/completed statuses.');
+    }
+
+    const { data: currentOrder, error: currentOrderError } = await supabase
+      .from('orders')
+      .select('id, status, user_id, tracking_number')
+      .eq('id', id)
+      .single();
+
+    if (currentOrderError || !currentOrder) {
+      throw new Error(currentOrderError?.message || 'Order not found');
+    }
+
+    if (!canTransitionStaffOrderStatus(currentOrder.status, normalizedStatus)) {
+      throw new Error(`Invalid status transition from ${currentOrder.status} to ${normalizedStatus}`);
+    }
+
+    const updatePayload = {
+      status: normalizedStatus,
+      updated_at: new Date().toISOString(),
+    };
+    if (normalizedStatus === 'shipped' && normalizedTrackingNumber) {
+      updatePayload.tracking_number = normalizedTrackingNumber;
+    }
+
     const { data, error } = await supabase
       .from('orders')
-      .update({ status })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();
 
     if (error) throw new Error(error.message);
-    await logSupabaseActivity('order.update_status', 'order', id, { status });
+    await logSupabaseActivity('order.update_status', 'order', id, { status: normalizedStatus });
 
     // Notify customer about their order status update
     if (data.user_id) {
@@ -2265,13 +2322,13 @@ export const updateOrderStatus = async (id, status) => {
       createNotification({
         user_id: data.user_id,
         type: 'order.status',
-        title: `Order #${String(id).padStart(4, '0')} ${status}`,
-        message: `Your order status is now ${status}${firstOrderItem?.product_name ? `. Item: ${firstOrderItem.product_name}.` : '.'}`,
+        title: `Order #${String(id).padStart(4, '0')} ${normalizedStatus}`,
+        message: `Your order status is now ${normalizedStatus}${firstOrderItem?.product_name ? `. Item: ${firstOrderItem.product_name}.` : '.'}`,
         reference_id: id,
         reference_type: 'order',
         thumbnail_url: firstOrderItem?.products?.image || null,
         metadata: {
-          status,
+          status: normalizedStatus,
           order_id: id,
           product_id: firstOrderItem?.product_id || null,
           product_name: firstOrderItem?.product_name || null,
@@ -2284,7 +2341,133 @@ export const updateOrderStatus = async (id, status) => {
 
   const data = await authenticatedFetch(`${API_URL}/orders/${id}/status`, {
     method: 'PUT',
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({
+      status: normalizedStatus,
+      tracking_number: normalizedStatus === 'shipped' && normalizedTrackingNumber
+        ? normalizedTrackingNumber
+        : undefined,
+    }),
+  });
+
+  return mapOrderFromApi(data.order ?? data);
+};
+
+export const confirmOrderDelivery = async (id) => {
+  if (USE_MOCK_DATA) {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const order = MOCK_ORDERS.find(o => o.id === id);
+    if (!order) throw new Error('Order not found');
+    if (order.status !== 'shipped') throw new Error('Only shipped orders can be confirmed as delivered.');
+    order.status = 'delivered';
+    order.delivered_at = order.delivered_at || new Date().toISOString();
+    order.rider_confirmed_delivery_at = new Date().toISOString();
+    return order;
+  }
+
+  if (USE_SUPABASE) {
+    const currentUser = getCurrentUserFromToken();
+    const { data: currentOrder, error: currentOrderError } = await supabase
+      .from('orders')
+      .select('id, status, user_id')
+      .eq('id', id)
+      .single();
+
+    if (currentOrderError || !currentOrder) {
+      throw new Error(currentOrderError?.message || 'Order not found');
+    }
+
+    if (currentOrder.status !== 'shipped') {
+      throw new Error('Only shipped orders can be confirmed as delivered.');
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('orders')
+      .update({
+        status: 'delivered',
+        delivered_at: nowIso,
+        rider_confirmed_delivery_at: nowIso,
+        rider_confirmed_by: currentUser?.id || null,
+        updated_at: nowIso,
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('order.confirm_delivery', 'order', id, {
+      rider_confirmed_by: currentUser?.id || null,
+    });
+
+    return mapOrderFromApi(data);
+  }
+
+  const data = await authenticatedFetch(`${API_URL}/orders/${id}/confirm-delivery`, {
+    method: 'PUT',
+  });
+
+  return mapOrderFromApi(data.order ?? data);
+};
+
+export const confirmOrderReceipt = async (id) => {
+  if (USE_MOCK_DATA) {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const order = MOCK_ORDERS.find(o => o.id === id);
+    if (!order) throw new Error('Order not found');
+    if (order.status !== 'delivered') {
+      throw new Error('Order can be completed only after rider delivery confirmation.');
+    }
+    order.status = 'completed';
+    order.customer_confirmed_receipt_at = new Date().toISOString();
+    order.delivered_at = order.delivered_at || new Date().toISOString();
+    return order;
+  }
+
+  if (USE_SUPABASE) {
+    const currentUser = getCurrentUserFromToken();
+    if (!currentUser?.id) throw new Error('Not authenticated');
+
+    const { data: currentOrder, error: currentOrderError } = await supabase
+      .from('orders')
+      .select('id, status, user_id, delivered_at')
+      .eq('id', id)
+      .single();
+
+    if (currentOrderError || !currentOrder) {
+      throw new Error(currentOrderError?.message || 'Order not found');
+    }
+
+    if (currentOrder.user_id !== currentUser.id) {
+      throw new Error('Access denied');
+    }
+
+    if (currentOrder.status !== 'delivered') {
+      throw new Error('Order can be completed only after rider delivery confirmation.');
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('orders')
+      .update({
+        status: 'completed',
+        customer_confirmed_receipt_at: nowIso,
+        delivered_at: currentOrder.delivered_at || nowIso,
+        updated_at: nowIso,
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('order.confirm_receipt', 'order', id, {
+      customer_id: currentUser.id,
+    });
+
+    return mapOrderFromApi(data);
+  }
+
+  const data = await authenticatedFetch(`${API_URL}/orders/${id}/confirm-receipt`, {
+    method: 'PUT',
   });
 
   return mapOrderFromApi(data.order ?? data);

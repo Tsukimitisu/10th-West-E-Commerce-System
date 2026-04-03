@@ -58,9 +58,10 @@ export const buildOrderStatusMessage = (status) => {
       return 'Your order is now being prepared.';
     case 'shipped':
       return 'Your order is on the way.';
-    case 'completed':
     case 'delivered':
-      return 'Your order has been delivered.';
+      return 'Your rider has marked the order as delivered. Please confirm receipt to complete the order.';
+    case 'completed':
+      return 'Your order is complete. Thank you for confirming receipt.';
     case 'cancelled':
       return 'Your order has been cancelled.';
     default:

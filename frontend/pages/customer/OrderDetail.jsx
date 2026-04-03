@@ -1,10 +1,10 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Package, ArrowLeft, Truck, MapPin, CreditCard, Clock, CheckCircle2, XCircle, Download, RotateCcw, Calendar, Mail, DollarSign, Printer, AlertTriangle } from 'lucide-react';
-import { getOrderById, cancelOrder } from '../../services/api';
+import { getOrderById, cancelOrder, confirmOrderReceipt } from '../../services/api';
 
-const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Completed'];
-const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, completed: 4, delivered: 4, cancelled: -1 };
+const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Delivered', 'Completed'];
+const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, delivered: 4, completed: 5, cancelled: -1 };
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -18,6 +18,8 @@ const OrderDetail = () => {
   const [cancelReasonSelect, setCancelReasonSelect] = useState('');
   const [cancelReasonOther, setCancelReasonOther] = useState('');
   const [cancelReasonError, setCancelReasonError] = useState('');
+  const [confirmingReceipt, setConfirmingReceipt] = useState(false);
+  const [receiptError, setReceiptError] = useState('');
 
   const loadOrder = async () => {
     try { const data = await getOrderById(Number(id)); setOrder(data); } catch {}
@@ -47,6 +49,22 @@ const OrderDetail = () => {
       setTimeout(() => setCancelError(''), 5000);
     }
     setCancelling(false);
+  };
+
+  const handleConfirmReceipt = async () => {
+    if (!order) return;
+    setConfirmingReceipt(true);
+    setReceiptError('');
+
+    try {
+      await confirmOrderReceipt(order.id);
+      await loadOrder();
+    } catch (err) {
+      setReceiptError(err.message || 'Failed to confirm receipt.');
+      setTimeout(() => setReceiptError(''), 5000);
+    }
+
+    setConfirmingReceipt(false);
   };
 
   if (loading) return (
@@ -121,6 +139,16 @@ const OrderDetail = () => {
               <XCircle size={14} /> Cancel Order
             </button>
           )}
+          {order.status === 'delivered' && (
+            <button
+              onClick={handleConfirmReceipt}
+              disabled={confirmingReceipt}
+              className="px-4 py-2 text-sm bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-1.5 transition-colors"
+            >
+              <CheckCircle2 size={14} />
+              {confirmingReceipt ? 'Confirming...' : 'Confirm Receipt'}
+            </button>
+          )}
           {order.return_eligible && (
             <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 flex items-center gap-1.5 transition-colors">
               <RotateCcw size={14} /> Request Return
@@ -128,6 +156,23 @@ const OrderDetail = () => {
           )}
         </div>
       </div>
+
+      {receiptError && (
+        <div className="mb-6 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+          <AlertTriangle size={14} /> {receiptError}
+        </div>
+      )}
+
+      {order.status === 'delivered' && (
+        <div className="bg-red-500/10 border border-red-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <Truck size={18} className="text-orange-600" />
+            <p className="text-sm text-orange-700 font-medium">
+              Rider confirmed delivery. Please confirm receipt to complete this order.
+            </p>
+          </div>
+        </div>
+      )}
 
       {showReturnSection && (
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-6">
@@ -216,7 +261,10 @@ const OrderDetail = () => {
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
           <div className="flex items-center justify-between relative">
             <div className="absolute left-0 right-0 top-4 h-0.5 bg-gray-200 z-0" />
-            <div className="absolute left-0 top-4 h-0.5 bg-red-500/100 z-0 transition-all duration-500" style={{ width: `${(step / 4) * 100}%` }} />
+            <div
+              className="absolute left-0 top-4 h-0.5 bg-red-500/100 z-0 transition-all duration-500"
+              style={{ width: `${(step / (stepLabels.length - 1)) * 100}%` }}
+            />
             {stepLabels.map((label, i) => (
               <div key={label} className="relative z-10 flex flex-col items-center">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${i <= step ? 'bg-red-500/100 text-white' : 'bg-gray-200 text-gray-400'}`}>

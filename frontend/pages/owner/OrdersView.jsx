@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { getOrders, getOrderById, updateOrderStatus, processRefund } from '../../services/api';
+import { getOrders, getOrderById, updateOrderStatus, confirmOrderDelivery, processRefund } from '../../services/api';
 import { OrderStatus } from '../../types.js';
 import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock, Filter, ChevronDown, ChevronUp, ArrowLeft, Printer, DollarSign, MapPin, User, Calendar, CreditCard, AlertCircle, Undo } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
@@ -10,12 +10,23 @@ const statusColors = {
   paid: 'bg-blue-50 text-blue-700 border-blue-200',
   preparing: 'bg-red-500/10 text-orange-700 border-red-200',
   shipped: 'bg-purple-50 text-purple-700 border-purple-200',
+  delivered: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   completed: 'bg-green-50 text-green-700 border-green-200',
   cancelled: 'bg-red-50 text-red-600 border-red-200',
 };
 const statusIcons = {
   pending: <Clock size={12} />, paid: <DollarSign size={12} />, preparing: <Package size={12} />,
-  shipped: <Truck size={12} />, completed: <CheckCircle2 size={12} />, cancelled: <XCircle size={12} />,
+  shipped: <Truck size={12} />, delivered: <CheckCircle2 size={12} />, completed: <CheckCircle2 size={12} />, cancelled: <XCircle size={12} />,
+};
+
+const staffStatusTransitions = {
+  pending: ['paid', 'preparing', 'cancelled'],
+  paid: ['preparing', 'cancelled'],
+  preparing: ['shipped', 'cancelled'],
+  shipped: [],
+  delivered: [],
+  completed: [],
+  cancelled: [],
 };
 
 const OrdersView = () => {
@@ -36,6 +47,7 @@ const OrdersView = () => {
   const [newStatus, setNewStatus] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+  const [statusError, setStatusError] = useState('');
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundOrder, setRefundOrder] = useState(null);
   const [refundAmount, setRefundAmount] = useState('');
@@ -62,16 +74,20 @@ const OrdersView = () => {
   };
 
   const openStatusChange = (order) => {
+    const nextOptions = staffStatusTransitions[order.status] || [];
     setStatusTarget(order);
-    setNewStatus(order.status);
+    setNewStatus(nextOptions[0] || '');
     setTrackingNumber(order.tracking_number || '');
     setCancelReason('');
+    setStatusError('');
     setStatusModalOpen(true);
   };
 
   const handleStatusUpdate = async () => {
     if (!statusTarget || !newStatus) return;
     if (newStatus === 'cancelled' && !cancelReason.trim()) return;
+    setStatusError('');
+
     try {
       if (newStatus === 'cancelled') {
         // Admin cancel: update status and store reason directly
@@ -91,7 +107,24 @@ const OrdersView = () => {
       }
       setStatusModalOpen(false);
       fetchOrders();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setStatusError(e.message || 'Failed to update status.');
+    }
+  };
+
+  const handleRiderDeliveryConfirm = async () => {
+    if (!statusTarget) return;
+    setStatusError('');
+
+    try {
+      await confirmOrderDelivery(statusTarget.id);
+      setStatusModalOpen(false);
+      fetchOrders();
+    } catch (e) {
+      console.error(e);
+      setStatusError(e.message || 'Failed to confirm delivery.');
+    }
   };
 
   const handleRefund = async () => {
@@ -120,6 +153,7 @@ const OrdersView = () => {
   });
 
   const statuses = Object.values(OrderStatus);
+  const nextStatusOptions = statusTarget ? (staffStatusTransitions[statusTarget.status] || []) : [];
   const pending = orders.filter(o => o.status === 'pending').length;
   const preparing = orders.filter(o => o.status === 'preparing').length;
   const shipped = orders.filter(o => o.status === 'shipped').length;
@@ -337,20 +371,37 @@ const OrdersView = () => {
         <div className="space-y-4">
           <div className="p-3 bg-gray-900 rounded-lg text-sm">
             <span className="text-gray-400">Order </span><span className="font-bold text-white">#{statusTarget?.id.toString().padStart(4, '0')}</span>
-            <span className="text-gray-400"> - Current: </span><span className={`font-semibold capitalize ${statusTarget?.status === 'completed' ? 'text-green-600' : 'text-white'}`}>{statusTarget?.status}</span>
+            <span className="text-gray-400"> - Current: </span><span className={`font-semibold capitalize ${(statusTarget?.status === 'completed' || statusTarget?.status === 'delivered') ? 'text-green-600' : 'text-white'}`}>{statusTarget?.status}</span>
           </div>
-          <div className="space-y-1.5">
-            {statuses.filter(s => {
-              // Block cancelling shipped/completed orders
-              if (s === 'cancelled' && (statusTarget?.status === 'shipped' || statusTarget?.status === 'completed' || statusTarget?.status === 'delivered')) return false;
-              return true;
-            }).map(s => (
-              <button key={s} onClick={() => setNewStatus(s)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium border transition-all capitalize ${newStatus === s ? 'bg-red-500/10 border-red-200 text-orange-600' : 'bg-gray-800 border-gray-700 text-gray-600 hover:bg-gray-900'}`}>
-                {statusIcons[s]} {s}
+          {nextStatusOptions.length > 0 ? (
+            <div className="space-y-1.5">
+              {nextStatusOptions.map((s) => (
+                <button key={s} onClick={() => setNewStatus(s)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium border transition-all capitalize ${newStatus === s ? 'bg-red-500/10 border-red-200 text-orange-600' : 'bg-gray-800 border-gray-700 text-gray-600 hover:bg-gray-900'}`}>
+                  {statusIcons[s]} {s}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="p-3 bg-gray-900 rounded-lg border border-gray-700 text-xs text-gray-400">
+              No direct staff status transition available for the current state.
+            </div>
+          )}
+
+          {statusTarget?.status === 'shipped' && (
+            <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+              <p className="text-xs font-medium text-indigo-700 mb-2">
+                Rider action: confirm delivery before customer can complete the order.
+              </p>
+              <button
+                onClick={handleRiderDeliveryConfirm}
+                className="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Confirm Delivery (Rider)
               </button>
-            ))}
-          </div>
+            </div>
+          )}
+
           {newStatus === 'shipped' && (
             <div className="p-3 bg-red-500/10 rounded-lg border border-red-200">
               <label className="block text-xs font-medium text-orange-700 mb-1.5">Tracking Number</label>
@@ -375,9 +426,22 @@ const OrdersView = () => {
               />
             </div>
           )}
+
+          {statusError && (
+            <div className="p-3 bg-red-50 rounded-lg border border-red-200 text-sm text-red-700">
+              {statusError}
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <button onClick={() => setStatusModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
-            <button onClick={handleStatusUpdate} disabled={newStatus === 'cancelled' && !cancelReason.trim()} className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors">Update Status</button>
+            <button
+              onClick={handleStatusUpdate}
+              disabled={!newStatus || (newStatus === 'cancelled' && !cancelReason.trim())}
+              className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Update Status
+            </button>
           </div>
         </div>
       </Modal>

@@ -137,7 +137,7 @@ const createTables = async () => {
         guest_name VARCHAR(255),
         guest_email VARCHAR(255),
         total_amount DECIMAL(10, 2) NOT NULL,
-        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'completed', 'cancelled')),
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'delivered', 'completed', 'cancelled')),
         shipping_address TEXT NOT NULL,
         shipping_address_snapshot JSONB,
         shipping_lat DECIMAL(10, 7),
@@ -156,6 +156,10 @@ const createTables = async () => {
         shipping_method VARCHAR(50) DEFAULT 'standard',
         delivery_notes TEXT,
         estimated_delivery DATE,
+        delivered_at TIMESTAMP,
+        rider_confirmed_delivery_at TIMESTAMP,
+        rider_confirmed_by INTEGER REFERENCES users(id),
+        customer_confirmed_receipt_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -674,6 +678,9 @@ const createTables = async () => {
       { name: 'delivery_notes', definition: 'TEXT' },
       { name: 'estimated_delivery', definition: 'DATE' },
       { name: 'delivered_at', definition: 'TIMESTAMP' },
+      { name: 'rider_confirmed_delivery_at', definition: 'TIMESTAMP' },
+      { name: 'rider_confirmed_by', definition: 'INTEGER REFERENCES users(id)' },
+      { name: 'customer_confirmed_receipt_at', definition: 'TIMESTAMP' },
     ];
 
     for (const col of ordersNewColumns) {
@@ -684,6 +691,13 @@ const createTables = async () => {
       }
     }
     console.log('✅ Orders table columns updated');
+
+    await client.query(`
+      ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+      ALTER TABLE orders ADD CONSTRAINT orders_status_check
+        CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'delivered', 'completed', 'cancelled'));
+    `);
+    console.log('✅ Orders status workflow constraint updated');
 
     // ============================================================
     // INDEXES

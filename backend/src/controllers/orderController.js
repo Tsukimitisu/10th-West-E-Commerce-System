@@ -6,18 +6,56 @@ import { buildOrderStatusMessage, createNotification as createUserNotification, 
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const STAFF_ROLES = new Set(['admin', 'super_admin', 'owner', 'store_staff', 'cashier', 'manager']);
+const VALID_ORDER_STATUSES = ['pending', 'paid', 'preparing', 'shipped', 'delivered', 'completed', 'cancelled'];
+const STAFF_STATUS_TRANSITIONS = {
+  pending: new Set(['paid', 'preparing', 'cancelled']),
+  paid: new Set(['preparing', 'cancelled']),
+  preparing: new Set(['shipped', 'cancelled']),
+  shipped: new Set([]),
+  delivered: new Set([]),
+  completed: new Set([]),
+  cancelled: new Set([]),
+};
 
-const ensureOrderAddressSnapshotColumns = async () => {
+const ORDER_NOTIFICATION_DETAIL_QUERY = `
+  SELECT o.id, o.user_id, o.status, o.order_number, o.tracking_number,
+         oi.product_id, COALESCE(oi.product_name, p.name) as product_name,
+         p.image as product_image
+  FROM orders o
+  LEFT JOIN order_items oi ON oi.order_id = o.id
+  LEFT JOIN products p ON p.id = oi.product_id
+  WHERE o.id = $1
+  ORDER BY oi.id ASC
+  LIMIT 1
+`;
+
+const ensureOrderWorkflowColumns = async () => {
   await pool.query(`
     ALTER TABLE orders
       ADD COLUMN IF NOT EXISTS shipping_address_snapshot JSONB,
-      ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP;
+      ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS rider_confirmed_delivery_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS rider_confirmed_by INTEGER REFERENCES users(id),
+      ADD COLUMN IF NOT EXISTS customer_confirmed_receipt_at TIMESTAMP;
   `).catch((error) => {
     console.error('Failed to ensure order support columns:', error);
   });
+
+  await pool.query(`
+    ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+    ALTER TABLE orders ADD CONSTRAINT orders_status_check
+      CHECK (status IN ('pending', 'paid', 'preparing', 'shipped', 'delivered', 'completed', 'cancelled'));
+  `).catch((error) => {
+    console.error('Failed to ensure order status constraint:', error);
+  });
 };
-ensureOrderAddressSnapshotColumns();
+ensureOrderWorkflowColumns();
 ensureNotificationColumns();
+
+const canStaffTransitionStatus = (currentStatus, nextStatus) => {
+  const allowed = STAFF_STATUS_TRANSITIONS[currentStatus] || new Set();
+  return allowed.has(nextStatus);
+};
 
 const normalizeText = (value) => {
   if (value === undefined || value === null) return null;
@@ -208,52 +246,61 @@ export const getOrderById = async (req, res) => {
 // Update order status (admin)
 export const updateOrderStatus = async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const status = String(req.body?.status || '').trim().toLowerCase();
+  const trackingNumber = normalizeText(req.body?.tracking_number ?? req.body?.trackingNumber);
 
-  const validStatuses = ['pending', 'paid', 'preparing', 'shipped', 'completed', 'delivered', 'cancelled'];
-
-  if (!validStatuses.includes(status)) {
+  if (!VALID_ORDER_STATUSES.includes(status)) {
     return res.status(400).json({ message: 'Invalid status' });
   }
 
+  if (status === 'delivered' || status === 'completed') {
+    return res.status(400).json({
+      message: status === 'delivered'
+        ? 'Use rider delivery confirmation to mark this order as delivered.'
+        : 'Order completion requires customer receipt confirmation.',
+    });
+  }
+
   try {
-    const orderDetailResult = await pool.query(
-      `SELECT o.id, o.user_id, o.status, o.order_number,
-              oi.product_id, COALESCE(oi.product_name, p.name) as product_name,
-              p.image as product_image
-       FROM orders o
-       LEFT JOIN order_items oi ON oi.order_id = o.id
-       LEFT JOIN products p ON p.id = oi.product_id
-       WHERE o.id = $1
-       ORDER BY oi.id ASC
-       LIMIT 1`,
-      [id]
-    );
+    const orderDetailResult = await pool.query(ORDER_NOTIFICATION_DETAIL_QUERY, [id]);
 
     if (orderDetailResult.rows.length === 0) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    const deliveredAt = status === 'completed' || status === 'delivered'
-      ? new Date().toISOString()
-      : null;
+    const orderDetail = orderDetailResult.rows[0];
+    const currentStatus = String(orderDetail.status || '').toLowerCase();
+
+    if (status === currentStatus) {
+      const currentOrderResult = await pool.query('SELECT * FROM orders WHERE id = $1', [id]);
+      return res.json({
+        message: 'Order status unchanged',
+        order: currentOrderResult.rows[0],
+      });
+    }
+
+    if (!canStaffTransitionStatus(currentStatus, status)) {
+      return res.status(400).json({
+        message: `Invalid status transition from ${currentStatus} to ${status}`,
+      });
+    }
+
     const result = await pool.query(
       `UPDATE orders
        SET status = $1,
-           delivered_at = CASE
-             WHEN $1 IN ('completed', 'delivered') THEN COALESCE(delivered_at, $3::timestamp)
-             ELSE delivered_at
+           tracking_number = CASE
+             WHEN $1 = 'shipped' THEN COALESCE($3, tracking_number)
+             ELSE tracking_number
            END,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
        RETURNING *`,
-      [status, id, deliveredAt]
+      [status, id, trackingNumber]
     );
 
     const updatedOrder = result.rows[0];
     emitOrderStatusUpdate(updatedOrder);
 
-    const orderDetail = orderDetailResult.rows[0];
     if (orderDetail.user_id) {
       await createUserNotification(pool, {
         user_id: orderDetail.user_id,
@@ -281,6 +328,137 @@ export const updateOrderStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('Update order status error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const confirmOrderDelivery = async (req, res) => {
+  const { id } = req.params;
+  const riderId = req.user?.id;
+
+  try {
+    const orderDetailResult = await pool.query(ORDER_NOTIFICATION_DETAIL_QUERY, [id]);
+    if (orderDetailResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const orderDetail = orderDetailResult.rows[0];
+    const currentStatus = String(orderDetail.status || '').toLowerCase();
+    if (currentStatus !== 'shipped') {
+      return res.status(400).json({
+        message: 'Only shipped orders can be confirmed as delivered by a rider.',
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE orders
+       SET status = 'delivered',
+           delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
+           rider_confirmed_delivery_at = COALESCE(rider_confirmed_delivery_at, CURRENT_TIMESTAMP),
+           rider_confirmed_by = COALESCE(rider_confirmed_by, $2),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [id, riderId || null]
+    );
+
+    const updatedOrder = result.rows[0];
+    emitOrderStatusUpdate(updatedOrder);
+
+    if (orderDetail.user_id) {
+      await createUserNotification(pool, {
+        user_id: orderDetail.user_id,
+        type: 'order.status',
+        title: `Order #${String(orderDetail.order_number || updatedOrder.id).padStart(4, '0')} delivered`,
+        message: orderDetail.product_name
+          ? `${buildOrderStatusMessage('delivered')} Item: ${orderDetail.product_name}.`
+          : buildOrderStatusMessage('delivered'),
+        reference_id: updatedOrder.id,
+        reference_type: 'order',
+        thumbnail_url: orderDetail.product_image || null,
+        metadata: {
+          status: 'delivered',
+          order_id: updatedOrder.id,
+          order_number: orderDetail.order_number || updatedOrder.id,
+          rider_confirmed_by: riderId || null,
+          product_id: orderDetail.product_id || null,
+          product_name: orderDetail.product_name || null,
+        },
+      });
+    }
+
+    res.json({
+      message: 'Delivery confirmed by rider',
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error('Confirm delivery error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const confirmOrderReceipt = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  try {
+    const orderDetailResult = await pool.query(ORDER_NOTIFICATION_DETAIL_QUERY, [id]);
+    if (orderDetailResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const orderDetail = orderDetailResult.rows[0];
+    if (orderDetail.user_id !== userId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const currentStatus = String(orderDetail.status || '').toLowerCase();
+    if (currentStatus !== 'delivered') {
+      return res.status(400).json({
+        message: 'Order can be completed only after rider delivery confirmation.',
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE orders
+       SET status = 'completed',
+           delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
+           customer_confirmed_receipt_at = COALESCE(customer_confirmed_receipt_at, CURRENT_TIMESTAMP),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    const updatedOrder = result.rows[0];
+    emitOrderStatusUpdate(updatedOrder);
+
+    await createUserNotification(pool, {
+      user_id: userId,
+      type: 'order.status',
+      title: `Order #${String(orderDetail.order_number || updatedOrder.id).padStart(4, '0')} completed`,
+      message: orderDetail.product_name
+        ? `${buildOrderStatusMessage('completed')} Item: ${orderDetail.product_name}.`
+        : buildOrderStatusMessage('completed'),
+      reference_id: updatedOrder.id,
+      reference_type: 'order',
+      thumbnail_url: orderDetail.product_image || null,
+      metadata: {
+        status: 'completed',
+        order_id: updatedOrder.id,
+        order_number: orderDetail.order_number || updatedOrder.id,
+        customer_confirmed_receipt_at: updatedOrder.customer_confirmed_receipt_at,
+        product_id: orderDetail.product_id || null,
+        product_name: orderDetail.product_name || null,
+      },
+    });
+
+    res.json({
+      message: 'Order receipt confirmed. Order completed.',
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error('Confirm receipt error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

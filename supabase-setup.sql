@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS orders (
   guest_name VARCHAR(255),
   guest_email VARCHAR(255),
   total_amount DECIMAL(10,2) NOT NULL,
-  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'completed', 'cancelled')),
+  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'delivered', 'completed', 'cancelled')),
   shipping_address TEXT NOT NULL,
   shipping_lat DECIMAL(10,7),
   shipping_lng DECIMAL(10,7),
@@ -137,6 +137,10 @@ CREATE TABLE IF NOT EXISTS orders (
   shipping_method VARCHAR(50) DEFAULT 'standard',
   delivery_notes TEXT,
   estimated_delivery DATE,
+  delivered_at TIMESTAMP,
+  rider_confirmed_delivery_at TIMESTAMP,
+  rider_confirmed_by INTEGER REFERENCES users(id),
+  customer_confirmed_receipt_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -492,7 +496,7 @@ ALTER TABLE users ADD CONSTRAINT users_role_check
 -- Orders: allow new statuses and payment methods
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
 ALTER TABLE orders ADD CONSTRAINT orders_status_check
-  CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'completed', 'cancelled'));
+  CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'delivered', 'completed', 'cancelled'));
 
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
 ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check
@@ -514,6 +518,10 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_amount DECIMAL(10,2) DEFAULT 0;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_method VARCHAR(50) DEFAULT 'standard';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_notes TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_delivery DATE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_confirmed_delivery_at TIMESTAMP;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_confirmed_by INTEGER REFERENCES users(id);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_confirmed_receipt_at TIMESTAMP;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
 
 -- Users: extra columns

@@ -14,6 +14,7 @@ export const OrderStatus = {
   PAID: 'paid',
   PREPARING: 'preparing',
   SHIPPED: 'shipped',
+  DELIVERED: 'delivered',
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
 };
