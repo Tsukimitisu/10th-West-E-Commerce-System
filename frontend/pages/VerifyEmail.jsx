@@ -5,6 +5,7 @@ import { verifyEmailToken, resendVerificationEmail } from '../services/api';
 
 const VERIFY_REQUEST_CACHE_MS = 30 * 1000;
 const verifyRequestCache = new Map();
+const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 
 const getPostVerifyRedirect = (user) => {
   const role = String(user?.role || '').toLowerCase();
@@ -45,19 +46,47 @@ const VerifyEmail = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [nextRoute, setNextRoute] = useState('/');
   const [resendStatus, setResendStatus] = useState('');
+  const [resendError, setResendError] = useState('');
   const [isResending, setIsResending] = useState(false);
   const redirectTimeoutRef = useRef(null);
+  const lastProcessedTokenRef = useRef('');
+  const onLoginRef = useRef(onLogin);
+
+  useEffect(() => {
+    onLoginRef.current = onLogin;
+  }, [onLogin]);
+
+  const validateResendEmail = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return 'Enter your registered email to resend the verification link.';
+    if (!EMAIL_REGEX.test(normalized)) return 'Use a valid email format like name@example.com.';
+    return '';
+  };
+
+  const clearVerificationTokenFromUrl = () => {
+    if (typeof window === 'undefined' || typeof window.history?.replaceState !== 'function') return;
+    window.history.replaceState(null, '', '/#/verify-email');
+  };
 
   useEffect(() => {
     let cancelled = false;
 
     const runVerification = async () => {
       const normalizedToken = String(token || '').trim();
+
       if (!normalizedToken) {
+        if (lastProcessedTokenRef.current) {
+          return;
+        }
         setStatus('error');
         setMessage('Verification token is missing. Please use the latest link from your email.');
         return;
       }
+
+      if (lastProcessedTokenRef.current === normalizedToken) {
+        return;
+      }
+      lastProcessedTokenRef.current = normalizedToken;
 
       setStatus('loading');
       setMessage('Verifying your email...');
@@ -67,12 +96,13 @@ const VerifyEmail = ({ onLogin }) => {
         if (cancelled) return;
 
         setStatus('success');
+        clearVerificationTokenFromUrl();
 
-        if (result?.token && result?.user && onLogin) {
+        if (result?.token && result?.user && onLoginRef.current) {
           const destination = getPostVerifyRedirect(result.user);
           setNextRoute(destination);
           setMessage(result?.message || 'Your account has been successfully verified. Logging you in...');
-          onLogin(result.user, result.token);
+          onLoginRef.current(result.user, result.token);
           redirectTimeoutRef.current = window.setTimeout(() => {
             if (!cancelled) navigate(destination, { replace: true });
           }, 1000);
@@ -90,6 +120,20 @@ const VerifyEmail = ({ onLogin }) => {
         const code = String(err?.code || '').toUpperCase();
         const fieldTokenError = String(err?.fieldErrors?.token || '').trim();
         const fallbackMessage = fieldTokenError || String(err?.message || 'Invalid or expired verification link.');
+
+        try {
+          const savedUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+          if (savedUser?.id && savedUser?.email_verified) {
+            const destination = getPostVerifyRedirect(savedUser);
+            setStatus('success');
+            setNextRoute(destination);
+            setMessage('Your email is already verified. Redirecting...');
+            redirectTimeoutRef.current = window.setTimeout(() => {
+              if (!cancelled) navigate(destination, { replace: true });
+            }, 900);
+            return;
+          }
+        } catch {}
 
         setStatus('error');
 
@@ -121,15 +165,22 @@ const VerifyEmail = ({ onLogin }) => {
         window.clearTimeout(redirectTimeoutRef.current);
       }
     };
-  }, [navigate, onLogin, token]);
+  }, [navigate, token]);
 
   const handleResend = async (e) => {
     e.preventDefault();
     const normalizedEmail = String(email || '').trim().toLowerCase();
-    if (!normalizedEmail) return;
+
+    const nextResendError = validateResendEmail(normalizedEmail);
+    if (nextResendError) {
+      setResendError(nextResendError);
+      setResendStatus('');
+      return;
+    }
 
     setIsResending(true);
     setResendStatus('');
+    setResendError('');
 
     try {
       await resendVerificationEmail(normalizedEmail);
@@ -179,7 +230,7 @@ const VerifyEmail = ({ onLogin }) => {
 
             <div className="w-full bg-gray-900 border border-gray-700 rounded-lg p-5 mb-6 text-left">
               <h3 className="text-sm font-bold text-white mb-3">Need a new verification email?</h3>
-              <form onSubmit={handleResend} className="flex flex-col gap-3">
+              <form onSubmit={handleResend} noValidate className="flex flex-col gap-3">
                 <div className="relative">
                   <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -187,10 +238,12 @@ const VerifyEmail = ({ onLogin }) => {
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value);
+                      if (resendError) setResendError('');
                       if (resendStatus) setResendStatus('');
                     }}
                     placeholder="Enter your registered email"
-                    required
+                    aria-invalid={resendError ? 'true' : 'false'}
+                    aria-describedby={resendError ? 'resend-email-error' : undefined}
                     className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white text-sm"
                   />
                 </div>
@@ -201,6 +254,9 @@ const VerifyEmail = ({ onLogin }) => {
                 >
                   {isResending ? 'Sending...' : 'Resend Verification Email'}
                 </button>
+                {resendError && (
+                  <p id="resend-email-error" className="text-xs text-red-400">{resendError}</p>
+                )}
                 {resendStatus && (
                   <p className={`text-xs ${resendStatus.toLowerCase().includes('success') ? 'text-green-400' : 'text-red-400'}`}>
                     {resendStatus}
