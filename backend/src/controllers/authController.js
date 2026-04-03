@@ -155,6 +155,13 @@ const initOtpTable = async () => {
     );
 
     ALTER TABLE IF EXISTS registration_otps ENABLE ROW LEVEL SECURITY;
+
+    DROP POLICY IF EXISTS registration_otps_restricted_access ON registration_otps;
+    CREATE POLICY registration_otps_restricted_access
+      ON registration_otps
+      FOR ALL
+      USING (current_setting('role', true) = 'service_role')
+      WITH CHECK (current_setting('role', true) = 'service_role');
   `).catch(err => console.error("Error creating OTP table:", err));
 };
 initOtpTable();

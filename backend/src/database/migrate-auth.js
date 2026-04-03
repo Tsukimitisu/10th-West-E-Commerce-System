@@ -80,6 +80,13 @@ const migrateAuth = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_registration_otps_expires ON registration_otps(expires_at);
       ALTER TABLE IF EXISTS registration_otps ENABLE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS registration_otps_restricted_access ON registration_otps;
+      CREATE POLICY registration_otps_restricted_access
+        ON registration_otps
+        FOR ALL
+        USING (current_setting('role', true) = 'service_role')
+        WITH CHECK (current_setting('role', true) = 'service_role');
     `);
     console.log('✅ Registration OTP table secured with RLS');
 
