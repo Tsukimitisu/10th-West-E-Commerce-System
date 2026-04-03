@@ -18,7 +18,7 @@ const Checkout = () => {
     discountAmount: cartDiscountAmount,
     applyDiscount: applyCartDiscount,
     removeDiscount: removeCartDiscount,
-    clearSelectedItems,
+    clearItemsByIds,
     updateQuantity,
     persistCheckoutSelection,
     getCheckoutSelection,
@@ -29,6 +29,18 @@ const Checkout = () => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const isBuyNowQuery = searchParams.get('buyNow') === '1';
+
+  const normalizeIdList = (ids = []) => {
+    return Array.from(new Set(Array.isArray(ids) ? ids : []))
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+  };
+
+  const areSameIds = (left = [], right = []) => {
+    if (left.length !== right.length) return false;
+    return left.every((id, index) => id === right[index]);
+  };
+
   const [checkoutItemIds, setCheckoutItemIds] = useState(() => {
     const routeSelection = Array.isArray(location.state?.checkoutSelectionIds)
       ? location.state.checkoutSelectionIds
@@ -40,8 +52,17 @@ const Checkout = () => {
       : storedSelection?.length
         ? storedSelection
         : fallbackSelection;
-    return Array.from(new Set(preferredSelection));
+    return normalizeIdList(preferredSelection);
   });
+
+  useEffect(() => {
+    if (isBuyNow) return;
+
+    const routeSelection = normalizeIdList(location.state?.checkoutSelectionIds);
+    if (routeSelection.length === 0) return;
+
+    setCheckoutItemIds((current) => (areSameIds(current, routeSelection) ? current : routeSelection));
+  }, [isBuyNow, location.key, location.state]);
 
   const buyNowSessionStore = useMemo(() => {
     try {
@@ -103,15 +124,20 @@ const Checkout = () => {
     if (isBuyNow) return;
 
     const availableIds = new Set(allCartItems.map((item) => item.productId));
+    const normalizeAvailable = (ids = []) => normalizeIdList(ids).filter((id) => availableIds.has(id));
 
     setCheckoutItemIds((current) => {
-      const filtered = current.filter((id) => availableIds.has(id));
-      if (filtered.length === current.length && filtered.every((id, index) => id === current[index])) {
+      const filteredCurrent = normalizeAvailable(current);
+      const selectedFromCart = normalizeAvailable(selectedItemIds);
+      const desired = selectedFromCart.length > 0 ? selectedFromCart : filteredCurrent;
+
+      if (areSameIds(current, desired)) {
         return current;
       }
-      return filtered;
+
+      return desired;
     });
-  }, [allCartItems, isBuyNow]);
+  }, [allCartItems, isBuyNow, selectedItemIds]);
 
   const verifiedCartItems = useMemo(() => {
     if (isBuyNow) return [];
@@ -474,7 +500,8 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
 
       const order = await createOrder(orderData);
       if (!isBuyNow) {
-        await clearSelectedItems();
+        await clearItemsByIds(checkoutItemIds);
+        clearCheckoutSelection();
       } else {
         sessionStorage.removeItem(BUY_NOW_SESSION_KEY);
         clearCheckoutSelection();

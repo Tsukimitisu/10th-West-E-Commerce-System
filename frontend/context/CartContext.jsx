@@ -881,84 +881,88 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  const clearSelectedItems = async () => {
-    if (selectedItemIds.length === 0) return;
+  const normalizeTargetProductIds = (ids = []) => {
+    const normalized = Array.from(new Set(Array.isArray(ids) ? ids : []))
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+    return normalized;
+  };
+
+  const removeItemsFromLocalState = (targetIds = []) => {
+    const targetIdSet = new Set(normalizeTargetProductIds(targetIds));
+    if (targetIdSet.size === 0) return;
+
+    setItems((prev) => prev.filter((item) => !targetIdSet.has(item.productId)));
+    setSelectedItemIds((prev) => prev.filter((id) => !targetIdSet.has(id)));
+    setError(null);
+
+    const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
+    const nextLocal = currentLocal.filter((item) => !targetIdSet.has(Number(item.productId)));
+    sessionStorage.setItem(getCartKey(), JSON.stringify(nextLocal));
+
+    const nextCheckoutSelection = getCheckoutSelection().filter((id) => !targetIdSet.has(id));
+    persistCheckoutSelection(nextCheckoutSelection);
+  };
+
+  const clearItemsByIds = async (ids = []) => {
+    const targetIds = normalizeTargetProductIds(ids);
+    if (targetIds.length === 0) return;
 
     const token = getToken();
     if (USE_SUPABASE && !token) {
-      clearSelectedItemsLocal();
+      removeItemsFromLocalState(targetIds);
       return;
     }
-    if (true) {
-      if (USE_SUPABASE) {
-        try {
-          setLoading(true);
-          const currentUser = getCurrentUserFromToken();
-          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
-          if (!cartId) throw new Error('Unable to access cart');
 
-          const { error: deleteError } = await supabase
-            .from('cart_items')
-            .delete()
-            .eq('cart_id', cartId)
-            .in('product_id', selectedItemIds);
-
-          if (deleteError) throw new Error(deleteError.message);
-
-          setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
-          setSelectedItemIds([]);
-          setError(null);
-          clearCheckoutSelection();
-          
-          // Update local storage
-          const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
-          sessionStorage.setItem(getCartKey(), JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
-        } catch (err) {
-          console.error('Error clearing selected items (Supabase):', err);
-          clearSelectedItemsLocal();
-        } finally {
-          setLoading(false);
-        }
-        return;
-      }
-
+    if (USE_SUPABASE) {
       try {
         setLoading(true);
-        // Fallback for REST API - delete one by one
-        await Promise.all(selectedItemIds.map(async id => {
-          const targetItem = items.find((item) => item.productId === id);
-          if (!targetItem) return;
-          const cartItemId = targetItem?.cartItemId ?? id;
-          return fetchCartWithCsrfRetry(`${API_URL}/cart/remove/${cartItemId}`, {
-            method: 'DELETE',
-          });
-        }));
-        setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
-        setSelectedItemIds([]);
-        setError(null);
-        clearCheckoutSelection();
-        
-        // Update local storage
-        const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
-        sessionStorage.setItem(getCartKey(), JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
+        const currentUser = getCurrentUserFromToken();
+        const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+        if (!cartId) throw new Error('Unable to access cart');
+
+        const { error: deleteError } = await supabase
+          .from('cart_items')
+          .delete()
+          .eq('cart_id', cartId)
+          .in('product_id', targetIds);
+
+        if (deleteError) throw new Error(deleteError.message);
+
+        removeItemsFromLocalState(targetIds);
       } catch (err) {
-        console.error('Error clearing selected items:', err);
-        clearSelectedItemsLocal();
+        console.error('Error clearing cart items by ids (Supabase):', err);
+        removeItemsFromLocalState(targetIds);
       } finally {
         setLoading(false);
       }
-    } else {
-      clearSelectedItemsLocal();
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await Promise.all(targetIds.map(async (id) => {
+        const targetItem = items.find((item) => item.productId === id);
+        if (!targetItem) return;
+        const cartItemId = targetItem?.cartItemId ?? id;
+        return fetchCartWithCsrfRetry(`${API_URL}/cart/remove/${cartItemId}`, {
+          method: 'DELETE',
+        });
+      }));
+
+      removeItemsFromLocalState(targetIds);
+    } catch (err) {
+      console.error('Error clearing cart items by ids:', err);
+      removeItemsFromLocalState(targetIds);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const clearSelectedItemsLocal = () => {
-    setItems(prev => prev.filter(item => !selectedItemIds.includes(item.productId)));
-    setSelectedItemIds([]);
-    setError(null);
+  const clearSelectedItems = async () => {
+    if (selectedItemIds.length === 0) return;
+    await clearItemsByIds(selectedItemIds);
     clearCheckoutSelection();
-    const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
-    sessionStorage.setItem(getCartKey(), JSON.stringify(currentLocal.filter(item => !selectedItemIds.includes(item.productId))));
   };
 
   const clearCartLocal = () => {
@@ -1052,6 +1056,7 @@ export const CartProvider = ({ children }) => {
         updateQuantity,
         clearCart,
         clearSelectedItems,
+        clearItemsByIds,
         itemCount,
         subtotal,
         total,
