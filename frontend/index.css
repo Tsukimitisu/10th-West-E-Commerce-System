@@ -15,24 +15,12 @@ html {
 }
 
 :root {
-  --scrollbar-size-base: 6px;
-  --scrollbar-size-near: 10px;
-  --scrollbar-size-hover: 13px;
+  --scrollbar-size-base: 10px;
   --scrollbar-size-current: var(--scrollbar-size-base);
   --scrollbar-track-color: rgba(148, 163, 184, 0.12);
   --scrollbar-thumb-color: rgba(100, 116, 139, 0.45);
   --scrollbar-thumb-hover-color: rgba(71, 85, 105, 0.68);
   --scrollbar-thumb-active-color: rgba(51, 65, 85, 0.8);
-}
-
-html.scrollbar-proximity-active {
-  --scrollbar-size-current: var(--scrollbar-size-near);
-  scrollbar-width: auto;
-  scrollbar-color: var(--scrollbar-thumb-hover-color) var(--scrollbar-track-color);
-}
-
-html.scrollbar-hover-active {
-  --scrollbar-size-current: var(--scrollbar-size-hover);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -43,10 +31,6 @@ html.scrollbar-hover-active {
 
   *::-webkit-scrollbar-track {
     background: transparent;
-  }
-
-  html.scrollbar-proximity-active *::-webkit-scrollbar-track {
-    background: var(--scrollbar-track-color);
   }
 
   *::-webkit-scrollbar-thumb {

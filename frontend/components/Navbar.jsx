@@ -111,6 +111,18 @@ const Navbar = ({ user, onLogout }) => {
     return '';
   };
 
+  const normalizeDisplayText = (value) => {
+    if (!value) return '';
+    return String(value)
+      .replace(/â€”/g, '—')
+      .replace(/â€“/g, '–')
+      .replace(/â€˜/g, "'")
+      .replace(/â€™/g, "'")
+      .replace(/â€œ/g, '"')
+      .replace(/â€/g, '"')
+      .replace(/â‚±/g, '₱');
+  };
+
   const getNotificationTypeLabel = (notification) => {
     const normalized = normalizeIncomingNotification(notification);
 
@@ -502,55 +514,72 @@ const Navbar = ({ user, onLogout }) => {
                     )}
                   </button>
                   {notifOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 animate-fade-in z-50">
-                      <div className="flex items-center justify-between px-4 py-4 border-b border-slate-200">
-                        <h3 className="font-bold text-gray-900 text-sm">Notifications</h3>
-                        {unreadCount > 0 && (
-                          <button onClick={handleMarkAllRead} className="text-xs text-red-600 hover:text-red-700 font-semibold hover:underline">Mark all read</button>
-                        )}
+                    <div className="absolute right-0 top-full mt-2 w-[26rem] bg-[#0f141e] rounded-2xl shadow-[0_18px_45px_rgba(0,0,0,0.45)] border border-white/10 animate-fade-in z-50 overflow-hidden">
+                      <div className="px-4 py-3.5 border-b border-white/10 bg-gradient-to-r from-[#141b2a] to-[#101725]">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-white text-sm">Notifications</h3>
+                          {unreadCount > 0 && (
+                            <button onClick={handleMarkAllRead} className="text-xs text-red-400 hover:text-red-300 font-semibold transition-colors">
+                              Mark all read
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          {unreadCount > 0 ? `${unreadCount} unread update${unreadCount > 1 ? 's' : ''}` : 'You are all caught up'}
+                        </p>
                       </div>
-                      <div className="max-h-96 overflow-y-auto">
+
+                      <div className="max-h-[26rem] overflow-y-auto">
                         {notifications.length === 0 ? (
-                          <div className="p-8 text-center text-gray-500 text-sm">No notifications</div>
+                          <div className="p-9 text-center text-slate-400 text-sm">
+                            <Bell size={24} className="mx-auto mb-2 opacity-40" />
+                            No notifications yet
+                          </div>
                         ) : (
                           notifications.map((notification, i) => {
                             const n = normalizeIncomingNotification(notification);
-                            const title = getNotificationTitle(n);
-                            const summary = getNotificationSummary(n);
+                            const title = normalizeDisplayText(getNotificationTitle(n));
+                            const summary = normalizeDisplayText(getNotificationSummary(n));
                             const typeLabel = getNotificationTypeLabel(n);
 
                             return (
-                            <button key={`${n.id || n.title}-${i}`} onClick={() => handleNotificationClick(n)} className={`w-full text-left px-4 py-3.5 hover:bg-gray-50 transition-all duration-150 border-b border-slate-200 ${!n.is_read ? 'bg-red-50' : ''}`}>
-                              <div className="flex items-start gap-3.5">
-                                <div className="mt-0.5 shrink-0">
-                                  {n.thumbnail_url ? (
-                                    <img src={n.thumbnail_url} alt="" className="h-12 w-12 rounded-xl object-cover bg-gray-100 border border-slate-200 shadow-sm" />
-                                  ) : n.type === 'announcement' ? (
-                                    <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-500 border border-blue-200 flex items-center justify-center">
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                                    </div>
-                                  ) : (
-                                    <div className="h-10 w-10 rounded-xl bg-red-50 text-red-500 border border-red-200 flex items-center justify-center">
-                                      <Bell size={16} />
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-start gap-2">
-                                    <div className="min-w-0 flex-1">
-                                      <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>{title}</p>
-                                      {summary && <p className="mt-1 text-xs leading-5 text-gray-500 line-clamp-2">{summary}</p>}
-                                      <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-500">
-                                        <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 font-medium text-gray-600">{typeLabel}</span>
-                                        <span>{formatNotificationTime(n)}</span>
+                              <button
+                                key={`${n.id || n.title}-${i}`}
+                                onClick={() => handleNotificationClick(n)}
+                                className={`w-full text-left px-4 py-3.5 transition-colors border-b border-white/10 last:border-b-0 hover:bg-white/5 ${!n.is_read ? 'bg-red-500/10' : 'bg-transparent'}`}
+                              >
+                                <div className="flex items-start gap-3.5">
+                                  <div className="mt-0.5 shrink-0">
+                                    {n.thumbnail_url ? (
+                                      <img src={n.thumbnail_url} alt="" className="h-11 w-11 rounded-xl object-cover bg-[#0b111a] border border-white/10 shadow-sm" />
+                                    ) : n.type === 'announcement' ? (
+                                      <div className="h-10 w-10 rounded-xl bg-blue-500/15 text-blue-300 border border-blue-400/30 flex items-center justify-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                                       </div>
+                                    ) : (
+                                      <div className="h-10 w-10 rounded-xl bg-red-500/15 text-red-300 border border-red-400/30 flex items-center justify-center">
+                                        <Bell size={16} />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-start gap-2">
+                                      <div className="min-w-0 flex-1">
+                                        <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-white' : 'font-medium text-slate-100'}`}>{title}</p>
+                                        {summary && <p className="mt-1 text-xs leading-5 text-slate-300 line-clamp-2">{summary}</p>}
+                                        <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
+                                          <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 font-medium text-slate-300">{typeLabel}</span>
+                                          <span>{formatNotificationTime(n)}</span>
+                                        </div>
+                                      </div>
+                                      {!n.is_read && <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" />}
                                     </div>
-                                    {!n.is_read && <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" />}
                                   </div>
                                 </div>
-                              </div>
-                            </button>
-                          )})
+                              </button>
+                            );
+                          })
                         )}
                       </div>
                     </div>
@@ -590,7 +619,7 @@ const Navbar = ({ user, onLogout }) => {
                         {user.name.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className="hidden md:block text-sm font-semibold text-gray-100 max-w-20 truncate">{user.name.split(' ')[0]}</span>
+                    <span className="hidden md:block text-sm font-semibold text-red-500 max-w-20 truncate">{user.name.split(' ')[0]}</span>
                     <ChevronDown size={14} className="hidden md:block text-gray-300" />
                   </button>
                   {userMenuOpen && (
