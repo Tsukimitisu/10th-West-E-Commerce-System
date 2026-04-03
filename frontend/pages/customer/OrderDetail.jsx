@@ -7,6 +7,19 @@ const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Delivered',
 const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, delivered: 4, completed: 5, cancelled: -1 };
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const ORDER_VAT_RATE = 0.12;
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const roundCurrency = (value) => {
+  const parsed = toFiniteNumber(value, 0);
+  return Math.round(parsed * 100) / 100;
+};
+
+const formatCurrency = (value) => `₱${roundCurrency(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -88,6 +101,18 @@ const OrderDetail = () => {
   const step = stepForStatus[order.status] ?? 0;
   const date = new Date(order.created_at || order.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   const items = order.items || [];
+  const itemsSubtotal = roundCurrency(items.reduce((sum, item) => {
+    const unitPrice = roundCurrency(item.price ?? item.product?.price ?? 0);
+    const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+    return sum + (unitPrice * quantity);
+  }, 0));
+  const subtotalAmount = roundCurrency(order.subtotal ?? itemsSubtotal);
+  const discountAmount = roundCurrency(order.discount ?? order.discount_amount ?? 0);
+  const shippingAmount = roundCurrency(order.shipping ?? order.shipping_fee ?? 0);
+  const fallbackVat = roundCurrency(Math.max(0, subtotalAmount - discountAmount + shippingAmount) * ORDER_VAT_RATE);
+  const vatAmount = roundCurrency(order.tax_amount ?? order.vat_amount ?? fallbackVat);
+  const fallbackTotal = roundCurrency(Math.max(0, subtotalAmount - discountAmount + shippingAmount + vatAmount));
+  const totalAmount = roundCurrency(order.total ?? order.total_amount ?? fallbackTotal);
   const returnRequestStatus = order.return_request?.status || '';
   const showReturnSection = ['completed', 'delivered'].includes(order.status) || Boolean(returnRequestStatus);
   const returnDeadline = order.return_deadline_at
@@ -299,7 +324,7 @@ const OrderDetail = () => {
               const productId = resolveOrderItemProductId(item);
               const itemTitle = item.name || item.product_name || item.product?.name;
               const itemImage = item.image_url || item.product?.image;
-              const lineTotal = Number(item.price ?? item.product?.price ?? 0) * item.quantity;
+              const lineTotal = roundCurrency(roundCurrency(item.price ?? item.product?.price ?? 0) * Math.max(0, toFiniteNumber(item.quantity, 0)));
 
               return (
                 <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-4 p-4">
@@ -323,9 +348,9 @@ const OrderDetail = () => {
                       <p className="text-sm font-medium text-white truncate">{itemTitle}</p>
                     )}
                     {(item.sku || item.product?.sku) && <p className="text-xs text-gray-400">SKU: {item.sku || item.product?.sku}</p>}
-                    <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
+                    <p className="text-xs text-gray-400">Qty: {Math.max(0, toFiniteNumber(item.quantity, 0))}</p>
                   </div>
-                  <p className="text-sm font-semibold text-white">₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-sm font-semibold text-white">{formatCurrency(lineTotal)}</p>
                 </div>
               );
             })}
@@ -338,11 +363,12 @@ const OrderDetail = () => {
           <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
             <h3 className="font-semibold text-white text-sm mb-3">Order Summary</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>₱{Number(order.subtotal || order.total || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-              {Number(order.discount || 0) > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-₱{Number(order.discount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-              <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{Number(order.shipping || 0) === 0 ? 'Free' : `₱${Number(order.shipping).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}</span></div>
+              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotalAmount)}</span></div>
+              {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(discountAmount)}</span></div>}
+              <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
+              <div className="flex justify-between text-gray-600"><span>VAT (12%)</span><span>{formatCurrency(vatAmount)}</span></div>
               <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold text-white">
-                <span>Total</span><span>₱{Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                <span>Total</span><span>{formatCurrency(totalAmount)}</span>
               </div>
             </div>
           </div>

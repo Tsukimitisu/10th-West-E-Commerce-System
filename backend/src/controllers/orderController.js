@@ -7,6 +7,10 @@ import { buildOrderStatusMessage, createNotification as createUserNotification, 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const STAFF_ROLES = new Set(['admin', 'super_admin', 'owner', 'store_staff', 'cashier', 'manager']);
 const VALID_ORDER_STATUSES = ['pending', 'paid', 'preparing', 'shipped', 'delivered', 'completed', 'cancelled'];
+const VAT_RATE = 0.12;
+const FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
+const STANDARD_SHIPPING_FEE = 150;
+const EXPRESS_SHIPPING_FEE = 300;
 const STAFF_STATUS_TRANSITIONS = {
   pending: new Set(['paid', 'preparing', 'cancelled']),
   paid: new Set(['preparing', 'cancelled']),
@@ -63,6 +67,30 @@ const normalizeText = (value) => {
   return text.length > 0 ? text : null;
 };
 
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const roundMoney = (value) => {
+  const parsed = toFiniteNumber(value, 0);
+  return Math.round(parsed * 100) / 100;
+};
+
+const resolveShippingMethod = (value) => {
+  const normalized = String(value || 'standard').trim().toLowerCase();
+  if (normalized === 'express' || normalized === 'pickup' || normalized === 'standard') {
+    return normalized;
+  }
+  return 'standard';
+};
+
+const computeShippingCost = (subtotalAmount, shippingMethod) => {
+  if (shippingMethod === 'pickup') return 0;
+  if (shippingMethod === 'express') return EXPRESS_SHIPPING_FEE;
+  return subtotalAmount >= FREE_STANDARD_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING_FEE;
+};
+
 const buildShippingAddressSnapshot = (snapshotInput = {}, shippingAddress) => {
   const snapshot = {
     recipient_name: normalizeText(snapshotInput.recipient_name),
@@ -89,8 +117,10 @@ const parseShippingAddressSnapshot = (order) => {
 
 const mapOrderRecord = (order) => ({
   ...order,
-  total_amount: parseFloat(order.total_amount),
-  discount_amount: parseFloat(order.discount_amount || 0),
+  total_amount: roundMoney(order.total_amount),
+  discount_amount: roundMoney(order.discount_amount || 0),
+  tax_amount: roundMoney(order.tax_amount || 0),
+  shipping_method: resolveShippingMethod(order.shipping_method),
   shipping_address_snapshot: parseShippingAddressSnapshot(order),
 });
 
@@ -234,7 +264,7 @@ export const getOrderById = async (req, res) => {
       ...returnInfo,
       items: itemsResult.rows.map(item => ({
         ...item,
-        product_price: parseFloat(item.product_price)
+        product_price: roundMoney(item.product_price)
       }))
     });
   } catch (error) {
@@ -517,6 +547,7 @@ export const createOrder = async (req, res) => {
     promo_code_used,
     source = 'online',
     payment_method,
+    shipping_method,
     shipping_address_snapshot,
     amount_tendered,
     change_due,
@@ -550,6 +581,7 @@ export const createOrder = async (req, res) => {
     );
 
     const productMap = new Map(productSnapshotResult.rows.map(product => [Number(product.id), product]));
+    let subtotalAmount = 0;
 
     for (const item of normalizedItems) {
       const product = productMap.get(Number(item.product_id));
@@ -567,6 +599,32 @@ export const createOrder = async (req, res) => {
           message: `${product.name}: Maximum available quantity is ${product.stock_quantity}.`
         });
       }
+
+      const productPrice = toFiniteNumber(product.price, NaN);
+      if (!Number.isFinite(productPrice) || productPrice < 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `${product.name}: Invalid product price. Please contact support.`
+        });
+      }
+
+      subtotalAmount += roundMoney(productPrice * item.quantity);
+    }
+
+    const normalizedDiscountAmount = Math.min(
+      roundMoney(Math.max(0, toFiniteNumber(discount_amount, 0))),
+      roundMoney(subtotalAmount)
+    );
+    const resolvedShippingMethod = resolveShippingMethod(shipping_method);
+    const shippingCost = roundMoney(computeShippingCost(roundMoney(subtotalAmount), resolvedShippingMethod));
+    const taxableAmount = roundMoney(Math.max(0, roundMoney(subtotalAmount) - normalizedDiscountAmount + shippingCost));
+    const vatAmount = roundMoney(taxableAmount * VAT_RATE);
+    const computedTotalAmount = roundMoney(taxableAmount + vatAmount);
+
+    const clientTotalAmount = toFiniteNumber(total_amount, NaN);
+    if (!Number.isFinite(clientTotalAmount) || clientTotalAmount <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Invalid total amount' });
     }
 
     // Respect the payment method from the frontend for online orders
@@ -581,22 +639,24 @@ export const createOrder = async (req, res) => {
       `INSERT INTO orders (
         user_id, guest_name, guest_email, total_amount, 
         shipping_address, shipping_lat, shipping_lng, payment_intent_id, status, 
-        discount_amount, promo_code_used, payment_method, source,
+        discount_amount, tax_amount, shipping_method, promo_code_used, payment_method, source,
         shipping_address_snapshot,
         amount_tendered, change_due, cashier_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17) 
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19) 
       RETURNING *`,
       [
         userId,
         guestInfo?.name || null,
         guestInfo?.email || null,
-        total_amount,
+        computedTotalAmount,
         shipping_address,
         shipping_lat ?? null,
         shipping_lng ?? null,
         payment_intent_id,
         'paid',
-        discount_amount,
+        normalizedDiscountAmount,
+        vatAmount,
+        resolvedShippingMethod,
         promo_code_used || null,
         resolvedPaymentMethod,
         source,
@@ -618,7 +678,7 @@ export const createOrder = async (req, res) => {
       await client.query(
         `INSERT INTO order_items (order_id, product_id, product_name, product_price, quantity)
          VALUES ($1, $2, $3, $4, $5)`,
-        [order.id, item.product_id, product.name, product.price, item.quantity]
+        [order.id, item.product_id, product.name, roundMoney(product.price), item.quantity]
       );
 
       const stockUpdateResult = await client.query(
@@ -683,7 +743,7 @@ export const createOrder = async (req, res) => {
       ...mapOrderRecord(order),
       items: itemsResult.rows.map(item => ({
         ...item,
-        product_price: parseFloat(item.product_price)
+        product_price: roundMoney(item.product_price)
       }))
     };
 
@@ -746,12 +806,15 @@ export const getOrderInvoice = async (req, res) => {
     const items = itemsResult.rows;
 
     // Generate invoice HTML (BIR RR 18-2012 compliant)
-    const subtotal = items.reduce((sum, item) => sum + parseFloat(item.product_price) * item.quantity, 0);
-    const discount = parseFloat(order.discount_amount || 0);
-    const totalAmount = parseFloat(order.total_amount);
-    const vatRate = 0.12;
-    const vatableSales = totalAmount / (1 + vatRate);
-    const vatAmount = totalAmount - vatableSales;
+    const subtotal = roundMoney(items.reduce((sum, item) => {
+      const linePrice = roundMoney(item.product_price);
+      const quantity = toFiniteNumber(item.quantity, 0);
+      return sum + (linePrice * quantity);
+    }, 0));
+    const discount = roundMoney(order.discount_amount || 0);
+    const totalAmount = roundMoney(order.total_amount);
+    const vatAmount = roundMoney(toFiniteNumber(order.tax_amount, totalAmount - roundMoney(totalAmount / (1 + VAT_RATE))));
+    const vatableSales = roundMoney(totalAmount - vatAmount);
 
     const invoiceHTML = `
       <!DOCTYPE html>
@@ -838,9 +901,9 @@ export const getOrderInvoice = async (req, res) => {
               <tr>
                 <td class="item-description">${item.product_name || 'Product'}</td>
                 <td>${item.part_number || '-'}</td>
-                <td class="text-right">₱${parseFloat(item.product_price).toFixed(2)}</td>
-                <td class="text-right">${item.quantity}</td>
-                <td class="text-right">₱${(parseFloat(item.product_price) * item.quantity).toFixed(2)}</td>
+                <td class="text-right">₱${roundMoney(item.product_price).toFixed(2)}</td>
+                <td class="text-right">${toFiniteNumber(item.quantity, 0)}</td>
+                <td class="text-right">₱${roundMoney(roundMoney(item.product_price) * toFiniteNumber(item.quantity, 0)).toFixed(2)}</td>
               </tr>
             `).join('')}
           </tbody>

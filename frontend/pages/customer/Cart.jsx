@@ -3,6 +3,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft, LogIn, X } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 
+const CART_VAT_RATE = 0.12;
+const CART_FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
+const CART_STANDARD_SHIPPING_FEE = 150;
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const roundCurrency = (value) => {
+  const parsed = toFiniteNumber(value, 0);
+  return Math.round(parsed * 100) / 100;
+};
+
 const Cart = () => {
   const {
     items,
@@ -25,10 +39,24 @@ const Cart = () => {
   const [quantityErrors, setQuantityErrors] = useState({});
   const [localQuantities, setLocalQuantities] = useState({});
 
-  const shippingFee = subtotal >= 2500 ? 0 : 150;
-  const grandTotal = total + shippingFee;
+  const shippingFee = subtotal >= CART_FREE_STANDARD_SHIPPING_THRESHOLD ? 0 : CART_STANDARD_SHIPPING_FEE;
+  const vatBase = roundCurrency(Math.max(0, toFiniteNumber(total, 0) + shippingFee));
+  const vatAmount = roundCurrency(vatBase * CART_VAT_RATE);
+  const grandTotal = roundCurrency(vatBase + vatAmount);
 
-  const formatPrice = (p) => `\u20B1${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const formatPrice = (price) => `\u20B1${roundCurrency(price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+
+  const getEffectiveItemUnitPrice = (item) => {
+    const regularPrice = toFiniteNumber(item?.product?.price, 0);
+    const salePrice = toFiniteNumber(item?.product?.sale_price, NaN);
+    const isOnSale = Boolean(item?.product?.is_on_sale);
+
+    if (isOnSale && Number.isFinite(salePrice)) {
+      return roundCurrency(salePrice);
+    }
+
+    return roundCurrency(regularPrice);
+  };
 
   const handleCheckout = () => {
     const checkoutSelectionIds = persistCheckoutSelection();
@@ -173,7 +201,7 @@ const Cart = () => {
                 </div>
 
                 {items.map((item, i) => {
-                  const price = item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price;
+                  const price = getEffectiveItemUnitPrice(item);
                   return (
                     <div key={item.productId} className={`p-4 md:px-6 md:py-5 hover:bg-red-50/30 transition-colors ${i < items.length - 1 ? 'border-b border-slate-200' : ''}`}>
                       <div className="md:grid md:grid-cols-12 md:gap-4 md:items-center">
@@ -227,7 +255,7 @@ const Cart = () => {
                         </div>
 
                         <div className="col-span-2 flex items-center justify-between md:justify-end gap-3 mt-3 md:mt-0">
-                          <span className="text-sm font-bold text-slate-900 md:mr-2">{formatPrice(price * item.quantity)}</span>
+                          <span className="text-sm font-bold text-slate-900 md:mr-2">{formatPrice(price * Math.max(0, toFiniteNumber(item.quantity, 0)))}</span>
                           <button onClick={() => handleRemoveItem(item.productId)} className="hidden md:block p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                             <Trash2 size={16} />
                           </button>
@@ -270,6 +298,10 @@ const Cart = () => {
                   <div className="flex justify-between text-slate-600">
                     <span>Shipping</span>
                     <span className="text-emerald-600 font-semibold">{shippingFee === 0 ? 'Free' : formatPrice(shippingFee)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500">
+                    <span>VAT (12%)</span>
+                    <span className="font-semibold text-slate-900">{formatPrice(vatAmount)}</span>
                   </div>
                   <div className="border-t border-slate-200 pt-3 flex justify-between">
                     <span className="font-semibold text-slate-900">Total</span>

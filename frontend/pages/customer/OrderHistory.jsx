@@ -16,6 +16,13 @@ const statusConfig = {
   refunded: { icon: AlertTriangle, color: 'text-gray-600', bg: 'bg-gray-100 border-slate-300' },
 };
 
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const formatCurrency = (value) => `PHP ${toFiniteNumber(value, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+
 const OrderHistory = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -147,7 +154,7 @@ const OrderHistory = () => {
                       )}
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="font-semibold text-gray-900">PHP {Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                      <p className="font-semibold text-gray-900">{formatCurrency(order.total || order.total_amount || 0)}</p>
                       <ChevronRight size={16} className="text-gray-300 group-hover:text-red-500 ml-auto mt-1 transition-all duration-300 ease-in-out" />
                     </div>
                   </div>

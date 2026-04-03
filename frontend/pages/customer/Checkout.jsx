@@ -9,6 +9,20 @@ import MapPinPicker from '../../components/MapPinPicker';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 const CHECKOUT_TERMS_SESSION_KEY = 'checkoutTermsAccepted';
+const CHECKOUT_VAT_RATE = 0.12;
+const CHECKOUT_FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
+const CHECKOUT_STANDARD_SHIPPING_FEE = 150;
+const CHECKOUT_EXPRESS_SHIPPING_FEE = 300;
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const roundCurrency = (value) => {
+  const parsed = toFiniteNumber(value, 0);
+  return Math.round(parsed * 100) / 100;
+};
 
 const Checkout = () => {
   const {
@@ -29,6 +43,7 @@ const Checkout = () => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const isBuyNowQuery = searchParams.get('buyNow') === '1';
+  const isBuyNow = isBuyNowQuery;
 
   const normalizeIdList = (ids = []) => {
     return Array.from(new Set(Array.isArray(ids) ? ids : []))
@@ -84,7 +99,6 @@ const Checkout = () => {
     return buyNowSessionStore;
   }, [isBuyNowQuery, buyNowSessionStore, location.state]);
 
-  const isBuyNow = isBuyNowQuery;
   const buyNowItem = buyNowSession?.item || null;
 
   const [buyNowQty, setBuyNowQty] = useState(1);
@@ -145,36 +159,39 @@ const Checkout = () => {
     return allCartItems.filter((item) => allowedIds.has(item.productId));
   }, [allCartItems, checkoutItemIds, isBuyNow]);
 
-  const items = isBuyNow ? (buyNowItem ? [{ ...buyNowItem, quantity: buyNowQty }] : []) : verifiedCartItems;
+  const resolvedBuyNowQty = Math.max(1, Math.trunc(toFiniteNumber(buyNowQty, 1)));
+  const items = isBuyNow ? (buyNowItem ? [{ ...buyNowItem, quantity: resolvedBuyNowQty }] : []) : verifiedCartItems;
   const activeDiscount = isBuyNow ? buyNowDiscount : cartDiscount;
   const activeDiscountAmount = isBuyNow ? buyNowDiscountAmount : cartDiscountAmount;
 
   const getEffectiveItemUnitPrice = (item) => {
-    const regularPrice = Number(item?.product?.price);
-    const salePrice = Number(item?.product?.sale_price);
+    const regularPrice = toFiniteNumber(item?.product?.price, 0);
+    const salePrice = toFiniteNumber(item?.product?.sale_price, NaN);
     const isOnSale = Boolean(item?.product?.is_on_sale);
 
     if (isOnSale && Number.isFinite(salePrice)) {
-      return salePrice;
+      return roundCurrency(salePrice);
     }
 
-    return Number.isFinite(regularPrice) ? regularPrice : 0;
+    return roundCurrency(regularPrice);
   };
   
   const calculatedCartSubtotal = useMemo(() => {
-    return verifiedCartItems.reduce((sum, item) => {
-      const quantity = Number(item?.quantity || 0);
+    const rawSubtotal = verifiedCartItems.reduce((sum, item) => {
+      const quantity = Math.max(0, toFiniteNumber(item?.quantity, 0));
       const unitPrice = getEffectiveItemUnitPrice(item);
       return sum + (unitPrice * quantity);
     }, 0);
+    return roundCurrency(rawSubtotal);
   }, [verifiedCartItems]);
 
-  const calculatedCartTotal = calculatedCartSubtotal - (activeDiscountAmount || 0);
+  const buyNowSubtotal = buyNowItem
+    ? roundCurrency(getEffectiveItemUnitPrice({ product: buyNowItem.product }) * resolvedBuyNowQty)
+    : 0;
+  const subtotal = isBuyNow ? buyNowSubtotal : calculatedCartSubtotal;
+  const discountAmount = roundCurrency(Math.max(0, toFiniteNumber(activeDiscountAmount, 0)));
+  const total = roundCurrency(Math.max(0, subtotal - discountAmount));
 
-  const subtotal = isBuyNow && buyNowItem
-    ? ((buyNowItem.product.is_on_sale && buyNowItem.product.sale_price ? buyNowItem.product.sale_price : buyNowItem.product.price) * buyNowQty)
-    : calculatedCartSubtotal;
-  const total = isBuyNow ? subtotal - (activeDiscountAmount || 0) : calculatedCartTotal;
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showNewAddress, setShowNewAddress] = useState(false);
@@ -299,10 +316,21 @@ const Checkout = () => {
     }).catch(() => {});
   }, []);
 
-  const shippingCost = shippingMethod === 'pickup' ? 0 : shippingMethod === 'express' ? 300 : subtotal >= 2500 ? 0 : 150;
-  const grandTotal = total + shippingCost;
+  const shippingCost = shippingMethod === 'pickup'
+    ? 0
+    : shippingMethod === 'express'
+      ? CHECKOUT_EXPRESS_SHIPPING_FEE
+      : subtotal >= CHECKOUT_FREE_STANDARD_SHIPPING_THRESHOLD
+        ? 0
+        : CHECKOUT_STANDARD_SHIPPING_FEE;
+  const vatBase = roundCurrency(Math.max(0, total + shippingCost));
+  const vatAmount = roundCurrency(vatBase * CHECKOUT_VAT_RATE);
+  const grandTotal = roundCurrency(vatBase + vatAmount);
 
-  const formatPrice = (p) => `PHP ${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const formatPrice = (price) => {
+    const safePrice = roundCurrency(price);
+    return `PHP ${safePrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  };
   const digitsOnly = (value) => value.replace(/\D/g, '');
   const validateZip = (zip) => /^\d{4}$/.test(zip);
 
@@ -473,7 +501,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
       if (paymentMethod === 'card') {
         await createPaymentIntent(Math.round(grandTotal), items.map((i) => ({
           product_id: i.productId,
-          quantity: i.quantity
+          quantity: Math.max(1, Math.trunc(toFiniteNumber(i.quantity, 1)))
         })), 'php');
       }
 
@@ -481,10 +509,10 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         user_id: u?.id,
         items: items.map((i) => ({
           productId: i.productId,
-          quantity: i.quantity,
-          price: i.product.is_on_sale && i.product.sale_price ? i.product.sale_price : i.product.price,
+          quantity: Math.max(1, Math.trunc(toFiniteNumber(i.quantity, 1))),
+          price: getEffectiveItemUnitPrice(i),
           product_name: i.product?.name,
-          product_price: i.product.is_on_sale && i.product.sale_price ? i.product.sale_price : i.product.price
+          product_price: getEffectiveItemUnitPrice(i)
         })),
         shipping_address: shippingAddress,
         shipping_address_snapshot: shippingAddressSnapshot,
@@ -492,9 +520,10 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         shipping_lng: shippingLng,
         shipping_method: shippingMethod,
         total_amount: grandTotal,
+        tax_amount: vatAmount,
         payment_method: paymentMethod,
         guest_info: !u ? { name: form.name, email: form.email } : undefined,
-        discount_amount: activeDiscountAmount,
+        discount_amount: discountAmount,
         promo_code_used: activeDiscount?.code,
       };
 
@@ -713,7 +742,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
               <Section title="Shipping Method" icon={<Truck size={18} />}>
                 <div className="space-y-2">
                   {[
-                    { id: 'standard', label: 'Standard Shipping', desc: '3-5 business days', price: subtotal >= 2500 ? 'Free' : 'PHP 150.00' },
+                    { id: 'standard', label: 'Standard Shipping', desc: '3-5 business days', price: subtotal >= CHECKOUT_FREE_STANDARD_SHIPPING_THRESHOLD ? 'Free' : `PHP ${CHECKOUT_STANDARD_SHIPPING_FEE.toFixed(2)}` },
                     { id: 'express', label: 'Express Shipping', desc: '1-2 business days', price: 'PHP 300.00' },
                     { id: 'pickup', label: 'Store Pickup', desc: 'Pick up at our store', price: 'Free' },
                   ].map((method) => (
@@ -893,7 +922,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                           </>
                         )}
                       </div>
-                      <span className="text-sm font-medium text-gray-900">{formatPrice((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity)}</span>
+                      <span className="text-sm font-medium text-gray-900">{formatPrice(getEffectiveItemUnitPrice(item) * Math.max(0, toFiniteNumber(item.quantity, 0)))}</span>
                     </div>
                   ))}
                 </div>
@@ -922,9 +951,9 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
-                  {activeDiscountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(activeDiscountAmount)}</span></div>}
+                  {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(discountAmount)}</span></div>}
                   <div className="flex justify-between text-gray-500"><span>Shipping</span><span className={shippingCost === 0 ? 'text-green-500 font-medium' : 'text-gray-600'}>{shippingCost === 0 ? 'Free' : formatPrice(shippingCost)}</span></div>
-                  <div className="flex justify-between text-gray-400 text-xs"><span>VAT (12% included)</span><span>{formatPrice((grandTotal / 1.12) * 0.12)}</span></div>
+                  <div className="flex justify-between text-gray-400 text-xs"><span>VAT (12%)</span><span>{formatPrice(vatAmount)}</span></div>
                   <div className="border-t border-slate-200 pt-2 flex justify-between"><span className="font-semibold text-gray-900">Total</span><span className="font-bold text-2xl text-gray-900">{formatPrice(grandTotal)}</span></div>
                 </div>
 

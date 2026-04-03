@@ -5,6 +5,18 @@ import { getOrderById } from '../../services/api';
 
 const API = window.__API_URL__ || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const roundCurrency = (value) => {
+  const parsed = toFiniteNumber(value, 0);
+  return Math.round(parsed * 100) / 100;
+};
+
+const formatCurrency = (value) => `₱${roundCurrency(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+
 const OrderConfirmation = () => {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
@@ -32,6 +44,9 @@ const OrderConfirmation = () => {
       <div className="w-10 h-10 border-4 border-red-100 border-t-orange-500 rounded-full animate-spin" />
     </div>
   );
+
+  const vatAmount = roundCurrency(order?.tax_amount ?? order?.vat_amount ?? 0);
+  const totalAmount = roundCurrency(order?.total ?? order?.total_amount ?? 0);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-16">
@@ -70,7 +85,7 @@ const OrderConfirmation = () => {
                 const productId = resolveOrderItemProductId(item);
                 const itemTitle = item.name || item.product_name;
                 const itemImage = item.image_url || item.product?.image;
-                const lineTotal = Number(item.price ?? item.product?.price ?? 0) * item.quantity;
+                const lineTotal = roundCurrency(roundCurrency(item.price ?? item.product?.price ?? 0) * Math.max(0, toFiniteNumber(item.quantity, 0)));
 
                 return (
                   <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-3">
@@ -93,16 +108,22 @@ const OrderConfirmation = () => {
                       ) : (
                         <p className="text-sm text-white truncate">{itemTitle}</p>
                       )}
-                      <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
+                      <p className="text-xs text-gray-400">Qty: {Math.max(0, toFiniteNumber(item.quantity, 0))}</p>
                     </div>
-                    <p className="text-sm font-medium text-white">₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-sm font-medium text-white">{formatCurrency(lineTotal)}</p>
                   </div>
                 );
               })}
             </div>
+            {vatAmount > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-700 flex justify-between text-sm text-gray-400">
+                <span>VAT (12%)</span>
+                <span>{formatCurrency(vatAmount)}</span>
+              </div>
+            )}
             <div className="mt-4 pt-4 border-t border-gray-700 flex justify-between font-semibold text-white">
               <span>Total</span>
-              <span>₱{Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+              <span>{formatCurrency(totalAmount)}</span>
             </div>
           </div>
         </div>

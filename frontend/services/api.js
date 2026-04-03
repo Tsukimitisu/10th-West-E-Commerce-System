@@ -1924,24 +1924,57 @@ const deleteCategoryMock = async (id) => {
 
 // ==================== ORDERS ====================
 
+const ORDER_VAT_RATE = 0.12;
+const ORDER_FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
+const ORDER_STANDARD_SHIPPING_FEE = 150;
+const ORDER_EXPRESS_SHIPPING_FEE = 300;
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const roundCurrency = (value) => {
+  const parsed = toFiniteNumber(value, 0);
+  return Math.round(parsed * 100) / 100;
+};
+
+const normalizeShippingMethod = (value) => {
+  const normalized = String(value || 'standard').trim().toLowerCase();
+  if (normalized === 'express' || normalized === 'pickup' || normalized === 'standard') {
+    return normalized;
+  }
+  return 'standard';
+};
+
+const deriveShippingFromMethod = (shippingMethod, subtotalAmount) => {
+  if (shippingMethod === 'pickup') return 0;
+  if (shippingMethod === 'express') return ORDER_EXPRESS_SHIPPING_FEE;
+  return subtotalAmount >= ORDER_FREE_STANDARD_SHIPPING_THRESHOLD ? 0 : ORDER_STANDARD_SHIPPING_FEE;
+};
+
 const mapOrderItemToCartItem = (item) => {
   const rawProductReference = item.product_id ?? item.productId ?? item.product?.id ?? null;
   const parsedProductId = Number(rawProductReference);
   const hasProductReference = Number.isInteger(parsedProductId) && parsedProductId > 0;
+  const resolvedQuantity = Math.max(1, Math.trunc(toFiniteNumber(item.quantity ?? item.qty, 1)));
   const productId = hasProductReference ? parsedProductId : 0;
   const product = {
     id: productId,
     partNumber: item.product_part_number ?? item.product?.partNumber ?? item.product?.part_number ?? '',
     name: item.product_name ?? item.product?.name ?? 'Unknown Item',
     description: item.product?.description ?? '',
-    price: Number(item.product_price ?? item.price ?? item.product_price_current ?? item.product?.price ?? 0),
-    buyingPrice: Number(item.product_buying_price ?? item.product?.buyingPrice ?? item.product?.buying_price ?? 0),
+    price: roundCurrency(item.product_price ?? item.price ?? item.product_price_current ?? item.product?.price ?? 0),
+    buyingPrice: roundCurrency(item.product_buying_price ?? item.product?.buyingPrice ?? item.product?.buying_price ?? 0),
     image: item.product_image ?? item.product?.image ?? '',
     category_id: item.product_category_id ?? item.product?.category_id ?? 0,
     stock_quantity: item.product_stock_quantity ?? item.product?.stock_quantity ?? 0,
     boxNumber: item.product_box_number ?? item.product?.boxNumber ?? item.product?.box_number ?? '',
     low_stock_threshold: item.product_low_stock_threshold ?? item.product?.low_stock_threshold ?? 0,
-    sale_price: item.product_sale_price ?? item.product?.sale_price,
+    sale_price: (() => {
+      const salePrice = toFiniteNumber(item.product_sale_price ?? item.product?.sale_price, NaN);
+      return Number.isFinite(salePrice) ? roundCurrency(salePrice) : null;
+    })(),
     is_on_sale: item.product_is_on_sale ?? item.product?.is_on_sale,
     sku: item.product_sku ?? item.product?.sku,
     barcode: item.product_barcode ?? item.product?.barcode,
@@ -1951,42 +1984,67 @@ const mapOrderItemToCartItem = (item) => {
     productId,
     productReferenceId: hasProductReference ? productId : null,
     product,
-    quantity: item.quantity ?? item.qty ?? 1,
+    quantity: resolvedQuantity,
   };
 };
 
-const mapOrderFromApi = (order) => ({
-  id: order.id,
-  user_id: order.user_id ?? undefined,
-  guest_info: order.guest_name
-    ? { name: order.guest_name, email: order.guest_email }
-    : order.guest_info,
-  items: Array.isArray(order.items) ? order.items.map(mapOrderItemToCartItem) : [],
-  total_amount: Number(order.total_amount ?? 0),
-  status: order.status,
-  shipping_address: order.shipping_address ?? '',
-  shipping_address_snapshot: order.shipping_address_snapshot ?? null,
-  created_at: order.created_at ?? new Date().toISOString(),
-  source: order.source ?? 'online',
-  payment_method: order.payment_method,
-  tracking_number: order.tracking_number ?? undefined,
-  delivered_at: order.delivered_at ?? undefined,
-  rider_confirmed_delivery_at: order.rider_confirmed_delivery_at ?? undefined,
-  rider_confirmed_by: order.rider_confirmed_by ?? undefined,
-  customer_confirmed_receipt_at: order.customer_confirmed_receipt_at ?? undefined,
-  amount_tendered: order.amount_tendered != null ? Number(order.amount_tendered) : undefined,
-  change_due: order.change_due != null ? Number(order.change_due) : undefined,
-  cashier_id: order.cashier_id ?? undefined,
-  discount_amount: order.discount_amount != null ? Number(order.discount_amount) : undefined,
-  promo_code_used: order.promo_code_used ?? undefined,
-  shipping_lat: order.shipping_lat ?? undefined,
-  shipping_lng: order.shipping_lng ?? undefined,
-  return_eligible: Boolean(order.return_eligible),
-  return_eligibility_message: order.return_eligibility_message ?? '',
-  return_window_days: order.return_window_days != null ? Number(order.return_window_days) : undefined,
-  return_deadline_at: order.return_deadline_at ?? null,
-  return_request: order.return_request ?? null,
-});
+const mapOrderFromApi = (order) => {
+  const mappedItems = Array.isArray(order.items) ? order.items.map(mapOrderItemToCartItem) : [];
+  const derivedSubtotal = roundCurrency(mappedItems.reduce((sum, item) => {
+    const quantity = toFiniteNumber(item.quantity, 0);
+    const price = roundCurrency(item.product?.price ?? 0);
+    return sum + (price * quantity);
+  }, 0));
+  const discountAmount = roundCurrency(order.discount_amount ?? order.discount ?? 0);
+  const shippingMethod = normalizeShippingMethod(order.shipping_method);
+  const shippingAmount = roundCurrency(
+    order.shipping ?? order.shipping_fee ?? deriveShippingFromMethod(shippingMethod, derivedSubtotal)
+  );
+  const fallbackTaxAmount = roundCurrency(Math.max(0, derivedSubtotal - discountAmount + shippingAmount) * ORDER_VAT_RATE);
+  const taxAmount = roundCurrency(order.tax_amount ?? order.vat_amount ?? fallbackTaxAmount);
+  const fallbackTotal = roundCurrency(Math.max(0, derivedSubtotal - discountAmount + shippingAmount + taxAmount));
+  const totalAmount = roundCurrency(order.total_amount ?? order.total ?? fallbackTotal);
+  const subtotalAmount = roundCurrency(order.subtotal ?? derivedSubtotal);
+
+  return {
+    id: order.id,
+    user_id: order.user_id ?? undefined,
+    guest_info: order.guest_name
+      ? { name: order.guest_name, email: order.guest_email }
+      : order.guest_info,
+    items: mappedItems,
+    subtotal: subtotalAmount,
+    total: totalAmount,
+    total_amount: totalAmount,
+    discount: discountAmount,
+    discount_amount: discountAmount,
+    shipping: shippingAmount,
+    tax_amount: taxAmount,
+    shipping_method: shippingMethod,
+    status: order.status,
+    shipping_address: order.shipping_address ?? '',
+    shipping_address_snapshot: order.shipping_address_snapshot ?? null,
+    created_at: order.created_at ?? new Date().toISOString(),
+    source: order.source ?? 'online',
+    payment_method: order.payment_method,
+    tracking_number: order.tracking_number ?? undefined,
+    delivered_at: order.delivered_at ?? undefined,
+    rider_confirmed_delivery_at: order.rider_confirmed_delivery_at ?? undefined,
+    rider_confirmed_by: order.rider_confirmed_by ?? undefined,
+    customer_confirmed_receipt_at: order.customer_confirmed_receipt_at ?? undefined,
+    amount_tendered: order.amount_tendered != null ? roundCurrency(order.amount_tendered) : undefined,
+    change_due: order.change_due != null ? roundCurrency(order.change_due) : undefined,
+    cashier_id: order.cashier_id ?? undefined,
+    promo_code_used: order.promo_code_used ?? undefined,
+    shipping_lat: order.shipping_lat ?? undefined,
+    shipping_lng: order.shipping_lng ?? undefined,
+    return_eligible: Boolean(order.return_eligible),
+    return_eligibility_message: order.return_eligibility_message ?? '',
+    return_window_days: order.return_window_days != null ? toFiniteNumber(order.return_window_days) : undefined,
+    return_deadline_at: order.return_deadline_at ?? null,
+    return_request: order.return_request ?? null,
+  };
+};
 
 const STAFF_ORDER_STATUS_TRANSITIONS = {
   pending: new Set(['paid', 'preparing', 'cancelled']),
@@ -2100,7 +2158,7 @@ export const createOrder = async (order) => {
       id: MOCK_ORDERS.length + 1001,
       user_id: order.user_id,
       items: order.items || [],
-      total_amount: order.total_amount || 0,
+      total_amount: roundCurrency(order.total_amount || 0),
       status: OrderStatus.PENDING,
       shipping_address: order.shipping_address || '',
       shipping_address_snapshot: order.shipping_address_snapshot || null,
@@ -2109,6 +2167,9 @@ export const createOrder = async (order) => {
       created_at: new Date().toISOString(),
       source: order.source || 'online',
       payment_method: order.payment_method,
+      discount_amount: roundCurrency(order.discount_amount || 0),
+      tax_amount: roundCurrency(order.tax_amount || 0),
+      shipping_method: normalizeShippingMethod(order.shipping_method),
       guest_info: order.guest_info,
     };
     MOCK_ORDERS.push(newOrder);
@@ -2121,12 +2182,15 @@ export const createOrder = async (order) => {
       .from('orders')
       .insert({
         user_id: order.user_id,
-        total_amount: order.total_amount,
+        total_amount: roundCurrency(order.total_amount),
         status: OrderStatus.PENDING,
         shipping_address: order.shipping_address,
         shipping_address_snapshot: order.shipping_address_snapshot ?? null,
         shipping_lat: order.shipping_lat ?? null,
         shipping_lng: order.shipping_lng ?? null,
+        discount_amount: roundCurrency(order.discount_amount || 0),
+        tax_amount: roundCurrency(order.tax_amount || 0),
+        shipping_method: normalizeShippingMethod(order.shipping_method),
         source: order.source || 'online',
         payment_method: order.payment_method,
         guest_name: order.guest_info?.name,
@@ -2156,14 +2220,15 @@ export const createOrder = async (order) => {
     const orderItems = rawItems.map((item) => {
       const productId = item.productId ?? item.product_id ?? item.product?.id ?? null;
       const product = productId != null ? productLookup.get(productId) : null;
-      const resolvedPrice = Number(
+      const resolvedPrice = roundCurrency(
         item.product_price ?? item.price ?? item.product?.price ?? product?.price ?? 0
       );
+      const resolvedQuantity = Math.max(1, Math.trunc(toFiniteNumber(item.quantity ?? 1, 1)));
 
       return {
         order_id: orderData.id,
         product_id: productId,
-        quantity: Number(item.quantity ?? 1),
+        quantity: resolvedQuantity,
         product_name: item.product_name ?? item.name ?? item.product?.name ?? product?.name ?? 'Unknown Product',
         product_price: resolvedPrice,
         price: resolvedPrice,
@@ -2219,7 +2284,7 @@ export const createOrder = async (order) => {
     notifyAdminStaff(
       'order.new',
       'New Order Received',
-      `Order #${String(orderData.id).padStart(4, '0')} â€” â‚±${Number(order.total_amount).toLocaleString()} (${orderItems.length} item${orderItems.length !== 1 ? 's' : ''})`,
+      `Order #${String(orderData.id).padStart(4, '0')} â€” â‚±${roundCurrency(order.total_amount).toLocaleString()} (${orderItems.length} item${orderItems.length !== 1 ? 's' : ''})`,
       orderData.id,
       'order'
     );
