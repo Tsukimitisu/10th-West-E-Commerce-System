@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { getProducts, getCategories, getSubcategories, createProduct, updateProduct, deleteProduct, uploadProductImage, uploadProductVideo, addCategory, updateCategory, deleteCategory, addSubcategory, updateSubcategory, deleteSubcategory } from '../../services/api';
-import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle, Layers, GripVertical } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle, Layers, GripVertical, ChevronDown, Check, Bold, Italic, Underline, List, ListOrdered } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import VariantsModal from '../../components/owner/VariantsModal';
 import { useSocketEvent } from '../../context/SocketContext';
@@ -35,6 +35,36 @@ const PRODUCT_VIDEO_ALLOWED_TYPES = new Set([
 ]);
 
 const createProductMediaId = () => `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const escapeHtml = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const containsHtml = (value = '') => /<[a-z][\s\S]*>/i.test(String(value));
+
+const normalizeDescriptionHtml = (value = '') => {
+  const cleaned = String(value || '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .trim();
+
+  if (!cleaned || cleaned === '<br>') return '';
+  return cleaned;
+};
+
+const toDescriptionEditorHtml = (value = '') => {
+  const cleaned = normalizeDescriptionHtml(value);
+  if (!cleaned) return '';
+  if (containsHtml(cleaned)) return cleaned;
+
+  return cleaned
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+};
 
 const reorderMediaItemsById = (items, sourceId, targetId) => {
   if (!Array.isArray(items) || !sourceId || !targetId || sourceId === targetId) return items;
@@ -180,6 +210,11 @@ const ProductsView = () => {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [formStep, setFormStep] = useState(0);
+  const [infoFieldErrors, setInfoFieldErrors] = useState({});
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [descriptionEditorInitialHtml, setDescriptionEditorInitialHtml] = useState('');
+  const [descriptionEditorSeed, setDescriptionEditorSeed] = useState(0);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategoryId, setEditingCategoryId] = useState(null);
@@ -196,6 +231,8 @@ const ProductsView = () => {
   const galleryUploadInputRef = useRef(null);
   const cameraUploadInputRef = useRef(null);
   const videoUploadInputRef = useRef(null);
+  const categoryDropdownRef = useRef(null);
+  const descriptionEditorRef = useRef(null);
 
   const fetch = async () => {
     try {
@@ -228,6 +265,19 @@ const ProductsView = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const resetProductMediaItems = (nextItems = []) => {
     productMediaItemsRef.current.forEach(revokeLocalMediaPreview);
     setProductMediaItems(nextItems);
@@ -242,13 +292,97 @@ const ProductsView = () => {
     setVideoError('');
   };
 
+  const getCategoryNameById = (categoryId) => {
+    const selectedCategory = categories.find((category) => String(category.id) === String(categoryId || ''));
+    return selectedCategory?.name || '';
+  };
+
+  const getInfoFieldErrors = (draftForm = form) => {
+    const errors = {};
+
+    if (!String(draftForm.name || '').trim()) {
+      errors.name = 'Product name is required.';
+    }
+
+    if (!String(draftForm.category_id || '').trim()) {
+      errors.category_id = 'Category is required.';
+    }
+
+    return errors;
+  };
+
+  const updateInlineInfoError = (fieldName, hasError, message) => {
+    setInfoFieldErrors((prev) => {
+      const next = { ...prev };
+      if (hasError) next[fieldName] = message;
+      else delete next[fieldName];
+      return next;
+    });
+  };
+
+  const syncDescriptionFromEditor = () => {
+    const nextHtml = normalizeDescriptionHtml(descriptionEditorRef.current?.innerHTML || '');
+    setForm((prev) => ({ ...prev, description: nextHtml }));
+  };
+
+  const executeDescriptionCommand = (command) => {
+    if (!descriptionEditorRef.current) return;
+
+    descriptionEditorRef.current.focus();
+    document.execCommand(command, false);
+    syncDescriptionFromEditor();
+  };
+
+  const handleDescriptionPaste = (event) => {
+    event.preventDefault();
+    const plainText = event.clipboardData?.getData('text/plain') || '';
+    document.execCommand('insertText', false, plainText);
+    syncDescriptionFromEditor();
+  };
+
+  const handleCategorySearchChange = (event) => {
+    const nextValue = event.target.value;
+    setCategorySearchQuery(nextValue);
+    setIsCategoryDropdownOpen(true);
+    setForm((prev) => ({
+      ...prev,
+      category_id: '',
+      subcategory_id: '',
+    }));
+
+    if (!nextValue.trim()) {
+      updateInlineInfoError('category_id', true, 'Category is required.');
+      return;
+    }
+
+    updateInlineInfoError('category_id', false, 'Category is required.');
+  };
+
+  const selectCategory = (category) => {
+    setForm((prev) => ({
+      ...prev,
+      category_id: String(category.id),
+      subcategory_id: '',
+    }));
+    setCategorySearchQuery(category.name);
+    setIsCategoryDropdownOpen(false);
+    updateInlineInfoError('category_id', false, 'Category is required.');
+  };
+
   const openAdd = () => {
+    const defaultCategoryId = categories[0]?.id?.toString() || '';
+    const defaultCategoryName = categories[0]?.name || '';
     setEditing(null);
     resetProductMediaItems([]);
     resetProductVideoItem(null);
     setFormError('');
+    setInfoFieldErrors({});
+    setCategorySearchQuery(defaultCategoryName);
+    setIsCategoryDropdownOpen(false);
+    setDescriptionEditorInitialHtml('');
+    setDescriptionEditorSeed((prev) => prev + 1);
     setFormStep(0);
-    setForm(createProductFormState({ category_id: categories[0]?.id?.toString() || '' }));
+    setForm(createProductFormState({ category_id: defaultCategoryId }));
     setModalOpen(true);
   };
 
@@ -257,6 +391,11 @@ const ProductsView = () => {
     resetProductMediaItems(resolveExistingProductMediaItems(p));
     resetProductVideoItem(resolveExistingProductVideoItem(p));
     setFormError('');
+    setInfoFieldErrors({});
+    setCategorySearchQuery(getCategoryNameById(p.category_id));
+    setIsCategoryDropdownOpen(false);
+    setDescriptionEditorInitialHtml(toDescriptionEditorHtml(p.description || ''));
+    setDescriptionEditorSeed((prev) => prev + 1);
     setFormStep(0);
     setForm(createProductFormState({
       partNumber: p.partNumber || '',
@@ -287,6 +426,11 @@ const ProductsView = () => {
     resetProductMediaItems(resolveExistingProductMediaItems(p));
     resetProductVideoItem(resolveExistingProductVideoItem(p));
     setFormError('');
+    setInfoFieldErrors({});
+    setCategorySearchQuery(getCategoryNameById(p.category_id));
+    setIsCategoryDropdownOpen(false);
+    setDescriptionEditorInitialHtml(toDescriptionEditorHtml(p.description || ''));
+    setDescriptionEditorSeed((prev) => prev + 1);
     setFormStep(0);
     setForm(createProductFormState({
       partNumber: '',
@@ -323,8 +467,10 @@ const ProductsView = () => {
     }
 
     if (stepIndex === 1) {
-      if (!String(form.name || '').trim()) return 'Product name is required.';
-      if (!String(form.category_id || '').trim()) return 'Select a product category.';
+      const infoErrors = getInfoFieldErrors(form);
+      if (Object.keys(infoErrors).length > 0) {
+        return infoErrors.name || infoErrors.category_id;
+      }
     }
 
     if (stepIndex === 2) {
@@ -382,6 +528,9 @@ const ProductsView = () => {
       for (let stepIndex = formStep; stepIndex < nextStep; stepIndex += 1) {
         const stepError = getStepValidationError(stepIndex);
         if (stepError) {
+          if (stepIndex === 1) {
+            setInfoFieldErrors(getInfoFieldErrors(form));
+          }
           setFormError(stepError);
           setFormStep(stepIndex);
           return;
@@ -397,6 +546,9 @@ const ProductsView = () => {
     for (let stepIndex = 0; stepIndex < PRODUCT_FORM_STEPS.length; stepIndex += 1) {
       const stepError = getStepValidationError(stepIndex);
       if (stepError) {
+        if (stepIndex === 1) {
+          setInfoFieldErrors(getInfoFieldErrors(form));
+        }
         setFormError(stepError);
         setFormStep(stepIndex);
         return false;
@@ -629,6 +781,11 @@ const ProductsView = () => {
     resetProductMediaItems([]);
     resetProductVideoItem(null);
     setFormError('');
+    setInfoFieldErrors({});
+    setCategorySearchQuery('');
+    setIsCategoryDropdownOpen(false);
+    setDescriptionEditorInitialHtml('');
+    setDescriptionEditorSeed((prev) => prev + 1);
     setMediaError('');
     setVideoError('');
     setIsMediaDragOver(false);
@@ -657,6 +814,9 @@ const ProductsView = () => {
       const created = await addCategory(name);
       setCategories(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
       setForm(prev => ({ ...prev, category_id: created.id.toString() }));
+      setCategorySearchQuery(created.name);
+      setIsCategoryDropdownOpen(false);
+      updateInlineInfoError('category_id', false, 'Category is required.');
       setNewCategoryName('');
     } catch (e) {
       setCategoryError(e.message || 'Failed to create category');
@@ -708,6 +868,10 @@ const ProductsView = () => {
       await deleteCategory(category.id);
       setCategories(prev => prev.filter(c => c.id !== category.id));
       setForm(prev => ({ ...prev, category_id: prev.category_id === category.id.toString() ? '' : prev.category_id }));
+      if (form.category_id === category.id.toString()) {
+        setCategorySearchQuery('');
+        updateInlineInfoError('category_id', true, 'Category is required.');
+      }
       setFilterCat(prev => (prev === category.id.toString() ? '' : prev));
       if (editingCategoryId === category.id) {
         setEditingCategoryId(null);
@@ -770,6 +934,10 @@ const ProductsView = () => {
     const matchesStock = !filterStock || (filterStock === 'low' && p.stock_quantity <= p.low_stock_threshold) || (filterStock === 'out' && p.stock_quantity === 0) || (filterStock === 'in' && p.stock_quantity > 0);
     return matchesSearch && matchesCat && matchesStock;
   });
+
+  const filteredCategoryOptions = categories.filter((category) => (
+    category.name.toLowerCase().includes(categorySearchQuery.trim().toLowerCase())
+  ));
 
 
 
@@ -1121,23 +1289,98 @@ const ProductsView = () => {
               )}
 
               {formStep === 1 && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <InputField label="Product Name" required>
-                      <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputClass} placeholder="Front Brake Pad Set" />
+                      <div className="space-y-1.5">
+                        <input
+                          type="text"
+                          value={form.name}
+                          onChange={(event) => {
+                            const nextName = event.target.value;
+                            setForm((prev) => ({ ...prev, name: nextName }));
+                            updateInlineInfoError('name', !String(nextName || '').trim(), 'Product name is required.');
+                          }}
+                          onBlur={() => updateInlineInfoError('name', !String(form.name || '').trim(), 'Product name is required.')}
+                          className={`${inputClass} ${infoFieldErrors.name ? 'border-red-400 focus:border-red-400 focus:ring-red-400/25' : ''}`}
+                          placeholder="Front Brake Pad Set"
+                        />
+                        {infoFieldErrors.name && (
+                          <p className="text-xs text-red-300">{infoFieldErrors.name}</p>
+                        )}
+                      </div>
                     </InputField>
-                    <InputField label="Part Number">
-                      <input value={form.partNumber} onChange={e => setForm(f => ({ ...f, partNumber: e.target.value, barcode: e.target.value }))} className={inputClass} placeholder="PN-001234" />
+
+                    <InputField label="Brand">
+                      <input
+                        value={form.brand}
+                        onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
+                        className={inputClass}
+                        placeholder="Honda"
+                      />
                     </InputField>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <InputField label="Category" required>
-                      <div className="space-y-2">
-                        <select value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value, subcategory_id: '' }))} className={inputClass}>
-                          <option value="">Select</option>
-                          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                      <div className="space-y-2" ref={categoryDropdownRef}>
+                        <div className={`relative rounded-lg border bg-[#202430] ${infoFieldErrors.category_id ? 'border-red-400' : 'border-white/10'}`}>
+                          <div className="flex items-center gap-2 px-3 py-2">
+                            <Search size={15} className="text-gray-400" />
+                            <input
+                              type="text"
+                              value={categorySearchQuery}
+                              onChange={handleCategorySearchChange}
+                              onFocus={() => setIsCategoryDropdownOpen(true)}
+                              onBlur={() => {
+                                window.setTimeout(() => {
+                                  setIsCategoryDropdownOpen(false);
+                                  updateInlineInfoError('category_id', !String(form.category_id || '').trim(), 'Category is required.');
+                                }, 120);
+                              }}
+                              className="flex-1 bg-transparent text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none"
+                              placeholder="Search category..."
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setIsCategoryDropdownOpen((prev) => !prev)}
+                              className="text-gray-400 hover:text-gray-200"
+                              aria-label="Toggle category options"
+                            >
+                              <ChevronDown size={16} />
+                            </button>
+                          </div>
+
+                          {isCategoryDropdownOpen && (
+                            <div className="absolute top-full left-0 right-0 mt-1 max-h-52 overflow-y-auto rounded-lg border border-white/10 bg-[#1b1f2a] z-30 shadow-xl">
+                              {filteredCategoryOptions.length === 0 ? (
+                                <p className="px-3 py-2 text-xs text-gray-400">No categories found.</p>
+                              ) : (
+                                filteredCategoryOptions.map((category) => (
+                                  <button
+                                    key={category.id}
+                                    type="button"
+                                    onMouseDown={(event) => {
+                                      event.preventDefault();
+                                      selectCategory(category);
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-sm text-gray-100 hover:bg-[#252c3d] flex items-center justify-between"
+                                  >
+                                    <span>{category.name}</span>
+                                    {String(form.category_id || '') === String(category.id) && (
+                                      <Check size={14} className="text-emerald-300" />
+                                    )}
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {infoFieldErrors.category_id && (
+                          <p className="text-xs text-red-300">{infoFieldErrors.category_id}</p>
+                        )}
+
                         <button type="button" onClick={openCategoryModal} className="text-xs font-medium text-red-400 hover:text-red-300">
                           + Manage Categories
                         </button>
@@ -1164,12 +1407,34 @@ const ProductsView = () => {
                     </InputField>
                   </div>
 
-                  <InputField label="Brand">
-                    <input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className={inputClass} placeholder="Honda" />
+                  <InputField label="Description (Rich Text)">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-1 rounded-lg border border-white/10 bg-[#202430]/60 p-1.5">
+                        <button type="button" onClick={() => executeDescriptionCommand('bold')} className="p-1.5 rounded hover:bg-white/10 text-gray-200" title="Bold"><Bold size={14} /></button>
+                        <button type="button" onClick={() => executeDescriptionCommand('italic')} className="p-1.5 rounded hover:bg-white/10 text-gray-200" title="Italic"><Italic size={14} /></button>
+                        <button type="button" onClick={() => executeDescriptionCommand('underline')} className="p-1.5 rounded hover:bg-white/10 text-gray-200" title="Underline"><Underline size={14} /></button>
+                        <div className="w-px h-5 bg-white/10 mx-1" />
+                        <button type="button" onClick={() => executeDescriptionCommand('insertUnorderedList')} className="p-1.5 rounded hover:bg-white/10 text-gray-200" title="Bullet List"><List size={14} /></button>
+                        <button type="button" onClick={() => executeDescriptionCommand('insertOrderedList')} className="p-1.5 rounded hover:bg-white/10 text-gray-200" title="Numbered List"><ListOrdered size={14} /></button>
+                      </div>
+
+                      <div
+                        key={`description-editor-${descriptionEditorSeed}`}
+                        ref={descriptionEditorRef}
+                        contentEditable
+                        suppressContentEditableWarning
+                        onInput={syncDescriptionFromEditor}
+                        onPaste={handleDescriptionPaste}
+                        className="min-h-[150px] w-full rounded-lg border border-white/10 bg-[#202430] px-3 py-2 text-sm text-gray-100 leading-6 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                        dangerouslySetInnerHTML={{ __html: descriptionEditorInitialHtml || '<p></p>' }}
+                      />
+
+                      <p className="text-[11px] text-gray-500">Use the toolbar to format product details.</p>
+                    </div>
                   </InputField>
 
-                  <InputField label="Description">
-                    <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={4} className={inputClass} placeholder="Product description..." />
+                  <InputField label="Part Number">
+                    <input value={form.partNumber} onChange={e => setForm(f => ({ ...f, partNumber: e.target.value, barcode: e.target.value }))} className={inputClass} placeholder="PN-001234" />
                   </InputField>
                 </div>
               )}
