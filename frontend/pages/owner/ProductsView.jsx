@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { getProducts, getCategories, getSubcategories, createProduct, updateProduct, deleteProduct, uploadProductImage, addCategory, updateCategory, deleteCategory, addSubcategory, updateSubcategory, deleteSubcategory } from '../../services/api';
-import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle, Layers } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle, Layers, GripVertical } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import VariantsModal from '../../components/owner/VariantsModal';
 import { useSocketEvent } from '../../context/SocketContext';
@@ -26,6 +26,21 @@ const PRODUCT_MEDIA_ALLOWED_TYPES = new Set([
 ]);
 
 const createProductMediaId = () => `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const reorderMediaItemsById = (items, sourceId, targetId) => {
+  if (!Array.isArray(items) || !sourceId || !targetId || sourceId === targetId) return items;
+
+  const sourceIndex = items.findIndex((item) => item.id === sourceId);
+  const targetIndex = items.findIndex((item) => item.id === targetId);
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items;
+
+  const reordered = [...items];
+  const [movedItem] = reordered.splice(sourceIndex, 1);
+  reordered.splice(targetIndex, 0, movedItem);
+  return reordered;
+};
+
+const hasDraggedFiles = (event) => Array.from(event?.dataTransfer?.types || []).includes('Files');
 
 const normalizeProductMediaUrls = (value) => {
   if (!value) return [];
@@ -131,6 +146,7 @@ const ProductsView = () => {
   const [productMediaItems, setProductMediaItems] = useState([]);
   const [mediaError, setMediaError] = useState('');
   const [isMediaDragOver, setIsMediaDragOver] = useState(false);
+  const [draggingMediaId, setDraggingMediaId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [formStep, setFormStep] = useState(0);
@@ -180,6 +196,7 @@ const ProductsView = () => {
     setProductMediaItems(nextItems);
     setMediaError('');
     setIsMediaDragOver(false);
+    setDraggingMediaId(null);
   };
 
   const openAdd = () => {
@@ -397,9 +414,37 @@ const ProductsView = () => {
   };
 
   const handleMediaDrop = (event) => {
+    if (!hasDraggedFiles(event)) return;
     event.preventDefault();
     setIsMediaDragOver(false);
     handleProductMediaFiles(event.dataTransfer?.files);
+  };
+
+  const handleMediaItemDragStart = (event, mediaItemId) => {
+    setDraggingMediaId(mediaItemId);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', mediaItemId);
+    }
+  };
+
+  const handleMediaItemDragOver = (event, targetMediaId) => {
+    event.preventDefault();
+    if (!draggingMediaId || draggingMediaId === targetMediaId) return;
+
+    event.dataTransfer.dropEffect = 'move';
+    setProductMediaItems((prev) => reorderMediaItemsById(prev, draggingMediaId, targetMediaId));
+  };
+
+  const handleMediaItemDrop = (event, targetMediaId) => {
+    event.preventDefault();
+    if (!draggingMediaId || draggingMediaId === targetMediaId) return;
+
+    setProductMediaItems((prev) => reorderMediaItemsById(prev, draggingMediaId, targetMediaId));
+  };
+
+  const handleMediaItemDragEnd = () => {
+    setDraggingMediaId(null);
   };
 
   const removeProductMediaItem = (mediaItemId) => {
@@ -488,6 +533,7 @@ const ProductsView = () => {
     setFormError('');
     setMediaError('');
     setIsMediaDragOver(false);
+    setDraggingMediaId(null);
   };
 
   const openCategoryModal = () => {
@@ -805,10 +851,12 @@ const ProductsView = () => {
                 <div className="space-y-4">
                   <div
                     onDragOver={(event) => {
+                      if (!hasDraggedFiles(event)) return;
                       event.preventDefault();
                       setIsMediaDragOver(true);
                     }}
                     onDragLeave={(event) => {
+                      if (!hasDraggedFiles(event)) return;
                       event.preventDefault();
                       setIsMediaDragOver(false);
                     }}
@@ -870,11 +918,30 @@ const ProductsView = () => {
                     )}
                   </div>
 
+                  {productMediaItems.length > 1 && (
+                    <p className="text-[11px] text-gray-400">Drag images to reorder. The first image is saved as the cover image.</p>
+                  )}
+
                   {productMediaItems.length > 0 && (
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       {productMediaItems.map((item, index) => (
-                        <div key={item.id} className="relative group rounded-xl overflow-hidden border border-white/10 bg-[#202430]">
+                        <div
+                          key={item.id}
+                          draggable
+                          onDragStart={(event) => handleMediaItemDragStart(event, item.id)}
+                          onDragOver={(event) => handleMediaItemDragOver(event, item.id)}
+                          onDrop={(event) => handleMediaItemDrop(event, item.id)}
+                          onDragEnd={handleMediaItemDragEnd}
+                          className={`relative group rounded-xl overflow-hidden border bg-[#202430] transition-all ${
+                            draggingMediaId === item.id
+                              ? 'border-red-400/70 ring-2 ring-red-400/40 opacity-80 scale-[0.98]'
+                              : 'border-white/10 hover:border-white/25'
+                          }`}
+                        >
                           <img src={item.previewUrl} alt={`Media ${index + 1}`} className="w-full aspect-square object-cover" />
+                          <div className="absolute top-1.5 left-1.5 w-7 h-7 rounded-full bg-black/70 text-white/90 flex items-center justify-center cursor-grab active:cursor-grabbing" title="Drag to reorder">
+                            <GripVertical size={13} />
+                          </div>
                           <button
                             type="button"
                             onClick={() => removeProductMediaItem(item.id)}
