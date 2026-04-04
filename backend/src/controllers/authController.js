@@ -43,7 +43,10 @@ const sanitizeUser = (row) => ({
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 15;
-const EMAIL_VERIFICATION_WINDOW_MINUTES = 60;
+const EMAIL_VERIFICATION_WINDOW_MINUTES = Math.min(
+  3,
+  Math.max(1, Number.parseInt(process.env.EMAIL_VERIFICATION_WINDOW_MINUTES || '3', 10) || 3)
+);
 const BCRYPT_ROUNDS = 12;
 const VERIFICATION_LOCK_TIMEOUT_MS = 5000;
 const VERIFICATION_STATEMENT_TIMEOUT_MS = 12000;
