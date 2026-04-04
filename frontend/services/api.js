@@ -1022,6 +1022,16 @@ const mapProductFromSupabase = (p) => ({
   reviewCount: Number(p.review_count ?? p.reviewCount ?? 0),
 });
 
+const normalizeProductImageUrls = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(new Set(
+    value
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+  )).slice(0, 9);
+};
+
 const mapProductToSupabase = (product) => ({
   part_number: toNullableString(product.partNumber),
   name: product.name,
@@ -1039,6 +1049,7 @@ const mapProductToSupabase = (product) => ({
   sale_price: product.sale_price,
   is_on_sale: product.is_on_sale,
   status: toNullableString(product.status) || 'available',
+  image_urls: normalizeProductImageUrls(product.image_urls),
 });
 
 const toApprovedReviewStatus = (review) => {
@@ -1642,6 +1653,7 @@ export const addProduct = async (product) => {
     sale_price: product.sale_price,
     is_on_sale: product.is_on_sale,
     status: toNullableString(product.status) || 'available',
+    image_urls: normalizeProductImageUrls(product.image_urls),
   };
 
   const data = await authenticatedFetch(`${API_URL}/products`, {
@@ -1696,6 +1708,7 @@ export const updateProduct = async (id, product) => {
     sale_price: product.sale_price,
     is_on_sale: product.is_on_sale,
     status: toNullableString(product.status) || 'available',
+    image_urls: normalizeProductImageUrls(product.image_urls),
   };
 
   const data = await authenticatedFetch(`${API_URL}/products/${id}`, {

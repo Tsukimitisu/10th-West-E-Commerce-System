@@ -36,6 +36,30 @@ const toNullableProductStatus = (value) => {
   return ALLOWED_PRODUCT_STATUSES.has(normalized) ? normalized : null;
 };
 
+const normalizeProductImageUrls = (value) => {
+  if (!value) return [];
+
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      parsed = value
+        .split(/[\n,|]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  if (!Array.isArray(parsed)) return [];
+
+  return Array.from(new Set(
+    parsed
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+  )).slice(0, 9);
+};
+
 const tokenizeSearchTerms = (value) => {
   const normalized = String(value || '')
     .toLowerCase()
@@ -72,6 +96,17 @@ const parseResultLimit = (value, fallback = null, max = 80) => {
   if (parsed < 1) return 1;
   return Math.min(parsed, max);
 };
+
+const ensureProductSchema = async () => {
+  await pool.query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb;
+  `).catch((error) => {
+    console.error('Failed to ensure products.image_urls column:', error);
+  });
+};
+
+ensureProductSchema();
 
 // Get all products
 export const getProducts = async (req, res) => {
@@ -301,7 +336,7 @@ export const createProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
     image, category_id, stock_quantity, box_number,
-    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status
+    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls
   } = req.body;
 
   try {
@@ -317,18 +352,20 @@ export const createProduct = async (req, res) => {
     const cleanSalePrice = toNullableNumber(sale_price);
     const cleanIsOnSale = typeof is_on_sale === 'boolean' ? is_on_sale : null;
     const cleanStatus = toNullableProductStatus(status);
+    const cleanImageUrls = normalizeProductImageUrls(image_urls);
 
     const result = await pool.query(
       `INSERT INTO products (
         part_number, name, description, price, buying_price, 
         image, category_id, stock_quantity, box_number, 
-        low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15, false), COALESCE($16, 'available'))
+        low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15, false), COALESCE($16, 'available'), COALESCE($17::jsonb, '[]'::jsonb))
       RETURNING *`,
       [
         cleanPartNumber, name, description, price, buying_price,
         cleanImage, cleanCategoryId, cleanStockQuantity ?? 0, cleanBoxNumber,
-        cleanLowStockThreshold ?? 5, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, cleanStatus
+        cleanLowStockThreshold ?? 5, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, cleanStatus,
+        JSON.stringify(cleanImageUrls)
       ]
     );
 
@@ -354,7 +391,7 @@ export const updateProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
     image, category_id, stock_quantity, box_number,
-    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status
+    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls
   } = req.body;
 
   try {
@@ -370,6 +407,10 @@ export const updateProduct = async (req, res) => {
     const cleanSalePrice = toNullableNumber(sale_price);
     const cleanIsOnSale = typeof is_on_sale === 'boolean' ? is_on_sale : null;
     const cleanStatus = toNullableProductStatus(status);
+    const cleanImageUrls = normalizeProductImageUrls(image_urls);
+    const hasImageUrlsPayload = Array.isArray(image_urls)
+      || (typeof image_urls === 'string' && image_urls.trim().length > 0);
+    const imageUrlsPayload = hasImageUrlsPayload ? JSON.stringify(cleanImageUrls) : null;
 
     const result = await pool.query(
       `UPDATE products SET
@@ -389,13 +430,15 @@ export const updateProduct = async (req, res) => {
         sale_price = COALESCE($14, sale_price),
         is_on_sale = COALESCE($15, is_on_sale),
         status = COALESCE($16, status),
+        image_urls = COALESCE($17::jsonb, image_urls),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $17
+      WHERE id = $18
       RETURNING *`,
       [
         cleanPartNumber, name, description, price, buying_price,
         cleanImage, cleanCategoryId, cleanStockQuantity, cleanBoxNumber,
-        cleanLowStockThreshold, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, cleanStatus, id
+        cleanLowStockThreshold, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, cleanStatus,
+        imageUrlsPayload, id
       ]
     );
 

@@ -8,7 +8,6 @@
 BEGIN;
 
 -- ==================== TABLES ====================
-
 -- 1. Users
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
@@ -70,6 +69,7 @@ CREATE TABLE IF NOT EXISTS products (
   price DECIMAL(10,2) NOT NULL,
   buying_price DECIMAL(10,2),
   image VARCHAR(500),
+  image_urls JSONB DEFAULT '[]'::jsonb,
   category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   subcategory_id INTEGER REFERENCES subcategories(id) ON DELETE SET NULL,
   stock_quantity INTEGER DEFAULT 0,
@@ -537,6 +537,7 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER REFERENCES 
 ALTER TABLE products ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'available';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS expiry_date DATE;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb;
 
 -- Orders: new columns for tracking / fulfillment
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number VARCHAR(255);

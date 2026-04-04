@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { getProducts, getCategories, getSubcategories, createProduct, updateProduct, deleteProduct, uploadProductImage, addCategory, updateCategory, deleteCategory, addSubcategory, updateSubcategory, deleteSubcategory } from '../../services/api';
 import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle, Layers } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
@@ -14,6 +14,74 @@ const PRODUCT_FORM_STEPS = [
   { key: 'status', label: 'Status', hint: 'Visibility and sale state' },
 ];
 
+const PRODUCT_MEDIA_MIN_FILES = 1;
+const PRODUCT_MEDIA_MAX_FILES = 9;
+const PRODUCT_MEDIA_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+const PRODUCT_MEDIA_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
+const PRODUCT_MEDIA_ALLOWED_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+
+const createProductMediaId = () => `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeProductMediaUrls = (value) => {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item : item?.url || item?.image || ''))
+      .map((item) => String(item || '').trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return normalizeProductMediaUrls(parsed);
+      }
+    } catch {
+      // Parse as comma/newline delimited text when not JSON.
+    }
+
+    return trimmed
+      .split(/[\n,|]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
+const resolveExistingProductMediaItems = (product) => {
+  const collected = [
+    ...normalizeProductMediaUrls(product?.image_urls),
+    ...normalizeProductMediaUrls(product?.gallery_images),
+    ...normalizeProductMediaUrls(product?.image),
+  ];
+
+  const deduped = Array.from(new Set(collected.map((item) => String(item || '').trim()).filter(Boolean))).slice(0, PRODUCT_MEDIA_MAX_FILES);
+
+  return deduped.map((url) => ({
+    id: createProductMediaId(),
+    source: 'existing',
+    previewUrl: url,
+    url,
+  }));
+};
+
+const revokeLocalMediaPreview = (mediaItem) => {
+  if (mediaItem?.source === 'local' && String(mediaItem?.previewUrl || '').startsWith('blob:')) {
+    URL.revokeObjectURL(mediaItem.previewUrl);
+  }
+};
+
 const createProductFormState = (overrides = {}) => ({
   partNumber: '',
   name: '',
@@ -23,6 +91,7 @@ const createProductFormState = (overrides = {}) => ({
   category_id: '',
   subcategory_id: '',
   image: '',
+  image_urls: [],
   stock_quantity: '0',
   boxNumber: '',
   low_stock_threshold: '5',
@@ -59,8 +128,9 @@ const ProductsView = () => {
   const [selectedProductVariants, setSelectedProductVariants] = useState(null);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [selectedImageFile, setSelectedImageFile] = useState(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [productMediaItems, setProductMediaItems] = useState([]);
+  const [mediaError, setMediaError] = useState('');
+  const [isMediaDragOver, setIsMediaDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [formStep, setFormStep] = useState(0);
@@ -75,6 +145,9 @@ const ProductsView = () => {
   const [editingSubcategoryId, setEditingSubcategoryId] = useState(null);
   const [editingSubcategoryName, setEditingSubcategoryName] = useState('');
   const [form, setForm] = useState(createProductFormState());
+  const productMediaItemsRef = useRef([]);
+  const galleryUploadInputRef = useRef(null);
+  const cameraUploadInputRef = useRef(null);
 
   const fetch = async () => {
     try {
@@ -93,17 +166,25 @@ const ProductsView = () => {
   useSocketEvent('inventory:updated', fetch);
 
   useEffect(() => {
+    productMediaItemsRef.current = productMediaItems;
+  }, [productMediaItems]);
+
+  useEffect(() => {
     return () => {
-      if (imagePreviewUrl?.startsWith('blob:')) {
-        URL.revokeObjectURL(imagePreviewUrl);
-      }
+      productMediaItemsRef.current.forEach(revokeLocalMediaPreview);
     };
-  }, [imagePreviewUrl]);
+  }, []);
+
+  const resetProductMediaItems = (nextItems = []) => {
+    productMediaItemsRef.current.forEach(revokeLocalMediaPreview);
+    setProductMediaItems(nextItems);
+    setMediaError('');
+    setIsMediaDragOver(false);
+  };
 
   const openAdd = () => {
     setEditing(null);
-    setSelectedImageFile(null);
-    setImagePreviewUrl('');
+    resetProductMediaItems([]);
     setFormError('');
     setFormStep(0);
     setForm(createProductFormState({ category_id: categories[0]?.id?.toString() || '' }));
@@ -112,8 +193,7 @@ const ProductsView = () => {
 
   const openEdit = (p) => {
     setEditing(p);
-    setSelectedImageFile(null);
-    setImagePreviewUrl('');
+    resetProductMediaItems(resolveExistingProductMediaItems(p));
     setFormError('');
     setFormStep(0);
     setForm(createProductFormState({
@@ -134,14 +214,14 @@ const ProductsView = () => {
       barcode: p.barcode || '',
       brand: p.brand || '',
       status: p.status || (p.stock_quantity === 0 ? 'out_of_stock' : 'available'),
+      image_urls: normalizeProductMediaUrls(p.image_urls),
     }));
     setModalOpen(true);
   };
 
   const handleDuplicate = (p) => {
     setEditing(null);
-    setSelectedImageFile(null);
-    setImagePreviewUrl('');
+    resetProductMediaItems(resolveExistingProductMediaItems(p));
     setFormError('');
     setFormStep(0);
     setForm(createProductFormState({
@@ -162,11 +242,21 @@ const ProductsView = () => {
       barcode: '',
       brand: p.brand || '',
       status: p.status || 'available',
+      image_urls: normalizeProductMediaUrls(p.image_urls),
     }));
     setModalOpen(true);
   };
 
   const getStepValidationError = (stepIndex) => {
+    if (stepIndex === 0) {
+      if (productMediaItems.length < PRODUCT_MEDIA_MIN_FILES) {
+        return 'Upload at least one product image.';
+      }
+      if (productMediaItems.length > PRODUCT_MEDIA_MAX_FILES) {
+        return `You can upload up to ${PRODUCT_MEDIA_MAX_FILES} images.`;
+      }
+    }
+
     if (stepIndex === 1) {
       if (!String(form.name || '').trim()) return 'Product name is required.';
       if (!String(form.category_id || '').trim()) return 'Select a product category.';
@@ -251,6 +341,78 @@ const ProductsView = () => {
     return true;
   };
 
+  const handleProductMediaFiles = (fileList) => {
+    const files = Array.from(fileList || []);
+    if (files.length === 0) return;
+
+    const nextMediaItems = [];
+    const validationErrors = [];
+    let mediaCount = productMediaItemsRef.current.length;
+
+    files.forEach((file) => {
+      if (mediaCount >= PRODUCT_MEDIA_MAX_FILES) {
+        validationErrors.push(`You can upload up to ${PRODUCT_MEDIA_MAX_FILES} images only.`);
+        return;
+      }
+
+      const mimeType = String(file?.type || '').toLowerCase();
+      if (!PRODUCT_MEDIA_ALLOWED_TYPES.has(mimeType)) {
+        validationErrors.push(`${file.name || 'File'} is not a supported image type.`);
+        return;
+      }
+
+      if (Number(file?.size || 0) > PRODUCT_MEDIA_MAX_SIZE_BYTES) {
+        validationErrors.push(`${file.name || 'File'} exceeds the 5MB size limit.`);
+        return;
+      }
+
+      const previewUrl = URL.createObjectURL(file);
+      nextMediaItems.push({
+        id: createProductMediaId(),
+        source: 'local',
+        file,
+        previewUrl,
+      });
+      mediaCount += 1;
+    });
+
+    if (nextMediaItems.length > 0) {
+      setProductMediaItems((prev) => [...prev, ...nextMediaItems]);
+      setMediaError('');
+    }
+
+    if (validationErrors.length > 0) {
+      setMediaError(validationErrors[0]);
+    }
+  };
+
+  const handleGalleryUploadChange = (event) => {
+    handleProductMediaFiles(event.target.files);
+    event.target.value = '';
+  };
+
+  const handleCameraUploadChange = (event) => {
+    handleProductMediaFiles(event.target.files);
+    event.target.value = '';
+  };
+
+  const handleMediaDrop = (event) => {
+    event.preventDefault();
+    setIsMediaDragOver(false);
+    handleProductMediaFiles(event.dataTransfer?.files);
+  };
+
+  const removeProductMediaItem = (mediaItemId) => {
+    setProductMediaItems((prev) => {
+      const target = prev.find((item) => item.id === mediaItemId);
+      if (target) {
+        revokeLocalMediaPreview(target);
+      }
+      return prev.filter((item) => item.id !== mediaItemId);
+    });
+    setMediaError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateAllSteps()) return;
@@ -259,10 +421,29 @@ const ProductsView = () => {
       setSubmitting(true);
       setFormError('');
 
-      let finalImage = form.image || '';
-      if (selectedImageFile) {
-        finalImage = await uploadProductImage(selectedImageFile);
+      const uploadedMediaUrls = [];
+      for (const mediaItem of productMediaItems) {
+        if (mediaItem.source === 'existing' && mediaItem.url) {
+          uploadedMediaUrls.push(String(mediaItem.url).trim());
+          continue;
+        }
+
+        if (mediaItem.source === 'local' && mediaItem.file) {
+          try {
+            const uploadedUrl = await uploadProductImage(mediaItem.file);
+            uploadedMediaUrls.push(String(uploadedUrl || '').trim());
+          } catch (uploadError) {
+            throw new Error(`Failed to upload ${mediaItem.file.name || 'an image'}. ${uploadError?.message || 'Please try again.'}`);
+          }
+        }
       }
+
+      const normalizedMediaUrls = Array.from(new Set(uploadedMediaUrls.filter(Boolean))).slice(0, PRODUCT_MEDIA_MAX_FILES);
+      if (normalizedMediaUrls.length < PRODUCT_MEDIA_MIN_FILES) {
+        throw new Error('Upload at least one product image before saving.');
+      }
+
+      const finalImage = normalizedMediaUrls[0];
 
       const payload = {
         partNumber: form.partNumber,
@@ -273,6 +454,7 @@ const ProductsView = () => {
         category_id: parseInt(form.category_id, 10),
         subcategory_id: form.subcategory_id ? parseInt(form.subcategory_id, 10) : null,
         image: finalImage,
+        image_urls: normalizedMediaUrls,
         stock_quantity: parseInt(form.stock_quantity, 10),
         boxNumber: form.boxNumber,
         low_stock_threshold: form.low_stock_threshold === '' ? undefined : parseInt(form.low_stock_threshold, 10),
@@ -287,7 +469,7 @@ const ProductsView = () => {
       if (editing) await updateProduct(editing.id, payload);
       else await createProduct(payload);
       fetch();
-      setTimeout(() => setModalOpen(false), 100);
+      setTimeout(() => closeProductModal(), 100);
     } catch (e) {
       setFormError(e.message || 'Failed to save product');
       console.error(e);
@@ -296,29 +478,16 @@ const ProductsView = () => {
     }
   };
 
-  const handleImageFileChange = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (imagePreviewUrl?.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreviewUrl);
-    }
-
-    const preview = URL.createObjectURL(file);
-    setSelectedImageFile(file);
-    setImagePreviewUrl(preview);
-  };
-
-  const clearSelectedImage = () => {
-    if (imagePreviewUrl?.startsWith('blob:')) {
-      URL.revokeObjectURL(imagePreviewUrl);
-    }
-    setSelectedImageFile(null);
-    setImagePreviewUrl('');
-  };
-
   const handleDelete = (p) => {
     setDeleteTarget(p);
+  };
+
+  const closeProductModal = () => {
+    setModalOpen(false);
+    resetProductMediaItems([]);
+    setFormError('');
+    setMediaError('');
+    setIsMediaDragOver(false);
   };
 
   const openCategoryModal = () => {
@@ -587,7 +756,7 @@ const ProductsView = () => {
 
       {/* Product Modal */}
       {modalOpen && (
-        <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Product' : 'Add Product'} size="2xl">
+        <Modal isOpen={modalOpen} onClose={closeProductModal} title={editing ? 'Edit Product' : 'Add Product'} size="2xl">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -634,30 +803,100 @@ const ProductsView = () => {
 
               {formStep === 0 && (
                 <div className="space-y-4">
-                  <InputField label="Product Image">
-                    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleImageFileChange} className={inputClass} />
-                    <p className="text-[11px] text-gray-400 mt-1">PNG, JPG, WEBP, GIF (max 5MB)</p>
-                    {(imagePreviewUrl || form.image) && (
-                      <div className="mt-2 flex items-start gap-3">
-                        <img src={imagePreviewUrl || form.image} alt="Preview" className="w-20 h-20 rounded-lg object-cover border border-gray-700" />
-                        {selectedImageFile && (
-                          <button type="button" onClick={clearSelectedImage} className="px-3 py-1.5 text-xs text-gray-300 hover:bg-[#202430] rounded-lg">
-                            Remove Selected
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </InputField>
-
-                  <InputField label="Or Image URL">
+                  <div
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setIsMediaDragOver(true);
+                    }}
+                    onDragLeave={(event) => {
+                      event.preventDefault();
+                      setIsMediaDragOver(false);
+                    }}
+                    onDrop={handleMediaDrop}
+                    className={`rounded-2xl border-2 border-dashed p-5 transition-colors ${
+                      isMediaDragOver
+                        ? 'border-red-400 bg-red-500/10'
+                        : 'border-white/15 bg-[#202430]/40'
+                    }`}
+                  >
                     <input
-                      value={form.image}
-                      onChange={e => setForm(f => ({ ...f, image: e.target.value }))}
-                      className={inputClass}
-                      placeholder="https://..."
-                      disabled={Boolean(selectedImageFile)}
+                      ref={galleryUploadInputRef}
+                      type="file"
+                      accept={PRODUCT_MEDIA_ACCEPT}
+                      multiple
+                      onChange={handleGalleryUploadChange}
+                      className="hidden"
                     />
-                  </InputField>
+                    <input
+                      ref={cameraUploadInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleCameraUploadChange}
+                      className="hidden"
+                    />
+
+                    <div className="flex flex-col items-center text-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+                        <Upload size={20} className="text-red-300" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">Drag and drop product photos here</p>
+                        <p className="text-xs text-gray-400 mt-1">Upload 1-9 images. JPG, PNG, WEBP, or GIF. Up to 5MB each.</p>
+                      </div>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => galleryUploadInputRef.current?.click()}
+                          className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                        >
+                          Select Images
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cameraUploadInputRef.current?.click()}
+                          className="px-4 py-2 bg-[#2a3244] hover:bg-[#37425b] text-gray-100 text-xs font-semibold rounded-lg transition-colors"
+                        >
+                          Use Camera
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>{productMediaItems.length}/{PRODUCT_MEDIA_MAX_FILES} images selected</span>
+                    {productMediaItems.length < PRODUCT_MEDIA_MIN_FILES && (
+                      <span className="text-amber-300">At least 1 image is required</span>
+                    )}
+                  </div>
+
+                  {productMediaItems.length > 0 && (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {productMediaItems.map((item, index) => (
+                        <div key={item.id} className="relative group rounded-xl overflow-hidden border border-white/10 bg-[#202430]">
+                          <img src={item.previewUrl} alt={`Media ${index + 1}`} className="w-full aspect-square object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeProductMediaItem(item.id)}
+                            className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                            aria-label="Remove image"
+                            title="Remove"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                          <div className="absolute bottom-0 inset-x-0 px-2 py-1 text-[10px] text-white bg-gradient-to-t from-black/70 to-transparent">
+                            {index === 0 ? 'Cover Image' : `Image ${index + 1}`}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {mediaError && (
+                    <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                      {mediaError}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -870,7 +1109,7 @@ const ProductsView = () => {
             )}
 
             <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 border-t border-gray-700">
-              <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2 text-sm text-gray-300 hover:bg-[#202430] rounded-lg transition-colors">Cancel</button>
+              <button type="button" onClick={closeProductModal} className="px-5 py-2 text-sm text-gray-300 hover:bg-[#202430] rounded-lg transition-colors">Cancel</button>
 
               <div className="flex items-center justify-end gap-2">
                 {formStep > 0 && (

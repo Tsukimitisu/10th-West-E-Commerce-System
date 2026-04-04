@@ -20,11 +20,13 @@ const productValidation = [
   body('name').trim().notEmpty().withMessage('Product name is required'),
   body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
   body('category_id').optional().isInt().withMessage('Category ID must be an integer'),
-  body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status')
+  body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status'),
+  body('image_urls').optional().isArray({ max: 9 }).withMessage('image_urls can contain up to 9 images')
 ];
 
 const productUpdateValidation = [
-  body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status')
+  body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status'),
+  body('image_urls').optional().isArray({ max: 9 }).withMessage('image_urls can contain up to 9 images')
 ];
 
 // Public routes
