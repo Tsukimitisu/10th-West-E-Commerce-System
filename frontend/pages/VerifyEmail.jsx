@@ -209,6 +209,16 @@ const VerifyEmail = ({ onLogin }) => {
           return;
         }
 
+        if (code === 'VERIFICATION_TIMEOUT' || code === 'VERIFICATION_TEMPORARY_FAILURE') {
+          setMessage('Verification is taking longer than expected. Please try again in a moment.');
+          return;
+        }
+
+        if (code === 'VERIFICATION_NETWORK_ERROR' || code === 'NETWORK_ERROR') {
+          setMessage('We could not reach the server. Please check your connection and try again.');
+          return;
+        }
+
         setMessage(fallbackMessage);
       }
     };

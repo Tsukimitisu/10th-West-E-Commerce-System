@@ -45,9 +45,41 @@ const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 15;
 const EMAIL_VERIFICATION_WINDOW_MINUTES = 60;
 const BCRYPT_ROUNDS = 12;
+const VERIFICATION_LOCK_TIMEOUT_MS = 5000;
+const VERIFICATION_STATEMENT_TIMEOUT_MS = 12000;
+const VERIFIED_TOKEN_LOOKBACK_HOURS = 24;
 
 const hashToken = (value) =>
   crypto.createHash('sha256').update(value).digest('hex');
+
+const isTransientVerificationDbError = (error) => {
+  const code = String(error?.code || '');
+  return code === '55P03' || code === '57014' || code === '40P01';
+};
+
+const queuePostVerificationTasks = ({
+  userId,
+  guestCartSessionId,
+  ipAddress,
+  userAgent,
+  activityAction = 'email_verified',
+}) => {
+  const tasks = [
+    logActivity({ userId, action: activityAction, ipAddress, userAgent }),
+  ];
+
+  if (guestCartSessionId && userId) {
+    tasks.push(mergeGuestCartIntoUserCart(guestCartSessionId, userId));
+  }
+
+  void Promise.allSettled(tasks).then((results) => {
+    results.forEach((result) => {
+      if (result.status === 'rejected') {
+        console.warn('Post-verification task failed:', result.reason?.message || result.reason);
+      }
+    });
+  });
+};
 
 const isLocalUrl = (hostname) =>
   ['localhost', '127.0.0.1'].includes(hostname) ||
@@ -170,9 +202,14 @@ const ensureAuthSchema = async () => {
     ALTER TABLE users
       ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255),
       ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS last_email_verification_token VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS last_email_verification_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255),
       ADD COLUMN IF NOT EXISTS email_change_token VARCHAR(255),
       ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMP;
+
+    CREATE INDEX IF NOT EXISTS idx_users_last_email_verification_token
+      ON users(last_email_verification_token);
   `).catch((error) => {
     console.error('Failed to ensure users verification columns:', error);
   });
@@ -986,12 +1023,15 @@ export const verifyEmailToken = async (req, res) => {
     });
   }
 
+  const normalizedToken = String(token).trim();
+  const tokenHash = hashToken(normalizedToken);
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
+    await client.query(`SET LOCAL lock_timeout = '${VERIFICATION_LOCK_TIMEOUT_MS}ms'`);
+    await client.query(`SET LOCAL statement_timeout = '${VERIFICATION_STATEMENT_TIMEOUT_MS}ms'`);
 
-    const tokenHash = hashToken(String(token).trim());
     const result = await client.query(
       `SELECT id, name, email, role, phone, avatar, store_credit, is_active,
               two_factor_enabled, oauth_provider, last_login, email_verified,
@@ -1003,7 +1043,27 @@ export const verifyEmailToken = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      const recentlyVerifiedResult = await client.query(
+        `SELECT id, name, email, role, phone, avatar, store_credit, is_active,
+                two_factor_enabled, oauth_provider, last_login, email_verified
+         FROM users
+         WHERE last_email_verification_token = $1
+           AND last_email_verification_at > NOW() - make_interval(hours => $2)
+         LIMIT 1`,
+        [tokenHash, VERIFIED_TOKEN_LOOKBACK_HOURS]
+      );
+
       await client.query('ROLLBACK');
+
+      if (recentlyVerifiedResult.rows.length > 0 && recentlyVerifiedResult.rows[0].email_verified) {
+        return res.json({
+          message: 'This email is already verified. Please continue to login.',
+          user: sanitizeUser(recentlyVerifiedResult.rows[0]),
+          autoLogin: false,
+          alreadyVerified: true,
+        });
+      }
+
       return res.status(400).json({
         message: 'This verification link is invalid. Please request a new one.',
         code: 'VERIFICATION_TOKEN_INVALID',
@@ -1020,30 +1080,54 @@ export const verifyEmailToken = async (req, res) => {
       });
     }
 
+    const expiresAt = user.email_verification_expires ? new Date(user.email_verification_expires) : null;
+    const tokenIsExpired = !expiresAt || expiresAt <= new Date();
+
     if (user.email_verified) {
-      await client.query(
-        'UPDATE users SET email_verification_token = NULL, email_verification_expires = NULL WHERE id = $1',
-        [user.id]
+      const updatedAlreadyVerifiedUserResult = await client.query(
+        `UPDATE users
+         SET email_verification_token = NULL,
+             email_verification_expires = NULL,
+             last_email_verification_token = $2,
+             last_email_verification_at = COALESCE(last_email_verification_at, NOW())
+         WHERE id = $1
+         RETURNING *`,
+        [user.id, tokenHash]
       );
 
-      await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
-      await rotateGuestSession(req);
-      const sessionToken = await persistSession(client, user, ipAddress, userAgent);
+      if (tokenIsExpired) {
+        await client.query('COMMIT');
+        return res.json({
+          message: 'This email is already verified. Please continue to login.',
+          user: sanitizeUser(updatedAlreadyVerifiedUserResult.rows[0]),
+          autoLogin: false,
+          alreadyVerified: true,
+        });
+      }
+
+      const alreadyVerifiedUser = updatedAlreadyVerifiedUserResult.rows[0];
+      const sessionToken = await persistSession(client, alreadyVerifiedUser, ipAddress, userAgent);
 
       await client.query('COMMIT');
-      await logActivity({ userId: user.id, action: 'email_verified', ipAddress, userAgent });
+
+      queuePostVerificationTasks({
+        userId: alreadyVerifiedUser.id,
+        guestCartSessionId,
+        ipAddress,
+        userAgent,
+        activityAction: 'email_verification_login',
+      });
 
       return res.json({
         message: 'Your email is already verified. Logging you in...',
-        user: sanitizeUser(user),
+        user: sanitizeUser(alreadyVerifiedUser),
         token: sessionToken,
         autoLogin: true,
         alreadyVerified: true,
       });
     }
 
-    const expiresAt = user.email_verification_expires ? new Date(user.email_verification_expires) : null;
-    if (!expiresAt || expiresAt <= new Date()) {
+    if (tokenIsExpired) {
       await client.query(
         'UPDATE users SET email_verification_token = NULL, email_verification_expires = NULL WHERE id = $1',
         [user.id]
@@ -1062,22 +1146,29 @@ export const verifyEmailToken = async (req, res) => {
        SET email_verified = true,
            email_verification_token = NULL,
            email_verification_expires = NULL,
+           last_email_verification_token = $2,
+           last_email_verification_at = NOW(),
            last_login = CURRENT_TIMESTAMP
        WHERE id = $1
        RETURNING *`,
-      [user.id]
+      [user.id, tokenHash]
     );
 
     const updatedUser = updatedUserResult.rows[0];
-    await mergeGuestCartIntoUserCart(guestCartSessionId, updatedUser.id);
-    await rotateGuestSession(req);
     const sessionToken = await persistSession(client, updatedUser, ipAddress, userAgent);
 
     await client.query('COMMIT');
-    await logActivity({ userId: updatedUser.id, action: 'email_verified', ipAddress, userAgent });
+
+    queuePostVerificationTasks({
+      userId: updatedUser.id,
+      guestCartSessionId,
+      ipAddress,
+      userAgent,
+      activityAction: 'email_verified',
+    });
 
     res.json({
-      message: 'Your account has been successfully verified.',
+      message: 'Email verified successfully. Logging you in...',
       user: sanitizeUser(updatedUser),
       token: sessionToken,
       autoLogin: true,
@@ -1089,6 +1180,14 @@ export const verifyEmailToken = async (req, res) => {
     } catch {}
 
     console.error('Verify email error:', err);
+
+    if (isTransientVerificationDbError(err)) {
+      return res.status(503).json({
+        message: 'Verification is taking longer than expected. Please try again.',
+        code: 'VERIFICATION_TEMPORARY_FAILURE',
+      });
+    }
+
     res.status(500).json({ message: 'We could not verify your account right now. Please try again.' });
   } finally {
     client.release();

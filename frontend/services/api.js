@@ -327,16 +327,21 @@ export const logPosActivity = logSupabaseActivity;
 
 // Helper function to make authenticated requests (for backend API fallback)
 const authenticatedFetch = async (url, options = {}) => {
+  const {
+    timeoutMs = 0,
+    skipCsrf = false,
+    ...requestOptions
+  } = options;
   const token = getAuthToken();
   const headers = {
-    ...(options.headers || {}),
+    ...(requestOptions.headers || {}),
   };
-  const method = String(options.method || 'GET').toUpperCase();
+  const method = String(requestOptions.method || 'GET').toUpperCase();
   const isStateChangingMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method);
   const hasContentTypeHeader = Object.keys(headers).some((key) => key.toLowerCase() === 'content-type');
   const hasCsrfHeader = Object.keys(headers).some((key) => key.toLowerCase() === 'x-csrf-token' || key.toLowerCase() === 'x-xsrf-token');
-  const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
-  const isBlobBody = typeof Blob !== 'undefined' && options.body instanceof Blob;
+  const isFormDataBody = typeof FormData !== 'undefined' && requestOptions.body instanceof FormData;
+  const isBlobBody = typeof Blob !== 'undefined' && requestOptions.body instanceof Blob;
 
   if (!hasContentTypeHeader && !isFormDataBody && !isBlobBody) {
     headers['Content-Type'] = 'application/json';
@@ -346,7 +351,7 @@ const authenticatedFetch = async (url, options = {}) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  if (isStateChangingMethod && !hasCsrfHeader) {
+  if (isStateChangingMethod && !hasCsrfHeader && !skipCsrf) {
     const csrfToken = await getCsrfToken();
     if (csrfToken) {
       headers['x-csrf-token'] = csrfToken;
@@ -354,19 +359,56 @@ const authenticatedFetch = async (url, options = {}) => {
   }
 
   const executeRequest = async (requestHeaders) => {
-    const response = await fetch(url, {
-      ...options,
-      headers: requestHeaders,
-      credentials: 'include'
-    });
-    const responseBody = await response.json().catch(() => ({ message: 'Request failed' }));
-    return { response, responseBody };
+    const timeout = Number(timeoutMs);
+    const shouldUseTimeout = Number.isFinite(timeout) && timeout > 0;
+    const abortController = shouldUseTimeout && typeof AbortController !== 'undefined'
+      ? new AbortController()
+      : null;
+    let timeoutId = null;
+
+    let signal = requestOptions.signal;
+    if (abortController) {
+      timeoutId = setTimeout(() => {
+        abortController.abort();
+      }, timeout);
+
+      if (signal && typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+        signal = AbortSignal.any([signal, abortController.signal]);
+      } else {
+        signal = abortController.signal;
+      }
+    }
+
+    try {
+      const response = await fetch(url, {
+        ...requestOptions,
+        headers: requestHeaders,
+        credentials: 'include',
+        signal,
+      });
+      const responseBody = await response.json().catch(() => ({ message: 'Request failed' }));
+      return { response, responseBody };
+    } catch (error) {
+      if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
+        const timeoutError = new Error('Request timed out. Please try again.');
+        timeoutError.code = 'REQUEST_TIMEOUT';
+        throw timeoutError;
+      }
+
+      const networkError = new Error('Unable to reach the server. Please check your connection and try again.');
+      networkError.code = 'NETWORK_ERROR';
+      throw networkError;
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
   };
 
   let { response, responseBody } = await executeRequest(headers);
 
   // Refresh and retry once when CSRF token is expired/invalid.
-  if (isStateChangingMethod && isCsrfFailure(response.status, responseBody)) {
+  if (isStateChangingMethod && !skipCsrf && isCsrfFailure(response.status, responseBody)) {
     const refreshedCsrf = await getCsrfToken({ forceRefresh: true });
     if (refreshedCsrf) {
       const retryHeaders = {
@@ -4631,10 +4673,31 @@ export const verifyEmailToken = async (token) => {
     throw tokenError;
   }
 
-  const data = await authenticatedFetch(`${API_URL}/auth/verify-email`, {
-    method: 'POST',
-    body: JSON.stringify({ token: normalizedToken })
-  });
+  let data;
+  try {
+    data = await authenticatedFetch(`${API_URL}/auth/verify-email`, {
+      method: 'POST',
+      body: JSON.stringify({ token: normalizedToken }),
+      timeoutMs: 15000,
+      skipCsrf: true,
+    });
+  } catch (error) {
+    const code = String(error?.code || '').toUpperCase();
+
+    if (code === 'REQUEST_TIMEOUT') {
+      const timeoutError = new Error('Verification is taking longer than expected. Please try again.');
+      timeoutError.code = 'VERIFICATION_TIMEOUT';
+      throw timeoutError;
+    }
+
+    if (code === 'NETWORK_ERROR') {
+      const networkError = new Error('Unable to reach the server. Check your connection and try again.');
+      networkError.code = 'VERIFICATION_NETWORK_ERROR';
+      throw networkError;
+    }
+
+    throw error;
+  }
 
   if (USE_SUPABASE && data && data.user) {
     const sbToken = 'sb-token-' + btoa(JSON.stringify({ id: data.user.id, email: data.user.email, role: data.user.role }));

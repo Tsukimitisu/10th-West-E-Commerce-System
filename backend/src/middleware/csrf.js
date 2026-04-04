@@ -2,6 +2,9 @@ import crypto from 'crypto';
 
 const CSRF_TTL_MS = Number(process.env.CSRF_TOKEN_TTL_MS || 60 * 60 * 1000);
 const CSRF_SECRET = process.env.CSRF_SECRET || process.env.SESSION_SECRET || 'dev-csrf-secret';
+const CSRF_PATH_EXEMPTIONS = new Set([
+  '/auth/verify-email',
+]);
 
 const toBase64Url = (value) => Buffer.from(value).toString('base64url');
 const fromBase64Url = (value) => Buffer.from(value, 'base64url').toString('utf8');
@@ -83,6 +86,8 @@ export const generateCsrfToken = (req, res, next) => {
 export const validateCsrf = (req, res, next) => {
   // Skip for GET, HEAD, OPTIONS
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  // Public token-based endpoints are protected by one-time token checks.
+  if (CSRF_PATH_EXEMPTIONS.has(req.path)) return next();
   // Skip for API calls with Bearer token (already authenticated)
   const authHeader = req.headers.authorization;
   if (typeof authHeader === 'string' && /^Bearer\s+/i.test(authHeader)) return next();
