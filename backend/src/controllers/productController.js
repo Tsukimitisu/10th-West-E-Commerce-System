@@ -10,12 +10,19 @@ const __dirname = path.dirname(__filename);
 const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'products');
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
 const ALLOWED_PRODUCT_STATUSES = new Set(['available', 'hidden', 'out_of_stock']);
+const PRODUCT_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
-  'image/gif': 'gif'
+  'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'video/ogg': 'ogg',
+  'video/x-m4v': 'm4v'
 };
 
 const toNullableString = (value) => {
@@ -100,9 +107,10 @@ const parseResultLimit = (value, fallback = null, max = 80) => {
 const ensureProductSchema = async () => {
   await pool.query(`
     ALTER TABLE products
-      ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb;
+      ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS video_url VARCHAR(500);
   `).catch((error) => {
-    console.error('Failed to ensure products.image_urls column:', error);
+    console.error('Failed to ensure product media columns:', error);
   });
 };
 
@@ -335,7 +343,7 @@ export const getProductById = async (req, res) => {
 export const createProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
-    image, category_id, stock_quantity, box_number,
+    image, video_url, category_id, stock_quantity, box_number,
     low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls
   } = req.body;
 
@@ -344,6 +352,7 @@ export const createProduct = async (req, res) => {
     const cleanSku = toNullableString(sku);
     const cleanBarcode = toNullableString(barcode);
     const cleanImage = toNullableString(image);
+    const cleanVideoUrl = toNullableString(video_url);
     const cleanBrand = toNullableString(brand);
     const cleanBoxNumber = toNullableString(box_number);
     const cleanCategoryId = toNullableNumber(category_id);
@@ -357,13 +366,13 @@ export const createProduct = async (req, res) => {
     const result = await pool.query(
       `INSERT INTO products (
         part_number, name, description, price, buying_price, 
-        image, category_id, stock_quantity, box_number, 
+        image, video_url, category_id, stock_quantity, box_number, 
         low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15, false), COALESCE($16, 'available'), COALESCE($17::jsonb, '[]'::jsonb))
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, COALESCE($16, false), COALESCE($17, 'available'), COALESCE($18::jsonb, '[]'::jsonb))
       RETURNING *`,
       [
         cleanPartNumber, name, description, price, buying_price,
-        cleanImage, cleanCategoryId, cleanStockQuantity ?? 0, cleanBoxNumber,
+        cleanImage, cleanVideoUrl, cleanCategoryId, cleanStockQuantity ?? 0, cleanBoxNumber,
         cleanLowStockThreshold ?? 5, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, cleanStatus,
         JSON.stringify(cleanImageUrls)
       ]
@@ -390,7 +399,7 @@ export const updateProduct = async (req, res) => {
   const { id } = req.params;
   const {
     part_number, name, description, price, buying_price,
-    image, category_id, stock_quantity, box_number,
+    image, video_url, category_id, stock_quantity, box_number,
     low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls
   } = req.body;
 
@@ -399,6 +408,7 @@ export const updateProduct = async (req, res) => {
     const cleanSku = toNullableString(sku);
     const cleanBarcode = toNullableString(barcode);
     const cleanImage = toNullableString(image);
+    const cleanVideoUrl = toNullableString(video_url);
     const cleanBrand = toNullableString(brand);
     const cleanBoxNumber = toNullableString(box_number);
     const cleanCategoryId = toNullableNumber(category_id);
@@ -408,6 +418,7 @@ export const updateProduct = async (req, res) => {
     const cleanIsOnSale = typeof is_on_sale === 'boolean' ? is_on_sale : null;
     const cleanStatus = toNullableProductStatus(status);
     const cleanImageUrls = normalizeProductImageUrls(image_urls);
+    const hasVideoUrlPayload = Object.prototype.hasOwnProperty.call(req.body, 'video_url');
     const hasImageUrlsPayload = Array.isArray(image_urls)
       || (typeof image_urls === 'string' && image_urls.trim().length > 0);
     const imageUrlsPayload = hasImageUrlsPayload ? JSON.stringify(cleanImageUrls) : null;
@@ -430,15 +441,16 @@ export const updateProduct = async (req, res) => {
         sale_price = COALESCE($14, sale_price),
         is_on_sale = COALESCE($15, is_on_sale),
         status = COALESCE($16, status),
-        image_urls = COALESCE($17::jsonb, image_urls),
+        video_url = CASE WHEN $17 THEN $18 ELSE video_url END,
+        image_urls = COALESCE($19::jsonb, image_urls),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $18
+      WHERE id = $20
       RETURNING *`,
       [
         cleanPartNumber, name, description, price, buying_price,
         cleanImage, cleanCategoryId, cleanStockQuantity, cleanBoxNumber,
         cleanLowStockThreshold, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, cleanStatus,
-        imageUrlsPayload, id
+        hasVideoUrlPayload, cleanVideoUrl, imageUrlsPayload, id
       ]
     );
 
@@ -511,6 +523,64 @@ export const uploadProductImage = async (req, res) => {
     });
   } catch (error) {
     console.error('Upload product image error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Upload product video
+export const uploadProductVideo = async (req, res) => {
+  try {
+    const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+
+    if (!ALLOWED_VIDEO_MIME_TYPES.has(contentType)) {
+      return res.status(400).json({ message: 'Unsupported video type. Use MP4, WEBM, MOV, OGG, or M4V.' });
+    }
+
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ message: 'Video file is required' });
+    }
+
+    if (req.body.length > PRODUCT_VIDEO_MAX_BYTES) {
+      return res.status(400).json({ message: 'Video must be 20MB or smaller.' });
+    }
+
+    const ext = MIME_EXTENSION_MAP[contentType] || 'bin';
+    const filename = `product-video-${Date.now()}-${Math.floor(Math.random() * 1_000_000_000)}.${ext}`;
+
+    let videoUrl;
+
+    const { SUPABASE_URL } = process.env;
+    if (SUPABASE_URL) {
+      const { error } = await supabaseClient.storage
+        .from('products')
+        .upload(filename, req.body, {
+          contentType,
+          upsert: false
+        });
+
+      if (!error) {
+        const { data: publicUrlData } = supabaseClient.storage
+          .from('products')
+          .getPublicUrl(filename);
+        videoUrl = publicUrlData.publicUrl;
+      } else {
+        console.warn('Supabase storage upload failed, falling back to local FS:', error.message);
+      }
+    }
+
+    if (!videoUrl) {
+      await fs.mkdir(uploadsDir, { recursive: true });
+      const filepath = path.join(uploadsDir, filename);
+      await fs.writeFile(filepath, req.body);
+      videoUrl = `${req.protocol}://${req.get('host')}/uploads/products/${filename}`;
+    }
+
+    res.status(201).json({
+      message: 'Video uploaded successfully',
+      videoUrl
+    });
+  } catch (error) {
+    console.error('Upload product video error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

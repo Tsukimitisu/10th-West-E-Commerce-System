@@ -1039,6 +1039,9 @@ const mapProductToSupabase = (product) => ({
   price: product.price,
   buying_price: product.buyingPrice,
   image: toNullableString(product.image),
+  ...(Object.prototype.hasOwnProperty.call(product, 'video_url')
+    ? { video_url: toNullableString(product.video_url) }
+    : {}),
   category_id: product.category_id,
   stock_quantity: product.stock_quantity,
   box_number: toNullableString(product.boxNumber),
@@ -1643,6 +1646,7 @@ export const addProduct = async (product) => {
     price: product.price,
     buying_price: product.buyingPrice,
     image: toNullableString(product.image),
+    video_url: product.video_url === undefined ? undefined : toNullableString(product.video_url),
     category_id: product.category_id,
     stock_quantity: product.stock_quantity,
     box_number: toNullableString(product.boxNumber),
@@ -1698,6 +1702,7 @@ export const updateProduct = async (id, product) => {
     price: product.price,
     buying_price: product.buyingPrice,
     image: toNullableString(product.image),
+    video_url: product.video_url === undefined ? undefined : toNullableString(product.video_url),
     category_id: product.category_id,
     stock_quantity: product.stock_quantity,
     box_number: toNullableString(product.boxNumber),
@@ -1767,6 +1772,30 @@ export const uploadProductImage = async (file) => {
   }
 
   return imageUrl;
+};
+
+export const uploadProductVideo = async (file) => {
+  if (!file) throw new Error('Video file is required');
+
+  const token = getAuthToken();
+  if (!token) throw new Error('You must be logged in to upload videos');
+
+  const data = await authenticatedFetch(`${API_URL}/products/upload-video`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+    },
+    body: file,
+  });
+
+  const videoUrl = data.videoUrl || '';
+  if (!videoUrl) throw new Error('Video upload failed');
+
+  if (videoUrl.startsWith('/')) {
+    return `${API_ORIGIN}${videoUrl}`;
+  }
+
+  return videoUrl;
 };
 
 // ==================== CATEGORIES ====================

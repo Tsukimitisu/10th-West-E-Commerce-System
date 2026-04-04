@@ -1,12 +1,12 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
-import { getProducts, getCategories, getSubcategories, createProduct, updateProduct, deleteProduct, uploadProductImage, addCategory, updateCategory, deleteCategory, addSubcategory, updateSubcategory, deleteSubcategory } from '../../services/api';
+import { getProducts, getCategories, getSubcategories, createProduct, updateProduct, deleteProduct, uploadProductImage, uploadProductVideo, addCategory, updateCategory, deleteCategory, addSubcategory, updateSubcategory, deleteSubcategory } from '../../services/api';
 import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle, Layers, GripVertical } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import VariantsModal from '../../components/owner/VariantsModal';
 import { useSocketEvent } from '../../context/SocketContext';
 
 const PRODUCT_FORM_STEPS = [
-  { key: 'media', label: 'Media Upload', hint: 'Add a product image' },
+  { key: 'media', label: 'Media Upload', hint: 'Add product photos and optional video' },
   { key: 'info', label: 'Product Info', hint: 'Core details and category' },
   { key: 'pricing', label: 'Pricing & Stock', hint: 'Prices and inventory' },
   { key: 'variants', label: 'Variants', hint: 'Configure variant strategy' },
@@ -23,6 +23,15 @@ const PRODUCT_MEDIA_ALLOWED_TYPES = new Set([
   'image/png',
   'image/webp',
   'image/gif',
+]);
+const PRODUCT_VIDEO_MAX_SIZE_BYTES = 20 * 1024 * 1024;
+const PRODUCT_VIDEO_ACCEPT = 'video/mp4,video/webm,video/quicktime,video/ogg,video/x-m4v';
+const PRODUCT_VIDEO_ALLOWED_TYPES = new Set([
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/ogg',
+  'video/x-m4v',
 ]);
 
 const createProductMediaId = () => `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -91,9 +100,27 @@ const resolveExistingProductMediaItems = (product) => {
   }));
 };
 
+const resolveExistingProductVideoItem = (product) => {
+  const videoUrl = String(product?.video_url || '').trim();
+  if (!videoUrl) return null;
+
+  return {
+    id: createProductMediaId(),
+    source: 'existing',
+    previewUrl: videoUrl,
+    url: videoUrl,
+  };
+};
+
 const revokeLocalMediaPreview = (mediaItem) => {
   if (mediaItem?.source === 'local' && String(mediaItem?.previewUrl || '').startsWith('blob:')) {
     URL.revokeObjectURL(mediaItem.previewUrl);
+  }
+};
+
+const revokeLocalVideoPreview = (videoItem) => {
+  if (videoItem?.source === 'local' && String(videoItem?.previewUrl || '').startsWith('blob:')) {
+    URL.revokeObjectURL(videoItem.previewUrl);
   }
 };
 
@@ -107,6 +134,7 @@ const createProductFormState = (overrides = {}) => ({
   subcategory_id: '',
   image: '',
   image_urls: [],
+  video_url: '',
   stock_quantity: '0',
   boxNumber: '',
   low_stock_threshold: '5',
@@ -145,6 +173,8 @@ const ProductsView = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [productMediaItems, setProductMediaItems] = useState([]);
   const [mediaError, setMediaError] = useState('');
+  const [productVideoItem, setProductVideoItem] = useState(null);
+  const [videoError, setVideoError] = useState('');
   const [isMediaDragOver, setIsMediaDragOver] = useState(false);
   const [draggingMediaId, setDraggingMediaId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -162,8 +192,10 @@ const ProductsView = () => {
   const [editingSubcategoryName, setEditingSubcategoryName] = useState('');
   const [form, setForm] = useState(createProductFormState());
   const productMediaItemsRef = useRef([]);
+  const productVideoItemRef = useRef(null);
   const galleryUploadInputRef = useRef(null);
   const cameraUploadInputRef = useRef(null);
+  const videoUploadInputRef = useRef(null);
 
   const fetch = async () => {
     try {
@@ -186,8 +218,13 @@ const ProductsView = () => {
   }, [productMediaItems]);
 
   useEffect(() => {
+    productVideoItemRef.current = productVideoItem;
+  }, [productVideoItem]);
+
+  useEffect(() => {
     return () => {
       productMediaItemsRef.current.forEach(revokeLocalMediaPreview);
+      revokeLocalVideoPreview(productVideoItemRef.current);
     };
   }, []);
 
@@ -199,9 +236,16 @@ const ProductsView = () => {
     setDraggingMediaId(null);
   };
 
+  const resetProductVideoItem = (nextItem = null) => {
+    revokeLocalVideoPreview(productVideoItemRef.current);
+    setProductVideoItem(nextItem);
+    setVideoError('');
+  };
+
   const openAdd = () => {
     setEditing(null);
     resetProductMediaItems([]);
+    resetProductVideoItem(null);
     setFormError('');
     setFormStep(0);
     setForm(createProductFormState({ category_id: categories[0]?.id?.toString() || '' }));
@@ -211,6 +255,7 @@ const ProductsView = () => {
   const openEdit = (p) => {
     setEditing(p);
     resetProductMediaItems(resolveExistingProductMediaItems(p));
+    resetProductVideoItem(resolveExistingProductVideoItem(p));
     setFormError('');
     setFormStep(0);
     setForm(createProductFormState({
@@ -232,6 +277,7 @@ const ProductsView = () => {
       brand: p.brand || '',
       status: p.status || (p.stock_quantity === 0 ? 'out_of_stock' : 'available'),
       image_urls: normalizeProductMediaUrls(p.image_urls),
+      video_url: p.video_url || '',
     }));
     setModalOpen(true);
   };
@@ -239,6 +285,7 @@ const ProductsView = () => {
   const handleDuplicate = (p) => {
     setEditing(null);
     resetProductMediaItems(resolveExistingProductMediaItems(p));
+    resetProductVideoItem(resolveExistingProductVideoItem(p));
     setFormError('');
     setFormStep(0);
     setForm(createProductFormState({
@@ -260,6 +307,7 @@ const ProductsView = () => {
       brand: p.brand || '',
       status: p.status || 'available',
       image_urls: normalizeProductMediaUrls(p.image_urls),
+      video_url: p.video_url || '',
     }));
     setModalOpen(true);
   };
@@ -413,6 +461,36 @@ const ProductsView = () => {
     event.target.value = '';
   };
 
+  const handleVideoUploadChange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const mimeType = String(file.type || '').toLowerCase();
+    if (!PRODUCT_VIDEO_ALLOWED_TYPES.has(mimeType)) {
+      setVideoError('Unsupported video type. Use MP4, WEBM, MOV, OGG, or M4V.');
+      return;
+    }
+
+    if (Number(file.size || 0) > PRODUCT_VIDEO_MAX_SIZE_BYTES) {
+      setVideoError('Video exceeds the 20MB size limit.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setProductVideoItem((prev) => {
+      revokeLocalVideoPreview(prev);
+      return {
+        id: createProductMediaId(),
+        source: 'local',
+        file,
+        previewUrl,
+        url: null,
+      };
+    });
+    setVideoError('');
+  };
+
   const handleMediaDrop = (event) => {
     if (!hasDraggedFiles(event)) return;
     event.preventDefault();
@@ -458,6 +536,10 @@ const ProductsView = () => {
     setMediaError('');
   };
 
+  const removeProductVideoItem = () => {
+    resetProductVideoItem(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateAllSteps()) return;
@@ -488,6 +570,20 @@ const ProductsView = () => {
         throw new Error('Upload at least one product image before saving.');
       }
 
+      let uploadedVideoUrl = null;
+      if (productVideoItem?.source === 'existing' && productVideoItem.url) {
+        uploadedVideoUrl = String(productVideoItem.url).trim();
+      }
+
+      if (productVideoItem?.source === 'local' && productVideoItem.file) {
+        try {
+          const nextVideoUrl = await uploadProductVideo(productVideoItem.file);
+          uploadedVideoUrl = String(nextVideoUrl || '').trim();
+        } catch (uploadError) {
+          throw new Error(`Failed to upload ${productVideoItem.file.name || 'the video'}. ${uploadError?.message || 'Please try again.'}`);
+        }
+      }
+
       const finalImage = normalizedMediaUrls[0];
 
       const payload = {
@@ -500,6 +596,7 @@ const ProductsView = () => {
         subcategory_id: form.subcategory_id ? parseInt(form.subcategory_id, 10) : null,
         image: finalImage,
         image_urls: normalizedMediaUrls,
+        video_url: uploadedVideoUrl || null,
         stock_quantity: parseInt(form.stock_quantity, 10),
         boxNumber: form.boxNumber,
         low_stock_threshold: form.low_stock_threshold === '' ? undefined : parseInt(form.low_stock_threshold, 10),
@@ -530,8 +627,10 @@ const ProductsView = () => {
   const closeProductModal = () => {
     setModalOpen(false);
     resetProductMediaItems([]);
+    resetProductVideoItem(null);
     setFormError('');
     setMediaError('');
+    setVideoError('');
     setIsMediaDragOver(false);
     setDraggingMediaId(null);
   };
@@ -883,6 +982,13 @@ const ProductsView = () => {
                       onChange={handleCameraUploadChange}
                       className="hidden"
                     />
+                    <input
+                      ref={videoUploadInputRef}
+                      type="file"
+                      accept={PRODUCT_VIDEO_ACCEPT}
+                      onChange={handleVideoUploadChange}
+                      className="hidden"
+                    />
 
                     <div className="flex flex-col items-center text-center gap-3">
                       <div className="w-12 h-12 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center">
@@ -958,6 +1064,53 @@ const ProductsView = () => {
                       ))}
                     </div>
                   )}
+
+                  <div className="rounded-2xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Optional Product Video</p>
+                        <p className="text-xs text-gray-400 mt-1">Upload a short video (MP4, WEBM, MOV, OGG, or M4V) up to 20MB.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => videoUploadInputRef.current?.click()}
+                          className="px-3 py-1.5 bg-[#2a3244] hover:bg-[#37425b] text-gray-100 text-xs font-semibold rounded-lg transition-colors"
+                        >
+                          {productVideoItem ? 'Replace Video' : 'Upload Video'}
+                        </button>
+                        {productVideoItem && (
+                          <button
+                            type="button"
+                            onClick={removeProductVideoItem}
+                            className="px-3 py-1.5 bg-red-500/90 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {productVideoItem ? (
+                      <div className="rounded-xl overflow-hidden border border-white/10 bg-black">
+                        <video
+                          key={productVideoItem.id}
+                          src={productVideoItem.previewUrl}
+                          controls
+                          preload="metadata"
+                          className="w-full max-h-64 object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500">No product video selected.</p>
+                    )}
+
+                    {videoError && (
+                      <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                        {videoError}
+                      </div>
+                    )}
+                  </div>
 
                   {mediaError && (
                     <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">

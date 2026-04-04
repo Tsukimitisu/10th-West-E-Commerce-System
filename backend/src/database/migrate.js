@@ -70,6 +70,7 @@ const createTables = async () => {
         price DECIMAL(10, 2) NOT NULL,
         buying_price DECIMAL(10, 2),
         image VARCHAR(500),
+        video_url VARCHAR(500),
         image_urls JSONB DEFAULT '[]'::jsonb,
         category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
         subcategory_id INTEGER REFERENCES subcategories(id) ON DELETE SET NULL,
@@ -659,6 +660,7 @@ const createTables = async () => {
       { name: 'expiry_date', definition: 'DATE' },
       { name: 'is_deleted', definition: 'BOOLEAN DEFAULT FALSE' },
       { name: 'subcategory_id', definition: 'INTEGER REFERENCES subcategories(id) ON DELETE SET NULL' },
+      { name: 'video_url', definition: 'VARCHAR(500)' },
       { name: 'image_urls', definition: "JSONB DEFAULT '[]'::jsonb" },
     ];
 

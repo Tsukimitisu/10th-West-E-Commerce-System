@@ -7,7 +7,8 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
-  uploadProductImage
+  uploadProductImage,
+  uploadProductVideo
 } from '../controllers/productController.js';
 import { getProductReviews } from '../controllers/reviewController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
@@ -21,12 +22,14 @@ const productValidation = [
   body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
   body('category_id').optional().isInt().withMessage('Category ID must be an integer'),
   body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status'),
-  body('image_urls').optional().isArray({ max: 9 }).withMessage('image_urls can contain up to 9 images')
+  body('image_urls').optional().isArray({ max: 9 }).withMessage('image_urls can contain up to 9 images'),
+  body('video_url').optional({ nullable: true }).isURL().withMessage('video_url must be a valid URL')
 ];
 
 const productUpdateValidation = [
   body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status'),
-  body('image_urls').optional().isArray({ max: 9 }).withMessage('image_urls can contain up to 9 images')
+  body('image_urls').optional().isArray({ max: 9 }).withMessage('image_urls can contain up to 9 images'),
+  body('video_url').optional({ nullable: true }).isURL().withMessage('video_url must be a valid URL')
 ];
 
 // Public routes
@@ -38,6 +41,13 @@ router.post(
   requireRole('admin', 'super_admin', 'owner'),
   express.raw({ type: 'image/*', limit: '5mb' }),
   uploadProductImage
+);
+router.post(
+  '/upload-video',
+  authenticateToken,
+  requireRole('admin', 'super_admin', 'owner'),
+  express.raw({ type: 'video/*', limit: '20mb' }),
+  uploadProductVideo
 );
 router.get('/:id/reviews', getProductReviews);
 router.get('/:id', getProductById);
