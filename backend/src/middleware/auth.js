@@ -192,23 +192,7 @@ export const requirePermission = (permissionName) => {
 };
 
 
-export const optionalAuth = async (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = extractBearerToken(authHeader);
-
-  if (!token) {
-    req.user = null;
-    return next();
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-  } catch (error) {
-    req.user = null;
-  }
-  next();
-};
+export const optionalAuth = async (req, res, next) => authenticateOptional(req, res, next);
 
 export const authenticateTokenOrSupabaseToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];

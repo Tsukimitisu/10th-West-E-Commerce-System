@@ -207,7 +207,8 @@ const Profile = () => {
         avatarUrl = await uploadProfileAvatar(avatarFile);
       }
 
-      const updated = await updateProfile(user?.id, { ...sanitized, avatar: avatarUrl });
+      const profileUpdateResult = await updateProfile(user?.id, { ...sanitized, avatar: avatarUrl });
+      const updated = profileUpdateResult?.user || {};
       const saved = { ...user, ...updated };
       localStorage.setItem('shopCoreUser', JSON.stringify(saved));
       window.dispatchEvent(new Event('auth:changed'));
@@ -221,7 +222,13 @@ const Profile = () => {
       resetAvatarInput();
       setFieldErrors({});
       setMessageType('success');
-      setMessage('Profile updated successfully.');
+
+      if (profileUpdateResult?.requiresEmailVerification) {
+        const pendingEmail = profileUpdateResult?.pending_email || sanitized.email;
+        setMessage(profileUpdateResult?.message || `Profile updated. Please verify your new email address (${pendingEmail}) to complete the change.`);
+      } else {
+        setMessage(profileUpdateResult?.message || 'Profile updated successfully.');
+      }
     } catch (err) {
       setFieldErrors(err.fieldErrors || {});
       if ((err.message || '').toLowerCase().includes('profile picture') || (err.message || '').toLowerCase().includes('image')) {

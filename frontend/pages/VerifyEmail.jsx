@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, X, Loader, Mail } from 'lucide-react';
-import { verifyEmailToken, resendVerificationEmail } from '../services/api';
+import { verifyEmailToken, resendVerificationEmail, confirmEmailChangeToken } from '../services/api';
 
 const VERIFY_REQUEST_CACHE_MS = 30 * 1000;
 const verifyRequestCache = new Map();
@@ -37,10 +37,34 @@ const verifyTokenOnce = (token) => {
   return request;
 };
 
+const confirmEmailChangeOnce = (token) => {
+  const normalizedToken = String(token || '').trim();
+  if (!normalizedToken) {
+    const tokenError = new Error('Invalid email change link.');
+    tokenError.code = 'EMAIL_CHANGE_TOKEN_INVALID';
+    return Promise.reject(tokenError);
+  }
+
+  const cacheKey = `email-change:${normalizedToken}`;
+  const cachedRequest = verifyRequestCache.get(cacheKey);
+  if (cachedRequest) return cachedRequest;
+
+  const request = confirmEmailChangeToken(normalizedToken).finally(() => {
+    window.setTimeout(() => {
+      verifyRequestCache.delete(cacheKey);
+    }, VERIFY_REQUEST_CACHE_MS);
+  });
+
+  verifyRequestCache.set(cacheKey, request);
+  return request;
+};
+
 const VerifyEmail = ({ onLogin }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
+  const emailChangeToken = searchParams.get('emailChangeToken');
+  const isEmailChangeFlow = Boolean(String(emailChangeToken || '').trim());
   const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('Verifying your email...');
   const [email, setEmail] = useState('');
@@ -72,9 +96,11 @@ const VerifyEmail = ({ onLogin }) => {
     let cancelled = false;
 
     const runVerification = async () => {
+      const normalizedEmailChangeToken = String(emailChangeToken || '').trim();
       const normalizedToken = String(token || '').trim();
+      const activeToken = normalizedEmailChangeToken || normalizedToken;
 
-      if (!normalizedToken) {
+      if (!activeToken) {
         if (lastProcessedTokenRef.current) {
           return;
         }
@@ -83,20 +109,40 @@ const VerifyEmail = ({ onLogin }) => {
         return;
       }
 
-      if (lastProcessedTokenRef.current === normalizedToken) {
+      if (lastProcessedTokenRef.current === activeToken) {
         return;
       }
-      lastProcessedTokenRef.current = normalizedToken;
+      lastProcessedTokenRef.current = activeToken;
 
       setStatus('loading');
-      setMessage('Verifying your email...');
+      setMessage(normalizedEmailChangeToken ? 'Confirming your new email address...' : 'Verifying your email...');
 
       try {
-        const result = await verifyTokenOnce(normalizedToken);
+        const result = normalizedEmailChangeToken
+          ? await confirmEmailChangeOnce(normalizedEmailChangeToken)
+          : await verifyTokenOnce(normalizedToken);
         if (cancelled) return;
 
         setStatus('success');
         clearVerificationTokenFromUrl();
+
+        if (normalizedEmailChangeToken) {
+          try {
+            const existingUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+            if (existingUser && result?.user && Number(existingUser.id) === Number(result.user.id)) {
+              localStorage.setItem('shopCoreUser', JSON.stringify({ ...existingUser, ...result.user }));
+              window.dispatchEvent(new Event('auth:changed'));
+            }
+          } catch {}
+
+          const destination = localStorage.getItem('shopCoreToken') ? '/profile' : '/login';
+          setNextRoute(destination);
+          setMessage(result?.message || 'Your email address has been updated successfully.');
+          redirectTimeoutRef.current = window.setTimeout(() => {
+            if (!cancelled) navigate(destination, { replace: true });
+          }, 1200);
+          return;
+        }
 
         if (result?.token && result?.user && onLoginRef.current) {
           const destination = getPostVerifyRedirect(result.user);
@@ -143,6 +189,16 @@ const VerifyEmail = ({ onLogin }) => {
           return;
         }
 
+        if (code === 'EMAIL_CHANGE_TOKEN_EXPIRED') {
+          setMessage('This email change link has expired. Update your profile again to request a new link.');
+          return;
+        }
+
+        if (code === 'EMAIL_CHANGE_TOKEN_INVALID' || code === 'EMAIL_CHANGE_NOT_PENDING') {
+          setMessage('This email change link is invalid or already used.');
+          return;
+        }
+
         if (code === 'VERIFICATION_TOKEN_INVALID') {
           setMessage('This verification link is invalid. You can request a new one below.');
           return;
@@ -165,7 +221,7 @@ const VerifyEmail = ({ onLogin }) => {
         window.clearTimeout(redirectTimeoutRef.current);
       }
     };
-  }, [navigate, token]);
+  }, [navigate, token, emailChangeToken]);
 
   const handleResend = async (e) => {
     e.preventDefault();
@@ -199,7 +255,7 @@ const VerifyEmail = ({ onLogin }) => {
         {status === 'loading' && (
           <>
             <Loader className="w-12 h-12 text-orange-500 animate-spin mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">Verifying your email...</h2>
+            <h2 className="text-xl font-bold text-white mb-2">{isEmailChangeFlow ? 'Confirming your email change...' : 'Verifying your email...'}</h2>
             <p className="text-gray-400">{message}</p>
           </>
         )}
@@ -228,42 +284,44 @@ const VerifyEmail = ({ onLogin }) => {
             <h2 className="text-xl font-bold text-white mb-2">Verification Failed</h2>
             <p className="text-gray-400 mb-6">{message}</p>
 
-            <div className="w-full bg-gray-900 border border-gray-700 rounded-lg p-5 mb-6 text-left">
-              <h3 className="text-sm font-bold text-white mb-3">Need a new verification email?</h3>
-              <form onSubmit={handleResend} noValidate className="flex flex-col gap-3">
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      if (resendError) setResendError('');
-                      if (resendStatus) setResendStatus('');
-                    }}
-                    placeholder="Enter your registered email"
-                    aria-invalid={resendError ? 'true' : 'false'}
-                    aria-describedby={resendError ? 'resend-email-error' : undefined}
-                    className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white text-sm"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={isResending}
-                  className="w-full py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-medium rounded-lg transition-colors text-sm"
-                >
-                  {isResending ? 'Sending...' : 'Resend Verification Email'}
-                </button>
-                {resendError && (
-                  <p id="resend-email-error" className="text-xs text-red-400">{resendError}</p>
-                )}
-                {resendStatus && (
-                  <p className={`text-xs ${resendStatus.toLowerCase().includes('success') ? 'text-green-400' : 'text-red-400'}`}>
-                    {resendStatus}
-                  </p>
-                )}
-              </form>
-            </div>
+            {!isEmailChangeFlow && (
+              <div className="w-full bg-gray-900 border border-gray-700 rounded-lg p-5 mb-6 text-left">
+                <h3 className="text-sm font-bold text-white mb-3">Need a new verification email?</h3>
+                <form onSubmit={handleResend} noValidate className="flex flex-col gap-3">
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (resendError) setResendError('');
+                        if (resendStatus) setResendStatus('');
+                      }}
+                      placeholder="Enter your registered email"
+                      aria-invalid={resendError ? 'true' : 'false'}
+                      aria-describedby={resendError ? 'resend-email-error' : undefined}
+                      className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white text-sm"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isResending}
+                    className="w-full py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-medium rounded-lg transition-colors text-sm"
+                  >
+                    {isResending ? 'Sending...' : 'Resend Verification Email'}
+                  </button>
+                  {resendError && (
+                    <p id="resend-email-error" className="text-xs text-red-400">{resendError}</p>
+                  )}
+                  {resendStatus && (
+                    <p className={`text-xs ${resendStatus.toLowerCase().includes('success') ? 'text-green-400' : 'text-red-400'}`}>
+                      {resendStatus}
+                    </p>
+                  )}
+                </form>
+              </div>
+            )}
 
             <Link
               to="/login"

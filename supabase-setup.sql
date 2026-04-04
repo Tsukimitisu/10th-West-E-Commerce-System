@@ -1,13 +1,13 @@
 -- =============================================================================
 -- 10th West Moto - COMPLETE Supabase Setup SQL
 -- Run this in Supabase Dashboard -> SQL Editor -> New query.
--- This script is idempotent (safe to re-run) and includes ALL 35 tables,
+-- This script is idempotent (safe to re-run) and includes ALL core tables,
 -- indexes, RLS config, and seed data.
 -- =============================================================================
 
 BEGIN;
 
--- ==================== TABLES (35 total) ====================
+-- ==================== TABLES ====================
 
 -- 1. Users
 CREATE TABLE IF NOT EXISTS users (
@@ -32,6 +32,11 @@ CREATE TABLE IF NOT EXISTS users (
   password_reset_expires TIMESTAMP,
   last_login TIMESTAMP,
   email_verified BOOLEAN DEFAULT FALSE,
+  email_verification_token VARCHAR(255),
+  email_verification_expires TIMESTAMP,
+  pending_email VARCHAR(255),
+  email_change_token VARCHAR(255),
+  email_change_expires TIMESTAMP,
   consent_given_at TIMESTAMP,
   age_confirmed_at TIMESTAMP,
   deleted_at TIMESTAMP,
@@ -98,6 +103,7 @@ CREATE TABLE IF NOT EXISTS product_variants (
 CREATE TABLE IF NOT EXISTS carts (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  session_id VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -485,6 +491,27 @@ CREATE TABLE IF NOT EXISTS backup_history (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 36. OAuth Codes (short-lived exchange codes)
+CREATE TABLE IF NOT EXISTS oauth_codes (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  code_hash VARCHAR(255) NOT NULL UNIQUE,
+  ip_address VARCHAR(45),
+  user_agent TEXT,
+  used BOOLEAN DEFAULT FALSE,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 37. Request Rate Limits (shared limiter state)
+CREATE TABLE IF NOT EXISTS request_rate_limits (
+  key TEXT PRIMARY KEY,
+  request_count INTEGER NOT NULL DEFAULT 0,
+  reset_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ==================== BACKFILL CONSTRAINTS ====================
 -- Update CHECK constraints if the table already existed with old values.
 
@@ -538,6 +565,27 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_token VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMP;
+
+-- Carts: support guest session isolation
+ALTER TABLE carts ADD COLUMN IF NOT EXISTS session_id VARCHAR(255);
+
+-- Orders: ensure idempotency-safe unique payment intent values
+WITH ranked_payment_intents AS (
+  SELECT id, payment_intent_id,
+         ROW_NUMBER() OVER (PARTITION BY payment_intent_id ORDER BY created_at ASC, id ASC) AS rn
+  FROM orders
+  WHERE payment_intent_id IS NOT NULL
+)
+UPDATE orders o
+SET payment_intent_id = NULL
+FROM ranked_payment_intents r
+WHERE o.id = r.id
+  AND r.rn > 1;
 
 -- Login attempts: user_agent
 ALTER TABLE login_attempts ADD COLUMN IF NOT EXISTS user_agent TEXT;
@@ -549,6 +597,7 @@ ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
 
 -- Core table indexes
 CREATE INDEX IF NOT EXISTS idx_carts_user ON carts(user_id);
+CREATE INDEX IF NOT EXISTS idx_carts_session ON carts(session_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON cart_items(cart_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_product ON cart_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
@@ -578,6 +627,10 @@ CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
 CREATE INDEX IF NOT EXISTS idx_system_settings_category ON system_settings(category);
 CREATE INDEX IF NOT EXISTS idx_error_logs_type ON error_logs(error_type);
 CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_users_email_verification_token ON users(email_verification_token);
+CREATE INDEX IF NOT EXISTS idx_users_email_change_token ON users(email_change_token);
+CREATE INDEX IF NOT EXISTS idx_users_pending_email ON users(pending_email);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_payment_intent_unique ON orders(payment_intent_id) WHERE payment_intent_id IS NOT NULL;
 
 -- Auth & security indexes
 CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs(user_id);
@@ -587,6 +640,10 @@ CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email);
 CREATE INDEX IF NOT EXISTS idx_login_attempts_created ON login_attempts(created_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_oauth_codes_hash ON oauth_codes(code_hash);
+CREATE INDEX IF NOT EXISTS idx_oauth_codes_user ON oauth_codes(user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_request_rate_limits_reset ON request_rate_limits(reset_at);
 
 -- ==================== RLS ====================
 -- Enable RLS on all tables with per-operation policies.
@@ -607,6 +664,20 @@ ALTER TABLE IF EXISTS registration_otps ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS registration_otps_restricted_access ON registration_otps;
 CREATE POLICY registration_otps_restricted_access
 ON registration_otps FOR ALL
+USING (current_setting('role', true) = 'service_role')
+WITH CHECK (current_setting('role', true) = 'service_role');
+
+ALTER TABLE IF EXISTS oauth_codes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS oauth_codes_restricted_access ON oauth_codes;
+CREATE POLICY oauth_codes_restricted_access
+ON oauth_codes FOR ALL
+USING (current_setting('role', true) = 'service_role')
+WITH CHECK (current_setting('role', true) = 'service_role');
+
+ALTER TABLE IF EXISTS request_rate_limits ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS request_rate_limits_restricted_access ON request_rate_limits;
+CREATE POLICY request_rate_limits_restricted_access
+ON request_rate_limits FOR ALL
 USING (current_setting('role', true) = 'service_role')
 WITH CHECK (current_setting('role', true) = 'service_role');
 

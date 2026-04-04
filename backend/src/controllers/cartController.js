@@ -1,6 +1,32 @@
 import crypto from 'crypto';
 import pool from '../config/database.js';
 
+const MAX_ITEM_QUANTITY = 99;
+
+const toPositiveInt = (value) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const ensureCartSchema = async () => {
+  await pool.query(
+    `ALTER TABLE carts
+     ADD COLUMN IF NOT EXISTS session_id VARCHAR(255)`
+  ).catch((error) => {
+    console.error('Failed to ensure carts.session_id column:', error.message || error);
+  });
+
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_carts_session_id ON carts(session_id)').catch((error) => {
+    console.error('Failed to ensure carts.session_id index:', error.message || error);
+  });
+
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_cart_items_cart_product ON cart_items(cart_id, product_id)').catch((error) => {
+    console.error('Failed to ensure cart_items cart/product index:', error.message || error);
+  });
+};
+ensureCartSchema();
+
 const saveSession = (req) =>
   new Promise((resolve, reject) => {
     if (!req.session) return resolve();
@@ -15,6 +41,47 @@ const regenerateSession = (req) =>
 
 const generateGuestCartSessionId = () =>
   crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+
+const acquireCartOwnershipLock = async (client, ownership) => {
+  const lockKey = ownership.userId
+    ? `cart:user:${ownership.userId}`
+    : `cart:session:${ownership.sessionId}`;
+
+  await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [lockKey]);
+};
+
+const resolveCartOwnership = async (req) => {
+  const userId = req.user?.id || null;
+  if (userId) {
+    return { userId, sessionId: null };
+  }
+
+  const guestSessionId = await ensureGuestCartSessionId(req);
+  return { userId: null, sessionId: guestSessionId };
+};
+
+const withCartTransaction = async (req, callback) => {
+  const ownership = await resolveCartOwnership(req);
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    await acquireCartOwnershipLock(client, ownership);
+
+    const cart = await getOrCreateCartByOwnership(client, ownership);
+    const result = await callback(client, cart, ownership);
+
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+    throw error;
+  } finally {
+    client.release();
+  }
+};
 
 export const ensureGuestCartSessionId = async (req) => {
   if (!req.session) {
@@ -80,14 +147,27 @@ const createCart = async (client, ownership) => {
     values.push(`$${params.length}`);
   }
 
-  const result = await client.query(
-    `INSERT INTO carts (${columns.join(', ')})
-     VALUES (${values.join(', ')})
-     RETURNING *`,
-    params
-  );
+  try {
+    const result = await client.query(
+      `INSERT INTO carts (${columns.join(', ')})
+       VALUES (${values.join(', ')})
+       RETURNING *`,
+      params
+    );
 
-  return result.rows[0];
+    return result.rows[0];
+  } catch (error) {
+    if (error?.code === '23505') {
+      if (ownership.userId) {
+        return getCartByUserId(client, ownership.userId);
+      }
+      if (ownership.sessionId) {
+        return getCartBySessionId(client, ownership.sessionId);
+      }
+    }
+
+    throw error;
+  }
 };
 
 const touchCart = async (client, cartId) => {
@@ -98,7 +178,13 @@ const touchCart = async (client, cartId) => {
 };
 
 export const getOrCreateCart = async (req, client = pool) => {
-  const userId = req.user?.id || null;
+  const ownership = await resolveCartOwnership(req);
+  return getOrCreateCartByOwnership(client, ownership);
+};
+
+const getOrCreateCartByOwnership = async (client, ownership) => {
+  const userId = ownership.userId || null;
+  const sessionId = ownership.sessionId || null;
 
   if (userId) {
     let cart = await getCartByUserId(client, userId);
@@ -108,10 +194,9 @@ export const getOrCreateCart = async (req, client = pool) => {
     return cart;
   }
 
-  const guestSessionId = await ensureGuestCartSessionId(req);
-  let cart = await getCartBySessionId(client, guestSessionId);
+  let cart = await getCartBySessionId(client, sessionId);
   if (!cart) {
-    cart = await createCart(client, { sessionId: guestSessionId });
+    cart = await createCart(client, { sessionId });
   }
   return cart;
 };
@@ -123,6 +208,8 @@ export const mergeGuestCartIntoUserCart = async (guestSessionId, userId) => {
 
   try {
     await client.query('BEGIN');
+    await acquireCartOwnershipLock(client, { userId, sessionId: null });
+    await acquireCartOwnershipLock(client, { userId: null, sessionId: guestSessionId });
 
     const guestCart = await getCartBySessionId(client, guestSessionId);
     if (!guestCart) {
@@ -136,10 +223,11 @@ export const mergeGuestCartIntoUserCart = async (guestSessionId, userId) => {
     }
 
     const guestItemsResult = await client.query(
-      `SELECT product_id, quantity
+      `SELECT product_id, SUM(quantity)::int AS quantity
        FROM cart_items
        WHERE cart_id = $1
-       ORDER BY id ASC`,
+       GROUP BY product_id
+       ORDER BY product_id ASC`,
       [guestCart.id]
     );
 
@@ -148,6 +236,7 @@ export const mergeGuestCartIntoUserCart = async (guestSessionId, userId) => {
         `SELECT id, quantity
          FROM cart_items
          WHERE cart_id = $1 AND product_id = $2
+         FOR UPDATE
          LIMIT 1`,
         [userCart.id, guestItem.product_id]
       );
@@ -221,50 +310,89 @@ export const getCart = async (req, res) => {
 
 // Add item to cart
 export const addToCart = async (req, res) => {
-  const { product_id, quantity = 1 } = req.body;
+  const productId = toPositiveInt(req.body?.product_id);
+  const quantity = toPositiveInt(req.body?.quantity ?? 1);
+
+  if (!productId) {
+    return res.status(400).json({ message: 'Valid product_id is required' });
+  }
+
+  if (!quantity || quantity > MAX_ITEM_QUANTITY) {
+    return res.status(400).json({
+      message: `Quantity must be between 1 and ${MAX_ITEM_QUANTITY}`,
+    });
+  }
 
   try {
-    const cart = await getOrCreateCart(req);
+    await withCartTransaction(req, async (client, cart) => {
+      const productResult = await client.query(
+        `SELECT id, stock_quantity
+         FROM products
+         WHERE id = $1
+         FOR UPDATE`,
+        [productId]
+      );
 
-    const product = await pool.query(
-      'SELECT id, stock_quantity FROM products WHERE id = $1',
-      [product_id]
-    );
-
-    if (product.rows.length === 0) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-
-    if (product.rows[0].stock_quantity < quantity) {
-      return res.status(400).json({ message: 'Insufficient stock' });
-    }
-
-    const existing = await pool.query(
-      'SELECT * FROM cart_items WHERE cart_id = $1 AND product_id = $2',
-      [cart.id, product_id]
-    );
-
-    if (existing.rows.length > 0) {
-      const newQuantity = existing.rows[0].quantity + quantity;
-
-      if (product.rows[0].stock_quantity < newQuantity) {
-        return res.status(400).json({ message: 'Insufficient stock' });
+      if (productResult.rows.length === 0) {
+        const notFoundError = new Error('Product not found');
+        notFoundError.statusCode = 404;
+        throw notFoundError;
       }
 
-      await pool.query(
-        'UPDATE cart_items SET quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [newQuantity, existing.rows[0].id]
-      );
-    } else {
-      await pool.query(
-        'INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3)',
-        [cart.id, product_id, quantity]
-      );
-    }
+      const product = productResult.rows[0];
+      if (Number(product.stock_quantity) < quantity) {
+        const stockError = new Error('Insufficient stock');
+        stockError.statusCode = 400;
+        throw stockError;
+      }
 
-    await touchCart(pool, cart.id);
+      const existingResult = await client.query(
+        `SELECT id, quantity
+         FROM cart_items
+         WHERE cart_id = $1 AND product_id = $2
+         FOR UPDATE
+         LIMIT 1`,
+        [cart.id, productId]
+      );
+
+      if (existingResult.rows.length > 0) {
+        const existingItem = existingResult.rows[0];
+        const nextQuantity = Number(existingItem.quantity) + quantity;
+
+        if (nextQuantity > Number(product.stock_quantity)) {
+          const stockError = new Error('Insufficient stock');
+          stockError.statusCode = 400;
+          throw stockError;
+        }
+
+        if (nextQuantity > MAX_ITEM_QUANTITY) {
+          const qtyError = new Error(`Quantity must be between 1 and ${MAX_ITEM_QUANTITY}`);
+          qtyError.statusCode = 400;
+          throw qtyError;
+        }
+
+        await client.query(
+          `UPDATE cart_items
+           SET quantity = $1,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2`,
+          [nextQuantity, existingItem.id]
+        );
+      } else {
+        await client.query(
+          'INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3)',
+          [cart.id, productId, quantity]
+        );
+      }
+
+      await touchCart(client, cart.id);
+    });
+
     res.json({ message: 'Item added to cart successfully' });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Add to cart error:', error);
     res.status(500).json({ message: 'Server error' });
   }
@@ -272,36 +400,59 @@ export const addToCart = async (req, res) => {
 
 // Update cart item quantity
 export const updateCartItem = async (req, res) => {
-  const { id } = req.params;
-  const { quantity } = req.body;
+  const itemId = toPositiveInt(req.params?.id);
+  const quantity = toPositiveInt(req.body?.quantity);
+
+  if (!itemId) {
+    return res.status(400).json({ message: 'Valid cart item id is required' });
+  }
+
+  if (!quantity || quantity > MAX_ITEM_QUANTITY) {
+    return res.status(400).json({
+      message: `Quantity must be between 1 and ${MAX_ITEM_QUANTITY}`,
+    });
+  }
 
   try {
-    const cart = await getOrCreateCart(req);
+    await withCartTransaction(req, async (client, cart) => {
+      const itemResult = await client.query(
+        `SELECT ci.id, ci.product_id, p.stock_quantity
+         FROM cart_items ci
+         JOIN products p ON p.id = ci.product_id
+         WHERE ci.id = $1 AND ci.cart_id = $2
+         FOR UPDATE OF ci, p`,
+        [itemId, cart.id]
+      );
 
-    const item = await pool.query(
-      `SELECT ci.*, p.stock_quantity
-       FROM cart_items ci
-       JOIN products p ON ci.product_id = p.id
-       WHERE ci.id = $1 AND ci.cart_id = $2`,
-      [id, cart.id]
-    );
+      if (itemResult.rows.length === 0) {
+        const notFoundError = new Error('Cart item not found');
+        notFoundError.statusCode = 404;
+        throw notFoundError;
+      }
 
-    if (item.rows.length === 0) {
-      return res.status(404).json({ message: 'Cart item not found' });
-    }
+      const item = itemResult.rows[0];
+      if (Number(item.stock_quantity) < quantity) {
+        const stockError = new Error('Insufficient stock');
+        stockError.statusCode = 400;
+        throw stockError;
+      }
 
-    if (item.rows[0].stock_quantity < quantity) {
-      return res.status(400).json({ message: 'Insufficient stock' });
-    }
+      await client.query(
+        `UPDATE cart_items
+         SET quantity = $1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [quantity, itemId]
+      );
 
-    await pool.query(
-      'UPDATE cart_items SET quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [quantity, id]
-    );
+      await touchCart(client, cart.id);
+    });
 
-    await touchCart(pool, cart.id);
     res.json({ message: 'Cart updated successfully' });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Update cart error:', error);
     res.status(500).json({ message: 'Server error' });
   }
@@ -309,23 +460,33 @@ export const updateCartItem = async (req, res) => {
 
 // Remove item from cart
 export const removeFromCart = async (req, res) => {
-  const { id } = req.params;
+  const itemId = toPositiveInt(req.params?.id);
+
+  if (!itemId) {
+    return res.status(400).json({ message: 'Valid cart item id is required' });
+  }
 
   try {
-    const cart = await getOrCreateCart(req);
+    await withCartTransaction(req, async (client, cart) => {
+      const result = await client.query(
+        'DELETE FROM cart_items WHERE id = $1 AND cart_id = $2 RETURNING id',
+        [itemId, cart.id]
+      );
 
-    const result = await pool.query(
-      'DELETE FROM cart_items WHERE id = $1 AND cart_id = $2 RETURNING id',
-      [id, cart.id]
-    );
+      if (result.rows.length === 0) {
+        const notFoundError = new Error('Cart item not found');
+        notFoundError.statusCode = 404;
+        throw notFoundError;
+      }
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Cart item not found' });
-    }
+      await touchCart(client, cart.id);
+    });
 
-    await touchCart(pool, cart.id);
     res.json({ message: 'Item removed from cart' });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Remove from cart error:', error);
     res.status(500).json({ message: 'Server error' });
   }
@@ -334,10 +495,10 @@ export const removeFromCart = async (req, res) => {
 // Clear cart
 export const clearCart = async (req, res) => {
   try {
-    const cart = await getOrCreateCart(req);
-
-    await pool.query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
-    await touchCart(pool, cart.id);
+    await withCartTransaction(req, async (client, cart) => {
+      await client.query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
+      await touchCart(client, cart.id);
+    });
 
     res.json({ message: 'Cart cleared successfully' });
   } catch (error) {

@@ -20,6 +20,8 @@ const STAFF_STATUS_TRANSITIONS = {
   completed: new Set([]),
   cancelled: new Set([]),
 };
+const DEFAULT_ORDER_LIMIT = 20;
+const MAX_ORDER_LIMIT = 100;
 
 const ORDER_NOTIFICATION_DETAIL_QUERY = `
   SELECT o.id, o.user_id, o.status, o.order_number, o.tracking_number,
@@ -52,6 +54,14 @@ const ensureOrderWorkflowColumns = async () => {
   `).catch((error) => {
     console.error('Failed to ensure order status constraint:', error);
   });
+
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_payment_intent_unique
+     ON orders(payment_intent_id)
+     WHERE payment_intent_id IS NOT NULL`
+  ).catch((error) => {
+    console.error('Failed to ensure payment_intent_id uniqueness index:', error);
+  });
 };
 ensureOrderWorkflowColumns();
 ensureNotificationColumns();
@@ -59,6 +69,23 @@ ensureNotificationColumns();
 const canStaffTransitionStatus = (currentStatus, nextStatus) => {
   const allowed = STAFF_STATUS_TRANSITIONS[currentStatus] || new Set();
   return allowed.has(nextStatus);
+};
+
+const parsePagination = (query = {}) => {
+  const parsedPage = Number.parseInt(String(query.page || ''), 10);
+  const parsedLimit = Number.parseInt(String(query.limit || ''), 10);
+
+  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const limit = Number.isInteger(parsedLimit) && parsedLimit > 0
+    ? Math.min(parsedLimit, MAX_ORDER_LIMIT)
+    : DEFAULT_ORDER_LIMIT;
+
+  return {
+    page,
+    limit,
+    offset: (page - 1) * limit,
+    paginated: query.page !== undefined || query.limit !== undefined,
+  };
 };
 
 const normalizeText = (value) => {
@@ -163,7 +190,9 @@ const buildOrderReturnInfo = async (db, order, userId, isStaff) => {
 // Get all orders (admin)
 export const getAllOrders = async (req, res) => {
   try {
-    const result = await pool.query(`
+    const { page, limit, offset, paginated } = parsePagination(req.query || {});
+
+    const query = `
       SELECT o.*, 
              u.name as customer_name, u.email as customer_email,
              COUNT(oi.id) as item_count
@@ -172,12 +201,33 @@ export const getAllOrders = async (req, res) => {
       LEFT JOIN order_items oi ON o.id = oi.order_id
       GROUP BY o.id, u.name, u.email
       ORDER BY o.created_at DESC
-    `);
+      ${paginated ? 'LIMIT $1 OFFSET $2' : ''}
+    `;
 
-    res.json(result.rows.map(order => ({
+    const result = paginated
+      ? await pool.query(query, [limit, offset])
+      : await pool.query(query);
+
+    const total = paginated
+      ? Number((await pool.query('SELECT COUNT(*)::int AS total FROM orders')).rows[0]?.total || 0)
+      : result.rows.length;
+
+    const orders = result.rows.map(order => ({
       ...mapOrderRecord(order),
       item_count: parseInt(order.item_count)
-    })));
+    }));
+
+    if (paginated) {
+      return res.json({
+        orders,
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      });
+    }
+
+    res.json(orders);
   } catch (error) {
     console.error('Get all orders error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -188,21 +238,42 @@ export const getAllOrders = async (req, res) => {
 export const getUserOrders = async (req, res) => {
   try {
     const userId = req.user.id;
+    const { page, limit, offset, paginated } = parsePagination(req.query || {});
 
-    const result = await pool.query(
-      `SELECT o.*, COUNT(oi.id) as item_count
-       FROM orders o
-       LEFT JOIN order_items oi ON o.id = oi.order_id
-       WHERE o.user_id = $1
-       GROUP BY o.id
-       ORDER BY o.created_at DESC`,
-      [userId]
-    );
+    const query = `
+      SELECT o.*, COUNT(oi.id) as item_count
+      FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.user_id = $1
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+      ${paginated ? 'LIMIT $2 OFFSET $3' : ''}
+    `;
 
-    res.json(result.rows.map(order => ({
+    const result = paginated
+      ? await pool.query(query, [userId, limit, offset])
+      : await pool.query(query, [userId]);
+
+    const total = paginated
+      ? Number((await pool.query('SELECT COUNT(*)::int AS total FROM orders WHERE user_id = $1', [userId])).rows[0]?.total || 0)
+      : result.rows.length;
+
+    const orders = result.rows.map(order => ({
       ...mapOrderRecord(order),
       item_count: parseInt(order.item_count)
-    })));
+    }));
+
+    if (paginated) {
+      return res.json({
+        orders,
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      });
+    }
+
+    res.json(orders);
   } catch (error) {
     console.error('Get user orders error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -324,9 +395,16 @@ export const updateOrderStatus = async (req, res) => {
            END,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
+         AND status = $4
        RETURNING *`,
-      [status, id, trackingNumber]
+      [status, id, trackingNumber, currentStatus]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(409).json({
+        message: 'Order status changed by another request. Please refresh and try again.',
+      });
+    }
 
     const updatedOrder = result.rows[0];
     emitOrderStatusUpdate(updatedOrder);
@@ -388,9 +466,16 @@ export const confirmOrderDelivery = async (req, res) => {
            rider_confirmed_by = COALESCE(rider_confirmed_by, $2),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
+         AND status = 'shipped'
        RETURNING *`,
       [id, riderId || null]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(409).json({
+        message: 'Order status changed by another request. Please refresh and try again.',
+      });
+    }
 
     const updatedOrder = result.rows[0];
     emitOrderStatusUpdate(updatedOrder);
@@ -456,9 +541,17 @@ export const confirmOrderReceipt = async (req, res) => {
            customer_confirmed_receipt_at = COALESCE(customer_confirmed_receipt_at, CURRENT_TIMESTAMP),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
+         AND user_id = $2
+         AND status = 'delivered'
        RETURNING *`,
-      [id]
+      [id, userId]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(409).json({
+        message: 'Order is no longer eligible for receipt confirmation. Please refresh order details.',
+      });
+    }
 
     const updatedOrder = result.rows[0];
     emitOrderStatusUpdate(updatedOrder);
@@ -499,27 +592,31 @@ export const cancelOrder = async (req, res) => {
   const userId = req.user?.id;
 
   try {
-    const orderResult = await pool.query('SELECT * FROM orders WHERE id = $1', [id]);
-    if (orderResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
-
-    const order = orderResult.rows[0];
-
-    // Customers can only cancel their own orders
-    if (order.user_id !== userId) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    // Only allow cancellation if not yet shipped
-    if (order.status !== 'pending' && order.status !== 'paid') {
-      return res.status(400).json({ message: 'Order cannot be cancelled once it is being prepared or shipped' });
-    }
-
     const result = await pool.query(
-      'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      ['cancelled', id]
+      `UPDATE orders
+       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND user_id = $2
+         AND status IN ('pending', 'paid')
+       RETURNING *`,
+      [id, userId]
     );
+
+    if (result.rows.length === 0) {
+      const existingOrder = await pool.query('SELECT user_id, status FROM orders WHERE id = $1', [id]);
+      if (existingOrder.rows.length === 0) {
+        return res.status(404).json({ message: 'Order not found' });
+      }
+
+      const order = existingOrder.rows[0];
+      if (order.user_id !== userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      return res.status(400).json({
+        message: 'Order cannot be cancelled once it is being prepared or shipped',
+      });
+    }
 
     const updatedOrder = result.rows[0];
     emitOrderStatusUpdate(updatedOrder);
@@ -561,12 +658,42 @@ export const createOrder = async (req, res) => {
 
     const userId = source === 'pos' ? null : req.user?.id;
     const guestInfo = req.body.guest_info;
+    const normalizedPaymentIntentId = normalizeText(payment_intent_id);
     const normalizedItems = (items || []).map(item => ({
       product_id: item.product_id ?? item.productId,
       quantity: Number(item.quantity)
     }));
 
+    if (normalizedItems.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Order must contain at least one item' });
+    }
+
+    if (source !== 'pos' && !normalizeText(shipping_address)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Shipping address is required' });
+    }
+
+    if (source !== 'pos' && normalizedPaymentIntentId) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`order:payment-intent:${normalizedPaymentIntentId}`]);
+
+      const existingOrderResult = await client.query(
+        'SELECT id FROM orders WHERE payment_intent_id = $1 LIMIT 1',
+        [normalizedPaymentIntentId]
+      );
+
+      if (existingOrderResult.rows.length > 0) {
+        await client.query('COMMIT');
+        return res.status(200).json({
+          message: 'Order already processed for this payment intent',
+          idempotent: true,
+          order_id: existingOrderResult.rows[0].id,
+        });
+      }
+    }
+
     if (normalizedItems.some(item => !item.product_id || !Number.isInteger(item.quantity) || item.quantity <= 0)) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Invalid items payload' });
     }
 
@@ -652,7 +779,7 @@ export const createOrder = async (req, res) => {
         shipping_address,
         shipping_lat ?? null,
         shipping_lng ?? null,
-        payment_intent_id,
+        normalizedPaymentIntentId,
         'paid',
         normalizedDiscountAmount,
         vatAmount,
@@ -764,6 +891,25 @@ export const createOrder = async (req, res) => {
     });
   } catch (error) {
     await client.query('ROLLBACK');
+
+    if (error?.code === '23505') {
+      const duplicatePaymentIntent = normalizeText(req.body?.payment_intent_id);
+      if (duplicatePaymentIntent) {
+        const duplicateResult = await pool.query(
+          'SELECT id FROM orders WHERE payment_intent_id = $1 LIMIT 1',
+          [duplicatePaymentIntent]
+        );
+
+        if (duplicateResult.rows.length > 0) {
+          return res.status(200).json({
+            message: 'Order already processed for this payment intent',
+            idempotent: true,
+            order_id: duplicateResult.rows[0].id,
+          });
+        }
+      }
+    }
+
     console.error('Create order error:', error);
     res.status(500).json({ message: 'Failed to create order' });
   } finally {

@@ -4042,7 +4042,7 @@ export const updateProfile = async (userId, updates) => {
 
     if (error) throw new Error(error.message);
 
-    return {
+    const user = {
       id: data.id,
       name: data.name,
       email: data.email,
@@ -4055,13 +4055,26 @@ export const updateProfile = async (userId, updates) => {
       email_verified: data.email_verified,
       two_factor_enabled: data.two_factor_enabled,
     };
+
+    return {
+      user,
+      message: 'Profile updated successfully',
+      requiresEmailVerification: false,
+      pending_email: null,
+    };
   }
 
   const data = await authenticatedFetch(`${API_URL}/users/profile`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
-  return data.user;
+
+  return {
+    user: data.user,
+    message: data.message || 'Profile updated successfully',
+    requiresEmailVerification: Boolean(data.requiresEmailVerification),
+    pending_email: data.pending_email || null,
+  };
 };
 
 export const uploadProfileAvatar = async (file) => {
@@ -4628,5 +4641,19 @@ export const verifyEmailToken = async (token) => {
     return { ...data, token: sbToken };
   }
   return data;
+};
+
+export const confirmEmailChangeToken = async (token) => {
+  const normalizedToken = String(token || '').trim();
+  if (!/^[a-f0-9]{64}$/i.test(normalizedToken)) {
+    const tokenError = new Error('This email change link is invalid.');
+    tokenError.code = 'EMAIL_CHANGE_TOKEN_INVALID';
+    throw tokenError;
+  }
+
+  return authenticatedFetch(`${API_URL}/users/profile/email-change/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ token: normalizedToken }),
+  });
 };
 

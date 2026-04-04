@@ -164,6 +164,40 @@ const initOtpTable = async () => {
       WITH CHECK (current_setting('role', true) = 'service_role');
   `).catch(err => console.error("Error creating OTP table:", err));
 };
+
+const ensureAuthSchema = async () => {
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS email_change_token VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMP;
+  `).catch((error) => {
+    console.error('Failed to ensure users verification columns:', error);
+  });
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS oauth_codes (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      code_hash VARCHAR(255) NOT NULL UNIQUE,
+      ip_address VARCHAR(45),
+      user_agent TEXT,
+      used BOOLEAN DEFAULT FALSE,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_oauth_codes_hash ON oauth_codes(code_hash);
+    CREATE INDEX IF NOT EXISTS idx_oauth_codes_user ON oauth_codes(user_id);
+    CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
+  `).catch((error) => {
+    console.error('Failed to ensure oauth_codes table:', error);
+  });
+};
+
+ensureAuthSchema();
 initOtpTable();
 
 // ─── SEND REGISTRATION OTP ─────────────────────────────────────────

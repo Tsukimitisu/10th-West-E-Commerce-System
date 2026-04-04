@@ -20,6 +20,9 @@ const migrateAuth = async () => {
         ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP,
         ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255),
         ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS email_change_token VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMP,
         ADD COLUMN IF NOT EXISTS last_login TIMESTAMP,
         ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS consent_given_at TIMESTAMP,
@@ -230,6 +233,20 @@ const migrateAuth = async () => {
       CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
     `);
     console.log('✅ OAuth codes table created');
+
+    // ── 8. Shared request rate limiter table (for multi-instance auth throttling) ──
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS request_rate_limits (
+        key TEXT PRIMARY KEY,
+        request_count INTEGER NOT NULL DEFAULT 0,
+        reset_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_request_rate_limits_reset ON request_rate_limits(reset_at);
+    `);
+    console.log('✅ Request rate limits table created');
 
     console.log('\n🎉 Auth & Staff migration completed successfully!');
   } catch (error) {

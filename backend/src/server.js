@@ -1,8 +1,10 @@
 import express from 'express';
 import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
@@ -42,6 +44,7 @@ import { apiLimiter, authLimiter } from './middleware/rateLimiter.js';
 import { errorLogger } from './middleware/errorLogger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { generateCsrfToken, validateCsrf } from './middleware/csrf.js';
+import pool from './config/database.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -82,6 +85,19 @@ const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 const uploadsDir = path.join(__dirname, '..', 'uploads');
+const PgSessionStore = connectPgSimple(session);
+
+const sessionSecret = process.env.SESSION_SECRET;
+if (process.env.NODE_ENV === 'production' && !sessionSecret) {
+  console.error('❌ SESSION_SECRET is required in production.');
+  process.exit(1);
+}
+
+if (!sessionSecret) {
+  console.warn('⚠️ SESSION_SECRET is not set. Using an ephemeral secret for development only.');
+}
+
+const effectiveSessionSecret = sessionSecret || crypto.randomBytes(48).toString('hex');
 
 // Initialize Socket.IO
 const io = initSocket(httpServer, FRONTEND_URL);
@@ -104,6 +120,7 @@ function getAllowedOrigins() {
 const allowedOrigins = getAllowedOrigins();
 
 // Middleware
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 0);
 
 // C8: Security headers via Helmet (CSP, X-Frame-Options, HSTS, etc.)
 app.use(helmet({
@@ -161,9 +178,15 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
-  secret: process.env.SESSION_SECRET || '10th_west_moto_secret_super_secure',
+  store: new PgSessionStore({
+    pool,
+    tableName: 'http_sessions',
+    createTableIfMissing: true,
+  }),
+  name: 'twm.sid',
+  secret: effectiveSessionSecret,
   resave: false,
-  saveUninitialized: true,
+  saveUninitialized: false,
   rolling: true,
   cookie: {
     secure: process.env.NODE_ENV === 'production',

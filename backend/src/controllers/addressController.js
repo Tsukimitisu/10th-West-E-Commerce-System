@@ -12,6 +12,14 @@ const normalizePhone = (value) => {
   return text.replace(/[\s()-]/g, '');
 };
 
+const parseCoordinate = (value, min, max) => {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return NaN;
+  if (parsed < min || parsed > max) return NaN;
+  return parsed;
+};
+
 const PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
 const ZIP_REGEX = /^\d{4}$/;
 
@@ -63,8 +71,8 @@ export const createAddress = async (req, res) => {
   const state = normalizeText(req.body.state);
   const postal_code = normalizeText(req.body.postal_code ?? req.body.zip);
   const is_default = !!req.body.is_default;
-  const lat = req.body.lat ?? null;
-  const lng = req.body.lng ?? null;
+  const lat = parseCoordinate(req.body.lat, -90, 90);
+  const lng = parseCoordinate(req.body.lng, -180, 180);
 
   let accountName = null;
   let accountPhone = null;
@@ -95,6 +103,8 @@ export const createAddress = async (req, res) => {
   if (!state) fieldErrors.state = 'Province is required.';
   if (!postal_code) fieldErrors.postal_code = 'ZIP code is required.';
   else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 4 digits.';
+  if (Number.isNaN(lat)) fieldErrors.lat = 'Latitude must be between -90 and 90.';
+  if (Number.isNaN(lng)) fieldErrors.lng = 'Longitude must be between -180 and 180.';
 
   if (Object.keys(fieldErrors).length > 0) {
     return res.status(400).json({ message: 'Please correct the highlighted address fields.', fieldErrors });
@@ -149,8 +159,8 @@ export const updateAddress = async (req, res) => {
   const incomingState = normalizeText(req.body.state);
   const incomingPostalCode = normalizeText(req.body.postal_code ?? req.body.zip);
   const incomingIsDefault = typeof req.body.is_default === 'boolean' ? req.body.is_default : null;
-  const nextLat = hasField('lat') ? (req.body.lat ?? null) : undefined;
-  const nextLng = hasField('lng') ? (req.body.lng ?? null) : undefined;
+  const nextLat = hasField('lat') ? parseCoordinate(req.body.lat, -90, 90) : undefined;
+  const nextLng = hasField('lng') ? parseCoordinate(req.body.lng, -180, 180) : undefined;
 
   const client = await pool.connect();
 
@@ -202,6 +212,8 @@ export const updateAddress = async (req, res) => {
     if (!state) fieldErrors.state = 'Province is required.';
     if (!postal_code) fieldErrors.postal_code = 'ZIP code is required.';
     else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 4 digits.';
+    if (Number.isNaN(lat)) fieldErrors.lat = 'Latitude must be between -90 and 90.';
+    if (Number.isNaN(lng)) fieldErrors.lng = 'Longitude must be between -180 and 180.';
 
     if (Object.keys(fieldErrors).length > 0) {
       await client.query('ROLLBACK');
