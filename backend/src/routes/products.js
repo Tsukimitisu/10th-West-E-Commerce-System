@@ -19,7 +19,12 @@ const router = express.Router();
 const productValidation = [
   body('name').trim().notEmpty().withMessage('Product name is required'),
   body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
-  body('category_id').optional().isInt().withMessage('Category ID must be an integer')
+  body('category_id').optional().isInt().withMessage('Category ID must be an integer'),
+  body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status')
+];
+
+const productUpdateValidation = [
+  body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status')
 ];
 
 // Public routes
@@ -49,6 +54,8 @@ router.put(
   '/:id',
   authenticateToken,
   requireRole('admin', 'super_admin', 'owner'),
+  productUpdateValidation,
+  validate,
   updateProduct
 );
 

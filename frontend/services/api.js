@@ -1038,6 +1038,7 @@ const mapProductToSupabase = (product) => ({
   barcode: toNullableString(product.barcode),
   sale_price: product.sale_price,
   is_on_sale: product.is_on_sale,
+  status: toNullableString(product.status) || 'available',
 });
 
 const toApprovedReviewStatus = (review) => {
@@ -1640,6 +1641,7 @@ export const addProduct = async (product) => {
     barcode: toNullableString(product.barcode),
     sale_price: product.sale_price,
     is_on_sale: product.is_on_sale,
+    status: toNullableString(product.status) || 'available',
   };
 
   const data = await authenticatedFetch(`${API_URL}/products`, {
@@ -1693,6 +1695,7 @@ export const updateProduct = async (id, product) => {
     barcode: toNullableString(product.barcode),
     sale_price: product.sale_price,
     is_on_sale: product.is_on_sale,
+    status: toNullableString(product.status) || 'available',
   };
 
   const data = await authenticatedFetch(`${API_URL}/products/${id}`, {

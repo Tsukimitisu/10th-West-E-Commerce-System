@@ -5,6 +5,41 @@ import Modal from '../../components/owner/Modal';
 import VariantsModal from '../../components/owner/VariantsModal';
 import { useSocketEvent } from '../../context/SocketContext';
 
+const PRODUCT_FORM_STEPS = [
+  { key: 'media', label: 'Media Upload', hint: 'Add a product image' },
+  { key: 'info', label: 'Product Info', hint: 'Core details and category' },
+  { key: 'pricing', label: 'Pricing & Stock', hint: 'Prices and inventory' },
+  { key: 'variants', label: 'Variants', hint: 'Configure variant strategy' },
+  { key: 'shipping', label: 'Shipping', hint: 'Fulfillment details' },
+  { key: 'status', label: 'Status', hint: 'Visibility and sale state' },
+];
+
+const createProductFormState = (overrides = {}) => ({
+  partNumber: '',
+  name: '',
+  description: '',
+  price: '',
+  buyingPrice: '',
+  category_id: '',
+  subcategory_id: '',
+  image: '',
+  stock_quantity: '0',
+  boxNumber: '',
+  low_stock_threshold: '5',
+  sale_price: '',
+  is_on_sale: false,
+  sku: '',
+  barcode: '',
+  brand: '',
+  status: 'available',
+  variant_notes: '',
+  shipping_class: 'standard',
+  shipping_weight: '',
+  shipping_handling_days: '1',
+  shipping_notes: '',
+  ...overrides,
+});
+
 const InputField = ({ label, required, children }) => (
   <div><label className="block text-xs font-medium text-gray-300 mb-1">{label}{required && <span className="text-red-400 ml-0.5">*</span>}</label>{children}</div>
 );
@@ -28,6 +63,7 @@ const ProductsView = () => {
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [formStep, setFormStep] = useState(0);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategoryId, setEditingCategoryId] = useState(null);
@@ -38,12 +74,7 @@ const ProductsView = () => {
   const [newSubcategoryName, setNewSubcategoryName] = useState('');
   const [editingSubcategoryId, setEditingSubcategoryId] = useState(null);
   const [editingSubcategoryName, setEditingSubcategoryName] = useState('');
-  const [form, setForm] = useState({
-    partNumber: '', name: '', description: '', price: '', buyingPrice: '',
-    category_id: '', subcategory_id: '', image: '', stock_quantity: '0', boxNumber: '',
-    low_stock_threshold: '5', sale_price: '', is_on_sale: false, sku: '', barcode: '',
-    brand: ''
-  });
+  const [form, setForm] = useState(createProductFormState());
 
   const fetch = async () => {
     try {
@@ -74,25 +105,8 @@ const ProductsView = () => {
     setSelectedImageFile(null);
     setImagePreviewUrl('');
     setFormError('');
-    setForm(prev => ({
-      ...prev,
-      partNumber: '',
-      name: '',
-      description: '',
-      price: '',
-      buyingPrice: '',
-      category_id: categories[0]?.id?.toString() || '',
-      subcategory_id: '',
-      image: '',
-      stock_quantity: '0',
-      boxNumber: '',
-      low_stock_threshold: '5',
-      sale_price: '',
-      is_on_sale: false,
-      sku: '',
-      barcode: '',
-      brand: ''
-    }));
+    setFormStep(0);
+    setForm(createProductFormState({ category_id: categories[0]?.id?.toString() || '' }));
     setModalOpen(true);
   };
 
@@ -101,13 +115,26 @@ const ProductsView = () => {
     setSelectedImageFile(null);
     setImagePreviewUrl('');
     setFormError('');
-    setForm({
-      partNumber: p.partNumber || '', name: p.name, description: p.description || '', price: p.price.toString(),
-      buyingPrice: p.buyingPrice.toString(), category_id: p.category_id.toString(), subcategory_id: p.subcategory_id?.toString() || '', image: p.image || '',
-      stock_quantity: p.stock_quantity.toString(), boxNumber: p.boxNumber || '',
-      low_stock_threshold: p.low_stock_threshold.toString(), sale_price: p.sale_price?.toString() || '',
-      is_on_sale: p.is_on_sale || false, sku: p.sku || '', barcode: p.barcode || '', brand: p.brand || ''
-    });
+    setFormStep(0);
+    setForm(createProductFormState({
+      partNumber: p.partNumber || '',
+      name: p.name,
+      description: p.description || '',
+      price: p.price.toString(),
+      buyingPrice: p.buyingPrice?.toString() || '',
+      category_id: p.category_id?.toString() || '',
+      subcategory_id: p.subcategory_id?.toString() || '',
+      image: p.image || '',
+      stock_quantity: p.stock_quantity.toString(),
+      boxNumber: p.boxNumber || '',
+      low_stock_threshold: p.low_stock_threshold.toString(),
+      sale_price: p.sale_price?.toString() || '',
+      is_on_sale: p.is_on_sale || false,
+      sku: p.sku || '',
+      barcode: p.barcode || '',
+      brand: p.brand || '',
+      status: p.status || (p.stock_quantity === 0 ? 'out_of_stock' : 'available'),
+    }));
     setModalOpen(true);
   };
 
@@ -116,17 +143,118 @@ const ProductsView = () => {
     setSelectedImageFile(null);
     setImagePreviewUrl('');
     setFormError('');
-    setForm({
-      partNumber: '', name: `${p.name} (Copy)`, description: p.description || '', price: p.price.toString(),
-      buyingPrice: p.buyingPrice.toString(), category_id: p.category_id.toString(), subcategory_id: p.subcategory_id?.toString() || '', image: p.image || '',
-      stock_quantity: '0', boxNumber: p.boxNumber || '', low_stock_threshold: p.low_stock_threshold.toString(),
-      sale_price: p.sale_price?.toString() || '', is_on_sale: false, sku: '', barcode: '', brand: p.brand || ''
-    });
+    setFormStep(0);
+    setForm(createProductFormState({
+      partNumber: '',
+      name: `${p.name} (Copy)`,
+      description: p.description || '',
+      price: p.price.toString(),
+      buyingPrice: p.buyingPrice?.toString() || '',
+      category_id: p.category_id?.toString() || '',
+      subcategory_id: p.subcategory_id?.toString() || '',
+      image: p.image || '',
+      stock_quantity: '0',
+      boxNumber: p.boxNumber || '',
+      low_stock_threshold: p.low_stock_threshold.toString(),
+      sale_price: p.sale_price?.toString() || '',
+      is_on_sale: false,
+      sku: '',
+      barcode: '',
+      brand: p.brand || '',
+      status: p.status || 'available',
+    }));
     setModalOpen(true);
+  };
+
+  const getStepValidationError = (stepIndex) => {
+    if (stepIndex === 1) {
+      if (!String(form.name || '').trim()) return 'Product name is required.';
+      if (!String(form.category_id || '').trim()) return 'Select a product category.';
+    }
+
+    if (stepIndex === 2) {
+      const price = Number(form.price);
+      const buyingPrice = Number(form.buyingPrice);
+      const stockQty = Number(form.stock_quantity);
+      const lowStockThreshold = Number(form.low_stock_threshold);
+
+      if (!Number.isFinite(price) || price < 0) return 'Selling price must be 0 or higher.';
+      if (!Number.isFinite(buyingPrice) || buyingPrice < 0) return 'Buying price must be 0 or higher.';
+      if (!Number.isFinite(stockQty) || stockQty < 0) return 'Stock quantity must be 0 or higher.';
+      if (!Number.isFinite(lowStockThreshold) || lowStockThreshold < 0) return 'Low stock alert must be 0 or higher.';
+    }
+
+    if (stepIndex === 4) {
+      if (form.shipping_weight !== '') {
+        const shippingWeight = Number(form.shipping_weight);
+        if (!Number.isFinite(shippingWeight) || shippingWeight <= 0) {
+          return 'Shipping weight must be greater than 0.';
+        }
+      }
+
+      if (form.shipping_handling_days !== '') {
+        const handlingDays = Number(form.shipping_handling_days);
+        if (!Number.isFinite(handlingDays) || handlingDays < 0) {
+          return 'Handling days must be 0 or higher.';
+        }
+      }
+    }
+
+    if (stepIndex === 5) {
+      if (!['available', 'hidden', 'out_of_stock'].includes(String(form.status || ''))) {
+        return 'Select a valid product status.';
+      }
+
+      if (form.is_on_sale) {
+        const regularPrice = Number(form.price);
+        const salePrice = Number(form.sale_price);
+        if (!Number.isFinite(salePrice) || salePrice <= 0) {
+          return 'Sale price must be greater than 0 when sale is enabled.';
+        }
+        if (Number.isFinite(regularPrice) && salePrice >= regularPrice) {
+          return 'Sale price should be lower than the regular price.';
+        }
+      }
+    }
+
+    return '';
+  };
+
+  const goToStep = (nextStep) => {
+    if (nextStep < 0 || nextStep >= PRODUCT_FORM_STEPS.length) return;
+
+    if (nextStep > formStep) {
+      for (let stepIndex = formStep; stepIndex < nextStep; stepIndex += 1) {
+        const stepError = getStepValidationError(stepIndex);
+        if (stepError) {
+          setFormError(stepError);
+          setFormStep(stepIndex);
+          return;
+        }
+      }
+    }
+
+    setFormError('');
+    setFormStep(nextStep);
+  };
+
+  const validateAllSteps = () => {
+    for (let stepIndex = 0; stepIndex < PRODUCT_FORM_STEPS.length; stepIndex += 1) {
+      const stepError = getStepValidationError(stepIndex);
+      if (stepError) {
+        setFormError(stepError);
+        setFormStep(stepIndex);
+        return false;
+      }
+    }
+
+    return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateAllSteps()) return;
+
     try {
       setSubmitting(true);
       setFormError('');
@@ -150,6 +278,7 @@ const ProductsView = () => {
         low_stock_threshold: form.low_stock_threshold === '' ? undefined : parseInt(form.low_stock_threshold, 10),
         sale_price: form.sale_price ? parseFloat(form.sale_price) : undefined,
         is_on_sale: form.is_on_sale,
+        status: form.status,
         sku: form.sku,
         barcode: form.partNumber || form.barcode,
         brand: form.brand
@@ -387,6 +516,21 @@ const ProductsView = () => {
                 {filtered.map(p => {
                   const cat = categories.find(c => c.id === p.category_id);
                   const subcat = subcategories.find(s => s.id === p.subcategory_id);
+                  const normalizedStatus = String(p.status || '').toLowerCase();
+                  const displayStatus = normalizedStatus === 'hidden'
+                    ? 'Hidden'
+                    : normalizedStatus === 'out_of_stock' || p.stock_quantity === 0
+                      ? 'Out of Stock'
+                      : p.stock_quantity <= p.low_stock_threshold
+                        ? 'Low Stock'
+                        : 'Available';
+                  const displayStatusClass = normalizedStatus === 'hidden'
+                    ? 'bg-slate-500/20 text-slate-300'
+                    : normalizedStatus === 'out_of_stock' || p.stock_quantity === 0
+                      ? 'bg-red-500/20 text-red-400'
+                      : p.stock_quantity <= p.low_stock_threshold
+                        ? 'bg-amber-500/20 text-amber-400'
+                        : 'bg-green-500/20 text-green-400';
                   return (
                     <tr key={p.id} className="hover:bg-[#202430]/60 transition-colors">
                       <td className="px-4 py-3">
@@ -420,8 +564,8 @@ const ProductsView = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${p.stock_quantity === 0 ? 'bg-red-500/20 text-red-400' : p.stock_quantity <= p.low_stock_threshold ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'}`}>
-                          {p.stock_quantity === 0 ? 'Out of Stock' : p.stock_quantity <= p.low_stock_threshold ? 'Low Stock' : 'In Stock'}
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${displayStatusClass}`}>
+                          {displayStatus}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -445,106 +589,276 @@ const ProductsView = () => {
       {modalOpen && (
         <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Product' : 'Add Product'} size="2xl">
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InputField label="Product Name" required>
-                <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className={inputClass} placeholder="Front Brake Pad Set" />
-              </InputField>
-              <InputField label="Part Number">
-                <input value={form.partNumber} onChange={e => setForm(f => ({ ...f, partNumber: e.target.value, barcode: e.target.value }))} className={inputClass} placeholder="PN-001234" />
-              </InputField>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <InputField label="Category" required>
-                <div className="space-y-2">
-                  <select value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value, subcategory_id: '' }))} required className={inputClass}>
-                    <option value="">Select</option>
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={openCategoryModal}
-                    className="text-xs font-medium text-red-400 hover:text-red-300"
-                  >
-                    + Manage Categories
-                  </button>
-                </div>
-              </InputField>
-              <InputField label="Subcategory">
-                <div className="space-y-2">
-                  <select value={form.subcategory_id} onChange={e => setForm(f => ({ ...f, subcategory_id: e.target.value }))} className={inputClass} disabled={!form.category_id}>
-                    <option value="">None</option>
-                    {subcategories.filter(s => s.category_id?.toString() === form.category_id?.toString()).map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setSubcategoryModalOpen(true)}
-                    className="text-xs font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
-                    disabled={!form.category_id}
-                  >
-                    + Manage Subcategories
-                  </button>
-                </div>
-              </InputField>
-              <InputField label="Brand">
-                <input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className={inputClass} placeholder="Honda" />
-              </InputField>
-              <InputField label="Box / Location">
-                <input value={form.boxNumber} onChange={e => setForm(f => ({ ...f, boxNumber: e.target.value }))} className={inputClass} placeholder="A-12" />
-              </InputField>
-            </div>
-
-            <InputField label="Description">
-              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} className={inputClass} placeholder="Product description..." />
-            </InputField>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <InputField label="Selling Price" required>
-                <input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} required className={inputClass} />
-              </InputField>
-              <InputField label="Buying Price" required>
-                <input type="number" step="0.01" value={form.buyingPrice} onChange={e => setForm(f => ({ ...f, buyingPrice: e.target.value }))} required className={inputClass} />
-              </InputField>
-              <InputField label="Stock Quantity" required>
-                <input type="number" value={form.stock_quantity} onChange={e => setForm(f => ({ ...f, stock_quantity: e.target.value }))} required className={inputClass} />
-              </InputField>
-              <InputField label="Low Stock Alert">
-                <input type="number" value={form.low_stock_threshold} onChange={e => setForm(f => ({ ...f, low_stock_threshold: e.target.value }))} className={inputClass} />
-              </InputField>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InputField label="SKU"><input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} className={inputClass} placeholder="Auto-generated if empty" /></InputField>
-            </div>
-
-            <InputField label="Product Image">
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleImageFileChange} className={inputClass} />
-              <p className="text-[11px] text-gray-400 mt-1">PNG, JPG, WEBP, GIF (max 5MB)</p>
-              {(imagePreviewUrl || form.image) && (
-                <div className="mt-2 flex items-start gap-3">
-                  <img src={imagePreviewUrl || form.image} alt="Preview" className="w-20 h-20 rounded-lg object-cover border border-gray-700" />
-                  {selectedImageFile && (
-                    <button type="button" onClick={clearSelectedImage} className="px-3 py-1.5 text-xs text-gray-300 hover:bg-[#202430] rounded-lg">
-                      Remove Selected
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-gray-300">
+                  Step {formStep + 1} of {PRODUCT_FORM_STEPS.length}
+                </p>
+                <p className="text-[11px] text-gray-500">
+                  {PRODUCT_FORM_STEPS[formStep]?.hint}
+                </p>
+              </div>
+              <div className="overflow-x-auto pb-1">
+                <div className="flex min-w-max gap-2">
+                  {PRODUCT_FORM_STEPS.map((step, index) => (
+                    <button
+                      key={step.key}
+                      type="button"
+                      onClick={() => goToStep(index)}
+                      className={`group flex items-center gap-2 rounded-xl border px-3 py-2 text-left transition-colors ${
+                        index === formStep
+                          ? 'border-red-400/50 bg-red-500/10'
+                          : index < formStep
+                            ? 'border-emerald-400/40 bg-emerald-500/10'
+                            : 'border-white/10 bg-[#202430]/50 hover:bg-[#202430]'
+                      }`}
+                    >
+                      <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${
+                        index === formStep
+                          ? 'bg-red-500 text-white'
+                          : index < formStep
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-white/10 text-gray-300'
+                      }`}>
+                        {index + 1}
+                      </span>
+                      <span className="text-xs font-medium text-gray-200 whitespace-nowrap">{step.label}</span>
                     </button>
-                  )}
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div key={PRODUCT_FORM_STEPS[formStep]?.key} className="space-y-4 rounded-xl border border-white/10 bg-[#171a22] p-4 sm:p-5 animate-fade-in">
+              <h4 className="text-sm font-semibold text-white">{PRODUCT_FORM_STEPS[formStep]?.label}</h4>
+
+              {formStep === 0 && (
+                <div className="space-y-4">
+                  <InputField label="Product Image">
+                    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleImageFileChange} className={inputClass} />
+                    <p className="text-[11px] text-gray-400 mt-1">PNG, JPG, WEBP, GIF (max 5MB)</p>
+                    {(imagePreviewUrl || form.image) && (
+                      <div className="mt-2 flex items-start gap-3">
+                        <img src={imagePreviewUrl || form.image} alt="Preview" className="w-20 h-20 rounded-lg object-cover border border-gray-700" />
+                        {selectedImageFile && (
+                          <button type="button" onClick={clearSelectedImage} className="px-3 py-1.5 text-xs text-gray-300 hover:bg-[#202430] rounded-lg">
+                            Remove Selected
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </InputField>
+
+                  <InputField label="Or Image URL">
+                    <input
+                      value={form.image}
+                      onChange={e => setForm(f => ({ ...f, image: e.target.value }))}
+                      className={inputClass}
+                      placeholder="https://..."
+                      disabled={Boolean(selectedImageFile)}
+                    />
+                  </InputField>
                 </div>
               )}
-            </InputField>
 
-            {/* Sale */}
-            <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-red-500/10 border-red-500/30' : 'bg-[#202430]/40 border-white/10'}`}>
-              <label className="flex items-center gap-2 font-medium text-sm text-gray-200 cursor-pointer">
-                <input type="checkbox" checked={form.is_on_sale} onChange={e => setForm(f => ({ ...f, is_on_sale: e.target.checked }))} className="w-4 h-4 text-red-500 rounded focus:ring-red-500" />
-                Put on Sale
-              </label>
-              {form.is_on_sale && (
-                <div className="mt-3">
-                  <InputField label="Sale Price">
-                    <input type="number" step="0.01" value={form.sale_price} onChange={e => setForm(f => ({ ...f, sale_price: e.target.value }))} className={inputClass} />
+              {formStep === 1 && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <InputField label="Product Name" required>
+                      <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputClass} placeholder="Front Brake Pad Set" />
+                    </InputField>
+                    <InputField label="Part Number">
+                      <input value={form.partNumber} onChange={e => setForm(f => ({ ...f, partNumber: e.target.value, barcode: e.target.value }))} className={inputClass} placeholder="PN-001234" />
+                    </InputField>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <InputField label="Category" required>
+                      <div className="space-y-2">
+                        <select value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value, subcategory_id: '' }))} className={inputClass}>
+                          <option value="">Select</option>
+                          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                        <button type="button" onClick={openCategoryModal} className="text-xs font-medium text-red-400 hover:text-red-300">
+                          + Manage Categories
+                        </button>
+                      </div>
+                    </InputField>
+
+                    <InputField label="Subcategory">
+                      <div className="space-y-2">
+                        <select value={form.subcategory_id} onChange={e => setForm(f => ({ ...f, subcategory_id: e.target.value }))} className={inputClass} disabled={!form.category_id}>
+                          <option value="">None</option>
+                          {subcategories.filter(s => s.category_id?.toString() === form.category_id?.toString()).map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setSubcategoryModalOpen(true)}
+                          className="text-xs font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
+                          disabled={!form.category_id}
+                        >
+                          + Manage Subcategories
+                        </button>
+                      </div>
+                    </InputField>
+                  </div>
+
+                  <InputField label="Brand">
+                    <input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className={inputClass} placeholder="Honda" />
                   </InputField>
+
+                  <InputField label="Description">
+                    <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={4} className={inputClass} placeholder="Product description..." />
+                  </InputField>
+                </div>
+              )}
+
+              {formStep === 2 && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <InputField label="Selling Price" required>
+                      <input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} className={inputClass} />
+                    </InputField>
+                    <InputField label="Buying Price" required>
+                      <input type="number" step="0.01" value={form.buyingPrice} onChange={e => setForm(f => ({ ...f, buyingPrice: e.target.value }))} className={inputClass} />
+                    </InputField>
+                    <InputField label="Stock Quantity" required>
+                      <input type="number" value={form.stock_quantity} onChange={e => setForm(f => ({ ...f, stock_quantity: e.target.value }))} className={inputClass} />
+                    </InputField>
+                    <InputField label="Low Stock Alert">
+                      <input type="number" value={form.low_stock_threshold} onChange={e => setForm(f => ({ ...f, low_stock_threshold: e.target.value }))} className={inputClass} />
+                    </InputField>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <InputField label="SKU">
+                      <input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} className={inputClass} placeholder="Auto-generated if empty" />
+                    </InputField>
+                    <InputField label="Barcode">
+                      <input value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className={inputClass} placeholder="Scan-ready barcode" />
+                    </InputField>
+                  </div>
+                </div>
+              )}
+
+              {formStep === 3 && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4">
+                    <h5 className="text-sm font-semibold text-white">Variant Setup</h5>
+                    <p className="mt-1 text-xs text-gray-400">
+                      Use the variant manager for size, color, or model combinations.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!editing) return;
+                          setSelectedProductVariants(editing);
+                          setVariantsModalOpen(true);
+                        }}
+                        disabled={!editing}
+                        className="px-4 py-2 bg-red-500/90 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Open Variant Manager
+                      </button>
+                      {!editing && (
+                        <span className="text-xs text-amber-300">Save product first, then configure variants.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <InputField label="Variant Notes">
+                    <textarea
+                      value={form.variant_notes}
+                      onChange={e => setForm(f => ({ ...f, variant_notes: e.target.value }))}
+                      rows={3}
+                      className={inputClass}
+                      placeholder="Example: Color (Black/Red), Size (S/M/L)"
+                    />
+                  </InputField>
+                </div>
+              )}
+
+              {formStep === 4 && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <InputField label="Shipping Class">
+                      <select
+                        value={form.shipping_class}
+                        onChange={e => setForm(f => ({ ...f, shipping_class: e.target.value }))}
+                        className={inputClass}
+                      >
+                        <option value="standard">Standard</option>
+                        <option value="fragile">Fragile</option>
+                        <option value="oversized">Oversized</option>
+                      </select>
+                    </InputField>
+                    <InputField label="Weight (kg)">
+                      <input type="number" step="0.01" min="0" value={form.shipping_weight} onChange={e => setForm(f => ({ ...f, shipping_weight: e.target.value }))} className={inputClass} placeholder="0.50" />
+                    </InputField>
+                    <InputField label="Handling Days">
+                      <input type="number" min="0" value={form.shipping_handling_days} onChange={e => setForm(f => ({ ...f, shipping_handling_days: e.target.value }))} className={inputClass} />
+                    </InputField>
+                  </div>
+
+                  <InputField label="Storage / Pickup Location">
+                    <input value={form.boxNumber} onChange={e => setForm(f => ({ ...f, boxNumber: e.target.value }))} className={inputClass} placeholder="A-12" />
+                  </InputField>
+
+                  <InputField label="Shipping Notes">
+                    <textarea
+                      value={form.shipping_notes}
+                      onChange={e => setForm(f => ({ ...f, shipping_notes: e.target.value }))}
+                      rows={3}
+                      className={inputClass}
+                      placeholder="Packing instructions, courier notes, or handling instructions"
+                    />
+                  </InputField>
+                </div>
+              )}
+
+              {formStep === 5 && (
+                <div className="space-y-4">
+                  <InputField label="Product Status" required>
+                    <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputClass}>
+                      <option value="available">Available</option>
+                      <option value="hidden">Hidden</option>
+                      <option value="out_of_stock">Out of Stock</option>
+                    </select>
+                  </InputField>
+
+                  <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-red-500/10 border-red-500/30' : 'bg-[#202430]/40 border-white/10'}`}>
+                    <label className="flex items-center gap-2 font-medium text-sm text-gray-200 cursor-pointer">
+                      <input type="checkbox" checked={form.is_on_sale} onChange={e => setForm(f => ({ ...f, is_on_sale: e.target.checked }))} className="w-4 h-4 text-red-500 rounded focus:ring-red-500" />
+                      Put on Sale
+                    </label>
+                    {form.is_on_sale && (
+                      <div className="mt-3">
+                        <InputField label="Sale Price">
+                          <input type="number" step="0.01" value={form.sale_price} onChange={e => setForm(f => ({ ...f, sale_price: e.target.value }))} className={inputClass} />
+                        </InputField>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Preview</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-gray-200">
+                        Status: {form.status === 'available' ? 'Available' : form.status === 'hidden' ? 'Hidden' : 'Out of Stock'}
+                      </span>
+                      <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-gray-200">
+                        Stock: {form.stock_quantity || 0}
+                      </span>
+                      {form.is_on_sale && (
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-500/20 text-red-300">
+                          Sale Enabled
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -555,11 +869,34 @@ const ProductsView = () => {
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-4 border-t border-gray-700">
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 border-t border-gray-700">
               <button type="button" onClick={() => setModalOpen(false)} className="px-5 py-2 text-sm text-gray-300 hover:bg-[#202430] rounded-lg transition-colors">Cancel</button>
-              <button type="submit" disabled={submitting} className="px-5 py-2 bg-red-500/100 hover:bg-red-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors">
-                {submitting ? 'Saving...' : editing ? 'Update Product' : 'Add Product'}
-              </button>
+
+              <div className="flex items-center justify-end gap-2">
+                {formStep > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => goToStep(formStep - 1)}
+                    className="px-4 py-2 text-sm text-gray-200 bg-[#202430] hover:bg-[#2a3244] rounded-lg transition-colors"
+                  >
+                    Previous
+                  </button>
+                )}
+
+                {formStep < PRODUCT_FORM_STEPS.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => goToStep(formStep + 1)}
+                    className="px-5 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button type="submit" disabled={submitting} className="px-5 py-2 bg-red-500/100 hover:bg-red-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors">
+                    {submitting ? 'Saving...' : editing ? 'Update Product' : 'Create Product'}
+                  </button>
+                )}
+              </div>
             </div>
           </form>
         </Modal>

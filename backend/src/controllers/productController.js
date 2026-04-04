@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'products');
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_PRODUCT_STATUSES = new Set(['available', 'hidden', 'out_of_stock']);
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -27,6 +28,12 @@ const toNullableNumber = (value) => {
   if (value === undefined || value === null || value === '') return null;
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
+};
+
+const toNullableProductStatus = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return null;
+  return ALLOWED_PRODUCT_STATUSES.has(normalized) ? normalized : null;
 };
 
 const tokenizeSearchTerms = (value) => {
@@ -294,7 +301,7 @@ export const createProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
     image, category_id, stock_quantity, box_number,
-    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale
+    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status
   } = req.body;
 
   try {
@@ -309,18 +316,19 @@ export const createProduct = async (req, res) => {
     const cleanLowStockThreshold = toNullableNumber(low_stock_threshold);
     const cleanSalePrice = toNullableNumber(sale_price);
     const cleanIsOnSale = typeof is_on_sale === 'boolean' ? is_on_sale : null;
+    const cleanStatus = toNullableProductStatus(status);
 
     const result = await pool.query(
       `INSERT INTO products (
         part_number, name, description, price, buying_price, 
         image, category_id, stock_quantity, box_number, 
-        low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15, false))
+        low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15, false), COALESCE($16, 'available'))
       RETURNING *`,
       [
         cleanPartNumber, name, description, price, buying_price,
         cleanImage, cleanCategoryId, cleanStockQuantity ?? 0, cleanBoxNumber,
-        cleanLowStockThreshold ?? 5, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale
+        cleanLowStockThreshold ?? 5, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, cleanStatus
       ]
     );
 
@@ -346,7 +354,7 @@ export const updateProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
     image, category_id, stock_quantity, box_number,
-    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale
+    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status
   } = req.body;
 
   try {
@@ -361,6 +369,7 @@ export const updateProduct = async (req, res) => {
     const cleanLowStockThreshold = toNullableNumber(low_stock_threshold);
     const cleanSalePrice = toNullableNumber(sale_price);
     const cleanIsOnSale = typeof is_on_sale === 'boolean' ? is_on_sale : null;
+    const cleanStatus = toNullableProductStatus(status);
 
     const result = await pool.query(
       `UPDATE products SET
@@ -379,13 +388,14 @@ export const updateProduct = async (req, res) => {
         barcode = COALESCE($13, barcode),
         sale_price = COALESCE($14, sale_price),
         is_on_sale = COALESCE($15, is_on_sale),
+        status = COALESCE($16, status),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $16
+      WHERE id = $17
       RETURNING *`,
       [
         cleanPartNumber, name, description, price, buying_price,
         cleanImage, cleanCategoryId, cleanStockQuantity, cleanBoxNumber,
-        cleanLowStockThreshold, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, id
+        cleanLowStockThreshold, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, cleanStatus, id
       ]
     );
 
