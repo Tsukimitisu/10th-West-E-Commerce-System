@@ -5,39 +5,125 @@ import {
   register, login, logout, getProfile,
   forgotPassword, resetPassword, verifyResetToken, changePassword,
   setup2FA, verify2FA, disable2FA,
-  oauthCallback,
+  oauthCallback, exchangeOAuthCode,
   getActiveSessions, revokeSession,
-  getActivityLogs,
+  getActivityLogs, sendRegistrationOtp,
   deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData,
 } from '../controllers/authController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
+import {
+  resendVerificationLimiter,
+  registerLimiter,
+  loginLimiter,
+  forgotPasswordLimiter,
+  verifyResetTokenLimiter,
+  resetPasswordLimiter,
+} from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
+const GMAIL_TYPO_DOMAINS = new Set([
+  'gmai.com',
+  'gmial.com',
+  'gmail.co',
+  'gmail.con',
+  'gmail.cm',
+  'gnail.com',
+  'gmailcom',
+]);
+
+const emailValidation = () =>
+  body('email')
+    .trim()
+    .customSanitizer((value) => String(value || '').trim().toLowerCase())
+    .isEmail({
+      allow_display_name: false,
+      require_tld: true,
+      ignore_max_length: false,
+      domain_specific_validation: true,
+    })
+    .withMessage('Please enter a valid email address')
+    .bail()
+    .custom((value) => {
+      const normalized = String(value || '').toLowerCase();
+
+      if (normalized.includes('..')) {
+        throw new Error('Please enter a valid email address');
+      }
+
+      const domain = normalized.split('@')[1] || '';
+      if (GMAIL_TYPO_DOMAINS.has(domain)) {
+        throw new Error('Did you mean @gmail.com?');
+      }
+
+      return true;
+    });
+
 // ─── Validation rules ──────────────────────────────────────────────
 const registerValidation = [
-  body('name').trim().notEmpty().withMessage('Name is required'),
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('name')
+    .trim()
+    .notEmpty().withMessage('Name is required')
+    .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters')
+    .escape(),
+  emailValidation(),
+  body('password').isStrongPassword({
+    minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 0
+  }).withMessage('Password must be at least 8 characters and include uppercase, lowercase, and a number'),
+  body('confirmPassword')
+    .notEmpty().withMessage('Please confirm your password')
+    .custom((value, { req }) => value === req.body.password)
+    .withMessage('Passwords do not match'),
+  body('consent_given')
+    .custom((value) => value === true)
+    .withMessage('You must agree to the Terms of Service and Privacy Policy'),
+  body('age_confirmed')
+    .custom((value) => value === true)
+    .withMessage('You must confirm you are at least 18 years old'),
 ];
 
 const loginValidation = [
-  body('email').isEmail().withMessage('Valid email is required'),
+  emailValidation(),
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
 // ─── Public routes ─────────────────────────────────────────────────
-router.post('/register', registerValidation, validate, register);
-router.post('/login', loginValidation, validate, login);
-router.post('/forgot-password', body('email').isEmail(), validate, forgotPassword);
-router.post('/verify-reset-token', body('token').notEmpty(), validate, verifyResetToken);
+router.post('/send-registration-otp', registerLimiter, registerValidation.slice(0, 2), validate, sendRegistrationOtp);
+
+router.post('/register',
+  registerLimiter,
+  registerValidation,
+  validate,
+  register
+);
+router.post('/login', loginLimiter, loginValidation, validate, login);
+router.post(
+  '/forgot-password',
+  forgotPasswordLimiter,
+  emailValidation(),
+  validate,
+  forgotPassword
+);
+router.post(
+  '/verify-reset-token',
+  verifyResetTokenLimiter,
+  body('token').trim().notEmpty().withMessage('Reset token is required'),
+  validate,
+  verifyResetToken
+);
 router.post('/reset-password',
-  body('token').notEmpty(),
-  body('newPassword').isLength({ min: 8 }),
+  resetPasswordLimiter,
+  body('token').trim().notEmpty().withMessage('Reset token is required'),
+  body('newPassword')
+    .isStrongPassword({ minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 1 })
+    .withMessage('Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character'),
   validate,
   resetPassword
 );
+
+// OAuth code exchange (used by frontend after OAuth redirect)
+router.post('/exchange-code', body('code').notEmpty(), validate, exchangeOAuthCode);
 
 // ─── OAuth: Google ─────────────────────────────────────────────────
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
@@ -60,8 +146,10 @@ router.post('/logout', authenticateToken, logout);
 router.get('/profile', authenticateToken, getProfile);
 router.put('/change-password',
   authenticateToken,
-  body('currentPassword').notEmpty(),
-  body('newPassword').isLength({ min: 8 }),
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword')
+    .isStrongPassword({ minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 1 })
+    .withMessage('Password must be at least 8 characters and include uppercase, lowercase, number, and special character'),
   validate,
   changePassword
 );
@@ -79,13 +167,32 @@ router.delete('/sessions/:sessionId', authenticateToken, revokeSession);
 router.get('/activity-logs', authenticateToken, requireRole('admin', 'super_admin', 'owner'), getActivityLogs);
 
 // ─── Account deletion (Right to be Forgotten - RA 10173) ────────────────────
-router.delete('/account', authenticateToken, deleteAccountHandler);
+router.delete('/account',
+  authenticateToken,
+  body('password').notEmpty().withMessage('Password is required'),
+  validate,
+  deleteAccountHandler
+);
 
 // ─── Data export / portability (RA 10173 §18) ──────────────────────────────
 router.get('/export-data', authenticateToken, exportUserData);
 
 // ─── Email verification ────────────────────────────────────────────
-router.post('/resend-verification', authenticateToken, resendVerification);
-router.post('/verify-email', body('token').notEmpty(), validate, verifyEmailToken);
+router.post('/resend-verification',
+  resendVerificationLimiter,
+  emailValidation(),
+  validate,
+  resendVerification
+);
+router.post(
+  '/verify-email',
+  body('token')
+    .trim()
+    .notEmpty().withMessage('Verification token is required')
+    .isLength({ min: 64, max: 64 }).withMessage('Invalid verification token format')
+    .matches(/^[a-f0-9]+$/i).withMessage('Invalid verification token format'),
+  validate,
+  verifyEmailToken
+);
 
 export default router;

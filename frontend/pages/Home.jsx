@@ -1,254 +1,719 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Truck, Shield, Clock, Headphones, ChevronLeft, ChevronRight, Zap, Star } from 'lucide-react';
-import { getProducts, getCategories, getBanners, getAnnouncements } from '../services/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Truck, Shield, Wrench, Search, Zap, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon, X, Settings, Clock, Headphones } from 'lucide-react';
+import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist, getSystemSettings, getProductById, getTopSellers, WISHLIST_SYNC_EVENT } from '../services/api';
+import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
 
 const Home = () => {
+  // --- Data & API State ---
   const [products, setProducts] = useState([]);
+  const [bestSellers, setBestSellers] = useState([]); // Create new state
+  const [topSellersDays, setTopSellersDays] = useState('all'); // State for time range
+  const [loadingBestSellers, setLoadingBestSellers] = useState(false);
   const [categories, setCategories] = useState([]);
-  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [banners, setBanners] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
+  const[announcements, setAnnouncements] = useState([]);
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
+  const [wishlistedIds, setWishlistedIds] = useState([]);
   const [currentBanner, setCurrentBanner] = useState(0);
+  const [heroConfig, setHeroConfig] = useState({
+    autoplay: true,
+    intervalMs: 5000,
+    showDots: true,
+    showArrows: true,
+    pauseOnHover: true,
+  });
+
+  // Custom socket hook binding
+  useSocketEvent('product:updated', (updatedProduct) => {
+    // If the updated product is in the recently viewed, update it automatically
+    setRecentlyViewed(prev => {
+      const matchIndex = prev.findIndex(p => p.id === updatedProduct.id);
+      if (matchIndex === -1) return prev;
+
+      const newRecent = [...prev];
+      newRecent[matchIndex] = { ...newRecent[matchIndex], ...updatedProduct };
+
+      // Keep local storage in sync with live updates
+      localStorage.setItem('recentlyViewed', JSON.stringify(newRecent));
+      return newRecent;
+    });
+  });
+
+  const [isHeroPaused, setIsHeroPaused] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(null);
+  const[isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
+  // --- Data Fetching ---
   useEffect(() => {
-    getProducts().then(setProducts).catch(() => {});
-    getCategories().then(setCategories).catch(() => {});
-    getBanners().then(setBanners).catch(() => {});
-    getAnnouncements().then(setAnnouncements).catch(() => {});
+    getProducts().then(setProducts).catch(() => { });
+    getCategories().then(setCategories).catch(() => { });
+    getBanners().then(setBanners).catch(() => { });
+    getAnnouncements().then(setAnnouncements).catch(() => { });
+    getSystemSettings('home').then((rows) => {
+      const map = {};
+      (Array.isArray(rows) ? rows : []).forEach((row) => {
+        map[row.key] = row.value;
+      });
 
-    const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-    if (viewed.length > 0) setRecentlyViewed(viewed.slice(0, 6));
+      const toBool = (value, fallback) => {
+        if (value === undefined || value === null) return fallback;
+        return String(value) === 'true';
+      };
+      const parsedInterval = Number(map.hero_interval_ms);
+
+      setHeroConfig({
+        autoplay: toBool(map.hero_autoplay, true),
+        intervalMs: Number.isFinite(parsedInterval) && parsedInterval >= 2000 ? parsedInterval : 5000,
+        showDots: toBool(map.hero_show_dots, true),
+        showArrows: toBool(map.hero_show_arrows, true),
+        pauseOnHover: toBool(map.hero_pause_on_hover, true),
+      });
+    }).catch(() => { });
+
+    const loadWishlist = async () => {
+      try {
+        const user = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+        if (!user?.id) {
+          setWishlistedIds([]);
+          return;
+        }
+        const wishlist = await getWishlist(user.id);
+        setWishlistedIds(wishlist.map(item => Number(item.product_id ?? item.product?.id ?? item.id)).filter(Boolean));
+      } catch (error) {
+        console.error("Failed to load wishlist", error);
+        setWishlistedIds([]);
+      }
+    };
+
+    loadWishlist();
+
+    const syncWishlist = () => {
+      loadWishlist();
+    };
+
+    window.addEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
+    window.addEventListener('storage', syncWishlist);
+    window.addEventListener('focus', syncWishlist);
+
+    return () => {
+      window.removeEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
+      window.removeEventListener('storage', syncWishlist);
+      window.removeEventListener('focus', syncWishlist);
+    };
+  },[]);
+
+  // --- Best Sellers Fetching ---
+  useEffect(() => {
+    setLoadingBestSellers(true);
+    getTopSellers(topSellersDays)
+      .then(setBestSellers)
+      .catch(() => {})
+      .finally(() => setLoadingBestSellers(false));
+  }, [topSellersDays]);
+
+  // Update real-time viewed items
+  useEffect(() => {
+    const fetchFreshRecentlyViewed = async (viewedItems) => {
+      try {
+        const freshItems = await Promise.all(
+          viewedItems.slice(0, 6).map(async (item) => {
+            try {
+              return await getProductById(item.id);
+            } catch (err) {
+              return item; // Fallback to cached item if fetch fails
+            }
+          })
+        );
+        setRecentlyViewed(freshItems);
+        
+        // Update the cache safely to avoid infinite loops across tabs
+        const currentCache = localStorage.getItem('recentlyViewed');
+        const newCache = JSON.stringify(freshItems);
+        if (currentCache !== newCache) {
+          localStorage.setItem('recentlyViewed', newCache);
+        }
+      } catch (err) {
+        setRecentlyViewed(viewedItems.slice(0, 6));
+      }
+    };
+
+    const handleStorageChange = () => {
+      const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+      // Show cached immediately, then fetch fresh ones
+      setRecentlyViewed(viewed.slice(0, 6)); 
+      fetchFreshRecentlyViewed(viewed);
+    };
+
+    // Initial load
+    handleStorageChange();
+
+    window.addEventListener('recentlyViewedUpdated', handleStorageChange);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('recentlyViewedUpdated', handleStorageChange);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
+  const activeBanners = banners
+    .filter((banner) => banner?.is_active !== false)
+    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
   useEffect(() => {
-    if (banners.length > 1) {
-      const timer = setInterval(() => setCurrentBanner(prev => (prev + 1) % banners.length), 5000);
+    if (currentBanner >= activeBanners.length && activeBanners.length > 0) {
+      setCurrentBanner(0);
+    }
+  }, [activeBanners.length, currentBanner]);
+
+  // --- Wishlist Logic ---
+  const handleWishlistToggle = (productId, shouldBeWishlisted) => {
+    const normalizedId = Number(productId);
+    if (!normalizedId) return;
+
+    setWishlistedIds(prev => {
+      const exists = prev.includes(normalizedId);
+      if (shouldBeWishlisted && !exists) return [...prev, normalizedId];
+      if (!shouldBeWishlisted && exists) return prev.filter(id => id !== normalizedId);
+      return prev;
+    });
+  };
+
+  // --- Banner Rotation ---
+  useEffect(() => {
+    if (heroConfig.autoplay && !isHeroPaused && activeBanners.length > 1) {
+      const timer = setInterval(() => setCurrentBanner(prev => (prev + 1) % activeBanners.length), heroConfig.intervalMs);
       return () => clearInterval(timer);
     }
-  }, [banners.length]);
+  }, [activeBanners.length, heroConfig.autoplay, heroConfig.intervalMs, isHeroPaused]);
 
-  const featured = products.filter(p => p.is_on_sale || p.rating && p.rating >= 4).slice(0, 8);
-  const bestSellers = [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 8);
+  const goToPrevBanner = () => {
+    if (activeBanners.length <= 1) return;
+    setCurrentBanner(prev => (prev - 1 + activeBanners.length) % activeBanners.length);
+  };
+
+  const goToNextBanner = () => {
+    if (activeBanners.length <= 1) return;
+    setCurrentBanner(prev => (prev + 1) % activeBanners.length);
+  };
+
+  // --- Derived Product Lists ---
+  const featured = products.filter(p => p.is_on_sale || (p.rating && p.rating >= 4)).slice(0, 8);
   const newArrivals = [...products].sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()).slice(0, 4);
 
+  // --- Animation Variants (Framer Motion v11 Compatible) ---
+  const fadeIn = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
+  };
+
+  const stagger = {
+    visible: { transition: { staggerChildren: 0.1 } }
+  };
+
+  const sidebarVariants = {
+    closed: { x: "-100%", opacity: 0 },
+    open: { x: 0, opacity: 1, transition: { type: "spring", stiffness: 100, damping: 20 } }
+  };
+
+  const buttonVariants = {
+    rest: { scale: 1, skewX: -10 },   
+    hover: { scale: 1.05, skewX: 0 }, 
+    tap: { scale: 0.95 },             
+  };
+
   return (
-    <div className="min-h-screen bg-white">
-      {/* Announcements Bar */}
-      {announcements.length > 0 && (
-        <div className="bg-orange-50 border-b border-orange-100">
-          <div className="max-w-7xl mx-auto px-4 py-2.5">
-            <div className="flex items-center justify-center gap-2">
-              <Zap size={14} className="text-orange-500 flex-shrink-0" />
-              <p className="text-sm text-orange-700 font-medium text-center">{announcements[0].title}: {announcements[0].content}</p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-white font-sans overflow-x-hidden text-gray-900 relative">
+      
+      {/* 1. FLOATING TOGGLE BUTTON */}
+      <div className="find-parts-toggle fixed sm:top-1/2 bottom-6 right-4 sm:right-auto sm:left-0 z-40 transform sm:-translate-y-1/2 flex justify-center">
+        {!isSidebarOpen && (
+          <motion.button
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            onClick={() => setIsSidebarOpen(true)}
+            className="find-parts-toggle-button flex flex-row sm:flex-col items-center justify-center gap-2 bg-red-600 text-white py-3 px-4 sm:py-4 sm:px-2 rounded-full sm:rounded-r-lg sm:rounded-l-none shadow-2xl hover:bg-red-700 transition-colors cursor-pointer"
+            style={{ position: 'relative' }}
+          >
+            <Settings size={20} className="find-parts-toggle-icon sm:rotate-90" />
+            <span 
+              className="find-parts-toggle-label font-bold uppercase tracking-widest text-sm whitespace-nowrap block [writing-mode:horizontal-tb] sm:[writing-mode:vertical-rl] sm:[text-orientation:mixed]"
+            >
+              Find Parts
+            </span>
+          </motion.button>
+        )}
+      </div>
+
+      {/* 2. SIDEBAR DRAWER */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/40 z-[60]"
+            />
+            
+            <motion.div
+              initial="closed"
+              animate="open"
+              exit="closed"
+              variants={sidebarVariants}
+              className="fixed top-0 left-0 h-full w-[92vw] max-w-[390px] bg-[#090d17] text-white shadow-2xl z-[70] flex flex-col overflow-y-auto border-r border-red-500/40"
+            >
+              <div className="px-5 sm:px-6 pt-6 pb-5 bg-gradient-to-r from-[#0b1222] via-[#0f1729] to-[#131d34] border-b border-white/10 relative overflow-hidden">
+                <div className="absolute -right-10 -top-10 w-36 h-36 rounded-full bg-red-600/20 blur-sm" />
+                <div className="absolute right-6 top-5 h-1.5 w-10 rounded-full bg-red-500/80" />
+                <div className="relative flex justify-between items-start gap-3">
+                  <div>
+                    <p className="text-[11px] tracking-[0.2em] uppercase text-red-300 font-semibold">Garage Match</p>
+                    <h3 className="text-2xl font-black italic uppercase leading-tight mt-1">My Garage</h3>
+                    <p className="text-xs text-slate-300 mt-1">Set bike details to narrow down compatible parts.</p>
+                  </div>
+                  <button
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-200 hover:text-white"
+                    aria-label="Close garage panel"
+                  >
+                    <X size={22} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-5 sm:px-6 py-5 space-y-5">
+                <div className="rounded-xl bg-[#101827] border border-white/10 p-3">
+                  <p className="text-[11px] uppercase tracking-[0.13em] text-slate-400 font-semibold mb-2">Quick Brands</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {['Honda', 'Yamaha', 'Kawasaki', 'Suzuki', 'Ducati'].map((brand) => (
+                      <button
+                        key={brand}
+                        type="button"
+                        className="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border border-white/15 bg-white/5 text-slate-200 hover:bg-red-500 hover:border-red-500 hover:text-white transition-colors"
+                      >
+                        {brand}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-[#0f1728] p-4 sm:p-5 space-y-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-[0.12em] block mb-2">Select Brand</label>
+                    <select className="text-[14px] w-full p-2.5 bg-[#0a1220] text-white rounded-xl border border-white/15 font-semibold focus:ring-2 focus:ring-red-500/50 focus:border-red-500 outline-none transition-all">
+                      <option>Honda</option>
+                      <option>Yamaha</option>
+                      <option>Kawasaki</option>
+                      <option>Suzuki</option>
+                      <option>Ducati</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-3">
+                    <div className="col-span-3">
+                      <label className="text-[11px] font-bold text-slate-300 uppercase tracking-[0.12em] block mb-2">Select Model</label>
+                      <select className="text-[14px] w-full p-2.5 bg-[#0a1220] text-white rounded-xl border border-white/15 font-semibold focus:ring-2 focus:ring-red-500/50 focus:border-red-500 outline-none transition-all">
+                        <option>Select Model</option>
+                      </select>
+                    </div>
+
+                    <div className="col-span-2">
+                      <label className="text-[11px] font-bold text-slate-300 uppercase tracking-[0.12em] block mb-2">Year</label>
+                      <select className="text-[14px] w-full p-2.5 bg-[#0a1220] text-white rounded-xl border border-white/15 font-semibold focus:ring-2 focus:ring-red-500/50 focus:border-red-500 outline-none transition-all">
+                        <option>2024</option>
+                        <option>2023</option>
+                        <option>2022</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="relative pt-2">
+                    <input
+                      type="text"
+                      placeholder="Search parts..."
+                      className="w-full p-3.5 bg-[#0a1220] border border-white/15 rounded-xl text-white placeholder:text-slate-500 font-semibold focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500 transition-all text-sm pr-10"
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.96 }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-400 transition-colors duration-200 cursor-pointer"
+                      aria-label="Search parts"
+                    >
+                      <Search size={18} />
+                    </motion.button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-[#101827] p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-300">Popular Searches</p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {['Brakes', 'Exhaust', 'Tires', 'Oil'].map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="px-3 py-1.5 bg-white/5 text-slate-200 text-xs rounded-full border border-white/15 hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.11em] text-red-200">Fitment Tip</p>
+                      <p className="text-xs text-red-100/90 mt-1 leading-relaxed">
+                        Save your exact bike profile once so future searches are faster.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* --- HERO SECTION (Dynamic from API + Red/Zinc Styling) --- */}
+      <section
+        className="relative h-[600px] md:h-[700px] bg-white flex items-center z-10"
+        onMouseEnter={() => {
+          if (heroConfig.pauseOnHover) setIsHeroPaused(true);
+        }}
+        onMouseLeave={() => {
+          if (heroConfig.pauseOnHover) setIsHeroPaused(false);
+        }}
+        onTouchStart={(e) => setTouchStartX(e.changedTouches[0].clientX)}
+        onTouchEnd={(e) => {
+          if (touchStartX === null || activeBanners.length <= 1) return;
+          const deltaX = e.changedTouches[0].clientX - touchStartX;
+          if (Math.abs(deltaX) > 40) {
+            if (deltaX > 0) goToPrevBanner();
+            else goToNextBanner();
+          }
+          setTouchStartX(null);
+        }}
+      >
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <img 
+            src={activeBanners.length > 0 ? activeBanners[currentBanner]?.image_url : "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?q=80&w=2070&auto=format&fit=crop"} 
+            alt="Hero Banner" 
+            className="w-full h-full object-cover opacity-60 transition-opacity duration-500"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent" />
         </div>
-      )}
 
-      {/* Hero Banner */}
-      {banners.length > 0 ? (
-        <section className="relative bg-gray-900 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-900 via-gray-900/90 to-transparent z-10" />
-          <div className="absolute inset-0">
-            <img src={banners[currentBanner]?.image_url || 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1600&h=600&fit=crop'} alt="" className="w-full h-full object-cover opacity-40 transition-opacity duration-500" />
-          </div>
-          <div className="relative z-20 max-w-7xl mx-auto px-4 py-16 md:py-24 lg:py-32">
-            <div className="max-w-xl">
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-orange-500/20 border border-orange-500/30 rounded-full text-orange-400 text-xs font-semibold mb-4">
-                <Zap size={14} /> Premium Motorcycle Parts
+        <div className="max-w-7xl mx-auto px-4 relative z-10 w-full">
+          <motion.div 
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8 }}
+            className="max-w-2xl"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <span className="h-1 w-12 bg-red-600"></span>
+              <span className="text-red-500 font-bold tracking-widest uppercase text-sm">
+                <Zap size={14} className="inline mr-1" /> Professional Grade Parts
               </span>
-              <h1 className="font-display font-bold text-3xl md:text-5xl lg:text-6xl text-white mb-4 leading-tight">
-                {banners[currentBanner]?.title || <>Ride With <span className="text-orange-500">Confidence</span></>}
-              </h1>
-              <p className="text-gray-400 text-sm md:text-base mb-8 max-w-md leading-relaxed">
-                {banners[currentBanner]?.subtitle || 'Quality motorcycle parts, accessories, and gear from trusted brands. Free shipping on orders over \u20B12,500.'}
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Link to={banners[currentBanner]?.link_url || '/shop'} className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-all hover:shadow-lg hover:shadow-orange-500/20 flex items-center gap-2">
-                  Shop Now <ArrowRight size={18} />
-                </Link>
-                <Link to="/shop?sort=newest" className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg transition-colors border border-white/20">
-                  New Arrivals
-                </Link>
-              </div>
             </div>
-            {banners.length > 1 && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">
-                {banners.map((_, i) => (
-                  <button key={i} onClick={() => setCurrentBanner(i)} className={`w-2.5 h-2.5 rounded-full transition-all ${i === currentBanner ? 'bg-orange-500 w-6' : 'bg-white/40 hover:bg-white/60'}`} />
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      ) : (
-        <section className="relative bg-gray-900 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-900 via-gray-900/90 to-transparent z-10" />
-          <div className="absolute inset-0">
-            <img src="https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1600&h=600&fit=crop" alt="" className="w-full h-full object-cover opacity-40" />
-          </div>
-          <div className="relative z-20 max-w-7xl mx-auto px-4 py-16 md:py-24 lg:py-32">
-            <div className="max-w-xl">
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-orange-500/20 border border-orange-500/30 rounded-full text-orange-400 text-xs font-semibold mb-4">
-                <Zap size={14} /> Premium Motorcycle Parts
-              </span>
-              <h1 className="font-display font-bold text-3xl md:text-5xl lg:text-6xl text-white mb-4 leading-tight">
-                Ride With <span className="text-orange-500">Confidence</span>
-              </h1>
-              <p className="text-gray-400 text-sm md:text-base mb-8 max-w-md leading-relaxed">
-                Quality motorcycle parts, accessories, and gear from trusted brands. Free shipping on orders over \u20B12,500.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Link to="/shop" className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-all hover:shadow-lg hover:shadow-orange-500/20 flex items-center gap-2">
-                  Shop Now <ArrowRight size={18} />
-                </Link>
-                <Link to="/shop?sort=newest" className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg transition-colors border border-white/20">
-                  New Arrivals
-                </Link>
-              </div>
+            <h1 className="text-5xl md:text-7xl font-black text-white italic uppercase leading-none mb-6">
+              {activeBanners.length > 0 && activeBanners[currentBanner]?.title ? (
+                activeBanners[currentBanner]?.title
+              ) : (
+                <>Upgrade <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-400">Your Ride</span></>
+              )}
+            </h1>
+            <p className="text-gray-600 text-lg mb-8 max-w-lg">
+              {activeBanners.length > 0 && activeBanners[currentBanner]?.subtitle 
+                ? activeBanners[currentBanner]?.subtitle 
+                : 'High-performance parts for street, track, and off-road. Genuine components and aftermarket upgrades delivered to your door.'}
+            </p>
+            
+            <div className="flex flex-wrap gap-4">
+              <Link to={activeBanners[currentBanner]?.link_url || '/shop'}>
+                <motion.button
+                  variants={buttonVariants}
+                  initial="rest"
+                  whileHover="hover"
+                  whileTap="tap"
+                  className="px-8 py-4 bg-red-600 text-white font-bold uppercase tracking-wider skew-x-[-10deg] hover:bg-red-700 transition-colors"
+                >
+                  <span className="block skew-x-[10deg] flex items-center gap-2">
+                    {activeBanners[currentBanner]?.button_text || 'Shop Parts'} <ArrowRight size={18} />
+                  </span>
+                </motion.button>
+              </Link>
+              <Link to="/shop?sort=newest">
+                 <motion.button 
+                   variants={buttonVariants}
+                   initial="rest"
+                   whileHover="hover"
+                   className="px-8 py-4 border border-white/30 text-white font-bold uppercase tracking-wider skew-x-[-10deg] hover:bg-white/10 transition-colors"
+                 >
+                   <span className="block skew-x-[10deg]">New Arrivals</span>
+                 </motion.button>
+              </Link>
             </div>
-          </div>
-        </section>
-      )}
+          </motion.div>
+        </div>
 
-      {/* Trust bar */}
-      <section className="border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {heroConfig.showArrows && activeBanners.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={goToPrevBanner}
+              className="absolute left-3 md:left-6 top-1/2 -translate-y-1/2 z-30 h-10 w-10 md:h-12 md:w-12 rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors flex items-center justify-center"
+              aria-label="Previous banner"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={goToNextBanner}
+              className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 z-30 h-10 w-10 md:h-12 md:w-12 rounded-full bg-black/40 text-white hover:bg-black/60 transition-colors flex items-center justify-center"
+              aria-label="Next banner"
+            >
+              <ChevronRightIcon size={20} />
+            </button>
+          </>
+        )}
+        
+        {/* Banner Dots from Main logic */}
+        {heroConfig.showDots && activeBanners.length > 1 && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">
+            {activeBanners.map((_, i) => (
+              <button key={i} onClick={() => setCurrentBanner(i)} className={`w-2.5 h-2.5 rounded-full transition-all ${i === currentBanner ? 'bg-red-600 w-6' : 'bg-white/40 hover:bg-white/60'}`} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* --- SERVICE STRIP --- */}
+      <div className="bg-gray-50 py-12 border-b border-gray-300">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
-              { icon: Truck, label: 'Free Shipping', desc: 'Orders over â‚±2,500' },
-              { icon: Shield, label: 'Authentic Parts', desc: '100% genuine products' },
-              { icon: Clock, label: 'Fast Delivery', desc: '2-5 business days' },
-              { icon: Headphones, label: 'Expert Support', desc: 'Mon-Sat, 9am-6pm' },
+              { icon: Truck, title: "Fast Shipping", sub: "Orders over ₱2,500" },
+              { icon: Shield, title: "Genuine Parts", sub: "100% Authentic" },
+              { icon: Wrench, title: "Fitment Check", sub: "Guaranteed to fit" },
+              { icon: Headphones, title: "Expert Support", sub: "Mon-Sat, 9am-6pm" },
             ].map((item, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2">
-                <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
-                  <item.icon size={20} className="text-orange-500" />
+              <div key={i} className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white border border-gray-300 rounded-full flex items-center justify-center text-red-600 shadow-sm">
+                  <item.icon size={24} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{item.label}</p>
-                  <p className="text-xs text-gray-500">{item.desc}</p>
+                  <h3 className="font-bold text-gray-900 uppercase text-sm">{item.title}</h3>
+                  <p className="text-xs text-gray-600">{item.sub}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Categories */}
+      {/* --- CATEGORIES --- */}
       {categories.length > 0 && (
-        <section className="py-12 md:py-16">
+        <section className="py-16 md:py-24 bg-white">
           <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex justify-between items-end mb-10">
               <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">Shop by Category</h2>
-                <p className="text-sm text-gray-500 mt-1">Find the perfect parts for your ride</p>
+                <h2 className="text-3xl md:text-4xl font-black uppercase italic text-gray-900">Shop By <span className="text-red-600">Category</span></h2>
+                <div className="h-1 w-20 bg-red-600 mt-2 skew-x-[-20deg]"></div>
               </div>
-              <Link to="/shop" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                View All <ArrowRight size={14} />
+              <Link to="/shop" className="hidden md:flex items-center gap-2 font-bold text-gray-700 hover:text-red-600 transition-colors">
+                View All Categories <ArrowRight size={20} />
               </Link>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-              {categories.slice(0, 8).map(cat => (
-                <Link key={cat.id} to={`/shop?category=${cat.id}`} className="group flex flex-col items-center gap-2 p-4 bg-gray-50 hover:bg-orange-50 rounded-xl transition-colors text-center">
-                  <div className="w-12 h-12 bg-white group-hover:bg-orange-100 rounded-lg flex items-center justify-center transition-colors shadow-sm">
-                    <span className="text-lg font-bold text-gray-400 group-hover:text-orange-500 transition-colors">{cat.name.charAt(0)}</span>
-                  </div>
-                  <span className="text-xs font-medium text-gray-700 group-hover:text-orange-500 transition-colors line-clamp-2">{cat.name}</span>
-                </Link>
+
+            <motion.div 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={stagger}
+              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+            >
+              {categories.slice(0, 6).map((cat) => (
+                <motion.div 
+                  key={cat.id} 
+                  variants={fadeIn}
+                  whileHover={{ y: -5 }}
+                  className="group relative h-40 bg-gray-50 border border-gray-300 rounded overflow-hidden hover:border-red-600 transition-colors cursor-pointer">
+                
+                  <Link to={`/shop?category=${cat.id}`} className="block h-full w-full p-4 flex flex-col justify-between">
+                    <div className="self-end p-2 bg-white rounded-full text-gray-600 group-hover:text-red-600 shadow-sm transition-colors">
+                      <ChevronRight size={16} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold uppercase text-lg leading-tight text-gray-900 group-hover:text-red-600 transition-colors line-clamp-2">
+                        {cat.name}
+                      </h3>
+                      <span className="text-xs text-gray-600 mt-1 block">View Parts</span>
+                    </div>
+                    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity transform rotate-12">
+                      <Wrench size={100} />
+                    </div>
+                  </Link>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           </div>
         </section>
       )}
 
-      {/* Featured Products */}
+      {/* --- FEATURED PRODUCTS --- */}
       {featured.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50">
+        <section className="py-16 md:py-24 bg-slate-900">
           <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-10">
               <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">Featured Products</h2>
-                <p className="text-sm text-gray-500 mt-1">Hand-picked deals and top-rated parts</p>
+                <span className="text-red-500 font-bold uppercase tracking-widest text-sm">Hand-picked</span>
+                <h2 className="text-3xl md:text-4xl font-black uppercase italic text-white mt-2">Featured Products</h2>
               </div>
-              <Link to="/shop" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                See All <ArrowRight size={14} />
+              <Link to="/shop" className="text-sm font-bold text-gray-300 hover:text-red-500 flex items-center gap-1 transition-colors">
+                See All <ArrowRight size={16} />
               </Link>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {featured.map(p => <ProductCard key={p.id} product={p} />)}
-            </div>
+            
+            <motion.div 
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={stagger}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+            >
+              {featured.map(p => (
+                <motion.div key={p.id} variants={fadeIn} className="bg-slate-800 rounded-lg p-4 shadow-md border border-slate-700 hover:border-red-500 hover:shadow-xl transition-all">
+                  <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
+                </motion.div>
+              ))}
+            </motion.div>
           </div>
         </section>
       )}
 
-      {/* Promo Banner */}
-      <section className="py-12 md:py-16">
+      {/* --- PROMO BANNER --- */}
+      <section className="py-12 md:py-16 bg-zinc-900 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
-            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=1200&h=400&fit=crop')] bg-cover bg-center opacity-10" />
+          <div className="bg-gradient-to-r from-slate-800 to-slate-900 border-l-8 border-red-600 rounded-r-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden shadow-xl">
+            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=1200&h=400&fit=crop')] bg-cover bg-center opacity-5" />
             <div className="relative z-10">
-              <span className="text-orange-400 text-sm font-semibold">Limited Time Offer</span>
-              <h3 className="font-display font-bold text-2xl md:text-3xl text-white mt-2">Up to 30% Off Riding Gear</h3>
-              <p className="text-gray-400 mt-2 text-sm">Helmets, jackets, gloves, and boots from top brands.</p>
+              <span className="text-red-500 font-bold tracking-widest uppercase text-sm">Limited Time Offer</span>
+              <h3 className="font-black text-2xl md:text-4xl italic uppercase text-white mt-2">Up to 30% Off Riding Gear</h3>
+              <p className="text-gray-400 mt-2 font-medium">Helmets, jackets, gloves, and boots from top brands.</p>
             </div>
-            <Link to="/shop?sale=true" className="relative z-10 px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors shrink-0 flex items-center gap-2">
-              Shop the Sale <ArrowRight size={18} />
+            <Link to="/shop?sale=true" className="relative z-10 px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wider rounded transition-colors shrink-0 flex items-center gap-2 skew-x-[-10deg]">
+               <span className="block skew-x-[10deg] flex items-center gap-2">Shop the Sale <ArrowRight size={18} /></span>
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Best Sellers */}
-      {bestSellers.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50">
+      {/* --- BEST SELLERS --- */}
+      <section className="py-16 md:py-24 bg-white "style={{backgroundImage: 'radial-gradient(circle, #e7e7e7 1px, transparent 1px)', backgroundSize: '20px 20px'}}>
           <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">Best Sellers</h2>
-                <p className="text-sm text-gray-500 mt-1">Most popular products from our shop</p>
+            <div className="text-center mb-12">
+              <span className="text-red-600 font-bold uppercase tracking-widest text-sm">Top Rated</span>
+              <h2 className="text-3xl md:text-4xl font-black uppercase text-gray-900 mt-2">Best Sellers</h2>
+              <div className="w-24 h-1 bg-red-600 mx-auto mt-4 skew-x-[-20deg] mb-6"></div>
+              
+              <div className="flex items-center justify-center gap-2 mb-4">
+                {[
+                  { label: 'Weekly', value: '7' },
+                  { label: 'Monthly', value: '30' },
+                  { label: 'All Time', value: 'all' }
+                ].map(tab => (
+                  <button
+                    key={tab.value}
+                    onClick={() => setTopSellersDays(tab.value)}
+                    className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-all duration-300 ${
+                      topSellersDays === tab.value 
+                        ? 'bg-red-600 text-white shadow-md' 
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
-              <Link to="/shop?sort=best-selling" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                View All <ArrowRight size={14} />
-              </Link>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {bestSellers.map(p => <ProductCard key={p.id} product={p} />)}
-            </div>
+            
+            {loadingBestSellers ? (
+              <div className="flex justify-center items-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-600"></div>
+              </div>
+            ) : bestSellers.length === 0 ? (
+              <div className="text-center text-gray-500 py-12">No recent sales data to display for this period.</div>
+            ) : (
+              <motion.div 
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                variants={stagger}
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+              >
+                {bestSellers.map(p => (
+                  <motion.div key={p.id} variants={fadeIn} className="bg-gray-50 rounded-lg p-4 shadow-sm border border-gray-300 hover:shadow-lg hover:border-red-500 transition-all">
+                    <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
           </div>
         </section>
-      )}
 
-      {/* New Arrivals Grid */}
+      {/* --- NEW ARRIVALS --- */}
       {newArrivals.length > 0 && (
-        <section className="py-12 md:py-16">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">New Arrivals</h2>
-                <p className="text-sm text-gray-500 mt-1">Fresh stock just landed</p>
+        <section className="py-16 bg-zinc-900 text-gray-900 relative overflow-hidden">
+          <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'radial-gradient(circle, #333 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
+          
+          <div className="max-w-7xl mx-auto px-4 relative z-10">
+            <div className="flex flex-col md:flex-row gap-10 items-center">
+              <div className="md:w-1/4 bg-zinc-900 text-white p-8 rounded-lg">
+                <span className="text-red-600 font-bold tracking-widest text-sm uppercase">Just Landed</span>
+                <h2 className="text-4xl font-black italic uppercase mt-2 mb-4 text-white">New <br/>Arrivals</h2>
+                <p className="text-gray-400 text-sm mb-6">Check out the latest performance parts and accessories added to our catalog.</p>
+                <Link to="/shop?sort=newest" className="inline-flex items-center gap-2 text-white border-b-2 border-red-600 pb-1 hover:text-red-500 transition-colors">
+                  Shop All New Items <ArrowRight size={16}/>
+                </Link>
               </div>
-              <Link to="/shop?sort=newest" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                View All <ArrowRight size={14} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {newArrivals.map(p => <ProductCard key={p.id} product={p} />)}
+              
+              <div className="md:w-3/4 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {newArrivals.map((p) => (
+                    <div key={p.id} className="bg-gray-50 rounded-lg p-4 shadow-sm border border-gray-300 hover:shadow-lg hover:border-red-500 transition-all">
+                      <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
       )}
 
-      {/* Recently Viewed */}
+      {/* --- RECENTLY VIEWED --- */}
       {recentlyViewed.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50">
+        <section className="py-16 bg-white-200 border-t border-slate-800"style={{backgroundImage: 'radial-gradient(circle, #e7e7e7 1px, transparent 1px)', backgroundSize: '20px 20px'}}>
           <div className="max-w-7xl mx-auto px-4">
-            <h2 className="font-display font-bold text-2xl text-gray-900 mb-8">Recently Viewed</h2>
+            <div className="mb-10">
+              <h2 className="text-2xl font-black uppercase text-black">Recently Viewed</h2>
+              <div className="h-1 w-16 bg-red-600 mt-2 skew-x-[-20deg]"></div>
+            </div>
+            
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              {recentlyViewed.map(p => <ProductCard key={p.id} product={p} />)}
+              {recentlyViewed.map(p => (
+                <div key={p.id} className="bg-gray-50 rounded-lg p-4 shadow-sm border border-gray-300 hover:shadow-lg hover:border-red-500 transition-all">
+                  <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -258,3 +723,4 @@ const Home = () => {
 };
 
 export default Home;
+

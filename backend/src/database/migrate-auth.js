@@ -18,6 +18,11 @@ const migrateAuth = async () => {
         ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP,
         ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255),
         ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS email_change_token VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMP,
         ADD COLUMN IF NOT EXISTS last_login TIMESTAMP,
         ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS consent_given_at TIMESTAMP,
@@ -65,6 +70,28 @@ const migrateAuth = async () => {
       CREATE INDEX IF NOT EXISTS idx_login_attempts_created ON login_attempts(created_at);
     `);
     console.log('✅ Login Attempts table created');
+
+    // ── 3b. Registration OTP table (email verification) ───────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS registration_otps (
+        email VARCHAR(255) PRIMARY KEY,
+        otp_hash VARCHAR(255) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_registration_otps_expires ON registration_otps(expires_at);
+      ALTER TABLE IF EXISTS registration_otps ENABLE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS registration_otps_restricted_access ON registration_otps;
+      CREATE POLICY registration_otps_restricted_access
+        ON registration_otps
+        FOR ALL
+        USING (current_setting('role', true) = 'service_role')
+        WITH CHECK (current_setting('role', true) = 'service_role');
+    `);
+    console.log('✅ Registration OTP table secured with RLS');
 
     // ── 4. Staff permissions table ─────────────────────────────────
     await client.query(`
@@ -186,6 +213,40 @@ const migrateAuth = async () => {
       CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
     `);
     console.log('✅ Sessions table created');
+
+    // ── 7. OAuth exchange codes table (short-lived one-time auth codes) ──────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS oauth_codes (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        code_hash VARCHAR(255) NOT NULL UNIQUE,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        used BOOLEAN DEFAULT FALSE,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_oauth_codes_hash ON oauth_codes(code_hash);
+      CREATE INDEX IF NOT EXISTS idx_oauth_codes_user ON oauth_codes(user_id);
+      CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
+    `);
+    console.log('✅ OAuth codes table created');
+
+    // ── 8. Shared request rate limiter table (for multi-instance auth throttling) ──
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS request_rate_limits (
+        key TEXT PRIMARY KEY,
+        request_count INTEGER NOT NULL DEFAULT 0,
+        reset_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_request_rate_limits_reset ON request_rate_limits(reset_at);
+    `);
+    console.log('✅ Request rate limits table created');
 
     console.log('\n🎉 Auth & Staff migration completed successfully!');
   } catch (error) {

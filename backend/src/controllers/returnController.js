@@ -1,15 +1,73 @@
 import pool from '../config/database.js';
 import Stripe from 'stripe';
 import { emitReturnCreated, emitReturnUpdated, emitStockUpdate } from '../socket.js';
+import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
+import { createNotification as createUserNotification } from '../utils/notifications.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
+const ensureReturnReviewColumns = async () => {
+  await pool.query(`
+    ALTER TABLE returns
+      ADD COLUMN IF NOT EXISTS reviewed_by INTEGER REFERENCES users(id),
+      ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP;
+  `).catch((error) => {
+    console.error('Failed to ensure return review columns:', error);
+  });
+};
+ensureReturnReviewColumns();
+
+const parseReturnItems = (value) => {
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+};
+
+const mapReturnRecord = (record) => ({
+  ...record,
+  items: parseReturnItems(record.items),
+  refund_amount: parseFloat(record.refund_amount || 0),
+});
+
+const getReturnProductThumbnail = async (db, productId) => {
+  if (!productId) return null;
+
+  const result = await db.query(
+    'SELECT image FROM products WHERE id = $1 LIMIT 1',
+    [productId]
+  );
+
+  return result.rows[0]?.image || null;
+};
+
 // Create return request
 export const createReturn = async (req, res) => {
-  const { order_id, items, reason, refund_amount, return_type } = req.body;
+  const { order_id, items, reason, return_type } = req.body;
+  const normalizedReason = typeof reason === 'string' ? reason.trim() : '';
 
-  if (!order_id || !items || !reason || refund_amount === undefined) {
-    return res.status(400).json({ message: 'Missing required fields' });
+  if (!order_id) {
+    return res.status(400).json({ message: 'Order is required.' });
+  }
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Select at least one item to return.' });
+  }
+
+  if (!normalizedReason) {
+    return res.status(400).json({ message: 'Please provide a reason for the return request.' });
+  }
+
+  if (normalizedReason.length > 1000) {
+    return res.status(400).json({ message: 'Return reason must be 1000 characters or less.' });
   }
 
   const client = await pool.connect();
@@ -17,9 +75,13 @@ export const createReturn = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Verify order belongs to user
+    const settings = await getReturnSettings(client);
+
+    // Verify order belongs to user and is returnable
     const orderResult = await client.query(
-      'SELECT id, user_id, payment_intent_id FROM orders WHERE id = $1',
+      `SELECT id, user_id, payment_intent_id, status, delivered_at, updated_at, created_at, total_amount
+       FROM orders
+       WHERE id = $1`,
       [order_id]
     );
 
@@ -35,20 +97,106 @@ export const createReturn = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    // Create return
+    const latestReturnResult = await client.query(
+      `SELECT id, status, created_at, updated_at
+       FROM returns
+       WHERE order_id = $1 AND user_id = $2
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [order_id, req.user.id]
+    );
+
+    const latestReturn = latestReturnResult.rows[0] || null;
+    const eligibility = buildReturnEligibility({
+      order,
+      latestReturn,
+      returnWindowDays: settings.returnWindowDays,
+    });
+
+    if (!eligibility.eligible) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: eligibility.message });
+    }
+
+    const orderItemsResult = await client.query(
+      `SELECT oi.product_id, oi.quantity, oi.product_name, oi.product_price
+       FROM order_items oi
+       WHERE oi.order_id = $1`,
+      [order_id]
+    );
+
+    const orderItemMap = new Map(
+      orderItemsResult.rows.map((item) => [Number(item.product_id), item])
+    );
+
+    const requestedQuantities = new Map();
+    for (const rawItem of items) {
+      const productId = Number(rawItem.product_id ?? rawItem.productId ?? rawItem.id);
+      const quantity = Number.parseInt(rawItem.quantity, 10);
+
+      if (!Number.isInteger(productId) || !Number.isInteger(quantity) || quantity <= 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Return request contains invalid item data.' });
+      }
+
+      requestedQuantities.set(productId, (requestedQuantities.get(productId) || 0) + quantity);
+    }
+
+    const normalizedItems = [];
+    let refundAmount = 0;
+
+    for (const [productId, quantity] of requestedQuantities.entries()) {
+      const orderItem = orderItemMap.get(productId);
+      if (!orderItem) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'One or more selected items do not belong to this order.' });
+      }
+
+      if (quantity > Number(orderItem.quantity)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `Requested quantity exceeds purchased quantity for ${orderItem.product_name}.` });
+      }
+
+      const normalizedItem = {
+        product_id: productId,
+        quantity,
+        name: orderItem.product_name,
+        price: parseFloat(orderItem.product_price || 0),
+      };
+
+      normalizedItems.push(normalizedItem);
+      refundAmount += normalizedItem.price * quantity;
+    }
+
+    const dedupedItems = Array.from(
+      normalizedItems.reduce((map, item) => {
+        const existing = map.get(item.product_id);
+        if (existing) {
+          existing.quantity += item.quantity;
+        } else {
+          map.set(item.product_id, { ...item });
+        }
+        return map;
+      }, new Map()).values()
+    );
+
     const returnResult = await client.query(
       `INSERT INTO returns (order_id, user_id, reason, refund_amount, return_type, items, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        RETURNING *`,
-      [order_id, req.user.id, reason, refund_amount, return_type || 'online', JSON.stringify(items)]
+      [
+        order_id,
+        req.user.id,
+        normalizedReason,
+        refundAmount.toFixed(2),
+        return_type || 'online',
+        JSON.stringify(dedupedItems),
+      ]
     );
 
     await client.query('COMMIT');
 
-    const newReturn = {
-      ...returnResult.rows[0],
-      items: JSON.parse(returnResult.rows[0].items)
-    };
+    const newReturn = mapReturnRecord(returnResult.rows[0]);
     emitReturnCreated(newReturn);
 
     res.status(201).json({
@@ -76,11 +224,7 @@ export const getUserReturns = async (req, res) => {
       [req.user.id]
     );
 
-    const returns = result.rows.map(r => ({
-      ...r,
-      items: JSON.parse(r.items),
-      refund_amount: parseFloat(r.refund_amount)
-    }));
+    const returns = result.rows.map(mapReturnRecord);
 
     res.json(returns);
   } catch (error) {
@@ -96,18 +240,16 @@ export const getAllReturns = async (req, res) => {
       `SELECT r.*, 
               u.name as customer_name, 
               u.email as customer_email,
+              reviewer.name as reviewed_by_name,
               o.total_amount as order_total
        FROM returns r
        LEFT JOIN users u ON r.user_id = u.id
+       LEFT JOIN users reviewer ON r.reviewed_by = reviewer.id
        LEFT JOIN orders o ON r.order_id = o.id
        ORDER BY r.created_at DESC`
     );
 
-    const returns = result.rows.map(r => ({
-      ...r,
-      items: JSON.parse(r.items),
-      refund_amount: parseFloat(r.refund_amount)
-    }));
+    const returns = result.rows.map(mapReturnRecord);
 
     res.json(returns);
   } catch (error) {
@@ -125,10 +267,12 @@ export const getReturnById = async (req, res) => {
       `SELECT r.*, 
               u.name as customer_name, 
               u.email as customer_email,
+              reviewer.name as reviewed_by_name,
               o.total_amount as order_total,
               o.payment_intent_id
        FROM returns r
        LEFT JOIN users u ON r.user_id = u.id
+       LEFT JOIN users reviewer ON r.reviewed_by = reviewer.id
        LEFT JOIN orders o ON r.order_id = o.id
        WHERE r.id = $1`,
       [id]
@@ -140,16 +284,14 @@ export const getReturnById = async (req, res) => {
 
     const returnData = result.rows[0];
 
+    const isStaff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user.role);
+    
     // Check authorization
-    if (req.user.role !== 'admin' && returnData.user_id !== req.user.id) {
+    if (!isStaff && returnData.user_id !== req.user.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    res.json({
-      ...returnData,
-      items: JSON.parse(returnData.items),
-      refund_amount: parseFloat(returnData.refund_amount)
-    });
+    res.json(mapReturnRecord(returnData));
   } catch (error) {
     console.error('Get return error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -165,23 +307,57 @@ export const approveReturn = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const result = await client.query(
-      'UPDATE returns SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      ['approved', id]
+    const existingResult = await client.query(
+      'SELECT id, status FROM returns WHERE id = $1 FOR UPDATE',
+      [id]
     );
 
-    if (result.rows.length === 0) {
+    if (existingResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Return not found' });
     }
 
+    if (existingResult.rows[0].status !== 'pending') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Only pending return requests can be approved.' });
+    }
+
+    const result = await client.query(
+      `UPDATE returns
+       SET status = $1,
+           reviewed_by = $3,
+           reviewed_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING *`,
+      ['approved', id, req.user.id]
+    );
+
     await client.query('COMMIT');
 
-    const approvedReturn = {
-      ...result.rows[0],
-      items: JSON.parse(result.rows[0].items)
-    };
+    const approvedReturn = mapReturnRecord(result.rows[0]);
     emitReturnUpdated(approvedReturn);
+
+    const firstItem = approvedReturn.items?.[0] || null;
+    const thumbnailUrl = await getReturnProductThumbnail(client, firstItem?.product_id || null);
+    await createUserNotification(client, {
+      user_id: approvedReturn.user_id,
+      type: 'return.status',
+      title: `Return Request #${approvedReturn.id} approved`,
+      message: firstItem?.name
+        ? `Your return request for ${firstItem.name} was approved.`
+        : 'Your return request was approved.',
+      reference_id: approvedReturn.order_id,
+      reference_type: 'order',
+      thumbnail_url: thumbnailUrl,
+      metadata: {
+        return_id: approvedReturn.id,
+        status: 'approved',
+        order_id: approvedReturn.order_id,
+        product_name: firstItem?.name || null,
+        product_image: thumbnailUrl,
+      },
+    });
 
     res.json({
       message: 'Return approved',
@@ -199,30 +375,63 @@ export const approveReturn = async (req, res) => {
 // Reject return (admin)
 export const rejectReturn = async (req, res) => {
   const { id } = req.params;
-  const { reason } = req.body;
 
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
-    const result = await client.query(
-      'UPDATE returns SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      ['rejected', id]
+    const existingResult = await client.query(
+      'SELECT id, status FROM returns WHERE id = $1 FOR UPDATE',
+      [id]
     );
 
-    if (result.rows.length === 0) {
+    if (existingResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Return not found' });
     }
 
+    if (existingResult.rows[0].status !== 'pending') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Only pending return requests can be rejected.' });
+    }
+
+    const result = await client.query(
+      `UPDATE returns
+       SET status = $1,
+           reviewed_by = $3,
+           reviewed_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING *`,
+      ['rejected', id, req.user.id]
+    );
+
     await client.query('COMMIT');
 
-    const rejectedReturn = {
-      ...result.rows[0],
-      items: JSON.parse(result.rows[0].items)
-    };
+    const rejectedReturn = mapReturnRecord(result.rows[0]);
     emitReturnUpdated(rejectedReturn);
+
+    const firstItem = rejectedReturn.items?.[0] || null;
+    const thumbnailUrl = await getReturnProductThumbnail(client, firstItem?.product_id || null);
+    await createUserNotification(client, {
+      user_id: rejectedReturn.user_id,
+      type: 'return.status',
+      title: `Return Request #${rejectedReturn.id} rejected`,
+      message: firstItem?.name
+        ? `Your return request for ${firstItem.name} was rejected.`
+        : 'Your return request was rejected.',
+      reference_id: rejectedReturn.order_id,
+      reference_type: 'order',
+      thumbnail_url: thumbnailUrl,
+      metadata: {
+        return_id: rejectedReturn.id,
+        status: 'rejected',
+        order_id: rejectedReturn.order_id,
+        product_name: firstItem?.name || null,
+        product_image: thumbnailUrl,
+      },
+    });
 
     res.json({
       message: 'Return rejected',
@@ -319,11 +528,13 @@ export const processRefund = async (req, res) => {
     );
 
     // Restore inventory
-    const items = JSON.parse(returnData.items);
+    const items = parseReturnItems(returnData.items);
     for (const item of items) {
+      const productId = Number(item.product_id ?? item.productId);
+      if (!Number.isInteger(productId)) continue;
       const stockResult = await client.query(
         'UPDATE products SET stock_quantity = stock_quantity + $1 WHERE id = $2 RETURNING id, name, stock_quantity',
-        [item.quantity, item.productId]
+        [item.quantity, productId]
       );
       if (stockResult.rows[0]) {
         emitStockUpdate({

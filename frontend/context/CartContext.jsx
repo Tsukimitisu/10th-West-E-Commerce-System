@@ -1,143 +1,708 @@
 ﻿import React, { createContext, useContext, useState, useEffect } from 'react';
-import { validateDiscountCode } from '../services/api';
+import { validateDiscountCode, ensureCsrfToken } from '../services/api';
+import { supabase } from '../services/supabase.js';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || (() => {
+  const host = window.location.hostname;
+  return `http://${host}:5000/api`;
+})();
+const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
+const GUEST_CART_KEY = 'shopCoreGuestCart';
+const GUEST_SELECTED_KEY = `${GUEST_CART_KEY}_selected`;
+const GUEST_CHECKOUT_SELECTION_KEY = `${GUEST_CART_KEY}_checkout_selection`;
 
 const CartContext = createContext(undefined);
 
 export const CartProvider = ({ children }) => {
   const [items, setItems] = useState([]);
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
+
   const [discount, setDiscount] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const itemsRef = React.useRef(items);
 
   const getToken = () => {
-    const userString = localStorage.getItem('shopCoreUser');
-    const user = userString ? JSON.parse(userString) : null;
-    return user?.token || null;
+    return localStorage.getItem('shopCoreToken');
+  };
+
+  const getStoredUser = () => {
+    try {
+      const raw = localStorage.getItem('shopCoreUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const decodeJwtPayload = (token) => {
+    try {
+      const [, payload] = token.split('.');
+      if (!payload) return null;
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4);
+      return JSON.parse(atob(padded));
+    } catch {
+      return null;
+    }
+  };
+
+  const getCurrentUserFromToken = () => {
+    const token = localStorage.getItem('shopCoreToken');
+    if (!token) return null;
+    if (token.startsWith('sb-token-')) {
+      try {
+        return JSON.parse(atob(token.replace('sb-token-', '')));
+      } catch {
+        return null;
+      }
+    }
+    return decodeJwtPayload(token);
+  };
+
+  const getCurrentUser = () => {
+    return getStoredUser() || getCurrentUserFromToken();
+  };
+
+  const getCartKey = () => {
+    const user = getCurrentUser();
+    return user?.id ? `shopCoreCart_${user.id}` : GUEST_CART_KEY;
+  };
+
+  const getSelectedKey = () => `${getCartKey()}_selected`;
+  const getCheckoutSelectionKey = () => `${getCartKey()}_checkout_selection`;
+  const [cartScopeKey, setCartScopeKey] = useState(getCartKey());
+  const cartScopeKeyRef = React.useRef(cartScopeKey);
+
+  useEffect(() => {
+    cartScopeKeyRef.current = cartScopeKey;
+  }, [cartScopeKey]);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  const getOrCreateSupabaseCartId = async (userId) => {
+    if (!supabase || !userId) return null;
+    const { data: existingCart, error: findError } = await supabase
+      .from('carts')
+      .select('id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (findError) throw new Error(findError.message);
+    if (existingCart?.id) return existingCart.id;
+
+    const { data: newCart, error: insertError } = await supabase
+      .from('carts')
+      .insert({ user_id: userId })
+      .select('id')
+      .single();
+
+    if (insertError) throw new Error(insertError.message);
+    return newCart?.id ?? null;
+  };
+
+  const mapCartItemsFromBackend = (rows = []) => {
+    return rows.map((item) => ({
+      cartItemId: item.id,
+      productId: item.product_id ?? item.product?.id,
+      quantity: item.quantity,
+      product: {
+        ...(item.product || {}),
+        id: item.product_id ?? item.product?.id,
+        image: item.product?.image || item.product?.image_url || '',
+      },
+    }));
+  };
+
+  const compareItemIdentity = (left, right) => {
+    if (typeof left === 'number' && typeof right === 'number') {
+      return left - right;
+    }
+
+    return String(left ?? '').localeCompare(String(right ?? ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  };
+
+  const orderCartItems = (nextItems = [], previousItems = itemsRef.current) => {
+    const previousOrder = new Map(
+      (Array.isArray(previousItems) ? previousItems : []).map((item, index) => [String(item.productId), index])
+    );
+
+    return [...nextItems].sort((left, right) => {
+      const leftOrder = previousOrder.get(String(left.productId));
+      const rightOrder = previousOrder.get(String(right.productId));
+
+      if (leftOrder != null && rightOrder != null) return leftOrder - rightOrder;
+      if (leftOrder != null) return -1;
+      if (rightOrder != null) return 1;
+
+      return compareItemIdentity(left.cartItemId ?? left.productId, right.cartItemId ?? right.productId);
+    });
+  };
+
+  const isCsrfFailure = (status, payload = {}) => {
+    const code = String(payload?.code || '').toUpperCase();
+    const message = String(payload?.message || '').toLowerCase();
+    return status === 403 && (code.startsWith('CSRF_') || message.includes('csrf'));
+  };
+
+  const buildRequestHeaders = async ({ includeJson = false, forceRefresh = false } = {}) => {
+    const token = getToken();
+    const headers = {};
+
+    const csrfToken = await ensureCsrfToken({ forceRefresh });
+    if (csrfToken) {
+      headers['x-csrf-token'] = csrfToken;
+    }
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    if (includeJson) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    return headers;
+  };
+
+  const fetchCartWithCsrfRetry = async (url, options = {}, { includeJson = false } = {}) => {
+    const execute = async (forceRefresh = false) => {
+      const headers = await buildRequestHeaders({ includeJson, forceRefresh });
+      return fetch(url, {
+        ...options,
+        credentials: 'include',
+        headers,
+      });
+    };
+
+    let response = await execute(false);
+    if (!response.ok) {
+      const payload = await response.clone().json().catch(() => ({}));
+      if (isCsrfFailure(response.status, payload)) {
+        response = await execute(true);
+      }
+    }
+
+    return response;
+  };
+
+  const normalizeSelectionIds = (ids, sourceItems = items) => {
+    const validIds = new Set(sourceItems.map((item) => item.productId));
+    return Array.from(new Set(Array.isArray(ids) ? ids : [])).filter((id) => validIds.has(id));
+  };
+
+  const getCheckoutSelection = () => {
+    try {
+      const raw = sessionStorage.getItem(getCheckoutSelectionKey());
+      if (!raw) return [];
+      return normalizeSelectionIds(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  };
+
+  const persistCheckoutSelection = (ids = selectedItemIds) => {
+    const normalized = normalizeSelectionIds(ids);
+    sessionStorage.setItem(getCheckoutSelectionKey(), JSON.stringify(normalized));
+    return normalized;
+  };
+
+  const clearCheckoutSelection = () => {
+    sessionStorage.removeItem(getCheckoutSelectionKey());
+  };
+
+  const getStoredCartItems = (storageKey) => {
+    try {
+      const raw = sessionStorage.getItem(storageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const clearGuestCartStorage = () => {
+    sessionStorage.removeItem(GUEST_CART_KEY);
+    sessionStorage.removeItem(GUEST_SELECTED_KEY);
+    sessionStorage.removeItem(GUEST_CHECKOUT_SELECTION_KEY);
+  };
+
+  const clearCartStorageForScope = (scopeKey) => {
+    if (!scopeKey) return;
+    sessionStorage.removeItem(scopeKey);
+    sessionStorage.removeItem(`${scopeKey}_selected`);
+    sessionStorage.removeItem(`${scopeKey}_checkout_selection`);
+  };
+
+  const normalizeGuestCartItems = (rawItems = []) => {
+    const merged = new Map();
+
+    for (const rawItem of Array.isArray(rawItems) ? rawItems : []) {
+      const productId = Number(rawItem?.productId ?? rawItem?.product?.id);
+      const quantity = Number(rawItem?.quantity || 0);
+      if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
+
+      const existing = merged.get(productId);
+      if (existing) {
+        existing.quantity += quantity;
+        if (!existing.product && rawItem?.product) existing.product = rawItem.product;
+      } else {
+        merged.set(productId, {
+          productId,
+          quantity,
+          product: rawItem?.product || null,
+        });
+      }
+    }
+
+    return Array.from(merged.values());
   };
 
   // Sync cart from backend when user logs in
   const syncCart = async () => {
     const token = getToken();
-    if (!token) {
-      // Load from localStorage if not logged in
-      const savedCart = localStorage.getItem('shopCoreCart');
-      setItems(savedCart ? JSON.parse(savedCart) : []);
-      setInitialized(true);
-      return;
+
+    if (USE_SUPABASE) {
+      try {
+        const currentUser = getCurrentUserFromToken();
+        if (!currentUser?.id) {
+          const savedCart = sessionStorage.getItem(getCartKey());
+          setItems(savedCart ? JSON.parse(savedCart) : []);
+          setInitialized(true);
+          return true;
+        }
+
+        const cartId = await getOrCreateSupabaseCartId(currentUser.id);
+        if (!cartId) {
+          setItems([]);
+          setInitialized(true);
+          return true;
+        }
+
+        const { data: rows, error: itemsError } = await supabase
+          .from('cart_items')
+          .select('id, product_id, quantity, products(*)')
+            .eq('cart_id', cartId)
+            .order('id', { ascending: true });
+        if (itemsError) throw new Error(itemsError.message);
+        const mappedItems = mapCartItemsFromBackend((rows || []).map((item) => ({
+          ...item,
+          product: item.products
+        })));
+        const stableItems = orderCartItems(mappedItems);
+
+        setItems(stableItems);
+        sessionStorage.setItem(getCartKey(), JSON.stringify(stableItems));
+        setInitialized(true);
+        return true;
+      } catch (err) {
+        console.error('Error syncing cart (Supabase):', err);
+        const savedCart = sessionStorage.getItem(getCartKey());
+        setItems(savedCart ? JSON.parse(savedCart) : []);
+        setInitialized(true);
+        return false;
+      }
     }
 
     try {
+      const headers = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
       const response = await fetch(`${API_URL}/cart`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include',
+        headers,
       });
       
       if (response.ok) {
         const data = await response.json();
-        setItems(data.items || []);
+        const mappedItems = mapCartItemsFromBackend(data.items || []);
+        const stableItems = orderCartItems(mappedItems);
+        setItems(stableItems);
         // Save to localStorage as backup
-        localStorage.setItem('shopCoreCart', JSON.stringify(data.items || []));
+        sessionStorage.setItem(getCartKey(), JSON.stringify(stableItems));
+        setInitialized(true);
+        return true;
       } else {
         // Fall back to localStorage
-        const savedCart = localStorage.getItem('shopCoreCart');
+        const savedCart = sessionStorage.getItem(getCartKey());
         setItems(savedCart ? JSON.parse(savedCart) : []);
+        setInitialized(true);
+        return false;
       }
     } catch (err) {
       console.error('Error syncing cart:', err);
-      const savedCart = localStorage.getItem('shopCoreCart');
+      const savedCart = sessionStorage.getItem(getCartKey());
       setItems(savedCart ? JSON.parse(savedCart) : []);
+      setInitialized(true);
+      return false;
     }
-    setInitialized(true);
   };
 
   // Initialize cart on mount and when user logs in
   useEffect(() => {
     syncCart();
-  }, []);
+  }, [cartScopeKey]);
 
   // Monitor localStorage for login changes
   useEffect(() => {
-    const handleStorageChange = () => {
-      syncCart();
+    const handleStorageChange = async () => {
+      const previousScopeKey = cartScopeKeyRef.current;
+      const currentUser = getCurrentUser();
+      const nextScopeKey = currentUser?.id ? `shopCoreCart_${currentUser.id}` : GUEST_CART_KEY;
+
+      setCartScopeKey(nextScopeKey);
+      setSelectedItemIds([]);
+      setHasLoadedSelection(false);
+
+      if (!currentUser?.id) {
+        clearCartStorageForScope(previousScopeKey);
+        clearGuestCartStorage();
+        setItems([]);
+        setDiscount(null);
+        setError(null);
+        setInitialized(true);
+        clearCheckoutSelection();
+        return;
+      }
+
+      if (currentUser?.id && USE_SUPABASE) {
+        try {
+          await mergeGuestCartIntoSupabaseCart();
+        } catch (err) {
+          console.error('Failed to merge guest cart after login:', err);
+        }
+      }
+
+      const synced = await syncCart();
+      if (currentUser?.id && synced) {
+        clearGuestCartStorage();
+      }
     };
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('auth:changed', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('auth:changed', handleStorageChange);
+    };
   }, []);
+
+  // Load selection state once on mount / init
+  const [hasLoadedSelection, setHasLoadedSelection] = useState(false);
+  useEffect(() => {
+    if (initialized && !hasLoadedSelection) {
+      try {
+        const saved = sessionStorage.getItem(getSelectedKey());
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setSelectedItemIds(Array.isArray(parsed) ? parsed : []);
+        } else {
+          setSelectedItemIds([]);
+        }
+      } catch (e) {
+        console.error('Failed to load selected item ids', e);
+        setSelectedItemIds([]);
+      }
+      setHasLoadedSelection(true);
+    }
+  }, [initialized, hasLoadedSelection, cartScopeKey]);
 
   // Save to localStorage as backup
   useEffect(() => {
-    if (initialized) {
-      localStorage.setItem('shopCoreCart', JSON.stringify(items));
+    if (initialized && hasLoadedSelection) {
+      sessionStorage.setItem(getCartKey(), JSON.stringify(items));
+      // cleanup removed items
+      const itemIds = new Set(items.map(i => i.productId));
+      const cleanSelected = selectedItemIds.filter(id => itemIds.has(id));
+      if (cleanSelected.length !== selectedItemIds.length) {
+        setSelectedItemIds(cleanSelected);
+      }
+      sessionStorage.setItem(getSelectedKey(), JSON.stringify(cleanSelected));
+      const cleanCheckoutSelection = getCheckoutSelection().filter((id) => itemIds.has(id));
+      sessionStorage.setItem(getCheckoutSelectionKey(), JSON.stringify(cleanCheckoutSelection));
     }
-  }, [items, initialized]);
+  }, [items, selectedItemIds, initialized, hasLoadedSelection, cartScopeKey]);
+
+  const resolveMaxStock = (product) => {
+    const rawStock = Number(product?.stock_quantity);
+    if (!Number.isFinite(rawStock)) return Infinity;
+    return Math.max(0, rawStock);
+  };
+
+  const mergeGuestCartIntoSupabaseCart = async () => {
+    const currentUser = getCurrentUserFromToken();
+    if (!currentUser?.id) return false;
+
+    const guestItems = normalizeGuestCartItems(getStoredCartItems(GUEST_CART_KEY));
+    if (guestItems.length === 0) return false;
+
+    const cartId = await getOrCreateSupabaseCartId(currentUser.id);
+    if (!cartId) return false;
+
+    const { data: existingRows, error: existingError } = await supabase
+      .from('cart_items')
+      .select('id, product_id, quantity, products(*)')
+      .eq('cart_id', cartId);
+
+    if (existingError) throw new Error(existingError.message);
+
+    const existingByProductId = new Map(
+      (existingRows || []).map((row) => [
+        Number(row.product_id),
+        {
+          id: row.id,
+          quantity: Number(row.quantity || 0),
+          product: row.products || null,
+        },
+      ])
+    );
+
+    for (const guestItem of guestItems) {
+      const productId = Number(guestItem.productId);
+      if (!productId) continue;
+
+      const existingItem = existingByProductId.get(productId);
+      const stockSource = existingItem?.product || guestItem.product;
+      const maxStock = resolveMaxStock(stockSource);
+      const desiredQuantity = (existingItem?.quantity || 0) + guestItem.quantity;
+      const nextQuantity = Number.isFinite(maxStock)
+        ? Math.max(0, Math.min(desiredQuantity, maxStock))
+        : desiredQuantity;
+
+      if (nextQuantity <= 0) continue;
+
+      if (existingItem?.id) {
+        const { error: updateError } = await supabase
+          .from('cart_items')
+          .update({ quantity: nextQuantity })
+          .eq('id', existingItem.id);
+
+        if (updateError) throw new Error(updateError.message);
+      } else {
+        const { error: insertError } = await supabase
+          .from('cart_items')
+          .insert({ cart_id: cartId, product_id: productId, quantity: nextQuantity });
+
+        if (insertError) throw new Error(insertError.message);
+      }
+    }
+
+    clearGuestCartStorage();
+    return true;
+  };
 
   const addToCart = async (product, quantity = 1) => {
+    const requestedQty = Number(quantity);
+    if (!Number.isFinite(requestedQty) || requestedQty < 1) {
+      setError('Invalid quantity.');
+      return false;
+    }
+
+    const existingItem = items.find((item) => item.productId === product.id);
+    const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
+    const currentQty = existingItem?.quantity || 0;
+    const nextQty = currentQty + requestedQty;
+
+    if (Number.isFinite(maxStock) && maxStock <= 0) {
+      setError('This item is out of stock.');
+      return false;
+    }
+
+    if (Number.isFinite(maxStock) && nextQty > maxStock) {
+      setError(`Cannot exceed available stock (${maxStock}).`);
+      return false;
+    }
+
+    setError(null);
     const token = getToken();
-    
-    if (token) {
+    if (USE_SUPABASE && !token) {
+      return addToCartLocal(product, requestedQty);
+    }
+    if (true) {
+      if (USE_SUPABASE) {
+        try {
+          setLoading(true);
+          const currentUser = getCurrentUserFromToken();
+          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+          if (!cartId) throw new Error('Unable to access cart');
+
+          const { data: existingRows, error: existingError } = await supabase
+            .from('cart_items')
+            .select('id, quantity')
+            .eq('cart_id', cartId)
+            .eq('product_id', product.id)
+            .limit(1)
+            .maybeSingle();
+
+          if (existingError) throw new Error(existingError.message);
+
+          if (existingRows?.id) {
+            const { error: updateError } = await supabase
+              .from('cart_items')
+              .update({ quantity: existingRows.quantity + requestedQty })
+              .eq('id', existingRows.id);
+
+            if (updateError) throw new Error(updateError.message);
+          } else {
+            const { error: insertError } = await supabase
+              .from('cart_items')
+              .insert({ cart_id: cartId, product_id: product.id, quantity: requestedQty });
+
+            if (insertError) throw new Error(insertError.message);
+          }
+
+          await syncCart();
+            setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
+            return true;
+        } catch (err) {
+          console.error('Error adding to cart (Supabase):', err);
+          const fallbackAdded = addToCartLocal(product, requestedQty);
+          if (!fallbackAdded) {
+            setError('Failed to add item to cart');
+          }
+          return fallbackAdded;
+        } finally {
+          setLoading(false);
+        }
+      }
+
       // Add to backend if logged in
       try {
         setLoading(true);
-        const response = await fetch(`${API_URL}/cart/add`, {
+        const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/add`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
           body: JSON.stringify({
             product_id: product.id,
-            quantity
+            quantity: requestedQty
           })
-        });
+        }, { includeJson: true });
 
         if (response.ok) {
           await syncCart();
+            setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
+            return true;
         } else {
           throw new Error('Failed to add item to cart');
         }
       } catch (err) {
         console.error('Error adding to cart:', err);
-        setError('Failed to add item to cart');
         // Fall back to local cart
-        addToCartLocal(product, quantity);
+        const fallbackAdded = addToCartLocal(product, requestedQty);
+        if (!fallbackAdded) {
+          setError('Failed to add item to cart');
+        }
+        return fallbackAdded;
       } finally {
         setLoading(false);
       }
     } else {
       // Use local storage if not logged in
-      addToCartLocal(product, quantity);
+      return addToCartLocal(product, requestedQty);
     }
   };
 
   const addToCartLocal = (product, quantity) => {
+    const requestedQty = Number(quantity);
+    if (!Number.isFinite(requestedQty) || requestedQty < 1) {
+      setError('Invalid quantity.');
+      return false;
+    }
+
+    const existingItem = items.find(item => item.productId === product.id);
+    const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
+
+    if (Number.isFinite(maxStock) && maxStock <= 0) {
+      setError('This item is out of stock.');
+      return false;
+    }
+
+    if (existingItem) {
+      const nextQuantity = existingItem.quantity + requestedQty;
+      if (Number.isFinite(maxStock) && nextQuantity > maxStock) {
+        setError(`Cannot exceed available stock (${maxStock}).`);
+        return false;
+      }
+    } else if (Number.isFinite(maxStock) && requestedQty > maxStock) {
+      setError(`Cannot exceed available stock (${maxStock}).`);
+      return false;
+    }
+
+    setError(null);
+
     setItems(currentItems => {
-      const existingItem = currentItems.find(item => item.productId === product.id);
-      if (existingItem) {
+      const existing = currentItems.find(item => item.productId === product.id);
+      if (existing) {
         return currentItems.map(item =>
           item.productId === product.id
-            ? { ...item, quantity: item.quantity + quantity }
+            ? { ...item, quantity: item.quantity + requestedQty }
             : item
         );
       }
-      return [...currentItems, { productId: product.id, product, quantity }];
+      return [...currentItems, { productId: product.id, product, quantity: requestedQty }];
     });
+    setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
+    return true;
   };
 
   const removeFromCart = async (productId) => {
     const token = getToken();
+    if (USE_SUPABASE && !token) {
+      removeFromCartLocal(productId);
+      return;
+    }
+    if (true) {
+      if (USE_SUPABASE) {
+        try {
+          setLoading(true);
+          const currentUser = getCurrentUserFromToken();
+          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+          if (!cartId) throw new Error('Unable to access cart');
 
-    if (token) {
+          const targetItem = items.find((item) => item.productId === productId);
+          const cartItemId = targetItem?.cartItemId ?? null;
+
+          if (cartItemId) {
+            const { error: deleteError } = await supabase
+              .from('cart_items')
+              .delete()
+              .eq('id', cartItemId);
+
+            if (deleteError) throw new Error(deleteError.message);
+          } else {
+            const { error: deleteError } = await supabase
+              .from('cart_items')
+              .delete()
+              .eq('cart_id', cartId)
+              .eq('product_id', productId);
+
+            if (deleteError) throw new Error(deleteError.message);
+          }
+
+          await syncCart();
+        } catch (err) {
+          console.error('Error removing from cart (Supabase):', err);
+          setError('Failed to remove item');
+          removeFromCartLocal(productId);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         setLoading(true);
-        const response = await fetch(`${API_URL}/cart/remove/${productId}`, {
+        const targetItem = items.find((item) => item.productId === productId);
+        const cartItemId = targetItem?.cartItemId ?? productId;
+        const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/remove/${cartItemId}`, {
           method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
         });
 
         if (response.ok) {
@@ -163,20 +728,66 @@ export const CartProvider = ({ children }) => {
 
   const updateQuantity = async (productId, quantity) => {
     if (quantity < 1) return;
+
+    const targetItem = items.find((item) => item.productId === productId);
+    const maxStock = resolveMaxStock(targetItem?.product);
+    if (targetItem && Number.isFinite(maxStock) && quantity > maxStock) {
+      setError(`Cannot exceed available stock (${maxStock}).`);
+      return;
+    }
+    setError(null);
     
     const token = getToken();
+    if (USE_SUPABASE && !token) {
+      updateQuantityLocal(productId, quantity);
+      return;
+    }
+    if (true) {
+      if (USE_SUPABASE) {
+        try {
+          setLoading(true);
+          const currentUser = getCurrentUserFromToken();
+          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+          if (!cartId) throw new Error('Unable to access cart');
 
-    if (token) {
+          const targetItem = items.find((item) => item.productId === productId);
+          const cartItemId = targetItem?.cartItemId ?? null;
+
+          if (cartItemId) {
+            const { error: updateError } = await supabase
+              .from('cart_items')
+              .update({ quantity })
+              .eq('id', cartItemId);
+
+            if (updateError) throw new Error(updateError.message);
+          } else {
+            const { error: updateError } = await supabase
+              .from('cart_items')
+              .update({ quantity })
+              .eq('cart_id', cartId)
+              .eq('product_id', productId);
+
+            if (updateError) throw new Error(updateError.message);
+          }
+
+          await syncCart();
+        } catch (err) {
+          console.error('Error updating quantity (Supabase):', err);
+          setError('Failed to update quantity');
+          updateQuantityLocal(productId, quantity);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         setLoading(true);
-        const response = await fetch(`${API_URL}/cart/update/${productId}`, {
+        const cartItemId = targetItem?.cartItemId ?? productId;
+        const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/update/${cartItemId}`, {
           method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
           body: JSON.stringify({ quantity })
-        });
+        }, { includeJson: true });
 
         if (response.ok) {
           await syncCart();
@@ -196,31 +807,68 @@ export const CartProvider = ({ children }) => {
   };
 
   const updateQuantityLocal = (productId, quantity) => {
-    setItems(currentItems =>
-      currentItems.map(item =>
+    setItems(currentItems => {
+      const target = currentItems.find((item) => item.productId === productId);
+      const maxStock = resolveMaxStock(target?.product);
+      if (target && Number.isFinite(maxStock) && quantity > maxStock) {
+        setError(`Cannot exceed available stock (${maxStock}).`);
+        return currentItems;
+      }
+      setError(null);
+
+      return currentItems.map(item =>
         item.productId === productId ? { ...item, quantity } : item
-      )
-    );
+      );
+    });
   };
 
   const clearCart = async () => {
     const token = getToken();
+    if (USE_SUPABASE && !token) {
+      clearCartLocal();
+      return;
+    }
+    if (true) {
+      if (USE_SUPABASE) {
+        try {
+          setLoading(true);
+          const currentUser = getCurrentUserFromToken();
+          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+          if (!cartId) throw new Error('Unable to access cart');
 
-    if (token) {
+          const { error: deleteError } = await supabase
+            .from('cart_items')
+            .delete()
+            .eq('cart_id', cartId);
+
+          if (deleteError) throw new Error(deleteError.message);
+
+          setItems([]);
+          setSelectedItemIds([]);
+          setDiscount(null);
+          setError(null);
+          sessionStorage.setItem(getCartKey(), JSON.stringify([]));
+        } catch (err) {
+          console.error('Error clearing cart (Supabase):', err);
+          clearCartLocal();
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         setLoading(true);
-        const response = await fetch(`${API_URL}/cart/clear`, {
+        const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/clear`, {
           method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
         });
 
         if (response.ok) {
           setItems([]);
+          setSelectedItemIds([]);
           setDiscount(null);
           setError(null);
-          localStorage.setItem('shopCoreCart', JSON.stringify([]));
+          sessionStorage.setItem(getCartKey(), JSON.stringify([]));
         }
       } catch (err) {
         console.error('Error clearing cart:', err);
@@ -233,22 +881,138 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  const clearCartLocal = () => {
-    setItems([]);
-    setDiscount(null);
-    setError(null);
-    localStorage.setItem('shopCoreCart', JSON.stringify([]));
+  const normalizeTargetProductIds = (ids = []) => {
+    const normalized = Array.from(new Set(Array.isArray(ids) ? ids : []))
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+    return normalized;
   };
 
-  // Calculations
-  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
-  
-  const subtotal = items.reduce((sum, item) => {
-      const price = (item.product.is_on_sale && item.product.sale_price) 
-        ? item.product.sale_price 
-        : item.product.price;
-      return sum + (price * item.quantity);
-  }, 0);
+  const removeItemsFromLocalState = (targetIds = []) => {
+    const targetIdSet = new Set(normalizeTargetProductIds(targetIds));
+    if (targetIdSet.size === 0) return;
+
+    setItems((prev) => prev.filter((item) => !targetIdSet.has(item.productId)));
+    setSelectedItemIds((prev) => prev.filter((id) => !targetIdSet.has(id)));
+    setError(null);
+
+    const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
+    const nextLocal = currentLocal.filter((item) => !targetIdSet.has(Number(item.productId)));
+    sessionStorage.setItem(getCartKey(), JSON.stringify(nextLocal));
+
+    const nextCheckoutSelection = getCheckoutSelection().filter((id) => !targetIdSet.has(id));
+    persistCheckoutSelection(nextCheckoutSelection);
+  };
+
+  const clearItemsByIds = async (ids = []) => {
+    const targetIds = normalizeTargetProductIds(ids);
+    if (targetIds.length === 0) return;
+
+    const token = getToken();
+    if (USE_SUPABASE && !token) {
+      removeItemsFromLocalState(targetIds);
+      return;
+    }
+
+    if (USE_SUPABASE) {
+      try {
+        setLoading(true);
+        const currentUser = getCurrentUserFromToken();
+        const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+        if (!cartId) throw new Error('Unable to access cart');
+
+        const { error: deleteError } = await supabase
+          .from('cart_items')
+          .delete()
+          .eq('cart_id', cartId)
+          .in('product_id', targetIds);
+
+        if (deleteError) throw new Error(deleteError.message);
+
+        removeItemsFromLocalState(targetIds);
+      } catch (err) {
+        console.error('Error clearing cart items by ids (Supabase):', err);
+        removeItemsFromLocalState(targetIds);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await Promise.all(targetIds.map(async (id) => {
+        const targetItem = items.find((item) => item.productId === id);
+        if (!targetItem) return;
+        const cartItemId = targetItem?.cartItemId ?? id;
+        return fetchCartWithCsrfRetry(`${API_URL}/cart/remove/${cartItemId}`, {
+          method: 'DELETE',
+        });
+      }));
+
+      removeItemsFromLocalState(targetIds);
+    } catch (err) {
+      console.error('Error clearing cart items by ids:', err);
+      removeItemsFromLocalState(targetIds);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clearSelectedItems = async () => {
+    if (selectedItemIds.length === 0) return;
+    await clearItemsByIds(selectedItemIds);
+    clearCheckoutSelection();
+  };
+
+  const clearCartLocal = () => {
+    setItems([]);
+    setSelectedItemIds([]);
+    setDiscount(null);
+    setError(null);
+    clearCheckoutSelection();
+    sessionStorage.setItem(getCartKey(), JSON.stringify([]));
+  };
+
+    const toggleSelection = (productId) => {
+        setSelectedItemIds(prev => normalizeSelectionIds(
+            prev.includes(productId)
+                ? prev.filter(id => id !== productId)
+                : [...prev, productId]
+        ));
+    };
+
+    const toggleAllSelection = (selectAll) => {
+        if (selectAll) {
+            setSelectedItemIds(items.map(i => i.productId));
+        } else {
+            setSelectedItemIds([]);
+        }
+    };
+
+    // Calculations
+    const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);      
+    
+    const selectedItems = items.filter(i => selectedItemIds.includes(i.productId));
+    const selectedItemCount = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
+
+    const getEffectiveItemUnitPrice = (item) => {
+      const regularPrice = Number(item?.product?.price);
+      const salePrice = Number(item?.product?.sale_price);
+      const isOnSale = Boolean(item?.product?.is_on_sale);
+
+      if (isOnSale && Number.isFinite(salePrice)) {
+        return salePrice;
+      }
+
+      return Number.isFinite(regularPrice) ? regularPrice : 0;
+    };
+
+    const subtotal = selectedItems.reduce((sum, item) => {
+      const quantity = Number(item?.quantity || 0);
+      const unitPrice = getEffectiveItemUnitPrice(item);
+      return sum + (unitPrice * quantity);
+    }, 0);
 
   let discountAmount = 0;
   if (discount) {
@@ -281,18 +1045,28 @@ export const CartProvider = ({ children }) => {
 
   return (
     <CartContext.Provider value={{ 
-        items, 
-        addToCart, 
-        removeFromCart, 
-        updateQuantity, 
-        clearCart, 
-        itemCount, 
+        items,
+        selectedItemIds,
+        selectedItems,
+        selectedItemCount,
+        toggleSelection,
+        toggleAllSelection,
+        addToCart,
+        removeFromCart,
+        updateQuantity,
+        clearCart,
+        clearSelectedItems,
+        clearItemsByIds,
+        itemCount,
         subtotal,
         total,
         discount,
         discountAmount,
         applyDiscount,
         removeDiscount,
+        persistCheckoutSelection,
+        getCheckoutSelection,
+        clearCheckoutSelection,
         error,
         loading,
         syncCart
@@ -309,3 +1083,4 @@ export const useCart = () => {
   }
   return context;
 };
+

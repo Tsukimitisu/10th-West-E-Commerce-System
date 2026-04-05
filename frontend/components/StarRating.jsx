@@ -19,10 +19,12 @@ const StarRating = ({ rating, count, size = 16, interactive = false, onChange })
         </button>
       ))}
       {count !== undefined && (
-        <span className="text-xs text-gray-500 ml-1">({count})</span>
+        <span className="text-xs text-gray-400 ml-1">({count})</span>
       )}
     </div>
   );
 };
 
 export default StarRating;
+
+

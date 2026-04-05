@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import SuperAdminLayout from '../../components/superadmin/SuperAdminLayout';
 import SuperAdminOverview from './SuperAdminOverview';
 import UserManagementView from './UserManagementView';
@@ -7,7 +7,7 @@ import SystemConfigView from './SystemConfigView';
 import MonitoringView from './MonitoringView';
 import BackupRecoveryView from './BackupRecoveryView';
 
-const SuperAdminDashboard = () => {
+const SuperAdminDashboard = ({ user }) => {
   const [activeView, setActiveView] = useState('overview');
 
   const renderView = () => {
@@ -23,10 +23,12 @@ const SuperAdminDashboard = () => {
   };
 
   return (
-    <SuperAdminLayout activeView={activeView} onNavigate={setActiveView}>
+    <SuperAdminLayout activeView={activeView} onNavigate={setActiveView} user={user}>
       {renderView()}
     </SuperAdminLayout>
   );
 };
 
 export default SuperAdminDashboard;
+
+

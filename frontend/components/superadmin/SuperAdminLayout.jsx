@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Shield, Settings, Activity,
@@ -16,14 +16,12 @@ const NAV_ITEMS = [
   { id: 'backup', label: 'Backup & Recovery', icon: Database },
 ];
 
-const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
+const SuperAdminLayout = ({ activeView, onNavigate, user, children }) => {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { connected } = useSocket();
-  const userStr = localStorage.getItem('shopCoreUser');
-  const user = userStr ? JSON.parse(userStr) : null;
 
   const handleNav = (item) => {
     onNavigate(item.id);
@@ -40,14 +38,14 @@ const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
 
   const SidebarContent = ({ mobile = false }) => (
     <>
-      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100 flex-shrink-0">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
+          <div className="w-9 h-9 bg-red-500/100 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
             <KeyRound size={18} className="text-white" />
           </div>
           {(!collapsed || mobile) && (
             <div>
-              <h1 className="font-display font-bold text-sm text-gray-900 leading-none">System Admin</h1>
+              <h1 className="font-display font-bold text-sm text-white leading-none">System Admin</h1>
               <p className="text-[10px] text-gray-400 font-medium tracking-wide">CONTROL PANEL</p>
             </div>
           )}
@@ -61,15 +59,15 @@ const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
           const isActive = activeView === item.id;
           return (
             <React.Fragment key={item.id}>
-              {item.divider && idx > 0 && <div className="my-2 border-t border-gray-100" />}
+              {item.divider && idx > 0 && <div className="my-2 border-t border-gray-700" />}
               <button
                 onClick={() => handleNav(item)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all
-                  ${isActive ? 'bg-orange-50 text-orange-600' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}
+                  ${isActive ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:bg-gray-900 hover:text-gray-700'}
                   ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
                 title={collapsed && !mobile ? item.label : undefined}
               >
-                <Icon size={18} className={`flex-shrink-0 ${isActive ? 'text-orange-500' : 'text-gray-400'}`} />
+                <Icon size={18} className={`flex-shrink-0 ${isActive ? 'text-red-500' : 'text-gray-400'}`} />
                 {(!collapsed || mobile) && <span className="flex-1 text-left">{item.label}</span>}
               </button>
             </React.Fragment>
@@ -77,9 +75,9 @@ const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
         })}
       </nav>
 
-      <div className="p-3 border-t border-gray-100 flex-shrink-0">
+      <div className="p-3 border-t border-gray-700 flex-shrink-0">
         <div className={`flex items-center gap-3 ${collapsed && !mobile ? 'justify-center' : ''}`}>
-          <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+          <div className="w-8 h-8 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
             {user?.name?.charAt(0)?.toUpperCase() || 'S'}
           </div>
           {(!collapsed || mobile) && (
@@ -88,7 +86,7 @@ const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
               <p className="text-[10px] text-gray-400 capitalize">{user?.role?.replace('_', ' ')}</p>
             </div>
           )}
-          <button onClick={() => setShowLogoutConfirm(true)} className="text-gray-400 hover:text-orange-500 transition-colors flex-shrink-0" title="Sign out">
+          <button onClick={() => setShowLogoutConfirm(true)} className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0" title="Sign out">
             <LogOut size={16} />
           </button>
         </div>
@@ -97,22 +95,22 @@ const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
   );
 
   return (
-    <div className="h-screen flex bg-gray-50 overflow-hidden">
-      <aside className={`${collapsed ? 'w-[72px]' : 'w-60'} bg-white border-r border-gray-200 flex-col transition-all duration-200 hidden lg:flex`}>
+    <div className="h-screen flex bg-gray-900 overflow-hidden">
+      <aside className={`${collapsed ? 'w-[72px]' : 'w-60'} bg-gray-800 border-r border-gray-700 flex-col transition-all duration-200 hidden lg:flex`}>
         <SidebarContent />
       </aside>
 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="fixed inset-0 bg-black/20" onClick={() => setMobileOpen(false)} />
-          <aside className="fixed left-0 top-0 bottom-0 w-64 bg-white shadow-xl z-50 flex flex-col">
+          <aside className="fixed left-0 top-0 bottom-0 w-64 bg-gray-800 shadow-xl z-50 flex flex-col">
             <SidebarContent mobile />
           </aside>
         </div>
       )}
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 flex-shrink-0">
+        <header className="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 lg:px-6 flex-shrink-0">
           <div className="flex items-center gap-3">
             <button onClick={() => setCollapsed(!collapsed)} className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
               <ChevronLeft size={18} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
@@ -134,19 +132,19 @@ const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
 
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-          <div className="bg-white p-8 rounded-2xl shadow-xl w-96 border border-gray-100">
+          <div className="bg-gray-800 p-8 rounded-2xl shadow-xl w-96 border border-gray-700">
             <div className="flex items-center gap-4 mb-6">
-              <div className="bg-orange-50 p-3 rounded-xl">
-                <LogOut className="w-7 h-7 text-orange-500" />
+              <div className="bg-red-500/10 p-3 rounded-xl">
+                <LogOut className="w-7 h-7 text-red-500" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Sign Out?</h3>
-                <p className="text-gray-500 text-sm mt-0.5">You will be logged out of the system</p>
+                <h3 className="text-lg font-bold text-white">Sign Out?</h3>
+                <p className="text-gray-400 text-sm mt-0.5">You will be logged out of the system</p>
               </div>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition-colors">Cancel</button>
-              <button onClick={confirmLogout} className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-xl transition-colors">Sign Out</button>
+              <button onClick={confirmLogout} className="flex-1 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-semibold rounded-xl transition-colors">Sign Out</button>
             </div>
           </div>
         </div>
@@ -156,3 +154,5 @@ const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
 };
 
 export default SuperAdminLayout;
+
+

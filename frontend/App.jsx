@@ -1,11 +1,14 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useLayoutEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import ProductList from './pages/ProductList';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import VerifyEmail from './pages/VerifyEmail';
 import ProductDetail from './pages/ProductDetail';
 import AdminDashboard from './pages/owner/AdminDashboard';
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
@@ -30,7 +33,7 @@ import Wishlist from './pages/customer/Wishlist';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import OAuthCallback from './pages/OAuthCallback';
-import { logoutApi } from './services/api.js';
+import { getProfile, logoutApi, initializeSecurityContext } from './services/api.js';
 import { supabase, onAuthStateChange } from './services/supabase.js';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { Role } from './types.js';
@@ -39,8 +42,22 @@ const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
 
 const AppLayout = ({ user, onLogout, onLogin }) => {
   const location = useLocation();
+  const shouldReduceMotion = useReducedMotion();
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname, location.search]);
+
   const isSuperAdmin = user?.role === Role.SUPER_ADMIN;
   const hideChrome = location.pathname === '/pos' || location.pathname === '/admin' || location.pathname === '/super-admin';
+  const isAccountRoute = (
+    location.pathname === '/profile' ||
+    location.pathname === '/orders' ||
+    location.pathname.startsWith('/orders/') ||
+    location.pathname === '/my-returns' ||
+    location.pathname === '/addresses' ||
+    location.pathname === '/wishlist'
+  );
 
   // Super Admin can ONLY access /super-admin — redirect everything else
   if (isSuperAdmin && location.pathname !== '/super-admin' && location.pathname !== '/login') {
@@ -48,38 +65,65 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className={`min-h-screen flex flex-col ${isAccountRoute ? 'bg-slate-50' : 'bg-zinc-900'}`}>
       {!hideChrome && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
       {!hideChrome && !isSuperAdmin && user && <EmailVerificationBanner user={user} />}
       <div className="flex-1">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/shop" element={<ProductList />} />
-          <Route path="/login" element={<Login onLogin={onLogin} />} />
-          <Route path="/register" element={<Register onLogin={onLogin} />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/oauth-callback" element={<OAuthCallback onLogin={onLogin} />} />
-          <Route path="/products/:id" element={<ProductDetail />} />
-          <Route path="/cart" element={<Cart />} />
-          <Route path="/checkout" element={user ? <Checkout /> : <Navigate to="/login?redirect=/checkout" />} />
-          <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/faq" element={<FAQ />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/terms" element={<TermsOfService />} />
-          <Route path="/return-policy" element={<ReturnPolicy />} />
-          <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
-          <Route path="/orders" element={user ? <OrderHistory /> : <Navigate to="/login" />} />
-          <Route path="/orders/:id" element={user ? <OrderDetail /> : <Navigate to="/login" />} />
-          <Route path="/orders/:id/return" element={user ? <RequestReturn /> : <Navigate to="/login" />} />
-          <Route path="/my-returns" element={user ? <MyReturns /> : <Navigate to="/login" />} />
-          <Route path="/addresses" element={user ? <AddressBook /> : <Navigate to="/login" />} />
-          <Route path="/wishlist" element={user ? <Wishlist /> : <Navigate to="/login" />} />
-          <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF ? <AdminDashboard onLogout={onLogout} /> : <Navigate to="/login" replace />} />
-          <Route path="/super-admin" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard /> : <Navigate to="/login" replace />} />
-          <Route path="/pos" element={(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) ? <PosTerminal /> : <Navigate to="/login" replace />} />
-        </Routes>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={`${location.pathname}${location.search}`}
+            initial={shouldReduceMotion || isAccountRoute ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={shouldReduceMotion || isAccountRoute ? { opacity: 1 } : { opacity: 0 }}
+            transition={{ duration: shouldReduceMotion || isAccountRoute ? 0 : 0.2, ease: 'easeOut' }}
+            className={`h-full ${isAccountRoute ? 'bg-slate-50' : ''}`}
+          >
+            <Routes location={location}>
+              <Route path="/" element={<Home />} />
+              <Route path="/shop" element={<ProductList />} />
+              <Route path="/login" element={
+                user && (user.role === Role.OWNER || user.role === Role.STORE_STAFF || user.role === Role.ADMIN)
+                  ? <Navigate to="/admin" replace />
+                  : user && user.role === Role.SUPER_ADMIN
+                    ? <Navigate to="/super-admin" replace />
+                    : user
+                      ? <Navigate to="/" replace />
+                      : <Login onLogin={onLogin} />
+              } />
+              <Route path="/register" element={<Register onLogin={onLogin} />} />
+              <Route path="/verify-email" element={<VerifyEmail onLogin={onLogin} />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/oauth-callback" element={<OAuthCallback onLogin={onLogin} />} />
+              <Route path="/products/:id" element={<ProductDetail />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route
+                path="/checkout"
+                element={
+                  user
+                    ? <Checkout />
+                    : <Navigate to={`/login?redirect=/checkout${location.search ? `&${location.search.slice(1)}` : ''}`} />
+                }
+              />
+              <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/faq" element={<FAQ />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/return-policy" element={<ReturnPolicy />} />
+              <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
+              <Route path="/orders" element={user ? <OrderHistory /> : <Navigate to="/login" />} />
+              <Route path="/orders/:id" element={user ? <OrderDetail /> : <Navigate to="/login" />} />
+              <Route path="/orders/:id/return" element={user ? <RequestReturn /> : <Navigate to="/login" />} />
+              <Route path="/my-returns" element={user ? <MyReturns /> : <Navigate to="/login" />} />
+              <Route path="/addresses" element={user ? <AddressBook /> : <Navigate to="/login" />} />
+              <Route path="/wishlist" element={user ? <Wishlist /> : <Navigate to="/login" />} />
+              <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF || user?.role === Role.ADMIN ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
+              <Route path="/super-admin" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
+              <Route path="/pos" element={(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) ? <PosTerminal /> : <Navigate to="/login" replace />} />
+            </Routes>
+          </motion.div>
+        </AnimatePresence>
       </div>
       {!hideChrome && !isSuperAdmin && <Footer />}
       <PrivacyBanner />
@@ -92,6 +136,107 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return () => {};
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return () => {};
+
+    const root = document.documentElement;
+    const proximityThreshold = 72;
+    const hoverThreshold = 20;
+    let rafId = 0;
+    let currentProximity = false;
+    let currentHover = false;
+
+    const applyState = (clientX, clientY) => {
+      const nearRightEdge = (window.innerWidth - clientX) <= proximityThreshold;
+      const nearBottomEdge = (window.innerHeight - clientY) <= proximityThreshold;
+      const nearRightHover = (window.innerWidth - clientX) <= hoverThreshold;
+      const nearBottomHover = (window.innerHeight - clientY) <= hoverThreshold;
+
+      const nextProximity = nearRightEdge || nearBottomEdge;
+      const nextHover = nearRightHover || nearBottomHover;
+
+      if (nextProximity !== currentProximity) {
+        currentProximity = nextProximity;
+        root.classList.toggle('scrollbar-proximity-active', nextProximity);
+      }
+
+      if (nextHover !== currentHover) {
+        currentHover = nextHover;
+        root.classList.toggle('scrollbar-hover-active', nextHover);
+      }
+    };
+
+    const handleMouseMove = (event) => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+
+      rafId = window.requestAnimationFrame(() => {
+        applyState(event.clientX, event.clientY);
+      });
+    };
+
+    const clearState = () => {
+      currentProximity = false;
+      currentHover = false;
+      root.classList.remove('scrollbar-proximity-active', 'scrollbar-hover-active');
+
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    window.addEventListener('blur', clearState);
+    document.addEventListener('mouseleave', clearState);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('blur', clearState);
+      document.removeEventListener('mouseleave', clearState);
+      clearState();
+    };
+  }, []);
+
+  useEffect(() => {
+    const disposeSecurity = initializeSecurityContext();
+    return () => {
+      disposeSecurity?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const clearLocalSession = () => {
+      localStorage.removeItem('shopCoreUser');
+      localStorage.removeItem('shopCoreToken');
+      if (isMounted) setUser(null);
+    };
+
+    const buildLocalTokenFromUser = (profile) =>
+      `sb-token-${btoa(JSON.stringify({ id: profile.id, email: profile.email, role: profile.role }))}`;
+
+    const syncUserFromStorage = () => {
+      const token = localStorage.getItem('shopCoreToken');
+      if (!token) {
+        localStorage.removeItem('shopCoreUser');
+        if (isMounted) setUser(null);
+        return;
+      }
+      const savedUser = localStorage.getItem('shopCoreUser');
+      if (!savedUser) return;
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.id && isMounted) {
+          setUser(parsed);
+        }
+      } catch {
+        clearLocalSession();
+      }
+    };
+
     // Check for existing session
     const initAuth = async () => {
       if (USE_SUPABASE && supabase) {
@@ -119,8 +264,10 @@ const App = () => {
                 last_login: session.user.last_sign_in_at,
                 email_verified: session.user.email_confirmed_at != null,
               };
-              setUser(userData);
+              const token = buildLocalTokenFromUser(userData);
+              if (isMounted) setUser(userData);
               localStorage.setItem('shopCoreUser', JSON.stringify(userData));
+              localStorage.setItem('shopCoreToken', token);
             }
           }
         } catch (e) {
@@ -128,27 +275,72 @@ const App = () => {
         }
       }
 
-      // Restore user from localStorage as secondary fallback or standard method
+      // Restore user from localStorage only if token exists.
+      const token = localStorage.getItem('shopCoreToken');
       const savedUser = localStorage.getItem('shopCoreUser');
-      if (savedUser) {
+      if (!token) {
+        clearLocalSession();
+      } else if (savedUser) {
         try {
           const parsed = JSON.parse(savedUser);
-          if (parsed && parsed.id) {
+          if (parsed && parsed.id && isMounted) {
             setUser(parsed);
           }
         } catch (e) {
           console.error('Failed to parse saved user:', e);
+          clearLocalSession();
         }
       }
+
+      // Validate active token and refresh profile to avoid stale/broken sessions.
+      if (localStorage.getItem('shopCoreToken')) {
+        try {
+          const profile = await getProfile();
+          if (isMounted) setUser(profile);
+          localStorage.setItem('shopCoreUser', JSON.stringify(profile));
+        } catch {
+          clearLocalSession();
+        }
+      }
+
+      const handleAuthChanged = () => {
+        syncUserFromStorage();
+      };
+      const handleStorage = (event) => {
+        if (!event.key || event.key === 'shopCoreUser' || event.key === 'shopCoreToken') {
+          syncUserFromStorage();
+        }
+      };
+      window.addEventListener('auth:changed', handleAuthChanged);
+      window.addEventListener('storage', handleStorage);
+      const supabaseSubscription = USE_SUPABASE && supabase
+        ? onAuthStateChange(() => syncUserFromStorage())
+        : null;
+
       setLoading(false);
+
+      return () => {
+        window.removeEventListener('auth:changed', handleAuthChanged);
+        window.removeEventListener('storage', handleStorage);
+        supabaseSubscription?.data?.subscription?.unsubscribe?.();
+      };
     };
-    initAuth();
+    let cleanup = () => { };
+    initAuth().then((dispose) => {
+      cleanup = typeof dispose === 'function' ? dispose : () => { };
+    });
+
+    return () => {
+      isMounted = false;
+      cleanup();
+    };
   }, []);
 
   const handleLogin = (userData, token) => {
-    setUser(userData);
+    flushSync(() => setUser(userData));
     localStorage.setItem('shopCoreUser', JSON.stringify(userData));
     localStorage.setItem('shopCoreToken', token);
+    window.dispatchEvent(new Event('auth:changed'));
   };
 
   const handleLogout = async () => {
@@ -160,13 +352,14 @@ const App = () => {
     setUser(null);
     localStorage.removeItem('shopCoreUser');
     localStorage.removeItem('shopCoreToken');
+    window.dispatchEvent(new Event('auth:changed'));
     // Navigation to /login handled by route guards (user is null)
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      <div className="min-h-screen bg-gray-800 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-500"></div>
       </div>
     );
   }
@@ -181,4 +374,9 @@ const App = () => {
 };
 
 export default App;
+
+
+
+
+
 

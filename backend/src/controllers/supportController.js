@@ -3,7 +3,7 @@ import nodemailer from 'nodemailer';
 
 // Create email transporter
 const createTransporter = () => {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.EMAIL_PORT || '587'),
     secure: false,
@@ -132,8 +132,10 @@ export const getTicketById = async (req, res) => {
 
     const ticket = result.rows[0];
 
+    const isStaff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user?.role);
+
     // Check authorization
-    if (req.user.role !== 'admin' && ticket.user_id !== req.user.id) {
+    if (!isStaff && ticket.user_id !== req.user?.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
 

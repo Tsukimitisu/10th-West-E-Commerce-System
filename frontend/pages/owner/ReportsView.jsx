@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { getSalesReport, getSalesByChannel, getTopProducts, getDailySalesTrend, getStockLevelsReport, getProfitReport, getOrders } from '../../services/api';
 import { BarChart3, Download, Calendar, TrendingUp, Package, DollarSign, ShoppingBag, Boxes, FileText, Printer, Users } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
@@ -133,35 +133,35 @@ const ReportsView = () => {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="font-display font-bold text-xl text-gray-900">Reports & Analytics</h1>
-          <p className="text-sm text-gray-500">Business intelligence and performance reports</p>
+          <h1 className="font-display font-bold text-xl text-white">Reports & Analytics</h1>
+          <p className="text-sm text-gray-400">Business intelligence and performance reports</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleExportPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200 transition-all">
+          <button onClick={handleExportPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs font-medium text-gray-600 hover:bg-red-500/10 hover:text-orange-600 hover:border-red-200 transition-all">
             <Printer size={13} /> Export PDF
           </button>
-          <button onClick={handleExportExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 rounded-lg text-xs font-medium text-white hover:bg-orange-600 transition-all">
+          <button onClick={handleExportExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/100 rounded-lg text-xs font-medium text-white hover:bg-red-600 transition-all">
             <FileText size={13} /> Export Excel
           </button>
-          <div className="flex bg-white rounded-lg border border-gray-100 p-0.5">
+          <div className="flex bg-gray-800 rounded-lg border border-gray-700 p-0.5">
             {['7d', '30d', '90d'].map(r => (
-              <button key={r} onClick={() => setDateRange(r)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${dateRange === r ? 'bg-orange-50 text-orange-500' : 'text-gray-500 hover:text-gray-700'}`}>{r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}</button>
+              <button key={r} onClick={() => setDateRange(r)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${dateRange === r ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>{r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}</button>
             ))}
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-lg border border-gray-100 p-1 w-fit">
+      <div className="flex gap-1 bg-gray-800 rounded-lg border border-gray-700 p-1 w-fit">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-orange-50 text-orange-500' : 'text-gray-500 hover:text-gray-700'}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
             <t.icon size={14} /> {t.label}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-12 text-center"><div className="w-6 h-6 border-2 border-gray-200 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
       ) : (
         <>
           {/* Sales Tab */}
@@ -170,28 +170,28 @@ const ReportsView = () => {
               {/* Sales KPIs */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'Total Sales', value: `₱${(salesReport?.total_sales || 0).toLocaleString()}`, color: 'bg-green-50 text-green-600' },
+                  { label: 'Total Sales', value: `â‚±${(salesReport?.total_sales || 0).toLocaleString()}`, color: 'bg-green-50 text-green-600' },
                   { label: 'Orders', value: (salesReport?.total_orders || 0).toString(), color: 'bg-blue-50 text-blue-600' },
-                  { label: 'Avg Order', value: `₱${(salesReport?.avg_order_value || 0).toFixed(0)}`, color: 'bg-purple-50 text-purple-600' },
+                  { label: 'Avg Order', value: `â‚±${(salesReport?.avg_order_value || 0).toFixed(0)}`, color: 'bg-purple-50 text-purple-600' },
                   { label: 'Items Sold', value: (salesReport?.total_items || 0).toString(), color: 'bg-amber-50 text-amber-600' },
                 ].map((kpi, i) => (
-                  <div key={i} className="bg-white rounded-xl border border-gray-100 p-4">
-                    <p className="text-xs text-gray-500 mb-1">{kpi.label}</p>
-                    <p className="text-lg font-bold text-gray-900">{kpi.value}</p>
+                  <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+                    <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
+                    <p className="text-lg font-bold text-white">{kpi.value}</p>
                   </div>
                 ))}
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="lg:col-span-2">
-                  <ChartCard title="Sales Trend" action={<button onClick={() => handleExport('sales')} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
+                  <ChartCard title="Sales Trend" action={<button onClick={() => handleExport('sales')} className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
                     <ResponsiveContainer width="100%" height={280}>
                       <AreaChart data={salesTrend}>
                         <defs><linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.1} /><stop offset="95%" stopColor="#f97316" stopOpacity={0} /></linearGradient></defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                         <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#9ca3af" />
                         <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                        <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
+                        <Tooltip formatter={(v) => [`â‚±${Number(v).toLocaleString()}`, '']} />
                         <Area type="monotone" dataKey="revenue" stroke="#f97316" fill="url(#salesGrad)" strokeWidth={2} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -216,7 +216,7 @@ const ReportsView = () => {
           {/* Products Tab */}
           {tab === 'products' && (
             <div className="space-y-4">
-              <ChartCard title="Top Selling Products" action={<button onClick={() => handleExport('products')} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
+              <ChartCard title="Top Selling Products" action={<button onClick={() => handleExport('products')} className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
                 {topProducts.length > 0 ? (
                   <ResponsiveContainer width="100%" height={350}>
                     <BarChart data={topProducts.slice(0, 10)} layout="vertical">
@@ -228,21 +228,21 @@ const ReportsView = () => {
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                  <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
                     <table className="w-full text-sm">
-                      <thead><tr className="bg-gray-50/80 border-b border-gray-100">
-                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">#</th>
-                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Product</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Price</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Rating</th>
+                      <thead><tr className="bg-gray-50/80 border-b border-gray-700">
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">#</th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Product</th>
+                        <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Price</th>
+                        <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Rating</th>
                       </tr></thead>
                       <tbody className="divide-y divide-gray-50">
                         {topProducts.map((p, i) => (
                           <tr key={i} className="hover:bg-gray-50/50">
                             <td className="px-4 py-3 font-bold text-gray-400">{i + 1}</td>
-                            <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
-                            <td className="px-4 py-3 text-right text-gray-900">₱{(p.price || 0).toLocaleString()}</td>
-                            <td className="px-4 py-3 text-right text-amber-600">★ {(p.rating || 0).toFixed(1)}</td>
+                            <td className="px-4 py-3 font-medium text-white">{p.name}</td>
+                            <td className="px-4 py-3 text-right text-white">â‚±{(p.price || 0).toLocaleString()}</td>
+                            <td className="px-4 py-3 text-right text-amber-600">â˜… {(p.rating || 0).toFixed(1)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -256,7 +256,7 @@ const ReportsView = () => {
           {/* Inventory Tab */}
           {tab === 'inventory' && (
             <div className="space-y-4">
-              <ChartCard title="Stock Level Distribution" action={<button onClick={() => handleExport('inventory')} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
+              <ChartCard title="Stock Level Distribution" action={<button onClick={() => handleExport('inventory')} className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
                 {stockLevels.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={stockLevels.slice(0, 20)}>
@@ -269,7 +269,7 @@ const ReportsView = () => {
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="p-8 text-center text-sm text-gray-500">No stock data available</div>
+                  <div className="p-8 text-center text-sm text-gray-400">No stock data available</div>
                 )}
               </ChartCard>
             </div>
@@ -280,40 +280,40 @@ const ReportsView = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'Gross Revenue', value: `₱${(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}` },
-                  { label: 'Total Cost', value: `₱${(profitReport?.total_cost || 0).toLocaleString()}` },
-                  { label: 'Net Profit', value: `₱${(profitReport?.net_profit || 0).toLocaleString()}` },
+                  { label: 'Gross Revenue', value: `â‚±${(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}` },
+                  { label: 'Total Cost', value: `â‚±${(profitReport?.total_cost || 0).toLocaleString()}` },
+                  { label: 'Net Profit', value: `â‚±${(profitReport?.net_profit || 0).toLocaleString()}` },
                   { label: 'Margin', value: `${(profitReport?.margin || 0).toFixed(1)}%` },
                 ].map((kpi, i) => (
-                  <div key={i} className="bg-white rounded-xl border border-gray-100 p-4">
-                    <p className="text-xs text-gray-500 mb-1">{kpi.label}</p>
-                    <p className="text-lg font-bold text-gray-900">{kpi.value}</p>
+                  <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+                    <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
+                    <p className="text-lg font-bold text-white">{kpi.value}</p>
                   </div>
                 ))}
               </div>
 
               {/* Profit & Loss Breakdown */}
-              <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="bg-gray-800 rounded-xl border border-gray-700 p-5">
                 <div className="flex items-center gap-2 mb-4">
-                  <DollarSign size={16} className="text-orange-500" />
-                  <h3 className="font-semibold text-sm text-gray-900">Profit & Loss Statement</h3>
+                  <DollarSign size={16} className="text-red-500" />
+                  <h3 className="font-semibold text-sm text-white">Profit & Loss Statement</h3>
                 </div>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <div className="flex items-center justify-between py-2 border-b border-gray-700">
                     <span className="text-sm text-gray-600">Gross Revenue (Sales)</span>
-                    <span className="text-sm font-semibold text-gray-900">₱{(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}</span>
+                    <span className="text-sm font-semibold text-white">â‚±{(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}</span>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <div className="flex items-center justify-between py-2 border-b border-gray-700">
                     <span className="text-sm text-gray-600">Cost of Goods Sold (Buying Price)</span>
-                    <span className="text-sm font-semibold text-red-500">- ₱{(profitReport?.total_cost || 0).toLocaleString()}</span>
+                    <span className="text-sm font-semibold text-red-500">- â‚±{(profitReport?.total_cost || 0).toLocaleString()}</span>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-dashed border-gray-200">
+                  <div className="flex items-center justify-between py-2 border-b border-dashed border-gray-700">
                     <span className="text-sm font-medium text-gray-700">Gross Profit</span>
-                    <span className="text-sm font-bold text-gray-900">₱{((profitReport?.gross_revenue || salesReport?.total_sales || 0) - (profitReport?.total_cost || 0)).toLocaleString()}</span>
+                    <span className="text-sm font-bold text-white">â‚±{((profitReport?.gross_revenue || salesReport?.total_sales || 0) - (profitReport?.total_cost || 0)).toLocaleString()}</span>
                   </div>
-                  <div className="flex items-center justify-between py-3 bg-orange-50 rounded-lg px-3 -mx-1">
+                  <div className="flex items-center justify-between py-3 bg-red-500/10 rounded-lg px-3 -mx-1">
                     <span className="text-sm font-bold text-orange-700">Net Profit</span>
-                    <span className="text-lg font-bold text-orange-600">₱{(profitReport?.net_profit || 0).toLocaleString()}</span>
+                    <span className="text-lg font-bold text-orange-600">â‚±{(profitReport?.net_profit || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-gray-600">Profit Margin</span>
@@ -328,7 +328,7 @@ const ReportsView = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                    <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
+                    <Tooltip formatter={(v) => [`â‚±${Number(v).toLocaleString()}`, '']} />
                     <Legend />
                     <Bar dataKey="revenue" fill="#f97316" name="Revenue" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="cost" fill="#9ca3af" name="Cost" radius={[4, 4, 0, 0]} />
@@ -343,55 +343,55 @@ const ReportsView = () => {
             <div className="space-y-4">
               {/* Customer KPIs */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-white rounded-xl border border-gray-100 p-5">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 p-5">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center">
-                      <Users size={16} className="text-orange-500" />
+                    <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center">
+                      <Users size={16} className="text-red-500" />
                     </div>
-                    <span className="text-xs text-gray-500">Total Customers</span>
+                    <span className="text-xs text-gray-400">Total Customers</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{customerActivity.total}</p>
+                  <p className="text-2xl font-bold text-white">{customerActivity.total}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-100 p-5">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
                       <TrendingUp size={16} className="text-green-500" />
                     </div>
-                    <span className="text-xs text-gray-500">New This Month</span>
+                    <span className="text-xs text-gray-400">New This Month</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{customerActivity.newThisMonth}</p>
+                  <p className="text-2xl font-bold text-white">{customerActivity.newThisMonth}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-100 p-5">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
                       <ShoppingBag size={16} className="text-blue-500" />
                     </div>
-                    <span className="text-xs text-gray-500">Avg Orders per Customer</span>
+                    <span className="text-xs text-gray-400">Avg Orders per Customer</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{customerActivity.total > 0 ? (customerActivity.mostActive.reduce((sum, c) => sum + c.orders, 0) / Math.min(customerActivity.total, customerActivity.mostActive.length) || 0).toFixed(1) : '0'}</p>
+                  <p className="text-2xl font-bold text-white">{customerActivity.total > 0 ? (customerActivity.mostActive.reduce((sum, c) => sum + c.orders, 0) / Math.min(customerActivity.total, customerActivity.mostActive.length) || 0).toFixed(1) : '0'}</p>
                 </div>
               </div>
 
               {/* Most Active Customers */}
-              <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                  <Users size={16} className="text-orange-500" />
-                  <h3 className="font-semibold text-sm text-gray-900">Most Active Customers</h3>
+              <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-700 flex items-center gap-2">
+                  <Users size={16} className="text-red-500" />
+                  <h3 className="font-semibold text-sm text-white">Most Active Customers</h3>
                 </div>
                 {customerActivity.mostActive.length === 0 ? (
                   <div className="p-12 text-center">
                     <Users size={40} className="mx-auto text-gray-300 mb-3" />
-                    <p className="text-sm text-gray-500">No customer data available</p>
+                    <p className="text-sm text-gray-400">No customer data available</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-gray-50/80 border-b border-gray-100">
-                          <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">#</th>
-                          <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Customer</th>
-                          <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Orders</th>
-                          <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Total Spent</th>
+                        <tr className="bg-gray-50/80 border-b border-gray-700">
+                          <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">#</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Customer</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Orders</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Total Spent</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -400,16 +400,16 @@ const ReportsView = () => {
                             <td className="px-4 py-3 font-bold text-gray-400">{i + 1}</td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                                  <span className="text-xs font-bold text-orange-500">{(customer.name || '?')[0].toUpperCase()}</span>
+                                <div className="w-7 h-7 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-xs font-bold text-red-500">{(customer.name || '?')[0].toUpperCase()}</span>
                                 </div>
-                                <span className="font-medium text-gray-900">{customer.name}</span>
+                                <span className="font-medium text-white">{customer.name}</span>
                               </div>
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <span className="px-2 py-0.5 bg-orange-50 text-orange-600 text-xs font-semibold rounded-full">{customer.orders}</span>
+                              <span className="px-2 py-0.5 bg-red-500/10 text-orange-600 text-xs font-semibold rounded-full">{customer.orders}</span>
                             </td>
-                            <td className="px-4 py-3 text-right font-semibold text-gray-900">₱{customer.total.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-white">â‚±{customer.total.toLocaleString()}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -426,3 +426,5 @@ const ReportsView = () => {
 };
 
 export default ReportsView;
+
+
