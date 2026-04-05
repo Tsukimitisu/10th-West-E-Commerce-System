@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS products (
   sku VARCHAR(100) UNIQUE,
   barcode VARCHAR(100) UNIQUE,
   sale_price DECIMAL(10,2),
+  bulk_pricing JSONB DEFAULT '[]'::jsonb,
   is_on_sale BOOLEAN DEFAULT FALSE,
   status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'hidden', 'out_of_stock')),
   expiry_date DATE,
@@ -531,6 +532,25 @@ ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
 ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check
   CHECK (payment_method IN ('cash', 'card', 'cod', 'online', 'stripe', 'gcash', 'maya', 'bank_transfer'));
 
+-- Products: strict pricing and stock guards
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_price_positive_check;
+ALTER TABLE products ADD CONSTRAINT products_price_positive_check
+  CHECK (price > 0);
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_stock_quantity_non_negative_check;
+ALTER TABLE products ADD CONSTRAINT products_stock_quantity_non_negative_check
+  CHECK (stock_quantity >= 0);
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_sale_price_positive_check;
+ALTER TABLE products ADD CONSTRAINT products_sale_price_positive_check
+  CHECK (sale_price IS NULL OR sale_price > 0);
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb;
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_bulk_pricing_array_check;
+ALTER TABLE products ADD CONSTRAINT products_bulk_pricing_array_check
+  CHECK (bulk_pricing IS NULL OR jsonb_typeof(bulk_pricing) = 'array');
+
 -- ==================== BACKFILL COLUMNS ====================
 -- If tables already exist, add any new columns that may be missing.
 
@@ -541,6 +561,7 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS expiry_date DATE;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS video_url VARCHAR(500);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb;
 
 -- Orders: new columns for tracking / fulfillment
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number VARCHAR(255);

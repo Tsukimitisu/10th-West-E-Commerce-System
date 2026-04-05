@@ -13,6 +13,7 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
 const ALLOWED_PRODUCT_STATUSES = new Set(['available', 'hidden', 'out_of_stock']);
 const PRODUCT_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
+const SKU_MAX_GENERATION_ATTEMPTS = 10;
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -35,6 +36,177 @@ const toNullableNumber = (value) => {
   if (value === undefined || value === null || value === '') return null;
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
+};
+
+const toNullableBoolean = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+  return null;
+};
+
+const parseRequiredPositiveNumber = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const parseRequiredNonNegativeInteger = (value) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) return null;
+  return parsed;
+};
+
+const parseOptionalNumberField = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return {
+      provided: false,
+      valid: true,
+      value: null,
+    };
+  }
+
+  const parsed = Number(value);
+  return {
+    provided: true,
+    valid: Number.isFinite(parsed),
+    value: Number.isFinite(parsed) ? parsed : null,
+  };
+};
+
+const parseOptionalIntegerField = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return {
+      provided: false,
+      valid: true,
+      value: null,
+    };
+  }
+
+  const parsed = Number(value);
+  return {
+    provided: true,
+    valid: Number.isInteger(parsed),
+    value: Number.isInteger(parsed) ? parsed : null,
+  };
+};
+
+const hasBodyField = (body, field) => Object.prototype.hasOwnProperty.call(body || {}, field);
+
+const normalizeSkuToken = (value, fallback = 'SKU') => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 22);
+
+  return normalized || fallback;
+};
+
+const buildSkuBase = ({ partNumber, name }) => {
+  const partToken = normalizeSkuToken(partNumber, '');
+  if (partToken) return partToken;
+
+  const nameToken = normalizeSkuToken(name, '');
+  if (nameToken) return nameToken;
+
+  return 'SKU';
+};
+
+const randomSkuSuffix = () => Math.random().toString(36).slice(2, 7).toUpperCase();
+
+const validateAndNormalizeBulkPricing = (value, regularPrice) => {
+  if (value === undefined) return { value: undefined };
+
+  if (value === null || value === '') return { value: [] };
+
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return { error: 'Bulk pricing must be a valid JSON array.' };
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    return { error: 'Bulk pricing must be an array of tiers.' };
+  }
+
+  const normalized = [];
+  const seenMinQty = new Set();
+
+  for (let index = 0; index < parsed.length; index += 1) {
+    const tier = parsed[index];
+    if (!tier || typeof tier !== 'object') {
+      return { error: `Bulk pricing row ${index + 1} is invalid.` };
+    }
+
+    const minQtyRaw = tier.min_qty ?? tier.minQty;
+    const unitPriceRaw = tier.unit_price ?? tier.unitPrice;
+    const minQty = Number(minQtyRaw);
+    const unitPrice = Number(unitPriceRaw);
+
+    if (!Number.isInteger(minQty) || minQty < 2) {
+      return { error: `Bulk pricing row ${index + 1}: minimum quantity must be an integer of 2 or more.` };
+    }
+
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      return { error: `Bulk pricing row ${index + 1}: unit price must be greater than 0.` };
+    }
+
+    if (seenMinQty.has(minQty)) {
+      return { error: `Bulk pricing row ${index + 1}: duplicate minimum quantity ${minQty}.` };
+    }
+
+    if (Number.isFinite(regularPrice) && unitPrice >= regularPrice) {
+      return { error: `Bulk pricing row ${index + 1}: unit price must be lower than regular price.` };
+    }
+
+    seenMinQty.add(minQty);
+    normalized.push({ min_qty: minQty, unit_price: unitPrice });
+  }
+
+  normalized.sort((a, b) => a.min_qty - b.min_qty);
+
+  for (let index = 1; index < normalized.length; index += 1) {
+    if (normalized[index].unit_price > normalized[index - 1].unit_price) {
+      return { error: 'Bulk pricing unit price must stay the same or decrease as quantity increases.' };
+    }
+  }
+
+  return { value: normalized };
+};
+
+const skuExists = async (sku, excludeProductId = null) => {
+  const result = await pool.query(
+    `SELECT 1
+     FROM products
+     WHERE sku = $1
+       AND ($2::int IS NULL OR id <> $2)
+     LIMIT 1`,
+    [sku, excludeProductId]
+  );
+
+  return result.rows.length > 0;
+};
+
+const generateUniqueSku = async ({ partNumber, name, excludeProductId = null }) => {
+  const base = buildSkuBase({ partNumber, name });
+
+  for (let attempt = 0; attempt < SKU_MAX_GENERATION_ATTEMPTS; attempt += 1) {
+    const candidate = `${base}-${randomSkuSuffix()}`;
+    const exists = await skuExists(candidate, excludeProductId);
+    if (!exists) return candidate;
+  }
+
+  const fallback = `${base}-${Date.now().toString(36).toUpperCase()}`;
+  return fallback.slice(0, 100);
 };
 
 const toNullableProductStatus = (value) => {
@@ -108,7 +280,8 @@ const ensureProductSchema = async () => {
   await pool.query(`
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS video_url VARCHAR(500);
+      ADD COLUMN IF NOT EXISTS video_url VARCHAR(500),
+      ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb;
   `).catch((error) => {
     console.error('Failed to ensure product media columns:', error);
   });
@@ -344,37 +517,114 @@ export const createProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
     image, video_url, category_id, stock_quantity, box_number,
-    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls
+    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing, auto_generate_sku
   } = req.body;
 
   try {
+    const cleanName = String(name || '').trim();
+    if (!cleanName) {
+      return res.status(400).json({ message: 'Product name is required' });
+    }
+
+    const parsedPrice = parseRequiredPositiveNumber(price);
+    if (parsedPrice === null) {
+      return res.status(400).json({ message: 'Price must be greater than 0' });
+    }
+
+    const parsedStockQuantity = parseRequiredNonNegativeInteger(stock_quantity);
+    if (parsedStockQuantity === null) {
+      return res.status(400).json({ message: 'Stock quantity must be an integer 0 or higher' });
+    }
+
+    const buyingPriceField = parseOptionalNumberField(buying_price);
+    if (!buyingPriceField.valid) {
+      return res.status(400).json({ message: 'Buying price must be a valid number' });
+    }
+    if (buyingPriceField.value !== null && buyingPriceField.value < 0) {
+      return res.status(400).json({ message: 'Buying price must be 0 or higher' });
+    }
+
+    const categoryIdField = parseOptionalIntegerField(category_id);
+    if (!categoryIdField.valid) {
+      return res.status(400).json({ message: 'Category must be a whole number' });
+    }
+    if (categoryIdField.value !== null && categoryIdField.value <= 0) {
+      return res.status(400).json({ message: 'Category must be a positive integer' });
+    }
+
+    const lowStockThresholdField = parseOptionalIntegerField(low_stock_threshold);
+    if (!lowStockThresholdField.valid) {
+      return res.status(400).json({ message: 'Low stock threshold must be a whole number' });
+    }
+    if (lowStockThresholdField.value !== null && lowStockThresholdField.value < 0) {
+      return res.status(400).json({ message: 'Low stock threshold must be 0 or higher' });
+    }
+
+    const salePriceField = parseOptionalNumberField(sale_price);
+    if (!salePriceField.valid) {
+      return res.status(400).json({ message: 'Sale price must be a valid number' });
+    }
+
+    const cleanSalePrice = salePriceField.value;
+    if (cleanSalePrice !== null && cleanSalePrice <= 0) {
+      return res.status(400).json({ message: 'Sale price must be greater than 0' });
+    }
+
+    if (cleanSalePrice !== null && cleanSalePrice >= parsedPrice) {
+      return res.status(400).json({ message: 'Sale price must be lower than regular price' });
+    }
+
+    const bulkPricingValidation = validateAndNormalizeBulkPricing(bulk_pricing, parsedPrice);
+    if (bulkPricingValidation.error) {
+      return res.status(400).json({ message: bulkPricingValidation.error });
+    }
+
     const cleanPartNumber = toNullableString(part_number);
+    const requestedAutoSku = toNullableBoolean(auto_generate_sku) === true;
     const cleanSku = toNullableString(sku);
     const cleanBarcode = toNullableString(barcode);
     const cleanImage = toNullableString(image);
     const cleanVideoUrl = toNullableString(video_url);
     const cleanBrand = toNullableString(brand);
     const cleanBoxNumber = toNullableString(box_number);
-    const cleanCategoryId = toNullableNumber(category_id);
-    const cleanStockQuantity = toNullableNumber(stock_quantity);
-    const cleanLowStockThreshold = toNullableNumber(low_stock_threshold);
-    const cleanSalePrice = toNullableNumber(sale_price);
-    const cleanIsOnSale = typeof is_on_sale === 'boolean' ? is_on_sale : null;
+    const cleanCategoryId = categoryIdField.value;
+    const cleanLowStockThreshold = lowStockThresholdField.value;
+    const cleanIsOnSale = toNullableBoolean(is_on_sale);
     const cleanStatus = toNullableProductStatus(status);
     const cleanImageUrls = normalizeProductImageUrls(image_urls);
+    const cleanBulkPricing = bulkPricingValidation.value ?? [];
+
+    if (status !== undefined && cleanStatus === null) {
+      return res.status(400).json({ message: 'Invalid product status' });
+    }
+
+    if (is_on_sale !== undefined && cleanIsOnSale === null) {
+      return res.status(400).json({ message: 'is_on_sale must be true or false' });
+    }
+
+    if (cleanIsOnSale === true && cleanSalePrice === null) {
+      return res.status(400).json({ message: 'Sale price is required when sale is enabled' });
+    }
+
+    const shouldAutoGenerateSku = requestedAutoSku || !cleanSku;
+    const resolvedSku = shouldAutoGenerateSku
+      ? await generateUniqueSku({ partNumber: cleanPartNumber, name: cleanName })
+      : cleanSku;
+
+    const resolvedIsOnSale = cleanIsOnSale ?? cleanSalePrice !== null;
 
     const result = await pool.query(
       `INSERT INTO products (
         part_number, name, description, price, buying_price, 
         image, video_url, category_id, stock_quantity, box_number, 
-        low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, COALESCE($16, false), COALESCE($17, 'available'), COALESCE($18::jsonb, '[]'::jsonb))
+        low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, COALESCE($17, 'available'), COALESCE($18::jsonb, '[]'::jsonb), COALESCE($19::jsonb, '[]'::jsonb))
       RETURNING *`,
       [
-        cleanPartNumber, name, description, price, buying_price,
-        cleanImage, cleanVideoUrl, cleanCategoryId, cleanStockQuantity ?? 0, cleanBoxNumber,
-        cleanLowStockThreshold ?? 5, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, cleanStatus,
-        JSON.stringify(cleanImageUrls)
+        cleanPartNumber, cleanName, description, parsedPrice, buyingPriceField.value,
+        cleanImage, cleanVideoUrl, cleanCategoryId, parsedStockQuantity, cleanBoxNumber,
+        cleanLowStockThreshold ?? 5, cleanBrand, resolvedSku, cleanBarcode, cleanSalePrice, resolvedIsOnSale, cleanStatus,
+        JSON.stringify(cleanImageUrls), JSON.stringify(cleanBulkPricing)
       ]
     );
 
@@ -400,28 +650,145 @@ export const updateProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
     image, video_url, category_id, stock_quantity, box_number,
-    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls
+    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing, auto_generate_sku
   } = req.body;
 
   try {
+    const existingResult = await pool.query(
+      `SELECT id, name, part_number, price, sale_price, is_on_sale
+       FROM products
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const existingProduct = existingResult.rows[0];
+
+    const hasNamePayload = hasBodyField(req.body, 'name');
+    const hasPartNumberPayload = hasBodyField(req.body, 'part_number');
+    const hasPricePayload = hasBodyField(req.body, 'price');
+    const hasStockPayload = hasBodyField(req.body, 'stock_quantity');
+    const hasBuyingPricePayload = hasBodyField(req.body, 'buying_price');
+    const hasCategoryIdPayload = hasBodyField(req.body, 'category_id');
+    const hasLowStockPayload = hasBodyField(req.body, 'low_stock_threshold');
+    const hasStatusPayload = hasBodyField(req.body, 'status');
+    const hasSalePricePayload = hasBodyField(req.body, 'sale_price');
+    const hasIsOnSalePayload = hasBodyField(req.body, 'is_on_sale');
+    const hasImageUrlsPayload = hasBodyField(req.body, 'image_urls');
+    const hasBulkPricingPayload = hasBodyField(req.body, 'bulk_pricing');
+
+    const cleanName = hasNamePayload ? String(name || '').trim() : null;
+    if (hasNamePayload && !cleanName) {
+      return res.status(400).json({ message: 'Product name cannot be empty' });
+    }
+
+    const parsedPrice = hasPricePayload ? parseRequiredPositiveNumber(price) : null;
+    if (hasPricePayload && parsedPrice === null) {
+      return res.status(400).json({ message: 'Price must be greater than 0' });
+    }
+
+    const parsedStockQuantity = hasStockPayload ? parseRequiredNonNegativeInteger(stock_quantity) : null;
+    if (hasStockPayload && parsedStockQuantity === null) {
+      return res.status(400).json({ message: 'Stock quantity must be an integer 0 or higher' });
+    }
+
+    const buyingPriceField = parseOptionalNumberField(buying_price);
+    if (hasBuyingPricePayload && !buyingPriceField.valid) {
+      return res.status(400).json({ message: 'Buying price must be a valid number' });
+    }
+    if (hasBuyingPricePayload && buyingPriceField.value !== null && buyingPriceField.value < 0) {
+      return res.status(400).json({ message: 'Buying price must be 0 or higher' });
+    }
+
+    const categoryIdField = parseOptionalIntegerField(category_id);
+    if (hasCategoryIdPayload && !categoryIdField.valid) {
+      return res.status(400).json({ message: 'Category must be a whole number' });
+    }
+    if (hasCategoryIdPayload && categoryIdField.value !== null && categoryIdField.value <= 0) {
+      return res.status(400).json({ message: 'Category must be a positive integer' });
+    }
+
+    const lowStockThresholdField = parseOptionalIntegerField(low_stock_threshold);
+    if (hasLowStockPayload && !lowStockThresholdField.valid) {
+      return res.status(400).json({ message: 'Low stock threshold must be a whole number' });
+    }
+    if (hasLowStockPayload && lowStockThresholdField.value !== null && lowStockThresholdField.value < 0) {
+      return res.status(400).json({ message: 'Low stock threshold must be 0 or higher' });
+    }
+
+    const salePriceField = parseOptionalNumberField(sale_price);
+    if (hasSalePricePayload && !salePriceField.valid) {
+      return res.status(400).json({ message: 'Sale price must be a valid number' });
+    }
+
+    const resolvedPrice = hasPricePayload ? parsedPrice : Number(existingProduct.price);
+    const nextSalePrice = hasSalePricePayload
+      ? salePriceField.value
+      : (existingProduct.sale_price !== null ? Number(existingProduct.sale_price) : null);
+
+    if (nextSalePrice !== null && nextSalePrice <= 0) {
+      return res.status(400).json({ message: 'Sale price must be greater than 0' });
+    }
+
+    if (nextSalePrice !== null && Number.isFinite(resolvedPrice) && nextSalePrice >= resolvedPrice) {
+      return res.status(400).json({ message: 'Sale price must be lower than regular price' });
+    }
+
     const cleanPartNumber = toNullableString(part_number);
+    const requestedAutoSku = toNullableBoolean(auto_generate_sku) === true;
     const cleanSku = toNullableString(sku);
     const cleanBarcode = toNullableString(barcode);
     const cleanImage = toNullableString(image);
     const cleanVideoUrl = toNullableString(video_url);
     const cleanBrand = toNullableString(brand);
     const cleanBoxNumber = toNullableString(box_number);
-    const cleanCategoryId = toNullableNumber(category_id);
-    const cleanStockQuantity = toNullableNumber(stock_quantity);
-    const cleanLowStockThreshold = toNullableNumber(low_stock_threshold);
-    const cleanSalePrice = toNullableNumber(sale_price);
-    const cleanIsOnSale = typeof is_on_sale === 'boolean' ? is_on_sale : null;
+    const cleanCategoryId = categoryIdField.value;
+    const cleanLowStockThreshold = lowStockThresholdField.value;
+    const cleanIsOnSale = hasIsOnSalePayload ? toNullableBoolean(is_on_sale) : null;
     const cleanStatus = toNullableProductStatus(status);
     const cleanImageUrls = normalizeProductImageUrls(image_urls);
-    const hasVideoUrlPayload = Object.prototype.hasOwnProperty.call(req.body, 'video_url');
-    const hasImageUrlsPayload = Array.isArray(image_urls)
-      || (typeof image_urls === 'string' && image_urls.trim().length > 0);
+    const hasVideoUrlPayload = hasBodyField(req.body, 'video_url');
     const imageUrlsPayload = hasImageUrlsPayload ? JSON.stringify(cleanImageUrls) : null;
+
+    if (hasStatusPayload && cleanStatus === null) {
+      return res.status(400).json({ message: 'Invalid product status' });
+    }
+
+    if (hasIsOnSalePayload && cleanIsOnSale === null) {
+      return res.status(400).json({ message: 'is_on_sale must be true or false' });
+    }
+
+    const nextIsOnSale = hasIsOnSalePayload
+      ? cleanIsOnSale
+      : Boolean(existingProduct.is_on_sale);
+
+    if (nextIsOnSale && nextSalePrice === null) {
+      return res.status(400).json({ message: 'Sale price is required when sale is enabled' });
+    }
+
+    const bulkPricingValidation = hasBulkPricingPayload
+      ? validateAndNormalizeBulkPricing(bulk_pricing, resolvedPrice)
+      : { value: undefined };
+    if (bulkPricingValidation.error) {
+      return res.status(400).json({ message: bulkPricingValidation.error });
+    }
+
+    const bulkPricingPayload = hasBulkPricingPayload
+      ? JSON.stringify(bulkPricingValidation.value ?? [])
+      : null;
+
+    const hasSkuPayload = hasBodyField(req.body, 'sku');
+    let resolvedSku = hasSkuPayload ? cleanSku : null;
+    if (requestedAutoSku || (hasSkuPayload && !cleanSku)) {
+      resolvedSku = await generateUniqueSku({
+        partNumber: hasPartNumberPayload ? cleanPartNumber : existingProduct.part_number,
+        name: hasNamePayload ? cleanName : existingProduct.name,
+        excludeProductId: Number(id),
+      });
+    }
 
     const result = await pool.query(
       `UPDATE products SET
@@ -438,25 +805,42 @@ export const updateProduct = async (req, res) => {
         brand = COALESCE($11, brand),
         sku = COALESCE($12, sku),
         barcode = COALESCE($13, barcode),
-        sale_price = COALESCE($14, sale_price),
-        is_on_sale = COALESCE($15, is_on_sale),
-        status = COALESCE($16, status),
-        video_url = CASE WHEN $17 THEN $18 ELSE video_url END,
-        image_urls = COALESCE($19::jsonb, image_urls),
+        sale_price = CASE WHEN $14 THEN $15 ELSE sale_price END,
+        is_on_sale = COALESCE($16, is_on_sale),
+        status = COALESCE($17, status),
+        video_url = CASE WHEN $18 THEN $19 ELSE video_url END,
+        image_urls = CASE WHEN $20 THEN COALESCE($21::jsonb, '[]'::jsonb) ELSE image_urls END,
+        bulk_pricing = CASE WHEN $22 THEN COALESCE($23::jsonb, '[]'::jsonb) ELSE bulk_pricing END,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $20
+      WHERE id = $24
       RETURNING *`,
       [
-        cleanPartNumber, name, description, price, buying_price,
-        cleanImage, cleanCategoryId, cleanStockQuantity, cleanBoxNumber,
-        cleanLowStockThreshold, cleanBrand, cleanSku, cleanBarcode, cleanSalePrice, cleanIsOnSale, cleanStatus,
-        hasVideoUrlPayload, cleanVideoUrl, imageUrlsPayload, id
+        hasPartNumberPayload ? cleanPartNumber : null,
+        hasNamePayload ? cleanName : null,
+        hasBodyField(req.body, 'description') ? description : null,
+        hasPricePayload ? parsedPrice : null,
+        hasBuyingPricePayload ? buyingPriceField.value : null,
+        hasBodyField(req.body, 'image') ? cleanImage : null,
+        hasCategoryIdPayload ? cleanCategoryId : null,
+        hasStockPayload ? parsedStockQuantity : null,
+        hasBodyField(req.body, 'box_number') ? cleanBoxNumber : null,
+        hasLowStockPayload ? cleanLowStockThreshold : null,
+        hasBodyField(req.body, 'brand') ? cleanBrand : null,
+        (requestedAutoSku || hasSkuPayload) ? resolvedSku : null,
+        hasBodyField(req.body, 'barcode') ? cleanBarcode : null,
+        hasSalePricePayload,
+        hasSalePricePayload ? salePriceField.value : null,
+        hasIsOnSalePayload ? cleanIsOnSale : null,
+        hasStatusPayload ? cleanStatus : null,
+        hasVideoUrlPayload,
+        cleanVideoUrl,
+        hasImageUrlsPayload,
+        imageUrlsPayload,
+        hasBulkPricingPayload,
+        bulkPricingPayload,
+        id
       ]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
 
     const updatedProduct = result.rows[0];
     emitProductUpdated(updatedProduct);
@@ -467,6 +851,9 @@ export const updateProduct = async (req, res) => {
     });
   } catch (error) {
     console.error('Update product error:', error);
+    if (error.code === '23505') {
+      return res.status(400).json({ message: 'Product with this part number, SKU, or barcode already exists' });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };

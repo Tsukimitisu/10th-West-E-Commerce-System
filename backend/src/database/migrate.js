@@ -81,6 +81,7 @@ const createTables = async () => {
         sku VARCHAR(100) UNIQUE,
         barcode VARCHAR(100) UNIQUE,
         sale_price DECIMAL(10, 2),
+        bulk_pricing JSONB DEFAULT '[]'::jsonb,
         is_on_sale BOOLEAN DEFAULT FALSE,
         status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'hidden', 'out_of_stock')),
         expiry_date DATE,
@@ -662,6 +663,7 @@ const createTables = async () => {
       { name: 'subcategory_id', definition: 'INTEGER REFERENCES subcategories(id) ON DELETE SET NULL' },
       { name: 'video_url', definition: 'VARCHAR(500)' },
       { name: 'image_urls', definition: "JSONB DEFAULT '[]'::jsonb" },
+      { name: 'bulk_pricing', definition: "JSONB DEFAULT '[]'::jsonb" },
     ];
 
     for (const col of productsNewColumns) {
@@ -702,6 +704,25 @@ const createTables = async () => {
         CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'delivered', 'completed', 'cancelled'));
     `);
     console.log('✅ Orders status workflow constraint updated');
+
+    await client.query(`
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_price_positive_check;
+      ALTER TABLE products ADD CONSTRAINT products_price_positive_check
+        CHECK (price > 0);
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_stock_quantity_non_negative_check;
+      ALTER TABLE products ADD CONSTRAINT products_stock_quantity_non_negative_check
+        CHECK (stock_quantity >= 0);
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_sale_price_positive_check;
+      ALTER TABLE products ADD CONSTRAINT products_sale_price_positive_check
+        CHECK (sale_price IS NULL OR sale_price > 0);
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_bulk_pricing_array_check;
+      ALTER TABLE products ADD CONSTRAINT products_bulk_pricing_array_check
+        CHECK (bulk_pricing IS NULL OR jsonb_typeof(bulk_pricing) = 'array');
+    `);
+    console.log('✅ Product pricing and stock constraints updated');
 
     // ============================================================
     // INDEXES

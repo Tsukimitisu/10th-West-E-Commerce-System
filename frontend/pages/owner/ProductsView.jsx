@@ -33,8 +33,27 @@ const PRODUCT_VIDEO_ALLOWED_TYPES = new Set([
   'video/ogg',
   'video/x-m4v',
 ]);
+const SKU_MODE_AUTO = 'auto';
+const SKU_MODE_MANUAL = 'manual';
 
 const createProductMediaId = () => `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeSkuToken = (value, fallback = 'SKU') => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 22);
+
+  return normalized || fallback;
+};
+
+const buildAutoSkuPreview = ({ partNumber, name }) => {
+  const base = normalizeSkuToken(partNumber, '') || normalizeSkuToken(name, 'SKU');
+  return `${base}-XXXXX`;
+};
 
 const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
@@ -113,6 +132,87 @@ const normalizeProductMediaUrls = (value) => {
   return [];
 };
 
+const parseBulkPricingValue = (value) => {
+  if (!value) return [];
+
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+};
+
+const normalizeBulkPricingDraft = (value) => {
+  const parsed = parseBulkPricingValue(value);
+
+  return parsed
+    .map((tier) => {
+      const minQty = Number(tier?.min_qty ?? tier?.minQty);
+      const unitPrice = Number(tier?.unit_price ?? tier?.unitPrice);
+
+      if (!Number.isInteger(minQty) || minQty < 2) return null;
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) return null;
+
+      return {
+        min_qty: String(minQty),
+        unit_price: unitPrice.toFixed(2),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => Number(a.min_qty) - Number(b.min_qty));
+};
+
+const validateBulkPricingTiers = (tiers, regularPrice) => {
+  if (!Array.isArray(tiers) || tiers.length === 0) {
+    return { value: [] };
+  }
+
+  const normalized = [];
+  const seenMinQty = new Set();
+
+  for (let index = 0; index < tiers.length; index += 1) {
+    const tier = tiers[index] || {};
+    const minQty = Number(tier.min_qty);
+    const unitPrice = Number(tier.unit_price);
+
+    if (!Number.isInteger(minQty) || minQty < 2) {
+      return { error: `Bulk pricing row ${index + 1}: minimum quantity must be a whole number of 2 or more.` };
+    }
+
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      return { error: `Bulk pricing row ${index + 1}: unit price must be greater than 0.` };
+    }
+
+    if (seenMinQty.has(minQty)) {
+      return { error: `Bulk pricing row ${index + 1}: duplicate minimum quantity ${minQty}.` };
+    }
+
+    if (Number.isFinite(regularPrice) && unitPrice >= regularPrice) {
+      return { error: `Bulk pricing row ${index + 1}: unit price must be lower than the regular price.` };
+    }
+
+    seenMinQty.add(minQty);
+    normalized.push({ min_qty: minQty, unit_price: unitPrice });
+  }
+
+  normalized.sort((a, b) => a.min_qty - b.min_qty);
+
+  for (let index = 1; index < normalized.length; index += 1) {
+    if (normalized[index].unit_price > normalized[index - 1].unit_price) {
+      return { error: 'Bulk pricing unit price should stay the same or decrease for higher quantities.' };
+    }
+  }
+
+  return { value: normalized };
+};
+
 const resolveExistingProductMediaItems = (product) => {
   const collected = [
     ...normalizeProductMediaUrls(product?.image_urls),
@@ -170,7 +270,9 @@ const createProductFormState = (overrides = {}) => ({
   low_stock_threshold: '5',
   sale_price: '',
   is_on_sale: false,
+  bulk_pricing: [],
   sku: '',
+  sku_mode: SKU_MODE_AUTO,
   barcode: '',
   brand: '',
   status: 'available',
@@ -397,6 +499,7 @@ const ProductsView = () => {
     setDescriptionEditorInitialHtml(toDescriptionEditorHtml(p.description || ''));
     setDescriptionEditorSeed((prev) => prev + 1);
     setFormStep(0);
+    const normalizedBulkPricing = normalizeBulkPricingDraft(p.bulk_pricing);
     setForm(createProductFormState({
       partNumber: p.partNumber || '',
       name: p.name,
@@ -412,11 +515,13 @@ const ProductsView = () => {
       sale_price: p.sale_price?.toString() || '',
       is_on_sale: p.is_on_sale || false,
       sku: p.sku || '',
+      sku_mode: p.sku ? SKU_MODE_MANUAL : SKU_MODE_AUTO,
       barcode: p.barcode || '',
       brand: p.brand || '',
       status: p.status || (p.stock_quantity === 0 ? 'out_of_stock' : 'available'),
       image_urls: normalizeProductMediaUrls(p.image_urls),
       video_url: p.video_url || '',
+      bulk_pricing: normalizedBulkPricing,
     }));
     setModalOpen(true);
   };
@@ -432,6 +537,7 @@ const ProductsView = () => {
     setDescriptionEditorInitialHtml(toDescriptionEditorHtml(p.description || ''));
     setDescriptionEditorSeed((prev) => prev + 1);
     setFormStep(0);
+    const normalizedBulkPricing = normalizeBulkPricingDraft(p.bulk_pricing);
     setForm(createProductFormState({
       partNumber: '',
       name: `${p.name} (Copy)`,
@@ -447,11 +553,13 @@ const ProductsView = () => {
       sale_price: p.sale_price?.toString() || '',
       is_on_sale: false,
       sku: '',
+      sku_mode: SKU_MODE_AUTO,
       barcode: '',
       brand: p.brand || '',
       status: p.status || 'available',
       image_urls: normalizeProductMediaUrls(p.image_urls),
       video_url: p.video_url || '',
+      bulk_pricing: normalizedBulkPricing,
     }));
     setModalOpen(true);
   };
@@ -475,14 +583,24 @@ const ProductsView = () => {
 
     if (stepIndex === 2) {
       const price = Number(form.price);
-      const buyingPrice = Number(form.buyingPrice);
       const stockQty = Number(form.stock_quantity);
       const lowStockThreshold = Number(form.low_stock_threshold);
+      const hasBuyingPrice = String(form.buyingPrice || '').trim() !== '';
+      const buyingPrice = hasBuyingPrice ? Number(form.buyingPrice) : null;
 
-      if (!Number.isFinite(price) || price < 0) return 'Selling price must be 0 or higher.';
-      if (!Number.isFinite(buyingPrice) || buyingPrice < 0) return 'Buying price must be 0 or higher.';
-      if (!Number.isFinite(stockQty) || stockQty < 0) return 'Stock quantity must be 0 or higher.';
-      if (!Number.isFinite(lowStockThreshold) || lowStockThreshold < 0) return 'Low stock alert must be 0 or higher.';
+      if (!Number.isFinite(price) || price <= 0) return 'Price must be greater than 0.';
+      if (hasBuyingPrice && (!Number.isFinite(buyingPrice) || buyingPrice < 0)) return 'Buying price must be 0 or higher.';
+      if (!Number.isInteger(stockQty) || stockQty < 0) return 'Stock must be a whole number 0 or higher.';
+      if (!Number.isInteger(lowStockThreshold) || lowStockThreshold < 0) return 'Low stock alert must be a whole number 0 or higher.';
+
+      if (form.sku_mode === SKU_MODE_MANUAL && !String(form.sku || '').trim()) {
+        return 'Manual SKU is required when SKU mode is set to manual.';
+      }
+
+      const bulkValidation = validateBulkPricingTiers(form.bulk_pricing, price);
+      if (bulkValidation.error) {
+        return bulkValidation.error;
+      }
     }
 
     if (stepIndex === 4) {
@@ -692,6 +810,41 @@ const ProductsView = () => {
     resetProductVideoItem(null);
   };
 
+  const setSkuMode = (nextMode) => {
+    if (nextMode !== SKU_MODE_AUTO && nextMode !== SKU_MODE_MANUAL) return;
+
+    setForm((prev) => {
+      if (nextMode === SKU_MODE_AUTO) {
+        return { ...prev, sku_mode: SKU_MODE_AUTO, sku: '' };
+      }
+
+      return { ...prev, sku_mode: SKU_MODE_MANUAL };
+    });
+  };
+
+  const addBulkPricingTier = () => {
+    setForm((prev) => ({
+      ...prev,
+      bulk_pricing: [...(prev.bulk_pricing || []), { min_qty: '', unit_price: '' }],
+    }));
+  };
+
+  const updateBulkPricingTier = (index, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      bulk_pricing: (prev.bulk_pricing || []).map((tier, tierIndex) => (
+        tierIndex === index ? { ...tier, [field]: value } : tier
+      )),
+    }));
+  };
+
+  const removeBulkPricingTier = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      bulk_pricing: (prev.bulk_pricing || []).filter((_, tierIndex) => tierIndex !== index),
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateAllSteps()) return;
@@ -737,13 +890,23 @@ const ProductsView = () => {
       }
 
       const finalImage = normalizedMediaUrls[0];
+      const regularPrice = Number(form.price);
+      const bulkPricingValidation = validateBulkPricingTiers(form.bulk_pricing, regularPrice);
+      if (bulkPricingValidation.error) {
+        throw new Error(bulkPricingValidation.error);
+      }
+
+      const manualSku = String(form.sku || '').trim();
+      const shouldAutoGenerateSku = form.sku_mode === SKU_MODE_AUTO || !manualSku;
+      const hasBuyingPrice = String(form.buyingPrice || '').trim() !== '';
+      const hasSalePrice = String(form.sale_price || '').trim() !== '';
 
       const payload = {
         partNumber: form.partNumber,
         name: form.name,
         description: form.description,
-        price: parseFloat(form.price),
-        buyingPrice: parseFloat(form.buyingPrice),
+        price: regularPrice,
+        buyingPrice: hasBuyingPrice ? Number(form.buyingPrice) : undefined,
         category_id: parseInt(form.category_id, 10),
         subcategory_id: form.subcategory_id ? parseInt(form.subcategory_id, 10) : null,
         image: finalImage,
@@ -752,10 +915,12 @@ const ProductsView = () => {
         stock_quantity: parseInt(form.stock_quantity, 10),
         boxNumber: form.boxNumber,
         low_stock_threshold: form.low_stock_threshold === '' ? undefined : parseInt(form.low_stock_threshold, 10),
-        sale_price: form.sale_price ? parseFloat(form.sale_price) : undefined,
+        sale_price: form.is_on_sale && hasSalePrice ? Number(form.sale_price) : null,
         is_on_sale: form.is_on_sale,
         status: form.status,
-        sku: form.sku,
+        sku: shouldAutoGenerateSku ? undefined : manualSku,
+        auto_generate_sku: shouldAutoGenerateSku,
+        bulk_pricing: bulkPricingValidation.value,
         barcode: form.partNumber || form.barcode,
         brand: form.brand
       };
@@ -1442,27 +1607,158 @@ const ProductsView = () => {
               {formStep === 2 && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <InputField label="Selling Price" required>
-                      <input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} className={inputClass} />
+                    <InputField label="Price" required>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={form.price}
+                        onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+                        className={inputClass}
+                        placeholder="0.00"
+                      />
                     </InputField>
-                    <InputField label="Buying Price" required>
-                      <input type="number" step="0.01" value={form.buyingPrice} onChange={e => setForm(f => ({ ...f, buyingPrice: e.target.value }))} className={inputClass} />
+                    <InputField label="Buying Price (Optional)">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.buyingPrice}
+                        onChange={e => setForm(f => ({ ...f, buyingPrice: e.target.value }))}
+                        className={inputClass}
+                        placeholder="0.00"
+                      />
                     </InputField>
-                    <InputField label="Stock Quantity" required>
-                      <input type="number" value={form.stock_quantity} onChange={e => setForm(f => ({ ...f, stock_quantity: e.target.value }))} className={inputClass} />
+                    <InputField label="Stock" required>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={form.stock_quantity}
+                        onChange={e => setForm(f => ({ ...f, stock_quantity: e.target.value }))}
+                        className={inputClass}
+                      />
                     </InputField>
                     <InputField label="Low Stock Alert">
-                      <input type="number" value={form.low_stock_threshold} onChange={e => setForm(f => ({ ...f, low_stock_threshold: e.target.value }))} className={inputClass} />
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={form.low_stock_threshold}
+                        onChange={e => setForm(f => ({ ...f, low_stock_threshold: e.target.value }))}
+                        className={inputClass}
+                      />
                     </InputField>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <InputField label="SKU">
-                      <input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} className={inputClass} placeholder="Auto-generated if empty" />
-                    </InputField>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-white">SKU</p>
+                        <div className="inline-flex items-center rounded-lg border border-white/10 bg-[#171a22] p-1">
+                          <button
+                            type="button"
+                            onClick={() => setSkuMode(SKU_MODE_AUTO)}
+                            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${form.sku_mode === SKU_MODE_AUTO ? 'bg-red-500 text-white' : 'text-gray-300 hover:bg-white/10'}`}
+                          >
+                            Auto
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSkuMode(SKU_MODE_MANUAL)}
+                            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${form.sku_mode === SKU_MODE_MANUAL ? 'bg-red-500 text-white' : 'text-gray-300 hover:bg-white/10'}`}
+                          >
+                            Manual
+                          </button>
+                        </div>
+                      </div>
+
+                      <input
+                        value={form.sku}
+                        onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
+                        className={`${inputClass} ${form.sku_mode === SKU_MODE_AUTO ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        placeholder={form.sku_mode === SKU_MODE_AUTO ? 'SKU will be generated automatically' : 'Enter manual SKU'}
+                        disabled={form.sku_mode === SKU_MODE_AUTO}
+                      />
+
+                      {form.sku_mode === SKU_MODE_AUTO ? (
+                        <p className="text-xs text-gray-400">
+                          Auto preview: {buildAutoSkuPreview({ partNumber: form.partNumber, name: form.name })}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-400">Manual SKU is required in manual mode.</p>
+                      )}
+                    </div>
+
                     <InputField label="Barcode">
-                      <input value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} className={inputClass} placeholder="Scan-ready barcode" />
+                      <input
+                        value={form.barcode}
+                        onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
+                        className={inputClass}
+                        placeholder="Scan-ready barcode"
+                      />
                     </InputField>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Bulk Pricing (Optional)</p>
+                        <p className="text-xs text-gray-400 mt-1">Add quantity tiers to offer discounted unit prices.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addBulkPricingTier}
+                        className="px-3 py-1.5 bg-[#2a3244] hover:bg-[#37425b] text-gray-100 text-xs font-semibold rounded-lg transition-colors"
+                      >
+                        + Add Tier
+                      </button>
+                    </div>
+
+                    {form.bulk_pricing.length === 0 ? (
+                      <p className="text-xs text-gray-500">No bulk pricing tiers yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {form.bulk_pricing.map((tier, tierIndex) => (
+                          <div key={`bulk-tier-${tierIndex}`} className="grid grid-cols-12 gap-2 items-center">
+                            <div className="col-span-5">
+                              <input
+                                type="number"
+                                min="2"
+                                step="1"
+                                value={tier.min_qty}
+                                onChange={(event) => updateBulkPricingTier(tierIndex, 'min_qty', event.target.value)}
+                                className={inputClass}
+                                placeholder="Min qty"
+                              />
+                            </div>
+                            <div className="col-span-5">
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={tier.unit_price}
+                                onChange={(event) => updateBulkPricingTier(tierIndex, 'unit_price', event.target.value)}
+                                className={inputClass}
+                                placeholder="Unit price"
+                              />
+                            </div>
+                            <div className="col-span-2 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => removeBulkPricingTier(tierIndex)}
+                                className="w-9 h-9 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-300 flex items-center justify-center transition-colors"
+                                title="Remove tier"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-gray-500">Tier prices must be lower than regular price and should not increase as quantity grows.</p>
                   </div>
                 </div>
               )}

@@ -1018,6 +1018,7 @@ const mapProductFromSupabase = (p) => ({
   partNumber: p.part_number,
   buyingPrice: p.buying_price,
   boxNumber: p.box_number,
+  bulk_pricing: normalizeBulkPricing(p.bulk_pricing),
   rating: Number(p.rating || 0),
   reviewCount: Number(p.review_count ?? p.reviewCount ?? 0),
 });
@@ -1032,7 +1033,50 @@ const normalizeProductImageUrls = (value) => {
   )).slice(0, 9);
 };
 
+const normalizeBulkPricing = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((tier) => {
+      const minQty = Number(tier?.min_qty ?? tier?.minQty);
+      const unitPrice = Number(tier?.unit_price ?? tier?.unitPrice);
+      if (!Number.isInteger(minQty) || minQty < 2) return null;
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) return null;
+      return {
+        min_qty: minQty,
+        unit_price: unitPrice,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.min_qty - b.min_qty);
+};
+
+const normalizeSkuToken = (value, fallback = 'SKU') => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 22);
+
+  return normalized || fallback;
+};
+
+const buildAutoSku = (product = {}) => {
+  const base = normalizeSkuToken(product.partNumber, '') || normalizeSkuToken(product.name, 'SKU');
+  const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
+  return `${base}-${suffix}`;
+};
+
 const mapProductToSupabase = (product) => ({
+  ...(() => {
+    const manualSku = toNullableString(product.sku);
+    const shouldAutoGenerateSku = product.auto_generate_sku === true;
+    return {
+      sku: shouldAutoGenerateSku ? buildAutoSku(product) : manualSku,
+    };
+  })(),
   part_number: toNullableString(product.partNumber),
   name: product.name,
   description: product.description,
@@ -1047,12 +1091,12 @@ const mapProductToSupabase = (product) => ({
   box_number: toNullableString(product.boxNumber),
   low_stock_threshold: product.low_stock_threshold,
   brand: toNullableString(product.brand),
-  sku: toNullableString(product.sku),
   barcode: toNullableString(product.barcode),
   sale_price: product.sale_price,
   is_on_sale: product.is_on_sale,
   status: toNullableString(product.status) || 'available',
   image_urls: normalizeProductImageUrls(product.image_urls),
+  bulk_pricing: normalizeBulkPricing(product.bulk_pricing),
 });
 
 const toApprovedReviewStatus = (review) => {
@@ -1658,6 +1702,10 @@ export const addProduct = async (product) => {
     is_on_sale: product.is_on_sale,
     status: toNullableString(product.status) || 'available',
     image_urls: normalizeProductImageUrls(product.image_urls),
+    bulk_pricing: normalizeBulkPricing(product.bulk_pricing),
+    ...(Object.prototype.hasOwnProperty.call(product, 'auto_generate_sku')
+      ? { auto_generate_sku: product.auto_generate_sku === true }
+      : {}),
   };
 
   const data = await authenticatedFetch(`${API_URL}/products`, {
@@ -1714,6 +1762,10 @@ export const updateProduct = async (id, product) => {
     is_on_sale: product.is_on_sale,
     status: toNullableString(product.status) || 'available',
     image_urls: normalizeProductImageUrls(product.image_urls),
+    bulk_pricing: normalizeBulkPricing(product.bulk_pricing),
+    ...(Object.prototype.hasOwnProperty.call(product, 'auto_generate_sku')
+      ? { auto_generate_sku: product.auto_generate_sku === true }
+      : {}),
   };
 
   const data = await authenticatedFetch(`${API_URL}/products/${id}`, {
