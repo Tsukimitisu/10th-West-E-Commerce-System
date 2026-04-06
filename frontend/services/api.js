@@ -3681,12 +3681,327 @@ export const deleteSubcategory = async (id) => {
 
 // ==================== PRODUCT VARIANTS ====================
 
-export const getProductVariants = async (productId) => {
-  if (USE_SUPABASE) {
-    const { data } = await supabase.from('product_variants').select('*').eq('product_id', productId).order('variant_type');
-    return data || [];
+const normalizeVariantOptionName = (value) => String(value || '').trim().slice(0, 50);
+const normalizeVariantOptionValue = (value) => String(value || '').trim().slice(0, 100);
+
+const normalizeVariantToken = (value, fallback = 'x') => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return normalized || fallback;
+};
+
+const buildVariantCombinationKey = (optionCombination, optionOrder) => optionOrder
+  .map((optionName) => `${normalizeVariantToken(optionName, 'opt')}:${normalizeVariantToken(optionCombination?.[optionName], 'val')}`)
+  .join('|');
+
+const formatVariantCombinationLabel = (optionCombination, optionOrder) => optionOrder
+  .map((optionName) => `${optionName}: ${optionCombination?.[optionName] || ''}`)
+  .join(' / ')
+  .slice(0, 100);
+
+const parseVariantOptionValues = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    return value
+      .split(/[\n,|]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
-  return authenticatedFetch(`${API_URL}/variants/product/${productId}`).catch(() => []);
+  return [];
+};
+
+const normalizeVariantOptionsPayload = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  const optionNameSet = new Set();
+
+  return value
+    .map((option) => {
+      const name = normalizeVariantOptionName(option?.name ?? option?.label ?? option?.option_name);
+      if (!name) return null;
+
+      const nameToken = name.toLowerCase();
+      if (optionNameSet.has(nameToken)) return null;
+      optionNameSet.add(nameToken);
+
+      const valueSet = new Set();
+      const values = parseVariantOptionValues(option?.values ?? option?.option_values)
+        .map((rawValue) => normalizeVariantOptionValue(rawValue))
+        .filter(Boolean)
+        .filter((rawValue) => {
+          const valueToken = rawValue.toLowerCase();
+          if (valueSet.has(valueToken)) return false;
+          valueSet.add(valueToken);
+          return true;
+        });
+
+      if (values.length === 0) return null;
+      return { name, values };
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+};
+
+const normalizeVariantCombinationMap = (value, optionOrder = []) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  const normalized = {};
+
+  if (optionOrder.length > 0) {
+    optionOrder.forEach((optionName) => {
+      const optionValue = normalizeVariantOptionValue(value?.[optionName]);
+      if (!optionValue) return;
+      normalized[optionName] = optionValue;
+    });
+  }
+
+  if (Object.keys(normalized).length === 0) {
+    Object.entries(value).forEach(([rawName, rawValue]) => {
+      const optionName = normalizeVariantOptionName(rawName);
+      const optionValue = normalizeVariantOptionValue(rawValue);
+      if (!optionName || !optionValue) return;
+      normalized[optionName] = optionValue;
+    });
+  }
+
+  return normalized;
+};
+
+const deriveVariantOptionsFromRows = (rows = []) => {
+  const optionOrder = [];
+  const optionValuesMap = new Map();
+
+  rows.forEach((row) => {
+    let optionCombination = row?.option_combination;
+    if (!optionCombination || typeof optionCombination !== 'object' || Array.isArray(optionCombination)) {
+      if (row?.variant_type && row?.variant_value) {
+        optionCombination = {
+          [normalizeVariantOptionName(row.variant_type) || 'Option']:
+            normalizeVariantOptionValue(row.variant_value) || 'Default',
+        };
+      } else {
+        return;
+      }
+    }
+
+    Object.entries(optionCombination).forEach(([rawName, rawValue]) => {
+      const optionName = normalizeVariantOptionName(rawName);
+      const optionValue = normalizeVariantOptionValue(rawValue);
+      if (!optionName || !optionValue) return;
+
+      if (!optionValuesMap.has(optionName)) {
+        optionValuesMap.set(optionName, []);
+        optionOrder.push(optionName);
+      }
+
+      const values = optionValuesMap.get(optionName);
+      if (!values.includes(optionValue)) {
+        values.push(optionValue);
+      }
+    });
+  });
+
+  return optionOrder.map((name) => ({ name, values: optionValuesMap.get(name) || [] }));
+};
+
+const normalizeVariantRowsPayload = (rows, options = [], fallbackPrice = 0) => {
+  if (!Array.isArray(rows)) return [];
+
+  const optionOrder = options.map((option) => option.name);
+  const variantsByKey = new Map();
+
+  rows.forEach((row) => {
+    const fallbackSingleOption = optionOrder.length === 1
+      ? { [optionOrder[0]]: row?.variant_value }
+      : null;
+
+    const optionCombination = normalizeVariantCombinationMap(
+      row?.option_combination ?? row?.optionValues ?? fallbackSingleOption,
+      optionOrder,
+    );
+
+    if (Object.keys(optionCombination).length === 0) return;
+
+    const resolvedOrder = optionOrder.length > 0 ? optionOrder : Object.keys(optionCombination);
+    const combinationKey = row?.combination_key || buildVariantCombinationKey(optionCombination, resolvedOrder);
+    const fallback = Number(fallbackPrice) + Number(row?.price_adjustment ?? row?.additional_price ?? 0);
+    const computedPrice = Number(row?.price ?? fallback);
+    const safePrice = Number.isFinite(computedPrice) && computedPrice > 0
+      ? computedPrice
+      : (Number.isFinite(Number(fallbackPrice)) ? Number(fallbackPrice) : 0);
+    const stockQuantity = Number(row?.stock_quantity ?? row?.stock ?? 0);
+
+    variantsByKey.set(combinationKey, {
+      id: row?.id,
+      product_id: row?.product_id,
+      option_combination: optionCombination,
+      combination_key: combinationKey,
+      label: formatVariantCombinationLabel(optionCombination, resolvedOrder),
+      price: safePrice,
+      stock_quantity: Number.isInteger(stockQuantity) && stockQuantity >= 0 ? stockQuantity : 0,
+      image_url: toNullableString(row?.image_url ?? row?.imageUrl),
+      sku: toNullableString(row?.sku),
+    });
+  });
+
+  return Array.from(variantsByKey.values());
+};
+
+const normalizeVariantResponsePayload = (payload, fallbackPrice = 0) => {
+  const rawVariants = Array.isArray(payload)
+    ? payload
+    : (Array.isArray(payload?.variants) ? payload.variants : []);
+
+  const explicitOptions = normalizeVariantOptionsPayload(payload?.options);
+  const derivedOptions = deriveVariantOptionsFromRows(rawVariants);
+  const options = explicitOptions.length > 0 ? explicitOptions : derivedOptions;
+  const variants = normalizeVariantRowsPayload(rawVariants, options, fallbackPrice);
+
+  return {
+    product_id: payload?.product_id ?? null,
+    options,
+    variants,
+  };
+};
+
+const buildVariantRowsForWrite = ({ productId, basePrice, options, variants }) => {
+  const optionOrder = options.map((option) => option.name);
+
+  return normalizeVariantRowsPayload(variants, options, basePrice).map((row) => ({
+    product_id: productId,
+    variant_type: 'combination',
+    variant_value: formatVariantCombinationLabel(row.option_combination, optionOrder.length > 0 ? optionOrder : Object.keys(row.option_combination)),
+    price_adjustment: Number.isFinite(Number(basePrice))
+      ? Number((Number(row.price) - Number(basePrice)).toFixed(2))
+      : null,
+    price: Number(row.price),
+    option_combination: row.option_combination,
+    combination_key: row.combination_key || buildVariantCombinationKey(row.option_combination, optionOrder),
+    image_url: toNullableString(row.image_url),
+    stock_quantity: Number.isInteger(Number(row.stock_quantity)) ? Number(row.stock_quantity) : 0,
+    sku: toNullableString(row.sku),
+  }));
+};
+
+export const getProductVariants = async (productId) => {
+  const normalizedProductId = Number.parseInt(String(productId), 10);
+  if (!Number.isInteger(normalizedProductId) || normalizedProductId <= 0) {
+    return { product_id: productId, options: [], variants: [] };
+  }
+
+  if (USE_SUPABASE) {
+    const [productResult, variantsResult] = await Promise.all([
+      supabase
+        .from('products')
+        .select('id, price, variant_options')
+        .eq('id', normalizedProductId)
+        .maybeSingle(),
+      supabase
+        .from('product_variants')
+        .select('*')
+        .eq('product_id', normalizedProductId)
+        .order('created_at', { ascending: true }),
+    ]);
+
+    if (productResult.error) throw new Error(productResult.error.message);
+    if (variantsResult.error) throw new Error(variantsResult.error.message);
+
+    return normalizeVariantResponsePayload(
+      {
+        product_id: normalizedProductId,
+        options: productResult.data?.variant_options || [],
+        variants: variantsResult.data || [],
+      },
+      Number(productResult.data?.price || 0),
+    );
+  }
+
+  const payload = await authenticatedFetch(`${API_URL}/variants/product/${normalizedProductId}`).catch(() => ({
+    product_id: normalizedProductId,
+    options: [],
+    variants: [],
+  }));
+
+  return normalizeVariantResponsePayload(payload, 0);
+};
+
+export const saveProductVariants = async (productId, payload = {}) => {
+  const normalizedProductId = Number.parseInt(String(productId), 10);
+  if (!Number.isInteger(normalizedProductId) || normalizedProductId <= 0) {
+    throw new Error('Invalid product id');
+  }
+
+  const options = normalizeVariantOptionsPayload(payload?.options);
+  const variants = Array.isArray(payload?.variants) ? payload.variants : [];
+
+  if (USE_SUPABASE) {
+    const { data: productRow, error: productError } = await supabase
+      .from('products')
+      .select('id, price')
+      .eq('id', normalizedProductId)
+      .single();
+
+    if (productError) throw new Error(productError.message);
+
+    const basePrice = Number(productRow?.price || 0);
+    const rowsForWrite = buildVariantRowsForWrite({
+      productId: normalizedProductId,
+      basePrice,
+      options,
+      variants,
+    });
+
+    const { error: updateProductError } = await supabase
+      .from('products')
+      .update({ variant_options: options })
+      .eq('id', normalizedProductId);
+
+    if (updateProductError) throw new Error(updateProductError.message);
+
+    const { error: deleteError } = await supabase
+      .from('product_variants')
+      .delete()
+      .eq('product_id', normalizedProductId);
+
+    if (deleteError) throw new Error(deleteError.message);
+
+    let insertedRows = [];
+    if (rowsForWrite.length > 0) {
+      const { data: inserted, error: insertError } = await supabase
+        .from('product_variants')
+        .insert(rowsForWrite)
+        .select('*');
+
+      if (insertError) throw new Error(insertError.message);
+      insertedRows = inserted || [];
+    }
+
+    await logSupabaseActivity('variant.save_matrix', 'product', normalizedProductId, {
+      option_count: options.length,
+      variant_count: rowsForWrite.length,
+    });
+
+    return normalizeVariantResponsePayload(
+      {
+        product_id: normalizedProductId,
+        options,
+        variants: insertedRows,
+      },
+      basePrice,
+    );
+  }
+
+  const response = await authenticatedFetch(`${API_URL}/variants/product/${normalizedProductId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ options, variants }),
+  });
+
+  return normalizeVariantResponsePayload(response, 0);
 };
 
 export const addVariant = async (variant) => {
