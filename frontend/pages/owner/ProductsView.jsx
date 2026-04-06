@@ -562,6 +562,7 @@ const ProductsView = () => {
   const [draggingMediaId, setDraggingMediaId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [creationSuccess, setCreationSuccess] = useState(null);
   const [formStep, setFormStep] = useState(0);
   const [fieldErrors, setFieldErrors] = useState({});
   const [infoFieldErrors, setInfoFieldErrors] = useState({});
@@ -806,6 +807,7 @@ const ProductsView = () => {
       : 0;
 
     setEditing(null);
+    setCreationSuccess(null);
     resetProductMediaItems([]);
     resetProductVideoItem(null);
     setFormError('');
@@ -828,6 +830,7 @@ const ProductsView = () => {
   };
 
   const openEdit = (p) => {
+    setCreationSuccess(null);
     setEditing(p);
     setDraftSaveState('');
     resetProductMediaItems(resolveExistingProductMediaItems(p));
@@ -874,6 +877,7 @@ const ProductsView = () => {
   };
 
   const handleDuplicate = (p) => {
+    setCreationSuccess(null);
     setEditing(null);
     setDraftSaveState('');
     resetProductMediaItems(resolveExistingProductMediaItems(p));
@@ -1330,6 +1334,7 @@ const ProductsView = () => {
     try {
       setSubmitting(true);
       setFormError('');
+      setCreationSuccess(null);
       setFieldErrors({});
       setMediaError('');
       setVideoError('');
@@ -1469,13 +1474,20 @@ const ProductsView = () => {
 
       if (editing) await updateProduct(editing.id, payload);
       else {
-        await createProduct(payload);
+        const createdProduct = await createProduct(payload);
         window.localStorage.removeItem(PRODUCT_FORM_DRAFT_STORAGE_KEY);
+        setCreationSuccess({
+          product: createdProduct,
+          productName: String(createdProduct?.name || payload.name || '').trim() || 'Product',
+        });
       }
 
       setDraftSaveState('');
       fetch();
-      setTimeout(() => closeProductModal(), 100);
+
+      if (editing) {
+        setTimeout(() => closeProductModal(), 100);
+      }
     } catch (e) {
       const friendlyMessage = getFriendlyRequestErrorMessage(e, 'Failed to save product. Please try again.');
       const apiFieldErrors = extractProductFieldErrors(e);
@@ -1527,8 +1539,25 @@ const ProductsView = () => {
     setDeleteTarget(p);
   };
 
+  const handleViewCreatedProduct = () => {
+    const createdProduct = creationSuccess?.product;
+    if (!createdProduct) {
+      closeProductModal();
+      return;
+    }
+
+    setCreationSuccess(null);
+    openEdit(createdProduct);
+  };
+
+  const handleAddAnotherProduct = () => {
+    setCreationSuccess(null);
+    openAdd();
+  };
+
   const closeProductModal = () => {
     setModalOpen(false);
+    setCreationSuccess(null);
     resetProductMediaItems([]);
     resetProductVideoItem(null);
     setFormError('');
@@ -1828,6 +1857,33 @@ const ProductsView = () => {
       {/* Product Modal */}
       {modalOpen && (
         <Modal isOpen={modalOpen} onClose={closeProductModal} title={editing ? 'Edit Product' : 'Add Product'} size="2xl">
+          {creationSuccess ? (
+            <div className="space-y-5 py-2">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <h4 className="text-base font-semibold text-emerald-300">Product added successfully</h4>
+                <p className="mt-1 text-sm text-gray-200">
+                  {creationSuccess.productName} is now in your catalog.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleViewCreatedProduct}
+                  className="px-4 py-2.5 bg-[#2a3244] hover:bg-[#35415a] text-gray-100 text-sm font-medium rounded-lg transition-colors"
+                >
+                  View product
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddAnotherProduct}
+                  className="px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  Add another product
+                </button>
+              </div>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-5 pb-24 sm:pb-20">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -2732,6 +2788,7 @@ const ProductsView = () => {
               </div>
             </div>
           </form>
+          )}
         </Modal>
       )}
 
