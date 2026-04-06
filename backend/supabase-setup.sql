@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS products (
   barcode VARCHAR(100) UNIQUE,
   sale_price DECIMAL(10,2),
   bulk_pricing JSONB DEFAULT '[]'::jsonb,
+  variant_options JSONB DEFAULT '[]'::jsonb,
   is_on_sale BOOLEAN DEFAULT FALSE,
   status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'hidden', 'out_of_stock')),
   expiry_date DATE,
@@ -97,9 +98,14 @@ CREATE TABLE IF NOT EXISTS product_variants (
   variant_type VARCHAR(50) NOT NULL,
   variant_value VARCHAR(100) NOT NULL,
   price_adjustment DECIMAL(10,2) DEFAULT 0,
+  price DECIMAL(10,2),
+  option_combination JSONB DEFAULT '{}'::jsonb,
+  combination_key VARCHAR(255),
+  image_url VARCHAR(500),
   stock_quantity INTEGER DEFAULT 0,
   sku VARCHAR(100),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 6. Carts
@@ -615,6 +621,14 @@ WHERE o.id = r.id
 -- Login attempts: user_agent
 ALTER TABLE login_attempts ADD COLUMN IF NOT EXISTS user_agent TEXT;
 
+-- Product variant schema upgrades (idempotent)
+ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_options JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS price DECIMAL(10,2);
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS option_combination JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS combination_key VARCHAR(255);
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS image_url VARCHAR(500);
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
 -- Allow nullable password_hash (for OAuth users)
 ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
 
@@ -640,6 +654,9 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets(user_id);
 -- New table indexes
 CREATE INDEX IF NOT EXISTS idx_subcategories_category ON subcategories(category_id);
 CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_product_key ON product_variants(product_id, combination_key);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_product_variants_product_combination ON product_variants(product_id, combination_key) WHERE combination_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_products_variant_options ON products USING GIN (variant_options);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_stock_adjustments_product ON stock_adjustments(product_id);
 CREATE INDEX IF NOT EXISTS idx_stock_adjustments_adjusted_by ON stock_adjustments(adjusted_by);

@@ -82,6 +82,7 @@ const createTables = async () => {
         barcode VARCHAR(100) UNIQUE,
         sale_price DECIMAL(10, 2),
         bulk_pricing JSONB DEFAULT '[]'::jsonb,
+        variant_options JSONB DEFAULT '[]'::jsonb,
         is_on_sale BOOLEAN DEFAULT FALSE,
         status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'hidden', 'out_of_stock')),
         expiry_date DATE,
@@ -100,9 +101,14 @@ const createTables = async () => {
         variant_type VARCHAR(50) NOT NULL,
         variant_value VARCHAR(100) NOT NULL,
         price_adjustment DECIMAL(10, 2) DEFAULT 0,
+        price DECIMAL(10, 2),
+        option_combination JSONB DEFAULT '{}'::jsonb,
+        combination_key VARCHAR(255),
+        image_url VARCHAR(500),
         stock_quantity INTEGER DEFAULT 0,
         sku VARCHAR(100),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
     console.log('✅ Product Variants table created');
@@ -664,6 +670,7 @@ const createTables = async () => {
       { name: 'video_url', definition: 'VARCHAR(500)' },
       { name: 'image_urls', definition: "JSONB DEFAULT '[]'::jsonb" },
       { name: 'bulk_pricing', definition: "JSONB DEFAULT '[]'::jsonb" },
+      { name: 'variant_options', definition: "JSONB DEFAULT '[]'::jsonb" },
     ];
 
     for (const col of productsNewColumns) {
@@ -674,6 +681,50 @@ const createTables = async () => {
       }
     }
     console.log('✅ Products table columns updated');
+
+    // -- Product Variants table: new columns --
+    const productVariantsNewColumns = [
+      { name: 'price', definition: 'DECIMAL(10,2)' },
+      { name: 'option_combination', definition: "JSONB DEFAULT '{}'::jsonb" },
+      { name: 'combination_key', definition: 'VARCHAR(255)' },
+      { name: 'image_url', definition: 'VARCHAR(500)' },
+      { name: 'updated_at', definition: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' },
+    ];
+
+    for (const col of productVariantsNewColumns) {
+      try {
+        await client.query(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS ${col.name} ${col.definition}`);
+      } catch (err) {
+        console.log(`⚠️  Column product_variants.${col.name} may already exist, skipping: ${err.message}`);
+      }
+    }
+
+    await client.query(`
+      UPDATE product_variants
+      SET option_combination = jsonb_build_object(
+        INITCAP(COALESCE(NULLIF(TRIM(variant_type), ''), 'Option')),
+        COALESCE(NULLIF(TRIM(variant_value), ''), 'Default')
+      )
+      WHERE (option_combination IS NULL OR option_combination = '{}'::jsonb)
+        AND variant_type IS NOT NULL
+        AND variant_value IS NOT NULL;
+    `).catch((err) => {
+      console.log(`⚠️  Could not backfill product_variants.option_combination: ${err.message}`);
+    });
+
+    await client.query(`
+      UPDATE product_variants
+      SET combination_key = LOWER(REGEXP_REPLACE(COALESCE(NULLIF(TRIM(variant_type), ''), 'option'), '[^a-z0-9]+', '-', 'g'))
+        || ':' ||
+        LOWER(REGEXP_REPLACE(COALESCE(NULLIF(TRIM(variant_value), ''), 'default'), '[^a-z0-9]+', '-', 'g'))
+      WHERE combination_key IS NULL
+        AND variant_type IS NOT NULL
+        AND variant_value IS NOT NULL;
+    `).catch((err) => {
+      console.log(`⚠️  Could not backfill product_variants.combination_key: ${err.message}`);
+    });
+
+    console.log('✅ Product Variants table columns updated');
 
     // -- Orders table: new columns --
     const ordersNewColumns = [
@@ -721,6 +772,18 @@ const createTables = async () => {
       ALTER TABLE products DROP CONSTRAINT IF EXISTS products_bulk_pricing_array_check;
       ALTER TABLE products ADD CONSTRAINT products_bulk_pricing_array_check
         CHECK (bulk_pricing IS NULL OR jsonb_typeof(bulk_pricing) = 'array');
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_variant_options_array_check;
+      ALTER TABLE products ADD CONSTRAINT products_variant_options_array_check
+        CHECK (variant_options IS NULL OR jsonb_typeof(variant_options) = 'array');
+
+      ALTER TABLE product_variants DROP CONSTRAINT IF EXISTS product_variants_stock_quantity_non_negative_check;
+      ALTER TABLE product_variants ADD CONSTRAINT product_variants_stock_quantity_non_negative_check
+        CHECK (stock_quantity >= 0);
+
+      ALTER TABLE product_variants DROP CONSTRAINT IF EXISTS product_variants_price_positive_check;
+      ALTER TABLE product_variants ADD CONSTRAINT product_variants_price_positive_check
+        CHECK (price IS NULL OR price > 0);
     `);
     console.log('✅ Product pricing and stock constraints updated');
 
@@ -750,6 +813,9 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_subcategories_category ON subcategories(category_id);
       CREATE INDEX IF NOT EXISTS idx_products_subcategory ON products(subcategory_id);
       CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants(product_id);
+      CREATE INDEX IF NOT EXISTS idx_product_variants_product_key ON product_variants(product_id, combination_key);
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_product_variants_product_combination ON product_variants(product_id, combination_key) WHERE combination_key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_products_variant_options ON products USING GIN (variant_options);
       CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
       CREATE INDEX IF NOT EXISTS idx_stock_adjustments_product ON stock_adjustments(product_id);
       CREATE INDEX IF NOT EXISTS idx_stock_adjustments_adjusted_by ON stock_adjustments(adjusted_by);
