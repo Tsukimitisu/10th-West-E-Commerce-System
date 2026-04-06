@@ -36,6 +36,10 @@ const PRODUCT_VIDEO_ALLOWED_TYPES = new Set([
 const SKU_MODE_AUTO = 'auto';
 const SKU_MODE_MANUAL = 'manual';
 const ALLOWED_SHIPPING_OPTIONS = new Set(['standard', 'express']);
+const PRODUCT_STATUS_DRAFT = 'draft';
+const PRODUCT_STATUS_PUBLISHED = 'published';
+const PRODUCT_ALLOWED_STATUSES = new Set([PRODUCT_STATUS_DRAFT, PRODUCT_STATUS_PUBLISHED]);
+const PRODUCT_LEGACY_STATUSES = new Set(['available', 'hidden', 'out_of_stock']);
 
 const createProductMediaId = () => `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -260,6 +264,18 @@ const resolveShippingOptionDraft = (value) => {
   return ALLOWED_SHIPPING_OPTIONS.has(normalized) ? normalized : 'standard';
 };
 
+const normalizeProductStatus = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === PRODUCT_STATUS_DRAFT || normalized === 'hidden') return PRODUCT_STATUS_DRAFT;
+  if (normalized === PRODUCT_STATUS_PUBLISHED || normalized === 'available' || normalized === 'out_of_stock') return PRODUCT_STATUS_PUBLISHED;
+  return PRODUCT_STATUS_DRAFT;
+};
+
+const isSupportedProductStatus = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return PRODUCT_ALLOWED_STATUSES.has(normalized) || PRODUCT_LEGACY_STATUSES.has(normalized);
+};
+
 const resolveShippingDimensionsDraft = (value) => {
   if (!value) {
     return {
@@ -321,7 +337,7 @@ const createProductFormState = (overrides = {}) => ({
   sku_mode: SKU_MODE_AUTO,
   barcode: '',
   brand: '',
-  status: 'available',
+  status: PRODUCT_STATUS_DRAFT,
   variant_notes: '',
   shipping_option: 'standard',
   shipping_weight_kg: '',
@@ -566,7 +582,7 @@ const ProductsView = () => {
       sku_mode: p.sku ? SKU_MODE_MANUAL : SKU_MODE_AUTO,
       barcode: p.barcode || '',
       brand: p.brand || '',
-      status: p.status || (p.stock_quantity === 0 ? 'out_of_stock' : 'available'),
+      status: normalizeProductStatus(p.status),
       shipping_option: resolveShippingOptionDraft(p.shipping_option),
       shipping_weight_kg: p.shipping_weight_kg !== undefined && p.shipping_weight_kg !== null ? String(p.shipping_weight_kg) : '',
       shipping_length_cm: shippingDimensionsDraft.shipping_length_cm,
@@ -610,7 +626,7 @@ const ProductsView = () => {
       sku_mode: SKU_MODE_AUTO,
       barcode: '',
       brand: p.brand || '',
-      status: p.status || 'available',
+      status: PRODUCT_STATUS_DRAFT,
       shipping_option: resolveShippingOptionDraft(p.shipping_option),
       shipping_weight_kg: p.shipping_weight_kg !== undefined && p.shipping_weight_kg !== null ? String(p.shipping_weight_kg) : '',
       shipping_length_cm: shippingDimensionsDraft.shipping_length_cm,
@@ -697,7 +713,7 @@ const ProductsView = () => {
     }
 
     if (stepIndex === 5) {
-      if (!['available', 'hidden', 'out_of_stock'].includes(String(form.status || ''))) {
+      if (!isSupportedProductStatus(form.status)) {
         return 'Select a valid product status.';
       }
 
@@ -1035,7 +1051,7 @@ const ProductsView = () => {
         low_stock_threshold: form.low_stock_threshold === '' ? undefined : parseInt(form.low_stock_threshold, 10),
         sale_price: form.is_on_sale && hasSalePrice ? Number(form.sale_price) : null,
         is_on_sale: form.is_on_sale,
-        status: form.status,
+        status: normalizeProductStatus(form.status),
         sku: shouldAutoGenerateSku ? undefined : manualSku,
         auto_generate_sku: shouldAutoGenerateSku,
         bulk_pricing: bulkPricingValidation.value,
@@ -1281,21 +1297,11 @@ const ProductsView = () => {
                 {filtered.map(p => {
                   const cat = categories.find(c => c.id === p.category_id);
                   const subcat = subcategories.find(s => s.id === p.subcategory_id);
-                  const normalizedStatus = String(p.status || '').toLowerCase();
-                  const displayStatus = normalizedStatus === 'hidden'
-                    ? 'Hidden'
-                    : normalizedStatus === 'out_of_stock' || p.stock_quantity === 0
-                      ? 'Out of Stock'
-                      : p.stock_quantity <= p.low_stock_threshold
-                        ? 'Low Stock'
-                        : 'Available';
-                  const displayStatusClass = normalizedStatus === 'hidden'
-                    ? 'bg-slate-500/20 text-slate-300'
-                    : normalizedStatus === 'out_of_stock' || p.stock_quantity === 0
-                      ? 'bg-red-500/20 text-red-400'
-                      : p.stock_quantity <= p.low_stock_threshold
-                        ? 'bg-amber-500/20 text-amber-400'
-                        : 'bg-green-500/20 text-green-400';
+                  const normalizedStatus = normalizeProductStatus(p.status);
+                  const displayStatus = normalizedStatus === PRODUCT_STATUS_PUBLISHED ? 'Published' : 'Draft';
+                  const displayStatusClass = normalizedStatus === PRODUCT_STATUS_PUBLISHED
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : 'bg-amber-500/20 text-amber-300';
                   return (
                     <tr key={p.id} className="hover:bg-[#202430]/60 transition-colors">
                       <td className="px-4 py-3">
@@ -2003,10 +2009,9 @@ const ProductsView = () => {
               {formStep === 5 && (
                 <div className="space-y-4">
                   <InputField label="Product Status" required>
-                    <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputClass}>
-                      <option value="available">Available</option>
-                      <option value="hidden">Hidden</option>
-                      <option value="out_of_stock">Out of Stock</option>
+                    <select value={normalizeProductStatus(form.status)} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputClass}>
+                      <option value={PRODUCT_STATUS_DRAFT}>Save as Draft</option>
+                      <option value={PRODUCT_STATUS_PUBLISHED}>Publish Product</option>
                     </select>
                   </InputField>
 
@@ -2028,7 +2033,7 @@ const ProductsView = () => {
                     <p className="text-xs uppercase tracking-wide text-gray-400">Preview</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-gray-200">
-                        Status: {form.status === 'available' ? 'Available' : form.status === 'hidden' ? 'Hidden' : 'Out of Stock'}
+                        Status: {normalizeProductStatus(form.status) === PRODUCT_STATUS_PUBLISHED ? 'Published' : 'Draft'}
                       </span>
                       <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-gray-200">
                         Stock: {form.stock_quantity || 0}

@@ -87,7 +87,7 @@ const createTables = async () => {
         bulk_pricing JSONB DEFAULT '[]'::jsonb,
         variant_options JSONB DEFAULT '[]'::jsonb,
         is_on_sale BOOLEAN DEFAULT FALSE,
-        status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'hidden', 'out_of_stock')),
+        status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
         expiry_date DATE,
         is_deleted BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -666,7 +666,7 @@ const createTables = async () => {
 
     // -- Products table: new columns --
     const productsNewColumns = [
-      { name: 'status', definition: "VARCHAR(20) DEFAULT 'available'" },
+      { name: 'status', definition: "VARCHAR(20) DEFAULT 'draft'" },
       { name: 'expiry_date', definition: 'DATE' },
       { name: 'is_deleted', definition: 'BOOLEAN DEFAULT FALSE' },
       { name: 'subcategory_id', definition: 'INTEGER REFERENCES subcategories(id) ON DELETE SET NULL' },
@@ -686,6 +686,32 @@ const createTables = async () => {
         console.log(`⚠️  Column products.${col.name} may already exist, skipping: ${err.message}`);
       }
     }
+
+    await client.query(`
+      UPDATE products
+      SET status = 'draft'
+      WHERE status = 'hidden';
+
+      UPDATE products
+      SET status = 'published'
+      WHERE status IN ('available', 'out_of_stock');
+
+      UPDATE products
+      SET status = 'draft'
+      WHERE status IS NULL;
+
+      ALTER TABLE products
+      ALTER COLUMN status SET DEFAULT 'draft';
+
+      ALTER TABLE products
+      DROP CONSTRAINT IF EXISTS products_status_check;
+
+      ALTER TABLE products
+      ADD CONSTRAINT products_status_check
+        CHECK (status IN ('draft', 'published'));
+    `).catch((err) => {
+      console.log(`⚠️  Could not enforce products status workflow: ${err.message}`);
+    });
 
     await client.query(`
       UPDATE products

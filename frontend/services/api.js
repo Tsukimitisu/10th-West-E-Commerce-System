@@ -1013,11 +1013,39 @@ export const getStaffPerformance = async (id, period = 30) => {
 
 // ==================== SUPABASE PRODUCT HELPERS ====================
 
+const PRODUCT_DRAFT_STATUS = 'draft';
+const PRODUCT_PUBLISHED_STATUS = 'published';
+const PRODUCT_MANAGEMENT_ROLES = new Set(['admin', 'super_admin', 'owner']);
+
+const normalizeProductPublicationStatus = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'draft' || normalized === 'hidden') return PRODUCT_DRAFT_STATUS;
+  if (normalized === 'published' || normalized === 'available' || normalized === 'out_of_stock') return PRODUCT_PUBLISHED_STATUS;
+  return PRODUCT_DRAFT_STATUS;
+};
+
+const canCurrentUserViewDraftProducts = () => {
+  const roleFromProfile = (() => {
+    if (typeof localStorage === 'undefined') return '';
+    try {
+      const parsed = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
+      return String(parsed?.role || '').trim().toLowerCase();
+    } catch {
+      return '';
+    }
+  })();
+
+  const fallbackRole = String(getCurrentUserFromToken()?.role || '').trim().toLowerCase();
+  const normalizedRole = roleFromProfile || fallbackRole;
+  return PRODUCT_MANAGEMENT_ROLES.has(normalizedRole);
+};
+
 const mapProductFromSupabase = (p) => ({
   ...p,
   partNumber: p.part_number,
   buyingPrice: p.buying_price,
   boxNumber: p.box_number,
+  status: normalizeProductPublicationStatus(p.status),
   shipping_option: normalizeProductShippingOption(p.shipping_option),
   shipping_weight_kg: normalizeProductShippingWeight(p.shipping_weight_kg),
   shipping_dimensions: normalizeProductShippingDimensions(p.shipping_dimensions),
@@ -1148,7 +1176,7 @@ const mapProductToSupabase = (product) => ({
   barcode: toNullableString(product.barcode),
   sale_price: product.sale_price,
   is_on_sale: product.is_on_sale,
-  status: toNullableString(product.status) || 'available',
+  status: normalizeProductPublicationStatus(product.status),
   image_urls: normalizeProductImageUrls(product.image_urls),
   bulk_pricing: normalizeBulkPricing(product.bulk_pricing),
 });
@@ -1544,9 +1572,10 @@ export const getTopSellers = async (days = null) => {
   }
 
   if (USE_SUPABASE) {
+    const canViewDraftProducts = canCurrentUserViewDraftProducts();
     let query = supabase
       .from('orders')
-      .select('id, created_at, order_items(quantity, product_id, products(id, name, part_number, image, description, price, sale_price, is_on_sale, stock_quantity, rating, brand, created_at, categories(name)))')
+      .select('id, created_at, order_items(quantity, product_id, products(id, name, part_number, image, description, price, sale_price, is_on_sale, stock_quantity, rating, brand, status, created_at, categories(name)))')
       .eq('status', 'completed');
 
     if (days && days !== 'all') {
@@ -1567,6 +1596,7 @@ export const getTopSellers = async (days = null) => {
         const product = item.products;
         const productId = Number(item.product_id || product?.id);
         if (!product || !productId) return;
+        if (!canViewDraftProducts && normalizeProductPublicationStatus(product.status) !== PRODUCT_PUBLISHED_STATUS) return;
 
         const existing = topSellerMap.get(productId) || {
           ...product,
@@ -1618,10 +1648,15 @@ export const getProducts = async (params = {}) => {
   const resultLimit = parseProductSearchLimit(params.limit, null, 80);
 
   if (USE_SUPABASE) {
+    const canViewDraftProducts = canCurrentUserViewDraftProducts();
     let query = supabase
       .from('products')
       .select('*, categories(name)')
       .order('id', { ascending: false });
+
+    if (!canViewDraftProducts) {
+      query = query.eq('status', PRODUCT_PUBLISHED_STATUS);
+    }
       
     if (searchTerms.length > 0) {
       searchTerms.forEach((term) => {
@@ -1689,13 +1724,21 @@ export const getProductById = async (id) => {
   }
 
   if (USE_SUPABASE) {
-    const { data, error } = await supabase
+    const canViewDraftProducts = canCurrentUserViewDraftProducts();
+
+    let query = supabase
       .from('products')
       .select('*, categories(name)')
-      .eq('id', id)
-      .single();
+      .eq('id', id);
+
+    if (!canViewDraftProducts) {
+      query = query.eq('status', PRODUCT_PUBLISHED_STATUS);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (error) throw new Error(error.message);
+    if (!data) throw new Error('Product not found');
 
     const [product] = await applyReviewStatsToProducts([{
       ...mapProductFromSupabase(data),
@@ -1773,7 +1816,7 @@ export const addProduct = async (product) => {
     barcode: toNullableString(product.barcode),
     sale_price: product.sale_price,
     is_on_sale: product.is_on_sale,
-    status: toNullableString(product.status) || 'available',
+    status: normalizeProductPublicationStatus(product.status),
     image_urls: normalizeProductImageUrls(product.image_urls),
     bulk_pricing: normalizeBulkPricing(product.bulk_pricing),
     ...(Object.prototype.hasOwnProperty.call(product, 'auto_generate_sku')
@@ -1842,7 +1885,7 @@ export const updateProduct = async (id, product) => {
     barcode: toNullableString(product.barcode),
     sale_price: product.sale_price,
     is_on_sale: product.is_on_sale,
-    status: toNullableString(product.status) || 'available',
+    status: normalizeProductPublicationStatus(product.status),
     image_urls: normalizeProductImageUrls(product.image_urls),
     bulk_pricing: normalizeBulkPricing(product.bulk_pricing),
     ...(Object.prototype.hasOwnProperty.call(product, 'auto_generate_sku')

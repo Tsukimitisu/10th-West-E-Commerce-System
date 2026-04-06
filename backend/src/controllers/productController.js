@@ -11,8 +11,9 @@ const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'products');
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
-const ALLOWED_PRODUCT_STATUSES = new Set(['available', 'hidden', 'out_of_stock']);
+const ALLOWED_PRODUCT_STATUSES = new Set(['draft', 'published']);
 const ALLOWED_PRODUCT_SHIPPING_OPTIONS = new Set(['standard', 'express']);
+const PRODUCT_PUBLISHER_ROLES = new Set(['admin', 'super_admin', 'owner']);
 const PRODUCT_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
 const SKU_MAX_GENERATION_ATTEMPTS = 10;
 const MIME_EXTENSION_MAP = {
@@ -333,6 +334,11 @@ const toNullableProductStatus = (value) => {
   return ALLOWED_PRODUCT_STATUSES.has(normalized) ? normalized : null;
 };
 
+const canViewUnpublishedProducts = (user) => {
+  const role = String(user?.role || '').trim().toLowerCase();
+  return PRODUCT_PUBLISHER_ROLES.has(role);
+};
+
 const normalizeProductImageUrls = (value) => {
   if (!value) return [];
 
@@ -475,6 +481,7 @@ const deriveVariantOptionsFromRows = (rows = []) => {
 const ensureProductSchema = async () => {
   await pool.query(`
     ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft',
       ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb,
       ADD COLUMN IF NOT EXISTS video_url VARCHAR(500),
       ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb,
@@ -487,6 +494,28 @@ const ensureProductSchema = async () => {
   });
 
   await pool.query(`
+    UPDATE products
+    SET status = 'draft'
+    WHERE status = 'hidden';
+
+    UPDATE products
+    SET status = 'published'
+    WHERE status IN ('available', 'out_of_stock');
+
+    UPDATE products
+    SET status = 'draft'
+    WHERE status IS NULL;
+
+    ALTER TABLE products
+    ALTER COLUMN status SET DEFAULT 'draft';
+
+    ALTER TABLE products
+    DROP CONSTRAINT IF EXISTS products_status_check;
+
+    ALTER TABLE products
+    ADD CONSTRAINT products_status_check
+      CHECK (status IN ('draft', 'published'));
+
     UPDATE products
     SET shipping_option = 'standard'
     WHERE shipping_option IS NULL;
@@ -524,6 +553,7 @@ export const getProducts = async (req, res) => {
     const searchTerms = tokenizeSearchTerms(search);
     const searchPhrase = normalizeSearchPhrase(search);
     const resultLimit = parseResultLimit(limitParam, null, 80);
+    const includeUnpublished = canViewUnpublishedProducts(req.user);
     
     let selectClause = `
       SELECT p.*, c.name as category_name,
@@ -550,6 +580,11 @@ export const getProducts = async (req, res) => {
     let whereClause = 'WHERE 1=1';
     let orderByClause = '';
     const params = [];
+
+    if (!includeUnpublished) {
+      params.push('published');
+      whereClause += ` AND p.status = $${params.length}`;
+    }
 
     // Filter by category
     if (category) {
@@ -638,12 +673,17 @@ export const getProducts = async (req, res) => {
 export const getTopSellers = async (req, res) => {
   try {
     const { days, limit = 8 } = req.query;
+    const includeUnpublished = canViewUnpublishedProducts(req.user);
 
     const parsedLimit = Number.parseInt(String(limit), 10);
     const safeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 8;
 
     const params = [safeLimit];
     let whereClause = `WHERE o.status = 'completed'`;
+
+    if (!includeUnpublished) {
+      whereClause += ` AND p.status = 'published'`;
+    }
 
     if (days && days !== 'all') {
       const parsedDays = Number.parseInt(String(days), 10);
@@ -703,6 +743,7 @@ export const getProductById = async (req, res) => {
     await ensureProductSchemaReady;
 
     const { id } = req.params;
+    const includeUnpublished = canViewUnpublishedProducts(req.user);
     
     const result = await pool.query(
       `SELECT p.*, c.name as category_name,
@@ -729,6 +770,10 @@ export const getProductById = async (req, res) => {
     }
 
     const product = result.rows[0];
+
+    if (!includeUnpublished && String(product.status || '').toLowerCase() !== 'published') {
+      return res.status(404).json({ message: 'Product not found' });
+    }
 
     let variantRows = [];
     try {
@@ -958,7 +1003,7 @@ export const createProduct = async (req, res) => {
         part_number, name, description, price, buying_price, 
         image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions,
         box_number, low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 'standard'), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'available'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb))
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 'standard'), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb))
       RETURNING *`,
       [
         cleanPartNumber, cleanName, description, parsedPrice, buyingPriceField.value,

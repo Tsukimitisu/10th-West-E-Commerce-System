@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS products (
   bulk_pricing JSONB DEFAULT '[]'::jsonb,
   variant_options JSONB DEFAULT '[]'::jsonb,
   is_on_sale BOOLEAN DEFAULT FALSE,
-  status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'hidden', 'out_of_stock')),
+  status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
   expiry_date DATE,
   is_deleted BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -541,6 +541,27 @@ ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
 ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check
   CHECK (payment_method IN ('cash', 'card', 'cod', 'online', 'stripe', 'gcash', 'maya', 'bank_transfer'));
 
+-- Products: publication status workflow
+ALTER TABLE products ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft';
+
+UPDATE products
+SET status = 'draft'
+WHERE status = 'hidden';
+
+UPDATE products
+SET status = 'published'
+WHERE status IN ('available', 'out_of_stock');
+
+UPDATE products
+SET status = 'draft'
+WHERE status IS NULL;
+
+ALTER TABLE products ALTER COLUMN status SET DEFAULT 'draft';
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_status_check;
+ALTER TABLE products ADD CONSTRAINT products_status_check
+  CHECK (status IN ('draft', 'published'));
+
 -- Products: strict pricing and stock guards
 ALTER TABLE products DROP CONSTRAINT IF EXISTS products_price_positive_check;
 ALTER TABLE products ADD CONSTRAINT products_price_positive_check
@@ -577,7 +598,7 @@ ALTER TABLE products ADD CONSTRAINT products_shipping_dimensions_object_check
 
 -- Products: new columns from Sprint 6+
 ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER REFERENCES subcategories(id) ON DELETE SET NULL;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'available';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS expiry_date DATE;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS video_url VARCHAR(500);

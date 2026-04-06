@@ -11,7 +11,7 @@ import {
   uploadProductVideo
 } from '../controllers/productController.js';
 import { getProductReviews } from '../controllers/reviewController.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, optionalAuth, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
 
 const router = express.Router();
@@ -111,7 +111,7 @@ const productValidation = [
     .withMessage('Sale price must be greater than 0 when provided'),
   body('sku').optional({ nullable: true }).trim().isLength({ max: 100 }).withMessage('SKU must be 100 characters or less'),
   body('category_id').optional().isInt({ min: 1 }).withMessage('Category ID must be a positive integer'),
-  body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status'),
+  body('status').optional().isIn(['draft', 'published']).withMessage('Invalid product status'),
   body('shipping_option').optional({ nullable: true }).isIn(['standard', 'express']).withMessage('shipping_option must be standard or express'),
   body('shipping_weight_kg').exists({ checkNull: true }).withMessage('Shipping weight is required').bail()
     .isFloat({ gt: 0 }).withMessage('Shipping weight must be greater than 0'),
@@ -127,7 +127,7 @@ const productUpdateValidation = [
   body('sale_price').optional({ nullable: true }).custom((value) => value === '' || Number(value) > 0)
     .withMessage('Sale price must be greater than 0 when provided'),
   body('sku').optional({ nullable: true }).trim().isLength({ max: 100 }).withMessage('SKU must be 100 characters or less'),
-  body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status'),
+  body('status').optional().isIn(['draft', 'published']).withMessage('Invalid product status'),
   body('shipping_option').optional({ nullable: true }).isIn(['standard', 'express']).withMessage('shipping_option must be standard or express'),
   body('shipping_weight_kg').optional({ nullable: true }).isFloat({ gt: 0 }).withMessage('Shipping weight must be greater than 0'),
   body('shipping_dimensions').optional({ nullable: true }).custom(validateShippingDimensionsPayload),
@@ -137,8 +137,8 @@ const productUpdateValidation = [
 ];
 
 // Public routes
-router.get('/', getProducts);
-router.get('/top-sellers', getTopSellers);
+router.get('/', optionalAuth, getProducts);
+router.get('/top-sellers', optionalAuth, getTopSellers);
 router.post(
   '/upload-image',
   authenticateToken,
@@ -154,7 +154,7 @@ router.post(
   uploadProductVideo
 );
 router.get('/:id/reviews', getProductReviews);
-router.get('/:id', getProductById);
+router.get('/:id', optionalAuth, getProductById);
 
 // Protected routes (Admin, Super Admin, Owner)
 router.post(
