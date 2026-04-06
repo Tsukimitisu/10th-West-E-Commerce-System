@@ -576,6 +576,9 @@ ALTER TABLE products ADD CONSTRAINT products_sale_price_positive_check
   CHECK (sale_price IS NULL OR sale_price > 0);
 
 ALTER TABLE products ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_option VARCHAR(20) DEFAULT 'standard';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_weight_kg DECIMAL(10,3) DEFAULT 0.10;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_dimensions JSONB;
 
 ALTER TABLE products DROP CONSTRAINT IF EXISTS products_bulk_pricing_array_check;
 ALTER TABLE products ADD CONSTRAINT products_bulk_pricing_array_check
