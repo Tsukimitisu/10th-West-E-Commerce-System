@@ -52,6 +52,54 @@ const validateBulkPricingPayload = (value) => {
   return true;
 };
 
+const validateShippingDimensionsPayload = (value) => {
+  if (value === undefined || value === null || value === '') return true;
+
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      throw new Error('shipping_dimensions must be a valid JSON object');
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('shipping_dimensions must be an object');
+  }
+
+  const rawLength = parsed.length_cm ?? parsed.length;
+  const rawWidth = parsed.width_cm ?? parsed.width;
+  const rawHeight = parsed.height_cm ?? parsed.height;
+  const hasAnyValue = [rawLength, rawWidth, rawHeight].some(
+    (rawValue) => rawValue !== undefined && rawValue !== null && rawValue !== ''
+  );
+
+  if (!hasAnyValue) return true;
+
+  if (
+    rawLength === undefined || rawLength === null || rawLength === '' ||
+    rawWidth === undefined || rawWidth === null || rawWidth === '' ||
+    rawHeight === undefined || rawHeight === null || rawHeight === ''
+  ) {
+    throw new Error('shipping_dimensions requires length, width, and height when provided');
+  }
+
+  const dimensions = [
+    ['length', Number(rawLength)],
+    ['width', Number(rawWidth)],
+    ['height', Number(rawHeight)],
+  ];
+
+  for (const [label, parsedValue] of dimensions) {
+    if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+      throw new Error(`shipping_dimensions ${label} must be greater than 0`);
+    }
+  }
+
+  return true;
+};
+
 // Validation rules for product creation/update
 const productValidation = [
   body('name').trim().notEmpty().withMessage('Product name is required'),
@@ -64,6 +112,10 @@ const productValidation = [
   body('sku').optional({ nullable: true }).trim().isLength({ max: 100 }).withMessage('SKU must be 100 characters or less'),
   body('category_id').optional().isInt({ min: 1 }).withMessage('Category ID must be a positive integer'),
   body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status'),
+  body('shipping_option').optional({ nullable: true }).isIn(['standard', 'express']).withMessage('shipping_option must be standard or express'),
+  body('shipping_weight_kg').exists({ checkNull: true }).withMessage('Shipping weight is required').bail()
+    .isFloat({ gt: 0 }).withMessage('Shipping weight must be greater than 0'),
+  body('shipping_dimensions').optional({ nullable: true }).custom(validateShippingDimensionsPayload),
   body('bulk_pricing').optional({ nullable: true }).custom(validateBulkPricingPayload),
   body('image_urls').optional().isArray({ max: 9 }).withMessage('image_urls can contain up to 9 images'),
   body('video_url').optional({ nullable: true }).isURL().withMessage('video_url must be a valid URL')
@@ -76,6 +128,9 @@ const productUpdateValidation = [
     .withMessage('Sale price must be greater than 0 when provided'),
   body('sku').optional({ nullable: true }).trim().isLength({ max: 100 }).withMessage('SKU must be 100 characters or less'),
   body('status').optional().isIn(['available', 'hidden', 'out_of_stock']).withMessage('Invalid product status'),
+  body('shipping_option').optional({ nullable: true }).isIn(['standard', 'express']).withMessage('shipping_option must be standard or express'),
+  body('shipping_weight_kg').optional({ nullable: true }).isFloat({ gt: 0 }).withMessage('Shipping weight must be greater than 0'),
+  body('shipping_dimensions').optional({ nullable: true }).custom(validateShippingDimensionsPayload),
   body('bulk_pricing').optional({ nullable: true }).custom(validateBulkPricingPayload),
   body('image_urls').optional().isArray({ max: 9 }).withMessage('image_urls can contain up to 9 images'),
   body('video_url').optional({ nullable: true }).isURL().withMessage('video_url must be a valid URL')

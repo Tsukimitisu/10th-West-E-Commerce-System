@@ -1018,6 +1018,9 @@ const mapProductFromSupabase = (p) => ({
   partNumber: p.part_number,
   buyingPrice: p.buying_price,
   boxNumber: p.box_number,
+  shipping_option: normalizeProductShippingOption(p.shipping_option),
+  shipping_weight_kg: normalizeProductShippingWeight(p.shipping_weight_kg),
+  shipping_dimensions: normalizeProductShippingDimensions(p.shipping_dimensions),
   bulk_pricing: normalizeBulkPricing(p.bulk_pricing),
   rating: Number(p.rating || 0),
   reviewCount: Number(p.review_count ?? p.reviewCount ?? 0),
@@ -1049,6 +1052,48 @@ const normalizeBulkPricing = (value) => {
     })
     .filter(Boolean)
     .sort((a, b) => a.min_qty - b.min_qty);
+};
+
+const normalizeProductShippingOption = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'express') return 'express';
+  return 'standard';
+};
+
+const normalizeProductShippingWeight = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Number(parsed.toFixed(3));
+};
+
+const normalizeProductShippingDimensions = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+
+  const lengthCm = Number(parsed.length_cm ?? parsed.length);
+  const widthCm = Number(parsed.width_cm ?? parsed.width);
+  const heightCm = Number(parsed.height_cm ?? parsed.height);
+
+  if (!Number.isFinite(lengthCm) || lengthCm <= 0) return null;
+  if (!Number.isFinite(widthCm) || widthCm <= 0) return null;
+  if (!Number.isFinite(heightCm) || heightCm <= 0) return null;
+
+  return {
+    length_cm: Number(lengthCm.toFixed(2)),
+    width_cm: Number(widthCm.toFixed(2)),
+    height_cm: Number(heightCm.toFixed(2)),
+    unit: 'cm',
+  };
 };
 
 const normalizeSkuToken = (value, fallback = 'SKU') => {
@@ -1088,6 +1133,15 @@ const mapProductToSupabase = (product) => ({
     : {}),
   category_id: product.category_id,
   stock_quantity: product.stock_quantity,
+  ...(Object.prototype.hasOwnProperty.call(product, 'shipping_option')
+    ? { shipping_option: normalizeProductShippingOption(product.shipping_option) }
+    : {}),
+  ...(Object.prototype.hasOwnProperty.call(product, 'shipping_weight_kg')
+    ? { shipping_weight_kg: normalizeProductShippingWeight(product.shipping_weight_kg) }
+    : {}),
+  ...(Object.prototype.hasOwnProperty.call(product, 'shipping_dimensions')
+    ? { shipping_dimensions: normalizeProductShippingDimensions(product.shipping_dimensions) }
+    : {}),
   box_number: toNullableString(product.boxNumber),
   low_stock_threshold: product.low_stock_threshold,
   brand: toNullableString(product.brand),
@@ -1703,6 +1757,15 @@ export const addProduct = async (product) => {
     video_url: product.video_url === undefined ? undefined : toNullableString(product.video_url),
     category_id: product.category_id,
     stock_quantity: product.stock_quantity,
+    ...(Object.prototype.hasOwnProperty.call(product, 'shipping_option')
+      ? { shipping_option: normalizeProductShippingOption(product.shipping_option) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(product, 'shipping_weight_kg')
+      ? { shipping_weight_kg: normalizeProductShippingWeight(product.shipping_weight_kg) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(product, 'shipping_dimensions')
+      ? { shipping_dimensions: normalizeProductShippingDimensions(product.shipping_dimensions) }
+      : {}),
     box_number: toNullableString(product.boxNumber),
     low_stock_threshold: product.low_stock_threshold,
     brand: toNullableString(product.brand),
@@ -1763,6 +1826,15 @@ export const updateProduct = async (id, product) => {
     video_url: product.video_url === undefined ? undefined : toNullableString(product.video_url),
     category_id: product.category_id,
     stock_quantity: product.stock_quantity,
+    ...(Object.prototype.hasOwnProperty.call(product, 'shipping_option')
+      ? { shipping_option: normalizeProductShippingOption(product.shipping_option) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(product, 'shipping_weight_kg')
+      ? { shipping_weight_kg: normalizeProductShippingWeight(product.shipping_weight_kg) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(product, 'shipping_dimensions')
+      ? { shipping_dimensions: normalizeProductShippingDimensions(product.shipping_dimensions) }
+      : {}),
     box_number: toNullableString(product.boxNumber),
     low_stock_threshold: product.low_stock_threshold,
     brand: toNullableString(product.brand),

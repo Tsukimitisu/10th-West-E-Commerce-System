@@ -75,6 +75,9 @@ const createTables = async () => {
         category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
         subcategory_id INTEGER REFERENCES subcategories(id) ON DELETE SET NULL,
         stock_quantity INTEGER DEFAULT 0,
+        shipping_option VARCHAR(20) DEFAULT 'standard' CHECK (shipping_option IN ('standard', 'express')),
+        shipping_weight_kg DECIMAL(10, 3) NOT NULL DEFAULT 0.10,
+        shipping_dimensions JSONB,
         box_number VARCHAR(100),
         low_stock_threshold INTEGER DEFAULT 5,
         brand VARCHAR(100),
@@ -671,6 +674,9 @@ const createTables = async () => {
       { name: 'image_urls', definition: "JSONB DEFAULT '[]'::jsonb" },
       { name: 'bulk_pricing', definition: "JSONB DEFAULT '[]'::jsonb" },
       { name: 'variant_options', definition: "JSONB DEFAULT '[]'::jsonb" },
+      { name: 'shipping_option', definition: "VARCHAR(20) DEFAULT 'standard'" },
+      { name: 'shipping_weight_kg', definition: 'DECIMAL(10,3) DEFAULT 0.10' },
+      { name: 'shipping_dimensions', definition: 'JSONB' },
     ];
 
     for (const col of productsNewColumns) {
@@ -680,6 +686,37 @@ const createTables = async () => {
         console.log(`⚠️  Column products.${col.name} may already exist, skipping: ${err.message}`);
       }
     }
+
+    await client.query(`
+      UPDATE products
+      SET shipping_option = 'standard'
+      WHERE shipping_option IS NULL;
+    `).catch((err) => {
+      console.log(`⚠️  Could not backfill products.shipping_option: ${err.message}`);
+    });
+
+    await client.query(`
+      UPDATE products
+      SET shipping_weight_kg = 0.10
+      WHERE shipping_weight_kg IS NULL;
+    `).catch((err) => {
+      console.log(`⚠️  Could not backfill products.shipping_weight_kg: ${err.message}`);
+    });
+
+    await client.query(`
+      ALTER TABLE products
+      ALTER COLUMN shipping_weight_kg SET DEFAULT 0.10;
+    `).catch((err) => {
+      console.log(`⚠️  Could not set default for products.shipping_weight_kg: ${err.message}`);
+    });
+
+    await client.query(`
+      ALTER TABLE products
+      ALTER COLUMN shipping_weight_kg SET NOT NULL;
+    `).catch((err) => {
+      console.log(`⚠️  Could not enforce NOT NULL on products.shipping_weight_kg: ${err.message}`);
+    });
+
     console.log('✅ Products table columns updated');
 
     // -- Product Variants table: new columns --
@@ -777,6 +814,18 @@ const createTables = async () => {
       ALTER TABLE products ADD CONSTRAINT products_variant_options_array_check
         CHECK (variant_options IS NULL OR jsonb_typeof(variant_options) = 'array');
 
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_option_check;
+      ALTER TABLE products ADD CONSTRAINT products_shipping_option_check
+        CHECK (shipping_option IN ('standard', 'express'));
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_weight_positive_check;
+      ALTER TABLE products ADD CONSTRAINT products_shipping_weight_positive_check
+        CHECK (shipping_weight_kg > 0);
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_dimensions_object_check;
+      ALTER TABLE products ADD CONSTRAINT products_shipping_dimensions_object_check
+        CHECK (shipping_dimensions IS NULL OR jsonb_typeof(shipping_dimensions) = 'object');
+
       ALTER TABLE product_variants DROP CONSTRAINT IF EXISTS product_variants_stock_quantity_non_negative_check;
       ALTER TABLE product_variants ADD CONSTRAINT product_variants_stock_quantity_non_negative_check
         CHECK (stock_quantity >= 0);
@@ -812,6 +861,7 @@ const createTables = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_subcategories_category ON subcategories(category_id);
       CREATE INDEX IF NOT EXISTS idx_products_subcategory ON products(subcategory_id);
+      CREATE INDEX IF NOT EXISTS idx_products_shipping_option ON products(shipping_option);
       CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants(product_id);
       CREATE INDEX IF NOT EXISTS idx_product_variants_product_key ON product_variants(product_id, combination_key);
       CREATE UNIQUE INDEX IF NOT EXISTS ux_product_variants_product_combination ON product_variants(product_id, combination_key) WHERE combination_key IS NOT NULL;

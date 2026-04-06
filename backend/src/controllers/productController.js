@@ -12,6 +12,7 @@ const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'products');
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
 const ALLOWED_PRODUCT_STATUSES = new Set(['available', 'hidden', 'out_of_stock']);
+const ALLOWED_PRODUCT_SHIPPING_OPTIONS = new Set(['standard', 'express']);
 const PRODUCT_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
 const SKU_MAX_GENERATION_ATTEMPTS = 10;
 const MIME_EXTENSION_MAP = {
@@ -91,6 +92,123 @@ const parseOptionalIntegerField = (value) => {
     provided: true,
     valid: Number.isInteger(parsed),
     value: Number.isInteger(parsed) ? parsed : null,
+  };
+};
+
+const toNullableShippingOption = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return null;
+  return ALLOWED_PRODUCT_SHIPPING_OPTIONS.has(normalized) ? normalized : null;
+};
+
+const parseOptionalShippingDimensionsField = (value) => {
+  if (value === undefined) {
+    return {
+      provided: false,
+      valid: true,
+      value: null,
+    };
+  }
+
+  if (value === null || value === '') {
+    return {
+      provided: true,
+      valid: true,
+      value: null,
+    };
+  }
+
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return {
+        provided: true,
+        valid: false,
+        value: null,
+        error: 'Shipping dimensions must be a valid JSON object.',
+      };
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return {
+      provided: true,
+      valid: false,
+      value: null,
+      error: 'Shipping dimensions must be an object with length, width, and height.',
+    };
+  }
+
+  const rawLength = parsed.length_cm ?? parsed.length;
+  const rawWidth = parsed.width_cm ?? parsed.width;
+  const rawHeight = parsed.height_cm ?? parsed.height;
+  const hasAnyValue = [rawLength, rawWidth, rawHeight].some(
+    (rawValue) => rawValue !== undefined && rawValue !== null && rawValue !== ''
+  );
+
+  if (!hasAnyValue) {
+    return {
+      provided: true,
+      valid: true,
+      value: null,
+    };
+  }
+
+  if (
+    rawLength === undefined || rawLength === null || rawLength === '' ||
+    rawWidth === undefined || rawWidth === null || rawWidth === '' ||
+    rawHeight === undefined || rawHeight === null || rawHeight === ''
+  ) {
+    return {
+      provided: true,
+      valid: false,
+      value: null,
+      error: 'Shipping dimensions require length, width, and height when provided.',
+    };
+  }
+
+  const lengthCm = Number(rawLength);
+  const widthCm = Number(rawWidth);
+  const heightCm = Number(rawHeight);
+
+  if (!Number.isFinite(lengthCm) || lengthCm <= 0) {
+    return {
+      provided: true,
+      valid: false,
+      value: null,
+      error: 'Shipping dimension length must be greater than 0.',
+    };
+  }
+
+  if (!Number.isFinite(widthCm) || widthCm <= 0) {
+    return {
+      provided: true,
+      valid: false,
+      value: null,
+      error: 'Shipping dimension width must be greater than 0.',
+    };
+  }
+
+  if (!Number.isFinite(heightCm) || heightCm <= 0) {
+    return {
+      provided: true,
+      valid: false,
+      value: null,
+      error: 'Shipping dimension height must be greater than 0.',
+    };
+  }
+
+  return {
+    provided: true,
+    valid: true,
+    value: {
+      length_cm: Number(lengthCm.toFixed(2)),
+      width_cm: Number(widthCm.toFixed(2)),
+      height_cm: Number(heightCm.toFixed(2)),
+      unit: 'cm',
+    },
   };
 };
 
@@ -360,9 +478,27 @@ const ensureProductSchema = async () => {
       ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb,
       ADD COLUMN IF NOT EXISTS video_url VARCHAR(500),
       ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS variant_options JSONB DEFAULT '[]'::jsonb;
+      ADD COLUMN IF NOT EXISTS variant_options JSONB DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS shipping_option VARCHAR(20) DEFAULT 'standard',
+      ADD COLUMN IF NOT EXISTS shipping_weight_kg DECIMAL(10, 3),
+      ADD COLUMN IF NOT EXISTS shipping_dimensions JSONB;
   `).catch((error) => {
     console.error('Failed to ensure product media columns:', error);
+  });
+
+  await pool.query(`
+    UPDATE products
+    SET shipping_option = 'standard'
+    WHERE shipping_option IS NULL;
+
+    UPDATE products
+    SET shipping_weight_kg = 0.10
+    WHERE shipping_weight_kg IS NULL;
+
+    ALTER TABLE products
+    ALTER COLUMN shipping_weight_kg SET DEFAULT 0.10;
+  `).catch((error) => {
+    console.error('Failed to ensure product shipping defaults:', error);
   });
 
   await pool.query(`
@@ -487,6 +623,8 @@ export const getProducts = async (req, res) => {
       price: parseFloat(product.price),
       buying_price: parseFloat(product.buying_price),
       sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
+      shipping_option: toNullableShippingOption(product.shipping_option) || 'standard',
+      shipping_weight_kg: product.shipping_weight_kg !== null ? parseFloat(product.shipping_weight_kg) : null,
       stock_quantity: parseInt(product.stock_quantity),
       total_sold: parseInt(product.total_sold)
     })));
@@ -684,6 +822,8 @@ export const getProductById = async (req, res) => {
       price: parseFloat(product.price),
       buying_price: product.buying_price !== null ? parseFloat(product.buying_price) : null,
       sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
+      shipping_option: toNullableShippingOption(product.shipping_option) || 'standard',
+      shipping_weight_kg: product.shipping_weight_kg !== null ? parseFloat(product.shipping_weight_kg) : null,
       stock_quantity: parseInt(product.stock_quantity, 10),
       variant_options: variantOptions,
       variants,
@@ -698,7 +838,7 @@ export const getProductById = async (req, res) => {
 export const createProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
-    image, video_url, category_id, stock_quantity, box_number,
+    image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions, box_number,
     low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing, auto_generate_sku
   } = req.body;
 
@@ -716,6 +856,16 @@ export const createProduct = async (req, res) => {
     const parsedStockQuantity = parseRequiredNonNegativeInteger(stock_quantity);
     if (parsedStockQuantity === null) {
       return res.status(400).json({ message: 'Stock quantity must be an integer 0 or higher' });
+    }
+
+    const parsedShippingWeightKg = parseRequiredPositiveNumber(shipping_weight_kg);
+    if (parsedShippingWeightKg === null) {
+      return res.status(400).json({ message: 'Shipping weight (kg) is required and must be greater than 0' });
+    }
+
+    const shippingDimensionsField = parseOptionalShippingDimensionsField(shipping_dimensions);
+    if (!shippingDimensionsField.valid) {
+      return res.status(400).json({ message: shippingDimensionsField.error || 'Shipping dimensions are invalid' });
     }
 
     const buyingPriceField = parseOptionalNumberField(buying_price);
@@ -773,11 +923,19 @@ export const createProduct = async (req, res) => {
     const cleanLowStockThreshold = lowStockThresholdField.value;
     const cleanIsOnSale = toNullableBoolean(is_on_sale);
     const cleanStatus = toNullableProductStatus(status);
+    const cleanShippingOption = shipping_option === undefined
+      ? 'standard'
+      : toNullableShippingOption(shipping_option);
     const cleanImageUrls = normalizeProductImageUrls(image_urls);
     const cleanBulkPricing = bulkPricingValidation.value ?? [];
+    const cleanShippingDimensions = shippingDimensionsField.value;
 
     if (status !== undefined && cleanStatus === null) {
       return res.status(400).json({ message: 'Invalid product status' });
+    }
+
+    if (shipping_option !== undefined && cleanShippingOption === null) {
+      return res.status(400).json({ message: 'Shipping option must be either standard or express' });
     }
 
     if (is_on_sale !== undefined && cleanIsOnSale === null) {
@@ -798,15 +956,16 @@ export const createProduct = async (req, res) => {
     const result = await pool.query(
       `INSERT INTO products (
         part_number, name, description, price, buying_price, 
-        image, video_url, category_id, stock_quantity, box_number, 
-        low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, COALESCE($17, 'available'), COALESCE($18::jsonb, '[]'::jsonb), COALESCE($19::jsonb, '[]'::jsonb))
+        image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions,
+        box_number, low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 'standard'), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'available'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb))
       RETURNING *`,
       [
         cleanPartNumber, cleanName, description, parsedPrice, buyingPriceField.value,
-        cleanImage, cleanVideoUrl, cleanCategoryId, parsedStockQuantity, cleanBoxNumber,
-        cleanLowStockThreshold ?? 5, cleanBrand, resolvedSku, cleanBarcode, cleanSalePrice, resolvedIsOnSale, cleanStatus,
-        JSON.stringify(cleanImageUrls), JSON.stringify(cleanBulkPricing)
+        cleanImage, cleanVideoUrl, cleanCategoryId, parsedStockQuantity, cleanShippingOption, parsedShippingWeightKg,
+        cleanShippingDimensions ? JSON.stringify(cleanShippingDimensions) : null,
+        cleanBoxNumber, cleanLowStockThreshold ?? 5, cleanBrand, resolvedSku, cleanBarcode, cleanSalePrice,
+        resolvedIsOnSale, cleanStatus, JSON.stringify(cleanImageUrls), JSON.stringify(cleanBulkPricing)
       ]
     );
 
@@ -831,7 +990,7 @@ export const updateProduct = async (req, res) => {
   const { id } = req.params;
   const {
     part_number, name, description, price, buying_price,
-    image, video_url, category_id, stock_quantity, box_number,
+    image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions, box_number,
     low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing, auto_generate_sku
   } = req.body;
 
@@ -861,6 +1020,9 @@ export const updateProduct = async (req, res) => {
     const hasIsOnSalePayload = hasBodyField(req.body, 'is_on_sale');
     const hasImageUrlsPayload = hasBodyField(req.body, 'image_urls');
     const hasBulkPricingPayload = hasBodyField(req.body, 'bulk_pricing');
+    const hasShippingOptionPayload = hasBodyField(req.body, 'shipping_option');
+    const hasShippingWeightPayload = hasBodyField(req.body, 'shipping_weight_kg');
+    const hasShippingDimensionsPayload = hasBodyField(req.body, 'shipping_dimensions');
 
     const cleanName = hasNamePayload ? String(name || '').trim() : null;
     if (hasNamePayload && !cleanName) {
@@ -875,6 +1037,18 @@ export const updateProduct = async (req, res) => {
     const parsedStockQuantity = hasStockPayload ? parseRequiredNonNegativeInteger(stock_quantity) : null;
     if (hasStockPayload && parsedStockQuantity === null) {
       return res.status(400).json({ message: 'Stock quantity must be an integer 0 or higher' });
+    }
+
+    const shippingWeightField = parseOptionalNumberField(shipping_weight_kg);
+    if (hasShippingWeightPayload) {
+      if (!shippingWeightField.valid || shippingWeightField.value === null || shippingWeightField.value <= 0) {
+        return res.status(400).json({ message: 'Shipping weight (kg) must be greater than 0' });
+      }
+    }
+
+    const shippingDimensionsField = parseOptionalShippingDimensionsField(shipping_dimensions);
+    if (hasShippingDimensionsPayload && !shippingDimensionsField.valid) {
+      return res.status(400).json({ message: shippingDimensionsField.error || 'Shipping dimensions are invalid' });
     }
 
     const buyingPriceField = parseOptionalNumberField(buying_price);
@@ -931,12 +1105,20 @@ export const updateProduct = async (req, res) => {
     const cleanLowStockThreshold = lowStockThresholdField.value;
     const cleanIsOnSale = hasIsOnSalePayload ? toNullableBoolean(is_on_sale) : null;
     const cleanStatus = toNullableProductStatus(status);
+    const cleanShippingOption = hasShippingOptionPayload ? toNullableShippingOption(shipping_option) : null;
     const cleanImageUrls = normalizeProductImageUrls(image_urls);
     const hasVideoUrlPayload = hasBodyField(req.body, 'video_url');
     const imageUrlsPayload = hasImageUrlsPayload ? JSON.stringify(cleanImageUrls) : null;
+    const shippingDimensionsPayload = hasShippingDimensionsPayload
+      ? (shippingDimensionsField.value ? JSON.stringify(shippingDimensionsField.value) : null)
+      : null;
 
     if (hasStatusPayload && cleanStatus === null) {
       return res.status(400).json({ message: 'Invalid product status' });
+    }
+
+    if (hasShippingOptionPayload && cleanShippingOption === null) {
+      return res.status(400).json({ message: 'Shipping option must be either standard or express' });
     }
 
     if (hasIsOnSalePayload && cleanIsOnSale === null) {
@@ -993,8 +1175,11 @@ export const updateProduct = async (req, res) => {
         video_url = CASE WHEN $18 THEN $19 ELSE video_url END,
         image_urls = CASE WHEN $20 THEN COALESCE($21::jsonb, '[]'::jsonb) ELSE image_urls END,
         bulk_pricing = CASE WHEN $22 THEN COALESCE($23::jsonb, '[]'::jsonb) ELSE bulk_pricing END,
+        shipping_option = CASE WHEN $24 THEN $25 ELSE shipping_option END,
+        shipping_weight_kg = CASE WHEN $26 THEN $27 ELSE shipping_weight_kg END,
+        shipping_dimensions = CASE WHEN $28 THEN $29::jsonb ELSE shipping_dimensions END,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $24
+      WHERE id = $30
       RETURNING *`,
       [
         hasPartNumberPayload ? cleanPartNumber : null,
@@ -1020,6 +1205,12 @@ export const updateProduct = async (req, res) => {
         imageUrlsPayload,
         hasBulkPricingPayload,
         bulkPricingPayload,
+        hasShippingOptionPayload,
+        cleanShippingOption,
+        hasShippingWeightPayload,
+        hasShippingWeightPayload ? shippingWeightField.value : null,
+        hasShippingDimensionsPayload,
+        shippingDimensionsPayload,
         id
       ]
     );

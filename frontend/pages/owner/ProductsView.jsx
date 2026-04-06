@@ -35,6 +35,7 @@ const PRODUCT_VIDEO_ALLOWED_TYPES = new Set([
 ]);
 const SKU_MODE_AUTO = 'auto';
 const SKU_MODE_MANUAL = 'manual';
+const ALLOWED_SHIPPING_OPTIONS = new Set(['standard', 'express']);
 
 const createProductMediaId = () => `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -254,6 +255,51 @@ const revokeLocalVideoPreview = (videoItem) => {
   }
 };
 
+const resolveShippingOptionDraft = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return ALLOWED_SHIPPING_OPTIONS.has(normalized) ? normalized : 'standard';
+};
+
+const resolveShippingDimensionsDraft = (value) => {
+  if (!value) {
+    return {
+      shipping_length_cm: '',
+      shipping_width_cm: '',
+      shipping_height_cm: '',
+    };
+  }
+
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return {
+      shipping_length_cm: '',
+      shipping_width_cm: '',
+      shipping_height_cm: '',
+    };
+  }
+
+  const normalizeDimension = (rawValue) => {
+    if (rawValue === undefined || rawValue === null || rawValue === '') return '';
+    const parsedValue = Number(rawValue);
+    if (!Number.isFinite(parsedValue) || parsedValue <= 0) return '';
+    return String(parsedValue);
+  };
+
+  return {
+    shipping_length_cm: normalizeDimension(parsed.length_cm ?? parsed.length),
+    shipping_width_cm: normalizeDimension(parsed.width_cm ?? parsed.width),
+    shipping_height_cm: normalizeDimension(parsed.height_cm ?? parsed.height),
+  };
+};
+
 const createProductFormState = (overrides = {}) => ({
   partNumber: '',
   name: '',
@@ -277,10 +323,11 @@ const createProductFormState = (overrides = {}) => ({
   brand: '',
   status: 'available',
   variant_notes: '',
-  shipping_class: 'standard',
-  shipping_weight: '',
-  shipping_handling_days: '1',
-  shipping_notes: '',
+  shipping_option: 'standard',
+  shipping_weight_kg: '',
+  shipping_length_cm: '',
+  shipping_width_cm: '',
+  shipping_height_cm: '',
   ...overrides,
 });
 
@@ -500,6 +547,7 @@ const ProductsView = () => {
     setDescriptionEditorSeed((prev) => prev + 1);
     setFormStep(0);
     const normalizedBulkPricing = normalizeBulkPricingDraft(p.bulk_pricing);
+    const shippingDimensionsDraft = resolveShippingDimensionsDraft(p.shipping_dimensions);
     setForm(createProductFormState({
       partNumber: p.partNumber || '',
       name: p.name,
@@ -519,6 +567,11 @@ const ProductsView = () => {
       barcode: p.barcode || '',
       brand: p.brand || '',
       status: p.status || (p.stock_quantity === 0 ? 'out_of_stock' : 'available'),
+      shipping_option: resolveShippingOptionDraft(p.shipping_option),
+      shipping_weight_kg: p.shipping_weight_kg !== undefined && p.shipping_weight_kg !== null ? String(p.shipping_weight_kg) : '',
+      shipping_length_cm: shippingDimensionsDraft.shipping_length_cm,
+      shipping_width_cm: shippingDimensionsDraft.shipping_width_cm,
+      shipping_height_cm: shippingDimensionsDraft.shipping_height_cm,
       image_urls: normalizeProductMediaUrls(p.image_urls),
       video_url: p.video_url || '',
       bulk_pricing: normalizedBulkPricing,
@@ -538,6 +591,7 @@ const ProductsView = () => {
     setDescriptionEditorSeed((prev) => prev + 1);
     setFormStep(0);
     const normalizedBulkPricing = normalizeBulkPricingDraft(p.bulk_pricing);
+    const shippingDimensionsDraft = resolveShippingDimensionsDraft(p.shipping_dimensions);
     setForm(createProductFormState({
       partNumber: '',
       name: `${p.name} (Copy)`,
@@ -557,6 +611,11 @@ const ProductsView = () => {
       barcode: '',
       brand: p.brand || '',
       status: p.status || 'available',
+      shipping_option: resolveShippingOptionDraft(p.shipping_option),
+      shipping_weight_kg: p.shipping_weight_kg !== undefined && p.shipping_weight_kg !== null ? String(p.shipping_weight_kg) : '',
+      shipping_length_cm: shippingDimensionsDraft.shipping_length_cm,
+      shipping_width_cm: shippingDimensionsDraft.shipping_width_cm,
+      shipping_height_cm: shippingDimensionsDraft.shipping_height_cm,
       image_urls: normalizeProductMediaUrls(p.image_urls),
       video_url: p.video_url || '',
       bulk_pricing: normalizedBulkPricing,
@@ -604,17 +663,35 @@ const ProductsView = () => {
     }
 
     if (stepIndex === 4) {
-      if (form.shipping_weight !== '') {
-        const shippingWeight = Number(form.shipping_weight);
-        if (!Number.isFinite(shippingWeight) || shippingWeight <= 0) {
-          return 'Shipping weight must be greater than 0.';
-        }
+      if (!ALLOWED_SHIPPING_OPTIONS.has(String(form.shipping_option || '').toLowerCase())) {
+        return 'Shipping option must be either Standard or Express.';
       }
 
-      if (form.shipping_handling_days !== '') {
-        const handlingDays = Number(form.shipping_handling_days);
-        if (!Number.isFinite(handlingDays) || handlingDays < 0) {
-          return 'Handling days must be 0 or higher.';
+      const shippingWeight = Number(form.shipping_weight_kg);
+      if (!Number.isFinite(shippingWeight) || shippingWeight <= 0) {
+        return 'Shipping weight is required and must be greater than 0.';
+      }
+
+      const lengthRaw = String(form.shipping_length_cm || '').trim();
+      const widthRaw = String(form.shipping_width_cm || '').trim();
+      const heightRaw = String(form.shipping_height_cm || '').trim();
+      const hasAnyDimension = [lengthRaw, widthRaw, heightRaw].some(Boolean);
+
+      if (hasAnyDimension && [lengthRaw, widthRaw, heightRaw].some((value) => !value)) {
+        return 'Provide complete dimensions (length, width, height) or leave all blank.';
+      }
+
+      if (hasAnyDimension) {
+        const dimensions = [
+          ['Length', Number(lengthRaw)],
+          ['Width', Number(widthRaw)],
+          ['Height', Number(heightRaw)],
+        ];
+
+        for (const [label, value] of dimensions) {
+          if (!Number.isFinite(value) || value <= 0) {
+            return `${label} must be greater than 0.`;
+          }
         }
       }
     }
@@ -900,6 +977,44 @@ const ProductsView = () => {
       const shouldAutoGenerateSku = form.sku_mode === SKU_MODE_AUTO || !manualSku;
       const hasBuyingPrice = String(form.buyingPrice || '').trim() !== '';
       const hasSalePrice = String(form.sale_price || '').trim() !== '';
+      const shippingOption = resolveShippingOptionDraft(form.shipping_option);
+      const shippingWeightKg = Number(form.shipping_weight_kg);
+      if (!Number.isFinite(shippingWeightKg) || shippingWeightKg <= 0) {
+        throw new Error('Shipping weight is required and must be greater than 0.');
+      }
+
+      const shippingLengthRaw = String(form.shipping_length_cm || '').trim();
+      const shippingWidthRaw = String(form.shipping_width_cm || '').trim();
+      const shippingHeightRaw = String(form.shipping_height_cm || '').trim();
+      const hasAnyShippingDimension = [shippingLengthRaw, shippingWidthRaw, shippingHeightRaw].some(Boolean);
+
+      if (hasAnyShippingDimension && [shippingLengthRaw, shippingWidthRaw, shippingHeightRaw].some((value) => !value)) {
+        throw new Error('Provide complete dimensions (length, width, height) or leave all blank.');
+      }
+
+      let shippingDimensionsPayload = null;
+      if (hasAnyShippingDimension) {
+        const lengthCm = Number(shippingLengthRaw);
+        const widthCm = Number(shippingWidthRaw);
+        const heightCm = Number(shippingHeightRaw);
+
+        if (!Number.isFinite(lengthCm) || lengthCm <= 0) {
+          throw new Error('Length must be greater than 0.');
+        }
+        if (!Number.isFinite(widthCm) || widthCm <= 0) {
+          throw new Error('Width must be greater than 0.');
+        }
+        if (!Number.isFinite(heightCm) || heightCm <= 0) {
+          throw new Error('Height must be greater than 0.');
+        }
+
+        shippingDimensionsPayload = {
+          length_cm: Number(lengthCm.toFixed(2)),
+          width_cm: Number(widthCm.toFixed(2)),
+          height_cm: Number(heightCm.toFixed(2)),
+          unit: 'cm',
+        };
+      }
 
       const payload = {
         partNumber: form.partNumber,
@@ -913,6 +1028,9 @@ const ProductsView = () => {
         image_urls: normalizedMediaUrls,
         video_url: uploadedVideoUrl || null,
         stock_quantity: parseInt(form.stock_quantity, 10),
+        shipping_option: shippingOption,
+        shipping_weight_kg: shippingWeightKg,
+        shipping_dimensions: shippingDimensionsPayload,
         boxNumber: form.boxNumber,
         low_stock_threshold: form.low_stock_threshold === '' ? undefined : parseInt(form.low_stock_threshold, 10),
         sale_price: form.is_on_sale && hasSalePrice ? Number(form.sale_price) : null,
@@ -1803,39 +1921,82 @@ const ProductsView = () => {
 
               {formStep === 4 && (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <InputField label="Shipping Class">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <InputField label="Shipping Option" required>
                       <select
-                        value={form.shipping_class}
-                        onChange={e => setForm(f => ({ ...f, shipping_class: e.target.value }))}
+                        value={form.shipping_option}
+                        onChange={e => setForm(f => ({ ...f, shipping_option: e.target.value }))}
                         className={inputClass}
                       >
                         <option value="standard">Standard</option>
-                        <option value="fragile">Fragile</option>
-                        <option value="oversized">Oversized</option>
+                        <option value="express">Express</option>
                       </select>
                     </InputField>
-                    <InputField label="Weight (kg)">
-                      <input type="number" step="0.01" min="0" value={form.shipping_weight} onChange={e => setForm(f => ({ ...f, shipping_weight: e.target.value }))} className={inputClass} placeholder="0.50" />
+                    <InputField label="Weight (kg)" required>
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0.001"
+                        value={form.shipping_weight_kg}
+                        onChange={e => setForm(f => ({ ...f, shipping_weight_kg: e.target.value }))}
+                        className={inputClass}
+                        placeholder="0.500"
+                      />
                     </InputField>
-                    <InputField label="Handling Days">
-                      <input type="number" min="0" value={form.shipping_handling_days} onChange={e => setForm(f => ({ ...f, shipping_handling_days: e.target.value }))} className={inputClass} />
-                    </InputField>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Dimensions (optional)</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Enter all values in centimeters if your courier requires parcel dimensions.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <InputField label="Length (cm)">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={form.shipping_length_cm}
+                          onChange={e => setForm(f => ({ ...f, shipping_length_cm: e.target.value }))}
+                          className={inputClass}
+                          placeholder="30"
+                        />
+                      </InputField>
+                      <InputField label="Width (cm)">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={form.shipping_width_cm}
+                          onChange={e => setForm(f => ({ ...f, shipping_width_cm: e.target.value }))}
+                          className={inputClass}
+                          placeholder="20"
+                        />
+                      </InputField>
+                      <InputField label="Height (cm)">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={form.shipping_height_cm}
+                          onChange={e => setForm(f => ({ ...f, shipping_height_cm: e.target.value }))}
+                          className={inputClass}
+                          placeholder="10"
+                        />
+                      </InputField>
+                    </div>
                   </div>
 
                   <InputField label="Storage / Pickup Location">
                     <input value={form.boxNumber} onChange={e => setForm(f => ({ ...f, boxNumber: e.target.value }))} className={inputClass} placeholder="A-12" />
                   </InputField>
 
-                  <InputField label="Shipping Notes">
-                    <textarea
-                      value={form.shipping_notes}
-                      onChange={e => setForm(f => ({ ...f, shipping_notes: e.target.value }))}
-                      rows={3}
-                      className={inputClass}
-                      placeholder="Packing instructions, courier notes, or handling instructions"
-                    />
-                  </InputField>
+                  <p className="text-xs text-gray-500">
+                    Courier-ready payload: shipping option, weight in kg, and optional dimensions in cm for APIs like J&T.
+                  </p>
                 </div>
               )}
 

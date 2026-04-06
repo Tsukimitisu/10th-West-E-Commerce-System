@@ -74,6 +74,9 @@ CREATE TABLE IF NOT EXISTS products (
   category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   subcategory_id INTEGER REFERENCES subcategories(id) ON DELETE SET NULL,
   stock_quantity INTEGER DEFAULT 0,
+  shipping_option VARCHAR(20) DEFAULT 'standard' CHECK (shipping_option IN ('standard', 'express')),
+  shipping_weight_kg DECIMAL(10,3) NOT NULL DEFAULT 0.10,
+  shipping_dimensions JSONB,
   box_number VARCHAR(100),
   low_stock_threshold INTEGER DEFAULT 5,
   brand VARCHAR(100),
@@ -556,6 +559,18 @@ ALTER TABLE products DROP CONSTRAINT IF EXISTS products_bulk_pricing_array_check
 ALTER TABLE products ADD CONSTRAINT products_bulk_pricing_array_check
   CHECK (bulk_pricing IS NULL OR jsonb_typeof(bulk_pricing) = 'array');
 
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_option_check;
+ALTER TABLE products ADD CONSTRAINT products_shipping_option_check
+  CHECK (shipping_option IN ('standard', 'express'));
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_weight_positive_check;
+ALTER TABLE products ADD CONSTRAINT products_shipping_weight_positive_check
+  CHECK (shipping_weight_kg > 0);
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_dimensions_object_check;
+ALTER TABLE products ADD CONSTRAINT products_shipping_dimensions_object_check
+  CHECK (shipping_dimensions IS NULL OR jsonb_typeof(shipping_dimensions) = 'object');
+
 -- ==================== BACKFILL COLUMNS ====================
 -- If tables already exist, add any new columns that may be missing.
 
@@ -567,6 +582,20 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS video_url VARCHAR(500);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_option VARCHAR(20) DEFAULT 'standard';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_weight_kg DECIMAL(10,3) DEFAULT 0.10;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_dimensions JSONB;
+
+UPDATE products
+SET shipping_option = 'standard'
+WHERE shipping_option IS NULL;
+
+UPDATE products
+SET shipping_weight_kg = 0.10
+WHERE shipping_weight_kg IS NULL;
+
+ALTER TABLE products ALTER COLUMN shipping_weight_kg SET DEFAULT 0.10;
+ALTER TABLE products ALTER COLUMN shipping_weight_kg SET NOT NULL;
 
 -- Orders: new columns for tracking / fulfillment
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number VARCHAR(255);
@@ -640,6 +669,7 @@ CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON cart_items(cart_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_product ON cart_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_subcategory ON products(subcategory_id);
+CREATE INDEX IF NOT EXISTS idx_products_shipping_option ON products(shipping_option);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_assigned_staff ON orders(assigned_staff_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
