@@ -28,11 +28,17 @@ const verifyTokenOnce = (token) => {
   const cachedRequest = verifyRequestCache.get(normalizedToken);
   if (cachedRequest) return cachedRequest;
 
-  const request = verifyEmailToken(normalizedToken).finally(() => {
-    window.setTimeout(() => {
+  const request = verifyEmailToken(normalizedToken)
+    .then((result) => {
+      window.setTimeout(() => {
+        verifyRequestCache.delete(normalizedToken);
+      }, VERIFY_REQUEST_CACHE_MS);
+      return result;
+    })
+    .catch((error) => {
       verifyRequestCache.delete(normalizedToken);
-    }, VERIFY_REQUEST_CACHE_MS);
-  });
+      throw error;
+    });
 
   verifyRequestCache.set(normalizedToken, request);
   return request;
@@ -50,11 +56,17 @@ const confirmEmailChangeOnce = (token) => {
   const cachedRequest = verifyRequestCache.get(cacheKey);
   if (cachedRequest) return cachedRequest;
 
-  const request = confirmEmailChangeToken(normalizedToken).finally(() => {
-    window.setTimeout(() => {
+  const request = confirmEmailChangeToken(normalizedToken)
+    .then((result) => {
+      window.setTimeout(() => {
+        verifyRequestCache.delete(cacheKey);
+      }, VERIFY_REQUEST_CACHE_MS);
+      return result;
+    })
+    .catch((error) => {
       verifyRequestCache.delete(cacheKey);
-    }, VERIFY_REQUEST_CACHE_MS);
-  });
+      throw error;
+    });
 
   verifyRequestCache.set(cacheKey, request);
   return request;
@@ -179,7 +191,36 @@ const VerifyEmail = ({ onLogin }) => {
             const destination = getPostVerifyRedirect(result.user);
             setNextRoute(destination);
             setMessage(result?.alreadyVerified ? 'Already verified. Logging you in...' : 'Email verified successfully. Logging you in...');
+
+            try {
+              localStorage.setItem('shopCoreUser', JSON.stringify(result.user));
+              localStorage.setItem('shopCoreToken', result.token);
+              window.dispatchEvent(new Event('auth:changed'));
+            } catch {
+              // Ignore storage sync failures.
+            }
+
             onLoginRef.current(result.user, result.token);
+            publishAuthVerifiedSignal(result.user);
+            redirectTimeoutRef.current = window.setTimeout(() => {
+              if (!cancelled) navigate(destination, { replace: true });
+            }, 1000);
+            return;
+          }
+
+          if (result?.token && result?.user) {
+            const destination = getPostVerifyRedirect(result.user);
+            setNextRoute(destination);
+            setMessage(result?.alreadyVerified ? 'Already verified. Logging you in...' : 'Email verified successfully. Logging you in...');
+
+            try {
+              localStorage.setItem('shopCoreUser', JSON.stringify(result.user));
+              localStorage.setItem('shopCoreToken', result.token);
+              window.dispatchEvent(new Event('auth:changed'));
+            } catch {
+              // Ignore storage sync failures.
+            }
+
             publishAuthVerifiedSignal(result.user);
             redirectTimeoutRef.current = window.setTimeout(() => {
               if (!cancelled) navigate(destination, { replace: true });

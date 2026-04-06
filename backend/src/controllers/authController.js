@@ -1059,10 +1059,32 @@ export const verifyEmailToken = async (req, res) => {
       await client.query('ROLLBACK');
 
       if (recentlyVerifiedResult.rows.length > 0 && recentlyVerifiedResult.rows[0].email_verified) {
+        const recentlyVerifiedUser = recentlyVerifiedResult.rows[0];
+
+        if (!recentlyVerifiedUser.is_active) {
+          return res.status(403).json({
+            message: 'Your account is currently unavailable. Please contact support.',
+            code: 'ACCOUNT_UNAVAILABLE',
+          });
+        }
+
+        const sessionToken = await persistSession(pool, recentlyVerifiedUser, ipAddress, userAgent);
+
+        queuePostVerificationTasks({
+          userId: recentlyVerifiedUser.id,
+          guestCartSessionId,
+          ipAddress,
+          userAgent,
+          activityAction: 'email_verification_login',
+        });
+
         return res.json({
-          message: 'This email is already verified. Please continue to login.',
-          user: sanitizeUser(recentlyVerifiedResult.rows[0]),
-          autoLogin: false,
+          message: sessionToken
+            ? 'This email is already verified. Logging you in...'
+            : 'This email is already verified. Please continue to login.',
+          user: sanitizeUser(recentlyVerifiedUser),
+          token: sessionToken,
+          autoLogin: true,
           alreadyVerified: true,
         });
       }
