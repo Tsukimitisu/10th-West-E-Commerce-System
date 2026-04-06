@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
-import { getProducts, getCategories, getSubcategories, createProduct, updateProduct, deleteProduct, uploadProductImage, uploadProductVideo, addCategory, updateCategory, deleteCategory, addSubcategory, updateSubcategory, deleteSubcategory } from '../../services/api';
+import { getProducts, getCategories, getSubcategories, createProduct, updateProduct, deleteProduct, uploadProductImage, uploadProductVideo, addCategory, updateCategory, deleteCategory, addSubcategory, updateSubcategory, deleteSubcategory, saveProductVariants } from '../../services/api';
 import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upload, Filter, MoreVertical, Image as ImageIcon, AlertTriangle, Layers, GripVertical, ChevronDown, Check, Bold, Italic, Underline, List, ListOrdered } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import VariantsModal from '../../components/owner/VariantsModal';
@@ -8,8 +8,8 @@ import { useSocketEvent } from '../../context/SocketContext';
 const PRODUCT_FORM_STEPS = [
   { key: 'media', label: 'Media Upload', hint: 'Add product photos and optional video' },
   { key: 'info', label: 'Product Info', hint: 'Core details and category' },
-  { key: 'pricing', label: 'Pricing & Stock', hint: 'Prices and inventory' },
-  { key: 'variants', label: 'Variants', hint: 'Configure variant strategy' },
+  { key: 'variants', label: 'Variants', hint: 'Define options before pricing' },
+  { key: 'pricing', label: 'Pricing & Stock', hint: 'Set prices and inventory' },
   { key: 'shipping', label: 'Shipping', hint: 'Fulfillment details' },
   { key: 'status', label: 'Status', hint: 'Visibility and sale state' },
 ];
@@ -42,6 +42,9 @@ const PRODUCT_ALLOWED_STATUSES = new Set([PRODUCT_STATUS_DRAFT, PRODUCT_STATUS_P
 const PRODUCT_LEGACY_STATUSES = new Set(['available', 'hidden', 'out_of_stock']);
 const PRODUCT_FORM_DRAFT_STORAGE_KEY = 'owner-products-form-draft-v1';
 const PRODUCT_FORM_DRAFT_AUTOSAVE_DELAY_MS = 450;
+const PRODUCT_VARIANT_MAX_OPTIONS = 5;
+const PRODUCT_VARIANT_MAX_VALUES = 30;
+const PRODUCT_VARIANT_MAX_COMBINATIONS = 300;
 const PRODUCT_API_FIELD_TO_FORM_FIELD = {
   part_number: 'partNumber',
   buying_price: 'buyingPrice',
@@ -49,6 +52,7 @@ const PRODUCT_API_FIELD_TO_FORM_FIELD = {
   image: 'image_urls',
   image_urls: 'image_urls',
   video_url: 'video_url',
+  variant_options: 'variant_options',
   shipping_dimensions: 'shipping_dimensions',
 };
 
@@ -61,13 +65,15 @@ const PRODUCT_FIELD_TO_STEP = {
   brand: 1,
   description: 1,
   partNumber: 1,
-  price: 2,
-  buyingPrice: 2,
-  stock_quantity: 2,
-  low_stock_threshold: 2,
-  sku: 2,
-  barcode: 2,
-  bulk_pricing: 2,
+  variant_options: 2,
+  variant_notes: 2,
+  price: 3,
+  buyingPrice: 3,
+  stock_quantity: 3,
+  low_stock_threshold: 3,
+  sku: 3,
+  barcode: 3,
+  bulk_pricing: 3,
   shipping_option: 4,
   shipping_weight_kg: 4,
   shipping_dimensions: 4,
@@ -193,6 +199,7 @@ const inferProductFieldErrorsFromMessage = (message) => {
   if (text.includes('stock quantity') || text.includes('stock must')) setField('stock_quantity', message);
   if (text.includes('low stock')) setField('low_stock_threshold', message);
   if (text.includes('bulk pricing')) setField('bulk_pricing', message);
+  if (text.includes('variant')) setField('variant_options', message);
   if (text.includes('sku')) setField('sku', message);
   if (text.includes('barcode')) setField('barcode', message);
   if (text.includes('shipping option')) setField('shipping_option', message);
@@ -404,6 +411,164 @@ const validateBulkPricingTiers = (tiers, regularPrice) => {
   return { value: normalized };
 };
 
+const createVariantOptionId = () => `variant-option-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeVariantOptionName = (value) => String(value || '').trim().replace(/\s+/g, ' ').slice(0, 50);
+
+const normalizeVariantOptionValue = (value) => String(value || '').trim().replace(/\s+/g, ' ').slice(0, 100);
+
+const parseVariantOptionValuesInput = (value) => String(value || '')
+  .split(/[\n,|]+/)
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+const normalizeVariantOptionsDraft = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .slice(0, PRODUCT_VARIANT_MAX_OPTIONS)
+    .map((option) => {
+      const optionName = normalizeVariantOptionName(option?.name);
+      const rawValues = Array.isArray(option?.values) ? option.values : parseVariantOptionValuesInput(option?.values);
+      const valueSet = new Set();
+      const values = rawValues
+        .map((rawValue) => normalizeVariantOptionValue(rawValue))
+        .filter(Boolean)
+        .filter((rawValue) => {
+          const token = rawValue.toLowerCase();
+          if (valueSet.has(token)) return false;
+          valueSet.add(token);
+          return true;
+        })
+        .slice(0, PRODUCT_VARIANT_MAX_VALUES);
+
+      return {
+        id: option?.id || createVariantOptionId(),
+        name: optionName,
+        values,
+      };
+    })
+    .filter((option) => option.name || option.values.length > 0);
+};
+
+const generateVariantCombinations = (options = []) => {
+  if (!Array.isArray(options) || options.length === 0) {
+    return { value: [] };
+  }
+
+  let combinations = [{}];
+
+  for (const option of options) {
+    const next = [];
+
+    for (const existingCombination of combinations) {
+      for (const optionValue of option.values) {
+        next.push({
+          ...existingCombination,
+          [option.name]: optionValue,
+        });
+
+        if (next.length > PRODUCT_VARIANT_MAX_COMBINATIONS) {
+          return {
+            error: `Too many variant combinations. Keep combinations at ${PRODUCT_VARIANT_MAX_COMBINATIONS} or fewer.`,
+          };
+        }
+      }
+    }
+
+    combinations = next;
+  }
+
+  return { value: combinations };
+};
+
+const validateVariantOptionsDraft = (rawOptions) => {
+  if (!Array.isArray(rawOptions) || rawOptions.length === 0) {
+    return { value: [], combinationCount: 0 };
+  }
+
+  const normalizedOptions = [];
+  const seenOptionNames = new Set();
+
+  for (let optionIndex = 0; optionIndex < rawOptions.length; optionIndex += 1) {
+    const option = rawOptions[optionIndex] || {};
+    const optionName = normalizeVariantOptionName(option.name);
+    const rawValues = Array.isArray(option.values) ? option.values : parseVariantOptionValuesInput(option.values);
+    const containsAnyValue = rawValues.some((rawValue) => String(rawValue || '').trim().length > 0);
+
+    if (!optionName && !containsAnyValue) {
+      continue;
+    }
+
+    if (!optionName) {
+      return { error: `Variant option #${optionIndex + 1} needs a name.` };
+    }
+
+    const optionNameToken = optionName.toLowerCase();
+    if (seenOptionNames.has(optionNameToken)) {
+      return { error: `Duplicate variant option name: ${optionName}.` };
+    }
+    seenOptionNames.add(optionNameToken);
+
+    if (rawValues.length > PRODUCT_VARIANT_MAX_VALUES) {
+      return { error: `Variant option "${optionName}" supports up to ${PRODUCT_VARIANT_MAX_VALUES} values.` };
+    }
+
+    const seenValues = new Set();
+    const values = rawValues
+      .map((rawValue) => normalizeVariantOptionValue(rawValue))
+      .filter(Boolean)
+      .filter((rawValue) => {
+        const token = rawValue.toLowerCase();
+        if (seenValues.has(token)) return false;
+        seenValues.add(token);
+        return true;
+      });
+
+    if (values.length === 0) {
+      return { error: `Variant option "${optionName}" must have at least one value.` };
+    }
+
+    normalizedOptions.push({ name: optionName, values });
+  }
+
+  if (normalizedOptions.length > PRODUCT_VARIANT_MAX_OPTIONS) {
+    return { error: `A maximum of ${PRODUCT_VARIANT_MAX_OPTIONS} variant options is supported.` };
+  }
+
+  const combinationsResult = generateVariantCombinations(normalizedOptions);
+  if (combinationsResult.error) {
+    return { error: combinationsResult.error };
+  }
+
+  return {
+    value: normalizedOptions,
+    combinationCount: combinationsResult.value.length,
+  };
+};
+
+const buildDefaultVariantRows = ({ options, basePrice }) => {
+  const combinationsResult = generateVariantCombinations(options);
+  if (combinationsResult.error) {
+    return { error: combinationsResult.error };
+  }
+
+  const normalizedBasePrice = Number(basePrice);
+  if (!Number.isFinite(normalizedBasePrice) || normalizedBasePrice <= 0) {
+    return { error: 'Variant rows require a valid base price greater than 0.' };
+  }
+
+  return {
+    value: combinationsResult.value.map((optionCombination) => ({
+      option_combination: optionCombination,
+      price: normalizedBasePrice,
+      stock_quantity: 0,
+      image_url: null,
+      sku: null,
+    })),
+  };
+};
+
 const resolveExistingProductMediaItems = (product) => {
   const collected = [
     ...normalizeProductMediaUrls(product?.image_urls),
@@ -519,6 +684,7 @@ const createProductFormState = (overrides = {}) => ({
   sale_price: '',
   is_on_sale: false,
   bulk_pricing: [],
+  variant_options: [],
   sku: '',
   sku_mode: SKU_MODE_AUTO,
   barcode: '',
@@ -581,6 +747,7 @@ const ProductsView = () => {
   const [editingSubcategoryId, setEditingSubcategoryId] = useState(null);
   const [editingSubcategoryName, setEditingSubcategoryName] = useState('');
   const [form, setForm] = useState(createProductFormState());
+  const [variantValueDraftByOption, setVariantValueDraftByOption] = useState({});
   const [draftSaveState, setDraftSaveState] = useState('');
   const productMediaItemsRef = useRef([]);
   const productVideoItemRef = useRef(null);
@@ -669,6 +836,20 @@ const ProductsView = () => {
       window.clearTimeout(timeoutId);
     };
   }, [modalOpen, editing, form, categorySearchQuery, formStep]);
+
+  useEffect(() => {
+    if (!modalOpen || Boolean(creationSuccess)) return undefined;
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [modalOpen, creationSuccess]);
 
   const resetProductMediaItems = (nextItems = []) => {
     productMediaItemsRef.current.forEach(revokeLocalMediaPreview);
@@ -785,6 +966,107 @@ const ProductsView = () => {
     updateInlineInfoError('category_id', false, 'Category is required.');
   };
 
+  const addVariantOptionGroup = () => {
+    const currentOptions = Array.isArray(form.variant_options) ? form.variant_options : [];
+    if (currentOptions.length >= PRODUCT_VARIANT_MAX_OPTIONS) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        variant_options: `A maximum of ${PRODUCT_VARIANT_MAX_OPTIONS} variant options is supported.`,
+      }));
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      variant_options: [
+        ...(Array.isArray(prev.variant_options) ? prev.variant_options : []),
+        { id: createVariantOptionId(), name: '', values: [] },
+      ],
+    }));
+    clearFieldError('variant_options');
+  };
+
+  const updateVariantOptionGroupName = (optionId, nextName) => {
+    setForm((prev) => ({
+      ...prev,
+      variant_options: (Array.isArray(prev.variant_options) ? prev.variant_options : []).map((option) => (
+        option.id === optionId
+          ? { ...option, name: nextName }
+          : option
+      )),
+    }));
+    clearFieldError('variant_options');
+  };
+
+  const removeVariantOptionGroup = (optionId) => {
+    setForm((prev) => ({
+      ...prev,
+      variant_options: (Array.isArray(prev.variant_options) ? prev.variant_options : []).filter((option) => option.id !== optionId),
+    }));
+
+    setVariantValueDraftByOption((prev) => {
+      const next = { ...prev };
+      delete next[optionId];
+      return next;
+    });
+
+    clearFieldError('variant_options');
+  };
+
+  const addVariantOptionValues = (optionId) => {
+    const valueDraft = variantValueDraftByOption[optionId] || '';
+    const parsedValues = parseVariantOptionValuesInput(valueDraft);
+    if (parsedValues.length === 0) return;
+
+    setForm((prev) => ({
+      ...prev,
+      variant_options: (Array.isArray(prev.variant_options) ? prev.variant_options : []).map((option) => {
+        if (option.id !== optionId) return option;
+
+        const seenValues = new Set((Array.isArray(option.values) ? option.values : []).map((value) => String(value || '').toLowerCase()));
+        const nextValues = Array.isArray(option.values) ? [...option.values] : [];
+
+        parsedValues.forEach((rawValue) => {
+          const normalizedValue = normalizeVariantOptionValue(rawValue);
+          if (!normalizedValue) return;
+
+          const token = normalizedValue.toLowerCase();
+          if (seenValues.has(token)) return;
+          seenValues.add(token);
+          if (nextValues.length >= PRODUCT_VARIANT_MAX_VALUES) return;
+
+          nextValues.push(normalizedValue);
+        });
+
+        return {
+          ...option,
+          values: nextValues,
+        };
+      }),
+    }));
+
+    setVariantValueDraftByOption((prev) => ({
+      ...prev,
+      [optionId]: '',
+    }));
+
+    clearFieldError('variant_options');
+  };
+
+  const removeVariantOptionValue = (optionId, optionValue) => {
+    setForm((prev) => ({
+      ...prev,
+      variant_options: (Array.isArray(prev.variant_options) ? prev.variant_options : []).map((option) => {
+        if (option.id !== optionId) return option;
+        return {
+          ...option,
+          values: (Array.isArray(option.values) ? option.values : []).filter((value) => value !== optionValue),
+        };
+      }),
+    }));
+    clearFieldError('variant_options');
+  };
+
   const openAdd = () => {
     const defaultCategoryId = categories[0]?.id?.toString() || '';
     const defaultCategoryName = categories[0]?.name || '';
@@ -818,10 +1100,12 @@ const ProductsView = () => {
     setDescriptionEditorInitialHtml(toDescriptionEditorHtml(restoredForm.description || ''));
     setDescriptionEditorSeed((prev) => prev + 1);
     setFormStep(restoredStep);
+    setVariantValueDraftByOption({});
     setForm(createProductFormState({
       category_id: defaultCategoryId,
       ...restoredForm,
       bulk_pricing: Array.isArray(restoredForm.bulk_pricing) ? restoredForm.bulk_pricing : [],
+      variant_options: normalizeVariantOptionsDraft(restoredForm.variant_options),
       status: normalizeProductStatus(restoredForm.status),
       shipping_option: resolveShippingOptionDraft(restoredForm.shipping_option),
     }));
@@ -843,7 +1127,9 @@ const ProductsView = () => {
     setDescriptionEditorInitialHtml(toDescriptionEditorHtml(p.description || ''));
     setDescriptionEditorSeed((prev) => prev + 1);
     setFormStep(0);
+    setVariantValueDraftByOption({});
     const normalizedBulkPricing = normalizeBulkPricingDraft(p.bulk_pricing);
+    const normalizedVariantOptions = normalizeVariantOptionsDraft(p.variant_options);
     const shippingDimensionsDraft = resolveShippingDimensionsDraft(p.shipping_dimensions);
     setForm(createProductFormState({
       partNumber: p.partNumber || '',
@@ -872,6 +1158,7 @@ const ProductsView = () => {
       image_urls: normalizeProductMediaUrls(p.image_urls),
       video_url: p.video_url || '',
       bulk_pricing: normalizedBulkPricing,
+      variant_options: normalizedVariantOptions,
     }));
     setModalOpen(true);
   };
@@ -890,7 +1177,9 @@ const ProductsView = () => {
     setDescriptionEditorInitialHtml(toDescriptionEditorHtml(p.description || ''));
     setDescriptionEditorSeed((prev) => prev + 1);
     setFormStep(0);
+    setVariantValueDraftByOption({});
     const normalizedBulkPricing = normalizeBulkPricingDraft(p.bulk_pricing);
+    const normalizedVariantOptions = normalizeVariantOptionsDraft(p.variant_options);
     const shippingDimensionsDraft = resolveShippingDimensionsDraft(p.shipping_dimensions);
     setForm(createProductFormState({
       partNumber: '',
@@ -919,6 +1208,7 @@ const ProductsView = () => {
       image_urls: normalizeProductMediaUrls(p.image_urls),
       video_url: p.video_url || '',
       bulk_pricing: normalizedBulkPricing,
+      variant_options: normalizedVariantOptions,
     }));
     setModalOpen(true);
   };
@@ -950,6 +1240,16 @@ const ProductsView = () => {
     }
 
     if (stepIndex === 2) {
+      const variantOptionsValidation = validateVariantOptionsDraft(form.variant_options);
+      if (variantOptionsValidation.error) {
+        return {
+          message: variantOptionsValidation.error,
+          fieldErrors: { variant_options: variantOptionsValidation.error },
+        };
+      }
+    }
+
+    if (stepIndex === 3) {
       const price = Number(form.price);
       const stockQty = Number(form.stock_quantity);
       const lowStockThreshold = Number(form.low_stock_threshold);
@@ -1567,6 +1867,7 @@ const ProductsView = () => {
     setIsCategoryDropdownOpen(false);
     setDescriptionEditorInitialHtml('');
     setDescriptionEditorSeed((prev) => prev + 1);
+    setVariantValueDraftByOption({});
     setDraftSaveState('');
     setMediaError('');
     setVideoError('');
@@ -2297,7 +2598,7 @@ const ProductsView = () => {
                 </div>
               )}
 
-              {formStep === 2 && (
+              {formStep === 3 && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <InputField label="Price" required>
@@ -2496,7 +2797,7 @@ const ProductsView = () => {
                 </div>
               )}
 
-              {formStep === 3 && (
+              {formStep === 2 && (
                 <div className="space-y-4">
                   <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4">
                     <h5 className="text-sm font-semibold text-white">Variant Setup</h5>
