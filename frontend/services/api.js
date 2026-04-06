@@ -1648,16 +1648,26 @@ export const getProductById = async (id) => {
       category_name: data.categories?.name,
     }]);
 
-    return product;
+    const variantData = await getProductVariants(id).catch(() => ({ options: [], variants: [] }));
+
+    return {
+      ...product,
+      variant_options: variantData.options || [],
+      variants: variantData.variants || [],
+    };
   }
 
   const product = await authenticatedFetch(`${API_URL}/products/${id}`);
+  const variantData = await getProductVariants(id).catch(() => ({ options: [], variants: [] }));
+
   return {
     ...product,
     partNumber: product.part_number,
     buyingPrice: product.buying_price,
     boxNumber: product.box_number,
     reviewCount: Number(product.review_count ?? product.reviewCount ?? 0),
+    variant_options: variantData.options || [],
+    variants: variantData.variants || [],
   };
 };
 

@@ -276,18 +276,110 @@ const parseResultLimit = (value, fallback = null, max = 80) => {
   return Math.min(parsed, max);
 };
 
+const normalizeVariantToken = (value, fallback = 'x') => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return normalized || fallback;
+};
+
+const buildVariantCombinationKey = (optionCombination, optionOrder) => optionOrder
+  .map((optionName) => `${normalizeVariantToken(optionName, 'opt')}:${normalizeVariantToken(optionCombination?.[optionName], 'val')}`)
+  .join('|');
+
+const normalizeStoredVariantOptions = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  const optionNameSet = new Set();
+  const options = [];
+
+  value.forEach((option) => {
+    const name = String(option?.name || '').trim();
+    if (!name) return;
+
+    const nameToken = name.toLowerCase();
+    if (optionNameSet.has(nameToken)) return;
+
+    optionNameSet.add(nameToken);
+
+    const seenValues = new Set();
+    const values = (Array.isArray(option?.values) ? option.values : [])
+      .map((rawValue) => String(rawValue || '').trim())
+      .filter(Boolean)
+      .filter((rawValue) => {
+        const valueToken = rawValue.toLowerCase();
+        if (seenValues.has(valueToken)) return false;
+        seenValues.add(valueToken);
+        return true;
+      })
+      .slice(0, 30);
+
+    if (values.length === 0) return;
+
+    options.push({ name, values });
+  });
+
+  return options;
+};
+
+const deriveVariantOptionsFromRows = (rows = []) => {
+  const optionValues = new Map();
+  const optionOrder = [];
+
+  rows.forEach((row) => {
+    const combination = row?.option_combination;
+    if (!combination || typeof combination !== 'object' || Array.isArray(combination)) return;
+
+    Object.entries(combination).forEach(([rawName, rawValue]) => {
+      const optionName = String(rawName || '').trim();
+      const optionValue = String(rawValue || '').trim();
+      if (!optionName || !optionValue) return;
+
+      if (!optionValues.has(optionName)) {
+        optionValues.set(optionName, []);
+        optionOrder.push(optionName);
+      }
+
+      const values = optionValues.get(optionName);
+      if (!values.includes(optionValue)) {
+        values.push(optionValue);
+      }
+    });
+  });
+
+  return optionOrder.map((name) => ({ name, values: optionValues.get(name) || [] }));
+};
+
 const ensureProductSchema = async () => {
   await pool.query(`
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb,
       ADD COLUMN IF NOT EXISTS video_url VARCHAR(500),
-      ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb;
+      ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS variant_options JSONB DEFAULT '[]'::jsonb;
   `).catch((error) => {
     console.error('Failed to ensure product media columns:', error);
   });
+
+  await pool.query(`
+    ALTER TABLE product_variants
+      ADD COLUMN IF NOT EXISTS price DECIMAL(10, 2),
+      ADD COLUMN IF NOT EXISTS option_combination JSONB DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS combination_key VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS image_url VARCHAR(500),
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+  `).catch((error) => {
+    console.error('Failed to ensure variant columns:', error);
+  });
 };
 
-ensureProductSchema();
+const ensureProductSchemaReady = ensureProductSchema().catch((error) => {
+  console.error('Failed to ensure product schema:', error);
+});
 
 // Get all products
 export const getProducts = async (req, res) => {
@@ -470,6 +562,8 @@ export const getTopSellers = async (req, res) => {
 // Get single product by ID
 export const getProductById = async (req, res) => {
   try {
+    await ensureProductSchemaReady;
+
     const { id } = req.params;
     
     const result = await pool.query(
@@ -497,14 +591,102 @@ export const getProductById = async (req, res) => {
     }
 
     const product = result.rows[0];
+
+    let variantRows = [];
+    try {
+      const modernVariantResult = await pool.query(
+        `SELECT id, product_id, variant_type, variant_value, price_adjustment, price,
+                stock_quantity, sku, image_url, option_combination, combination_key
+         FROM product_variants
+         WHERE product_id = $1
+         ORDER BY created_at ASC, id ASC`,
+        [id]
+      );
+      variantRows = modernVariantResult.rows;
+    } catch (variantError) {
+      try {
+        const legacyVariantResult = await pool.query(
+          `SELECT id, product_id, variant_type, variant_value, price_adjustment,
+                  stock_quantity, sku
+           FROM product_variants
+           WHERE product_id = $1
+           ORDER BY variant_type ASC, variant_value ASC`,
+          [id]
+        );
+        variantRows = legacyVariantResult.rows;
+      } catch (legacyError) {
+        console.warn('Could not load product variants:', legacyError.message || variantError.message);
+      }
+    }
+
+    const storedVariantOptions = normalizeStoredVariantOptions(product.variant_options);
+    const optionOrder = storedVariantOptions.map((option) => option.name);
+    const basePrice = Number(product.price);
+
+    const variants = variantRows
+      .map((variantRow) => {
+        let optionCombination = variantRow.option_combination;
+
+        if (!optionCombination || typeof optionCombination !== 'object' || Array.isArray(optionCombination)) {
+          const fallbackOptionName = optionOrder[0] || String(variantRow.variant_type || 'Option').trim() || 'Option';
+          const fallbackOptionValue = String(variantRow.variant_value || '').trim();
+          optionCombination = fallbackOptionValue ? { [fallbackOptionName]: fallbackOptionValue } : {};
+        }
+
+        const normalizedCombination = {};
+        const combinationOrder = optionOrder.length > 0 ? optionOrder : Object.keys(optionCombination);
+
+        combinationOrder.forEach((optionName) => {
+          const optionValue = String(optionCombination?.[optionName] || '').trim();
+          if (!optionValue) return;
+          normalizedCombination[optionName] = optionValue;
+        });
+
+        if (Object.keys(normalizedCombination).length === 0) {
+          Object.entries(optionCombination || {}).forEach(([rawName, rawValue]) => {
+            const optionName = String(rawName || '').trim();
+            const optionValue = String(rawValue || '').trim();
+            if (!optionName || !optionValue) return;
+            normalizedCombination[optionName] = optionValue;
+          });
+        }
+
+        if (Object.keys(normalizedCombination).length === 0) {
+          return null;
+        }
+
+        const normalizedOrder = optionOrder.length > 0 ? optionOrder : Object.keys(normalizedCombination);
+        const resolvedPrice = Number.isFinite(Number(variantRow.price))
+          ? Number(variantRow.price)
+          : basePrice + Number(variantRow.price_adjustment || 0);
+
+        return {
+          id: variantRow.id,
+          product_id: variantRow.product_id,
+          option_combination: normalizedCombination,
+          combination_key: variantRow.combination_key || buildVariantCombinationKey(normalizedCombination, normalizedOrder),
+          price: Number.isFinite(resolvedPrice) ? resolvedPrice : basePrice,
+          stock_quantity: Number.isFinite(Number(variantRow.stock_quantity)) ? Number(variantRow.stock_quantity) : 0,
+          image_url: String(variantRow.image_url || '').trim() || null,
+          sku: String(variantRow.sku || '').trim() || null,
+        };
+      })
+      .filter(Boolean);
+
+    const variantOptions = storedVariantOptions.length > 0
+      ? storedVariantOptions
+      : deriveVariantOptionsFromRows(variants);
+
     res.json({
       ...product,
       rating: parseFloat(product.review_rating ?? product.rating ?? 0),
       review_count: parseInt(product.review_count ?? 0, 10),
       price: parseFloat(product.price),
-      buying_price: parseFloat(product.buying_price),
+      buying_price: product.buying_price !== null ? parseFloat(product.buying_price) : null,
       sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
-      stock_quantity: parseInt(product.stock_quantity)
+      stock_quantity: parseInt(product.stock_quantity, 10),
+      variant_options: variantOptions,
+      variants,
     });
   } catch (error) {
     console.error('Get product error:', error);
