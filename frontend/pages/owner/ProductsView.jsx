@@ -40,6 +40,8 @@ const PRODUCT_STATUS_DRAFT = 'draft';
 const PRODUCT_STATUS_PUBLISHED = 'published';
 const PRODUCT_ALLOWED_STATUSES = new Set([PRODUCT_STATUS_DRAFT, PRODUCT_STATUS_PUBLISHED]);
 const PRODUCT_LEGACY_STATUSES = new Set(['available', 'hidden', 'out_of_stock']);
+const PRODUCT_FORM_DRAFT_STORAGE_KEY = 'owner-products-form-draft-v1';
+const PRODUCT_FORM_DRAFT_AUTOSAVE_DELAY_MS = 450;
 
 const createProductMediaId = () => `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -391,6 +393,7 @@ const ProductsView = () => {
   const [editingSubcategoryId, setEditingSubcategoryId] = useState(null);
   const [editingSubcategoryName, setEditingSubcategoryName] = useState('');
   const [form, setForm] = useState(createProductFormState());
+  const [draftSaveState, setDraftSaveState] = useState('');
   const productMediaItemsRef = useRef([]);
   const productVideoItemRef = useRef(null);
   const galleryUploadInputRef = useRef(null);
@@ -442,6 +445,36 @@ const ProductsView = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  useEffect(() => {
+    if (!modalOpen || editing) return;
+
+    setDraftSaveState('Saving draft...');
+
+    const timeoutId = window.setTimeout(() => {
+      try {
+        const draftPayload = {
+          form: {
+            ...form,
+            status: normalizeProductStatus(form.status),
+            shipping_option: resolveShippingOptionDraft(form.shipping_option),
+          },
+          categorySearchQuery,
+          formStep,
+          savedAt: new Date().toISOString(),
+        };
+
+        window.localStorage.setItem(PRODUCT_FORM_DRAFT_STORAGE_KEY, JSON.stringify(draftPayload));
+        setDraftSaveState('Draft auto-saved');
+      } catch {
+        setDraftSaveState('');
+      }
+    }, PRODUCT_FORM_DRAFT_AUTOSAVE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [modalOpen, editing, form, categorySearchQuery, formStep]);
 
   const resetProductMediaItems = (nextItems = []) => {
     productMediaItemsRef.current.forEach(revokeLocalMediaPreview);
@@ -537,22 +570,48 @@ const ProductsView = () => {
   const openAdd = () => {
     const defaultCategoryId = categories[0]?.id?.toString() || '';
     const defaultCategoryName = categories[0]?.name || '';
+    let restoredDraft = null;
+
+    try {
+      const rawDraft = window.localStorage.getItem(PRODUCT_FORM_DRAFT_STORAGE_KEY);
+      const parsedDraft = rawDraft ? JSON.parse(rawDraft) : null;
+      if (parsedDraft && typeof parsedDraft === 'object' && parsedDraft.form && typeof parsedDraft.form === 'object') {
+        restoredDraft = parsedDraft;
+      }
+    } catch {
+      restoredDraft = null;
+    }
+
+    const restoredForm = restoredDraft?.form || {};
+    const restoredStepRaw = Number.parseInt(String(restoredDraft?.formStep ?? 0), 10);
+    const restoredStep = Number.isFinite(restoredStepRaw)
+      ? Math.min(Math.max(restoredStepRaw, 0), PRODUCT_FORM_STEPS.length - 1)
+      : 0;
+
     setEditing(null);
     resetProductMediaItems([]);
     resetProductVideoItem(null);
     setFormError('');
     setInfoFieldErrors({});
-    setCategorySearchQuery(defaultCategoryName);
+    setCategorySearchQuery(restoredDraft?.categorySearchQuery || defaultCategoryName);
     setIsCategoryDropdownOpen(false);
-    setDescriptionEditorInitialHtml('');
+    setDescriptionEditorInitialHtml(toDescriptionEditorHtml(restoredForm.description || ''));
     setDescriptionEditorSeed((prev) => prev + 1);
-    setFormStep(0);
-    setForm(createProductFormState({ category_id: defaultCategoryId }));
+    setFormStep(restoredStep);
+    setForm(createProductFormState({
+      category_id: defaultCategoryId,
+      ...restoredForm,
+      bulk_pricing: Array.isArray(restoredForm.bulk_pricing) ? restoredForm.bulk_pricing : [],
+      status: normalizeProductStatus(restoredForm.status),
+      shipping_option: resolveShippingOptionDraft(restoredForm.shipping_option),
+    }));
+    setDraftSaveState(restoredDraft ? 'Draft restored' : '');
     setModalOpen(true);
   };
 
   const openEdit = (p) => {
     setEditing(p);
+    setDraftSaveState('');
     resetProductMediaItems(resolveExistingProductMediaItems(p));
     resetProductVideoItem(resolveExistingProductVideoItem(p));
     setFormError('');
@@ -597,6 +656,7 @@ const ProductsView = () => {
 
   const handleDuplicate = (p) => {
     setEditing(null);
+    setDraftSaveState('');
     resetProductMediaItems(resolveExistingProductMediaItems(p));
     resetProductVideoItem(resolveExistingProductVideoItem(p));
     setFormError('');
@@ -938,8 +998,7 @@ const ProductsView = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const saveProduct = async ({ forcedStatus = null } = {}) => {
     if (!validateAllSteps()) return;
 
     try {
@@ -1051,7 +1110,7 @@ const ProductsView = () => {
         low_stock_threshold: form.low_stock_threshold === '' ? undefined : parseInt(form.low_stock_threshold, 10),
         sale_price: form.is_on_sale && hasSalePrice ? Number(form.sale_price) : null,
         is_on_sale: form.is_on_sale,
-        status: normalizeProductStatus(form.status),
+        status: normalizeProductStatus(forcedStatus || form.status),
         sku: shouldAutoGenerateSku ? undefined : manualSku,
         auto_generate_sku: shouldAutoGenerateSku,
         bulk_pricing: bulkPricingValidation.value,
@@ -1060,7 +1119,12 @@ const ProductsView = () => {
       };
 
       if (editing) await updateProduct(editing.id, payload);
-      else await createProduct(payload);
+      else {
+        await createProduct(payload);
+        window.localStorage.removeItem(PRODUCT_FORM_DRAFT_STORAGE_KEY);
+      }
+
+      setDraftSaveState('');
       fetch();
       setTimeout(() => closeProductModal(), 100);
     } catch (e) {
@@ -1069,6 +1133,11 @@ const ProductsView = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await saveProduct();
   };
 
   const handleDelete = (p) => {
@@ -1085,6 +1154,7 @@ const ProductsView = () => {
     setIsCategoryDropdownOpen(false);
     setDescriptionEditorInitialHtml('');
     setDescriptionEditorSeed((prev) => prev + 1);
+    setDraftSaveState('');
     setMediaError('');
     setVideoError('');
     setIsMediaDragOver(false);
@@ -1238,6 +1308,8 @@ const ProductsView = () => {
     category.name.toLowerCase().includes(categorySearchQuery.trim().toLowerCase())
   ));
 
+  const progressPercent = Math.round(((formStep + 1) / PRODUCT_FORM_STEPS.length) * 100);
+
 
 
   return (
@@ -1359,15 +1431,27 @@ const ProductsView = () => {
       {/* Product Modal */}
       {modalOpen && (
         <Modal isOpen={modalOpen} onClose={closeProductModal} title={editing ? 'Edit Product' : 'Add Product'} size="2xl">
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5 pb-24 sm:pb-20">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-gray-300">
                   Step {formStep + 1} of {PRODUCT_FORM_STEPS.length}
                 </p>
-                <p className="text-[11px] text-gray-500">
-                  {PRODUCT_FORM_STEPS[formStep]?.hint}
-                </p>
+                <div className="text-right">
+                  <p className="text-[11px] text-gray-500">{PRODUCT_FORM_STEPS[formStep]?.hint}</p>
+                  {!editing && draftSaveState && (
+                    <p className="text-[10px] text-emerald-300">{draftSaveState}</p>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-red-500 to-amber-400 transition-all duration-300"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-gray-500 text-right">{progressPercent}% complete</p>
               </div>
               <div className="overflow-x-auto pb-1">
                 <div className="flex min-w-max gap-2">
@@ -2055,33 +2139,54 @@ const ProductsView = () => {
               </div>
             )}
 
-            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 border-t border-gray-700">
-              <button type="button" onClick={closeProductModal} className="px-5 py-2 text-sm text-gray-300 hover:bg-[#202430] rounded-lg transition-colors">Cancel</button>
-
-              <div className="flex items-center justify-end gap-2">
-                {formStep > 0 && (
+            <div className="sticky bottom-0 z-20 -mx-5 px-4 sm:px-5 py-3 border-t border-white/10 bg-[#111318]/95 backdrop-blur supports-[backdrop-filter]:bg-[#111318]/80">
+              <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => goToStep(formStep - 1)}
-                    className="px-4 py-2 text-sm text-gray-200 bg-[#202430] hover:bg-[#2a3244] rounded-lg transition-colors"
+                    onClick={closeProductModal}
+                    className="px-4 py-2 text-sm text-gray-300 hover:bg-[#202430] rounded-lg transition-colors"
                   >
-                    Previous
+                    Cancel
                   </button>
-                )}
+                  {formStep > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => goToStep(formStep - 1)}
+                      className="px-4 py-2 text-sm text-gray-200 bg-[#202430] hover:bg-[#2a3244] rounded-lg transition-colors"
+                    >
+                      Previous
+                    </button>
+                  )}
+                  {formStep < PRODUCT_FORM_STEPS.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => goToStep(formStep + 1)}
+                      className="px-4 py-2 text-sm text-gray-100 bg-[#2a3244] hover:bg-[#35415a] rounded-lg transition-colors"
+                    >
+                      Next
+                    </button>
+                  )}
+                </div>
 
-                {formStep < PRODUCT_FORM_STEPS.length - 1 ? (
+                <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:min-w-[300px]">
                   <button
                     type="button"
-                    onClick={() => goToStep(formStep + 1)}
-                    className="px-5 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                    onClick={() => saveProduct({ forcedStatus: PRODUCT_STATUS_DRAFT })}
+                    disabled={submitting}
+                    className="px-4 py-2 bg-[#2a3244] hover:bg-[#35415a] disabled:opacity-70 text-gray-100 text-sm font-medium rounded-lg transition-colors"
                   >
-                    Next
+                    {submitting ? 'Saving...' : 'Save Draft'}
                   </button>
-                ) : (
-                  <button type="submit" disabled={submitting} className="px-5 py-2 bg-red-500/100 hover:bg-red-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors">
-                    {submitting ? 'Saving...' : editing ? 'Update Product' : 'Create Product'}
+                  <button
+                    type="button"
+                    onClick={() => saveProduct({ forcedStatus: PRODUCT_STATUS_PUBLISHED })}
+                    disabled={submitting}
+                    className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:opacity-70 text-white text-sm font-semibold rounded-lg transition-colors"
+                  >
+                    {submitting ? 'Publishing...' : 'Publish'}
                   </button>
-                )}
+                </div>
               </div>
             </div>
           </form>
