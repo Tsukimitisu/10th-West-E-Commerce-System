@@ -11,7 +11,7 @@ const PRODUCT_FORM_STEPS = [
   { key: 'variants', label: 'Variants', hint: 'Define options before pricing' },
   { key: 'pricing', label: 'Pricing & Stock', hint: 'Set prices and inventory' },
   { key: 'shipping', label: 'Shipping', hint: 'Fulfillment details' },
-  { key: 'status', label: 'Status', hint: 'Visibility and sale state' },
+  { key: 'status', label: 'Publish', hint: 'Finalize visibility and publish settings' },
 ];
 
 const PRODUCT_MEDIA_MIN_FILES = 1;
@@ -1239,7 +1239,7 @@ const ProductsView = () => {
       }
     }
 
-    if (stepIndex === 2) {
+    if (stepIndex === 2 && !editing) {
       const variantOptionsValidation = validateVariantOptionsDraft(form.variant_options);
       if (variantOptionsValidation.error) {
         return {
@@ -1697,6 +1697,17 @@ const ProductsView = () => {
 
       const finalImage = normalizedMediaUrls[0];
       const regularPrice = Number(form.price);
+      let normalizedVariantOptions = [];
+      if (!editing) {
+        const variantOptionsValidation = validateVariantOptionsDraft(form.variant_options);
+        if (variantOptionsValidation.error) {
+          setFormStep(2);
+          setFieldErrors((prev) => ({ ...prev, variant_options: variantOptionsValidation.error }));
+          throw new Error(variantOptionsValidation.error);
+        }
+        normalizedVariantOptions = variantOptionsValidation.value;
+      }
+
       const bulkPricingValidation = validateBulkPricingTiers(form.bulk_pricing, regularPrice);
       if (bulkPricingValidation.error) {
         throw new Error(bulkPricingValidation.error);
@@ -1772,13 +1783,41 @@ const ProductsView = () => {
         brand: form.brand
       };
 
-      if (editing) await updateProduct(editing.id, payload);
-      else {
+      if (editing) {
+        await updateProduct(editing.id, payload);
+      } else {
         const createdProduct = await createProduct(payload);
+        let variantWarning = '';
+
+        if (normalizedVariantOptions.length > 0) {
+          const variantRowsResult = buildDefaultVariantRows({
+            options: normalizedVariantOptions,
+            basePrice: regularPrice,
+          });
+
+          if (variantRowsResult.error) {
+            variantWarning = `${variantRowsResult.error} Open "View product" to complete variant setup.`;
+          } else {
+            try {
+              await saveProductVariants(createdProduct.id, {
+                options: normalizedVariantOptions,
+                variants: variantRowsResult.value,
+              });
+            } catch (variantSaveError) {
+              const variantFriendlyMessage = getFriendlyRequestErrorMessage(
+                variantSaveError,
+                'Variants could not be saved right now.'
+              );
+              variantWarning = `Product was added, but variants were not saved. ${variantFriendlyMessage} Open "View product" to complete variant setup.`;
+            }
+          }
+        }
+
         window.localStorage.removeItem(PRODUCT_FORM_DRAFT_STORAGE_KEY);
         setCreationSuccess({
           product: createdProduct,
           productName: String(createdProduct?.name || payload.name || '').trim() || 'Product',
+          warning: variantWarning,
         });
       }
 
@@ -1856,6 +1895,24 @@ const ProductsView = () => {
   };
 
   const closeProductModal = () => {
+    if (!editing && modalOpen && !creationSuccess) {
+      try {
+        const draftPayload = {
+          form: {
+            ...form,
+            status: normalizeProductStatus(form.status),
+            shipping_option: resolveShippingOptionDraft(form.shipping_option),
+          },
+          categorySearchQuery,
+          formStep,
+          savedAt: new Date().toISOString(),
+        };
+        window.localStorage.setItem(PRODUCT_FORM_DRAFT_STORAGE_KEY, JSON.stringify(draftPayload));
+      } catch {
+        // Best effort only.
+      }
+    }
+
     setModalOpen(false);
     setCreationSuccess(null);
     resetProductMediaItems([]);
@@ -2028,6 +2085,9 @@ const ProductsView = () => {
   const filteredCategoryOptions = categories.filter((category) => (
     category.name.toLowerCase().includes(categorySearchQuery.trim().toLowerCase())
   ));
+  const variantOptionRows = Array.isArray(form.variant_options) ? form.variant_options : [];
+  const variantOptionsValidation = validateVariantOptionsDraft(variantOptionRows);
+  const variantCombinationCount = Number(variantOptionsValidation.combinationCount || 0);
 
   const progressPercent = Math.round(((formStep + 1) / PRODUCT_FORM_STEPS.length) * 100);
 
@@ -2165,6 +2225,11 @@ const ProductsView = () => {
                 <p className="mt-1 text-sm text-gray-200">
                   {creationSuccess.productName} is now in your catalog.
                 </p>
+                {creationSuccess.warning && (
+                  <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                    {creationSuccess.warning}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2799,39 +2864,175 @@ const ProductsView = () => {
 
               {formStep === 2 && (
                 <div className="space-y-4">
-                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4">
-                    <h5 className="text-sm font-semibold text-white">Variant Setup</h5>
-                    <p className="mt-1 text-xs text-gray-400">
-                      Use the variant manager for size, color, or model combinations.
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!editing) return;
-                          setSelectedProductVariants(editing);
-                          setVariantsModalOpen(true);
-                        }}
-                        disabled={!editing}
-                        className="px-4 py-2 bg-red-500/90 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-                      >
-                        Open Variant Manager
-                      </button>
+                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h5 className="text-sm font-semibold text-white">Variant Setup</h5>
+                        <p className="mt-1 text-xs text-gray-400">
+                          Define variant options now. Combinations are generated automatically when you publish.
+                        </p>
+                      </div>
                       {!editing && (
-                        <span className="text-xs text-amber-300">Save product first, then configure variants.</span>
+                        <button
+                          type="button"
+                          onClick={addVariantOptionGroup}
+                          disabled={variantOptionRows.length >= PRODUCT_VARIANT_MAX_OPTIONS}
+                          className="px-3 py-1.5 bg-[#2a3244] hover:bg-[#37425b] disabled:opacity-60 text-gray-100 text-xs font-semibold rounded-lg transition-colors"
+                        >
+                          + Add Option
+                        </button>
                       )}
                     </div>
+
+                    {!editing ? (
+                      variantOptionRows.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-white/15 bg-[#171a22]/70 px-3 py-4 text-xs text-gray-400">
+                          No variant options yet. Add an option like Color or Size.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {variantOptionRows.map((option, optionIndex) => {
+                            const optionId = option.id;
+                            const optionValues = Array.isArray(option.values) ? option.values : [];
+                            const valueDraft = variantValueDraftByOption[optionId] || '';
+
+                            return (
+                              <div
+                                key={optionId}
+                                className="rounded-lg border border-white/10 bg-[#171a22]/70 p-3 space-y-3"
+                              >
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                                  <InputField label={`Option ${optionIndex + 1} Name`} required>
+                                    <input
+                                      value={option.name || ''}
+                                      onChange={(event) => updateVariantOptionGroupName(optionId, event.target.value)}
+                                      className={inputClass}
+                                      placeholder="Example: Color"
+                                    />
+                                  </InputField>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => removeVariantOptionGroup(optionId)}
+                                    className="h-10 px-3 bg-red-500/15 hover:bg-red-500/25 text-red-300 text-xs font-semibold rounded-lg transition-colors"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <p className="text-xs text-gray-400">Values</p>
+                                  {optionValues.length === 0 ? (
+                                    <p className="text-xs text-gray-500">No values yet.</p>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                      {optionValues.map((optionValue) => (
+                                        <button
+                                          key={`${optionId}-${optionValue}`}
+                                          type="button"
+                                          onClick={() => removeVariantOptionValue(optionId, optionValue)}
+                                          className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-[#202430] px-2.5 py-1 text-xs text-gray-100 hover:bg-[#2a3244] transition-colors"
+                                          title="Remove value"
+                                        >
+                                          <span>{optionValue}</span>
+                                          <span className="text-gray-400">×</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  <div className="flex flex-col gap-2 sm:flex-row">
+                                    <input
+                                      value={valueDraft}
+                                      onChange={(event) => {
+                                        setVariantValueDraftByOption((prev) => ({
+                                          ...prev,
+                                          [optionId]: event.target.value,
+                                        }));
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter' || event.key === ',') {
+                                          event.preventDefault();
+                                          addVariantOptionValues(optionId);
+                                        }
+                                      }}
+                                      className={`${inputClass} sm:flex-1`}
+                                      placeholder="Type value then press Enter (e.g. Red, Blue)"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => addVariantOptionValues(optionId)}
+                                      disabled={!String(valueDraft || '').trim() || optionValues.length >= PRODUCT_VARIANT_MAX_VALUES}
+                                      className="px-3 py-2 bg-[#2a3244] hover:bg-[#37425b] disabled:opacity-60 text-gray-100 text-xs font-semibold rounded-lg transition-colors"
+                                    >
+                                      Add Value
+                                    </button>
+                                  </div>
+
+                                  {optionValues.length >= PRODUCT_VARIANT_MAX_VALUES && (
+                                    <p className="text-[11px] text-amber-300">
+                                      This option already has the maximum of {PRODUCT_VARIANT_MAX_VALUES} values.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )
+                    ) : (
+                      <div className="rounded-lg border border-white/10 bg-[#171a22]/70 p-3">
+                        <p className="text-xs text-gray-300">
+                          For existing products, use the variant manager to edit options, prices, SKUs, and stock per combination.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedProductVariants(editing);
+                            setVariantsModalOpen(true);
+                          }}
+                          className="mt-3 px-4 py-2 bg-red-500/90 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          Open Variant Manager
+                        </button>
+                      </div>
+                    )}
                   </div>
+
+                  {!editing && (
+                    <div className="rounded-xl border border-white/10 bg-[#202430]/30 p-3">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Combination Preview</p>
+                      {variantOptionsValidation.error ? (
+                        <p className="mt-1 text-xs text-amber-300">{variantOptionsValidation.error}</p>
+                      ) : (
+                        <p className="mt-1 text-xs text-gray-300">
+                          {variantCombinationCount === 0
+                            ? 'No combinations yet. Add options and values to generate combinations.'
+                            : `${variantCombinationCount} combination${variantCombinationCount === 1 ? '' : 's'} will be created at publish.`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {getFieldError('variant_options') && (
+                    <p className="text-xs text-red-300">{getFieldError('variant_options')}</p>
+                  )}
 
                   <InputField label="Variant Notes">
                     <textarea
                       value={form.variant_notes}
-                      onChange={e => setForm(f => ({ ...f, variant_notes: e.target.value }))}
+                      onChange={e => {
+                        setForm(f => ({ ...f, variant_notes: e.target.value }));
+                        clearFieldError('variant_notes');
+                      }}
                       rows={3}
                       className={inputClass}
                       placeholder="Example: Color (Black/Red), Size (S/M/L)"
                     />
                   </InputField>
+                  {getFieldError('variant_notes') && (
+                    <p className="text-xs text-red-300">{getFieldError('variant_notes')}</p>
+                  )}
                 </div>
               )}
 
