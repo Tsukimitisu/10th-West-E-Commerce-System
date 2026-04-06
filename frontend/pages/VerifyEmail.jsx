@@ -6,6 +6,7 @@ import { verifyEmailToken, resendVerificationEmail, confirmEmailChangeToken } fr
 const VERIFY_REQUEST_CACHE_MS = 30 * 1000;
 const verifyRequestCache = new Map();
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
+const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
 
 const getPostVerifyRedirect = (user) => {
   const role = String(user?.role || '').toLowerCase();
@@ -59,6 +60,25 @@ const confirmEmailChangeOnce = (token) => {
   return request;
 };
 
+const publishAuthVerifiedSignal = (user = null) => {
+  if (typeof window === 'undefined') return;
+
+  const payload = {
+    verified: true,
+    userId: Number(user?.id || 0) || null,
+    at: Date.now(),
+    source: 'verify-email',
+  };
+
+  try {
+    window.localStorage.setItem(AUTH_VERIFIED_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Best effort only.
+  }
+
+  window.dispatchEvent(new CustomEvent('auth:verified', { detail: payload }));
+};
+
 const VerifyEmail = ({ onLogin }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -66,7 +86,7 @@ const VerifyEmail = ({ onLogin }) => {
   const emailChangeToken = searchParams.get('emailChangeToken');
   const isEmailChangeFlow = Boolean(String(emailChangeToken || '').trim());
   const [status, setStatus] = useState('loading');
-  const [message, setMessage] = useState('Verifying your email...');
+  const [message, setMessage] = useState('Verifying...');
   const [email, setEmail] = useState('');
   const [nextRoute, setNextRoute] = useState('/');
   const [resendStatus, setResendStatus] = useState('');
@@ -96,8 +116,10 @@ const VerifyEmail = ({ onLogin }) => {
     let cancelled = false;
 
     const runVerification = async () => {
+      let hardTimedOut = false;
       const hardTimeoutId = window.setTimeout(() => {
         if (cancelled) return;
+        hardTimedOut = true;
         setStatus('error');
         setMessage('Verification is taking too long. Please try again.');
       }, 10000);
@@ -108,9 +130,8 @@ const VerifyEmail = ({ onLogin }) => {
         const activeToken = normalizedEmailChangeToken || normalizedToken;
 
         if (!activeToken) {
-          if (lastProcessedTokenRef.current) {
-            return;
-          }
+          if (lastProcessedTokenRef.current) return;
+
           setStatus('error');
           setMessage('Verification token is missing. Please use the latest link from your email.');
           return;
@@ -122,13 +143,14 @@ const VerifyEmail = ({ onLogin }) => {
         lastProcessedTokenRef.current = activeToken;
 
         setStatus('loading');
-        setMessage(normalizedEmailChangeToken ? 'Confirming your new email address...' : 'Verifying your email...');
+        setMessage(normalizedEmailChangeToken ? 'Confirming your new email address...' : 'Verifying...');
 
         try {
           const result = normalizedEmailChangeToken
             ? await confirmEmailChangeOnce(normalizedEmailChangeToken)
             : await verifyTokenOnce(normalizedToken);
-          if (cancelled) return;
+
+          if (cancelled || hardTimedOut) return;
 
           setStatus('success');
           clearVerificationTokenFromUrl();
@@ -140,7 +162,9 @@ const VerifyEmail = ({ onLogin }) => {
                 localStorage.setItem('shopCoreUser', JSON.stringify({ ...existingUser, ...result.user }));
                 window.dispatchEvent(new Event('auth:changed'));
               }
-            } catch {}
+            } catch {
+              // Ignore local cache merge failures.
+            }
 
             const destination = localStorage.getItem('shopCoreToken') ? '/profile' : '/login';
             setNextRoute(destination);
@@ -154,8 +178,9 @@ const VerifyEmail = ({ onLogin }) => {
           if (result?.token && result?.user && onLoginRef.current) {
             const destination = getPostVerifyRedirect(result.user);
             setNextRoute(destination);
-            setMessage(result?.alreadyVerified ? 'Account already verified. Redirecting...' : 'Email verified successfully. Redirecting...');
+            setMessage(result?.alreadyVerified ? 'Already verified. Logging you in...' : 'Email verified successfully. Logging you in...');
             onLoginRef.current(result.user, result.token);
+            publishAuthVerifiedSignal(result.user);
             redirectTimeoutRef.current = window.setTimeout(() => {
               if (!cancelled) navigate(destination, { replace: true });
             }, 1000);
@@ -163,12 +188,12 @@ const VerifyEmail = ({ onLogin }) => {
           }
 
           setNextRoute('/login');
-          setMessage(result?.alreadyVerified ? 'Account already verified. Redirecting...' : 'Email verified successfully. Redirecting...');
+          setMessage(result?.alreadyVerified ? 'Already verified. Please log in to continue.' : 'Email verified successfully. Please log in to continue.');
           redirectTimeoutRef.current = window.setTimeout(() => {
             if (!cancelled) navigate('/login?verified=1', { replace: true });
           }, 1200);
         } catch (err) {
-          if (cancelled) return;
+          if (cancelled || hardTimedOut) return;
 
           const code = String(err?.code || '').toUpperCase();
           const fieldTokenError = String(err?.fieldErrors?.token || '').trim();
@@ -186,7 +211,9 @@ const VerifyEmail = ({ onLogin }) => {
               }, 900);
               return;
             }
-          } catch {}
+          } catch {
+            // Ignore local cache parse issues.
+          }
 
           setStatus('error');
 
@@ -275,7 +302,7 @@ const VerifyEmail = ({ onLogin }) => {
         {status === 'loading' && (
           <>
             <Loader className="w-12 h-12 text-orange-500 animate-spin mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">{isEmailChangeFlow ? 'Confirming your email change...' : 'Verifying your email...'}</h2>
+            <h2 className="text-xl font-bold text-white mb-2">{isEmailChangeFlow ? 'Confirming your email change...' : 'Verifying...'}</h2>
             <p className="text-gray-400">{message}</p>
           </>
         )}

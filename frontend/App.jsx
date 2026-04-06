@@ -39,6 +39,7 @@ import { SocketProvider } from './context/SocketContext.jsx';
 import { Role } from './types.js';
 
 const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
+const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
 
 const AppLayout = ({ user, onLogout, onLogin }) => {
   const location = useLocation();
@@ -90,7 +91,15 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                       ? <Navigate to="/" replace />
                       : <Login onLogin={onLogin} />
               } />
-              <Route path="/register" element={<Register onLogin={onLogin} />} />
+              <Route path="/register" element={
+                user && (user.role === Role.OWNER || user.role === Role.STORE_STAFF || user.role === Role.ADMIN)
+                  ? <Navigate to="/admin" replace />
+                  : user && user.role === Role.SUPER_ADMIN
+                    ? <Navigate to="/super-admin" replace />
+                    : user
+                      ? <Navigate to="/" replace />
+                      : <Register onLogin={onLogin} />
+              } />
               <Route path="/verify-email" element={<VerifyEmail onLogin={onLogin} />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
@@ -237,6 +246,22 @@ const App = () => {
       }
     };
 
+    const syncUserWithProfileRefresh = async () => {
+      syncUserFromStorage();
+
+      if (!localStorage.getItem('shopCoreToken')) {
+        return;
+      }
+
+      try {
+        const profile = await getProfile();
+        if (isMounted) setUser(profile);
+        localStorage.setItem('shopCoreUser', JSON.stringify(profile));
+      } catch {
+        syncUserFromStorage();
+      }
+    };
+
     // Check for existing session
     const initAuth = async () => {
       if (USE_SUPABASE && supabase) {
@@ -306,12 +331,24 @@ const App = () => {
       const handleAuthChanged = () => {
         syncUserFromStorage();
       };
+
+      const handleAuthVerified = () => {
+        void syncUserWithProfileRefresh();
+      };
+
       const handleStorage = (event) => {
         if (!event.key || event.key === 'shopCoreUser' || event.key === 'shopCoreToken') {
           syncUserFromStorage();
+          return;
+        }
+
+        if (event.key === AUTH_VERIFIED_STORAGE_KEY) {
+          void syncUserWithProfileRefresh();
         }
       };
+
       window.addEventListener('auth:changed', handleAuthChanged);
+      window.addEventListener('auth:verified', handleAuthVerified);
       window.addEventListener('storage', handleStorage);
       const supabaseSubscription = USE_SUPABASE && supabase
         ? onAuthStateChange(() => syncUserFromStorage())
@@ -321,6 +358,7 @@ const App = () => {
 
       return () => {
         window.removeEventListener('auth:changed', handleAuthChanged);
+        window.removeEventListener('auth:verified', handleAuthVerified);
         window.removeEventListener('storage', handleStorage);
         supabaseSubscription?.data?.subscription?.unsubscribe?.();
       };
