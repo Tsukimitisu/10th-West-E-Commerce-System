@@ -72,7 +72,6 @@ const PRODUCT_FIELD_TO_STEP = {
   stock_quantity: 3,
   low_stock_threshold: 3,
   sku: 3,
-  barcode: 3,
   bulk_pricing: 3,
   shipping_option: 4,
   shipping_weight_kg: 4,
@@ -201,7 +200,6 @@ const inferProductFieldErrorsFromMessage = (message) => {
   if (text.includes('bulk pricing')) setField('bulk_pricing', message);
   if (text.includes('variant')) setField('variant_options', message);
   if (text.includes('sku')) setField('sku', message);
-  if (text.includes('barcode')) setField('barcode', message);
   if (text.includes('shipping option')) setField('shipping_option', message);
   if (text.includes('shipping weight')) setField('shipping_weight_kg', message);
   if (text.includes('shipping dimensions')) {
@@ -687,7 +685,6 @@ const createProductFormState = (overrides = {}) => ({
   variant_options: [],
   sku: '',
   sku_mode: SKU_MODE_AUTO,
-  barcode: '',
   brand: '',
   status: PRODUCT_STATUS_DRAFT,
   variant_notes: '',
@@ -1147,7 +1144,6 @@ const ProductsView = () => {
       is_on_sale: p.is_on_sale || false,
       sku: p.sku || '',
       sku_mode: p.sku ? SKU_MODE_MANUAL : SKU_MODE_AUTO,
-      barcode: p.barcode || '',
       brand: p.brand || '',
       status: normalizeProductStatus(p.status),
       shipping_option: resolveShippingOptionDraft(p.shipping_option),
@@ -1197,7 +1193,6 @@ const ProductsView = () => {
       is_on_sale: false,
       sku: '',
       sku_mode: SKU_MODE_AUTO,
-      barcode: '',
       brand: p.brand || '',
       status: PRODUCT_STATUS_DRAFT,
       shipping_option: resolveShippingOptionDraft(p.shipping_option),
@@ -1779,7 +1774,6 @@ const ProductsView = () => {
         sku: shouldAutoGenerateSku ? undefined : manualSku,
         auto_generate_sku: shouldAutoGenerateSku,
         bulk_pricing: bulkPricingValidation.value,
-        barcode: form.partNumber || form.barcode,
         brand: form.brand
       };
 
@@ -2076,7 +2070,7 @@ const ProductsView = () => {
 
   const filtered = products.filter(p => {
     const term = search.toLowerCase();
-    const matchesSearch = !term || p.name.toLowerCase().includes(term) || p.partNumber?.toLowerCase().includes(term) || p.sku?.toLowerCase().includes(term) || p.barcode?.toLowerCase().includes(term);
+    const matchesSearch = !term || p.name.toLowerCase().includes(term) || p.partNumber?.toLowerCase().includes(term) || p.sku?.toLowerCase().includes(term);
     const matchesCat = !filterCat || p.category_id.toString() === filterCat;
     const matchesStock = !filterStock || (filterStock === 'low' && p.stock_quantity <= p.low_stock_threshold) || (filterStock === 'out' && p.stock_quantity === 0) || (filterStock === 'in' && p.stock_quantity > 0);
     return matchesSearch && matchesCat && matchesStock;
@@ -2110,7 +2104,7 @@ const ProductsView = () => {
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search products, SKU, barcode..." value={search} onChange={e => setSearch(e.target.value)}
+          <input type="text" placeholder="Search products, SKU, part number..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 border border-white/10 bg-[#202430] text-gray-100 rounded-lg text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400" />
         </div>
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="px-3 py-2 border border-white/10 bg-[#202430] text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20">
@@ -2145,7 +2139,7 @@ const ProductsView = () => {
             <table className="w-full text-sm">
               <thead><tr className="bg-[#202430]/80 border-b border-white/10">
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-300">Product</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-300 hidden md:table-cell">SKU / Barcode</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-300 hidden md:table-cell">SKU</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-300">Category</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-300">Price</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-300">Stock</th>
@@ -2177,7 +2171,6 @@ const ProductsView = () => {
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">
                         <p className="text-xs font-mono text-gray-500">{p.sku || 'â€”'}</p>
-                        <p className="text-[10px] font-mono text-gray-400">{p.barcode || 'â€”'}</p>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs text-gray-300 block">{cat?.name || '—'}</span>
@@ -2649,9 +2642,8 @@ const ProductsView = () => {
                     <input
                       value={form.partNumber}
                       onChange={e => {
-                        setForm(f => ({ ...f, partNumber: e.target.value, barcode: e.target.value }));
+                        setForm(f => ({ ...f, partNumber: e.target.value }));
                         clearFieldError('partNumber');
-                        clearFieldError('barcode');
                       }}
                       className={getInputClassName('partNumber')}
                       placeholder="PN-001234"
@@ -2734,8 +2726,7 @@ const ProductsView = () => {
                     </InputField>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
+                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-semibold text-white">SKU</p>
                         <div className="inline-flex items-center rounded-lg border border-white/10 bg-[#171a22] p-1">
@@ -2778,22 +2769,6 @@ const ProductsView = () => {
                       ) : (
                         <p className="text-xs text-gray-400">Manual SKU is required in manual mode.</p>
                       )}
-                    </div>
-
-                    <InputField label="Barcode">
-                      <input
-                        value={form.barcode}
-                        onChange={e => {
-                          setForm(f => ({ ...f, barcode: e.target.value }));
-                          clearFieldError('barcode');
-                        }}
-                        className={getInputClassName('barcode')}
-                        placeholder="Scan-ready barcode"
-                      />
-                      {getFieldError('barcode') && (
-                        <p className="mt-1 text-xs text-red-300">{getFieldError('barcode')}</p>
-                      )}
-                    </InputField>
                   </div>
 
                   <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">

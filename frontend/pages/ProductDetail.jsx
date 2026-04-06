@@ -887,12 +887,10 @@ const ProductDetail = () => {
             </div>
             <p className="text-xs text-slate-500 mb-6">Stock level: {maxStock}</p>
 
-            {/* SKU / Barcode */}
-            {(product.sku || product.barcode || product.partNumber) && (
+            {/* SKU / Brand */}
+            {(product.sku || product.brand) && (
               <div className="flex flex-wrap gap-2 text-xs text-slate-600 mb-6 pb-6 border-b border-slate-200">
                 {product.sku && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">SKU: <strong className="text-slate-800">{product.sku}</strong></span>}
-                {product.partNumber && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">Part#: <strong className="text-slate-800">{product.partNumber}</strong></span>}
-                {product.barcode && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">Barcode: <strong className="text-slate-800">{product.barcode}</strong></span>}
                 {product.brand && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">Brand: <strong className="text-slate-800">{product.brand}</strong></span>}
               </div>
             )}
@@ -1109,12 +1107,9 @@ const ProductDetail = () => {
             <div className="animate-fade-in">
               <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden">
                 {[
-                  ['Part Number', product.partNumber],
                   ['SKU', product.sku],
-                  ['Barcode', product.barcode],
                   ['Brand', product.brand],
                   ['Category', product.category_name],
-                  ['Box Number', product.boxNumber],
                   ['Stock Quantity', String(product.stock_quantity)],
                 ].filter(([, v]) => v).map(([label, value], i) => (
                   <div key={label} className={`flex justify-between px-5 py-3 text-sm ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>

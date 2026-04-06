@@ -345,6 +345,10 @@ const Navbar = ({ user, onLogout }) => {
   const isShopRoute = location.pathname === '/shop';
   const isHomeRoute = location.pathname === '/';
   const shouldShowGlobalSearch = isShopRoute || isHomeRoute;
+  const showInternalProductMeta = user?.role === Role.OWNER
+    || user?.role === Role.STORE_STAFF
+    || user?.role === Role.ADMIN
+    || user?.role === Role.SUPER_ADMIN;
 
   useEffect(() => {
     if (isShopRoute) {
@@ -483,7 +487,9 @@ const Navbar = ({ user, onLogout }) => {
                                 )}
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-semibold text-white truncate">{product.name}</p>
-                                  <p className="text-xs text-gray-400 truncate">{product.part_number || product.category_name}</p>
+                                  <p className="text-xs text-gray-400 truncate">
+                                    {showInternalProductMeta ? (product.part_number || product.category_name) : product.category_name}
+                                  </p>
                                 </div>
                                 <div className="text-sm font-bold text-red-500 shrink-0">₱{product.price?.toFixed(2) || '0.00'}</div>
                               </Link>
@@ -703,7 +709,9 @@ const Navbar = ({ user, onLogout }) => {
                               )}
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-white truncate">{product.name}</p>
-                                <p className="text-xs text-gray-400 truncate">{product.part_number || product.category_name}</p>
+                                <p className="text-xs text-gray-400 truncate">
+                                  {showInternalProductMeta ? (product.part_number || product.category_name) : product.category_name}
+                                </p>
                               </div>
                               <div className="text-sm font-bold text-red-500 shrink-0">₱{product.price?.toFixed(2) || '0.00'}</div>
                             </Link>
