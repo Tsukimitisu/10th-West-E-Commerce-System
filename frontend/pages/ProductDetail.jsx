@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle } from 'lucide-react';
 import { getProductById, getRelatedProducts, getProductReviews, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, WISHLIST_SYNC_EVENT } from '../services/api';
@@ -160,7 +160,7 @@ const ProductDetail = () => {
   const [activeTab, setActiveTab] = useState('description');
   const [wishlistedIds, setWishlistedIds] = useState([]);
   const [addedToCart, setAddedToCart] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState({ color: '' });
+  const [selectedVariant, setSelectedVariant] = useState({});
   const [variantError, setVariantError] = useState('');
   const [quantityError, setQuantityError] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
@@ -227,6 +227,8 @@ const ProductDetail = () => {
         setReviewError('');
         setReviewSuccess('');
         setReviewFieldErrors({});
+        setSelectedVariant({});
+        setVariantError('');
         const [rel, rev] = await Promise.all([
           getRelatedProducts(Number(id), p.category_id || 0).catch(() => []),
           getProductReviews(Number(id)).catch(() => []),
@@ -248,6 +250,129 @@ const ProductDetail = () => {
   }, [id]);
 
   const hasVariants = product && Array.isArray(product.variants) && product.variants.length > 0;
+
+  const variantRows = useMemo(() => {
+    if (!hasVariants) return [];
+
+    return product.variants
+      .map((variant) => {
+        let optionCombination = variant?.option_combination;
+        if (!optionCombination || typeof optionCombination !== 'object' || Array.isArray(optionCombination)) {
+          if (variant?.variant_type && variant?.variant_value) {
+            optionCombination = {
+              [String(variant.variant_type).trim() || 'Option']: String(variant.variant_value).trim(),
+            };
+          } else {
+            optionCombination = {};
+          }
+        }
+
+        const normalizedCombination = {};
+        Object.entries(optionCombination).forEach(([rawName, rawValue]) => {
+          const optionName = String(rawName || '').trim();
+          const optionValue = String(rawValue || '').trim();
+          if (!optionName || !optionValue) return;
+          normalizedCombination[optionName] = optionValue;
+        });
+
+        if (Object.keys(normalizedCombination).length === 0) return null;
+
+        const parsedPrice = Number(variant?.price ?? product.price);
+        const parsedStock = Number(variant?.stock_quantity);
+
+        return {
+          ...variant,
+          option_combination: normalizedCombination,
+          price: Number.isFinite(parsedPrice) ? parsedPrice : Number(product.price),
+          stock_quantity: Number.isFinite(parsedStock) ? parsedStock : 0,
+          label: Object.entries(normalizedCombination).map(([name, value]) => `${name}: ${value}`).join(' / '),
+        };
+      })
+      .filter(Boolean);
+  }, [hasVariants, product]);
+
+  const variantOptions = useMemo(() => {
+    const explicit = Array.isArray(product?.variant_options)
+      ? product.variant_options
+      : [];
+
+    const normalizedExplicit = explicit
+      .map((option) => {
+        const name = String(option?.name || '').trim();
+        const values = (Array.isArray(option?.values) ? option.values : [])
+          .map((value) => String(value || '').trim())
+          .filter(Boolean);
+
+        if (!name || values.length === 0) return null;
+
+        return {
+          name,
+          values: Array.from(new Set(values)),
+        };
+      })
+      .filter(Boolean);
+
+    if (normalizedExplicit.length > 0) {
+      return normalizedExplicit;
+    }
+
+    const optionMap = new Map();
+    const optionOrder = [];
+
+    variantRows.forEach((variant) => {
+      Object.entries(variant.option_combination || {}).forEach(([rawName, rawValue]) => {
+        const optionName = String(rawName || '').trim();
+        const optionValue = String(rawValue || '').trim();
+        if (!optionName || !optionValue) return;
+
+        if (!optionMap.has(optionName)) {
+          optionMap.set(optionName, []);
+          optionOrder.push(optionName);
+        }
+
+        const values = optionMap.get(optionName);
+        if (!values.includes(optionValue)) {
+          values.push(optionValue);
+        }
+      });
+    });
+
+    return optionOrder.map((name) => ({
+      name,
+      values: optionMap.get(name) || [],
+    }));
+  }, [product?.variant_options, variantRows]);
+
+  useEffect(() => {
+    if (!variantOptions.length) {
+      setSelectedVariant({});
+      return;
+    }
+
+    setSelectedVariant((current) => {
+      const next = {};
+      variantOptions.forEach((option) => {
+        const currentValue = current?.[option.name];
+        if (option.values.includes(currentValue)) {
+          next[option.name] = currentValue;
+        }
+      });
+      return next;
+    });
+  }, [variantOptions]);
+
+  const isVariantSelectionComplete = variantOptions.length > 0
+    && variantOptions.every((option) => Boolean(selectedVariant?.[option.name]));
+
+  const selectedVariantRow = useMemo(() => {
+    if (!variantRows.length || !variantOptions.length) return null;
+    if (!isVariantSelectionComplete) return null;
+
+    return variantRows.find((variant) => (
+      variantOptions.every((option) => variant.option_combination?.[option.name] === selectedVariant?.[option.name])
+    )) || null;
+  }, [variantRows, variantOptions, selectedVariant, isVariantSelectionComplete]);
+
   const shareUrl = product
     ? `${window.location.origin}${window.location.pathname}${window.location.search}#/products/${product.id}`
     : `${window.location.origin}${window.location.pathname}${window.location.search}`;
@@ -340,25 +465,53 @@ const ProductDetail = () => {
 
   const validateSelection = () => {
     if (!product) return false;
-    if (hasVariants && !selectedVariant.color) {
-      setVariantError('Please select a color before adding this item to cart.');
-      return false;
+
+    if (hasVariants && variantOptions.length > 0) {
+      const missingOption = variantOptions.find((option) => !selectedVariant?.[option.name]);
+      if (missingOption) {
+        setVariantError(`Please select ${missingOption.name.toLowerCase()} before adding this item to cart.`);
+        return false;
+      }
+
+      if (!selectedVariantRow) {
+        setVariantError('This variant combination is unavailable. Please pick another combination.');
+        return false;
+      }
     }
-    const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
+
+    const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
     if (quantity > maxStock) {
       setQuantityError(`Maximum available quantity is ${maxStock}.`);
       return false;
     }
+
     setVariantError('');
     setQuantityError('');
     return true;
+  };
+
+  const resolveCartProduct = () => {
+    if (!product) return null;
+    if (!selectedVariantRow) return product;
+
+    return {
+      ...product,
+      price: Number(selectedVariantRow.price ?? product.price),
+      sale_price: null,
+      is_on_sale: false,
+      stock_quantity: Number(selectedVariantRow.stock_quantity ?? product.stock_quantity ?? 0),
+      selected_variant: selectedVariantRow,
+      selected_options: selectedVariant,
+      variant_label: selectedVariantRow.label,
+    };
   };
 
   const addCurrentSelectionToCart = async (showAddedState = true) => {
     if (!product) return false;
     if (!validateSelection()) return false;
 
-    const added = await addToCart(product, quantity);
+    const cartProduct = resolveCartProduct();
+    const added = await addToCart(cartProduct, quantity);
     if (added === false) return false;
 
     if (showAddedState) {
@@ -376,11 +529,13 @@ const ProductDetail = () => {
     if (!product) return;
     if (!validateSelection()) return;
 
-    const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
+    const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
     if (quantity > maxStock) {
       setQuantityError(`Maximum available quantity is ${maxStock}.`);
       return;
     }
+
+    const cartProduct = resolveCartProduct();
 
     const buyNowSession = {
       sessionId: `${product.id}-${Date.now()}`,
@@ -388,7 +543,7 @@ const ProductDetail = () => {
       returnPath: `/products/${product.id}`,
       item: {
         productId: product.id,
-        product,
+        product: cartProduct,
         quantity,
       },
     };
@@ -618,12 +773,12 @@ const ProductDetail = () => {
   if (!product) return <div className="text-center py-20 text-gray-600">Product not found.</div>;
 
   const images = extractProductImages(product);
-  const maxStock = Math.max(0, Number(product.stock_quantity ?? 0));
+  const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
   const isOutOfStock = maxStock <= 0;
-  const hasDiscount = product.is_on_sale && product.sale_price;
-  const currentPrice = hasDiscount ? product.sale_price : product.price;
-
-  const colors = hasVariants ? product.variants.map(v => v.color || v.name).filter(Boolean) : [];
+  const hasDiscount = !hasVariants && product.is_on_sale && product.sale_price;
+  const displayPrice = hasVariants
+    ? Number(selectedVariantRow?.price ?? product.price)
+    : Number(hasDiscount ? product.sale_price : product.price);
 
   const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : product.rating || 0;
   const ratingDist = [5, 4, 3, 2, 1].map(star => ({
@@ -701,7 +856,14 @@ const ProductDetail = () => {
 
             {/* Price */}
             <div className="flex items-end gap-3 mb-3">
-              {hasDiscount ? (
+              {hasVariants ? (
+                <>
+                  <span className="text-4xl font-black tracking-tight text-slate-950">{formatPrice(displayPrice)}</span>
+                  {!selectedVariantRow && (
+                    <span className="text-sm text-slate-500 mb-1">Price may change by option</span>
+                  )}
+                </>
+              ) : hasDiscount ? (
                 <>
                   <span className="text-4xl font-black tracking-tight text-slate-950">{formatPrice(product.sale_price)}</span>
                   <span className="text-lg text-slate-400 line-through mb-1">{formatPrice(product.price)}</span>
@@ -715,13 +877,15 @@ const ProductDetail = () => {
             <div className="flex items-center gap-2 mb-2">
               {isOutOfStock ? (
                 <span className="inline-flex items-center gap-1.5 text-sm text-red-700 font-semibold bg-red-50 border border-red-200 px-3 py-1.5 rounded-full"><Info size={15} /> Out of stock</span>
+              ) : hasVariants ? (
+                <span className="inline-flex items-center gap-1.5 text-sm text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full"><Check size={15} /> {maxStock} available for selected variant</span>
               ) : product.stock_quantity <= (product.low_stock_threshold || 5) ? (
                 <span className="inline-flex items-center gap-1.5 text-sm text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full"><Info size={15} /> Only {product.stock_quantity} left in stock</span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-sm text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full"><Check size={15} /> In Stock</span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mb-6">Stock level: {Math.max(0, Number(product.stock_quantity ?? 0))}</p>
+            <p className="text-xs text-slate-500 mb-6">Stock level: {maxStock}</p>
 
             {/* SKU / Barcode */}
             {(product.sku || product.barcode || product.partNumber) && (
@@ -734,19 +898,29 @@ const ProductDetail = () => {
             )}
 
             {/* Variants */}
-            {colors.length > 0 && (
+            {variantOptions.length > 0 && (
             <div className="space-y-4 mb-6">
-              <div>
-                <label className="text-sm font-medium text-slate-900 mb-2 block">Color <span className="text-red-500">*</span></label>
-                <div className="flex gap-2">
-                  {colors.map(c => (
-                    <button key={c} onClick={() => { setSelectedVariant(prev => ({...prev, color: c})); setVariantError(''); }}
-                      className={`px-4 py-2 border rounded-xl text-sm transition-colors ${selectedVariant.color === c ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-slate-300 text-slate-700 hover:border-red-200 bg-white'}`}
-                    >{c}</button>
-                  ))}
+              {variantOptions.map((option) => (
+                <div key={option.name}>
+                  <label className="text-sm font-medium text-slate-900 mb-2 block">{option.name} <span className="text-red-500">*</span></label>
+                  <div className="flex flex-wrap gap-2">
+                    {option.values.map((value) => (
+                      <button
+                        key={`${option.name}-${value}`}
+                        onClick={() => {
+                          setSelectedVariant((prev) => ({ ...prev, [option.name]: value }));
+                          setVariantError('');
+                        }}
+                        className={`px-4 py-2 border rounded-xl text-sm transition-colors ${selectedVariant?.[option.name] === value ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-slate-300 text-slate-700 hover:border-red-200 bg-white'}`}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                {variantError && <p className="text-xs text-red-500 mt-2">{variantError}</p>}
-              </div>
+              ))}
+
+              {variantError && <p className="text-xs text-red-500 mt-2">{variantError}</p>}
             </div>
             )}
 

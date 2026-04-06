@@ -534,6 +534,9 @@ router.put('/product/:productId', authenticateToken, requireRole('admin', 'super
     });
   } catch (error) {
     await client.query('ROLLBACK');
+    if (error.code === '23505') {
+      return res.status(400).json({ message: 'Duplicate variant combinations are not allowed.' });
+    }
     res.status(500).json({ message: error.message });
   } finally {
     client.release();
