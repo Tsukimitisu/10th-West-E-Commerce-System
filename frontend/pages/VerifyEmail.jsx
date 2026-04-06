@@ -93,6 +93,7 @@ const publishAuthVerifiedSignal = (user = null) => {
 
 const VerifyEmail = ({ onLogin }) => {
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
   const emailChangeToken = searchParams.get('emailChangeToken');
@@ -107,6 +108,10 @@ const VerifyEmail = ({ onLogin }) => {
   const redirectTimeoutRef = useRef(null);
   const lastProcessedTokenRef = useRef('');
   const onLoginRef = useRef(onLogin);
+
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
 
   useEffect(() => {
     onLoginRef.current = onLogin;
@@ -182,7 +187,7 @@ const VerifyEmail = ({ onLogin }) => {
             setNextRoute(destination);
             setMessage(result?.message || 'Your email address has been updated successfully.');
             redirectTimeoutRef.current = window.setTimeout(() => {
-              if (!cancelled) navigate(destination, { replace: true });
+              if (!cancelled) navigateRef.current(destination, { replace: true });
             }, 1200);
             return;
           }
@@ -203,7 +208,7 @@ const VerifyEmail = ({ onLogin }) => {
             onLoginRef.current(result.user, result.token);
             publishAuthVerifiedSignal(result.user);
             redirectTimeoutRef.current = window.setTimeout(() => {
-              if (!cancelled) navigate(destination, { replace: true });
+              if (!cancelled) navigateRef.current(destination, { replace: true });
             }, 1000);
             return;
           }
@@ -223,7 +228,7 @@ const VerifyEmail = ({ onLogin }) => {
 
             publishAuthVerifiedSignal(result.user);
             redirectTimeoutRef.current = window.setTimeout(() => {
-              if (!cancelled) navigate(destination, { replace: true });
+              if (!cancelled) navigateRef.current(destination, { replace: true });
             }, 1000);
             return;
           }
@@ -231,7 +236,7 @@ const VerifyEmail = ({ onLogin }) => {
           setNextRoute('/login');
           setMessage(result?.alreadyVerified ? 'Already verified. Please log in to continue.' : 'Email verified successfully. Please log in to continue.');
           redirectTimeoutRef.current = window.setTimeout(() => {
-            if (!cancelled) navigate('/login?verified=1', { replace: true });
+            if (!cancelled) navigateRef.current('/login?verified=1', { replace: true });
           }, 1200);
         } catch (err) {
           if (cancelled || hardTimedOut) return;
@@ -248,7 +253,7 @@ const VerifyEmail = ({ onLogin }) => {
               setNextRoute(destination);
               setMessage('Account already verified. Redirecting...');
               redirectTimeoutRef.current = window.setTimeout(() => {
-                if (!cancelled) navigate(destination, { replace: true });
+                if (!cancelled) navigateRef.current(destination, { replace: true });
               }, 900);
               return;
             }
@@ -309,7 +314,27 @@ const VerifyEmail = ({ onLogin }) => {
         window.clearTimeout(redirectTimeoutRef.current);
       }
     };
-  }, [navigate, token, emailChangeToken]);
+  }, [token, emailChangeToken]);
+
+  useEffect(() => {
+    if (status !== 'loading') return undefined;
+
+    const watchdogId = window.setTimeout(() => {
+      setStatus((current) => {
+        if (current !== 'loading') return current;
+        return 'error';
+      });
+      setMessage((current) => (
+        current === 'Verifying...' || current === 'Confirming your new email address...'
+          ? 'Verification is taking too long. Please try again.'
+          : current
+      ));
+    }, 12000);
+
+    return () => {
+      window.clearTimeout(watchdogId);
+    };
+  }, [status]);
 
   const handleResend = async (e) => {
     e.preventDefault();
