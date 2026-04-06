@@ -4,6 +4,12 @@ import supabaseClient from '../services/supabaseClient.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  sanitizeHttpUrlOrPath,
+  sanitizePlainText,
+  sanitizeRichText,
+  sanitizeUrlArray,
+} from '../utils/inputSanitizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -339,6 +345,20 @@ const canViewUnpublishedProducts = (user) => {
   return PRODUCT_PUBLISHER_ROLES.has(role);
 };
 
+const requireProductManagerAccess = (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ message: 'Authentication required' });
+    return false;
+  }
+
+  if (!canViewUnpublishedProducts(req.user)) {
+    res.status(403).json({ message: 'Insufficient permissions' });
+    return false;
+  }
+
+  return true;
+};
+
 const normalizeProductImageUrls = (value) => {
   if (!value) return [];
 
@@ -549,7 +569,7 @@ const ensureProductSchemaReady = ensureProductSchema().catch((error) => {
 // Get all products
 export const getProducts = async (req, res) => {
   try {
-    const { category, search, limit: limitParam } = req.query;
+    const { category, search, limit: limitParam } = req.validatedData || req.query;
     const searchTerms = tokenizeSearchTerms(search);
     const searchPhrase = normalizeSearchPhrase(search);
     const resultLimit = parseResultLimit(limitParam, null, 80);
@@ -672,7 +692,7 @@ export const getProducts = async (req, res) => {
 // Get top selling products
 export const getTopSellers = async (req, res) => {
   try {
-    const { days, limit = 8 } = req.query;
+    const { days, limit = 8 } = req.validatedData || req.query;
     const includeUnpublished = canViewUnpublishedProducts(req.user);
 
     const parsedLimit = Number.parseInt(String(limit), 10);
@@ -742,7 +762,7 @@ export const getProductById = async (req, res) => {
   try {
     await ensureProductSchemaReady;
 
-    const { id } = req.params;
+    const { id } = req.validatedData || req.params;
     const includeUnpublished = canViewUnpublishedProducts(req.user);
     
     const result = await pool.query(
@@ -888,7 +908,9 @@ export const createProduct = async (req, res) => {
   } = req.body;
 
   try {
-    const cleanName = String(name || '').trim();
+    if (!requireProductManagerAccess(req, res)) return;
+
+    const cleanName = sanitizePlainText(name, { maxLength: 255 }) || '';
     if (!cleanName) {
       return res.status(400).json({ message: 'Product name is required' });
     }
@@ -956,14 +978,15 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({ message: bulkPricingValidation.error });
     }
 
-    const cleanPartNumber = toNullableString(part_number);
+    const cleanDescription = sanitizeRichText(description, { maxLength: 10000 });
+    const cleanPartNumber = sanitizePlainText(part_number, { maxLength: 100 });
     const requestedAutoSku = toNullableBoolean(auto_generate_sku) === true;
-    const cleanSku = toNullableString(sku);
-    const cleanBarcode = toNullableString(barcode);
-    const cleanImage = toNullableString(image);
-    const cleanVideoUrl = toNullableString(video_url);
-    const cleanBrand = toNullableString(brand);
-    const cleanBoxNumber = toNullableString(box_number);
+    const cleanSku = sanitizePlainText(sku, { maxLength: 100 });
+    const cleanBarcode = sanitizePlainText(barcode, { maxLength: 100 });
+    const cleanImage = sanitizeHttpUrlOrPath(image);
+    const cleanVideoUrl = sanitizeHttpUrlOrPath(video_url);
+    const cleanBrand = sanitizePlainText(brand, { maxLength: 100 });
+    const cleanBoxNumber = sanitizePlainText(box_number, { maxLength: 100 });
     const cleanCategoryId = categoryIdField.value;
     const cleanLowStockThreshold = lowStockThresholdField.value;
     const cleanIsOnSale = toNullableBoolean(is_on_sale);
@@ -971,9 +994,19 @@ export const createProduct = async (req, res) => {
     const cleanShippingOption = shipping_option === undefined
       ? 'standard'
       : toNullableShippingOption(shipping_option);
-    const cleanImageUrls = normalizeProductImageUrls(image_urls);
+    const cleanImageUrls = Array.isArray(image_urls)
+      ? sanitizeUrlArray(image_urls, { maxItems: 9 })
+      : normalizeProductImageUrls(image_urls);
     const cleanBulkPricing = bulkPricingValidation.value ?? [];
     const cleanShippingDimensions = shippingDimensionsField.value;
+
+    if (image !== undefined && image !== null && image !== '' && !cleanImage) {
+      return res.status(400).json({ message: 'Image URL is invalid' });
+    }
+
+    if (video_url !== undefined && video_url !== null && video_url !== '' && !cleanVideoUrl) {
+      return res.status(400).json({ message: 'Video URL is invalid' });
+    }
 
     if (status !== undefined && cleanStatus === null) {
       return res.status(400).json({ message: 'Invalid product status' });
@@ -1006,7 +1039,7 @@ export const createProduct = async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 'standard'), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb))
       RETURNING *`,
       [
-        cleanPartNumber, cleanName, description, parsedPrice, buyingPriceField.value,
+        cleanPartNumber, cleanName, cleanDescription, parsedPrice, buyingPriceField.value,
         cleanImage, cleanVideoUrl, cleanCategoryId, parsedStockQuantity, cleanShippingOption, parsedShippingWeightKg,
         cleanShippingDimensions ? JSON.stringify(cleanShippingDimensions) : null,
         cleanBoxNumber, cleanLowStockThreshold ?? 5, cleanBrand, resolvedSku, cleanBarcode, cleanSalePrice,
@@ -1032,7 +1065,7 @@ export const createProduct = async (req, res) => {
 
 // Update product (Admin only)
 export const updateProduct = async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.validatedData || req.params;
   const {
     part_number, name, description, price, buying_price,
     image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions, box_number,
@@ -1040,6 +1073,8 @@ export const updateProduct = async (req, res) => {
   } = req.body;
 
   try {
+    if (!requireProductManagerAccess(req, res)) return;
+
     const existingResult = await pool.query(
       `SELECT id, name, part_number, price, sale_price, is_on_sale
        FROM products
@@ -1069,7 +1104,7 @@ export const updateProduct = async (req, res) => {
     const hasShippingWeightPayload = hasBodyField(req.body, 'shipping_weight_kg');
     const hasShippingDimensionsPayload = hasBodyField(req.body, 'shipping_dimensions');
 
-    const cleanName = hasNamePayload ? String(name || '').trim() : null;
+    const cleanName = hasNamePayload ? (sanitizePlainText(name, { maxLength: 255 }) || '') : null;
     if (hasNamePayload && !cleanName) {
       return res.status(400).json({ message: 'Product name cannot be empty' });
     }
@@ -1138,25 +1173,38 @@ export const updateProduct = async (req, res) => {
       return res.status(400).json({ message: 'Sale price must be lower than regular price' });
     }
 
-    const cleanPartNumber = toNullableString(part_number);
+    const cleanDescription = hasBodyField(req.body, 'description')
+      ? sanitizeRichText(description, { maxLength: 10000 })
+      : null;
+    const cleanPartNumber = sanitizePlainText(part_number, { maxLength: 100 });
     const requestedAutoSku = toNullableBoolean(auto_generate_sku) === true;
-    const cleanSku = toNullableString(sku);
-    const cleanBarcode = toNullableString(barcode);
-    const cleanImage = toNullableString(image);
-    const cleanVideoUrl = toNullableString(video_url);
-    const cleanBrand = toNullableString(brand);
-    const cleanBoxNumber = toNullableString(box_number);
+    const cleanSku = sanitizePlainText(sku, { maxLength: 100 });
+    const cleanBarcode = sanitizePlainText(barcode, { maxLength: 100 });
+    const cleanImage = sanitizeHttpUrlOrPath(image);
+    const cleanVideoUrl = sanitizeHttpUrlOrPath(video_url);
+    const cleanBrand = sanitizePlainText(brand, { maxLength: 100 });
+    const cleanBoxNumber = sanitizePlainText(box_number, { maxLength: 100 });
     const cleanCategoryId = categoryIdField.value;
     const cleanLowStockThreshold = lowStockThresholdField.value;
     const cleanIsOnSale = hasIsOnSalePayload ? toNullableBoolean(is_on_sale) : null;
     const cleanStatus = toNullableProductStatus(status);
     const cleanShippingOption = hasShippingOptionPayload ? toNullableShippingOption(shipping_option) : null;
-    const cleanImageUrls = normalizeProductImageUrls(image_urls);
+    const cleanImageUrls = Array.isArray(image_urls)
+      ? sanitizeUrlArray(image_urls, { maxItems: 9 })
+      : normalizeProductImageUrls(image_urls);
     const hasVideoUrlPayload = hasBodyField(req.body, 'video_url');
     const imageUrlsPayload = hasImageUrlsPayload ? JSON.stringify(cleanImageUrls) : null;
     const shippingDimensionsPayload = hasShippingDimensionsPayload
       ? (shippingDimensionsField.value ? JSON.stringify(shippingDimensionsField.value) : null)
       : null;
+
+    if (hasBodyField(req.body, 'image') && image !== null && image !== '' && !cleanImage) {
+      return res.status(400).json({ message: 'Image URL is invalid' });
+    }
+
+    if (hasVideoUrlPayload && video_url !== null && video_url !== '' && !cleanVideoUrl) {
+      return res.status(400).json({ message: 'Video URL is invalid' });
+    }
 
     if (hasStatusPayload && cleanStatus === null) {
       return res.status(400).json({ message: 'Invalid product status' });
@@ -1203,7 +1251,7 @@ export const updateProduct = async (req, res) => {
       `UPDATE products SET
         part_number = COALESCE($1, part_number),
         name = COALESCE($2, name),
-        description = COALESCE($3, description),
+        description = CASE WHEN $31 THEN $3 ELSE description END,
         price = COALESCE($4, price),
         buying_price = COALESCE($5, buying_price),
         image = COALESCE($6, image),
@@ -1229,7 +1277,7 @@ export const updateProduct = async (req, res) => {
       [
         hasPartNumberPayload ? cleanPartNumber : null,
         hasNamePayload ? cleanName : null,
-        hasBodyField(req.body, 'description') ? description : null,
+        hasBodyField(req.body, 'description') ? cleanDescription : null,
         hasPricePayload ? parsedPrice : null,
         hasBuyingPricePayload ? buyingPriceField.value : null,
         hasBodyField(req.body, 'image') ? cleanImage : null,
@@ -1256,7 +1304,8 @@ export const updateProduct = async (req, res) => {
         hasShippingWeightPayload ? shippingWeightField.value : null,
         hasShippingDimensionsPayload,
         shippingDimensionsPayload,
-        id
+        id,
+        hasBodyField(req.body, 'description')
       ]
     );
 
@@ -1279,6 +1328,8 @@ export const updateProduct = async (req, res) => {
 // Upload product image
 export const uploadProductImage = async (req, res) => {
   try {
+    if (!requireProductManagerAccess(req, res)) return;
+
     const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
 
     if (!ALLOWED_IMAGE_MIME_TYPES.has(contentType)) {
@@ -1335,6 +1386,8 @@ export const uploadProductImage = async (req, res) => {
 // Upload product video
 export const uploadProductVideo = async (req, res) => {
   try {
+    if (!requireProductManagerAccess(req, res)) return;
+
     const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
 
     if (!ALLOWED_VIDEO_MIME_TYPES.has(contentType)) {
@@ -1392,9 +1445,11 @@ export const uploadProductVideo = async (req, res) => {
 
 // Delete product (Admin only)
 export const deleteProduct = async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.validatedData || req.params;
 
   try {
+    if (!requireProductManagerAccess(req, res)) return;
+
     const result = await pool.query(
       'DELETE FROM products WHERE id = $1 RETURNING id',
       [id]
