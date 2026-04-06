@@ -42,6 +42,190 @@ const PRODUCT_ALLOWED_STATUSES = new Set([PRODUCT_STATUS_DRAFT, PRODUCT_STATUS_P
 const PRODUCT_LEGACY_STATUSES = new Set(['available', 'hidden', 'out_of_stock']);
 const PRODUCT_FORM_DRAFT_STORAGE_KEY = 'owner-products-form-draft-v1';
 const PRODUCT_FORM_DRAFT_AUTOSAVE_DELAY_MS = 450;
+const PRODUCT_API_FIELD_TO_FORM_FIELD = {
+  part_number: 'partNumber',
+  buying_price: 'buyingPrice',
+  box_number: 'boxNumber',
+  image: 'image_urls',
+  image_urls: 'image_urls',
+  video_url: 'video_url',
+  shipping_dimensions: 'shipping_dimensions',
+};
+
+const PRODUCT_FIELD_TO_STEP = {
+  image_urls: 0,
+  video_url: 0,
+  name: 1,
+  category_id: 1,
+  subcategory_id: 1,
+  brand: 1,
+  description: 1,
+  partNumber: 1,
+  price: 2,
+  buyingPrice: 2,
+  stock_quantity: 2,
+  low_stock_threshold: 2,
+  sku: 2,
+  barcode: 2,
+  bulk_pricing: 2,
+  shipping_option: 4,
+  shipping_weight_kg: 4,
+  shipping_dimensions: 4,
+  shipping_length_cm: 4,
+  shipping_width_cm: 4,
+  shipping_height_cm: 4,
+  boxNumber: 4,
+  status: 5,
+  sale_price: 5,
+  is_on_sale: 5,
+};
+
+const getFriendlyRequestErrorMessage = (error, fallback = 'Something went wrong. Please try again.') => {
+  const message = String(error?.message || '').trim();
+  const status = Number(error?.status || 0);
+  const code = String(error?.code || '').toUpperCase();
+
+  if (code === 'NETWORK_ERROR') {
+    return 'Unable to reach the server. Please check your internet connection and try again.';
+  }
+
+  if (code === 'REQUEST_TIMEOUT') {
+    return 'The request timed out. Please try again.';
+  }
+
+  if (status === 401) {
+    return 'Your session has expired. Please log in again.';
+  }
+
+  if (status === 403) {
+    return 'You do not have permission to perform this action.';
+  }
+
+  if (status >= 500) {
+    return 'A server error occurred. Please try again in a moment.';
+  }
+
+  if (message) {
+    return message;
+  }
+
+  return fallback;
+};
+
+const formatUploadFailureMessage = ({ mediaType, fileName, error }) => {
+  const resolvedMediaType = mediaType === 'video' ? 'video' : 'image';
+  const safeName = String(fileName || '').trim();
+  const contextLabel = safeName ? `"${safeName}"` : `the ${resolvedMediaType}`;
+  const friendlyBase = `Failed to upload ${contextLabel}.`;
+
+  if (String(error?.code || '').toUpperCase() === 'NETWORK_ERROR') {
+    return `${friendlyBase} Unable to reach the server. Please check your internet connection and try again.`;
+  }
+
+  if (String(error?.code || '').toUpperCase() === 'REQUEST_TIMEOUT') {
+    return `${friendlyBase} The upload timed out. Please try again.`;
+  }
+
+  if (Number(error?.status || 0) >= 500) {
+    return `${friendlyBase} A server error occurred. Please try again in a moment.`;
+  }
+
+  const detail = String(error?.message || '').trim();
+  if (!detail) {
+    return `${friendlyBase} Please try again.`;
+  }
+
+  return `${friendlyBase} ${detail}`;
+};
+
+const extractProductFieldErrors = (error) => {
+  const normalized = {};
+
+  const assignFieldError = (rawField, rawMessage) => {
+    const message = String(rawMessage || '').trim();
+    if (!rawField || !message) return;
+
+    const mappedField = PRODUCT_API_FIELD_TO_FORM_FIELD[rawField] || rawField;
+    if (mappedField === 'shipping_dimensions') {
+      normalized.shipping_length_cm = normalized.shipping_length_cm || message;
+      normalized.shipping_width_cm = normalized.shipping_width_cm || message;
+      normalized.shipping_height_cm = normalized.shipping_height_cm || message;
+      return;
+    }
+
+    if (!normalized[mappedField]) {
+      normalized[mappedField] = message;
+    }
+  };
+
+  if (error?.fieldErrors && typeof error.fieldErrors === 'object') {
+    Object.entries(error.fieldErrors).forEach(([fieldName, message]) => {
+      assignFieldError(fieldName, message);
+    });
+  }
+
+  if (Array.isArray(error?.errors)) {
+    error.errors.forEach((entry) => {
+      assignFieldError(entry?.path, entry?.msg);
+    });
+  }
+
+  return normalized;
+};
+
+const inferProductFieldErrorsFromMessage = (message) => {
+  const text = String(message || '').toLowerCase();
+  const inferred = {};
+
+  const setField = (fieldName, value) => {
+    if (!fieldName || !value || inferred[fieldName]) return;
+    inferred[fieldName] = value;
+  };
+
+  if (!text) return inferred;
+
+  if (text.includes('product name')) setField('name', 'Product name is required.');
+  if (text.includes('part number')) setField('partNumber', message);
+  if (text.includes('box number')) setField('boxNumber', message);
+  if (text.includes('category')) setField('category_id', 'Category is required.');
+  if (text.includes('price') && !text.includes('sale')) setField('price', message);
+  if (text.includes('buying price')) setField('buyingPrice', message);
+  if (text.includes('stock quantity') || text.includes('stock must')) setField('stock_quantity', message);
+  if (text.includes('low stock')) setField('low_stock_threshold', message);
+  if (text.includes('bulk pricing')) setField('bulk_pricing', message);
+  if (text.includes('sku')) setField('sku', message);
+  if (text.includes('barcode')) setField('barcode', message);
+  if (text.includes('shipping option')) setField('shipping_option', message);
+  if (text.includes('shipping weight')) setField('shipping_weight_kg', message);
+  if (text.includes('shipping dimensions')) {
+    setField('shipping_length_cm', message);
+    setField('shipping_width_cm', message);
+    setField('shipping_height_cm', message);
+  }
+  if (text.includes('length')) setField('shipping_length_cm', message);
+  if (text.includes('width')) setField('shipping_width_cm', message);
+  if (text.includes('height')) setField('shipping_height_cm', message);
+  if (text.includes('sale price')) setField('sale_price', message);
+  if (text.includes('status')) setField('status', message);
+  if (text.includes('video')) setField('video_url', message);
+  if (text.includes('image')) setField('image_urls', message);
+
+  return inferred;
+};
+
+const getFirstErrorStepIndex = (fieldErrors = {}) => {
+  let nextStep = null;
+
+  Object.keys(fieldErrors).forEach((fieldName) => {
+    const step = PRODUCT_FIELD_TO_STEP[fieldName];
+    if (typeof step !== 'number') return;
+    if (nextStep === null || step < nextStep) {
+      nextStep = step;
+    }
+  });
+
+  return nextStep;
+};
 
 const createProductMediaId = () => `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -360,6 +544,7 @@ const ProductsView = () => {
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [filterStock, setFilterStock] = useState('');
@@ -368,6 +553,7 @@ const ProductsView = () => {
   const [selectedProductVariants, setSelectedProductVariants] = useState(null);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
   const [productMediaItems, setProductMediaItems] = useState([]);
   const [mediaError, setMediaError] = useState('');
   const [productVideoItem, setProductVideoItem] = useState(null);
@@ -377,6 +563,7 @@ const ProductsView = () => {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [formStep, setFormStep] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [infoFieldErrors, setInfoFieldErrors] = useState({});
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
@@ -403,11 +590,17 @@ const ProductsView = () => {
   const descriptionEditorRef = useRef(null);
 
   const fetch = async () => {
+    setLoading(true);
     try {
       const [p, c, s] = await Promise.all([getProducts(), getCategories(), getSubcategories()]);
       setProducts(p); setCategories(c); setSubcategories(s || []);
-    } catch (e) { console.error(e); }
-    setLoading(false);
+      setLoadError('');
+    } catch (e) {
+      setLoadError(getFriendlyRequestErrorMessage(e, 'Failed to load products. Please refresh and try again.'));
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetch(); }, []);
@@ -509,6 +702,25 @@ const ProductsView = () => {
     return errors;
   };
 
+  const getFieldError = (fieldName) => String(fieldErrors[fieldName] || '').trim();
+
+  const hasFieldError = (fieldName) => getFieldError(fieldName).length > 0;
+
+  const getInputClassName = (fieldName) => `${inputClass} ${hasFieldError(fieldName) ? 'border-red-400 focus:border-red-400 focus:ring-red-400/25' : ''}`;
+
+  const clearFieldError = (fieldName) => {
+    if (!fieldName) return;
+
+    setFieldErrors((prev) => {
+      if (!prev[fieldName]) return prev;
+      const next = { ...prev };
+      delete next[fieldName];
+      return next;
+    });
+  };
+
+  const getInfoErrorMessage = (fieldName) => String(infoFieldErrors[fieldName] || fieldErrors[fieldName] || '').trim();
+
   const updateInlineInfoError = (fieldName, hasError, message) => {
     setInfoFieldErrors((prev) => {
       const next = { ...prev };
@@ -516,11 +728,16 @@ const ProductsView = () => {
       else delete next[fieldName];
       return next;
     });
+
+    if (!hasError) {
+      clearFieldError(fieldName);
+    }
   };
 
   const syncDescriptionFromEditor = () => {
     const nextHtml = normalizeDescriptionHtml(descriptionEditorRef.current?.innerHTML || '');
     setForm((prev) => ({ ...prev, description: nextHtml }));
+    clearFieldError('description');
   };
 
   const executeDescriptionCommand = (command) => {
@@ -592,6 +809,7 @@ const ProductsView = () => {
     resetProductMediaItems([]);
     resetProductVideoItem(null);
     setFormError('');
+    setFieldErrors({});
     setInfoFieldErrors({});
     setCategorySearchQuery(restoredDraft?.categorySearchQuery || defaultCategoryName);
     setIsCategoryDropdownOpen(false);
@@ -615,6 +833,7 @@ const ProductsView = () => {
     resetProductMediaItems(resolveExistingProductMediaItems(p));
     resetProductVideoItem(resolveExistingProductVideoItem(p));
     setFormError('');
+    setFieldErrors({});
     setInfoFieldErrors({});
     setCategorySearchQuery(getCategoryNameById(p.category_id));
     setIsCategoryDropdownOpen(false);
@@ -660,6 +879,7 @@ const ProductsView = () => {
     resetProductMediaItems(resolveExistingProductMediaItems(p));
     resetProductVideoItem(resolveExistingProductVideoItem(p));
     setFormError('');
+    setFieldErrors({});
     setInfoFieldErrors({});
     setCategorySearchQuery(getCategoryNameById(p.category_id));
     setIsCategoryDropdownOpen(false);
@@ -699,20 +919,29 @@ const ProductsView = () => {
     setModalOpen(true);
   };
 
-  const getStepValidationError = (stepIndex) => {
+  const getStepValidationResult = (stepIndex) => {
     if (stepIndex === 0) {
       if (productMediaItems.length < PRODUCT_MEDIA_MIN_FILES) {
-        return 'Upload at least one product image.';
+        return {
+          message: 'Upload at least one product image.',
+          fieldErrors: { image_urls: 'At least one product image is required.' },
+        };
       }
       if (productMediaItems.length > PRODUCT_MEDIA_MAX_FILES) {
-        return `You can upload up to ${PRODUCT_MEDIA_MAX_FILES} images.`;
+        return {
+          message: `You can upload up to ${PRODUCT_MEDIA_MAX_FILES} images.`,
+          fieldErrors: { image_urls: `You can upload up to ${PRODUCT_MEDIA_MAX_FILES} images.` },
+        };
       }
     }
 
     if (stepIndex === 1) {
       const infoErrors = getInfoFieldErrors(form);
       if (Object.keys(infoErrors).length > 0) {
-        return infoErrors.name || infoErrors.category_id;
+        return {
+          message: infoErrors.name || infoErrors.category_id,
+          fieldErrors: infoErrors,
+        };
       }
     }
 
@@ -723,29 +952,64 @@ const ProductsView = () => {
       const hasBuyingPrice = String(form.buyingPrice || '').trim() !== '';
       const buyingPrice = hasBuyingPrice ? Number(form.buyingPrice) : null;
 
-      if (!Number.isFinite(price) || price <= 0) return 'Price must be greater than 0.';
-      if (hasBuyingPrice && (!Number.isFinite(buyingPrice) || buyingPrice < 0)) return 'Buying price must be 0 or higher.';
-      if (!Number.isInteger(stockQty) || stockQty < 0) return 'Stock must be a whole number 0 or higher.';
-      if (!Number.isInteger(lowStockThreshold) || lowStockThreshold < 0) return 'Low stock alert must be a whole number 0 or higher.';
+      if (!Number.isFinite(price) || price <= 0) {
+        return {
+          message: 'Price must be greater than 0.',
+          fieldErrors: { price: 'Price must be greater than 0.' },
+        };
+      }
+
+      if (hasBuyingPrice && (!Number.isFinite(buyingPrice) || buyingPrice < 0)) {
+        return {
+          message: 'Buying price must be 0 or higher.',
+          fieldErrors: { buyingPrice: 'Buying price must be 0 or higher.' },
+        };
+      }
+
+      if (!Number.isInteger(stockQty) || stockQty < 0) {
+        return {
+          message: 'Stock must be a whole number 0 or higher.',
+          fieldErrors: { stock_quantity: 'Stock must be a whole number 0 or higher.' },
+        };
+      }
+
+      if (!Number.isInteger(lowStockThreshold) || lowStockThreshold < 0) {
+        return {
+          message: 'Low stock alert must be a whole number 0 or higher.',
+          fieldErrors: { low_stock_threshold: 'Low stock alert must be a whole number 0 or higher.' },
+        };
+      }
 
       if (form.sku_mode === SKU_MODE_MANUAL && !String(form.sku || '').trim()) {
-        return 'Manual SKU is required when SKU mode is set to manual.';
+        return {
+          message: 'Manual SKU is required when SKU mode is set to manual.',
+          fieldErrors: { sku: 'Manual SKU is required when SKU mode is set to manual.' },
+        };
       }
 
       const bulkValidation = validateBulkPricingTiers(form.bulk_pricing, price);
       if (bulkValidation.error) {
-        return bulkValidation.error;
+        return {
+          message: bulkValidation.error,
+          fieldErrors: { bulk_pricing: bulkValidation.error },
+        };
       }
     }
 
     if (stepIndex === 4) {
       if (!ALLOWED_SHIPPING_OPTIONS.has(String(form.shipping_option || '').toLowerCase())) {
-        return 'Shipping option must be either Standard or Express.';
+        return {
+          message: 'Shipping option must be either Standard or Express.',
+          fieldErrors: { shipping_option: 'Shipping option must be either Standard or Express.' },
+        };
       }
 
       const shippingWeight = Number(form.shipping_weight_kg);
       if (!Number.isFinite(shippingWeight) || shippingWeight <= 0) {
-        return 'Shipping weight is required and must be greater than 0.';
+        return {
+          message: 'Shipping weight is required and must be greater than 0.',
+          fieldErrors: { shipping_weight_kg: 'Shipping weight is required and must be greater than 0.' },
+        };
       }
 
       const lengthRaw = String(form.shipping_length_cm || '').trim();
@@ -754,7 +1018,14 @@ const ProductsView = () => {
       const hasAnyDimension = [lengthRaw, widthRaw, heightRaw].some(Boolean);
 
       if (hasAnyDimension && [lengthRaw, widthRaw, heightRaw].some((value) => !value)) {
-        return 'Provide complete dimensions (length, width, height) or leave all blank.';
+        return {
+          message: 'Provide complete dimensions (length, width, height) or leave all blank.',
+          fieldErrors: {
+            shipping_length_cm: 'Provide complete dimensions (length, width, height) or leave all blank.',
+            shipping_width_cm: 'Provide complete dimensions (length, width, height) or leave all blank.',
+            shipping_height_cm: 'Provide complete dimensions (length, width, height) or leave all blank.',
+          },
+        };
       }
 
       if (hasAnyDimension) {
@@ -766,7 +1037,16 @@ const ProductsView = () => {
 
         for (const [label, value] of dimensions) {
           if (!Number.isFinite(value) || value <= 0) {
-            return `${label} must be greater than 0.`;
+            const fieldName = label.toLowerCase() === 'length'
+              ? 'shipping_length_cm'
+              : label.toLowerCase() === 'width'
+                ? 'shipping_width_cm'
+                : 'shipping_height_cm';
+
+            return {
+              message: `${label} must be greater than 0.`,
+              fieldErrors: { [fieldName]: `${label} must be greater than 0.` },
+            };
           }
         }
       }
@@ -774,22 +1054,34 @@ const ProductsView = () => {
 
     if (stepIndex === 5) {
       if (!isSupportedProductStatus(form.status)) {
-        return 'Select a valid product status.';
+        return {
+          message: 'Select a valid product status.',
+          fieldErrors: { status: 'Select a valid product status.' },
+        };
       }
 
       if (form.is_on_sale) {
         const regularPrice = Number(form.price);
         const salePrice = Number(form.sale_price);
         if (!Number.isFinite(salePrice) || salePrice <= 0) {
-          return 'Sale price must be greater than 0 when sale is enabled.';
+          return {
+            message: 'Sale price must be greater than 0 when sale is enabled.',
+            fieldErrors: { sale_price: 'Sale price must be greater than 0 when sale is enabled.' },
+          };
         }
         if (Number.isFinite(regularPrice) && salePrice >= regularPrice) {
-          return 'Sale price should be lower than the regular price.';
+          return {
+            message: 'Sale price should be lower than the regular price.',
+            fieldErrors: { sale_price: 'Sale price should be lower than the regular price.' },
+          };
         }
       }
     }
 
-    return '';
+    return {
+      message: '',
+      fieldErrors: {},
+    };
   };
 
   const goToStep = (nextStep) => {
@@ -797,12 +1089,22 @@ const ProductsView = () => {
 
     if (nextStep > formStep) {
       for (let stepIndex = formStep; stepIndex < nextStep; stepIndex += 1) {
-        const stepError = getStepValidationError(stepIndex);
-        if (stepError) {
+        const validationResult = getStepValidationResult(stepIndex);
+        if (validationResult.message) {
           if (stepIndex === 1) {
             setInfoFieldErrors(getInfoFieldErrors(form));
           }
-          setFormError(stepError);
+          setFieldErrors(validationResult.fieldErrors || {});
+
+          if (validationResult.fieldErrors?.image_urls) {
+            setMediaError(validationResult.fieldErrors.image_urls);
+          }
+
+          if (validationResult.fieldErrors?.video_url) {
+            setVideoError(validationResult.fieldErrors.video_url);
+          }
+
+          setFormError(validationResult.message);
           setFormStep(stepIndex);
           return;
         }
@@ -810,22 +1112,35 @@ const ProductsView = () => {
     }
 
     setFormError('');
+    setFieldErrors({});
     setFormStep(nextStep);
   };
 
   const validateAllSteps = () => {
     for (let stepIndex = 0; stepIndex < PRODUCT_FORM_STEPS.length; stepIndex += 1) {
-      const stepError = getStepValidationError(stepIndex);
-      if (stepError) {
+      const validationResult = getStepValidationResult(stepIndex);
+      if (validationResult.message) {
         if (stepIndex === 1) {
           setInfoFieldErrors(getInfoFieldErrors(form));
         }
-        setFormError(stepError);
+        setFieldErrors(validationResult.fieldErrors || {});
+
+        if (validationResult.fieldErrors?.image_urls) {
+          setMediaError(validationResult.fieldErrors.image_urls);
+        }
+
+        if (validationResult.fieldErrors?.video_url) {
+          setVideoError(validationResult.fieldErrors.video_url);
+        }
+
+        setFormError(validationResult.message);
         setFormStep(stepIndex);
         return false;
       }
     }
 
+    setFormError('');
+    setFieldErrors({});
     return true;
   };
 
@@ -867,10 +1182,12 @@ const ProductsView = () => {
     if (nextMediaItems.length > 0) {
       setProductMediaItems((prev) => [...prev, ...nextMediaItems]);
       setMediaError('');
+      clearFieldError('image_urls');
     }
 
     if (validationErrors.length > 0) {
       setMediaError(validationErrors[0]);
+      setFieldErrors((prev) => ({ ...prev, image_urls: validationErrors[0] }));
     }
   };
 
@@ -891,12 +1208,16 @@ const ProductsView = () => {
 
     const mimeType = String(file.type || '').toLowerCase();
     if (!PRODUCT_VIDEO_ALLOWED_TYPES.has(mimeType)) {
-      setVideoError('Unsupported video type. Use MP4, WEBM, MOV, OGG, or M4V.');
+      const message = 'Unsupported video type. Use MP4, WEBM, MOV, OGG, or M4V.';
+      setVideoError(message);
+      setFieldErrors((prev) => ({ ...prev, video_url: message }));
       return;
     }
 
     if (Number(file.size || 0) > PRODUCT_VIDEO_MAX_SIZE_BYTES) {
-      setVideoError('Video exceeds the 20MB size limit.');
+      const message = 'Video exceeds the 20MB size limit.';
+      setVideoError(message);
+      setFieldErrors((prev) => ({ ...prev, video_url: message }));
       return;
     }
 
@@ -912,6 +1233,7 @@ const ProductsView = () => {
       };
     });
     setVideoError('');
+    clearFieldError('video_url');
   };
 
   const handleMediaDrop = (event) => {
@@ -957,14 +1279,18 @@ const ProductsView = () => {
       return prev.filter((item) => item.id !== mediaItemId);
     });
     setMediaError('');
+    clearFieldError('image_urls');
   };
 
   const removeProductVideoItem = () => {
     resetProductVideoItem(null);
+    clearFieldError('video_url');
   };
 
   const setSkuMode = (nextMode) => {
     if (nextMode !== SKU_MODE_AUTO && nextMode !== SKU_MODE_MANUAL) return;
+
+    clearFieldError('sku');
 
     setForm((prev) => {
       if (nextMode === SKU_MODE_AUTO) {
@@ -1004,6 +1330,9 @@ const ProductsView = () => {
     try {
       setSubmitting(true);
       setFormError('');
+      setFieldErrors({});
+      setMediaError('');
+      setVideoError('');
 
       const uploadedMediaUrls = [];
       for (const mediaItem of productMediaItems) {
@@ -1017,14 +1346,26 @@ const ProductsView = () => {
             const uploadedUrl = await uploadProductImage(mediaItem.file);
             uploadedMediaUrls.push(String(uploadedUrl || '').trim());
           } catch (uploadError) {
-            throw new Error(`Failed to upload ${mediaItem.file.name || 'an image'}. ${uploadError?.message || 'Please try again.'}`);
+            const uploadMessage = formatUploadFailureMessage({
+              mediaType: 'image',
+              fileName: mediaItem.file.name,
+              error: uploadError,
+            });
+            setMediaError(uploadMessage);
+            setFieldErrors((prev) => ({ ...prev, image_urls: uploadMessage }));
+            setFormStep(0);
+            throw new Error(uploadMessage);
           }
         }
       }
 
       const normalizedMediaUrls = Array.from(new Set(uploadedMediaUrls.filter(Boolean))).slice(0, PRODUCT_MEDIA_MAX_FILES);
       if (normalizedMediaUrls.length < PRODUCT_MEDIA_MIN_FILES) {
-        throw new Error('Upload at least one product image before saving.');
+        const message = 'Upload at least one product image before saving.';
+        setMediaError(message);
+        setFieldErrors((prev) => ({ ...prev, image_urls: message }));
+        setFormStep(0);
+        throw new Error(message);
       }
 
       let uploadedVideoUrl = null;
@@ -1037,7 +1378,15 @@ const ProductsView = () => {
           const nextVideoUrl = await uploadProductVideo(productVideoItem.file);
           uploadedVideoUrl = String(nextVideoUrl || '').trim();
         } catch (uploadError) {
-          throw new Error(`Failed to upload ${productVideoItem.file.name || 'the video'}. ${uploadError?.message || 'Please try again.'}`);
+          const uploadMessage = formatUploadFailureMessage({
+            mediaType: 'video',
+            fileName: productVideoItem.file.name,
+            error: uploadError,
+          });
+          setVideoError(uploadMessage);
+          setFieldErrors((prev) => ({ ...prev, video_url: uploadMessage }));
+          setFormStep(0);
+          throw new Error(uploadMessage);
         }
       }
 
@@ -1128,7 +1477,40 @@ const ProductsView = () => {
       fetch();
       setTimeout(() => closeProductModal(), 100);
     } catch (e) {
-      setFormError(e.message || 'Failed to save product');
+      const friendlyMessage = getFriendlyRequestErrorMessage(e, 'Failed to save product. Please try again.');
+      const apiFieldErrors = extractProductFieldErrors(e);
+      const inferredFieldErrors = inferProductFieldErrorsFromMessage(friendlyMessage);
+      const nextFieldErrors = {
+        ...inferredFieldErrors,
+        ...apiFieldErrors,
+      };
+
+      if (Object.keys(nextFieldErrors).length > 0) {
+        setFieldErrors((prev) => ({ ...prev, ...nextFieldErrors }));
+
+        if (nextFieldErrors.name || nextFieldErrors.category_id) {
+          setInfoFieldErrors((prev) => ({
+            ...prev,
+            ...(nextFieldErrors.name ? { name: nextFieldErrors.name } : {}),
+            ...(nextFieldErrors.category_id ? { category_id: nextFieldErrors.category_id } : {}),
+          }));
+        }
+
+        if (nextFieldErrors.image_urls) {
+          setMediaError(nextFieldErrors.image_urls);
+        }
+
+        if (nextFieldErrors.video_url) {
+          setVideoError(nextFieldErrors.video_url);
+        }
+
+        const firstErrorStep = getFirstErrorStepIndex(nextFieldErrors);
+        if (firstErrorStep !== null) {
+          setFormStep(firstErrorStep);
+        }
+      }
+
+      setFormError(friendlyMessage);
       console.error(e);
     } finally {
       setSubmitting(false);
@@ -1141,6 +1523,7 @@ const ProductsView = () => {
   };
 
   const handleDelete = (p) => {
+    setDeleteError('');
     setDeleteTarget(p);
   };
 
@@ -1149,6 +1532,7 @@ const ProductsView = () => {
     resetProductMediaItems([]);
     resetProductVideoItem(null);
     setFormError('');
+    setFieldErrors({});
     setInfoFieldErrors({});
     setCategorySearchQuery('');
     setIsCategoryDropdownOpen(false);
@@ -1292,8 +1676,15 @@ const ProductsView = () => {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    try { await deleteProduct(deleteTarget.id); fetch(); } catch (e) { console.error(e); }
-    setDeleteTarget(null);
+    try {
+      setDeleteError('');
+      await deleteProduct(deleteTarget.id);
+      await fetch();
+      setDeleteTarget(null);
+    } catch (e) {
+      setDeleteError(getFriendlyRequestErrorMessage(e, 'Failed to delete product. Please try again.'));
+      console.error(e);
+    }
   };
 
   const filtered = products.filter(p => {
@@ -1343,6 +1734,12 @@ const ProductsView = () => {
           <option value="out">Out of Stock</option>
         </select>
       </div>
+
+      {loadError && (
+        <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+          {loadError}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5 overflow-hidden">
@@ -1675,11 +2072,11 @@ const ProductsView = () => {
                             updateInlineInfoError('name', !String(nextName || '').trim(), 'Product name is required.');
                           }}
                           onBlur={() => updateInlineInfoError('name', !String(form.name || '').trim(), 'Product name is required.')}
-                          className={`${inputClass} ${infoFieldErrors.name ? 'border-red-400 focus:border-red-400 focus:ring-red-400/25' : ''}`}
+                          className={`${inputClass} ${getInfoErrorMessage('name') ? 'border-red-400 focus:border-red-400 focus:ring-red-400/25' : ''}`}
                           placeholder="Front Brake Pad Set"
                         />
-                        {infoFieldErrors.name && (
-                          <p className="text-xs text-red-300">{infoFieldErrors.name}</p>
+                        {getInfoErrorMessage('name') && (
+                          <p className="text-xs text-red-300">{getInfoErrorMessage('name')}</p>
                         )}
                       </div>
                     </InputField>
@@ -1687,17 +2084,23 @@ const ProductsView = () => {
                     <InputField label="Brand">
                       <input
                         value={form.brand}
-                        onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
-                        className={inputClass}
+                        onChange={e => {
+                          setForm(f => ({ ...f, brand: e.target.value }));
+                          clearFieldError('brand');
+                        }}
+                        className={getInputClassName('brand')}
                         placeholder="Honda"
                       />
+                      {getFieldError('brand') && (
+                        <p className="mt-1 text-xs text-red-300">{getFieldError('brand')}</p>
+                      )}
                     </InputField>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <InputField label="Category" required>
                       <div className="space-y-2" ref={categoryDropdownRef}>
-                        <div className={`relative rounded-lg border bg-[#202430] ${infoFieldErrors.category_id ? 'border-red-400' : 'border-white/10'}`}>
+                        <div className={`relative rounded-lg border bg-[#202430] ${getInfoErrorMessage('category_id') ? 'border-red-400' : 'border-white/10'}`}>
                           <div className="flex items-center gap-2 px-3 py-2">
                             <Search size={15} className="text-gray-400" />
                             <input
@@ -1750,8 +2153,8 @@ const ProductsView = () => {
                           )}
                         </div>
 
-                        {infoFieldErrors.category_id && (
-                          <p className="text-xs text-red-300">{infoFieldErrors.category_id}</p>
+                        {getInfoErrorMessage('category_id') && (
+                          <p className="text-xs text-red-300">{getInfoErrorMessage('category_id')}</p>
                         )}
 
                         <button type="button" onClick={openCategoryModal} className="text-xs font-medium text-red-400 hover:text-red-300">
@@ -1762,12 +2165,23 @@ const ProductsView = () => {
 
                     <InputField label="Subcategory">
                       <div className="space-y-2">
-                        <select value={form.subcategory_id} onChange={e => setForm(f => ({ ...f, subcategory_id: e.target.value }))} className={inputClass} disabled={!form.category_id}>
+                        <select
+                          value={form.subcategory_id}
+                          onChange={e => {
+                            setForm(f => ({ ...f, subcategory_id: e.target.value }));
+                            clearFieldError('subcategory_id');
+                          }}
+                          className={getInputClassName('subcategory_id')}
+                          disabled={!form.category_id}
+                        >
                           <option value="">None</option>
                           {subcategories.filter(s => s.category_id?.toString() === form.category_id?.toString()).map(s => (
                             <option key={s.id} value={s.id}>{s.name}</option>
                           ))}
                         </select>
+                        {getFieldError('subcategory_id') && (
+                          <p className="text-xs text-red-300">{getFieldError('subcategory_id')}</p>
+                        )}
                         <button
                           type="button"
                           onClick={() => setSubcategoryModalOpen(true)}
@@ -1803,11 +2217,26 @@ const ProductsView = () => {
                       />
 
                       <p className="text-[11px] text-gray-500">Use the toolbar to format product details.</p>
+                      {getFieldError('description') && (
+                        <p className="text-xs text-red-300">{getFieldError('description')}</p>
+                      )}
                     </div>
                   </InputField>
 
                   <InputField label="Part Number">
-                    <input value={form.partNumber} onChange={e => setForm(f => ({ ...f, partNumber: e.target.value, barcode: e.target.value }))} className={inputClass} placeholder="PN-001234" />
+                    <input
+                      value={form.partNumber}
+                      onChange={e => {
+                        setForm(f => ({ ...f, partNumber: e.target.value, barcode: e.target.value }));
+                        clearFieldError('partNumber');
+                        clearFieldError('barcode');
+                      }}
+                      className={getInputClassName('partNumber')}
+                      placeholder="PN-001234"
+                    />
+                    {getFieldError('partNumber') && (
+                      <p className="mt-1 text-xs text-red-300">{getFieldError('partNumber')}</p>
+                    )}
                   </InputField>
                 </div>
               )}
@@ -1821,10 +2250,16 @@ const ProductsView = () => {
                         min="0.01"
                         step="0.01"
                         value={form.price}
-                        onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
-                        className={inputClass}
+                        onChange={e => {
+                          setForm(f => ({ ...f, price: e.target.value }));
+                          clearFieldError('price');
+                        }}
+                        className={getInputClassName('price')}
                         placeholder="0.00"
                       />
+                      {getFieldError('price') && (
+                        <p className="mt-1 text-xs text-red-300">{getFieldError('price')}</p>
+                      )}
                     </InputField>
                     <InputField label="Buying Price (Optional)">
                       <input
@@ -1832,10 +2267,16 @@ const ProductsView = () => {
                         min="0"
                         step="0.01"
                         value={form.buyingPrice}
-                        onChange={e => setForm(f => ({ ...f, buyingPrice: e.target.value }))}
-                        className={inputClass}
+                        onChange={e => {
+                          setForm(f => ({ ...f, buyingPrice: e.target.value }));
+                          clearFieldError('buyingPrice');
+                        }}
+                        className={getInputClassName('buyingPrice')}
                         placeholder="0.00"
                       />
+                      {getFieldError('buyingPrice') && (
+                        <p className="mt-1 text-xs text-red-300">{getFieldError('buyingPrice')}</p>
+                      )}
                     </InputField>
                     <InputField label="Stock" required>
                       <input
@@ -1843,9 +2284,15 @@ const ProductsView = () => {
                         min="0"
                         step="1"
                         value={form.stock_quantity}
-                        onChange={e => setForm(f => ({ ...f, stock_quantity: e.target.value }))}
-                        className={inputClass}
+                        onChange={e => {
+                          setForm(f => ({ ...f, stock_quantity: e.target.value }));
+                          clearFieldError('stock_quantity');
+                        }}
+                        className={getInputClassName('stock_quantity')}
                       />
+                      {getFieldError('stock_quantity') && (
+                        <p className="mt-1 text-xs text-red-300">{getFieldError('stock_quantity')}</p>
+                      )}
                     </InputField>
                     <InputField label="Low Stock Alert">
                       <input
@@ -1853,9 +2300,15 @@ const ProductsView = () => {
                         min="0"
                         step="1"
                         value={form.low_stock_threshold}
-                        onChange={e => setForm(f => ({ ...f, low_stock_threshold: e.target.value }))}
-                        className={inputClass}
+                        onChange={e => {
+                          setForm(f => ({ ...f, low_stock_threshold: e.target.value }));
+                          clearFieldError('low_stock_threshold');
+                        }}
+                        className={getInputClassName('low_stock_threshold')}
                       />
+                      {getFieldError('low_stock_threshold') && (
+                        <p className="mt-1 text-xs text-red-300">{getFieldError('low_stock_threshold')}</p>
+                      )}
                     </InputField>
                   </div>
 
@@ -1883,11 +2336,18 @@ const ProductsView = () => {
 
                       <input
                         value={form.sku}
-                        onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
-                        className={`${inputClass} ${form.sku_mode === SKU_MODE_AUTO ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        onChange={e => {
+                          setForm(f => ({ ...f, sku: e.target.value }));
+                          clearFieldError('sku');
+                        }}
+                        className={`${getInputClassName('sku')} ${form.sku_mode === SKU_MODE_AUTO ? 'opacity-70 cursor-not-allowed' : ''}`}
                         placeholder={form.sku_mode === SKU_MODE_AUTO ? 'SKU will be generated automatically' : 'Enter manual SKU'}
                         disabled={form.sku_mode === SKU_MODE_AUTO}
                       />
+
+                      {getFieldError('sku') && (
+                        <p className="text-xs text-red-300">{getFieldError('sku')}</p>
+                      )}
 
                       {form.sku_mode === SKU_MODE_AUTO ? (
                         <p className="text-xs text-gray-400">
@@ -1901,10 +2361,16 @@ const ProductsView = () => {
                     <InputField label="Barcode">
                       <input
                         value={form.barcode}
-                        onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
-                        className={inputClass}
+                        onChange={e => {
+                          setForm(f => ({ ...f, barcode: e.target.value }));
+                          clearFieldError('barcode');
+                        }}
+                        className={getInputClassName('barcode')}
                         placeholder="Scan-ready barcode"
                       />
+                      {getFieldError('barcode') && (
+                        <p className="mt-1 text-xs text-red-300">{getFieldError('barcode')}</p>
+                      )}
                     </InputField>
                   </div>
 
@@ -1967,6 +2433,9 @@ const ProductsView = () => {
                     )}
 
                     <p className="text-[11px] text-gray-500">Tier prices must be lower than regular price and should not increase as quantity grows.</p>
+                    {getFieldError('bulk_pricing') && (
+                      <p className="text-xs text-red-300">{getFieldError('bulk_pricing')}</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -2015,12 +2484,18 @@ const ProductsView = () => {
                     <InputField label="Shipping Option" required>
                       <select
                         value={form.shipping_option}
-                        onChange={e => setForm(f => ({ ...f, shipping_option: e.target.value }))}
-                        className={inputClass}
+                        onChange={e => {
+                          setForm(f => ({ ...f, shipping_option: e.target.value }));
+                          clearFieldError('shipping_option');
+                        }}
+                        className={getInputClassName('shipping_option')}
                       >
                         <option value="standard">Standard</option>
                         <option value="express">Express</option>
                       </select>
+                      {getFieldError('shipping_option') && (
+                        <p className="mt-1 text-xs text-red-300">{getFieldError('shipping_option')}</p>
+                      )}
                     </InputField>
                     <InputField label="Weight (kg)" required>
                       <input
@@ -2028,10 +2503,16 @@ const ProductsView = () => {
                         step="0.001"
                         min="0.001"
                         value={form.shipping_weight_kg}
-                        onChange={e => setForm(f => ({ ...f, shipping_weight_kg: e.target.value }))}
-                        className={inputClass}
+                        onChange={e => {
+                          setForm(f => ({ ...f, shipping_weight_kg: e.target.value }));
+                          clearFieldError('shipping_weight_kg');
+                        }}
+                        className={getInputClassName('shipping_weight_kg')}
                         placeholder="0.500"
                       />
+                      {getFieldError('shipping_weight_kg') && (
+                        <p className="mt-1 text-xs text-red-300">{getFieldError('shipping_weight_kg')}</p>
+                      )}
                     </InputField>
                   </div>
 
@@ -2050,10 +2531,16 @@ const ProductsView = () => {
                           step="0.01"
                           min="0"
                           value={form.shipping_length_cm}
-                          onChange={e => setForm(f => ({ ...f, shipping_length_cm: e.target.value }))}
-                          className={inputClass}
+                          onChange={e => {
+                            setForm(f => ({ ...f, shipping_length_cm: e.target.value }));
+                            clearFieldError('shipping_length_cm');
+                          }}
+                          className={getInputClassName('shipping_length_cm')}
                           placeholder="30"
                         />
+                        {getFieldError('shipping_length_cm') && (
+                          <p className="mt-1 text-xs text-red-300">{getFieldError('shipping_length_cm')}</p>
+                        )}
                       </InputField>
                       <InputField label="Width (cm)">
                         <input
@@ -2061,10 +2548,16 @@ const ProductsView = () => {
                           step="0.01"
                           min="0"
                           value={form.shipping_width_cm}
-                          onChange={e => setForm(f => ({ ...f, shipping_width_cm: e.target.value }))}
-                          className={inputClass}
+                          onChange={e => {
+                            setForm(f => ({ ...f, shipping_width_cm: e.target.value }));
+                            clearFieldError('shipping_width_cm');
+                          }}
+                          className={getInputClassName('shipping_width_cm')}
                           placeholder="20"
                         />
+                        {getFieldError('shipping_width_cm') && (
+                          <p className="mt-1 text-xs text-red-300">{getFieldError('shipping_width_cm')}</p>
+                        )}
                       </InputField>
                       <InputField label="Height (cm)">
                         <input
@@ -2072,16 +2565,33 @@ const ProductsView = () => {
                           step="0.01"
                           min="0"
                           value={form.shipping_height_cm}
-                          onChange={e => setForm(f => ({ ...f, shipping_height_cm: e.target.value }))}
-                          className={inputClass}
+                          onChange={e => {
+                            setForm(f => ({ ...f, shipping_height_cm: e.target.value }));
+                            clearFieldError('shipping_height_cm');
+                          }}
+                          className={getInputClassName('shipping_height_cm')}
                           placeholder="10"
                         />
+                        {getFieldError('shipping_height_cm') && (
+                          <p className="mt-1 text-xs text-red-300">{getFieldError('shipping_height_cm')}</p>
+                        )}
                       </InputField>
                     </div>
                   </div>
 
                   <InputField label="Storage / Pickup Location">
-                    <input value={form.boxNumber} onChange={e => setForm(f => ({ ...f, boxNumber: e.target.value }))} className={inputClass} placeholder="A-12" />
+                    <input
+                      value={form.boxNumber}
+                      onChange={e => {
+                        setForm(f => ({ ...f, boxNumber: e.target.value }));
+                        clearFieldError('boxNumber');
+                      }}
+                      className={getInputClassName('boxNumber')}
+                      placeholder="A-12"
+                    />
+                    {getFieldError('boxNumber') && (
+                      <p className="mt-1 text-xs text-red-300">{getFieldError('boxNumber')}</p>
+                    )}
                   </InputField>
 
                   <p className="text-xs text-gray-500">
@@ -2093,21 +2603,53 @@ const ProductsView = () => {
               {formStep === 5 && (
                 <div className="space-y-4">
                   <InputField label="Product Status" required>
-                    <select value={normalizeProductStatus(form.status)} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className={inputClass}>
+                    <select
+                      value={normalizeProductStatus(form.status)}
+                      onChange={e => {
+                        setForm(f => ({ ...f, status: e.target.value }));
+                        clearFieldError('status');
+                      }}
+                      className={getInputClassName('status')}
+                    >
                       <option value={PRODUCT_STATUS_DRAFT}>Save as Draft</option>
                       <option value={PRODUCT_STATUS_PUBLISHED}>Publish Product</option>
                     </select>
+                    {getFieldError('status') && (
+                      <p className="mt-1 text-xs text-red-300">{getFieldError('status')}</p>
+                    )}
                   </InputField>
 
                   <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-red-500/10 border-red-500/30' : 'bg-[#202430]/40 border-white/10'}`}>
                     <label className="flex items-center gap-2 font-medium text-sm text-gray-200 cursor-pointer">
-                      <input type="checkbox" checked={form.is_on_sale} onChange={e => setForm(f => ({ ...f, is_on_sale: e.target.checked }))} className="w-4 h-4 text-red-500 rounded focus:ring-red-500" />
+                      <input
+                        type="checkbox"
+                        checked={form.is_on_sale}
+                        onChange={e => {
+                          setForm(f => ({ ...f, is_on_sale: e.target.checked }));
+                          if (!e.target.checked) {
+                            clearFieldError('sale_price');
+                          }
+                        }}
+                        className="w-4 h-4 text-red-500 rounded focus:ring-red-500"
+                      />
                       Put on Sale
                     </label>
                     {form.is_on_sale && (
                       <div className="mt-3">
                         <InputField label="Sale Price">
-                          <input type="number" step="0.01" value={form.sale_price} onChange={e => setForm(f => ({ ...f, sale_price: e.target.value }))} className={inputClass} />
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={form.sale_price}
+                            onChange={e => {
+                              setForm(f => ({ ...f, sale_price: e.target.value }));
+                              clearFieldError('sale_price');
+                            }}
+                            className={getInputClassName('sale_price')}
+                          />
+                          {getFieldError('sale_price') && (
+                            <p className="mt-1 text-xs text-red-300">{getFieldError('sale_price')}</p>
+                          )}
                         </InputField>
                       </div>
                     )}
@@ -2421,8 +2963,13 @@ const ProductsView = () => {
               <h3 className="text-lg font-bold text-white">Delete Product</h3>
             </div>
             <p className="text-sm text-gray-300 mb-4">Are you sure you want to delete <strong>"{deleteTarget.name}"</strong>? This cannot be undone.</p>
+            {deleteError && (
+              <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-4">
+                {deleteError}
+              </div>
+            )}
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-[#202430] hover:bg-[#2a3244] text-gray-200 text-sm font-medium rounded-xl">Cancel</button>
+              <button onClick={() => { setDeleteError(''); setDeleteTarget(null); }} className="flex-1 py-2.5 bg-[#202430] hover:bg-[#2a3244] text-gray-200 text-sm font-medium rounded-xl">Cancel</button>
               <button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl">Delete</button>
             </div>
           </div>
