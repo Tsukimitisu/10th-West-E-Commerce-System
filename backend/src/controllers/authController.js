@@ -1203,6 +1203,7 @@ export const verifyEmailToken = async (req, res) => {
         message: 'This verification link has expired. Request a new verification email to continue.',
         code: 'VERIFICATION_TOKEN_EXPIRED',
         requiresResend: true,
+        expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
         email: user.email,
       });
     }
@@ -1382,7 +1383,10 @@ export const resendVerification = async (req, res) => {
       });
     }
 
-    res.json({ message: 'Verification email resent successfully.' });
+    res.json({
+      message: 'Verification email resent successfully.',
+      expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
+    });
   } catch (err) {
     console.error('Resend verification error:', err);
     res.status(500).json({ message: 'Failed to resend verification email' });

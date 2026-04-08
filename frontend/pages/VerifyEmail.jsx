@@ -8,6 +8,8 @@ const VERIFY_REQUEST_TIMEOUT_MS = 8000;
 const VERIFICATION_LOADING_MESSAGE = 'Verifying...';
 const VERIFICATION_SUCCESS_MESSAGE = 'Email verified successfully. Logging you in...';
 const VERIFICATION_FAILED_MESSAGE = 'Verification failed';
+const VERIFICATION_EXPIRED_MESSAGE = 'This verification link expired. Request a new one below.';
+const VERIFICATION_USED_MESSAGE = 'This verification link was already used. Request a new one below.';
 const verifyRequestCache = new Map();
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
@@ -25,6 +27,12 @@ const getVerificationRedirect = (result) => {
   const explicitRedirect = String(result?.redirectTo || '').trim();
   if (explicitRedirect) return explicitRedirect;
   return getPostVerifyRedirect(result?.user);
+};
+
+const formatExpiryMinutes = (value) => {
+  const minutes = Number.parseInt(value, 10);
+  if (!Number.isFinite(minutes) || minutes <= 0) return 'a few minutes';
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
 };
 
 const verifyTokenOnce = (token) => {
@@ -292,7 +300,7 @@ const VerifyEmail = ({ onLogin }) => {
         setStatus('error');
 
         if (code === 'VERIFICATION_TOKEN_EXPIRED') {
-          setMessage(VERIFICATION_FAILED_MESSAGE);
+          setMessage(VERIFICATION_EXPIRED_MESSAGE);
           if (err?.email) setEmail(String(err.email).trim().toLowerCase());
           return;
         }
@@ -313,7 +321,7 @@ const VerifyEmail = ({ onLogin }) => {
         }
 
         if (code === 'VERIFICATION_TOKEN_USED') {
-          setMessage(VERIFICATION_FAILED_MESSAGE);
+          setMessage(VERIFICATION_USED_MESSAGE);
           return;
         }
 
@@ -362,9 +370,9 @@ const VerifyEmail = ({ onLogin }) => {
     setResendError('');
 
     try {
-      await resendVerificationEmail(normalizedEmail);
+      const result = await resendVerificationEmail(normalizedEmail);
       setEmail(normalizedEmail);
-      setResendStatus('Verification email resent successfully. Please check your inbox.');
+      setResendStatus(`Verification email resent successfully. It expires in ${formatExpiryMinutes(result?.expiresInMinutes)}.`);
     } catch (err) {
       setResendStatus(err.message || 'Failed to resend verification email.');
     } finally {
@@ -408,6 +416,7 @@ const VerifyEmail = ({ onLogin }) => {
             {!isEmailChangeFlow && (
               <div className="w-full bg-gray-900 border border-gray-700 rounded-lg p-5 mb-6 text-left">
                 <h3 className="text-sm font-bold text-white mb-3">Need a new verification email?</h3>
+                <p className="text-xs text-gray-400 mb-3">Verification links expire in 1 to 3 minutes. Enter your email to send a fresh link.</p>
                 <form onSubmit={handleResend} noValidate className="flex flex-col gap-3">
                   <div className="relative">
                     <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
