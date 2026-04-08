@@ -217,6 +217,7 @@ const App = () => {
 
   useEffect(() => {
     let isMounted = true;
+    let crossTabSyncTimer = null;
 
     const clearLocalSession = () => {
       localStorage.removeItem('shopCoreUser');
@@ -229,13 +230,16 @@ const App = () => {
 
     const syncUserFromStorage = () => {
       const token = localStorage.getItem('shopCoreToken');
-      if (!token) {
-        localStorage.removeItem('shopCoreUser');
+      const savedUser = localStorage.getItem('shopCoreUser');
+
+      if (!token || !savedUser) {
+        if (!token && !savedUser) {
+          localStorage.removeItem('shopCoreUser');
+        }
         if (isMounted) setUser(null);
         return;
       }
-      const savedUser = localStorage.getItem('shopCoreUser');
-      if (!savedUser) return;
+
       try {
         const parsed = JSON.parse(savedUser);
         if (parsed && parsed.id && isMounted) {
@@ -256,6 +260,17 @@ const App = () => {
       } catch {
         syncUserFromStorage();
       }
+    };
+
+    const scheduleCrossTabAuthRefresh = () => {
+      if (crossTabSyncTimer) {
+        window.clearTimeout(crossTabSyncTimer);
+      }
+
+      crossTabSyncTimer = window.setTimeout(() => {
+        crossTabSyncTimer = null;
+        void syncUserWithProfileRefresh();
+      }, 50);
     };
 
     // Check for existing session
@@ -331,8 +346,13 @@ const App = () => {
       };
 
       const handleStorage = async (event) => {
-        if (!event.key || event.key === 'shopCoreUser' || event.key === 'shopCoreToken') {
-          syncUserFromStorage();
+        if (!event.key) {
+          scheduleCrossTabAuthRefresh();
+          return;
+        }
+
+        if (event.key === 'shopCoreUser' || event.key === 'shopCoreToken') {
+          scheduleCrossTabAuthRefresh();
           return;
         }
 
@@ -357,6 +377,10 @@ const App = () => {
       setLoading(false);
 
       return () => {
+        if (crossTabSyncTimer) {
+          window.clearTimeout(crossTabSyncTimer);
+          crossTabSyncTimer = null;
+        }
         window.removeEventListener('auth:changed', handleAuthChanged);
         window.removeEventListener('auth:verified', handleAuthVerified);
         window.removeEventListener('storage', handleStorage);
@@ -370,6 +394,10 @@ const App = () => {
 
     return () => {
       isMounted = false;
+      if (crossTabSyncTimer) {
+        window.clearTimeout(crossTabSyncTimer);
+        crossTabSyncTimer = null;
+      }
       cleanup();
     };
   }, []);
