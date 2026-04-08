@@ -270,7 +270,13 @@ const VerifyEmail = ({ onLogin }) => {
 
         try {
           const savedUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
-          if (savedUser?.id && savedUser?.email_verified) {
+          if (
+            savedUser?.id &&
+            savedUser?.email_verified &&
+            code !== 'VERIFICATION_TOKEN_USED' &&
+            code !== 'VERIFICATION_TOKEN_INVALID' &&
+            code !== 'VERIFICATION_TOKEN_EXPIRED'
+          ) {
             const destination = getPostVerifyRedirect(savedUser);
             setStatus('success');
             setNextRoute(destination);
@@ -304,6 +310,11 @@ const VerifyEmail = ({ onLogin }) => {
 
         if (code === 'VERIFICATION_TOKEN_INVALID') {
           setMessage('Invalid verification link.');
+          return;
+        }
+
+        if (code === 'VERIFICATION_TOKEN_USED') {
+          setMessage('This verification link has already been used. Please log in or request a new one.');
           return;
         }
 

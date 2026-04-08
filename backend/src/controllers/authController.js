@@ -1075,9 +1075,8 @@ export const verifyEmailToken = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      const recentlyVerifiedResult = await client.query(
-        `SELECT id, name, email, role, phone, avatar, store_credit, is_active,
-                two_factor_enabled, oauth_provider, last_login, email_verified
+      const usedTokenResult = await client.query(
+        `SELECT id, email_verified
          FROM users
          WHERE last_email_verification_token = $1
            AND last_email_verification_at > NOW() - make_interval(hours => $2)
@@ -1087,36 +1086,11 @@ export const verifyEmailToken = async (req, res) => {
 
       await client.query('ROLLBACK');
 
-      if (recentlyVerifiedResult.rows.length > 0 && recentlyVerifiedResult.rows[0].email_verified) {
-        const recentlyVerifiedUser = recentlyVerifiedResult.rows[0];
-
-        if (!recentlyVerifiedUser.is_active) {
-          return sendResponse(403, {
-            success: false,
-            message: 'Your account is currently unavailable. Please contact support.',
-            code: 'ACCOUNT_UNAVAILABLE',
-          });
-        }
-
-        const sessionToken = await persistSession(pool, recentlyVerifiedUser, ipAddress, userAgent);
-
-        queuePostVerificationTasks({
-          userId: recentlyVerifiedUser.id,
-          guestCartSessionId,
-          ipAddress,
-          userAgent,
-          activityAction: 'email_verification_login',
-        });
-
-        return sendResponse(200, {
-          success: true,
-          message: sessionToken
-            ? 'This email is already verified. Logging you in...'
-            : 'This email is already verified. Please continue to login.',
-          user: sanitizeUser(recentlyVerifiedUser),
-          token: sessionToken,
-          autoLogin: true,
-          alreadyVerified: true,
+      if (usedTokenResult.rows.length > 0 && usedTokenResult.rows[0].email_verified) {
+        return sendResponse(409, {
+          success: false,
+          message: 'This verification link has already been used. Please log in or request a new one.',
+          code: 'VERIFICATION_TOKEN_USED',
         });
       }
 
@@ -1142,48 +1116,23 @@ export const verifyEmailToken = async (req, res) => {
     const tokenIsExpired = !expiresAt || expiresAt <= new Date();
 
     if (user.email_verified) {
-      const updatedAlreadyVerifiedUserResult = await client.query(
+      await client.query(
         `UPDATE users
          SET email_verification_token = NULL,
              email_verification_expires = NULL,
              last_email_verification_token = $2,
              last_email_verification_at = COALESCE(last_email_verification_at, NOW())
          WHERE id = $1
-         RETURNING *`,
+         RETURNING id`,
         [user.id, tokenHash]
       );
 
-      if (tokenIsExpired) {
-        await client.query('COMMIT');
-        return sendResponse(200, {
-          success: true,
-          message: 'This email is already verified. Please continue to login.',
-          user: sanitizeUser(updatedAlreadyVerifiedUserResult.rows[0]),
-          autoLogin: false,
-          alreadyVerified: true,
-        });
-      }
-
-      const alreadyVerifiedUser = updatedAlreadyVerifiedUserResult.rows[0];
-      const sessionToken = await persistSession(client, alreadyVerifiedUser, ipAddress, userAgent);
-
       await client.query('COMMIT');
 
-      queuePostVerificationTasks({
-        userId: alreadyVerifiedUser.id,
-        guestCartSessionId,
-        ipAddress,
-        userAgent,
-        activityAction: 'email_verification_login',
-      });
-
-      return sendResponse(200, {
-        success: true,
-        message: 'Your email is already verified. Logging you in...',
-        user: sanitizeUser(alreadyVerifiedUser),
-        token: sessionToken,
-        autoLogin: true,
-        alreadyVerified: true,
+      return sendResponse(409, {
+        success: false,
+        message: 'This verification link has already been used. Please log in or request a new one.',
+        code: 'VERIFICATION_TOKEN_USED',
       });
     }
 
