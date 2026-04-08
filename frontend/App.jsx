@@ -330,14 +330,20 @@ const App = () => {
         void syncUserWithProfileRefresh();
       };
 
-      const handleStorage = (event) => {
+      const handleStorage = async (event) => {
         if (!event.key || event.key === 'shopCoreUser' || event.key === 'shopCoreToken') {
           syncUserFromStorage();
           return;
         }
 
-        if (event.key === AUTH_VERIFIED_STORAGE_KEY) {
-          void syncUserWithProfileRefresh();
+        if (event.key === AUTH_VERIFIED_STORAGE_KEY && event.newValue === 'true') {
+          await syncUserWithProfileRefresh();
+
+          try {
+            localStorage.removeItem(AUTH_VERIFIED_STORAGE_KEY);
+          } catch {
+            // Ignore cleanup failures for the one-shot cross-tab signal.
+          }
         }
       };
 

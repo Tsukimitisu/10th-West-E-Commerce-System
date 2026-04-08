@@ -82,20 +82,22 @@ const confirmEmailChangeOnce = (token) => {
 const publishAuthVerifiedSignal = (user = null) => {
   if (typeof window === 'undefined') return;
 
-  const payload = {
-    verified: true,
-    userId: Number(user?.id || 0) || null,
-    at: Date.now(),
-    source: 'verify-email',
-  };
-
   try {
-    window.localStorage.setItem(AUTH_VERIFIED_STORAGE_KEY, JSON.stringify(payload));
+    // Reset the flag first so repeated verifications still trigger a storage event in other tabs.
+    window.localStorage.removeItem(AUTH_VERIFIED_STORAGE_KEY);
+    window.localStorage.setItem(AUTH_VERIFIED_STORAGE_KEY, 'true');
   } catch {
     // Best effort only.
   }
 
-  window.dispatchEvent(new CustomEvent('auth:verified', { detail: payload }));
+  window.dispatchEvent(new CustomEvent('auth:verified', {
+    detail: {
+      verified: true,
+      userId: Number(user?.id || 0) || null,
+      at: Date.now(),
+      source: 'verify-email',
+    },
+  }));
 };
 
 const createVerificationTimeoutError = () => {
