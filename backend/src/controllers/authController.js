@@ -1026,6 +1026,7 @@ export const verifyEmailToken = async (req, res) => {
     if (res.headersSent || res.writableEnded) return;
 
     res.status(503).json({
+      success: false,
       message: 'Verification is taking longer than expected. Please try again.',
       code: 'VERIFICATION_TIMEOUT',
     });
@@ -1033,7 +1034,16 @@ export const verifyEmailToken = async (req, res) => {
 
   const sendResponse = (status, payload) => {
     if (requestTimedOut || res.headersSent || res.writableEnded) return false;
-    res.status(status).json(payload);
+    const message = String(payload?.message || '').trim() || 'Verification request completed.';
+    const success = typeof payload?.success === 'boolean'
+      ? payload.success
+      : status >= 200 && status < 300;
+
+    res.status(status).json({
+      ...payload,
+      success,
+      message,
+    });
     return true;
   };
 
@@ -1082,6 +1092,7 @@ export const verifyEmailToken = async (req, res) => {
 
         if (!recentlyVerifiedUser.is_active) {
           return sendResponse(403, {
+            success: false,
             message: 'Your account is currently unavailable. Please contact support.',
             code: 'ACCOUNT_UNAVAILABLE',
           });
@@ -1098,6 +1109,7 @@ export const verifyEmailToken = async (req, res) => {
         });
 
         return sendResponse(200, {
+          success: true,
           message: sessionToken
             ? 'This email is already verified. Logging you in...'
             : 'This email is already verified. Please continue to login.',
@@ -1109,6 +1121,7 @@ export const verifyEmailToken = async (req, res) => {
       }
 
       return sendResponse(400, {
+        success: false,
         message: 'This verification link is invalid. Please request a new one.',
         code: 'VERIFICATION_TOKEN_INVALID',
       });
@@ -1119,6 +1132,7 @@ export const verifyEmailToken = async (req, res) => {
     if (!user.is_active) {
       await client.query('ROLLBACK');
       return sendResponse(403, {
+        success: false,
         message: 'Your account is currently unavailable. Please contact support.',
         code: 'ACCOUNT_UNAVAILABLE',
       });
@@ -1142,6 +1156,7 @@ export const verifyEmailToken = async (req, res) => {
       if (tokenIsExpired) {
         await client.query('COMMIT');
         return sendResponse(200, {
+          success: true,
           message: 'This email is already verified. Please continue to login.',
           user: sanitizeUser(updatedAlreadyVerifiedUserResult.rows[0]),
           autoLogin: false,
@@ -1163,6 +1178,7 @@ export const verifyEmailToken = async (req, res) => {
       });
 
       return sendResponse(200, {
+        success: true,
         message: 'Your email is already verified. Logging you in...',
         user: sanitizeUser(alreadyVerifiedUser),
         token: sessionToken,
@@ -1178,6 +1194,7 @@ export const verifyEmailToken = async (req, res) => {
       );
       await client.query('COMMIT');
       return sendResponse(410, {
+        success: false,
         message: 'This verification link has expired. Request a new verification email to continue.',
         code: 'VERIFICATION_TOKEN_EXPIRED',
         requiresResend: true,
@@ -1212,6 +1229,7 @@ export const verifyEmailToken = async (req, res) => {
     });
 
     return sendResponse(200, {
+      success: true,
       message: 'Email verified successfully. Logging you in...',
       user: sanitizeUser(updatedUser),
       token: sessionToken,
@@ -1233,12 +1251,14 @@ export const verifyEmailToken = async (req, res) => {
 
     if (isTransientVerificationDbError(err)) {
       return sendResponse(503, {
+        success: false,
         message: 'Verification is taking longer than expected. Please try again.',
         code: 'VERIFICATION_TEMPORARY_FAILURE',
       });
     }
 
     return sendResponse(500, {
+      success: false,
       message: 'We could not verify your account right now. Please try again.',
       code: 'VERIFICATION_FAILED',
     });

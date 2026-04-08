@@ -1,5 +1,5 @@
 import express from 'express';
-import { body } from 'express-validator';
+import { body, matchedData, validationResult } from 'express-validator';
 import passport from '../config/passport.js';
 import {
   register, login, logout, getProfile,
@@ -57,8 +57,33 @@ const emailValidation = () =>
         throw new Error('Did you mean @gmail.com?');
       }
 
-      return true;
+    return true;
+  });
+
+const validateVerifyEmailRequest = (req, res, next) => {
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const rawErrors = errors.array();
+    const fieldErrors = rawErrors.reduce((acc, error) => {
+      if (error.type === 'field' && error.path && !acc[error.path]) {
+        acc[error.path] = error.msg;
+      }
+      return acc;
+    }, {});
+
+    return res.status(400).json({
+      success: false,
+      message: fieldErrors.token || rawErrors[0]?.msg || 'Invalid verification link.',
+      code: 'VERIFICATION_TOKEN_INVALID',
+      errors: rawErrors,
+      fieldErrors,
     });
+  }
+
+  req.validatedData = matchedData(req, { locations: ['body', 'query', 'params'] });
+  next();
+};
 
 // ─── Validation rules ──────────────────────────────────────────────
 const registerValidation = [
@@ -191,7 +216,7 @@ router.post(
     .notEmpty().withMessage('Verification token is required')
     .isLength({ min: 64, max: 64 }).withMessage('Invalid verification token format')
     .matches(/^[a-f0-9]+$/i).withMessage('Invalid verification token format'),
-  validate,
+  validateVerifyEmailRequest,
   verifyEmailToken
 );
 
