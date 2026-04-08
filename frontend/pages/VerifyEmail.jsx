@@ -18,6 +18,12 @@ const getPostVerifyRedirect = (user) => {
   return '/';
 };
 
+const getVerificationRedirect = (result) => {
+  const explicitRedirect = String(result?.redirectTo || '').trim();
+  if (explicitRedirect) return explicitRedirect;
+  return getPostVerifyRedirect(result?.user);
+};
+
 const verifyTokenOnce = (token) => {
   const normalizedToken = String(token || '').trim();
   if (!normalizedToken) {
@@ -215,18 +221,10 @@ const VerifyEmail = ({ onLogin }) => {
           return;
         }
 
-        if (result?.token && result?.user && onLoginRef.current) {
-          const destination = getPostVerifyRedirect(result.user);
+        if (result?.autoLogin && result?.token && result?.user && onLoginRef.current) {
+          const destination = getVerificationRedirect(result);
           setNextRoute(destination);
-          setMessage(result?.alreadyVerified ? 'Already verified. Logging you in...' : 'Email verified successfully. Logging you in...');
-
-          try {
-            localStorage.setItem('shopCoreUser', JSON.stringify(result.user));
-            localStorage.setItem('shopCoreToken', result.token);
-            window.dispatchEvent(new Event('auth:changed'));
-          } catch {
-            // Ignore storage sync failures.
-          }
+          setMessage('Email verified successfully. Logging you in...');
 
           onLoginRef.current(result.user, result.token);
           publishAuthVerifiedSignal(result.user);
@@ -236,10 +234,10 @@ const VerifyEmail = ({ onLogin }) => {
           return;
         }
 
-        if (result?.token && result?.user) {
-          const destination = getPostVerifyRedirect(result.user);
+        if (result?.autoLogin && result?.token && result?.user) {
+          const destination = getVerificationRedirect(result);
           setNextRoute(destination);
-          setMessage(result?.alreadyVerified ? 'Already verified. Logging you in...' : 'Email verified successfully. Logging you in...');
+          setMessage('Email verified successfully. Logging you in...');
 
           try {
             localStorage.setItem('shopCoreUser', JSON.stringify(result.user));
@@ -256,11 +254,9 @@ const VerifyEmail = ({ onLogin }) => {
           return;
         }
 
+        setStatus('error');
         setNextRoute('/login');
-        setMessage(result?.alreadyVerified ? 'Already verified. Please log in to continue.' : 'Email verified successfully. Please log in to continue.');
-        redirectTimeoutRef.current = window.setTimeout(() => {
-          if (!cancelled) navigateRef.current('/login?verified=1', { replace: true });
-        }, 1200);
+        setMessage('Verification succeeded, but automatic sign-in was not completed. Please try the link again.');
       } catch (err) {
         if (cancelled) return;
 

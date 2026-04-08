@@ -85,6 +85,15 @@ const queuePostVerificationTasks = ({
   });
 };
 
+const getPostVerificationRedirectPath = (user) => {
+  const role = String(user?.role || '').toLowerCase();
+
+  if (role === 'super_admin') return '/super-admin';
+  if (role === 'owner' || role === 'admin' || role === 'store_staff') return '/admin';
+
+  return '/';
+};
+
 const isLocalUrl = (hostname) =>
   ['localhost', '127.0.0.1'].includes(hostname) ||
   hostname.startsWith('192.168.') ||
@@ -1182,6 +1191,8 @@ export const verifyEmailToken = async (req, res) => {
       message: 'Email verified successfully. Logging you in...',
       user: sanitizeUser(updatedUser),
       token: sessionToken,
+      redirectTo: getPostVerificationRedirectPath(updatedUser),
+      authenticated: true,
       autoLogin: true,
       alreadyVerified: false,
     });
