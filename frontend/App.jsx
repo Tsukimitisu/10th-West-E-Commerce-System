@@ -249,10 +249,6 @@ const App = () => {
     const syncUserWithProfileRefresh = async () => {
       syncUserFromStorage();
 
-      if (!localStorage.getItem('shopCoreToken')) {
-        return;
-      }
-
       try {
         const profile = await getProfile();
         if (isMounted) setUser(profile);
@@ -317,15 +313,13 @@ const App = () => {
         }
       }
 
-      // Validate active token and refresh profile to avoid stale/broken sessions.
-      if (localStorage.getItem('shopCoreToken')) {
-        try {
-          const profile = await getProfile();
-          if (isMounted) setUser(profile);
-          localStorage.setItem('shopCoreUser', JSON.stringify(profile));
-        } catch {
-          clearLocalSession();
-        }
+      // Validate active token and restore cookie-backed sessions after redirects.
+      try {
+        const profile = await getProfile();
+        if (isMounted) setUser(profile);
+        localStorage.setItem('shopCoreUser', JSON.stringify(profile));
+      } catch {
+        clearLocalSession();
       }
 
       const handleAuthChanged = () => {

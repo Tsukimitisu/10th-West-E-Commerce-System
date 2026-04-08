@@ -33,11 +33,73 @@ const decodeSupabaseFallbackToken = (token) => {
   }
 };
 
+const readSessionAuth = (req) => {
+  const sessionAuth = req.session?.auth;
+  if (!sessionAuth || typeof sessionAuth !== 'object') return null;
+
+  const userId = Number(sessionAuth.userId);
+  if (!Number.isInteger(userId) || userId <= 0) return null;
+
+  const tokenHash = String(sessionAuth.tokenHash || '').trim();
+  if (!tokenHash) return null;
+
+  return {
+    userId,
+    tokenHash,
+    role: sessionAuth.role || null,
+  };
+};
+
+const hydrateUserFromSession = async (req) => {
+  const sessionAuth = readSessionAuth(req);
+  if (!sessionAuth) return null;
+
+  const sessionResult = await pool.query(
+    `SELECT id
+     FROM sessions
+     WHERE token_hash = $1
+       AND is_active = true
+       AND expires_at > NOW()`,
+    [sessionAuth.tokenHash]
+  );
+
+  if (sessionResult.rows.length === 0) {
+    return null;
+  }
+
+  const userResult = await pool.query(
+    `SELECT id, name, email, role, avatar, is_active
+     FROM users
+     WHERE id = $1
+     LIMIT 1`,
+    [sessionAuth.userId]
+  );
+
+  if (userResult.rows.length === 0 || !userResult.rows[0].is_active) {
+    return null;
+  }
+
+  await pool.query(
+    'UPDATE sessions SET last_active = NOW() WHERE token_hash = $1',
+    [sessionAuth.tokenHash]
+  );
+
+  return userResult.rows[0];
+};
+
 export const authenticateOptional = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = extractBearerToken(authHeader);
 
   if (!token) {
+    try {
+      const sessionUser = await hydrateUserFromSession(req);
+      if (sessionUser) {
+        req.user = sessionUser;
+      }
+    } catch (error) {
+      console.error('Optional session authentication error:', error);
+    }
     return next();
   }
 
@@ -69,8 +131,26 @@ export const authenticateOptional = async (req, res, next) => {
 export const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = extractBearerToken(authHeader);
+  const trySessionFallback = async () => {
+    const sessionUser = await hydrateUserFromSession(req);
+    if (!sessionUser) return false;
+    req.user = sessionUser;
+    return true;
+  };
 
   if (!token) {
+    try {
+      if (await trySessionFallback()) {
+        return next();
+      }
+    } catch (error) {
+      console.error('Session authentication error:', error);
+      return res.status(500).json({
+        message: 'Authentication check failed. Please try again.',
+        code: 'AUTH_VALIDATION_FAILED',
+      });
+    }
+
     return res.status(401).json({
       message: 'Access token required',
       code: 'AUTH_TOKEN_REQUIRED',
@@ -81,6 +161,18 @@ export const authenticateToken = async (req, res, next) => {
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET, { clockTolerance: 30 });
   } catch (err) {
+    try {
+      if (await trySessionFallback()) {
+        return next();
+      }
+    } catch (sessionError) {
+      console.error('Session authentication fallback error:', sessionError);
+      return res.status(500).json({
+        message: 'Authentication check failed. Please try again.',
+        code: 'AUTH_VALIDATION_FAILED',
+      });
+    }
+
     if (err?.name === 'TokenExpiredError') {
       return res.status(401).json({
         message: 'Access token expired. Please log in again.',

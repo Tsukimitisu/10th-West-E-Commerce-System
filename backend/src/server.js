@@ -86,6 +86,11 @@ const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 const PgSessionStore = connectPgSimple(session);
+const configuredSessionSameSite = String(process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
+const sessionCookieSameSite = ['lax', 'strict', 'none'].includes(configuredSessionSameSite)
+  ? configuredSessionSameSite
+  : (process.env.NODE_ENV === 'production' ? 'none' : 'lax');
+const sessionCookieSecure = sessionCookieSameSite === 'none' || process.env.NODE_ENV === 'production';
 
 const sessionSecret = process.env.SESSION_SECRET;
 if (process.env.NODE_ENV === 'production' && !sessionSecret) {
@@ -188,10 +193,12 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   rolling: true,
+  proxy: process.env.NODE_ENV === 'production',
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: sessionCookieSecure,
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: sessionCookieSameSite,
+    path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 }));
