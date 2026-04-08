@@ -4,6 +4,7 @@ import { Check, X, Loader, Mail } from 'lucide-react';
 import { verifyEmailToken, resendVerificationEmail, confirmEmailChangeToken } from '../services/api';
 
 const VERIFY_REQUEST_CACHE_MS = 30 * 1000;
+const VERIFY_REQUEST_TIMEOUT_MS = 8000;
 const verifyRequestCache = new Map();
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
@@ -28,7 +29,7 @@ const verifyTokenOnce = (token) => {
   const cachedRequest = verifyRequestCache.get(normalizedToken);
   if (cachedRequest) return cachedRequest;
 
-  const request = verifyEmailToken(normalizedToken)
+  const request = withVerificationTimeout(verifyEmailToken(normalizedToken))
     .then((result) => {
       window.setTimeout(() => {
         verifyRequestCache.delete(normalizedToken);
@@ -56,7 +57,7 @@ const confirmEmailChangeOnce = (token) => {
   const cachedRequest = verifyRequestCache.get(cacheKey);
   if (cachedRequest) return cachedRequest;
 
-  const request = confirmEmailChangeToken(normalizedToken)
+  const request = withVerificationTimeout(confirmEmailChangeToken(normalizedToken))
     .then((result) => {
       window.setTimeout(() => {
         verifyRequestCache.delete(cacheKey);
@@ -90,6 +91,37 @@ const publishAuthVerifiedSignal = (user = null) => {
 
   window.dispatchEvent(new CustomEvent('auth:verified', { detail: payload }));
 };
+
+const createVerificationTimeoutError = () => {
+  const timeoutError = new Error('Verification is taking longer than expected. Please try again.');
+  timeoutError.code = 'VERIFICATION_TIMEOUT';
+  return timeoutError;
+};
+
+const withVerificationTimeout = (promise, timeoutMs = VERIFY_REQUEST_TIMEOUT_MS) => (
+  new Promise((resolve, reject) => {
+    let settled = false;
+    const timerId = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(createVerificationTimeoutError());
+    }, timeoutMs);
+
+    Promise.resolve(promise)
+      .then((result) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timerId);
+        resolve(result);
+      })
+      .catch((error) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timerId);
+        reject(error);
+      });
+  })
+);
 
 const VerifyEmail = ({ onLogin }) => {
   const navigate = useNavigate();
@@ -133,176 +165,164 @@ const VerifyEmail = ({ onLogin }) => {
     let cancelled = false;
 
     const runVerification = async () => {
-      let hardTimedOut = false;
-      const hardTimeoutId = window.setTimeout(() => {
-        if (cancelled) return;
-        hardTimedOut = true;
+      const normalizedEmailChangeToken = String(emailChangeToken || '').trim();
+      const normalizedToken = String(token || '').trim();
+      const activeToken = normalizedEmailChangeToken || normalizedToken;
+
+      if (!activeToken) {
+        if (lastProcessedTokenRef.current) return;
+
         setStatus('error');
-        setMessage('Verification is taking too long. Please try again.');
-      }, 10000);
+        setMessage('Verification token is missing. Please use the latest link from your email.');
+        return;
+      }
+
+      if (lastProcessedTokenRef.current === activeToken) {
+        return;
+      }
+      lastProcessedTokenRef.current = activeToken;
+
+      setStatus('loading');
+      setMessage(normalizedEmailChangeToken ? 'Confirming your new email address...' : 'Verifying...');
 
       try {
-        const normalizedEmailChangeToken = String(emailChangeToken || '').trim();
-        const normalizedToken = String(token || '').trim();
-        const activeToken = normalizedEmailChangeToken || normalizedToken;
+        const result = normalizedEmailChangeToken
+          ? await confirmEmailChangeOnce(normalizedEmailChangeToken)
+          : await verifyTokenOnce(normalizedToken);
 
-        if (!activeToken) {
-          if (lastProcessedTokenRef.current) return;
+        if (cancelled) return;
 
-          setStatus('error');
+        setStatus('success');
+        clearVerificationTokenFromUrl();
+
+        if (normalizedEmailChangeToken) {
+          try {
+            const existingUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+            if (existingUser && result?.user && Number(existingUser.id) === Number(result.user.id)) {
+              localStorage.setItem('shopCoreUser', JSON.stringify({ ...existingUser, ...result.user }));
+              window.dispatchEvent(new Event('auth:changed'));
+            }
+          } catch {
+            // Ignore local cache merge failures.
+          }
+
+          const destination = localStorage.getItem('shopCoreToken') ? '/profile' : '/login';
+          setNextRoute(destination);
+          setMessage(result?.message || 'Your email address has been updated successfully.');
+          redirectTimeoutRef.current = window.setTimeout(() => {
+            if (!cancelled) navigateRef.current(destination, { replace: true });
+          }, 1200);
+          return;
+        }
+
+        if (result?.token && result?.user && onLoginRef.current) {
+          const destination = getPostVerifyRedirect(result.user);
+          setNextRoute(destination);
+          setMessage(result?.alreadyVerified ? 'Already verified. Logging you in...' : 'Email verified successfully. Logging you in...');
+
+          try {
+            localStorage.setItem('shopCoreUser', JSON.stringify(result.user));
+            localStorage.setItem('shopCoreToken', result.token);
+            window.dispatchEvent(new Event('auth:changed'));
+          } catch {
+            // Ignore storage sync failures.
+          }
+
+          onLoginRef.current(result.user, result.token);
+          publishAuthVerifiedSignal(result.user);
+          redirectTimeoutRef.current = window.setTimeout(() => {
+            if (!cancelled) navigateRef.current(destination, { replace: true });
+          }, 1000);
+          return;
+        }
+
+        if (result?.token && result?.user) {
+          const destination = getPostVerifyRedirect(result.user);
+          setNextRoute(destination);
+          setMessage(result?.alreadyVerified ? 'Already verified. Logging you in...' : 'Email verified successfully. Logging you in...');
+
+          try {
+            localStorage.setItem('shopCoreUser', JSON.stringify(result.user));
+            localStorage.setItem('shopCoreToken', result.token);
+            window.dispatchEvent(new Event('auth:changed'));
+          } catch {
+            // Ignore storage sync failures.
+          }
+
+          publishAuthVerifiedSignal(result.user);
+          redirectTimeoutRef.current = window.setTimeout(() => {
+            if (!cancelled) navigateRef.current(destination, { replace: true });
+          }, 1000);
+          return;
+        }
+
+        setNextRoute('/login');
+        setMessage(result?.alreadyVerified ? 'Already verified. Please log in to continue.' : 'Email verified successfully. Please log in to continue.');
+        redirectTimeoutRef.current = window.setTimeout(() => {
+          if (!cancelled) navigateRef.current('/login?verified=1', { replace: true });
+        }, 1200);
+      } catch (err) {
+        if (cancelled) return;
+
+        const code = String(err?.code || '').toUpperCase();
+        const fieldTokenError = String(err?.fieldErrors?.token || '').trim();
+        const fallbackMessage = fieldTokenError || String(err?.message || 'Invalid or expired verification link.');
+
+        try {
+          const savedUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+          if (savedUser?.id && savedUser?.email_verified) {
+            const destination = getPostVerifyRedirect(savedUser);
+            setStatus('success');
+            setNextRoute(destination);
+            setMessage('Account already verified. Redirecting...');
+            redirectTimeoutRef.current = window.setTimeout(() => {
+              if (!cancelled) navigateRef.current(destination, { replace: true });
+            }, 900);
+            return;
+          }
+        } catch {
+          // Ignore local cache parse issues.
+        }
+
+        setStatus('error');
+
+        if (code === 'VERIFICATION_TOKEN_EXPIRED') {
+          setMessage('Verification link expired. Please request a new one.');
+          if (err?.email) setEmail(String(err.email).trim().toLowerCase());
+          return;
+        }
+
+        if (code === 'EMAIL_CHANGE_TOKEN_EXPIRED') {
+          setMessage('This email change link has expired. Update your profile again to request a new link.');
+          return;
+        }
+
+        if (code === 'EMAIL_CHANGE_TOKEN_INVALID' || code === 'EMAIL_CHANGE_NOT_PENDING') {
+          setMessage('This email change link is invalid or already used.');
+          return;
+        }
+
+        if (code === 'VERIFICATION_TOKEN_INVALID') {
+          setMessage('Invalid verification link.');
+          return;
+        }
+
+        if (code === 'VERIFICATION_TOKEN_REQUIRED') {
           setMessage('Verification token is missing. Please use the latest link from your email.');
           return;
         }
 
-        if (lastProcessedTokenRef.current === activeToken) {
+        if (code === 'VERIFICATION_TIMEOUT' || code === 'VERIFICATION_TEMPORARY_FAILURE') {
+          setMessage('Verification is taking too long. Please try again.');
           return;
         }
-        lastProcessedTokenRef.current = activeToken;
 
-        setStatus('loading');
-        setMessage(normalizedEmailChangeToken ? 'Confirming your new email address...' : 'Verifying...');
-
-        try {
-          const result = normalizedEmailChangeToken
-            ? await confirmEmailChangeOnce(normalizedEmailChangeToken)
-            : await verifyTokenOnce(normalizedToken);
-
-          if (cancelled || hardTimedOut) return;
-
-          setStatus('success');
-          clearVerificationTokenFromUrl();
-
-          if (normalizedEmailChangeToken) {
-            try {
-              const existingUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
-              if (existingUser && result?.user && Number(existingUser.id) === Number(result.user.id)) {
-                localStorage.setItem('shopCoreUser', JSON.stringify({ ...existingUser, ...result.user }));
-                window.dispatchEvent(new Event('auth:changed'));
-              }
-            } catch {
-              // Ignore local cache merge failures.
-            }
-
-            const destination = localStorage.getItem('shopCoreToken') ? '/profile' : '/login';
-            setNextRoute(destination);
-            setMessage(result?.message || 'Your email address has been updated successfully.');
-            redirectTimeoutRef.current = window.setTimeout(() => {
-              if (!cancelled) navigateRef.current(destination, { replace: true });
-            }, 1200);
-            return;
-          }
-
-          if (result?.token && result?.user && onLoginRef.current) {
-            const destination = getPostVerifyRedirect(result.user);
-            setNextRoute(destination);
-            setMessage(result?.alreadyVerified ? 'Already verified. Logging you in...' : 'Email verified successfully. Logging you in...');
-
-            try {
-              localStorage.setItem('shopCoreUser', JSON.stringify(result.user));
-              localStorage.setItem('shopCoreToken', result.token);
-              window.dispatchEvent(new Event('auth:changed'));
-            } catch {
-              // Ignore storage sync failures.
-            }
-
-            onLoginRef.current(result.user, result.token);
-            publishAuthVerifiedSignal(result.user);
-            redirectTimeoutRef.current = window.setTimeout(() => {
-              if (!cancelled) navigateRef.current(destination, { replace: true });
-            }, 1000);
-            return;
-          }
-
-          if (result?.token && result?.user) {
-            const destination = getPostVerifyRedirect(result.user);
-            setNextRoute(destination);
-            setMessage(result?.alreadyVerified ? 'Already verified. Logging you in...' : 'Email verified successfully. Logging you in...');
-
-            try {
-              localStorage.setItem('shopCoreUser', JSON.stringify(result.user));
-              localStorage.setItem('shopCoreToken', result.token);
-              window.dispatchEvent(new Event('auth:changed'));
-            } catch {
-              // Ignore storage sync failures.
-            }
-
-            publishAuthVerifiedSignal(result.user);
-            redirectTimeoutRef.current = window.setTimeout(() => {
-              if (!cancelled) navigateRef.current(destination, { replace: true });
-            }, 1000);
-            return;
-          }
-
-          setNextRoute('/login');
-          setMessage(result?.alreadyVerified ? 'Already verified. Please log in to continue.' : 'Email verified successfully. Please log in to continue.');
-          redirectTimeoutRef.current = window.setTimeout(() => {
-            if (!cancelled) navigateRef.current('/login?verified=1', { replace: true });
-          }, 1200);
-        } catch (err) {
-          if (cancelled || hardTimedOut) return;
-
-          const code = String(err?.code || '').toUpperCase();
-          const fieldTokenError = String(err?.fieldErrors?.token || '').trim();
-          const fallbackMessage = fieldTokenError || String(err?.message || 'Invalid or expired verification link.');
-
-          try {
-            const savedUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
-            if (savedUser?.id && savedUser?.email_verified) {
-              const destination = getPostVerifyRedirect(savedUser);
-              setStatus('success');
-              setNextRoute(destination);
-              setMessage('Account already verified. Redirecting...');
-              redirectTimeoutRef.current = window.setTimeout(() => {
-                if (!cancelled) navigateRef.current(destination, { replace: true });
-              }, 900);
-              return;
-            }
-          } catch {
-            // Ignore local cache parse issues.
-          }
-
-          setStatus('error');
-
-          if (code === 'VERIFICATION_TOKEN_EXPIRED') {
-            setMessage('Verification link expired. Please request a new one.');
-            if (err?.email) setEmail(String(err.email).trim().toLowerCase());
-            return;
-          }
-
-          if (code === 'EMAIL_CHANGE_TOKEN_EXPIRED') {
-            setMessage('This email change link has expired. Update your profile again to request a new link.');
-            return;
-          }
-
-          if (code === 'EMAIL_CHANGE_TOKEN_INVALID' || code === 'EMAIL_CHANGE_NOT_PENDING') {
-            setMessage('This email change link is invalid or already used.');
-            return;
-          }
-
-          if (code === 'VERIFICATION_TOKEN_INVALID') {
-            setMessage('Invalid verification link.');
-            return;
-          }
-
-          if (code === 'VERIFICATION_TOKEN_REQUIRED') {
-            setMessage('Verification token is missing. Please use the latest link from your email.');
-            return;
-          }
-
-          if (code === 'VERIFICATION_TIMEOUT' || code === 'VERIFICATION_TEMPORARY_FAILURE') {
-            setMessage('Verification is taking too long. Please try again.');
-            return;
-          }
-
-          if (code === 'VERIFICATION_NETWORK_ERROR' || code === 'NETWORK_ERROR') {
-            setMessage('We could not reach the server. Please check your connection and try again.');
-            return;
-          }
-
-          setMessage(fallbackMessage);
+        if (code === 'VERIFICATION_NETWORK_ERROR' || code === 'NETWORK_ERROR') {
+          setMessage('We could not reach the server. Please check your connection and try again.');
+          return;
         }
-      } finally {
-        window.clearTimeout(hardTimeoutId);
+
+        setMessage(fallbackMessage);
       }
     };
 
@@ -315,26 +335,6 @@ const VerifyEmail = ({ onLogin }) => {
       }
     };
   }, [token, emailChangeToken]);
-
-  useEffect(() => {
-    if (status !== 'loading') return undefined;
-
-    const watchdogId = window.setTimeout(() => {
-      setStatus((current) => {
-        if (current !== 'loading') return current;
-        return 'error';
-      });
-      setMessage((current) => (
-        current === 'Verifying...' || current === 'Confirming your new email address...'
-          ? 'Verification is taking too long. Please try again.'
-          : current
-      ));
-    }, 12000);
-
-    return () => {
-      window.clearTimeout(watchdogId);
-    };
-  }, [status]);
 
   const handleResend = async (e) => {
     e.preventDefault();

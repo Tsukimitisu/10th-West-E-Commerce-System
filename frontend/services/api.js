@@ -5274,7 +5274,7 @@ export const verifyEmailToken = async (token) => {
     data = await authenticatedFetch(`${API_URL}/auth/verify-email`, {
       method: 'POST',
       body: JSON.stringify({ token: normalizedToken }),
-      timeoutMs: 8000,
+      timeoutMs: 7000,
       skipCsrf: true,
     });
   } catch (error) {
