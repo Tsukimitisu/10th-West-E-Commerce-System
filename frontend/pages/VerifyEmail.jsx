@@ -13,6 +13,8 @@ const VERIFICATION_USED_MESSAGE = 'This verification link was already used. Requ
 const VERIFICATION_ALREADY_VERIFIED_MESSAGE = 'This email is already verified. Redirecting you to login...';
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
+const VERIFY_REQUEST_CACHE_MS = 30000;
+const verificationRequestCache = new Map();
 
 const getPostVerifyRedirect = (user) => {
   const role = String(user?.role || '').toLowerCase();
@@ -98,6 +100,22 @@ const createVerificationRequiredError = () => {
   const error = new Error('Verification token is required.');
   error.code = 'VERIFICATION_TOKEN_REQUIRED';
   return error;
+};
+
+const getCachedVerificationRequest = (cacheKey, factory) => {
+  const existingRequest = verificationRequestCache.get(cacheKey);
+  if (existingRequest) return existingRequest;
+
+  const request = Promise.resolve()
+    .then(factory)
+    .finally(() => {
+      window.setTimeout(() => {
+        verificationRequestCache.delete(cacheKey);
+      }, VERIFY_REQUEST_CACHE_MS);
+    });
+
+  verificationRequestCache.set(cacheKey, request);
+  return request;
 };
 
 const VerifyEmail = ({ onLogin }) => {
@@ -194,11 +212,14 @@ const VerifyEmail = ({ onLogin }) => {
       setMessage(VERIFICATION_LOADING_MESSAGE);
 
       try {
-        const result = await withVerificationTimeout(
+        const cacheKey = normalizedEmailChangeToken
+          ? `email-change:${normalizedEmailChangeToken}`
+          : `verify:${normalizedToken}`;
+        const result = await getCachedVerificationRequest(cacheKey, () => withVerificationTimeout(
           normalizedEmailChangeToken
             ? confirmEmailChangeToken(normalizedEmailChangeToken)
             : (normalizedToken ? verifyEmailToken(normalizedToken) : Promise.reject(createVerificationRequiredError()))
-        );
+        ));
 
         if (cancelled) return;
 
