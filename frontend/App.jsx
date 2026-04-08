@@ -217,6 +217,7 @@ const App = () => {
 
   useEffect(() => {
     let isMounted = true;
+    let crossTabSyncTimer = null;
 
     const clearLocalSession = () => {
       localStorage.removeItem('shopCoreUser');
@@ -229,13 +230,16 @@ const App = () => {
 
     const syncUserFromStorage = () => {
       const token = localStorage.getItem('shopCoreToken');
-      if (!token) {
-        localStorage.removeItem('shopCoreUser');
+      const savedUser = localStorage.getItem('shopCoreUser');
+
+      if (!token || !savedUser) {
+        if (!token && !savedUser) {
+          localStorage.removeItem('shopCoreUser');
+        }
         if (isMounted) setUser(null);
         return;
       }
-      const savedUser = localStorage.getItem('shopCoreUser');
-      if (!savedUser) return;
+
       try {
         const parsed = JSON.parse(savedUser);
         if (parsed && parsed.id && isMounted) {
@@ -249,10 +253,6 @@ const App = () => {
     const syncUserWithProfileRefresh = async () => {
       syncUserFromStorage();
 
-      if (!localStorage.getItem('shopCoreToken')) {
-        return;
-      }
-
       try {
         const profile = await getProfile();
         if (isMounted) setUser(profile);
@@ -260,6 +260,17 @@ const App = () => {
       } catch {
         syncUserFromStorage();
       }
+    };
+
+    const scheduleCrossTabAuthRefresh = () => {
+      if (crossTabSyncTimer) {
+        window.clearTimeout(crossTabSyncTimer);
+      }
+
+      crossTabSyncTimer = window.setTimeout(() => {
+        crossTabSyncTimer = null;
+        void syncUserWithProfileRefresh();
+      }, 50);
     };
 
     // Check for existing session
@@ -317,15 +328,13 @@ const App = () => {
         }
       }
 
-      // Validate active token and refresh profile to avoid stale/broken sessions.
-      if (localStorage.getItem('shopCoreToken')) {
-        try {
-          const profile = await getProfile();
-          if (isMounted) setUser(profile);
-          localStorage.setItem('shopCoreUser', JSON.stringify(profile));
-        } catch {
-          clearLocalSession();
-        }
+      // Validate active token and restore cookie-backed sessions after redirects.
+      try {
+        const profile = await getProfile();
+        if (isMounted) setUser(profile);
+        localStorage.setItem('shopCoreUser', JSON.stringify(profile));
+      } catch {
+        clearLocalSession();
       }
 
       const handleAuthChanged = () => {
@@ -336,14 +345,25 @@ const App = () => {
         void syncUserWithProfileRefresh();
       };
 
-      const handleStorage = (event) => {
-        if (!event.key || event.key === 'shopCoreUser' || event.key === 'shopCoreToken') {
-          syncUserFromStorage();
+      const handleStorage = async (event) => {
+        if (!event.key) {
+          scheduleCrossTabAuthRefresh();
           return;
         }
 
-        if (event.key === AUTH_VERIFIED_STORAGE_KEY) {
-          void syncUserWithProfileRefresh();
+        if (event.key === 'shopCoreUser' || event.key === 'shopCoreToken') {
+          scheduleCrossTabAuthRefresh();
+          return;
+        }
+
+        if (event.key === AUTH_VERIFIED_STORAGE_KEY && event.newValue === 'true') {
+          await syncUserWithProfileRefresh();
+
+          try {
+            localStorage.removeItem(AUTH_VERIFIED_STORAGE_KEY);
+          } catch {
+            // Ignore cleanup failures for the one-shot cross-tab signal.
+          }
         }
       };
 
@@ -357,6 +377,10 @@ const App = () => {
       setLoading(false);
 
       return () => {
+        if (crossTabSyncTimer) {
+          window.clearTimeout(crossTabSyncTimer);
+          crossTabSyncTimer = null;
+        }
         window.removeEventListener('auth:changed', handleAuthChanged);
         window.removeEventListener('auth:verified', handleAuthVerified);
         window.removeEventListener('storage', handleStorage);
@@ -370,6 +394,10 @@ const App = () => {
 
     return () => {
       isMounted = false;
+      if (crossTabSyncTimer) {
+        window.clearTimeout(crossTabSyncTimer);
+        crossTabSyncTimer = null;
+      }
       cleanup();
     };
   }, []);

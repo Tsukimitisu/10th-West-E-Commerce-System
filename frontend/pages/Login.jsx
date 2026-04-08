@@ -17,6 +17,7 @@ const Login = ({ onLogin }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const defaultRedirect = searchParams.get('redirect') || '/';
+  const pageMessage = searchParams.get('message') || '';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -92,6 +93,13 @@ const Login = ({ onLogin }) => {
         </div>
 
         <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-2xl border border-white/10 shadow-2xl p-8">
+        <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-sm p-8">
+          {pageMessage && (
+            <div className="mb-4 p-3 bg-green-500/10 border border-green-200 rounded-lg text-sm text-green-500 flex items-center gap-2">
+              <Check size={16} /> {pageMessage}
+            </div>
+          )}
+
           {searchParams.get('error') && (
             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-300 flex items-center gap-2">
               <AlertCircle size={16} /> {searchParams.get('error')}

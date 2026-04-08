@@ -85,6 +85,46 @@ const queuePostVerificationTasks = ({
   });
 };
 
+const getPostVerificationRedirectPath = (user) => {
+  const role = String(user?.role || '').toLowerCase();
+
+  if (role === 'super_admin') return '/super-admin';
+  if (role === 'owner' || role === 'admin' || role === 'store_staff') return '/admin';
+
+  return '/';
+};
+
+const getSessionCookieSameSite = () => {
+  const configured = String(process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
+  if (['lax', 'strict', 'none'].includes(configured)) {
+    return configured;
+  }
+
+  return process.env.NODE_ENV === 'production' ? 'none' : 'lax';
+};
+
+const isSessionCookieSecure = () =>
+  getSessionCookieSameSite() === 'none' || process.env.NODE_ENV === 'production';
+
+const saveRequestSession = (req) =>
+  new Promise((resolve, reject) => {
+    if (!req.session) return resolve();
+    req.session.save((error) => (error ? reject(error) : resolve()));
+  });
+
+const bindAuthenticatedSession = async (req, user, token) => {
+  if (!req.session || !user?.id || !token) return;
+
+  req.session.auth = {
+    userId: user.id,
+    role: user.role || null,
+    tokenHash: hashToken(token),
+    authenticatedAt: Date.now(),
+  };
+
+  await saveRequestSession(req);
+};
+
 const isLocalUrl = (hostname) =>
   ['localhost', '127.0.0.1'].includes(hostname) ||
   hostname.startsWith('192.168.') ||
@@ -489,6 +529,7 @@ export const login = async (req, res) => {
     await recordLoginAttempt(email, ipAddress, true);
 
     const token = await persistSession(pool, user, ipAddress, userAgent);
+    await bindAuthenticatedSession(req, user, token);
     await logActivity({ userId: user.id, action: 'login', ipAddress, userAgent });
 
     res.json({ user: sanitizeUser({ ...user, last_login: new Date(), email_verified: true }), token });
@@ -505,7 +546,22 @@ export const logout = async (req, res) => {
       const token = authHeader.split(' ')[1];
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       await pool.query('UPDATE sessions SET is_active = false WHERE token_hash = $1', [tokenHash]);
+    } else if (req.session?.auth?.tokenHash) {
+      await pool.query('UPDATE sessions SET is_active = false WHERE token_hash = $1', [req.session.auth.tokenHash]);
     }
+
+    if (req.session) {
+      await new Promise((resolve) => {
+        req.session.destroy(() => resolve());
+      });
+      res.clearCookie('twm.sid', {
+        httpOnly: true,
+        sameSite: getSessionCookieSameSite(),
+        secure: isSessionCookieSecure(),
+        path: '/',
+      });
+    }
+
     await rotateGuestSession(req);
     await logActivity({ userId: req.user?.id, action: 'logout', ipAddress: req.clientIp, userAgent: req.clientUa });
     res.json({ message: 'Logged out successfully' });
@@ -1131,8 +1187,9 @@ export const verifyEmailToken = async (req, res) => {
 
       return sendResponse(409, {
         success: false,
-        message: 'This verification link has already been used. Please log in or request a new one.',
-        code: 'VERIFICATION_TOKEN_USED',
+        message: 'This email is already verified. Please log in to continue.',
+        code: 'VERIFICATION_ALREADY_VERIFIED',
+        alreadyVerified: true,
       });
     }
 
@@ -1147,6 +1204,7 @@ export const verifyEmailToken = async (req, res) => {
         message: 'This verification link has expired. Request a new verification email to continue.',
         code: 'VERIFICATION_TOKEN_EXPIRED',
         requiresResend: true,
+        expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
         email: user.email,
       });
     }
@@ -1168,6 +1226,8 @@ export const verifyEmailToken = async (req, res) => {
     const sessionToken = await persistSession(client, updatedUser, ipAddress, userAgent);
 
     await client.query('COMMIT');
+    await rotateGuestSession(req);
+    await bindAuthenticatedSession(req, updatedUser, sessionToken);
 
     queuePostVerificationTasks({
       userId: updatedUser.id,
@@ -1182,6 +1242,8 @@ export const verifyEmailToken = async (req, res) => {
       message: 'Email verified successfully. Logging you in...',
       user: sanitizeUser(updatedUser),
       token: sessionToken,
+      redirectTo: getPostVerificationRedirectPath(updatedUser),
+      authenticated: true,
       autoLogin: true,
       alreadyVerified: false,
     });
@@ -1322,7 +1384,10 @@ export const resendVerification = async (req, res) => {
       });
     }
 
-    res.json({ message: 'Verification email resent successfully.' });
+    res.json({
+      message: 'Verification email resent successfully.',
+      expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
+    });
   } catch (err) {
     console.error('Resend verification error:', err);
     res.status(500).json({ message: 'Failed to resend verification email' });
