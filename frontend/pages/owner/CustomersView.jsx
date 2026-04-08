@@ -96,11 +96,11 @@ const CustomersView = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Total Customers', value: totalCustomers.toString(), icon: <Users size={18} />, color: 'bg-blue-50 text-blue-600' },
-          { label: 'Total Revenue', value: `₱${totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
-          { label: 'Avg Order Value', value: `₱${avgOrderValue.toFixed(0)}`, icon: <ShoppingBag size={18} />, color: 'bg-purple-50 text-purple-600' },
+          { label: 'Total Revenue', value: `\u20B1${totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
+          { label: 'Avg Order Value', value: `\u20B1${avgOrderValue.toFixed(0)}`, icon: <ShoppingBag size={18} />, color: 'bg-purple-50 text-purple-600' },
           { label: 'Repeat Customers', value: repeatCustomers.toString(), icon: <Star size={18} />, color: 'bg-amber-50 text-amber-600' },
         ].map((kpi, i) => (
-          <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+          <div key={i} className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-4">
             <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
             <p className="text-lg font-bold text-white">{kpi.value}</p>
             <p className="text-xs text-gray-400">{kpi.label}</p>
@@ -109,21 +109,23 @@ const CustomersView = () => {
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input type="text" placeholder="Search customers..." value={search} onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
+      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-3">
+        <div className="relative max-w-sm">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input type="text" placeholder="Search customers..." value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-1.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
+        </div>
       </div>
 
       {/* Customers Table */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center"><Users size={40} className="mx-auto text-gray-300 mb-3" /><p className="text-sm text-gray-400">No customers found</p></div>
         ) : (
           <table className="w-full text-sm">
-            <thead><tr className="bg-gray-50/80 border-b border-gray-700">
+            <thead><tr className="bg-[#202430]/80 border-b border-white/10">
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Customer</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Email</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Orders</th>
@@ -131,9 +133,9 @@ const CustomersView = () => {
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Last Order</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-auto">Actions</th>
             </tr></thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-white/10">
               {filtered.map(c => (
-                <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
+                <tr key={c.id} className="hover:bg-[#202430]/60 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
@@ -147,12 +149,12 @@ const CustomersView = () => {
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{c.email || '-'}</td>
                   <td className="px-4 py-3 text-right font-medium text-white">{c.orderCount}</td>
-                  <td className="px-4 py-3 text-right font-bold text-white">₱{c.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-right font-bold text-white">{'\u20B1'}{c.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-xs text-gray-400 hidden sm:table-cell">{new Date(c.lastOrder).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => setSelectedCustomer(c)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title={`View ${c.name}`}><Eye size={14} /></button>
-                          <button onClick={() => setDeleteId(c.id)} className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors text-xs font-medium"><Trash2 size={13} /> Delete {c.name}</button>
+                          <button onClick={() => setSelectedCustomer(c)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430]/80 text-gray-400 hover:text-blue-300 transition-colors" title={`View ${c.name}`}><Eye size={14} /></button>
+                          <button onClick={() => setDeleteId(c.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors" title={`Delete ${c.name}`}><Trash2 size={14} /></button>
                       </div>
                   </td>
                 </tr>
@@ -208,11 +210,11 @@ const CustomersView = () => {
                 <p className="text-[10px] text-blue-500 font-medium">Total Orders</p>
               </div>
               <div className="text-center p-3 bg-green-50 rounded-lg">
-                <p className="text-lg font-bold text-green-700">₱{selectedCustomer.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 0 })}</p>
+                <p className="text-lg font-bold text-green-700">{'\u20B1'}{selectedCustomer.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 0 })}</p>
                 <p className="text-[10px] text-green-500 font-medium">Total Spent</p>
               </div>
               <div className="text-center p-3 bg-purple-50 rounded-lg">
-                <p className="text-lg font-bold text-purple-700">₱{(selectedCustomer.totalSpent / selectedCustomer.orderCount).toFixed(0)}</p>
+                <p className="text-lg font-bold text-purple-700">{'\u20B1'}{(selectedCustomer.totalSpent / selectedCustomer.orderCount).toFixed(0)}</p>
                 <p className="text-[10px] text-purple-500 font-medium">Avg Order</p>
               </div>
             </div>
@@ -231,7 +233,7 @@ const CustomersView = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-white">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-sm font-bold text-white">{'\u20B1'}{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
                       <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
                         o.status === 'delivered' ? 'bg-green-50 text-green-600' :
                         o.status === 'pending' ? 'bg-yellow-50 text-yellow-600' :
@@ -263,6 +265,7 @@ const CustomersView = () => {
 };
 
 export default CustomersView;
+
 
 
 

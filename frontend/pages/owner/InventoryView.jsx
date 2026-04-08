@@ -92,7 +92,7 @@ const InventoryView = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 ">
         {[
           { label: 'Total Units', value: totalStock.toLocaleString(), icon: <Boxes size={18} />, color: 'bg-blue-50 text-blue-600 ' },
-          { label: 'Inventory Value', value: `â‚±${totalValue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <TrendingUp size={18} />, color: 'bg-green-50 text-green-600' },
+          { label: 'Inventory Value', value: `₱${totalValue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <TrendingUp size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Low Stock', value: lowStock.length.toString(), icon: <AlertTriangle size={18} />, color: 'bg-amber-50 text-amber-600' },
           { label: 'Out of Stock', value: outOfStock.toString(), icon: <Package size={18} />, color: 'bg-red-500/10 text-red-500' },
         ].map((kpi, i) => (
@@ -107,7 +107,7 @@ const InventoryView = () => {
       {/* Tabs */}
       <div className="flex gap-1 bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-lg border-b border-white/10 p-1 w-fit">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-white'}`}>
             <t.icon size={14} />
             {t.label}
             {t.count != null && <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-red-500/20 text-red-500' : 'bg-gray-100 text-gray-400'}`}>{t.count}</span>}
@@ -189,25 +189,25 @@ const InventoryView = () => {
 
       {/* Adjustments History Tab */}
       {tab === 'adjustments' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 overflow-hidden">
           {adjustments.length === 0 ? (
             <div className="p-12 text-center text-sm text-gray-400">No adjustments recorded</div>
           ) : (
             <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50/80 border-b border-gray-700">
+              <thead><tr className="bg-[#202430]/80 border-b border-white/10">
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Date</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Product</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Type</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Qty</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Reason</th>
               </tr></thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-white/10">
                 {adjustments.slice(0, 50).map((a, i) => {
                   const prod = products.find(p => p.id === a.product_id);
                   const qty = a.quantity_change ?? a.quantity ?? 0;
                   const isAdd = qty > 0;
                   return (
-                    <tr key={i} className="hover:bg-gray-50/50">
+                    <tr key={i} className="hover:bg-[#202430]/60">
                       <td className="px-4 py-3 text-xs text-gray-400">{new Date(a.created_at).toLocaleDateString()}</td>
                       <td className="px-4 py-3">
                         <p className="font-medium text-white text-sm">{a.product_name || prod?.name || `Product #${a.product_id}`}</p>
@@ -231,20 +231,20 @@ const InventoryView = () => {
 
       {/* Low Stock Alerts Tab */}
       {tab === 'alerts' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 overflow-hidden">
           {lowStock.length === 0 ? (
             <div className="p-12 text-center"><AlertTriangle size={36} className="mx-auto text-green-300 mb-2" /><p className="text-sm text-green-600 font-medium">All stock levels are healthy!</p></div>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-white/10">
               {lowStock.map(p => (
-                <div key={p.id} className="flex items-center justify-between p-4 hover:bg-gray-50/50 transition-colors">
+                <div key={p.id} className="flex items-center justify-between p-4 hover:bg-[#202430]/60 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${p.stock_quantity === 0 ? 'bg-red-500/10' : 'bg-amber-50'}`}>
                       <AlertTriangle size={16} className={p.stock_quantity === 0 ? 'text-red-500' : 'text-amber-500'} />
                     </div>
                     <div>
                       <p className="font-medium text-white text-sm">{p.name}</p>
-                      <p className="text-xs text-gray-400">Threshold: {p.low_stock_threshold} â€¢ Current: <span className={`font-bold ${p.stock_quantity === 0 ? 'text-red-500' : 'text-amber-600'}`}>{p.stock_quantity}</span></p>
+                      <p className="text-xs text-gray-400">Threshold: {p.low_stock_threshold} {'\u2022'} Current: <span className={`font-bold ${p.stock_quantity === 0 ? 'text-red-500' : 'text-amber-600'}`}>{p.stock_quantity}</span></p>
                     </div>
                   </div>
                   <button onClick={() => openAdjust(p)} className="px-3 py-1.5 bg-red-500/100 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1">
@@ -303,7 +303,7 @@ const InventoryView = () => {
 
           {adjForm.quantity && (
             <div className={`p-3 rounded-lg text-sm font-medium ${adjForm.type === 'add' ? 'bg-green-50 text-green-700' : 'bg-red-500/10 text-orange-600'}`}>
-              New stock: {selectedProduct?.stock_quantity || 0} â†’ <span className="font-bold">
+              New stock: {selectedProduct?.stock_quantity || 0} {'\u2192'} <span className="font-bold">
                 {adjForm.type === 'add' ? (selectedProduct?.stock_quantity || 0) + parseInt(adjForm.quantity || '0') : Math.max(0, (selectedProduct?.stock_quantity || 0) - parseInt(adjForm.quantity || '0'))}
               </span>
             </div>

@@ -5,9 +5,9 @@ import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 
 const statusColors = {
-  pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  approved: 'bg-blue-50 text-blue-700 border-blue-200',
-  rejected: 'bg-red-500/10 text-orange-600 border-red-200',
+  pending: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  approved: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  rejected: 'bg-red-500/15 text-red-300 border-red-500/30',
 };
 
 const ReturnsView = () => {
@@ -94,7 +94,7 @@ const ReturnsView = () => {
           { label: 'Rejected', value: rejected.toString(), icon: <XCircle size={18} />, color: 'bg-red-500/10 text-orange-600' },
           { label: 'Total', value: returns.length.toString(), icon: <RotateCcw size={18} />, color: 'bg-gray-900 text-gray-600' },
         ].map((kpi, index) => (
-          <div key={index} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+          <div key={index} className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-4">
             <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
             <p className="text-lg font-bold text-white">{kpi.value}</p>
             <p className="text-xs text-gray-400">{kpi.label}</p>
@@ -102,32 +102,34 @@ const ReturnsView = () => {
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search returns..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-          />
-        </div>
-        <div className="flex gap-1 flex-wrap">
-          <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
-          {allStatuses.map((status) => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(statusFilter === status ? '' : status)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all capitalize ${statusFilter === status ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}
-            >
-              {status}
-            </button>
-          ))}
+      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-3">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1 max-w-sm">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search returns..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+            />
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${!statusFilter ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-gray-900 text-gray-400 border-gray-700 hover:bg-[#202430]/60 hover:text-white'}`}>All</button>
+            {allStatuses.map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(statusFilter === status ? '' : status)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all capitalize ${statusFilter === status ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-gray-900 text-gray-400 border-gray-700 hover:bg-[#202430]/60 hover:text-white'}`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
@@ -135,7 +137,7 @@ const ReturnsView = () => {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50/80 border-b border-gray-700">
+              <tr className="bg-[#202430]/80 border-b border-white/10">
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Return ID</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Order</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Customer</th>
@@ -145,11 +147,11 @@ const ReturnsView = () => {
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-40">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-white/10">
               {filtered.map((ret) => (
-                <tr key={ret.id} className="hover:bg-gray-50/50">
+                <tr key={ret.id} className="hover:bg-[#202430]/60">
                   <td className="px-4 py-3 font-medium text-white font-mono">RET-{ret.id.toString().padStart(4, '0')}</td>
-                  <td className="px-4 py-3 text-gray-600">#{ret.order_id?.toString().padStart(4, '0') || ret.id}</td>
+                  <td className="px-4 py-3 text-white">#{ret.order_id?.toString().padStart(4, '0') || ret.id}</td>
                   <td className="px-4 py-3 text-gray-400 hidden md:table-cell">
                     <div>{ret.customer_name || `User #${ret.user_id}`}</div>
                     {ret.customer_email && <div className="text-xs">{ret.customer_email}</div>}
@@ -163,10 +165,10 @@ const ReturnsView = () => {
                   <td className="px-4 py-3 text-xs text-gray-400 hidden sm:table-cell">{new Date(ret.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => setDetailReturn(ret)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="View"><Eye size={14} /></button>
+                      <button onClick={() => setDetailReturn(ret)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430]/80 text-gray-400 hover:text-blue-300 transition-colors" title="View"><Eye size={14} /></button>
                       {!isStaff && ret.status === 'pending' && (
                         <>
-                          <button onClick={() => handleStatusUpdate(ret, 'approved')} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-green-50 text-gray-400 hover:text-green-600 transition-colors" title="Approve"><CheckCircle2 size={14} /></button>
+                          <button onClick={() => handleStatusUpdate(ret, 'approved')} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-green-500/10 text-gray-400 hover:text-green-300 transition-colors" title="Approve"><CheckCircle2 size={14} /></button>
                           <button onClick={() => handleStatusUpdate(ret, 'rejected')} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors" title="Reject"><XCircle size={14} /></button>
                         </>
                       )}
@@ -222,7 +224,7 @@ const ReturnsView = () => {
                         <p className="text-sm font-medium text-white">{item.name || item.product_name}</p>
                         <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
                       </div>
-                      <span className="text-sm font-bold">₱{((item.price || 0) * (item.quantity || 1)).toFixed(2)}</span>
+                      <span className="text-sm font-bold">{'\u20B1'}{((item.price || 0) * (item.quantity || 1)).toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
@@ -242,3 +244,4 @@ const ReturnsView = () => {
 };
 
 export default ReturnsView;
+

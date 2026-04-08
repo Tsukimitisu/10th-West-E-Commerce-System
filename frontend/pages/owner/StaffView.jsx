@@ -8,7 +8,7 @@ const StaffView = () => {
         <h1 className="font-display font-bold text-xl text-white">Staff Management</h1>
         <p className="text-sm text-gray-400">Manage staff members, roles, and permissions</p>
       </div>
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-5">
+      <div className="rounded-xl p-0">
         <StaffManagement />
       </div>
     </div>

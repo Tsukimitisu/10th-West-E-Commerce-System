@@ -6,13 +6,13 @@ import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 
 const statusColors = {
-  pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  paid: 'bg-blue-50 text-blue-700 border-blue-200',
-  preparing: 'bg-red-500/10 text-orange-700 border-red-200',
-  shipped: 'bg-purple-50 text-purple-700 border-purple-200',
-  delivered: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  completed: 'bg-green-50 text-green-700 border-green-200',
-  cancelled: 'bg-red-50 text-red-600 border-red-200',
+  pending: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  paid: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  preparing: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+  shipped: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
+  delivered: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
+  completed: 'bg-green-500/15 text-green-300 border-green-500/30',
+  cancelled: 'bg-red-500/15 text-red-300 border-red-500/30',
 };
 const statusIcons = {
   pending: <Clock size={12} />, paid: <DollarSign size={12} />, preparing: <Package size={12} />,
@@ -171,12 +171,12 @@ const OrdersView = () => {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Revenue', value: `â‚±${totalRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
+          { label: 'Total Revenue', value: `₱${totalRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Pending', value: pending.toString(), icon: <Clock size={18} />, color: 'bg-yellow-50 text-yellow-600' },
           { label: 'Preparing', value: preparing.toString(), icon: <Package size={18} />, color: 'bg-red-500/10 text-orange-600' },
           { label: 'Shipped', value: shipped.toString(), icon: <Truck size={18} />, color: 'bg-purple-50 text-purple-600' },
         ].map((kpi, i) => (
-          <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+          <div key={i} className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-4">
             <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
             <p className="text-lg font-bold text-white">{kpi.value}</p>
             <p className="text-xs text-gray-400">{kpi.label}</p>
@@ -185,22 +185,40 @@ const OrdersView = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search orders..." value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
-        </div>
-        <div className="flex gap-1 flex-wrap">
-          <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
-          {statuses.map(s => (
-            <button key={s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all capitalize ${statusFilter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>{s}</button>
-          ))}
+      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-3">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1 max-w-sm">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search orders..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+            />
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            <button
+              onClick={() => setStatusFilter('')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${!statusFilter ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-gray-900 text-gray-400 border-gray-700 hover:bg-[#202430]/60 hover:text-white'}`}
+            >
+              All
+            </button>
+            {statuses.map(s => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all capitalize ${statusFilter === s ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-gray-900 text-gray-400 border-gray-700 hover:bg-[#202430]/60 hover:text-white'}`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Orders Table */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
@@ -210,7 +228,7 @@ const OrdersView = () => {
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead><tr className="bg-gray-50/80 border-b border-gray-700">
+            <thead><tr className="bg-[#202430]/80 border-b border-white/10">
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Order</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Customer</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Date</th>
@@ -219,15 +237,15 @@ const OrdersView = () => {
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Total</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-28">Actions</th>
             </tr></thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-white/10">
               {filtered.map(o => (
-                <tr key={o.id} className="hover:bg-gray-50/50 transition-colors">
+                <tr key={o.id} className="hover:bg-[#202430]/60 transition-colors">
                   <td className="px-4 py-3">
                     <p className="font-medium text-white">#{o.id.toString().padStart(4, '0')}</p>
                     <p className="text-[10px] text-gray-400">{o.items?.length || '-'} items</p>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
-                    <p className="text-sm text-gray-700">{o.customer_name || o.shipping_name || `User ${o.user_id}`}</p>
+                    <p className="text-sm text-white">{o.customer_name || o.shipping_name || `User ${o.user_id}`}</p>
                     <p className="text-[10px] text-gray-400">{o.customer_email || ''}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400">{new Date(o.created_at).toLocaleDateString()}</td>
@@ -239,10 +257,10 @@ const OrdersView = () => {
                   <td className="px-4 py-3 hidden sm:table-cell">
                     <span className="text-xs text-gray-400 capitalize">{o.payment_method || '-'}</span>
                   </td>
-                  <td className="px-4 py-3 text-right font-bold text-white">â‚±{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-right font-bold text-white">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openDetail(o)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="View"><Eye size={14} /></button>
+                      <button onClick={() => openDetail(o)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430]/80 text-gray-400 hover:text-blue-300 transition-colors" title="View"><Eye size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -327,7 +345,7 @@ const OrdersView = () => {
                         <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
                       </div>
                     </div>
-                    <span className="text-sm font-bold text-white">â‚±{((item.price || 0) * (item.quantity || 1)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-bold text-white">₱{((item.price || 0) * (item.quantity || 1)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                   </div>
                 )) : <div className="p-4 text-center text-xs text-gray-400">No item details available</div>}
               </div>
@@ -335,10 +353,10 @@ const OrdersView = () => {
 
             {/* Totals */}
             <div className="p-4 bg-gray-900 rounded-lg space-y-2 text-sm">
-              <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>â‚±{(detailOrder.subtotal || detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-              {detailOrder.tax > 0 && <div className="flex justify-between text-gray-400"><span>Tax</span><span>â‚±{detailOrder.tax.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-              {detailOrder.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-â‚±{detailOrder.discount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-              <div className="flex justify-between font-bold text-white text-base pt-2 border-t border-gray-700"><span>Total</span><span>â‚±{(detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+              <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>₱{(detailOrder.subtotal || detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+              {detailOrder.tax > 0 && <div className="flex justify-between text-gray-400"><span>Tax</span><span>₱{detailOrder.tax.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+              {detailOrder.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-₱{detailOrder.discount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+              <div className="flex justify-between font-bold text-white text-base pt-2 border-t border-gray-700"><span>Total</span><span>₱{(detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
             </div>
 
             {/* Actions */}

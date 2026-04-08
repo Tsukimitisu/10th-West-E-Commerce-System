@@ -2210,7 +2210,14 @@ const ProductsView = () => {
 
       {/* Product Modal */}
       {modalOpen && (
-        <Modal isOpen={modalOpen} onClose={closeProductModal} title={editing ? 'Edit Product' : 'Add Product'} size="2xl">
+        <Modal
+          isOpen={modalOpen}
+          onClose={closeProductModal}
+          title={editing ? 'Edit Product' : 'Add Product'}
+          size="2xl"
+          panelClassName="bg-gradient-to-b from-[#1a1d23] to-[#111318] border border-white/10"
+          bodyClassName="bg-transparent"
+        >
           {creationSuccess ? (
             <div className="space-y-5 py-2">
               <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
@@ -2265,7 +2272,7 @@ const ProductsView = () => {
                 </div>
                 <p className="text-[11px] text-gray-500 text-right">{progressPercent}% complete</p>
               </div>
-              <div className="overflow-x-auto pb-1">
+              <div className="overflow-x-auto scrollbar-hide pb-1">
                 <div className="flex min-w-max gap-2">
                   {PRODUCT_FORM_STEPS.map((step, index) => (
                     <button
@@ -2296,7 +2303,7 @@ const ProductsView = () => {
               </div>
             </div>
 
-            <div key={PRODUCT_FORM_STEPS[formStep]?.key} className="space-y-4 rounded-xl border border-white/10 bg-[#171a22] p-4 sm:p-5 animate-fade-in">
+            <div key={PRODUCT_FORM_STEPS[formStep]?.key} className="space-y-4 rounded-xl border border-white/10 bg-gradient-to-b from-[#1a1d23] to-[#111318] p-4 sm:p-5 animate-fade-in">
               <h4 className="text-sm font-semibold text-white">{PRODUCT_FORM_STEPS[formStep]?.label}</h4>
 
               {formStep === 0 && (
@@ -2418,7 +2425,7 @@ const ProductsView = () => {
                     </div>
                   )}
 
-                  <div className="rounded-2xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
+                  <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-[#202430]/70 to-[#171b24]/80 p-4 space-y-3">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-white">Optional Product Video</p>
@@ -2455,7 +2462,7 @@ const ProductsView = () => {
                         />
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-500">No product video selected.</p>
+                      <p className="text-xs text-gray-400">No product video selected.</p>
                     )}
 
                     {videoError && (
@@ -2975,7 +2982,7 @@ const ProductsView = () => {
                   </div>
 
                   {!editing && (
-                    <div className="rounded-xl border border-white/10 bg-[#202430]/30 p-3">
+                  <div className="rounded-xl border border-white/10 bg-gradient-to-b from-[#202430]/60 to-[#171b24]/70 p-3">
                       <p className="text-xs uppercase tracking-wide text-gray-400">Combination Preview</p>
                       {variantOptionsValidation.error ? (
                         <p className="mt-1 text-xs text-amber-300">{variantOptionsValidation.error}</p>
@@ -3049,7 +3056,7 @@ const ProductsView = () => {
                     </InputField>
                   </div>
 
-                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
+                  <div className="rounded-xl border border-white/10 bg-gradient-to-b from-[#202430]/70 to-[#171b24]/80 p-4 space-y-3">
                     <div>
                       <p className="text-sm font-semibold text-white">Dimensions (optional)</p>
                       <p className="text-xs text-gray-400 mt-1">
@@ -3152,7 +3159,7 @@ const ProductsView = () => {
                     )}
                   </InputField>
 
-                  <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-red-500/10 border-red-500/30' : 'bg-[#202430]/40 border-white/10'}`}>
+                  <div className={`p-4 rounded-lg border ${form.is_on_sale ? 'bg-red-500/10 border-red-500/30' : 'bg-gradient-to-b from-[#202430]/70 to-[#171b24]/80 border-white/10'}`}>
                     <label className="flex items-center gap-2 font-medium text-sm text-gray-200 cursor-pointer">
                       <input
                         type="checkbox"
@@ -3188,7 +3195,7 @@ const ProductsView = () => {
                     )}
                   </div>
 
-                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4">
+                  <div className="rounded-xl border border-white/10 bg-gradient-to-b from-[#202430]/70 to-[#171b24]/80 p-4">
                     <p className="text-xs uppercase tracking-wide text-gray-400">Preview</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-gray-200">
