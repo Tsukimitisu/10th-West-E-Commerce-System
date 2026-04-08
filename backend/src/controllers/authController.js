@@ -52,6 +52,7 @@ const VERIFICATION_LOCK_TIMEOUT_MS = 5000;
 const VERIFICATION_STATEMENT_TIMEOUT_MS = 7000;
 const VERIFICATION_RESPONSE_TIMEOUT_MS = 8000;
 const VERIFIED_TOKEN_LOOKBACK_HOURS = 24;
+const SESSION_PERSIST_TIMEOUT_MS = 1000;
 
 const hashToken = (value) =>
   crypto.createHash('sha256').update(value).digest('hex');
@@ -112,6 +113,25 @@ const saveRequestSession = (req) =>
     req.session.save((error) => (error ? reject(error) : resolve()));
   });
 
+const withTimeout = (promise, timeoutMs, label) =>
+  new Promise((resolve, reject) => {
+    const timerId = setTimeout(() => {
+      const error = new Error(`${label} timed out`);
+      error.code = 'ASYNC_OPERATION_TIMEOUT';
+      reject(error);
+    }, timeoutMs);
+
+    Promise.resolve(promise)
+      .then((result) => {
+        clearTimeout(timerId);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timerId);
+        reject(error);
+      });
+  });
+
 const bindAuthenticatedSession = async (req, user, token) => {
   if (!req.session || !user?.id || !token) return;
 
@@ -123,6 +143,20 @@ const bindAuthenticatedSession = async (req, user, token) => {
   };
 
   await saveRequestSession(req);
+};
+
+const prepareAuthenticatedSession = async (req, user, token) => {
+  try {
+    await withTimeout(rotateGuestSession(req), SESSION_PERSIST_TIMEOUT_MS, 'rotateGuestSession');
+  } catch (error) {
+    console.warn('Unable to rotate guest session before auth response:', error.message || error);
+  }
+
+  try {
+    await withTimeout(bindAuthenticatedSession(req, user, token), SESSION_PERSIST_TIMEOUT_MS, 'bindAuthenticatedSession');
+  } catch (error) {
+    console.warn('Unable to persist authenticated session before auth response:', error.message || error);
+  }
 };
 
 const isLocalUrl = (hostname) =>
@@ -516,7 +550,6 @@ export const login = async (req, res) => {
     }
 
     await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
-    await rotateGuestSession(req);
 
     await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
     await pool.query(
@@ -529,7 +562,7 @@ export const login = async (req, res) => {
     await recordLoginAttempt(email, ipAddress, true);
 
     const token = await persistSession(pool, user, ipAddress, userAgent);
-    await bindAuthenticatedSession(req, user, token);
+    await prepareAuthenticatedSession(req, user, token);
     await logActivity({ userId: user.id, action: 'login', ipAddress, userAgent });
 
     res.json({ user: sanitizeUser({ ...user, last_login: new Date(), email_verified: true }), token });
@@ -1226,8 +1259,7 @@ export const verifyEmailToken = async (req, res) => {
     const sessionToken = await persistSession(client, updatedUser, ipAddress, userAgent);
 
     await client.query('COMMIT');
-    await rotateGuestSession(req);
-    await bindAuthenticatedSession(req, updatedUser, sessionToken);
+    await prepareAuthenticatedSession(req, updatedUser, sessionToken);
 
     queuePostVerificationTasks({
       userId: updatedUser.id,
