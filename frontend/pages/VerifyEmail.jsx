@@ -9,7 +9,9 @@ const VERIFICATION_LOADING_MESSAGE = 'Verifying...';
 const VERIFICATION_SUCCESS_MESSAGE = 'Email verified successfully. Logging you in...';
 const VERIFICATION_FAILED_MESSAGE = 'Verification failed';
 const VERIFICATION_EXPIRED_MESSAGE = 'This verification link expired. Request a new one below.';
+const VERIFICATION_INVALID_MESSAGE = 'This verification link is invalid. Request a new one below.';
 const VERIFICATION_USED_MESSAGE = 'This verification link was already used. Request a new one below.';
+const VERIFICATION_ALREADY_VERIFIED_MESSAGE = 'This email is already verified. Redirecting you to login...';
 const verifyRequestCache = new Map();
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
@@ -27,6 +29,13 @@ const getVerificationRedirect = (result) => {
   const explicitRedirect = String(result?.redirectTo || '').trim();
   if (explicitRedirect) return explicitRedirect;
   return getPostVerifyRedirect(result?.user);
+};
+
+const buildLoginRedirect = (message, extraParams = {}) => {
+  const params = new URLSearchParams(extraParams);
+  if (message) params.set('message', message);
+  const query = params.toString();
+  return query ? `/login?${query}` : '/login';
 };
 
 const formatExpiryMinutes = (value) => {
@@ -180,6 +189,16 @@ const VerifyEmail = ({ onLogin }) => {
     window.history.replaceState(null, '', '/#/verify-email');
   };
 
+  const redirectToLoginWithMessage = (message, extraParams = {}, delayMs = 1200) => {
+    const destination = buildLoginRedirect(message, extraParams);
+    setStatus('success');
+    setNextRoute(destination);
+    setMessage(message);
+    redirectTimeoutRef.current = window.setTimeout(() => {
+      navigateRef.current(destination, { replace: true });
+    }, delayMs);
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -269,7 +288,8 @@ const VerifyEmail = ({ onLogin }) => {
 
         setStatus('error');
         setNextRoute('/login');
-        setMessage(VERIFICATION_FAILED_MESSAGE);
+        redirectToLoginWithMessage('Email verified successfully. Please sign in to continue.', { verified: '1' });
+        return;
       } catch (err) {
         if (cancelled) return;
 
@@ -281,6 +301,7 @@ const VerifyEmail = ({ onLogin }) => {
             savedUser?.id &&
             savedUser?.email_verified &&
             code !== 'VERIFICATION_TOKEN_USED' &&
+            code !== 'VERIFICATION_ALREADY_VERIFIED' &&
             code !== 'VERIFICATION_TOKEN_INVALID' &&
             code !== 'VERIFICATION_TOKEN_EXPIRED'
           ) {
@@ -316,7 +337,7 @@ const VerifyEmail = ({ onLogin }) => {
         }
 
         if (code === 'VERIFICATION_TOKEN_INVALID') {
-          setMessage(VERIFICATION_FAILED_MESSAGE);
+          setMessage(VERIFICATION_INVALID_MESSAGE);
           return;
         }
 
@@ -325,8 +346,13 @@ const VerifyEmail = ({ onLogin }) => {
           return;
         }
 
+        if (code === 'VERIFICATION_ALREADY_VERIFIED') {
+          redirectToLoginWithMessage(VERIFICATION_ALREADY_VERIFIED_MESSAGE, { verified: '1' });
+          return;
+        }
+
         if (code === 'VERIFICATION_TOKEN_REQUIRED') {
-          setMessage(VERIFICATION_FAILED_MESSAGE);
+          setMessage(VERIFICATION_INVALID_MESSAGE);
           return;
         }
 

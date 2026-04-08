@@ -1187,8 +1187,9 @@ export const verifyEmailToken = async (req, res) => {
 
       return sendResponse(409, {
         success: false,
-        message: 'This verification link has already been used. Please log in or request a new one.',
-        code: 'VERIFICATION_TOKEN_USED',
+        message: 'This email is already verified. Please log in to continue.',
+        code: 'VERIFICATION_ALREADY_VERIFIED',
+        alreadyVerified: true,
       });
     }
 
