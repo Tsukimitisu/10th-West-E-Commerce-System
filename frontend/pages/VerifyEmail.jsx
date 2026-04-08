@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, X, Loader, Mail } from 'lucide-react';
 import { verifyEmailToken, resendVerificationEmail, confirmEmailChangeToken } from '../services/api';
 
 const VERIFY_REQUEST_CACHE_MS = 30 * 1000;
 const VERIFY_REQUEST_TIMEOUT_MS = 8000;
+const VERIFICATION_LOADING_MESSAGE = 'Verifying...';
+const VERIFICATION_SUCCESS_MESSAGE = 'Email verified successfully. Logging you in...';
+const VERIFICATION_FAILED_MESSAGE = 'Verification failed';
 const verifyRequestCache = new Map();
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
@@ -139,7 +142,7 @@ const VerifyEmail = ({ onLogin }) => {
   const emailChangeToken = searchParams.get('emailChangeToken');
   const isEmailChangeFlow = Boolean(String(emailChangeToken || '').trim());
   const [status, setStatus] = useState('loading');
-  const [message, setMessage] = useState('Verifying...');
+  const [message, setMessage] = useState(VERIFICATION_LOADING_MESSAGE);
   const [email, setEmail] = useState('');
   const [nextRoute, setNextRoute] = useState('/');
   const [resendStatus, setResendStatus] = useState('');
@@ -177,13 +180,13 @@ const VerifyEmail = ({ onLogin }) => {
       const normalizedToken = String(token || '').trim();
       const activeToken = normalizedEmailChangeToken || normalizedToken;
 
-      if (!activeToken) {
-        if (lastProcessedTokenRef.current) return;
+        if (!activeToken) {
+          if (lastProcessedTokenRef.current) return;
 
-        setStatus('error');
-        setMessage('Verification token is missing. Please use the latest link from your email.');
-        return;
-      }
+          setStatus('error');
+          setMessage(VERIFICATION_FAILED_MESSAGE);
+          return;
+        }
 
       if (lastProcessedTokenRef.current === activeToken) {
         return;
@@ -191,7 +194,7 @@ const VerifyEmail = ({ onLogin }) => {
       lastProcessedTokenRef.current = activeToken;
 
       setStatus('loading');
-      setMessage(normalizedEmailChangeToken ? 'Confirming your new email address...' : 'Verifying...');
+      setMessage(VERIFICATION_LOADING_MESSAGE);
 
       try {
         const result = normalizedEmailChangeToken
@@ -216,7 +219,7 @@ const VerifyEmail = ({ onLogin }) => {
 
           const destination = localStorage.getItem('shopCoreToken') ? '/profile' : '/login';
           setNextRoute(destination);
-          setMessage(result?.message || 'Your email address has been updated successfully.');
+          setMessage(VERIFICATION_SUCCESS_MESSAGE);
           redirectTimeoutRef.current = window.setTimeout(() => {
             if (!cancelled) navigateRef.current(destination, { replace: true });
           }, 1200);
@@ -226,7 +229,7 @@ const VerifyEmail = ({ onLogin }) => {
         if (result?.autoLogin && result?.token && result?.user && onLoginRef.current) {
           const destination = getVerificationRedirect(result);
           setNextRoute(destination);
-          setMessage('Email verified successfully. Logging you in...');
+          setMessage(VERIFICATION_SUCCESS_MESSAGE);
 
           onLoginRef.current(result.user, result.token);
           publishAuthVerifiedSignal(result.user);
@@ -239,7 +242,7 @@ const VerifyEmail = ({ onLogin }) => {
         if (result?.autoLogin && result?.token && result?.user) {
           const destination = getVerificationRedirect(result);
           setNextRoute(destination);
-          setMessage('Email verified successfully. Logging you in...');
+          setMessage(VERIFICATION_SUCCESS_MESSAGE);
 
           try {
             localStorage.setItem('shopCoreUser', JSON.stringify(result.user));
@@ -258,13 +261,11 @@ const VerifyEmail = ({ onLogin }) => {
 
         setStatus('error');
         setNextRoute('/login');
-        setMessage('Verification succeeded, but automatic sign-in was not completed. Please try the link again.');
+        setMessage(VERIFICATION_FAILED_MESSAGE);
       } catch (err) {
         if (cancelled) return;
 
         const code = String(err?.code || '').toUpperCase();
-        const fieldTokenError = String(err?.fieldErrors?.token || '').trim();
-        const fallbackMessage = fieldTokenError || String(err?.message || 'Invalid or expired verification link.');
 
         try {
           const savedUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
@@ -278,7 +279,7 @@ const VerifyEmail = ({ onLogin }) => {
             const destination = getPostVerifyRedirect(savedUser);
             setStatus('success');
             setNextRoute(destination);
-            setMessage('Account already verified. Redirecting...');
+            setMessage(VERIFICATION_SUCCESS_MESSAGE);
             redirectTimeoutRef.current = window.setTimeout(() => {
               if (!cancelled) navigateRef.current(destination, { replace: true });
             }, 900);
@@ -291,47 +292,47 @@ const VerifyEmail = ({ onLogin }) => {
         setStatus('error');
 
         if (code === 'VERIFICATION_TOKEN_EXPIRED') {
-          setMessage('Verification link expired. Please request a new one.');
+          setMessage(VERIFICATION_FAILED_MESSAGE);
           if (err?.email) setEmail(String(err.email).trim().toLowerCase());
           return;
         }
 
         if (code === 'EMAIL_CHANGE_TOKEN_EXPIRED') {
-          setMessage('This email change link has expired. Update your profile again to request a new link.');
+          setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
         if (code === 'EMAIL_CHANGE_TOKEN_INVALID' || code === 'EMAIL_CHANGE_NOT_PENDING') {
-          setMessage('This email change link is invalid or already used.');
+          setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
         if (code === 'VERIFICATION_TOKEN_INVALID') {
-          setMessage('Invalid verification link.');
+          setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
         if (code === 'VERIFICATION_TOKEN_USED') {
-          setMessage('This verification link has already been used. Please log in or request a new one.');
+          setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
         if (code === 'VERIFICATION_TOKEN_REQUIRED') {
-          setMessage('Verification token is missing. Please use the latest link from your email.');
+          setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
         if (code === 'VERIFICATION_TIMEOUT' || code === 'VERIFICATION_TEMPORARY_FAILURE') {
-          setMessage('Verification is taking too long. Please try again.');
+          setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
         if (code === 'VERIFICATION_NETWORK_ERROR' || code === 'NETWORK_ERROR') {
-          setMessage('We could not reach the server. Please check your connection and try again.');
+          setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
-        setMessage(fallbackMessage);
+        setMessage(VERIFICATION_FAILED_MESSAGE);
       }
     };
 
@@ -377,7 +378,7 @@ const VerifyEmail = ({ onLogin }) => {
         {status === 'loading' && (
           <>
             <Loader className="w-12 h-12 text-orange-500 animate-spin mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">{isEmailChangeFlow ? 'Confirming your email change...' : 'Verifying...'}</h2>
+            <h2 className="text-xl font-bold text-white mb-2">{VERIFICATION_LOADING_MESSAGE}</h2>
             <p className="text-gray-400">{message}</p>
           </>
         )}
@@ -387,14 +388,12 @@ const VerifyEmail = ({ onLogin }) => {
             <div className="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-4">
               <Check size={32} />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Email Verified</h2>
-            <p className="text-gray-400 mb-6">{message}</p>
-            <Link
-              to={nextRoute}
-              className="w-full py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors flex items-center justify-center"
-            >
-              Continue
-            </Link>
+            <h2 className="text-xl font-bold text-white mb-2">Success</h2>
+            <p className="text-gray-400 mb-4">{message}</p>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Loader className="w-4 h-4 animate-spin" />
+              <span>Redirecting...</span>
+            </div>
           </>
         )}
 
@@ -403,7 +402,7 @@ const VerifyEmail = ({ onLogin }) => {
             <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mb-4">
               <X size={32} />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Verification Failed</h2>
+            <h2 className="text-xl font-bold text-white mb-2">Verification failed</h2>
             <p className="text-gray-400 mb-6">{message}</p>
 
             {!isEmailChangeFlow && (
