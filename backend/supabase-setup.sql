@@ -777,6 +777,17 @@ ON request_rate_limits FOR ALL
 USING (current_setting('role', true) = 'service_role')
 WITH CHECK (current_setting('role', true) = 'service_role');
 
+-- Runtime-created session table (connect-pg-simple): lock to service role only.
+DO $$
+BEGIN
+  IF to_regclass('public.http_sessions') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.http_sessions ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS http_sessions_restricted_access ON public.http_sessions';
+    EXECUTE 'CREATE POLICY http_sessions_restricted_access ON public.http_sessions FOR ALL USING (current_setting(''role'', true) = ''service_role'') WITH CHECK (current_setting(''role'', true) = ''service_role'')';
+  END IF;
+END
+$$;
+
 -- 1. users
 ALTER TABLE IF EXISTS users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON users;
