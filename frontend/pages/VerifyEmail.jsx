@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, X, Loader, Mail } from 'lucide-react';
 import { verifyEmailToken, resendVerificationEmail, confirmEmailChangeToken } from '../services/api';
 
@@ -156,13 +156,33 @@ const VerifyEmail = ({ onLogin }) => {
     window.history.replaceState(null, '', '/#/verify-email');
   };
 
-  const redirectToLoginWithMessage = (message, extraParams = {}, delayMs = 1200) => {
+  const navigateWithFallback = (destination, { replace = true } = {}) => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      navigateRef.current(destination, { replace });
+      return;
+    } catch {
+      // Fall back to a hard hash redirect when the current effect instance was remounted.
+    }
+
+    const normalized = String(destination || '/').trim() || '/';
+    const hashTarget = normalized.startsWith('#')
+      ? normalized
+      : `#${normalized.startsWith('/') ? normalized : `/${normalized}`}`;
+
+    window.location.hash = hashTarget;
+  };
+
+  const redirectToLoginWithMessage = (message, extraParams = {}, delayMs = 1200, cancelled = false) => {
     const destination = buildLoginRedirect(message, extraParams);
-    setStatus('success');
-    setNextRoute(destination);
-    setMessage(message);
+    if (!cancelled) {
+      setStatus('success');
+      setNextRoute(destination);
+      setMessage(message);
+    }
     redirectTimeoutRef.current = window.setTimeout(() => {
-      navigateRef.current(destination, { replace: true });
+      navigateWithFallback(destination, { replace: true });
     }, delayMs);
   };
 
@@ -176,18 +196,22 @@ const VerifyEmail = ({ onLogin }) => {
     }
 
     if (onLoginRef.current) {
-      onLoginRef.current(user, authToken);
+      try {
+        onLoginRef.current(user, authToken);
+      } catch {
+        // Fall through to the redirect. Local session state was already written.
+      }
     }
 
     publishAuthVerifiedSignal(user);
-    setStatus('success');
-    setNextRoute(destination);
-    setMessage(VERIFICATION_SUCCESS_MESSAGE);
+    if (!cancelled) {
+      setStatus('success');
+      setNextRoute(destination);
+      setMessage(VERIFICATION_SUCCESS_MESSAGE);
+    }
     clearVerificationTokenFromUrl();
     redirectTimeoutRef.current = window.setTimeout(() => {
-      if (!cancelled) {
-        navigateRef.current(destination, { replace: true });
-      }
+      navigateWithFallback(destination, { replace: true });
     }, 1000);
   };
 
@@ -221,8 +245,6 @@ const VerifyEmail = ({ onLogin }) => {
             : (normalizedToken ? verifyEmailToken(normalizedToken) : Promise.reject(createVerificationRequiredError()))
         ));
 
-        if (cancelled) return;
-
         if (normalizedEmailChangeToken) {
           try {
             const existingUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
@@ -235,12 +257,14 @@ const VerifyEmail = ({ onLogin }) => {
           }
 
           const destination = localStorage.getItem('shopCoreToken') ? '/profile' : '/login';
-          setStatus('success');
-          setNextRoute(destination);
-          setMessage(VERIFICATION_SUCCESS_MESSAGE);
+          if (!cancelled) {
+            setStatus('success');
+            setNextRoute(destination);
+            setMessage(VERIFICATION_SUCCESS_MESSAGE);
+          }
           clearVerificationTokenFromUrl();
           redirectTimeoutRef.current = window.setTimeout(() => {
-            if (!cancelled) navigateRef.current(destination, { replace: true });
+            navigateWithFallback(destination, { replace: true });
           }, 1200);
           return;
         }
@@ -251,62 +275,63 @@ const VerifyEmail = ({ onLogin }) => {
           return;
         }
 
-        redirectToLoginWithMessage('Email verified successfully. Please sign in to continue.', { verified: '1' });
+        redirectToLoginWithMessage('Email verified successfully. Please sign in to continue.', { verified: '1' }, 1200, cancelled);
         return;
       } catch (err) {
-        if (cancelled) return;
-
         const code = String(err?.code || '').toUpperCase();
-
-        setStatus('error');
+        if (!cancelled) {
+          setStatus('error');
+        }
 
         if (code === 'VERIFICATION_TOKEN_EXPIRED') {
-          setMessage(VERIFICATION_EXPIRED_MESSAGE);
-          if (err?.email) setEmail(String(err.email).trim().toLowerCase());
+          if (!cancelled) {
+            setMessage(VERIFICATION_EXPIRED_MESSAGE);
+            if (err?.email) setEmail(String(err.email).trim().toLowerCase());
+          }
           return;
         }
 
         if (code === 'EMAIL_CHANGE_TOKEN_EXPIRED') {
-          setMessage(VERIFICATION_FAILED_MESSAGE);
+          if (!cancelled) setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
         if (code === 'EMAIL_CHANGE_TOKEN_INVALID' || code === 'EMAIL_CHANGE_NOT_PENDING') {
-          setMessage(VERIFICATION_FAILED_MESSAGE);
+          if (!cancelled) setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
         if (code === 'VERIFICATION_TOKEN_INVALID') {
-          setMessage(VERIFICATION_INVALID_MESSAGE);
+          if (!cancelled) setMessage(VERIFICATION_INVALID_MESSAGE);
           return;
         }
 
         if (code === 'VERIFICATION_TOKEN_USED') {
-          setMessage(VERIFICATION_USED_MESSAGE);
+          if (!cancelled) setMessage(VERIFICATION_USED_MESSAGE);
           return;
         }
 
         if (code === 'VERIFICATION_ALREADY_VERIFIED') {
-          redirectToLoginWithMessage(VERIFICATION_ALREADY_VERIFIED_MESSAGE, { verified: '1' });
+          redirectToLoginWithMessage(VERIFICATION_ALREADY_VERIFIED_MESSAGE, { verified: '1' }, 1200, cancelled);
           return;
         }
 
         if (code === 'VERIFICATION_TOKEN_REQUIRED') {
-          setMessage(VERIFICATION_INVALID_MESSAGE);
+          if (!cancelled) setMessage(VERIFICATION_INVALID_MESSAGE);
           return;
         }
 
         if (code === 'VERIFICATION_TIMEOUT' || code === 'VERIFICATION_TEMPORARY_FAILURE') {
-          setMessage(VERIFICATION_FAILED_MESSAGE);
+          if (!cancelled) setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
         if (code === 'VERIFICATION_NETWORK_ERROR' || code === 'NETWORK_ERROR') {
-          setMessage(VERIFICATION_FAILED_MESSAGE);
+          if (!cancelled) setMessage(VERIFICATION_FAILED_MESSAGE);
           return;
         }
 
-        setMessage(VERIFICATION_FAILED_MESSAGE);
+        if (!cancelled) setMessage(VERIFICATION_FAILED_MESSAGE);
       }
     };
 
