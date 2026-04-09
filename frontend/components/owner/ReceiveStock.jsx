@@ -100,7 +100,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
   if (result) {
     return (
       <div className="space-y-4">
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-8 text-center">
+        <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-8 text-center">
           <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle size={32} className="text-green-500" />
           </div>
@@ -109,7 +109,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
             {result.success_count} of {result.total_items} items processed
           </p>
 
-          <div className="bg-gray-900 rounded-lg p-4 max-w-md mx-auto mb-6">
+          <div className="bg-gray-900/80 rounded-lg p-4 max-w-md mx-auto mb-6 border border-white/10">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-700">
@@ -118,7 +118,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
                   <th className="text-right py-2 text-xs font-medium text-gray-400">New Stock</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-white/10">
                 {result.results?.filter(r => r.success).map((r, i) => (
                   <tr key={i}>
                     <td className="py-2 text-white">{r.name}</td>
@@ -141,7 +141,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
               Receive More Items
             </button>
             {onBack && (
-              <button onClick={onBack} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors">
+              <button onClick={onBack} className="px-4 py-2 bg-gray-900 hover:bg-[#202430]/80 border border-gray-700 text-gray-200 text-sm font-medium rounded-lg transition-colors">
                 Back to Inventory
               </button>
             )}
@@ -157,7 +157,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {onBack && (
-            <button onClick={onBack} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={onBack} className="p-1.5 hover:bg-[#202430]/80 rounded-lg transition-colors">
               <ArrowLeft size={18} className="text-gray-400" />
             </button>
           )}
@@ -171,13 +171,13 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
         </div>
         {cart.length > 0 && (
           <div className="bg-red-500/10 text-orange-600 px-3 py-1.5 rounded-full text-sm font-medium">
-            {cart.length} product{cart.length !== 1 ? 's' : ''} â€¢ {totalItems} unit{totalItems !== 1 ? 's' : ''}
+            {cart.length} product{cart.length !== 1 ? 's' : ''} {'\u2022'} {totalItems} unit{totalItems !== 1 ? 's' : ''}
           </div>
         )}
       </div>
 
       {/* Scan Input */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-4">
         <form onSubmit={handleScan} className="flex gap-2">
           <div className="relative flex-1">
             <ScanBarcode size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -208,8 +208,8 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
 
       {/* Cart / Items List */}
       {cart.length > 0 && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+        <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 overflow-hidden">
+          <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">Items to Receive</h3>
             <button onClick={() => setCart([])} className="text-xs text-red-500 hover:text-red-600 font-medium">
               Clear All
@@ -217,7 +217,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50/80 border-b border-gray-700">
+              <tr className="bg-[#202430]/80 border-b border-white/10">
                 <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-400">Product</th>
                 <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-400">Current Stock</th>
                 <th className="text-center px-4 py-2.5 text-xs font-medium text-gray-400 w-40">Qty to Add</th>
@@ -225,9 +225,9 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
                 <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-400 w-16"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-white/10">
               {cart.map(item => (
-                <tr key={item.product.id} className="hover:bg-gray-50/50">
+                <tr key={item.product.id} className="hover:bg-[#202430]/60">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-700">
@@ -252,7 +252,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
                     <div className="flex items-center justify-center gap-1">
                       <button
                         onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                        className="p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                        className="p-1 rounded-md hover:bg-[#202430]/80 text-gray-400 hover:text-white transition-colors"
                       >
                         <Minus size={14} />
                       </button>
@@ -268,7 +268,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
                       />
                       <button
                         onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                        className="p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                        className="p-1 rounded-md hover:bg-[#202430]/80 text-gray-400 hover:text-white transition-colors"
                       >
                         <Plus size={14} />
                       </button>
@@ -291,7 +291,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
           </table>
 
           {/* Notes */}
-          <div className="px-4 py-3 border-t border-gray-700">
+          <div className="px-4 py-3 border-t border-white/10">
             <label className="block text-xs font-medium text-gray-600 mb-1">Receiving Notes (optional)</label>
             <input
               type="text"
@@ -303,10 +303,10 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
           </div>
 
           {/* Summary & Submit */}
-          <div className="px-4 py-3 border-t border-gray-700 bg-gray-50/80">
+          <div className="px-4 py-3 border-t border-white/10 bg-[#202430]/50">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600">
-                <span className="font-medium text-white">{cart.length}</span> product{cart.length !== 1 ? 's' : ''} â€¢{' '}
+                <span className="font-medium text-white">{cart.length}</span> product{cart.length !== 1 ? 's' : ''} {'\u2022'}{' '}
                 <span className="font-medium text-white">{totalItems}</span> total unit{totalItems !== 1 ? 's' : ''} to receive
               </div>
               <button
@@ -338,7 +338,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
 
       {/* Empty cart state */}
       {cart.length === 0 && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
+        <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-12 text-center">
           <div className="w-16 h-16 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-3">
             <ScanBarcode size={28} className="text-gray-300" />
           </div>
