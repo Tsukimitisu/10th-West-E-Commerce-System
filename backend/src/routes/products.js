@@ -19,6 +19,7 @@ import {
   sanitizeRichText,
   sanitizeUrlArray,
 } from '../utils/inputSanitizer.js';
+import { PRODUCT_SHIPPING_OPTIONS, PRODUCT_STATUSES } from '../constants/schemaEnums.js';
 
 const router = express.Router();
 
@@ -185,8 +186,8 @@ const productValidation = [
   body('sale_price').optional({ nullable: true }).custom((value) => value === '' || Number(value) > 0)
     .withMessage('Sale price must be greater than 0 when provided'),
   body('category_id').optional().isInt({ min: 1 }).withMessage('Category ID must be a positive integer'),
-  body('status').optional().isIn(['draft', 'published']).withMessage('Invalid product status'),
-  body('shipping_option').optional({ nullable: true }).isIn(['standard', 'express']).withMessage('shipping_option must be standard or express'),
+  body('status').optional().isIn(PRODUCT_STATUSES).withMessage('Invalid product status'),
+  body('shipping_option').optional({ nullable: true }).isIn(PRODUCT_SHIPPING_OPTIONS).withMessage('shipping_option must be standard or express'),
   body('shipping_weight_kg').exists({ checkNull: true }).withMessage('Shipping weight is required').bail()
     .isFloat({ gt: 0 }).withMessage('Shipping weight must be greater than 0'),
   body('image').optional({ nullable: true }).custom((value) => value === '' || sanitizeHttpUrlOrPath(value) !== null)
@@ -221,8 +222,8 @@ const productUpdateValidation = [
   body('stock_quantity').optional({ nullable: true }).isInt({ min: 0 }).withMessage('Stock must be an integer 0 or higher'),
   body('sale_price').optional({ nullable: true }).custom((value) => value === '' || Number(value) > 0)
     .withMessage('Sale price must be greater than 0 when provided'),
-  body('status').optional().isIn(['draft', 'published']).withMessage('Invalid product status'),
-  body('shipping_option').optional({ nullable: true }).isIn(['standard', 'express']).withMessage('shipping_option must be standard or express'),
+  body('status').optional().isIn(PRODUCT_STATUSES).withMessage('Invalid product status'),
+  body('shipping_option').optional({ nullable: true }).isIn(PRODUCT_SHIPPING_OPTIONS).withMessage('shipping_option must be standard or express'),
   body('shipping_weight_kg').optional({ nullable: true }).isFloat({ gt: 0 }).withMessage('Shipping weight must be greater than 0'),
   body('image').optional({ nullable: true }).custom((value) => value === '' || sanitizeHttpUrlOrPath(value) !== null)
     .withMessage('image must be a valid URL')

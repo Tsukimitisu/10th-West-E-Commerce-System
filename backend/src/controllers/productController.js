@@ -1,5 +1,10 @@
 import pool from '../config/database.js';
 import { emitProductCreated, emitProductUpdated, emitProductDeleted } from '../socket.js';
+import {
+  PRODUCT_PUBLISHER_ROLE_SET,
+  PRODUCT_SHIPPING_OPTION_SET,
+  PRODUCT_STATUS_SET,
+} from '../constants/schemaEnums.js';
 import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
 import {
   sanitizeHttpUrlOrPath,
@@ -10,9 +15,9 @@ import {
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
-const ALLOWED_PRODUCT_STATUSES = new Set(['draft', 'published']);
-const ALLOWED_PRODUCT_SHIPPING_OPTIONS = new Set(['standard', 'express']);
-const PRODUCT_PUBLISHER_ROLES = new Set(['admin', 'super_admin', 'owner']);
+const ALLOWED_PRODUCT_STATUSES = PRODUCT_STATUS_SET;
+const ALLOWED_PRODUCT_SHIPPING_OPTIONS = PRODUCT_SHIPPING_OPTION_SET;
+const PRODUCT_PUBLISHER_ROLES = PRODUCT_PUBLISHER_ROLE_SET;
 const PRODUCT_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
 const SKU_MAX_GENERATION_ATTEMPTS = 10;
 const MIME_EXTENSION_MAP = {

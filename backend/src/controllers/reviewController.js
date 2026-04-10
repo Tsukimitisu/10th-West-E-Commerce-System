@@ -95,7 +95,7 @@ const ensureReviewSchema = async () => {
 
     await pool.query(`
       ALTER TABLE reviews
-      ALTER COLUMN review_status SET DEFAULT '${REVIEW_STATUS.APPROVED}';
+      ALTER COLUMN review_status SET DEFAULT '${REVIEW_STATUS.PENDING}';
     `);
 
     await pool.query(`

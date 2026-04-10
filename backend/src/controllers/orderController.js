@@ -1,12 +1,14 @@
 import pool from '../config/database.js';
 import Stripe from 'stripe';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
+import { ORDER_STATUSES, STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
 import { buildOrderStatusMessage, createNotification as createUserNotification, ensureNotificationColumns } from '../utils/notifications.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
-const STAFF_ROLES = new Set(['admin', 'super_admin', 'owner', 'store_staff', 'cashier', 'manager']);
-const VALID_ORDER_STATUSES = ['pending', 'paid', 'preparing', 'shipped', 'delivered', 'completed', 'cancelled'];
+const STAFF_ROLES = STAFF_ROLE_SET;
+const VALID_ORDER_STATUSES = ORDER_STATUSES;
+const ORDER_STATUS_SQL_LIST = ORDER_STATUSES.map((status) => `'${status}'`).join(', ');
 const VAT_RATE = 0.12;
 const FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
 const STANDARD_SHIPPING_FEE = 150;
@@ -50,7 +52,7 @@ const ensureOrderWorkflowColumns = async () => {
   await pool.query(`
     ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
     ALTER TABLE orders ADD CONSTRAINT orders_status_check
-      CHECK (status IN ('pending', 'paid', 'preparing', 'shipped', 'delivered', 'completed', 'cancelled'));
+      CHECK (status IN (${ORDER_STATUS_SQL_LIST}));
   `).catch((error) => {
     console.error('Failed to ensure order status constraint:', error);
   });

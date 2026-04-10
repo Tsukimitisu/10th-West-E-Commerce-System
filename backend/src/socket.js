@@ -1,4 +1,5 @@
 import { Server } from 'socket.io';
+import { PRODUCT_PUBLISHER_ROLE_SET, STAFF_ROLE_SET } from './constants/schemaEnums.js';
 
 let io = null;
 
@@ -30,12 +31,12 @@ export function initSocket(httpServer, frontendUrl) {
       }
       const joinedRooms = [];
 
-      if (data.role === 'admin' || data.role === 'super_admin' || data.role === 'owner' || data.role === 'store_staff' || data.role === 'cashier' || data.role === 'manager') {
+      if (STAFF_ROLE_SET.has(data.role)) {
         socket.join('staff');
         joinedRooms.push('staff');
         console.log(`   ↳ ${socket.id} joined [staff] room`);
       }
-      if (data.role === 'admin' || data.role === 'super_admin' || data.role === 'owner') {
+      if (PRODUCT_PUBLISHER_ROLE_SET.has(data.role)) {
         socket.join('admin');
         joinedRooms.push('admin');
         console.log(`   ↳ ${socket.id} joined [admin] room`);

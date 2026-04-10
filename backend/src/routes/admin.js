@@ -1,6 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import pool from '../config/database.js';
+import { USER_ROLES } from '../constants/schemaEnums.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -108,7 +109,7 @@ router.patch('/users/:id/role', async (req, res) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
-    const validRoles = ['customer', 'admin', 'cashier', 'super_admin', 'owner', 'store_staff'];
+    const validRoles = USER_ROLES;
     if (!validRoles.includes(role)) {
       return res.status(400).json({ message: 'Invalid role' });
     }
