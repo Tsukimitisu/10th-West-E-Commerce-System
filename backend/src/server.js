@@ -65,6 +65,10 @@ const requiredEnvVars = [
   'EMAIL_FROM'
 ];
 
+if (process.env.NODE_ENV === 'production') {
+  requiredEnvVars.push('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET');
+}
+
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingVars.length > 0) {
   console.error('❌ Missing required environment variables:', missingVars.join(', '));
@@ -78,6 +82,11 @@ console.log('   Stripe Secret:', process.env.STRIPE_SECRET_KEY ? '✅ SET' : '�
 console.log('   Stripe Public:', process.env.STRIPE_PUBLISHABLE_KEY ? '✅ SET' : '❌ NOT SET');
 console.log('   Email User:', process.env.EMAIL_USER ? '✅ SET' : '❌ NOT SET');
 console.log('   Email Password:', process.env.EMAIL_PASSWORD ? '✅ SET' : '❌ NOT SET');
+console.log('   Cloudinary:', (
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET
+) ? '✅ SET' : '❌ NOT SET');
 console.log('');
 
 const app = express();

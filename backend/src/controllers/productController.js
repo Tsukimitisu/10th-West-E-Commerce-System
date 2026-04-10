@@ -1,19 +1,12 @@
 import pool from '../config/database.js';
 import { emitProductCreated, emitProductUpdated, emitProductDeleted } from '../socket.js';
-import supabaseClient from '../services/supabaseClient.js';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
 import {
   sanitizeHttpUrlOrPath,
   sanitizePlainText,
   sanitizeRichText,
   sanitizeUrlArray,
 } from '../utils/inputSanitizer.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const uploadsDir = path.join(__dirname, '..', '..', 'uploads', 'products');
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
@@ -1330,6 +1323,10 @@ export const uploadProductImage = async (req, res) => {
   try {
     if (!requireProductManagerAccess(req, res)) return;
 
+    if (!isCloudinaryConfigured()) {
+      return res.status(503).json({ message: 'Product media storage is not configured. Please contact support.' });
+    }
+
     const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
 
     if (!ALLOWED_IMAGE_MIME_TYPES.has(contentType)) {
@@ -1341,37 +1338,13 @@ export const uploadProductImage = async (req, res) => {
     }
 
     const ext = MIME_EXTENSION_MAP[contentType] || 'bin';
-    const filename = `product-${Date.now()}-${Math.floor(Math.random() * 1_000_000_000)}.${ext}`;
-    
-    let imageUrl;
-
-    // Try Supabase first if available
-    const { SUPABASE_URL } = process.env;
-    if (SUPABASE_URL) {
-      const { data, error } = await supabaseClient.storage
-        .from('products')
-        .upload(filename, req.body, {
-          contentType: contentType,
-          upsert: false
-        });
-
-      if (!error) {
-        // Get public URL
-        const { data: publicUrlData } = supabaseClient.storage
-          .from('products')
-          .getPublicUrl(filename);
-        imageUrl = publicUrlData.publicUrl;
-      } else {
-        console.warn('Supabase storage upload failed, falling back to local FS:', error.message);
-      }
-    }
-
-    if (!imageUrl) {
-      await fs.mkdir(uploadsDir, { recursive: true });
-      const filepath = path.join(uploadsDir, filename);
-      await fs.writeFile(filepath, req.body);
-      imageUrl = `${req.protocol}://${req.get('host')}/uploads/products/${filename}`;
-    }
+    const { url: imageUrl } = await uploadBufferToCloudinary({
+      buffer: req.body,
+      contentType,
+      folder: 'products/images',
+      publicId: `product-image-${Date.now()}-${Math.floor(Math.random() * 1_000_000_000)}-${ext}`,
+      resourceType: 'image',
+    });
 
     res.status(201).json({
       message: 'Image uploaded successfully',
@@ -1388,6 +1361,10 @@ export const uploadProductVideo = async (req, res) => {
   try {
     if (!requireProductManagerAccess(req, res)) return;
 
+    if (!isCloudinaryConfigured()) {
+      return res.status(503).json({ message: 'Product media storage is not configured. Please contact support.' });
+    }
+
     const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
 
     if (!ALLOWED_VIDEO_MIME_TYPES.has(contentType)) {
@@ -1403,35 +1380,13 @@ export const uploadProductVideo = async (req, res) => {
     }
 
     const ext = MIME_EXTENSION_MAP[contentType] || 'bin';
-    const filename = `product-video-${Date.now()}-${Math.floor(Math.random() * 1_000_000_000)}.${ext}`;
-
-    let videoUrl;
-
-    const { SUPABASE_URL } = process.env;
-    if (SUPABASE_URL) {
-      const { error } = await supabaseClient.storage
-        .from('products')
-        .upload(filename, req.body, {
-          contentType,
-          upsert: false
-        });
-
-      if (!error) {
-        const { data: publicUrlData } = supabaseClient.storage
-          .from('products')
-          .getPublicUrl(filename);
-        videoUrl = publicUrlData.publicUrl;
-      } else {
-        console.warn('Supabase storage upload failed, falling back to local FS:', error.message);
-      }
-    }
-
-    if (!videoUrl) {
-      await fs.mkdir(uploadsDir, { recursive: true });
-      const filepath = path.join(uploadsDir, filename);
-      await fs.writeFile(filepath, req.body);
-      videoUrl = `${req.protocol}://${req.get('host')}/uploads/products/${filename}`;
-    }
+    const { url: videoUrl } = await uploadBufferToCloudinary({
+      buffer: req.body,
+      contentType,
+      folder: 'products/videos',
+      publicId: `product-video-${Date.now()}-${Math.floor(Math.random() * 1_000_000_000)}-${ext}`,
+      resourceType: 'video',
+    });
 
     res.status(201).json({
       message: 'Video uploaded successfully',

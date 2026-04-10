@@ -1,15 +1,8 @@
 import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
-import supabaseClient from '../services/supabaseClient.js';
+import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
 import nodemailer from 'nodemailer';
-import fs from 'fs/promises';
-import path from 'path';
 import crypto from 'crypto';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const avatarUploadsDir = path.join(__dirname, '..', '..', 'uploads', 'avatars');
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
@@ -17,7 +10,6 @@ const MIME_EXTENSION_MAP = {
   'image/webp': 'webp',
 };
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
-const AVATAR_BUCKET = 'avatars';
 const PROFILE_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
 const PROFILE_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
@@ -106,50 +98,6 @@ const ensureUserProfileColumns = async () => {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_users_pending_email ON users(pending_email)').catch(() => {});
 };
 ensureUserProfileColumns();
-
-const hasSupabaseStorageConfig = () => {
-  return Boolean(
-    process.env.SUPABASE_URL &&
-    (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY),
-  );
-};
-
-const ensureAvatarBucketIsPublic = async () => {
-  if (!hasSupabaseStorageConfig()) return;
-
-  const { data: bucket, error: getBucketError } = await supabaseClient.storage.getBucket(AVATAR_BUCKET);
-  if (getBucketError) {
-    const { error: createBucketError } = await supabaseClient.storage.createBucket(AVATAR_BUCKET, {
-      public: true,
-      fileSizeLimit: `${MAX_AVATAR_BYTES}`,
-      allowedMimeTypes: [...ALLOWED_IMAGE_MIME_TYPES],
-    });
-
-    if (createBucketError && !String(createBucketError.message || '').toLowerCase().includes('already exists')) {
-      throw createBucketError;
-    }
-    return;
-  }
-
-  if (bucket && bucket.public === false) {
-    const { error: updateBucketError } = await supabaseClient.storage.updateBucket(AVATAR_BUCKET, {
-      public: true,
-      fileSizeLimit: `${MAX_AVATAR_BYTES}`,
-      allowedMimeTypes: [...ALLOWED_IMAGE_MIME_TYPES],
-    });
-
-    if (updateBucketError) {
-      throw updateBucketError;
-    }
-  }
-};
-
-const persistAvatarToLocal = async (req, filename, fileBuffer) => {
-  await fs.mkdir(avatarUploadsDir, { recursive: true });
-  const filepath = path.join(avatarUploadsDir, filename);
-  await fs.writeFile(filepath, fileBuffer);
-  return `${req.protocol}://${req.get('host')}/uploads/avatars/${filename}`;
-};
 
 // Get user profile
 export const getProfile = async (req, res) => {
@@ -474,6 +422,10 @@ export const confirmEmailChange = async (req, res) => {
 
 export const uploadProfileAvatar = async (req, res) => {
   try {
+    if (!isCloudinaryConfigured()) {
+      return res.status(503).json({ message: 'Avatar storage is not configured. Please contact support.' });
+    }
+
     const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
 
     if (!ALLOWED_IMAGE_MIME_TYPES.has(contentType)) {
@@ -489,54 +441,14 @@ export const uploadProfileAvatar = async (req, res) => {
     }
 
     const ext = MIME_EXTENSION_MAP[contentType] || 'bin';
-    const filename = `avatar-${req.user.id}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${ext}`;
-    let avatarUrl = null;
-
-    if (process.env.SUPABASE_URL && hasSupabaseStorageConfig()) {
-      let canUseSupabaseStorage = true;
-      try {
-        await ensureAvatarBucketIsPublic();
-      } catch (bucketError) {
-        canUseSupabaseStorage = false;
-        console.warn('Failed to ensure avatars bucket visibility, falling back to local FS:', bucketError.message || bucketError);
-      }
-
-      if (canUseSupabaseStorage) {
-        const objectPath = `user-${req.user.id}/${filename}`;
-        const { error } = await supabaseClient.storage
-          .from(AVATAR_BUCKET)
-          .upload(objectPath, req.body, {
-            contentType,
-            upsert: false,
-          });
-
-        if (!error) {
-          const { data: publicUrlData } = supabaseClient.storage
-            .from(AVATAR_BUCKET)
-            .getPublicUrl(objectPath);
-
-          const publicUrl = publicUrlData?.publicUrl || '';
-          if (publicUrl) {
-            try {
-              const headResponse = await fetch(publicUrl, { method: 'HEAD' });
-              if (headResponse.ok) {
-                avatarUrl = publicUrl;
-              } else {
-                console.warn(`Supabase avatar URL is not publicly reachable (status ${headResponse.status}), falling back to local FS.`);
-              }
-            } catch (publicCheckError) {
-              console.warn('Unable to verify Supabase avatar URL reachability, falling back to local FS:', publicCheckError.message || publicCheckError);
-            }
-          }
-        } else {
-          console.warn('Supabase avatar upload failed, falling back to local FS:', error.message);
-        }
-      }
-    }
-
-    if (!avatarUrl) {
-      avatarUrl = await persistAvatarToLocal(req, filename, req.body);
-    }
+    const cloudinaryPublicId = `avatar-${req.user.id}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}-${ext}`;
+    const { url: avatarUrl } = await uploadBufferToCloudinary({
+      buffer: req.body,
+      contentType,
+      folder: `avatars/user-${req.user.id}`,
+      publicId: cloudinaryPublicId,
+      resourceType: 'image',
+    });
 
     const updatedResult = await pool.query(
       `UPDATE users
