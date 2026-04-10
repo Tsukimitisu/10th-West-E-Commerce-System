@@ -56,9 +56,23 @@ If you want direct Supabase mode, set `VITE_USE_SUPABASE=true` and fill Supabase
 
 ## 4. Database Setup
 
-Run SQL schema/seed in your Supabase SQL editor:
+Run tracked migrations (up):
 
-- `backend/supabase-setup.sql`
+```bash
+npm run migrate
+```
+
+Roll back latest migration batch (down):
+
+```bash
+npm run migrate:down
+```
+
+Optional migration status check:
+
+```bash
+npm run migrate:status
+```
 
 ## 5. Run Locally
 

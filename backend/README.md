@@ -43,15 +43,18 @@ CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 CLOUDINARY_UPLOAD_ROOT=10th-west-moto
 ```
 
-3. Create schema in Supabase:
-```bash
-# Run backend/supabase-setup.sql in Supabase SQL Editor
-```
-
-4. Optional: run Node migrations/seeds against Supabase:
+3. Run database migrations (up):
 ```bash
 npm run migrate
-node src/database/migrate-auth.js
+```
+
+4. Roll back the latest migration batch (down):
+```bash
+npm run migrate:down
+```
+
+5. Optional: run seed scripts:
+```bash
 node src/database/seed.js
 node src/database/seed-sprint6.js
 ```
@@ -123,9 +126,10 @@ backend/
 │   │   ├── products.js          # Product routes
 │   │   └── categories.js        # Category routes
 │   ├── database/
-│   │   ├── migrate.js           # Database schema
 │   │   └── seed.js              # Seed data
 │   └── server.js                # Main server file
+├── migrations/                   # Knex up/down migrations
+├── knexfile.cjs                  # Knex migration config
 ├── .env                          # Environment variables
 ├── .env.example                  # Example env file
 ├── package.json

@@ -1,6 +1,7 @@
 -- =============================================================================
 -- 10th West Moto - COMPLETE Supabase Setup SQL
--- Run this in Supabase Dashboard -> SQL Editor -> New query.
+-- LEGACY FILE: kept only for historical reference.
+-- Use Knex migrations instead: npm run migrate (inside backend/)
 -- This script is idempotent (safe to re-run) and includes ALL core tables,
 -- indexes, RLS config, and seed data.
 -- =============================================================================
