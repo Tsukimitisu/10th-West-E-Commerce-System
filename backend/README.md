@@ -10,7 +10,7 @@ Backend REST API for the 10th West Moto E-Commerce System.
 - **Authentication:** JWT (JSON Web Tokens)
 - **Validation:** Express-validator
 - **Password Hashing:** bcryptjs
-- **Media Storage:** Cloudinary (product images, product videos, avatars)
+- **Media Storage:** Cloudinary (all uploads: product images/videos, avatars, review media)
 
 ## Prerequisites
 
@@ -39,6 +39,8 @@ JWT_SECRET=your-super-secret-jwt-key
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_cloudinary_api_key
 CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+# Optional: prefix uploads by app/environment for scale and isolation
+CLOUDINARY_UPLOAD_ROOT=10th-west-moto
 ```
 
 3. Create schema in Supabase:

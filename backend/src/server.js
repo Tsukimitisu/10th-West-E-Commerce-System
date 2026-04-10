@@ -93,7 +93,6 @@ const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
-const uploadsDir = path.join(__dirname, '..', 'uploads');
 const PgSessionStore = connectPgSimple(session);
 const configuredSessionSameSite = String(process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
 const sessionCookieSameSite = ['lax', 'strict', 'none'].includes(configuredSessionSameSite)
@@ -211,11 +210,6 @@ app.use(session({
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 }));
-app.use('/uploads', (req, res, next) => {
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  next();
-});
-app.use('/uploads', express.static(uploadsDir));
 app.use(passport.initialize());
 app.use(activityLogger);
 app.use('/api', apiLimiter);

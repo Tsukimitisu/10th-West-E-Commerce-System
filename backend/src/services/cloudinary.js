@@ -22,6 +22,18 @@ const configureCloudinary = () => {
 const getMissingCloudinaryVars = () =>
   REQUIRED_CLOUDINARY_VARS.filter((key) => !process.env[key]);
 
+const normalizeCloudinaryPath = (value) =>
+  String(value || '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/\/{2,}/g, '/');
+
+const resolveUploadFolder = (folder) => {
+  const root = normalizeCloudinaryPath(process.env.CLOUDINARY_UPLOAD_ROOT || '10th-west-moto');
+  const normalizedFolder = normalizeCloudinaryPath(folder || 'misc');
+  return [root, normalizedFolder].filter(Boolean).join('/');
+};
+
 export const assertCloudinaryConfigured = () => {
   const missing = getMissingCloudinaryVars();
   if (missing.length > 0) {
@@ -46,10 +58,12 @@ export const uploadBufferToCloudinary = async ({
     throw new Error('uploadBufferToCloudinary requires a non-empty buffer');
   }
 
+  const resolvedFolder = resolveUploadFolder(folder);
+
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder,
+        folder: resolvedFolder,
         resource_type: resourceType,
         public_id: publicId,
         overwrite: false,
