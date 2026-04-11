@@ -1,6 +1,6 @@
 import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
-import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
+import { getMissingCloudinaryVars, isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -423,7 +423,15 @@ export const confirmEmailChange = async (req, res) => {
 export const uploadProfileAvatar = async (req, res) => {
   try {
     if (!isCloudinaryConfigured()) {
-      return res.status(503).json({ message: 'Avatar storage is not configured. Please contact support.' });
+      const missingVars = getMissingCloudinaryVars();
+      const isProduction = process.env.NODE_ENV === 'production';
+      return res.status(503).json({
+        message: isProduction
+          ? 'Avatar storage is not configured. Please contact support.'
+          : `Avatar storage is not configured. Missing env vars: ${missingVars.join(', ')}.`,
+        code: 'AVATAR_STORAGE_NOT_CONFIGURED',
+        ...(isProduction ? {} : { missingVars }),
+      });
     }
 
     const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();

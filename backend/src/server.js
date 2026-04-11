@@ -76,6 +76,13 @@ if (missingVars.length > 0) {
   process.exit(1);
 }
 
+const optionalUploadVars = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
+const missingUploadVars = optionalUploadVars.filter((varName) => !process.env[varName]);
+if (missingUploadVars.length > 0) {
+  console.warn('⚠️ Cloudinary is not configured. Product, review, and avatar uploads will be unavailable.');
+  console.warn('⚠️ Missing Cloudinary env vars:', missingUploadVars.join(', '));
+}
+
 // Log configuration on startup (no sensitive values)
 console.log('\n🔐 Configuration loaded:');
 console.log('   Stripe Secret:', process.env.STRIPE_SECRET_KEY ? '✅ SET' : '❌ NOT SET');
