@@ -788,6 +788,23 @@ BEGIN
 END
 $$;
 
+-- Runtime-created Knex metadata tables: lock to service role only.
+DO $$
+BEGIN
+  IF to_regclass('public.knex_migrations') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.knex_migrations ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS knex_migrations_restricted_access ON public.knex_migrations';
+    EXECUTE 'CREATE POLICY knex_migrations_restricted_access ON public.knex_migrations FOR ALL USING (current_setting(''role'', true) = ''service_role'') WITH CHECK (current_setting(''role'', true) = ''service_role'')';
+  END IF;
+
+  IF to_regclass('public.knex_migrations_lock') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.knex_migrations_lock ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS knex_migrations_lock_restricted_access ON public.knex_migrations_lock';
+    EXECUTE 'CREATE POLICY knex_migrations_lock_restricted_access ON public.knex_migrations_lock FOR ALL USING (current_setting(''role'', true) = ''service_role'') WITH CHECK (current_setting(''role'', true) = ''service_role'')';
+  END IF;
+END
+$$;
+
 -- 1. users
 ALTER TABLE IF EXISTS users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS allow_all ON users;
