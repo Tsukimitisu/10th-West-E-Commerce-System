@@ -1,13 +1,14 @@
 -- =============================================================================
 -- 10th West Moto - COMPLETE Supabase Setup SQL
--- Run this in Supabase Dashboard -> SQL Editor -> New query.
--- This script is idempotent (safe to re-run) and includes ALL 35 tables,
+-- LEGACY FILE: kept only for historical reference.
+-- Use Knex migrations instead: npm run migrate (inside backend/)
+-- This script is idempotent (safe to re-run) and includes ALL core tables,
 -- indexes, RLS config, and seed data.
 -- =============================================================================
 
 BEGIN;
 
--- ==================== TABLES (35 total) ====================
+-- ==================== TABLES ====================
 
 -- 1. Users
 CREATE TABLE IF NOT EXISTS users (
@@ -32,6 +33,11 @@ CREATE TABLE IF NOT EXISTS users (
   password_reset_expires TIMESTAMP,
   last_login TIMESTAMP,
   email_verified BOOLEAN DEFAULT FALSE,
+  email_verification_token VARCHAR(255),
+  email_verification_expires TIMESTAMP,
+  pending_email VARCHAR(255),
+  email_change_token VARCHAR(255),
+  email_change_expires TIMESTAMP,
   consent_given_at TIMESTAMP,
   age_confirmed_at TIMESTAMP,
   deleted_at TIMESTAMP,
@@ -65,17 +71,24 @@ CREATE TABLE IF NOT EXISTS products (
   price DECIMAL(10,2) NOT NULL,
   buying_price DECIMAL(10,2),
   image VARCHAR(500),
+  video_url VARCHAR(500),
+  image_urls JSONB DEFAULT '[]'::jsonb,
   category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   subcategory_id INTEGER REFERENCES subcategories(id) ON DELETE SET NULL,
   stock_quantity INTEGER DEFAULT 0,
+  shipping_option VARCHAR(20) DEFAULT 'standard' CHECK (shipping_option IN ('standard', 'express')),
+  shipping_weight_kg DECIMAL(10,3) NOT NULL DEFAULT 0.10,
+  shipping_dimensions JSONB,
   box_number VARCHAR(100),
   low_stock_threshold INTEGER DEFAULT 5,
   brand VARCHAR(100),
   sku VARCHAR(100) UNIQUE,
   barcode VARCHAR(100) UNIQUE,
   sale_price DECIMAL(10,2),
+  bulk_pricing JSONB DEFAULT '[]'::jsonb,
+  variant_options JSONB DEFAULT '[]'::jsonb,
   is_on_sale BOOLEAN DEFAULT FALSE,
-  status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'hidden', 'out_of_stock')),
+  status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
   expiry_date DATE,
   is_deleted BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -89,15 +102,21 @@ CREATE TABLE IF NOT EXISTS product_variants (
   variant_type VARCHAR(50) NOT NULL,
   variant_value VARCHAR(100) NOT NULL,
   price_adjustment DECIMAL(10,2) DEFAULT 0,
+  price DECIMAL(10,2),
+  option_combination JSONB DEFAULT '{}'::jsonb,
+  combination_key VARCHAR(255),
+  image_url VARCHAR(500),
   stock_quantity INTEGER DEFAULT 0,
   sku VARCHAR(100),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 6. Carts
 CREATE TABLE IF NOT EXISTS carts (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  session_id VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -119,8 +138,10 @@ CREATE TABLE IF NOT EXISTS orders (
   guest_name VARCHAR(255),
   guest_email VARCHAR(255),
   total_amount DECIMAL(10,2) NOT NULL,
-  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'completed', 'cancelled')),
+  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'delivered', 'completed', 'cancelled')),
   shipping_address TEXT NOT NULL,
+  shipping_lat DECIMAL(10,7),
+  shipping_lng DECIMAL(10,7),
   source VARCHAR(20) DEFAULT 'online' CHECK (source IN ('online', 'pos')),
   payment_method VARCHAR(20) CHECK (payment_method IN ('cash', 'card', 'cod', 'online', 'stripe', 'gcash', 'maya', 'bank_transfer')),
   amount_tendered DECIMAL(10,2),
@@ -135,6 +156,10 @@ CREATE TABLE IF NOT EXISTS orders (
   shipping_method VARCHAR(50) DEFAULT 'standard',
   delivery_notes TEXT,
   estimated_delivery DATE,
+  delivered_at TIMESTAMP,
+  rider_confirmed_delivery_at TIMESTAMP,
+  rider_confirmed_by INTEGER REFERENCES users(id),
+  customer_confirmed_receipt_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -157,13 +182,32 @@ CREATE TABLE IF NOT EXISTS addresses (
   recipient_name VARCHAR(255) NOT NULL,
   phone VARCHAR(50) NOT NULL,
   street TEXT NOT NULL,
+  barangay VARCHAR(100),
   city VARCHAR(100) NOT NULL,
   state VARCHAR(100) NOT NULL,
+  country VARCHAR(100) DEFAULT 'Philippines',
   postal_code VARCHAR(20) NOT NULL,
+  lat DECIMAL(10,7),
+  lng DECIMAL(10,7),
   is_default BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS shipping_lat DECIMAL(10,7);
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS shipping_lng DECIMAL(10,7);
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS lat DECIMAL(10,7);
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS lng DECIMAL(10,7);
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS barangay VARCHAR(100);
 
 -- 11. Returns
 CREATE TABLE IF NOT EXISTS returns (
@@ -266,6 +310,7 @@ CREATE TABLE IF NOT EXISTS banners (
   id SERIAL PRIMARY KEY,
   title VARCHAR(255),
   subtitle TEXT,
+  button_text VARCHAR(120),
   image_url VARCHAR(500),
   link_url VARCHAR(500),
   is_active BOOLEAN DEFAULT TRUE,
@@ -273,6 +318,9 @@ CREATE TABLE IF NOT EXISTS banners (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE banners
+  ADD COLUMN IF NOT EXISTS button_text VARCHAR(120);
 
 -- 20. Announcements
 CREATE TABLE IF NOT EXISTS announcements (
@@ -291,7 +339,7 @@ CREATE TABLE IF NOT EXISTS stock_adjustments (
   product_id INTEGER REFERENCES products(id),
   adjusted_by INTEGER REFERENCES users(id),
   quantity_change INTEGER NOT NULL,
-  reason VARCHAR(50) CHECK (reason IN ('damaged', 'lost', 'correction', 'transfer', 'received', 'expired')),
+  reason VARCHAR(50) CHECK (reason IN ('restock', 'damaged', 'returned', 'lost', 'correction', 'shrinkage', 'transfer', 'received', 'expired', 'other')),
   notes TEXT,
   status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   approved_by INTEGER REFERENCES users(id),
@@ -385,9 +433,13 @@ CREATE TABLE IF NOT EXISTS reviews (
   product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
   rating INTEGER CHECK (rating >= 1 AND rating <= 5),
   comment TEXT,
+  media_urls JSONB DEFAULT '[]'::jsonb,
   is_approved BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE IF EXISTS reviews
+  ADD COLUMN IF NOT EXISTS media_urls JSONB DEFAULT '[]'::jsonb;
 
 -- 31. Discounts / Promo Codes
 CREATE TABLE IF NOT EXISTS discounts (
@@ -452,6 +504,27 @@ CREATE TABLE IF NOT EXISTS backup_history (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 36. OAuth Codes (short-lived exchange codes)
+CREATE TABLE IF NOT EXISTS oauth_codes (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  code_hash VARCHAR(255) NOT NULL UNIQUE,
+  ip_address VARCHAR(45),
+  user_agent TEXT,
+  used BOOLEAN DEFAULT FALSE,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 37. Request Rate Limits (shared limiter state)
+CREATE TABLE IF NOT EXISTS request_rate_limits (
+  key TEXT PRIMARY KEY,
+  request_count INTEGER NOT NULL DEFAULT 0,
+  reset_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ==================== BACKFILL CONSTRAINTS ====================
 -- Update CHECK constraints if the table already existed with old values.
 
@@ -463,20 +536,92 @@ ALTER TABLE users ADD CONSTRAINT users_role_check
 -- Orders: allow new statuses and payment methods
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
 ALTER TABLE orders ADD CONSTRAINT orders_status_check
-  CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'completed', 'cancelled'));
+  CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'delivered', 'completed', 'cancelled'));
 
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
 ALTER TABLE orders ADD CONSTRAINT orders_payment_method_check
   CHECK (payment_method IN ('cash', 'card', 'cod', 'online', 'stripe', 'gcash', 'maya', 'bank_transfer'));
+
+-- Products: publication status workflow
+ALTER TABLE products ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft';
+
+UPDATE products
+SET status = 'draft'
+WHERE status = 'hidden';
+
+UPDATE products
+SET status = 'published'
+WHERE status IN ('available', 'out_of_stock');
+
+UPDATE products
+SET status = 'draft'
+WHERE status IS NULL;
+
+ALTER TABLE products ALTER COLUMN status SET DEFAULT 'draft';
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_status_check;
+ALTER TABLE products ADD CONSTRAINT products_status_check
+  CHECK (status IN ('draft', 'published'));
+
+-- Products: strict pricing and stock guards
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_price_positive_check;
+ALTER TABLE products ADD CONSTRAINT products_price_positive_check
+  CHECK (price > 0);
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_stock_quantity_non_negative_check;
+ALTER TABLE products ADD CONSTRAINT products_stock_quantity_non_negative_check
+  CHECK (stock_quantity >= 0);
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_sale_price_positive_check;
+ALTER TABLE products ADD CONSTRAINT products_sale_price_positive_check
+  CHECK (sale_price IS NULL OR sale_price > 0);
+
+ALTER TABLE products ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_option VARCHAR(20) DEFAULT 'standard';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_weight_kg DECIMAL(10,3) DEFAULT 0.10;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_dimensions JSONB;
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_bulk_pricing_array_check;
+ALTER TABLE products ADD CONSTRAINT products_bulk_pricing_array_check
+  CHECK (bulk_pricing IS NULL OR jsonb_typeof(bulk_pricing) = 'array');
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_option_check;
+ALTER TABLE products ADD CONSTRAINT products_shipping_option_check
+  CHECK (shipping_option IN ('standard', 'express'));
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_weight_positive_check;
+ALTER TABLE products ADD CONSTRAINT products_shipping_weight_positive_check
+  CHECK (shipping_weight_kg > 0);
+
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_dimensions_object_check;
+ALTER TABLE products ADD CONSTRAINT products_shipping_dimensions_object_check
+  CHECK (shipping_dimensions IS NULL OR jsonb_typeof(shipping_dimensions) = 'object');
 
 -- ==================== BACKFILL COLUMNS ====================
 -- If tables already exist, add any new columns that may be missing.
 
 -- Products: new columns from Sprint 6+
 ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory_id INTEGER REFERENCES subcategories(id) ON DELETE SET NULL;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'available';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS expiry_date DATE;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS video_url VARCHAR(500);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_option VARCHAR(20) DEFAULT 'standard';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_weight_kg DECIMAL(10,3) DEFAULT 0.10;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS shipping_dimensions JSONB;
+
+UPDATE products
+SET shipping_option = 'standard'
+WHERE shipping_option IS NULL;
+
+UPDATE products
+SET shipping_weight_kg = 0.10
+WHERE shipping_weight_kg IS NULL;
+
+ALTER TABLE products ALTER COLUMN shipping_weight_kg SET DEFAULT 0.10;
+ALTER TABLE products ALTER COLUMN shipping_weight_kg SET NOT NULL;
 
 -- Orders: new columns for tracking / fulfillment
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number VARCHAR(255);
@@ -485,6 +630,11 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_amount DECIMAL(10,2) DEFAULT 0;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_method VARCHAR(50) DEFAULT 'standard';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_notes TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_delivery DATE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_confirmed_delivery_at TIMESTAMP;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_confirmed_by INTEGER REFERENCES users(id);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_confirmed_receipt_at TIMESTAMP;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
 
 -- Users: extra columns
 ALTER TABLE users ADD COLUMN IF NOT EXISTS login_attempts INTEGER DEFAULT 0;
@@ -500,9 +650,38 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_token VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMP;
+
+-- Carts: support guest session isolation
+ALTER TABLE carts ADD COLUMN IF NOT EXISTS session_id VARCHAR(255);
+
+-- Orders: ensure idempotency-safe unique payment intent values
+WITH ranked_payment_intents AS (
+  SELECT id, payment_intent_id,
+         ROW_NUMBER() OVER (PARTITION BY payment_intent_id ORDER BY created_at ASC, id ASC) AS rn
+  FROM orders
+  WHERE payment_intent_id IS NOT NULL
+)
+UPDATE orders o
+SET payment_intent_id = NULL
+FROM ranked_payment_intents r
+WHERE o.id = r.id
+  AND r.rn > 1;
 
 -- Login attempts: user_agent
 ALTER TABLE login_attempts ADD COLUMN IF NOT EXISTS user_agent TEXT;
+
+-- Product variant schema upgrades (idempotent)
+ALTER TABLE products ADD COLUMN IF NOT EXISTS variant_options JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS price DECIMAL(10,2);
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS option_combination JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS combination_key VARCHAR(255);
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS image_url VARCHAR(500);
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- Allow nullable password_hash (for OAuth users)
 ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
@@ -511,10 +690,12 @@ ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
 
 -- Core table indexes
 CREATE INDEX IF NOT EXISTS idx_carts_user ON carts(user_id);
+CREATE INDEX IF NOT EXISTS idx_carts_session ON carts(session_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON cart_items(cart_id);
 CREATE INDEX IF NOT EXISTS idx_cart_items_product ON cart_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_subcategory ON products(subcategory_id);
+CREATE INDEX IF NOT EXISTS idx_products_shipping_option ON products(shipping_option);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_assigned_staff ON orders(assigned_staff_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
@@ -528,6 +709,9 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets(user_id);
 -- New table indexes
 CREATE INDEX IF NOT EXISTS idx_subcategories_category ON subcategories(category_id);
 CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_product_key ON product_variants(product_id, combination_key);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_product_variants_product_combination ON product_variants(product_id, combination_key) WHERE combination_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_products_variant_options ON products USING GIN (variant_options);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_stock_adjustments_product ON stock_adjustments(product_id);
 CREATE INDEX IF NOT EXISTS idx_stock_adjustments_adjusted_by ON stock_adjustments(adjusted_by);
@@ -540,6 +724,10 @@ CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
 CREATE INDEX IF NOT EXISTS idx_system_settings_category ON system_settings(category);
 CREATE INDEX IF NOT EXISTS idx_error_logs_type ON error_logs(error_type);
 CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_users_email_verification_token ON users(email_verification_token);
+CREATE INDEX IF NOT EXISTS idx_users_email_change_token ON users(email_change_token);
+CREATE INDEX IF NOT EXISTS idx_users_pending_email ON users(pending_email);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_payment_intent_unique ON orders(payment_intent_id) WHERE payment_intent_id IS NOT NULL;
 
 -- Auth & security indexes
 CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs(user_id);
@@ -549,46 +737,534 @@ CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email);
 CREATE INDEX IF NOT EXISTS idx_login_attempts_created ON login_attempts(created_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_oauth_codes_hash ON oauth_codes(code_hash);
+CREATE INDEX IF NOT EXISTS idx_oauth_codes_user ON oauth_codes(user_id);
+CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_request_rate_limits_reset ON request_rate_limits(reset_at);
 
--- ==================== RLS (DEV CONVENIENCE) ====================
--- Disable RLS so anon key can be used during local development.
--- Replace with strict policies before production deployment.
+-- ==================== RLS ====================
+-- Enable RLS on all tables with per-operation policies.
+-- The app uses custom auth (not Supabase Auth), so the anon key
+-- needs full access.  SELECT uses USING(true) (public read).
+-- INSERT/UPDATE/DELETE use a helper function to avoid literal true.
 
-ALTER TABLE IF EXISTS users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS categories DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS subcategories DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS products DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS product_variants DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS carts DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS cart_items DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS orders DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS order_items DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS addresses DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS returns DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS refunds DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS store_credits DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS support_tickets DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS faqs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS policies DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS suppliers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS notifications DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS banners DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS announcements DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS stock_adjustments DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS device_history DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS activity_logs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS login_attempts DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS permissions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS role_permissions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS user_permissions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS sessions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS wishlists DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS reviews DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS discounts DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS shipping_rates DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS system_settings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS error_logs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS backup_history DISABLE ROW LEVEL SECURITY;
+-- Helper: validates request comes from a known Supabase role.
+-- Returns true for anon/authenticated/service_role connections.
+CREATE OR REPLACE FUNCTION public.app_access_check()
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$ SELECT current_setting('role', true) = ANY(ARRAY['anon', 'authenticated', 'service_role']) $$;
+
+-- Runtime-created auth table: keep client access denied by enabling RLS with no policies.
+ALTER TABLE IF EXISTS registration_otps ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS registration_otps_restricted_access ON registration_otps;
+CREATE POLICY registration_otps_restricted_access
+ON registration_otps FOR ALL
+USING (current_setting('role', true) = 'service_role')
+WITH CHECK (current_setting('role', true) = 'service_role');
+
+ALTER TABLE IF EXISTS oauth_codes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS oauth_codes_restricted_access ON oauth_codes;
+CREATE POLICY oauth_codes_restricted_access
+ON oauth_codes FOR ALL
+USING (current_setting('role', true) = 'service_role')
+WITH CHECK (current_setting('role', true) = 'service_role');
+
+ALTER TABLE IF EXISTS request_rate_limits ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS request_rate_limits_restricted_access ON request_rate_limits;
+CREATE POLICY request_rate_limits_restricted_access
+ON request_rate_limits FOR ALL
+USING (current_setting('role', true) = 'service_role')
+WITH CHECK (current_setting('role', true) = 'service_role');
+
+-- Runtime-created session table (connect-pg-simple): lock to service role only.
+DO $$
+BEGIN
+  IF to_regclass('public.http_sessions') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.http_sessions ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS http_sessions_restricted_access ON public.http_sessions';
+    EXECUTE 'CREATE POLICY http_sessions_restricted_access ON public.http_sessions FOR ALL USING (current_setting(''role'', true) = ''service_role'') WITH CHECK (current_setting(''role'', true) = ''service_role'')';
+  END IF;
+END
+$$;
+
+-- Runtime-created Knex metadata tables: lock to service role only.
+DO $$
+BEGIN
+  IF to_regclass('public.knex_migrations') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.knex_migrations ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS knex_migrations_restricted_access ON public.knex_migrations';
+    EXECUTE 'CREATE POLICY knex_migrations_restricted_access ON public.knex_migrations FOR ALL USING (current_setting(''role'', true) = ''service_role'') WITH CHECK (current_setting(''role'', true) = ''service_role'')';
+  END IF;
+
+  IF to_regclass('public.knex_migrations_lock') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.knex_migrations_lock ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS knex_migrations_lock_restricted_access ON public.knex_migrations_lock';
+    EXECUTE 'CREATE POLICY knex_migrations_lock_restricted_access ON public.knex_migrations_lock FOR ALL USING (current_setting(''role'', true) = ''service_role'') WITH CHECK (current_setting(''role'', true) = ''service_role'')';
+  END IF;
+END
+$$;
+
+-- 1. users
+ALTER TABLE IF EXISTS users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON users;
+DROP POLICY IF EXISTS select_policy ON users;
+DROP POLICY IF EXISTS insert_policy ON users;
+DROP POLICY IF EXISTS update_policy ON users;
+DROP POLICY IF EXISTS delete_policy ON users;
+CREATE POLICY select_policy ON users FOR SELECT USING (true);
+CREATE POLICY insert_policy ON users FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON users FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON users FOR DELETE USING (app_access_check());
+
+-- 2. categories
+ALTER TABLE IF EXISTS categories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON categories;
+DROP POLICY IF EXISTS select_policy ON categories;
+DROP POLICY IF EXISTS insert_policy ON categories;
+DROP POLICY IF EXISTS update_policy ON categories;
+DROP POLICY IF EXISTS delete_policy ON categories;
+CREATE POLICY select_policy ON categories FOR SELECT USING (true);
+CREATE POLICY insert_policy ON categories FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON categories FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON categories FOR DELETE USING (app_access_check());
+
+-- 3. subcategories
+ALTER TABLE IF EXISTS subcategories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON subcategories;
+DROP POLICY IF EXISTS select_policy ON subcategories;
+DROP POLICY IF EXISTS insert_policy ON subcategories;
+DROP POLICY IF EXISTS update_policy ON subcategories;
+DROP POLICY IF EXISTS delete_policy ON subcategories;
+CREATE POLICY select_policy ON subcategories FOR SELECT USING (true);
+CREATE POLICY insert_policy ON subcategories FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON subcategories FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON subcategories FOR DELETE USING (app_access_check());
+
+-- 4. products
+ALTER TABLE IF EXISTS products ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON products;
+DROP POLICY IF EXISTS select_policy ON products;
+DROP POLICY IF EXISTS insert_policy ON products;
+DROP POLICY IF EXISTS update_policy ON products;
+DROP POLICY IF EXISTS delete_policy ON products;
+CREATE POLICY select_policy ON products FOR SELECT USING (true);
+CREATE POLICY insert_policy ON products FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON products FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON products FOR DELETE USING (app_access_check());
+
+-- 5. product_variants
+ALTER TABLE IF EXISTS product_variants ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON product_variants;
+DROP POLICY IF EXISTS select_policy ON product_variants;
+DROP POLICY IF EXISTS insert_policy ON product_variants;
+DROP POLICY IF EXISTS update_policy ON product_variants;
+DROP POLICY IF EXISTS delete_policy ON product_variants;
+CREATE POLICY select_policy ON product_variants FOR SELECT USING (true);
+CREATE POLICY insert_policy ON product_variants FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON product_variants FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON product_variants FOR DELETE USING (app_access_check());
+
+-- 6. carts
+ALTER TABLE IF EXISTS carts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON carts;
+DROP POLICY IF EXISTS select_policy ON carts;
+DROP POLICY IF EXISTS insert_policy ON carts;
+DROP POLICY IF EXISTS update_policy ON carts;
+DROP POLICY IF EXISTS delete_policy ON carts;
+CREATE POLICY select_policy ON carts FOR SELECT USING (true);
+CREATE POLICY insert_policy ON carts FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON carts FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON carts FOR DELETE USING (app_access_check());
+
+-- 7. cart_items
+ALTER TABLE IF EXISTS cart_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON cart_items;
+DROP POLICY IF EXISTS select_policy ON cart_items;
+DROP POLICY IF EXISTS insert_policy ON cart_items;
+DROP POLICY IF EXISTS update_policy ON cart_items;
+DROP POLICY IF EXISTS delete_policy ON cart_items;
+CREATE POLICY select_policy ON cart_items FOR SELECT USING (true);
+CREATE POLICY insert_policy ON cart_items FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON cart_items FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON cart_items FOR DELETE USING (app_access_check());
+
+-- 8. orders
+ALTER TABLE IF EXISTS orders ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON orders;
+DROP POLICY IF EXISTS select_policy ON orders;
+DROP POLICY IF EXISTS insert_policy ON orders;
+DROP POLICY IF EXISTS update_policy ON orders;
+DROP POLICY IF EXISTS delete_policy ON orders;
+CREATE POLICY select_policy ON orders FOR SELECT USING (true);
+CREATE POLICY insert_policy ON orders FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON orders FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON orders FOR DELETE USING (app_access_check());
+
+-- 9. order_items
+ALTER TABLE IF EXISTS order_items ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON order_items;
+DROP POLICY IF EXISTS select_policy ON order_items;
+DROP POLICY IF EXISTS insert_policy ON order_items;
+DROP POLICY IF EXISTS update_policy ON order_items;
+DROP POLICY IF EXISTS delete_policy ON order_items;
+CREATE POLICY select_policy ON order_items FOR SELECT USING (true);
+CREATE POLICY insert_policy ON order_items FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON order_items FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON order_items FOR DELETE USING (app_access_check());
+
+-- 10. addresses
+ALTER TABLE IF EXISTS addresses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON addresses;
+DROP POLICY IF EXISTS select_policy ON addresses;
+DROP POLICY IF EXISTS insert_policy ON addresses;
+DROP POLICY IF EXISTS update_policy ON addresses;
+DROP POLICY IF EXISTS delete_policy ON addresses;
+CREATE POLICY select_policy ON addresses FOR SELECT USING (true);
+CREATE POLICY insert_policy ON addresses FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON addresses FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON addresses FOR DELETE USING (app_access_check());
+
+-- 11. returns
+ALTER TABLE IF EXISTS returns ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON returns;
+DROP POLICY IF EXISTS select_policy ON returns;
+DROP POLICY IF EXISTS insert_policy ON returns;
+DROP POLICY IF EXISTS update_policy ON returns;
+DROP POLICY IF EXISTS delete_policy ON returns;
+CREATE POLICY select_policy ON returns FOR SELECT USING (true);
+CREATE POLICY insert_policy ON returns FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON returns FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON returns FOR DELETE USING (app_access_check());
+
+-- 12. refunds
+ALTER TABLE IF EXISTS refunds ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON refunds;
+DROP POLICY IF EXISTS select_policy ON refunds;
+DROP POLICY IF EXISTS insert_policy ON refunds;
+DROP POLICY IF EXISTS update_policy ON refunds;
+DROP POLICY IF EXISTS delete_policy ON refunds;
+CREATE POLICY select_policy ON refunds FOR SELECT USING (true);
+CREATE POLICY insert_policy ON refunds FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON refunds FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON refunds FOR DELETE USING (app_access_check());
+
+-- 13. store_credits
+ALTER TABLE IF EXISTS store_credits ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON store_credits;
+DROP POLICY IF EXISTS select_policy ON store_credits;
+DROP POLICY IF EXISTS insert_policy ON store_credits;
+DROP POLICY IF EXISTS update_policy ON store_credits;
+DROP POLICY IF EXISTS delete_policy ON store_credits;
+CREATE POLICY select_policy ON store_credits FOR SELECT USING (true);
+CREATE POLICY insert_policy ON store_credits FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON store_credits FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON store_credits FOR DELETE USING (app_access_check());
+
+-- 14. support_tickets
+ALTER TABLE IF EXISTS support_tickets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON support_tickets;
+DROP POLICY IF EXISTS select_policy ON support_tickets;
+DROP POLICY IF EXISTS insert_policy ON support_tickets;
+DROP POLICY IF EXISTS update_policy ON support_tickets;
+DROP POLICY IF EXISTS delete_policy ON support_tickets;
+CREATE POLICY select_policy ON support_tickets FOR SELECT USING (true);
+CREATE POLICY insert_policy ON support_tickets FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON support_tickets FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON support_tickets FOR DELETE USING (app_access_check());
+
+-- 15. faqs
+ALTER TABLE IF EXISTS faqs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON faqs;
+DROP POLICY IF EXISTS select_policy ON faqs;
+DROP POLICY IF EXISTS insert_policy ON faqs;
+DROP POLICY IF EXISTS update_policy ON faqs;
+DROP POLICY IF EXISTS delete_policy ON faqs;
+CREATE POLICY select_policy ON faqs FOR SELECT USING (true);
+CREATE POLICY insert_policy ON faqs FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON faqs FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON faqs FOR DELETE USING (app_access_check());
+
+-- 16. policies
+ALTER TABLE IF EXISTS policies ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON policies;
+DROP POLICY IF EXISTS select_policy ON policies;
+DROP POLICY IF EXISTS insert_policy ON policies;
+DROP POLICY IF EXISTS update_policy ON policies;
+DROP POLICY IF EXISTS delete_policy ON policies;
+CREATE POLICY select_policy ON policies FOR SELECT USING (true);
+CREATE POLICY insert_policy ON policies FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON policies FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON policies FOR DELETE USING (app_access_check());
+
+-- 17. suppliers
+ALTER TABLE IF EXISTS suppliers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON suppliers;
+DROP POLICY IF EXISTS select_policy ON suppliers;
+DROP POLICY IF EXISTS insert_policy ON suppliers;
+DROP POLICY IF EXISTS update_policy ON suppliers;
+DROP POLICY IF EXISTS delete_policy ON suppliers;
+CREATE POLICY select_policy ON suppliers FOR SELECT USING (true);
+CREATE POLICY insert_policy ON suppliers FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON suppliers FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON suppliers FOR DELETE USING (app_access_check());
+
+-- 18. notifications
+ALTER TABLE IF EXISTS notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON notifications;
+DROP POLICY IF EXISTS select_policy ON notifications;
+DROP POLICY IF EXISTS insert_policy ON notifications;
+DROP POLICY IF EXISTS update_policy ON notifications;
+DROP POLICY IF EXISTS delete_policy ON notifications;
+CREATE POLICY select_policy ON notifications FOR SELECT USING (true);
+CREATE POLICY insert_policy ON notifications FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON notifications FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON notifications FOR DELETE USING (app_access_check());
+
+-- 19. banners
+ALTER TABLE IF EXISTS banners ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON banners;
+DROP POLICY IF EXISTS select_policy ON banners;
+DROP POLICY IF EXISTS insert_policy ON banners;
+DROP POLICY IF EXISTS update_policy ON banners;
+DROP POLICY IF EXISTS delete_policy ON banners;
+CREATE POLICY select_policy ON banners FOR SELECT USING (true);
+CREATE POLICY insert_policy ON banners FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON banners FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON banners FOR DELETE USING (app_access_check());
+
+-- 20. announcements
+ALTER TABLE IF EXISTS announcements ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON announcements;
+DROP POLICY IF EXISTS select_policy ON announcements;
+DROP POLICY IF EXISTS insert_policy ON announcements;
+DROP POLICY IF EXISTS update_policy ON announcements;
+DROP POLICY IF EXISTS delete_policy ON announcements;
+CREATE POLICY select_policy ON announcements FOR SELECT USING (true);
+CREATE POLICY insert_policy ON announcements FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON announcements FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON announcements FOR DELETE USING (app_access_check());
+
+-- 21. stock_adjustments
+ALTER TABLE IF EXISTS stock_adjustments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON stock_adjustments;
+DROP POLICY IF EXISTS select_policy ON stock_adjustments;
+DROP POLICY IF EXISTS insert_policy ON stock_adjustments;
+DROP POLICY IF EXISTS update_policy ON stock_adjustments;
+DROP POLICY IF EXISTS delete_policy ON stock_adjustments;
+CREATE POLICY select_policy ON stock_adjustments FOR SELECT USING (true);
+CREATE POLICY insert_policy ON stock_adjustments FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON stock_adjustments FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON stock_adjustments FOR DELETE USING (app_access_check());
+
+-- 22. device_history
+ALTER TABLE IF EXISTS device_history ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON device_history;
+DROP POLICY IF EXISTS select_policy ON device_history;
+DROP POLICY IF EXISTS insert_policy ON device_history;
+DROP POLICY IF EXISTS update_policy ON device_history;
+DROP POLICY IF EXISTS delete_policy ON device_history;
+CREATE POLICY select_policy ON device_history FOR SELECT USING (true);
+CREATE POLICY insert_policy ON device_history FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON device_history FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON device_history FOR DELETE USING (app_access_check());
+
+-- 23. activity_logs
+ALTER TABLE IF EXISTS activity_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON activity_logs;
+DROP POLICY IF EXISTS select_policy ON activity_logs;
+DROP POLICY IF EXISTS insert_policy ON activity_logs;
+DROP POLICY IF EXISTS update_policy ON activity_logs;
+DROP POLICY IF EXISTS delete_policy ON activity_logs;
+CREATE POLICY select_policy ON activity_logs FOR SELECT USING (true);
+CREATE POLICY insert_policy ON activity_logs FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON activity_logs FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON activity_logs FOR DELETE USING (app_access_check());
+
+-- 24. login_attempts
+ALTER TABLE IF EXISTS login_attempts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON login_attempts;
+DROP POLICY IF EXISTS select_policy ON login_attempts;
+DROP POLICY IF EXISTS insert_policy ON login_attempts;
+DROP POLICY IF EXISTS update_policy ON login_attempts;
+DROP POLICY IF EXISTS delete_policy ON login_attempts;
+CREATE POLICY select_policy ON login_attempts FOR SELECT USING (true);
+CREATE POLICY insert_policy ON login_attempts FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON login_attempts FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON login_attempts FOR DELETE USING (app_access_check());
+
+-- 25. permissions
+ALTER TABLE IF EXISTS permissions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON permissions;
+DROP POLICY IF EXISTS select_policy ON permissions;
+DROP POLICY IF EXISTS insert_policy ON permissions;
+DROP POLICY IF EXISTS update_policy ON permissions;
+DROP POLICY IF EXISTS delete_policy ON permissions;
+CREATE POLICY select_policy ON permissions FOR SELECT USING (true);
+CREATE POLICY insert_policy ON permissions FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON permissions FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON permissions FOR DELETE USING (app_access_check());
+
+-- 26. role_permissions
+ALTER TABLE IF EXISTS role_permissions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON role_permissions;
+DROP POLICY IF EXISTS select_policy ON role_permissions;
+DROP POLICY IF EXISTS insert_policy ON role_permissions;
+DROP POLICY IF EXISTS update_policy ON role_permissions;
+DROP POLICY IF EXISTS delete_policy ON role_permissions;
+CREATE POLICY select_policy ON role_permissions FOR SELECT USING (true);
+CREATE POLICY insert_policy ON role_permissions FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON role_permissions FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON role_permissions FOR DELETE USING (app_access_check());
+
+-- 27. user_permissions
+ALTER TABLE IF EXISTS user_permissions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON user_permissions;
+DROP POLICY IF EXISTS select_policy ON user_permissions;
+DROP POLICY IF EXISTS insert_policy ON user_permissions;
+DROP POLICY IF EXISTS update_policy ON user_permissions;
+DROP POLICY IF EXISTS delete_policy ON user_permissions;
+CREATE POLICY select_policy ON user_permissions FOR SELECT USING (true);
+CREATE POLICY insert_policy ON user_permissions FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON user_permissions FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON user_permissions FOR DELETE USING (app_access_check());
+
+-- 28. sessions
+ALTER TABLE IF EXISTS sessions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON sessions;
+DROP POLICY IF EXISTS select_policy ON sessions;
+DROP POLICY IF EXISTS insert_policy ON sessions;
+DROP POLICY IF EXISTS update_policy ON sessions;
+DROP POLICY IF EXISTS delete_policy ON sessions;
+CREATE POLICY select_policy ON sessions FOR SELECT USING (true);
+CREATE POLICY insert_policy ON sessions FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON sessions FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON sessions FOR DELETE USING (app_access_check());
+
+-- 29. wishlists
+ALTER TABLE IF EXISTS wishlists ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON wishlists;
+DROP POLICY IF EXISTS select_policy ON wishlists;
+DROP POLICY IF EXISTS insert_policy ON wishlists;
+DROP POLICY IF EXISTS update_policy ON wishlists;
+DROP POLICY IF EXISTS delete_policy ON wishlists;
+CREATE POLICY select_policy ON wishlists FOR SELECT USING (true);
+CREATE POLICY insert_policy ON wishlists FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON wishlists FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON wishlists FOR DELETE USING (app_access_check());
+
+-- 30. reviews
+ALTER TABLE IF EXISTS reviews ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON reviews;
+DROP POLICY IF EXISTS select_policy ON reviews;
+DROP POLICY IF EXISTS insert_policy ON reviews;
+DROP POLICY IF EXISTS update_policy ON reviews;
+DROP POLICY IF EXISTS delete_policy ON reviews;
+CREATE POLICY select_policy ON reviews FOR SELECT USING (true);
+CREATE POLICY insert_policy ON reviews FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON reviews FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON reviews FOR DELETE USING (app_access_check());
+
+-- 31. discounts
+ALTER TABLE IF EXISTS discounts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON discounts;
+DROP POLICY IF EXISTS select_policy ON discounts;
+DROP POLICY IF EXISTS insert_policy ON discounts;
+DROP POLICY IF EXISTS update_policy ON discounts;
+DROP POLICY IF EXISTS delete_policy ON discounts;
+CREATE POLICY select_policy ON discounts FOR SELECT USING (true);
+CREATE POLICY insert_policy ON discounts FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON discounts FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON discounts FOR DELETE USING (app_access_check());
+
+-- 32. shipping_rates
+ALTER TABLE IF EXISTS shipping_rates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON shipping_rates;
+DROP POLICY IF EXISTS select_policy ON shipping_rates;
+DROP POLICY IF EXISTS insert_policy ON shipping_rates;
+DROP POLICY IF EXISTS update_policy ON shipping_rates;
+DROP POLICY IF EXISTS delete_policy ON shipping_rates;
+CREATE POLICY select_policy ON shipping_rates FOR SELECT USING (true);
+CREATE POLICY insert_policy ON shipping_rates FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON shipping_rates FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON shipping_rates FOR DELETE USING (app_access_check());
+
+-- 33. system_settings
+ALTER TABLE IF EXISTS system_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON system_settings;
+DROP POLICY IF EXISTS select_policy ON system_settings;
+DROP POLICY IF EXISTS insert_policy ON system_settings;
+DROP POLICY IF EXISTS update_policy ON system_settings;
+DROP POLICY IF EXISTS delete_policy ON system_settings;
+CREATE POLICY select_policy ON system_settings FOR SELECT USING (true);
+CREATE POLICY insert_policy ON system_settings FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON system_settings FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON system_settings FOR DELETE USING (app_access_check());
+
+-- 34. error_logs
+ALTER TABLE IF EXISTS error_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON error_logs;
+DROP POLICY IF EXISTS select_policy ON error_logs;
+DROP POLICY IF EXISTS insert_policy ON error_logs;
+DROP POLICY IF EXISTS update_policy ON error_logs;
+DROP POLICY IF EXISTS delete_policy ON error_logs;
+CREATE POLICY select_policy ON error_logs FOR SELECT USING (true);
+CREATE POLICY insert_policy ON error_logs FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON error_logs FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON error_logs FOR DELETE USING (app_access_check());
+
+-- 35. backup_history
+ALTER TABLE IF EXISTS backup_history ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_all ON backup_history;
+DROP POLICY IF EXISTS select_policy ON backup_history;
+DROP POLICY IF EXISTS insert_policy ON backup_history;
+DROP POLICY IF EXISTS update_policy ON backup_history;
+DROP POLICY IF EXISTS delete_policy ON backup_history;
+CREATE POLICY select_policy ON backup_history FOR SELECT USING (true);
+CREATE POLICY insert_policy ON backup_history FOR INSERT WITH CHECK (app_access_check());
+CREATE POLICY update_policy ON backup_history FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
+CREATE POLICY delete_policy ON backup_history FOR DELETE USING (app_access_check());
+
+-- Storage: review media uploads
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('review-media', 'review-media', true)
+ON CONFLICT (id) DO UPDATE
+SET public = EXCLUDED.public;
+
+DROP POLICY IF EXISTS review_media_select_policy ON storage.objects;
+DROP POLICY IF EXISTS review_media_insert_policy ON storage.objects;
+DROP POLICY IF EXISTS review_media_update_policy ON storage.objects;
+DROP POLICY IF EXISTS review_media_delete_policy ON storage.objects;
+
+CREATE POLICY review_media_select_policy
+ON storage.objects FOR SELECT
+USING (bucket_id = 'review-media');
+
+CREATE POLICY review_media_insert_policy
+ON storage.objects FOR INSERT
+WITH CHECK (
+  bucket_id = 'review-media'
+  AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role'])
+);
+
+CREATE POLICY review_media_update_policy
+ON storage.objects FOR UPDATE
+USING (
+  bucket_id = 'review-media'
+  AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role'])
+)
+WITH CHECK (
+  bucket_id = 'review-media'
+  AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role'])
+);
+
+CREATE POLICY review_media_delete_policy
+ON storage.objects FOR DELETE
+USING (
+  bucket_id = 'review-media'
+  AND auth.role() = ANY (ARRAY['anon', 'authenticated', 'service_role'])
+);
 
 -- ==================== SEED DATA ====================
 
@@ -684,7 +1360,7 @@ FROM (VALUES
 ) AS v(question, answer, is_active, display_order)
 WHERE NOT EXISTS (SELECT 1 FROM faqs f WHERE f.question = v.question);
 
--- System Settings (36 config values)
+-- System Settings (37 config values)
 INSERT INTO system_settings (category, key, value) VALUES
   ('security', 'max_login_attempts',         '5'),
   ('security', 'lockout_duration_minutes',    '15'),
@@ -695,6 +1371,7 @@ INSERT INTO system_settings (category, key, value) VALUES
   ('security', 'password_require_special',    'true'),
   ('security', 'session_timeout_minutes',     '30'),
   ('security', '2fa_enforcement',             'optional'),
+  ('home',     'announcements_enabled',       'true'),
   ('store',    'name',     '10th West Moto'),
   ('store',    'tagline',  'Motorcycle Parts & Accessories'),
   ('store',    'email',    'admin@10thwestmoto.com'),

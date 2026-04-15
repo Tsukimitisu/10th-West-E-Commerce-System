@@ -1,12 +1,25 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Package, ArrowLeft, Truck, MapPin, CreditCard, Clock, CheckCircle2, XCircle, Download, RotateCcw, Calendar, Mail, DollarSign, Printer, AlertTriangle } from 'lucide-react';
-import { getOrderById, cancelOrder } from '../../services/api';
+import { getOrderById, cancelOrder, confirmOrderReceipt } from '../../services/api';
 
-const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Completed'];
-const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, completed: 4, delivered: 4, cancelled: -1 };
+const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Delivered', 'Completed'];
+const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, delivered: 4, completed: 5, cancelled: -1 };
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const ORDER_VAT_RATE = 0.12;
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const roundCurrency = (value) => {
+  const parsed = toFiniteNumber(value, 0);
+  return Math.round(parsed * 100) / 100;
+};
+
+const formatCurrency = (value) => `₱${roundCurrency(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -15,6 +28,11 @@ const OrderDetail = () => {
   const [cancelling, setCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  const [cancelReasonSelect, setCancelReasonSelect] = useState('');
+  const [cancelReasonOther, setCancelReasonOther] = useState('');
+  const [cancelReasonError, setCancelReasonError] = useState('');
+  const [confirmingReceipt, setConfirmingReceipt] = useState(false);
+  const [receiptError, setReceiptError] = useState('');
 
   const loadOrder = async () => {
     try { const data = await getOrderById(Number(id)); setOrder(data); } catch {}
@@ -26,16 +44,40 @@ const OrderDetail = () => {
   const canCancel = order && (order.status === 'pending' || order.status === 'paid');
 
   const handleCancel = async () => {
+    const reason = cancelReasonSelect === 'Other' ? cancelReasonOther.trim() : cancelReasonSelect;
+    if (!reason) {
+      setCancelReasonError('Please provide a reason for cancellation.');
+      return;
+    }
+    setCancelReasonError('');
     setCancelling(true);
     try {
-      await cancelOrder(order.id);
+      await cancelOrder(order.id, reason);
       await loadOrder();
       setShowCancelConfirm(false);
+      setCancelReasonSelect('');
+      setCancelReasonOther('');
     } catch (err) {
       setCancelError('Failed to cancel order: ' + (err.message || 'Unknown error'));
       setTimeout(() => setCancelError(''), 5000);
     }
     setCancelling(false);
+  };
+
+  const handleConfirmReceipt = async () => {
+    if (!order) return;
+    setConfirmingReceipt(true);
+    setReceiptError('');
+
+    try {
+      await confirmOrderReceipt(order.id);
+      await loadOrder();
+    } catch (err) {
+      setReceiptError(err.message || 'Failed to confirm receipt.');
+      setTimeout(() => setReceiptError(''), 5000);
+    }
+
+    setConfirmingReceipt(false);
   };
 
   if (loading) return (
@@ -51,33 +93,67 @@ const OrderDetail = () => {
   if (!order) return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center">
       <Package size={48} className="mx-auto text-gray-300 mb-3" />
-      <h2 className="font-display font-semibold text-xl text-gray-900 mb-2">Order not found</h2>
-      <Link to="/orders" className="text-orange-500 hover:text-orange-600 text-sm font-medium">Back to orders</Link>
+      <h2 className="font-display font-semibold text-xl text-white mb-2">Order not found</h2>
+      <Link to="/orders" className="text-red-500 hover:text-orange-600 text-sm font-medium">Back to orders</Link>
     </div>
   );
 
   const step = stepForStatus[order.status] ?? 0;
   const date = new Date(order.created_at || order.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   const items = order.items || [];
+  const itemsSubtotal = roundCurrency(items.reduce((sum, item) => {
+    const unitPrice = roundCurrency(item.price ?? item.product?.price ?? 0);
+    const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+    return sum + (unitPrice * quantity);
+  }, 0));
+  const subtotalAmount = roundCurrency(order.subtotal ?? itemsSubtotal);
+  const discountAmount = roundCurrency(order.discount ?? order.discount_amount ?? 0);
+  const shippingAmount = roundCurrency(order.shipping ?? order.shipping_fee ?? 0);
+  const fallbackVat = roundCurrency(Math.max(0, subtotalAmount - discountAmount + shippingAmount) * ORDER_VAT_RATE);
+  const vatAmount = roundCurrency(order.tax_amount ?? order.vat_amount ?? fallbackVat);
+  const fallbackTotal = roundCurrency(Math.max(0, subtotalAmount - discountAmount + shippingAmount + vatAmount));
+  const totalAmount = roundCurrency(order.total ?? order.total_amount ?? fallbackTotal);
+  const returnRequestStatus = order.return_request?.status || '';
+  const showReturnSection = ['completed', 'delivered'].includes(order.status) || Boolean(returnRequestStatus);
+  const returnDeadline = order.return_deadline_at
+    ? new Date(order.return_deadline_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+    : null;
+  const shippingSnapshot = order.shipping_address_snapshot || {};
+  const shippingAddressLines = [
+    shippingSnapshot.recipient_name,
+    shippingSnapshot.street,
+    shippingSnapshot.barangay,
+    [shippingSnapshot.city, shippingSnapshot.state, shippingSnapshot.postal_code].filter(Boolean).join(', '),
+    shippingSnapshot.country,
+  ].map((line) => (typeof line === 'string' ? line.trim() : line)).filter(Boolean);
+  const fallbackAddressLines = typeof order.shipping_address === 'string'
+    ? order.shipping_address.split(', ').map((part) => part.trim()).filter(Boolean)
+    : [];
+  const addressLines = shippingAddressLines.length > 0 ? shippingAddressLines : fallbackAddressLines;
+  const shippingPhone = shippingSnapshot.phone || order.shipping_phone || order.address?.phone || '';
+  const resolveOrderItemProductId = (item) => {
+    const candidate = Number(item?.productReferenceId ?? item?.productId ?? item?.product_id ?? item?.product?.id);
+    return Number.isInteger(candidate) && candidate > 0 ? candidate : null;
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       {/* Back */}
-      <Link to="/orders" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-orange-500 mb-6 transition-colors">
+      <Link to="/orders" className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-red-500 mb-6 transition-colors">
         <ArrowLeft size={16} /> Back to Orders
       </Link>
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="font-display font-bold text-xl text-gray-900">Order #{order.order_number || order.id}</h1>
-          <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5"><Calendar size={14} /> Placed on {date}</p>
+          <h1 className="font-display font-bold text-xl text-white">Order #{order.order_number || order.id}</h1>
+          <p className="text-sm text-gray-400 flex items-center gap-1 mt-0.5"><Calendar size={14} /> Placed on {date}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {/* View Invoice */}
           <button
             onClick={() => window.open(`${API_URL}/orders/${order.id}/invoice`, '_blank')}
-            className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 transition-colors"
+            className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 flex items-center gap-1.5 transition-colors"
           >
             <Printer size={14} /> View Invoice
           </button>
@@ -89,27 +165,106 @@ const OrderDetail = () => {
             </button>
           )}
           {order.status === 'delivered' && (
-            <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 transition-colors">
+            <button
+              onClick={handleConfirmReceipt}
+              disabled={confirmingReceipt}
+              className="px-4 py-2 text-sm bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-1.5 transition-colors"
+            >
+              <CheckCircle2 size={14} />
+              {confirmingReceipt ? 'Confirming...' : 'Confirm Receipt'}
+            </button>
+          )}
+          {order.return_eligible && (
+            <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 flex items-center gap-1.5 transition-colors">
               <RotateCcw size={14} /> Request Return
             </Link>
           )}
         </div>
       </div>
 
+      {receiptError && (
+        <div className="mb-6 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+          <AlertTriangle size={14} /> {receiptError}
+        </div>
+      )}
+
+      {order.status === 'delivered' && (
+        <div className="bg-red-500/10 border border-red-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <Truck size={18} className="text-orange-600" />
+            <p className="text-sm text-orange-700 font-medium">
+              Rider confirmed delivery. Please confirm receipt to complete this order.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showReturnSection && (
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-white">Return status</p>
+              <p className="text-sm text-gray-400 mt-1">
+                {returnRequestStatus
+                  ? `Current request: ${returnRequestStatus}.`
+                  : order.return_eligibility_message}
+              </p>
+              {order.return_eligible && returnDeadline && (
+                <p className="text-xs text-gray-400 mt-1">Request a return by {returnDeadline}.</p>
+              )}
+            </div>
+            {returnRequestStatus ? (
+              <Link to="/my-returns" className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 transition-colors">
+                View My Returns
+              </Link>
+            ) : order.return_eligible ? (
+              <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm bg-red-500/100 hover:bg-red-600 text-white rounded-lg transition-colors">
+                Request Return
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {/* Cancel Confirmation Modal */}
       {showCancelConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
+          <div className="bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
                 <AlertTriangle size={20} className="text-red-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900">Cancel Order</h3>
-                <p className="text-sm text-gray-500">This action cannot be undone.</p>
+                <h3 className="font-semibold text-white">Cancel Order</h3>
+                <p className="text-sm text-gray-400">This action cannot be undone.</p>
               </div>
             </div>
-            <p className="text-sm text-gray-600 mb-5">Are you sure you want to cancel Order #{order.order_number || order.id}?</p>
+            <p className="text-sm text-gray-600 mb-4">Are you sure you want to cancel Order #{order.order_number || order.id}?</p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reason for cancellation <span className="text-red-500">*</span></label>
+              <select
+                value={cancelReasonSelect}
+                onChange={e => { setCancelReasonSelect(e.target.value); setCancelReasonError(''); }}
+                className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 mb-2"
+              >
+                <option value="">Select a reason...</option>
+                <option value="Changed my mind">Changed my mind</option>
+                <option value="Found a better price">Found a better price</option>
+                <option value="Ordered by mistake">Ordered by mistake</option>
+                <option value="Item no longer needed">Item no longer needed</option>
+                <option value="Other">Other</option>
+              </select>
+              {cancelReasonSelect === 'Other' && (
+                <textarea
+                  placeholder="Please describe your reason..."
+                  value={cancelReasonOther}
+                  onChange={e => { setCancelReasonOther(e.target.value); setCancelReasonError(''); }}
+                  className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none"
+                  rows={2}
+                />
+              )}
+              {cancelReasonError && <p className="text-xs text-red-500 mt-1">{cancelReasonError}</p>}
+            </div>
             {cancelError && (
               <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
                 <AlertTriangle size={14} /> {cancelError}
@@ -128,81 +283,114 @@ const OrderDetail = () => {
 
       {/* Progress tracker */}
       {order.status !== 'cancelled' && (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 mb-6">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
           <div className="flex items-center justify-between relative">
             <div className="absolute left-0 right-0 top-4 h-0.5 bg-gray-200 z-0" />
-            <div className="absolute left-0 top-4 h-0.5 bg-orange-500 z-0 transition-all duration-500" style={{ width: `${(step / 4) * 100}%` }} />
+            <div
+              className="absolute left-0 top-4 h-0.5 bg-red-500/100 z-0 transition-all duration-500"
+              style={{ width: `${(step / (stepLabels.length - 1)) * 100}%` }}
+            />
             {stepLabels.map((label, i) => (
               <div key={label} className="relative z-10 flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${i <= step ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${i <= step ? 'bg-red-500/100 text-white' : 'bg-gray-200 text-gray-400'}`}>
                   {i < step ? <CheckCircle2 size={16} /> : i + 1}
                 </div>
-                <span className={`text-xs mt-2 ${i <= step ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>{label}</span>
+                <span className={`text-xs mt-2 ${i <= step ? 'text-white font-medium' : 'text-gray-400'}`}>{label}</span>
               </div>
             ))}
           </div>
         </div>
       )}
       {order.status === 'cancelled' && (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex items-center gap-3">
-          <XCircle size={20} className="text-orange-500" />
-          <p className="text-sm text-orange-600 font-medium">This order has been cancelled.</p>
+        <div className="bg-red-500/10 border border-red-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <XCircle size={20} className="text-red-500" />
+            <p className="text-sm text-orange-600 font-medium">This order has been cancelled.</p>
+          </div>
+          {order.cancellation_reason && (
+            <p className="text-sm text-orange-600 mt-2 ml-8">Reason: {order.cancellation_reason}</p>
+          )}
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Items */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900 text-sm">Items ({items.length})</h3>
+        <div className="lg:col-span-2 bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+          <div className="p-4 border-b border-gray-700">
+            <h3 className="font-semibold text-white text-sm">Items ({items.length})</h3>
           </div>
           <div className="divide-y divide-gray-100">
-            {items.map((item, i) => (
-              <div key={i} className="flex items-center gap-4 p-4">
-                <div className="w-16 h-16 bg-gray-50 rounded-lg border border-gray-100 overflow-hidden flex-shrink-0">
-                  {item.image_url ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" /> :
-                    <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
+            {items.map((item, i) => {
+              const productId = resolveOrderItemProductId(item);
+              const itemTitle = item.name || item.product_name || item.product?.name;
+              const itemImage = item.image_url || item.product?.image;
+              const lineTotal = roundCurrency(roundCurrency(item.price ?? item.product?.price ?? 0) * Math.max(0, toFiniteNumber(item.quantity, 0)));
+
+              return (
+                <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-4 p-4">
+                  {productId ? (
+                    <Link to={`/products/${productId}`} className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-red-500/40 transition-all" title="View product">
+                      {itemImage ? <img src={itemImage} alt={itemTitle} className="w-full h-full object-cover" /> :
+                        <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
+                    </Link>
+                  ) : (
+                    <div className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0">
+                      {itemImage ? <img src={itemImage} alt={itemTitle} className="w-full h-full object-cover" /> :
+                        <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    {productId ? (
+                      <Link to={`/products/${productId}`} className="text-sm font-medium text-white truncate hover:text-red-500 transition-colors inline-block" title="View product">
+                        {itemTitle}
+                      </Link>
+                    ) : (
+                      <p className="text-sm font-medium text-white truncate">{itemTitle}</p>
+                    )}
+                    {(item.sku || item.product?.sku) && <p className="text-xs text-gray-400">SKU: {item.sku || item.product?.sku}</p>}
+                    <p className="text-xs text-gray-400">Qty: {Math.max(0, toFiniteNumber(item.quantity, 0))}</p>
+                  </div>
+                  <p className="text-sm font-semibold text-white">{formatCurrency(lineTotal)}</p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{item.name || item.product_name}</p>
-                  {item.sku && <p className="text-xs text-gray-400">SKU: {item.sku}</p>}
-                  <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
-                </div>
-                <p className="text-sm font-semibold text-gray-900">₱{(Number(item.price) * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* Summary sidebar */}
         <div className="space-y-4">
           {/* Order Summary */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <h3 className="font-semibold text-gray-900 text-sm mb-3">Order Summary</h3>
+          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+            <h3 className="font-semibold text-white text-sm mb-3">Order Summary</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>₱{Number(order.subtotal || order.total || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-              {Number(order.discount || 0) > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-₱{Number(order.discount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-              <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{Number(order.shipping || 0) === 0 ? 'Free' : `₱${Number(order.shipping).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}</span></div>
-              <div className="border-t border-gray-100 pt-2 flex justify-between font-semibold text-gray-900">
-                <span>Total</span><span>₱{Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotalAmount)}</span></div>
+              {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(discountAmount)}</span></div>}
+              <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
+              <div className="flex justify-between text-gray-600"><span>VAT (12%)</span><span>{formatCurrency(vatAmount)}</span></div>
+              <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold text-white">
+                <span>Total</span><span>{formatCurrency(totalAmount)}</span>
               </div>
             </div>
           </div>
 
           {/* Shipping Address */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <h3 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5"><MapPin size={14} /> Shipping Address</h3>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              {order.shipping_name || order.address?.name || 'â€”'}<br />
-              {order.shipping_address || order.address?.street || ''}<br />
-              {order.shipping_city || order.address?.city || ''}{order.shipping_state ? `, ${order.shipping_state}` : ''} {order.shipping_zip || order.address?.zip || ''}<br />
-              {order.shipping_phone || order.address?.phone || ''}
-            </p>
+          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+            <h3 className="font-semibold text-white text-sm mb-2 flex items-center gap-1.5"><MapPin size={14} /> Shipping Address</h3>
+            <div className="text-sm text-gray-600 leading-relaxed">
+              {addressLines.length > 0 ? (
+                addressLines.map((line, index) => (
+                  <div key={index}>{line}</div>
+                ))
+              ) : (
+                <div className="text-gray-500">No address provided</div>
+              )}
+              {shippingPhone && <div>{shippingPhone}</div>}
+            </div>
           </div>
 
           {/* Payment */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <h3 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5"><CreditCard size={14} /> Payment</h3>
+          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+            <h3 className="font-semibold text-white text-sm mb-2 flex items-center gap-1.5"><CreditCard size={14} /> Payment</h3>
             <p className="text-sm text-gray-600 capitalize">{order.payment_method || 'Card'}</p>
             {order.payment_status && <p className="text-xs text-gray-400 capitalize mt-0.5">Status: {order.payment_status}</p>}
           </div>
@@ -213,3 +401,5 @@ const OrderDetail = () => {
 };
 
 export default OrderDetail;
+
+

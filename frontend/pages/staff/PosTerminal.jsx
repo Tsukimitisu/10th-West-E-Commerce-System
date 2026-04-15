@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getProducts, getCategories, createOrder, getOrderById } from '../../services/api';
-import { Loader2, Search, Trash2, Plus, Minus, LogOut, RotateCcw, Monitor, ShoppingBag, Bike, Box, ArrowLeftCircle, Tag, Check, Clock, DollarSign, Receipt, AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
+import { getProducts, getCategories, createOrder, getOrderById, logPosActivity } from '../../services/api';
+import { Loader2, Search, Trash2, Plus, Minus, LogOut, RotateCcw, Monitor, ShoppingBag, Bike, Box, ArrowLeftCircle, Tag, Check, Clock, DollarSign, Receipt, AlertTriangle, CheckCircle, Info, X, Moon, Sun } from 'lucide-react';
 import PaymentModal from './PaymentModal';
 import ReceiptModal from './ReceiptModal';
 import { useSocketEvent } from '../../context/SocketContext';
@@ -35,6 +35,7 @@ const PosTerminal = () => {
 
     // Logout Confirmation
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+    const [themeMode, setThemeMode] = useState('light');
 
     // Toast notification
     const [posToast, setPosToast] = useState(null);
@@ -83,13 +84,14 @@ const PosTerminal = () => {
     // --- Cart Logic ---
 
     const addToCart = (product) => {
-        if (product.stock_quantity === 0) return;
+        const stock = Number(product.stock_quantity ?? 0);
+        if (stock <= 0) return;
 
         setCartItems(current => {
             const existing = current.find(item => item.productId === product.id);
 
             // Check stock before adding
-            if (existing && existing.quantity >= product.stock_quantity) {
+            if (existing && existing.quantity >= stock) {
                 showToast('error', 'Insufficient Stock!');
                 return current;
             }
@@ -111,12 +113,13 @@ const PosTerminal = () => {
     const updateQuantity = (productId, delta) => {
         const product = products.find(p => p.id === productId);
         if (!product) return;
+        const stock = Number(product.stock_quantity ?? 0);
 
         setCartItems(current =>
             current.map(item => {
                 if (item.productId === productId) {
                     const newQty = item.quantity + delta;
-                    if (newQty > product.stock_quantity) {
+                    if (newQty > stock) {
                         return item; // Max stock reached
                     }
                     const validQty = Math.max(1, newQty);
@@ -158,6 +161,8 @@ const PosTerminal = () => {
     };
 
     const processReturn = () => {
+        const returnedCount = Object.values(returnItems).reduce((sum, qty) => sum + qty, 0);
+        logPosActivity('pos.return', 'order', returnOrder?.id, { items_returned: returnedCount, cashier: user?.name });
         showToast('success', 'Return Processed & Inventory Updated!');
         setReturnMode(false);
         setReturnOrder(null);
@@ -170,11 +175,16 @@ const PosTerminal = () => {
 
     const filteredProducts = products.filter(product => {
         const term = searchTerm.toLowerCase();
-        const matchesSearch = product.name.toLowerCase().includes(term) ||
-            product.partNumber.toLowerCase().includes(term) ||
-            (product.barcode && product.barcode.toLowerCase().includes(term)) ||
-            (product.sku && product.sku.toLowerCase().includes(term));
-        const matchesCategory = selectedCategory === 'all' || product.category_id === selectedCategory;
+        const productName = String(product.name || '').toLowerCase();
+        const partNumber = String(product.partNumber || '').toLowerCase();
+        const barcode = String(product.barcode || '').toLowerCase();
+        const sku = String(product.sku || '').toLowerCase();
+
+        const matchesSearch = productName.includes(term) ||
+            partNumber.includes(term) ||
+            barcode.includes(term) ||
+            sku.includes(term);
+        const matchesCategory = selectedCategory === 'all' || String(product.category_id) === String(selectedCategory);
         return matchesSearch && matchesCategory;
     });
 
@@ -213,9 +223,16 @@ const PosTerminal = () => {
         }
     }
 
-    const taxRate = 0.12; // 12% VAT
-    const taxAmount = (subtotal - discountAmount) * taxRate;
-    const total = Math.max(0, subtotal - discountAmount + taxAmount);
+    const taxRate = 0.12; // 12% VAT (already included in price)
+    const total = Math.max(0, subtotal - discountAmount);
+    const taxAmount = (total / 1.12) * 0.12; // VAT portion already included
+    const isDarkTheme = themeMode === 'dark';
+    const cycleTheme = () => setThemeMode(prev => (prev === 'light' ? 'dark' : 'light'));
+    const formatCurrency = (value) =>
+        `\u20B1${Number(value || 0).toLocaleString('en-PH', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })}`;
 
     // --- Payment & Order ---
 
@@ -238,6 +255,8 @@ const PosTerminal = () => {
             const newOrder = await createOrder(orderData);
             setLastOrder(newOrder);
             setShowPayment(false);
+            // Log POS sale activity
+            logPosActivity('pos.sale', 'order', newOrder.id, { total, items: cartItems.length, payment_method: method, cashier: user?.name });
             // Update shift summary
             setShiftTransactionCount(prev => prev + 1);
             setShiftTotalSales(prev => prev + total);
@@ -275,24 +294,24 @@ const PosTerminal = () => {
         navigate('/admin');
     };
 
-    if (loading && products.length === 0) return <div className="h-screen flex items-center justify-center bg-slate-100"><Loader2 className="animate-spin h-10 w-10 text-orange-600" /></div>;
+    if (loading && products.length === 0) return <div className="h-screen flex items-center justify-center bg-slate-100"><Loader2 className="animate-spin h-10 w-10 text-red-600" /></div>;
 
     return (
-        <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 via-white to-gray-100 overflow-hidden">
+        <div className={`h-screen flex flex-col overflow-hidden ${isDarkTheme ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-black' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
             {/* Header */}
-            <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 h-16 flex items-center justify-between px-6 shadow-sm z-30 sticky top-0">
+            <header className={`${isDarkTheme ? 'bg-slate-900/95 border-slate-700' : 'bg-white/95 border-slate-200'} backdrop-blur-md border-b h-16 flex items-center justify-between px-6 shadow-sm z-30 sticky top-0`}>
                 <div className="flex items-center gap-3">
-                    <div className="bg-orange-500 p-2 rounded-lg shadow-lg shadow-orange-200">
+                    <div className="bg-red-500/100 p-2 rounded-lg shadow-lg shadow-red-200">
                         <Bike className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-black tracking-tighter text-gray-900 leading-none">10TH WEST</h1>
-                        <p className="text-[10px] text-orange-500 font-bold tracking-[0.2em] leading-none mt-1">POS TERMINAL</p>
+                        <h1 className={`text-xl font-black tracking-tighter leading-none ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>10TH WEST</h1>
+                        <p className="text-[10px] text-red-500 font-bold tracking-[0.2em] leading-none mt-1">POS TERMINAL</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-6">
                     {!returnMode ? (
-                        <button onClick={() => setReturnMode(true)} className="bg-gray-100 px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-orange-50 hover:text-orange-500 transition-all">
+                        <button onClick={() => setReturnMode(true)} className={`${isDarkTheme ? 'bg-slate-800 text-slate-300 hover:bg-red-500/10' : 'bg-gray-100 text-gray-600 hover:bg-red-500/10'} px-4 py-2 rounded-xl text-xs font-bold hover:text-red-500 transition-all`}>
                             Process Return
                         </button>
                     ) : (
@@ -300,39 +319,47 @@ const PosTerminal = () => {
                             <ArrowLeftCircle className="w-3 h-3 mr-1" /> Back to Sale
                         </button>
                     )}
-                    <button onClick={fetchData} className="text-xs text-gray-400 hover:text-gray-900 font-medium flex items-center gap-1.5 transition-colors">
+                    <button onClick={fetchData} className={`text-xs font-medium flex items-center gap-1.5 transition-colors ${isDarkTheme ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}>
                         <RotateCcw size={14} className={loading ? 'animate-spin' : ''} /> Sync Stock
                     </button>
-                    <div className="h-8 w-px bg-gray-200"></div>
+                    <button
+                        onClick={cycleTheme}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-colors ${isDarkTheme ? 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'}`}
+                        title="Toggle POS theme"
+                    >
+                        {isDarkTheme ? <Sun size={14} /> : <Moon size={14} />}
+                        {isDarkTheme ? 'Dark' : 'Light'}
+                    </button>
+                    <div className={`h-8 w-px ${isDarkTheme ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
                     <div className="text-right">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cashier</p>
-                        <p className="text-sm font-bold text-gray-900">{user?.name}</p>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${isDarkTheme ? 'text-slate-400' : 'text-gray-400'}`}>Cashier</p>
+                        <p className={`text-sm font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{user?.name}</p>
                     </div>
-                    <button onClick={handleLogout} className="bg-white p-2.5 rounded-xl hover:bg-orange-50 text-gray-400 hover:text-orange-500 border border-gray-100 hover:border-orange-100 shadow-sm transition-all group">
+                    <button onClick={handleLogout} className={`${isDarkTheme ? 'bg-slate-800 text-slate-300 border-slate-700 hover:border-red-400/40' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-red-100'} p-2.5 rounded-xl hover:bg-red-500/10 hover:text-red-500 shadow-sm transition-all group`}>
                         <LogOut className="h-5 w-5 group-hover:translate-x-0.5 transition-transform" />
                     </button>
                 </div>
             </header>
 
             {/* Shift Summary Bar */}
-            <div className="bg-gradient-to-r from-orange-50 via-orange-50/80 to-amber-50 border-b border-orange-100 px-6 py-2 flex items-center justify-between text-sm z-20">
+            <div className={`${isDarkTheme ? 'bg-gradient-to-r from-slate-900 via-slate-900 to-slate-900 border-slate-700' : 'bg-gradient-to-r from-red-50 via-red-50/80 to-red-50 border-red-100'} border-b px-6 py-2 flex items-center justify-between text-sm z-20`}>
                 <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2 text-orange-700">
-                        <Clock className="w-4 h-4 text-orange-500" />
-                        <span className="font-bold text-xs uppercase tracking-wider text-orange-500">Shift Started:</span>
-                        <span className="font-bold text-orange-900">{shiftStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <div className="flex items-center gap-2 text-red-700">
+                        <Clock className="w-4 h-4 text-red-500" />
+                        <span className={`font-bold text-xs uppercase tracking-wider ${isDarkTheme ? 'text-red-400' : 'text-red-500'}`}>Shift Started:</span>
+                        <span className={`font-bold ${isDarkTheme ? 'text-red-200' : 'text-red-900'}`}>{shiftStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
-                    <div className="h-4 w-px bg-orange-200"></div>
+                    <div className={`h-4 w-px ${isDarkTheme ? 'bg-slate-700' : 'bg-red-200'}`}></div>
                     <div className="flex items-center gap-2">
-                        <Receipt className="w-4 h-4 text-orange-500" />
-                        <span className="font-bold text-xs uppercase tracking-wider text-orange-500">Transactions:</span>
-                        <span className="font-black text-orange-900 bg-orange-100 px-2 py-0.5 rounded-md text-xs">{shiftTransactionCount}</span>
+                        <Receipt className="w-4 h-4 text-red-500" />
+                        <span className={`font-bold text-xs uppercase tracking-wider ${isDarkTheme ? 'text-red-400' : 'text-red-500'}`}>Transactions:</span>
+                        <span className={`font-black px-2 py-0.5 rounded-md text-xs ${isDarkTheme ? 'text-red-200 bg-red-500/20' : 'text-red-900 bg-red-500/20'}`}>{shiftTransactionCount}</span>
                     </div>
-                    <div className="h-4 w-px bg-orange-200"></div>
+                    <div className={`h-4 w-px ${isDarkTheme ? 'bg-slate-700' : 'bg-red-200'}`}></div>
                     <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-orange-500" />
-                        <span className="font-bold text-xs uppercase tracking-wider text-orange-500">Shift Sales:</span>
-                        <span className="font-black text-orange-900 bg-orange-100 px-2.5 py-0.5 rounded-md text-xs">₱{shiftTotalSales.toFixed(2)}</span>
+                        <DollarSign className="w-4 h-4 text-red-500" />
+                        <span className={`font-bold text-xs uppercase tracking-wider ${isDarkTheme ? 'text-red-400' : 'text-red-500'}`}>Shift Sales:</span>
+                        <span className={`font-black px-2.5 py-0.5 rounded-md text-xs ${isDarkTheme ? 'text-red-200 bg-red-500/20' : 'text-red-900 bg-red-500/20'}`}>{formatCurrency(shiftTotalSales)}</span>
                     </div>
                 </div>
             </div>
@@ -342,12 +369,12 @@ const PosTerminal = () => {
                 <div className="flex-1 flex flex-col items-center justify-center p-10">
                     <div className="bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-white/50 max-w-2xl w-full">
                         <div className="flex items-center gap-4 mb-8">
-                            <div className="bg-orange-50 p-3 rounded-2xl">
-                                <RotateCcw className="w-8 h-8 text-orange-500" />
+                            <div className="bg-red-500/10 p-3 rounded-2xl">
+                                <RotateCcw className="w-8 h-8 text-red-500" />
                             </div>
                             <div>
-                                <h2 className="text-3xl font-black text-gray-900 tracking-tight">Return & Refund</h2>
-                                <p className="text-gray-500 font-medium">Process order returns or exchanges</p>
+                                <h2 className="text-3xl font-black text-white tracking-tight">Return & Refund</h2>
+                                <p className="text-gray-400 font-medium">Process order returns or exchanges</p>
                             </div>
                         </div>
 
@@ -357,7 +384,7 @@ const PosTerminal = () => {
                                 <input
                                     type="text"
                                     placeholder="Scan or Enter Order ID"
-                                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-lg font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all shadow-inner"
+                                    className="w-full pl-12 pr-4 py-4 bg-gray-900 border border-gray-700 rounded-2xl text-lg font-bold focus:ring-4 focus:ring-red-500/10 focus:border-red-500 outline-none transition-all shadow-inner"
                                     value={returnOrderId}
                                     onChange={(e) => setReturnOrderId(e.target.value)}
                                     autoFocus
@@ -367,16 +394,16 @@ const PosTerminal = () => {
                         </form>
 
                         {returnOrder && (
-                            <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <div className="flex justify-between mb-6 pb-6 border-b border-gray-100">
+                            <div className="bg-gray-50/50 border border-gray-700 rounded-2xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div className="flex justify-between mb-6 pb-6 border-b border-gray-700">
                                     <div>
                                         <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Receipt ID</p>
-                                        <p className="font-black text-gray-900 text-lg">#{returnOrder.id}</p>
-                                        <p className="text-xs text-gray-500 font-medium mt-1">{new Date(returnOrder.created_at).toLocaleString()}</p>
+                                        <p className="font-black text-white text-lg">#{returnOrder.id}</p>
+                                        <p className="text-xs text-gray-400 font-medium mt-1">{new Date(returnOrder.created_at).toLocaleString()}</p>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Total Paid</p>
-                                        <p className="font-black text-orange-500 text-2xl">₱{returnOrder.total_amount.toFixed(2)}</p>
+                                        <p className="font-black text-red-500 text-2xl">{formatCurrency(returnOrder.total_amount)}</p>
                                         <div className="flex justify-end mt-1">
                                             <p className="text-[10px] font-black uppercase bg-green-100 text-green-600 px-2 py-0.5 rounded-full ring-1 ring-green-200 ring-inset">{returnOrder.status}</p>
                                         </div>
@@ -384,21 +411,21 @@ const PosTerminal = () => {
                                 </div>
                                 <div className="space-y-3 mb-8 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                                     {returnOrder.items.map(item => (
-                                        <div key={item.productId} className="flex justify-between items-center p-3 bg-white rounded-xl border border-gray-50 hover:border-orange-100 transition-all group cursor-pointer shadow-sm" onClick={() => handleReturnItemToggle(item.productId, item.quantity)}>
-                                            <div className={`w-6 h-6 border-2 rounded-lg mr-3 flex items-center justify-center transition-all ${returnItems[item.productId] ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-200' : 'border-gray-200 group-hover:border-orange-200 bg-gray-50'}`}>
+                                        <div key={item.productId} className="flex justify-between items-center p-3 bg-gray-800 rounded-xl border border-gray-50 hover:border-red-100 transition-all group cursor-pointer shadow-sm" onClick={() => handleReturnItemToggle(item.productId, item.quantity)}>
+                                            <div className={`w-6 h-6 border-2 rounded-lg mr-3 flex items-center justify-center transition-all ${returnItems[item.productId] ? 'bg-red-500/100 border-red-500 text-white shadow-lg shadow-red-200' : 'border-gray-700 group-hover:border-red-200 bg-gray-900'}`}>
                                                 {returnItems[item.productId] ? <Check className="w-4 h-4" /> : null}
                                             </div>
                                             <div className="flex-1">
-                                                <p className="font-bold text-gray-900 text-sm">{item.product.name}</p>
+                                                <p className="font-bold text-white text-sm">{item.product.name}</p>
                                                 <p className="text-[10px] text-gray-400 font-bold tracking-widest">QTY: {item.quantity}</p>
                                             </div>
-                                            <div className="font-black text-gray-900">₱{(item.product.price * item.quantity).toFixed(2)}</div>
+                                            <div className="font-black text-white">{formatCurrency(item.product.price * item.quantity)}</div>
                                         </div>
                                     ))}
                                 </div>
                                 <button
                                     onClick={processReturn}
-                                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-black rounded-2xl hover:from-orange-600 hover:to-orange-700 shadow-xl shadow-orange-200 hover:shadow-orange-300 transition-all hover:-translate-y-1 active:translate-y-0"
+                                    className="w-full py-4 bg-gradient-to-r from-red-500 to-red-600 text-white font-black rounded-2xl hover:from-red-600 hover:to-red-700 shadow-xl shadow-red-200 hover:shadow-red-300 transition-all hover:-translate-y-1 active:translate-y-0"
                                 >
                                     CONFIRM REFUND
                                 </button>
@@ -408,18 +435,18 @@ const PosTerminal = () => {
                 </div>
             ) : (
                 // SALE MODE UI (Existing)
-                <div className="flex-1 flex overflow-hidden min-h-0">
+                <div className={`flex-1 flex overflow-hidden min-h-0 ${isDarkTheme ? 'bg-slate-950' : 'bg-slate-50'}`}>
                     {/* LEFT: Product Browser */}
-                    <div className="flex-1 flex flex-col border-r border-gray-200 bg-white min-w-0">
+                    <div className={`flex-1 flex flex-col border-r min-w-0 ${isDarkTheme ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}>
                         {/* Search & Categories */}
-                        <div className="p-4 border-b border-slate-200 space-y-4">
+                        <div className={`p-4 border-b space-y-4 ${isDarkTheme ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'}`}>
                             <div className="relative">
                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                                 <input
                                     ref={searchInputRef}
                                     type="text"
                                     placeholder="Scan Part# or Search Name..."
-                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-lg focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                    className={`w-full pl-12 pr-4 py-3 border rounded-xl text-lg focus:ring-2 focus:ring-red-500 outline-none transition-all ${isDarkTheme ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400'}`}
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     onKeyDown={handleSearchKeyDown}
@@ -429,7 +456,9 @@ const PosTerminal = () => {
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                                 <button
                                     onClick={() => setSelectedCategory('all')}
-                                    className={`px-5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${selectedCategory === 'all' ? 'bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-200' : 'bg-white text-gray-500 border-gray-100 hover:border-gray-300 hover:bg-gray-50'}`}
+                                    className={`px-5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${selectedCategory === 'all'
+                                        ? (isDarkTheme ? 'bg-white text-slate-900 border-white shadow-md' : 'bg-slate-900 text-white border-slate-900 shadow-md')
+                                        : (isDarkTheme ? 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500 hover:bg-slate-800' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400 hover:bg-slate-100')}`}
                                 >
                                     All Parts
                                 </button>
@@ -437,7 +466,9 @@ const PosTerminal = () => {
                                     <button
                                         key={c.id}
                                         onClick={() => setSelectedCategory(c.id)}
-                                        className={`px-5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${selectedCategory === c.id ? 'bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-200' : 'bg-white text-gray-500 border-gray-100 hover:border-gray-300 hover:bg-gray-50'}`}
+                                        className={`px-5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${selectedCategory === c.id
+                                            ? (isDarkTheme ? 'bg-white text-slate-900 border-white shadow-md' : 'bg-slate-900 text-white border-slate-900 shadow-md')
+                                            : (isDarkTheme ? 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500 hover:bg-slate-800' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400 hover:bg-slate-100')}`}
                                     >
                                         {c.name}
                                     </button>
@@ -446,7 +477,7 @@ const PosTerminal = () => {
                         </div>
 
                         {/* Product Grid */}
-                        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+                        <div className={`flex-1 overflow-y-auto p-4 ${isDarkTheme ? 'bg-slate-950' : 'bg-slate-50'}`}>
                             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
                                 {filteredProducts.map(product => {
                                     const isOutOfStock = product.stock_quantity === 0;
@@ -455,35 +486,35 @@ const PosTerminal = () => {
                                             key={product.id}
                                             onClick={() => addToCart(product)}
                                             disabled={isOutOfStock}
-                                            className={`bg-white p-4 rounded-2xl shadow-sm border border-gray-100 hover:border-orange-500 hover:shadow-xl hover:shadow-orange-50 transition-all flex flex-col items-center text-center h-full group relative overflow-hidden ${isOutOfStock ? 'opacity-60 grayscale' : ''}`}
+                                            className={`p-4 rounded-2xl shadow-sm border hover:border-red-400 hover:shadow-lg transition-all flex flex-col items-center text-center h-full group relative overflow-hidden ${isDarkTheme ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} ${isOutOfStock ? 'opacity-60 grayscale' : ''}`}
                                         >
                                             <div className="w-full flex justify-between items-start mb-3">
-                                                <span className="text-[9px] font-bold bg-gray-50 px-2 py-0.5 rounded-full text-gray-400 border border-gray-100">{product.partNumber}</span>
-                                                {product.is_on_sale && <span className="text-[9px] font-black bg-orange-100 text-orange-500 px-2 py-0.5 rounded-full ring-1 ring-orange-200 ring-inset">SALE</span>}
+                                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${isDarkTheme ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{product.partNumber}</span>
+                                                {product.is_on_sale && <span className="text-[9px] font-black bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full ring-1 ring-red-200 ring-inset">SALE</span>}
                                             </div>
-                                            <div className="h-24 w-24 mb-4 rounded-xl overflow-hidden bg-gray-50/50 p-2 group-hover:bg-orange-50/30 transition-colors">
+                                            <div className={`h-24 w-24 mb-4 rounded-xl overflow-hidden p-2 group-hover:bg-red-50 transition-colors ${isDarkTheme ? 'bg-slate-800' : 'bg-slate-100'}`}>
                                                 <img src={product.image} alt={product.name} className="h-full w-full object-contain group-hover:scale-110 transition-transform duration-500" />
                                             </div>
-                                            <h3 className="font-bold text-gray-900 text-sm line-clamp-2 mb-2 flex-1 group-hover:text-orange-500 transition-colors text-left w-full leading-snug">{product.name}</h3>
-                                            <div className="flex justify-between items-center w-full mt-auto pt-3 border-t border-gray-50">
-                                                <span className={`text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md ${product.stock_quantity <= product.low_stock_threshold ? 'bg-orange-50 text-orange-500' : 'bg-green-50 text-green-600'}`}>
+                                            <h3 className={`font-bold text-sm line-clamp-2 mb-2 flex-1 group-hover:text-red-600 transition-colors text-left w-full leading-snug ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{product.name}</h3>
+                                            <div className={`flex justify-between items-center w-full mt-auto pt-3 border-t ${isDarkTheme ? 'border-slate-700' : 'border-slate-200'}`}>
+                                                <span className={`text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md ${product.stock_quantity <= product.low_stock_threshold ? 'bg-red-500/10 text-red-500' : 'bg-green-50 text-green-600'}`}>
                                                     {isOutOfStock ? 'OUT' : `${product.stock_quantity} IN STOCK`}
                                                 </span>
                                                 <div className="flex flex-col items-end">
                                                     {product.is_on_sale ? (
                                                         <>
-                                                            <span className="text-gray-400 line-through text-[10px] font-medium">₱{product.price.toFixed(2)}</span>
-                                                            <span className="text-gray-900 font-black text-lg -mt-1">₱{product.sale_price?.toFixed(2)}</span>
+                                                            <span className="text-slate-400 line-through text-[10px] font-medium">{formatCurrency(product.price)}</span>
+                                                            <span className={`font-black text-lg -mt-1 ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(product.sale_price)}</span>
                                                         </>
                                                     ) : (
-                                                        <span className="text-gray-900 font-black text-lg">₱{product.price.toFixed(2)}</span>
+                                                        <span className={`font-black text-lg ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(product.price)}</span>
                                                     )}
                                                 </div>
                                             </div>
 
                                             {/* Subtle hover effect */}
                                             <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <div className="bg-orange-500 text-white p-1.5 rounded-full shadow-lg">
+                                                <div className="bg-red-500/100 text-white p-1.5 rounded-full shadow-lg">
                                                     <Plus size={14} />
                                                 </div>
                                             </div>
@@ -495,57 +526,57 @@ const PosTerminal = () => {
                     </div>
 
                     {/* RIGHT: Current Transaction */}
-                    <div className="w-80 lg:w-96 flex-shrink-0 flex flex-col bg-white shadow-2xl border-l border-gray-200 z-20">
-                        <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-gray-50 to-white">
+                    <div className={`w-80 lg:w-96 flex-shrink-0 flex flex-col shadow-xl border-l z-20 ${isDarkTheme ? 'bg-[#0f172a] border-slate-700' : 'bg-white border-slate-200'}`}>
+                        <div className={`p-5 border-b flex justify-between items-center ${isDarkTheme ? 'bg-gradient-to-r from-[#111827] to-[#0f172a] border-slate-700' : 'bg-white border-slate-200'}`}>
                             <div>
-                                <h2 className="font-black text-xl text-gray-900 tracking-tight">Current Order</h2>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Transaction #{Math.floor(Math.random() * 10000)}</p>
+                                <h2 className={`font-black text-xl tracking-tight ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>Current Order</h2>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Transaction #{Math.floor(Math.random() * 10000)}</p>
                             </div>
-                            <button onClick={clearCart} className="text-gray-400 hover:text-orange-500 p-2.5 rounded-xl hover:bg-orange-50 transition-all border border-gray-100 hover:border-orange-100" title="Clear Cart">
+                            <button onClick={clearCart} className={`text-slate-400 hover:text-red-400 p-2.5 rounded-xl hover:bg-red-500/10 transition-all border ${isDarkTheme ? 'border-slate-700 hover:border-red-400/40' : 'border-slate-300 hover:border-red-300'}`} title="Clear Cart">
                                 <Trash2 className="h-5 w-5" />
                             </button>
                         </div>
 
                         {/* Cart Items */}
-                        <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-gradient-to-b from-gray-50/50 to-white">
+                        <div className={`flex-1 overflow-y-auto p-5 space-y-3 ${isDarkTheme ? 'bg-gradient-to-b from-[#0f172a] to-[#0b1220]' : 'bg-slate-50'}`}>
                             {cartItems.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-gray-300 space-y-4">
-                                    <div className="bg-gray-50 p-6 rounded-3xl">
+                                <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-4">
+                                    <div className={`${isDarkTheme ? 'bg-[#111827]' : 'bg-slate-100'} p-6 rounded-3xl`}>
                                         <ShoppingBag className="h-16 w-16 opacity-20" />
                                     </div>
                                     <p className="font-bold text-sm">Scan or select items to begin</p>
                                 </div>
                             ) : (
                                 cartItems.map(item => (
-                                    <div key={item.productId} className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-orange-100 transition-all group">
-                                        <div className="h-14 w-14 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0 p-1 group-hover:bg-orange-50 transition-colors">
+                                    <div key={item.productId} className={`flex items-center gap-3 p-4 rounded-2xl border shadow-sm hover:shadow-md hover:border-red-300 transition-all group ${isDarkTheme ? 'bg-[#111827] border-slate-700 hover:border-red-400/40' : 'bg-white border-slate-200'}`}>
+                                        <div className={`h-14 w-14 rounded-xl overflow-hidden flex-shrink-0 p-1 group-hover:bg-red-50 transition-colors ${isDarkTheme ? 'bg-[#0b1220]' : 'bg-slate-100'}`}>
                                             <img src={item.product.image} alt="" className="h-full w-full object-contain" />
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="text-[10px] text-slate-400 font-mono mb-0.5">{item.product.partNumber}</div>
-                                            <h4 className="font-bold text-slate-900 text-sm truncate">{item.product.name}</h4>
+                                            <h4 className={`font-bold text-sm truncate ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{item.product.name}</h4>
                                             <div className="text-xs text-slate-500 font-medium">
-                                                ₱{(item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price).toFixed(2)} / unit
+                                                {formatCurrency(item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price)} / unit
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <div className="flex items-center bg-slate-100 rounded-lg">
+                                            <div className={`flex items-center border rounded-lg ${isDarkTheme ? 'bg-[#0b1220] border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
                                                 <button
                                                     onClick={() => item.quantity > 1 ? updateQuantity(item.productId, -1) : removeItem(item.productId)}
-                                                    className="p-1 hover:bg-slate-200 text-slate-600 rounded-l-lg"
+                                                    className={`p-1 rounded-l-lg ${isDarkTheme ? 'hover:bg-slate-700/60 text-slate-300' : 'hover:bg-slate-200 text-slate-600'}`}
                                                 >
                                                     <Minus className="h-3 w-3" />
                                                 </button>
-                                                <span className="w-8 text-center text-sm font-bold text-slate-900">{item.quantity}</span>
+                                                <span className={`w-8 text-center text-sm font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{item.quantity}</span>
                                                 <button
                                                     onClick={() => updateQuantity(item.productId, 1)}
-                                                    className="p-1 hover:bg-slate-200 text-slate-600 rounded-r-lg"
+                                                    className={`p-1 rounded-r-lg ${isDarkTheme ? 'hover:bg-slate-700/60 text-slate-300' : 'hover:bg-slate-200 text-slate-600'}`}
                                                 >
                                                     <Plus className="h-3 w-3" />
                                                 </button>
                                             </div>
-                                            <div className="font-bold text-slate-900 w-16 text-right text-sm">
-                                                ₱{((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity).toFixed(2)}
+                                            <div className={`font-bold w-20 text-right text-sm ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
+                                                {formatCurrency((item.product.is_on_sale && item.product.sale_price ? item.product.sale_price : item.product.price) * item.quantity)}
                                             </div>
                                         </div>
                                     </div>
@@ -554,42 +585,42 @@ const PosTerminal = () => {
                         </div>
 
                         {/* Totals */}
-                        <div className="p-6 bg-white border-t border-gray-100 shadow-[0_-8px_16px_-4px_rgba(0,0,0,0.05)]">
+                        <div className={`p-6 border-t shadow-[0_-8px_16px_-4px_rgba(0,0,0,0.05)] ${isDarkTheme ? 'bg-[#111827] border-slate-700' : 'bg-white border-slate-200'}`}>
                             <div className="space-y-3 mb-6">
-                                <div className="flex justify-between text-gray-600 text-sm font-medium">
+                                <div className={`flex justify-between text-sm font-medium ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>
                                     <span>Subtotal</span>
-                                    <span className="font-bold">₱{subtotal.toFixed(2)}</span>
+                                    <span className={`font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(subtotal)}</span>
                                 </div>
                                 {discountAmount > 0 && (
-                                    <div className="flex justify-between text-green-600 text-sm font-bold bg-green-50 -mx-2 px-2 py-1.5 rounded-lg">
+                                    <div className="flex justify-between text-green-600 text-sm font-bold bg-green-50 -mx-2 px-2 py-1.5 rounded-lg border border-green-200">
                                         <span className="flex items-center gap-1.5">
                                             <Tag className="w-3.5 h-3.5" />
                                             Discount
                                         </span>
-                                        <span>-₱{discountAmount.toFixed(2)}</span>
+                                        <span>-{formatCurrency(discountAmount)}</span>
                                     </div>
                                 )}
-                                <div className="flex justify-between text-gray-600 text-sm font-medium">
-                                    <span>VAT (12%)</span>
-                                    <span className="font-bold">₱{taxAmount.toFixed(2)}</span>
+                                <div className={`flex justify-between text-sm font-medium ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>
+                                    <span>VAT (12% included)</span>
+                                    <span className={`font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(taxAmount)}</span>
                                 </div>
-                                <div className="flex justify-between text-3xl font-black text-gray-900 pt-4 border-t-2 border-gray-100">
+                                <div className={`flex justify-between text-3xl font-black pt-4 border-t-2 ${isDarkTheme ? 'text-white border-slate-700' : 'text-slate-900 border-slate-200'}`}>
                                     <span>TOTAL</span>
-                                    <span className="text-orange-500">₱{total.toFixed(2)}</span>
+                                    <span className="text-red-500">{formatCurrency(total)}</span>
                                 </div>
                             </div>
 
                             <div className="flex gap-3 mb-4">
                                 <button
                                     onClick={() => setShowDiscountModal(true)}
-                                    className="flex-1 py-2.5 border-2 border-gray-200 text-gray-700 rounded-xl text-sm font-bold hover:bg-gray-50 hover:border-gray-300 flex items-center justify-center gap-2 transition-all"
+                                    className="flex-1 py-2.5 border-2 border-slate-300 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center gap-2 transition-all"
                                 >
                                     <Tag className="w-4 h-4" /> Discount
                                 </button>
                                 {posDiscount && (
                                     <button
                                         onClick={() => setPosDiscount(null)}
-                                        className="px-4 py-2.5 border-2 border-orange-200 text-orange-500 rounded-xl hover:bg-orange-50 font-bold transition-all"
+                                        className="px-4 py-2.5 border-2 border-red-200 text-red-500 rounded-xl hover:bg-red-500/10 font-bold transition-all"
                                     >
                                         Remove
                                     </button>
@@ -599,11 +630,11 @@ const PosTerminal = () => {
                             <button
                                 onClick={() => setShowPayment(true)}
                                 disabled={cartItems.length === 0}
-                                className="w-full py-5 bg-gradient-to-r from-orange-500 via-orange-500 to-orange-600 text-white rounded-2xl font-black text-xl shadow-2xl shadow-orange-200 hover:shadow-orange-300 hover:from-orange-600 hover:via-orange-600 hover:to-orange-700 disabled:opacity-50 disabled:shadow-none transition-all hover:-translate-y-1 active:translate-y-0 flex justify-center items-center gap-3 relative overflow-hidden group"
+                                className="w-full py-5 bg-gradient-to-r from-red-500 via-red-500 to-red-600 text-white rounded-2xl font-black text-xl shadow-2xl shadow-red-200 hover:shadow-red-300 hover:from-red-600 hover:via-red-600 hover:to-red-700 disabled:opacity-50 disabled:shadow-none transition-all hover:-translate-y-1 active:translate-y-0 flex justify-center items-center gap-3 relative overflow-hidden group"
                             >
                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"></div>
                                 <span className="relative">CHECKOUT</span>
-                                <span className="relative font-black">₱{total.toFixed(2)}</span>
+                                <span className="relative font-black">{formatCurrency(total)}</span>
                             </button>
                         </div>
                     </div>
@@ -613,18 +644,18 @@ const PosTerminal = () => {
             {/* Manual Discount Modal */}
             {showDiscountModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white p-8 rounded-3xl shadow-2xl w-96 border border-gray-100 animate-in zoom-in-95 duration-200">
-                        <h3 className="text-2xl font-black mb-6 text-gray-900">Apply Discount</h3>
+                    <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-96 border border-gray-700 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-2xl font-black mb-6 text-white">Apply Discount</h3>
                         <div className="flex gap-3 mb-6">
                             <button
                                 onClick={() => setTempDiscount({ ...tempDiscount, type: 'percent' })}
-                                className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${tempDiscount.type === 'percent' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
+                                className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${tempDiscount.type === 'percent' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-800 text-gray-700 border-gray-700 hover:border-gray-300'}`}
                             >
                                 % Percent
                             </button>
                             <button
                                 onClick={() => setTempDiscount({ ...tempDiscount, type: 'fixed' })}
-                                className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${tempDiscount.type === 'fixed' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
+                                className={`flex-1 py-3 rounded-xl border-2 font-bold transition-all ${tempDiscount.type === 'fixed' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-800 text-gray-700 border-gray-700 hover:border-gray-300'}`}
                             >
                                 ₱ Fixed
                             </button>
@@ -632,14 +663,14 @@ const PosTerminal = () => {
                         <input
                             type="number"
                             placeholder="Enter discount value"
-                            className="w-full border-2 border-gray-200 p-4 rounded-2xl mb-6 text-xl font-bold focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 outline-none transition-all"
+                            className="w-full border-2 border-gray-700 p-4 rounded-2xl mb-6 text-xl font-bold focus:border-red-500 focus:ring-4 focus:ring-red-500/10 outline-none transition-all"
                             value={tempDiscount.value}
                             onChange={(e) => setTempDiscount({ ...tempDiscount, value: e.target.value })}
                             autoFocus
                         />
                         <div className="flex gap-3">
                             <button onClick={() => setShowDiscountModal(false)} className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-2xl font-bold transition-all">Cancel</button>
-                            <button onClick={handleApplyDiscount} className="flex-1 py-3 bg-orange-500 text-white rounded-2xl hover:bg-orange-600 font-bold shadow-lg hover:shadow-xl transition-all">Apply</button>
+                            <button onClick={handleApplyDiscount} className="flex-1 py-3 bg-red-500/100 text-white rounded-2xl hover:bg-red-600 font-bold shadow-lg hover:shadow-xl transition-all">Apply</button>
                         </div>
                     </div>
                 </div>
@@ -666,14 +697,14 @@ const PosTerminal = () => {
             {/* Logout Confirmation Modal */}
             {showLogoutConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white p-8 rounded-3xl shadow-2xl w-96 border border-gray-100 animate-in zoom-in-95 duration-200">
+                    <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-96 border border-gray-700 animate-in zoom-in-95 duration-200">
                         <div className="flex items-center gap-4 mb-6">
-                            <div className="bg-orange-50 p-3 rounded-2xl">
-                                <LogOut className="w-8 h-8 text-orange-500" />
+                            <div className="bg-red-500/10 p-3 rounded-2xl">
+                                <LogOut className="w-8 h-8 text-red-500" />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-black text-gray-900">Sign Out?</h3>
-                                <p className="text-gray-500 font-medium text-sm mt-1">You have items in the cart</p>
+                                <h3 className="text-2xl font-black text-white">Sign Out?</h3>
+                                <p className="text-gray-400 font-medium text-sm mt-1">You have items in the cart</p>
                             </div>
                         </div>
                         <p className="text-gray-600 mb-6">
@@ -688,7 +719,7 @@ const PosTerminal = () => {
                             </button>
                             <button
                                 onClick={confirmLogout}
-                                className="flex-1 py-3 bg-orange-500 text-white rounded-2xl hover:bg-orange-600 font-bold shadow-lg hover:shadow-xl transition-all"
+                                className="flex-1 py-3 bg-red-500/100 text-white rounded-2xl hover:bg-red-600 font-bold shadow-lg hover:shadow-xl transition-all"
                             >
                                 Sign Out
                             </button>
@@ -716,3 +747,5 @@ const PosTerminal = () => {
 };
 
 export default PosTerminal;
+
+

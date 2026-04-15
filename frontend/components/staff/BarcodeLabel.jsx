@@ -22,7 +22,7 @@ const BarcodePattern = () => (
 
 const BarcodeLabel = ({ product }) => {
   return (
-    <div className="border-2 border-black p-4 w-[300px] bg-white text-center break-inside-avoid mb-4">
+    <div className="border-2 border-black p-4 w-[300px] bg-gray-800 text-center break-inside-avoid mb-4">
       <h3 className="font-bold text-lg truncate">{product.name}</h3>
       <p className="text-xs text-gray-600">{product.partNumber}</p>
       <BarcodePattern />
@@ -33,3 +33,4 @@ const BarcodeLabel = ({ product }) => {
 };
 
 export default BarcodeLabel;
+

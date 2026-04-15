@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   getStaffList, getStaffById, addStaff, editStaff, toggleStaffStatus, deleteStaff,
   getStaffActivity, updateStaffPermissions, getAllPermissions, getStaffPerformance,
@@ -7,12 +7,19 @@ import {
 import {
   Loader2, Plus, Pencil, Trash2, X, Save, Search, Shield, ShieldOff,
   UserPlus, Eye, Activity, Lock, ChevronDown, ChevronUp, ToggleLeft, ToggleRight,
-  UserCheck, UserX, Clock, FileText, BarChart3, Unlock, Key, AlertTriangle,
-} from 'lucide-react';
+UserCheck, UserX, Clock, FileText, BarChart3, Unlock, Key, AlertTriangle, EyeOff} from 'lucide-react';
 
 const StaffManagement = () => {
   const [view, setView] = useState('list');
   const [staff, setStaff] = useState([]);
+
+  const formatLogDetails = (details) => {
+    let obj = details;
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
+    if (typeof obj !== 'object' || obj === null) return String(obj);
+    return Object.entries(obj).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(', ');
+  };
   const [selected, setSelected] = useState(null);
   const [allPermissions, setAllPermissions] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
@@ -196,10 +203,10 @@ const StaffManagement = () => {
     if (success) { const t = setTimeout(() => setSuccess(''), 3000); return () => clearTimeout(t); }
   }, [success]);
 
-  // ─── FORM VIEW ───────────────────────────────────────────────────
+  // â”€â”€â”€ FORM VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (view === 'add' || view === 'edit') {
     return (
-      <div className="bg-white rounded-xl shadow p-6 max-w-lg mx-auto">
+      <div className="bg-gray-800 rounded-xl shadow p-6 max-w-lg mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-slate-900">{view === 'add' ? 'Add Staff Member' : 'Edit Staff Member'}</h2>
           <button onClick={() => setView('list')} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
@@ -231,7 +238,7 @@ const StaffManagement = () => {
           </div>
         </div>
 
-        {error && <div className="mt-4 p-3 rounded-lg bg-orange-50 text-orange-500 text-sm">{error}</div>}
+        {error && <div className="mt-4 p-3 rounded-lg bg-red-500/10 text-red-500 text-sm">{error}</div>}
 
         <div className="mt-6 flex gap-3">
           <button onClick={() => setView('list')} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50">Cancel</button>
@@ -244,7 +251,7 @@ const StaffManagement = () => {
     );
   }
 
-  // ─── DETAIL VIEW ─────────────────────────────────────────────────
+  // â”€â”€â”€ DETAIL VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (view === 'detail' && selected) {
     const grouped = (selected.permissions || []).reduce((acc, p) => {
       const cat = p.category || 'Other';
@@ -256,15 +263,15 @@ const StaffManagement = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <button onClick={() => { setView('list'); setSelected(null); }} className="text-sm text-orange-600 font-medium hover:text-orange-500">&larr; Back to Staff</button>
+          <button onClick={() => { setView('list'); setSelected(null); }} className="text-sm text-orange-600 font-medium hover:text-red-500">&larr; Back to Staff</button>
           <div className="flex gap-2">
             <button onClick={() => openEdit(selected)} className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm flex items-center gap-1"><Pencil className="h-3.5 w-3.5" /> Edit</button>
-            <button onClick={() => handleDelete(selected)} className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm flex items-center gap-1"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
+            <button onClick={() => handleDelete(selected)} className="px-3 py-1.5 bg-red-500/100 text-white rounded-lg text-sm flex items-center gap-1"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
           </div>
         </div>
 
         {/* Profile Card */}
-        <div className="bg-white rounded-xl shadow p-6">
+        <div className="bg-gray-800 rounded-xl shadow p-6">
           <div className="flex items-start gap-4">
             <div className="h-16 w-16 rounded-full bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center text-white text-xl font-bold">
               {selected.name.charAt(0).toUpperCase()}
@@ -272,7 +279,7 @@ const StaffManagement = () => {
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-bold text-slate-900">{selected.name}</h2>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${selected.is_active ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-600'}`}>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${selected.is_active ? 'bg-green-100 text-green-700' : 'bg-red-500/20 text-orange-600'}`}>
                   {selected.is_active ? 'Active' : 'Inactive'}
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 capitalize">{selected.role}</span>
@@ -285,7 +292,7 @@ const StaffManagement = () => {
                 {selected.two_factor_enabled && <span className="text-green-600 flex items-center gap-1"><Shield className="h-3 w-3" /> 2FA Enabled</span>}
               </div>
             </div>
-            <button onClick={() => handleToggle(selected.id)} className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 ${selected.is_active ? 'bg-orange-50 text-orange-500 hover:bg-orange-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
+            <button onClick={() => handleToggle(selected.id)} className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 ${selected.is_active ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
               {selected.is_active ? <><UserX className="h-4 w-4" /> Deactivate</> : <><UserCheck className="h-4 w-4" /> Activate</>}
             </button>
             <button onClick={() => handleLockUnlock(selected.id, selected.locked_until && new Date(selected.locked_until) > new Date())}
@@ -297,7 +304,7 @@ const StaffManagement = () => {
               {selected.locked_until && new Date(selected.locked_until) > new Date() ? <><Unlock size={14} /> Unlock</> : <><Lock size={14} /> Lock</>}
             </button>
             <button onClick={() => setShowResetModal(true)}
-              className="px-3 py-1.5 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-lg text-sm font-medium flex items-center gap-1">
+              className="px-3 py-1.5 bg-red-500/10 text-orange-600 hover:bg-red-500/20 rounded-lg text-sm font-medium flex items-center gap-1">
               <Key size={14} /> Reset Password
             </button>
           </div>
@@ -305,15 +312,15 @@ const StaffManagement = () => {
 
         {/* Performance */}
         {performance && (
-          <div className="bg-white rounded-xl shadow p-6">
-            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><BarChart3 className="h-5 w-5 text-orange-500" /> Performance (Last {performance.period} Days)</h3>
+          <div className="bg-gray-800 rounded-xl shadow p-6">
+            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><BarChart3 className="h-5 w-5 text-red-500" /> Performance (Last {performance.period} Days)</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-slate-50 rounded-lg p-3 text-center">
                 <p className="text-2xl font-bold text-slate-900">{performance.orders.totalOrders}</p>
                 <p className="text-xs text-slate-500">Orders Processed</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-slate-900">₱{performance.orders.totalRevenue.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-slate-900">â‚±{performance.orders.totalRevenue.toLocaleString()}</p>
                 <p className="text-xs text-slate-500">Revenue</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3 text-center">
@@ -330,7 +337,7 @@ const StaffManagement = () => {
                 <p className="text-xs font-medium text-slate-500 mb-2">Top Actions</p>
                 <div className="flex flex-wrap gap-2">
                   {performance.topActions.map(a => (
-                    <span key={a.action} className="px-2 py-1 bg-orange-50 text-orange-700 rounded text-xs">{a.action} ({a.count})</span>
+                    <span key={a.action} className="px-2 py-1 bg-red-500/10 text-orange-700 rounded text-xs">{a.action} ({a.count})</span>
                   ))}
                 </div>
               </div>
@@ -339,8 +346,8 @@ const StaffManagement = () => {
         )}
 
         {/* Permissions */}
-        <div className="bg-white rounded-xl shadow p-6">
-          <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><Lock className="h-5 w-5 text-orange-500" /> Permissions</h3>
+        <div className="bg-gray-800 rounded-xl shadow p-6">
+          <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><Lock className="h-5 w-5 text-red-500" /> Permissions</h3>
           {Object.entries(grouped).map(([cat, perms]) => (
             <div key={cat} className="mb-4">
               <h4 className="text-sm font-semibold text-slate-600 uppercase tracking-wider mb-2">{cat}</h4>
@@ -351,7 +358,7 @@ const StaffManagement = () => {
                       type="checkbox"
                       checked={p.granted !== false}
                       onChange={e => handlePermissionChange(p.id, e.target.checked)}
-                      className="rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                      className="rounded border-slate-300 text-red-500 focus:ring-orange-500"
                     />
                     <div>
                       <p className="text-sm text-slate-700">{p.description || p.name}</p>
@@ -366,27 +373,37 @@ const StaffManagement = () => {
         {/* Password Reset Modal */}
         {showResetModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Reset Password for {selected?.name}</h3>
+            <div className="bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl">
+              <h3 className="text-lg font-semibold text-white mb-4">Reset Password for {selected?.name}</h3>
               <div className="space-y-3">
                 <div>
                   <label className="text-sm text-gray-600">New Password</label>
-                  <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500"
-                    placeholder="Min 8 characters" />
+                  <div className="relative">
+                    <input type={showResetPassword ? "text" : "password"} value={resetPassword} onChange={e => setResetPassword(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-red-500 pr-10"
+                      placeholder="Min 8 characters" />
+                    <button type="button" onClick={() => setShowResetPassword(!showResetPassword)} className="absolute right-3 top-1/2 translate-y-[-10%] text-gray-400">
+                      {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm text-gray-600">Confirm Password</label>
-                  <input type="password" value={resetConfirm} onChange={e => setResetConfirm(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500"
-                    placeholder="Re-enter password" />
+                  <div className="relative">
+                    <input type={showResetPassword ? "text" : "password"} value={resetConfirm} onChange={e => setResetConfirm(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-red-500 pr-10"
+                      placeholder="Re-enter password" />
+                    <button type="button" onClick={() => setShowResetPassword(!showResetPassword)} className="absolute right-3 top-1/2 translate-y-[-10%] text-gray-400">
+                      {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-5">
                 <button onClick={() => { setShowResetModal(false); setResetPassword(''); setResetConfirm(''); }}
                   className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button>
                 <button onClick={handleResetPassword} disabled={resetting}
-                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm disabled:opacity-50">
+                  className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white rounded-lg text-sm disabled:opacity-50">
                   {resetting ? 'Resetting...' : 'Reset Password'}
                 </button>
               </div>
@@ -397,15 +414,15 @@ const StaffManagement = () => {
     );
   }
 
-  // ─── ACTIVITY LOGS VIEW ──────────────────────────────────────────
+  // â”€â”€â”€ ACTIVITY LOGS VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (view === 'logs') {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <button onClick={() => setView('list')} className="text-sm text-orange-600 font-medium hover:text-orange-500">&larr; Back to Staff</button>
+          <button onClick={() => setView('list')} className="text-sm text-orange-600 font-medium hover:text-red-500">&larr; Back to Staff</button>
           <span className="text-sm text-slate-500">{logTotal} total log entries</span>
         </div>
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="bg-gray-800 rounded-xl shadow overflow-hidden">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
@@ -420,12 +437,12 @@ const StaffManagement = () => {
               {globalLogs.map(log => (
                 <tr key={log.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2 text-xs text-slate-500">{new Date(log.created_at).toLocaleString()}</td>
-                  <td className="px-4 py-2 text-sm text-slate-700">{log.user_name || log.user_email || '—'}</td>
+                  <td className="px-4 py-2 text-sm text-slate-700">{log.user_name || log.user_email || '-'}</td>
                   <td className="px-4 py-2">
                     <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-mono">{log.action}</span>
                   </td>
-                  <td className="px-4 py-2 text-xs text-slate-400 font-mono">{log.ip_address || '—'}</td>
-                  <td className="px-4 py-2 text-xs text-slate-500 max-w-xs truncate">{log.details ? JSON.stringify(log.details) : '—'}</td>
+                  <td className="px-4 py-2 text-xs text-slate-400 font-mono">{log.ip_address || '-'}</td>
+                  <td className="px-4 py-2 text-xs text-slate-500 max-w-xs truncate">{log.details ? formatLogDetails(log.details) : '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -433,14 +450,14 @@ const StaffManagement = () => {
         </div>
         {globalLogs.length < logTotal && (
           <div className="text-center">
-            <button onClick={loadMoreLogs} className="px-4 py-2 text-sm text-orange-600 hover:text-orange-500 font-medium">Load More</button>
+            <button onClick={loadMoreLogs} className="px-4 py-2 text-sm text-orange-600 hover:text-red-500 font-medium">Load More</button>
           </div>
         )}
       </div>
     );
   }
 
-  // ─── LIST VIEW ───────────────────────────────────────────────────
+  // â”€â”€â”€ LIST VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div className="space-y-4">
       {success && (
@@ -449,7 +466,7 @@ const StaffManagement = () => {
         </div>
       )}
       {error && (
-        <div className="p-3 rounded-lg bg-orange-50 text-orange-500 text-sm font-medium">{error}</div>
+        <div className="p-3 rounded-lg bg-red-500/10 text-red-500 text-sm font-medium">{error}</div>
       )}
 
       {/* Toolbar */}
@@ -474,7 +491,7 @@ const StaffManagement = () => {
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
         </select>
-        <button onClick={openLogs} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm flex items-center gap-1">
+        <button onClick={openLogs} className="px-4 py-2 bg-gray-800 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm flex items-center gap-1">
           <Activity className="h-4 w-4" /> Activity Logs
         </button>
         <button onClick={openAdd} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm flex items-center gap-1">
@@ -484,9 +501,9 @@ const StaffManagement = () => {
 
       {/* Staff Table */}
       {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 text-orange-500 animate-spin" /></div>
+        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 text-red-500 animate-spin" /></div>
       ) : (
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="bg-gray-800 rounded-xl shadow overflow-hidden">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
@@ -516,7 +533,7 @@ const StaffManagement = () => {
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'} capitalize`}>{s.role}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-600'}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-red-500/20 text-orange-600'}`}>
                       {s.is_active ? 'Active' : 'Inactive'}
                     </span>
                     {s.locked_until && new Date(s.locked_until) > new Date() && (
@@ -524,17 +541,17 @@ const StaffManagement = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 text-xs text-slate-500">
-                    {s.last_activity ? new Date(s.last_activity).toLocaleString() : '—'}
+                    {s.last_activity ? new Date(s.last_activity).toLocaleString() : '-'}
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">{s.action_count || 0}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => openDetail(s.id)} className="p-1.5 text-slate-400 hover:text-orange-500" title="View Details"><Eye className="h-4 w-4" /></button>
+                      <button onClick={() => openDetail(s.id)} className="p-1.5 text-slate-400 hover:text-red-500" title="View Details"><Eye className="h-4 w-4" /></button>
                       <button onClick={() => openEdit(s)} className="p-1.5 text-slate-400 hover:text-blue-500" title="Edit"><Pencil className="h-4 w-4" /></button>
                       <button onClick={() => handleToggle(s.id)} className="p-1.5 text-slate-400 hover:text-amber-500" title={s.is_active ? 'Deactivate' : 'Activate'}>
                         {s.is_active ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4 text-orange-400" />}
                       </button>
-                      <button onClick={() => handleDelete(s)} className="p-1.5 text-slate-400 hover:text-orange-500" title="Delete"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => handleDelete(s)} className="p-1.5 text-slate-400 hover:text-red-500" title="Delete"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -549,16 +566,16 @@ const StaffManagement = () => {
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                 <AlertTriangle size={20} className="text-red-600" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900">Delete Staff Member</h3>
+              <h3 className="text-lg font-bold text-white">Delete Staff Member</h3>
             </div>
             <p className="text-sm text-gray-600 mb-2">Are you sure you want to permanently delete:</p>
-            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 mb-4">
-              <p className="text-sm font-semibold text-gray-900">{deleteTarget.name}</p>
+            <div className="bg-gray-900 rounded-lg p-3 border border-gray-700 mb-4">
+              <p className="text-sm font-semibold text-white">{deleteTarget.name}</p>
               <p className="text-xs text-gray-400">{deleteTarget.email}</p>
               <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-600">{deleteTarget.role}</span>
             </div>
@@ -580,3 +597,5 @@ const StaffManagement = () => {
 };
 
 export default StaffManagement;
+
+

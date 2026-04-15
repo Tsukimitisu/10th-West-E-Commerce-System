@@ -70,17 +70,24 @@ const createTables = async () => {
         price DECIMAL(10, 2) NOT NULL,
         buying_price DECIMAL(10, 2),
         image VARCHAR(500),
+        video_url VARCHAR(500),
+        image_urls JSONB DEFAULT '[]'::jsonb,
         category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
         subcategory_id INTEGER REFERENCES subcategories(id) ON DELETE SET NULL,
         stock_quantity INTEGER DEFAULT 0,
+        shipping_option VARCHAR(20) DEFAULT 'standard' CHECK (shipping_option IN ('standard', 'express')),
+        shipping_weight_kg DECIMAL(10, 3) NOT NULL DEFAULT 0.10,
+        shipping_dimensions JSONB,
         box_number VARCHAR(100),
         low_stock_threshold INTEGER DEFAULT 5,
         brand VARCHAR(100),
         sku VARCHAR(100) UNIQUE,
         barcode VARCHAR(100) UNIQUE,
         sale_price DECIMAL(10, 2),
+        bulk_pricing JSONB DEFAULT '[]'::jsonb,
+        variant_options JSONB DEFAULT '[]'::jsonb,
         is_on_sale BOOLEAN DEFAULT FALSE,
-        status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'hidden', 'out_of_stock')),
+        status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
         expiry_date DATE,
         is_deleted BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -97,9 +104,14 @@ const createTables = async () => {
         variant_type VARCHAR(50) NOT NULL,
         variant_value VARCHAR(100) NOT NULL,
         price_adjustment DECIMAL(10, 2) DEFAULT 0,
+        price DECIMAL(10, 2),
+        option_combination JSONB DEFAULT '{}'::jsonb,
+        combination_key VARCHAR(255),
+        image_url VARCHAR(500),
         stock_quantity INTEGER DEFAULT 0,
         sku VARCHAR(100),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
     console.log('✅ Product Variants table created');
@@ -109,6 +121,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS carts (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -136,8 +149,11 @@ const createTables = async () => {
         guest_name VARCHAR(255),
         guest_email VARCHAR(255),
         total_amount DECIMAL(10, 2) NOT NULL,
-        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'completed', 'cancelled')),
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'delivered', 'completed', 'cancelled')),
         shipping_address TEXT NOT NULL,
+        shipping_address_snapshot JSONB,
+        shipping_lat DECIMAL(10, 7),
+        shipping_lng DECIMAL(10, 7),
         source VARCHAR(20) DEFAULT 'online' CHECK (source IN ('online', 'pos')),
         payment_method VARCHAR(20) CHECK (payment_method IN ('cash', 'card', 'cod', 'online', 'stripe', 'gcash', 'maya', 'bank_transfer')),
         amount_tendered DECIMAL(10, 2),
@@ -152,6 +168,10 @@ const createTables = async () => {
         shipping_method VARCHAR(50) DEFAULT 'standard',
         delivery_notes TEXT,
         estimated_delivery DATE,
+        delivered_at TIMESTAMP,
+        rider_confirmed_delivery_at TIMESTAMP,
+        rider_confirmed_by INTEGER REFERENCES users(id),
+        customer_confirmed_receipt_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -177,12 +197,18 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS addresses (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         recipient_name VARCHAR(255) NOT NULL,
         phone VARCHAR(50) NOT NULL,
         street TEXT NOT NULL,
+        barangay VARCHAR(100),
         city VARCHAR(100) NOT NULL,
         state VARCHAR(100) NOT NULL,
+        country VARCHAR(100) DEFAULT 'Philippines',
         postal_code VARCHAR(20) NOT NULL,
+        address_string TEXT,
+        lat DECIMAL(10, 7),
+        lng DECIMAL(10, 7),
         is_default BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -190,12 +216,51 @@ const createTables = async () => {
     `);
     console.log('✅ Addresses table created');
 
+    // Backfill shipping coordinates for existing deployments
+    await client.query(`
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS shipping_address_snapshot JSONB;
+    `);
+    await client.query(`
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS shipping_lat DECIMAL(10, 7);
+    `);
+    await client.query(`
+      ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS shipping_lng DECIMAL(10, 7);
+    `);
+    console.log('✅ Orders table ensured shipping coordinates');
+
+    // Backfill country column for existing deployments
+    await client.query(`
+      ALTER TABLE addresses
+      ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'Philippines';
+    `);
+    console.log('✅ Addresses table ensured country column');
+
+    await client.query(`
+      ALTER TABLE addresses
+      ADD COLUMN IF NOT EXISTS barangay VARCHAR(100);
+    `);
+    console.log('✅ Addresses table ensured barangay column');
+
+    await client.query(`
+      ALTER TABLE addresses
+      ADD COLUMN IF NOT EXISTS lat DECIMAL(10, 7);
+    `);
+    await client.query(`
+      ALTER TABLE addresses
+      ADD COLUMN IF NOT EXISTS lng DECIMAL(10, 7);
+    `);
+    console.log('✅ Addresses table ensured coordinates');
+
     // Create Returns table
     await client.query(`
       CREATE TABLE IF NOT EXISTS returns (
         id SERIAL PRIMARY KEY,
         order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         reason TEXT NOT NULL,
         status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'refunded', 'exchanged')),
         refund_amount DECIMAL(10, 2) NOT NULL,
@@ -225,6 +290,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS store_credits (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         amount DECIMAL(10, 2) NOT NULL,
         reason VARCHAR(255),
         reference_id INTEGER,
@@ -303,12 +369,15 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS notifications (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         type VARCHAR(50) NOT NULL,
         title VARCHAR(255) NOT NULL,
         message TEXT,
         is_read BOOLEAN DEFAULT FALSE,
         reference_id INTEGER,
         reference_type VARCHAR(50),
+        thumbnail_url VARCHAR(500),
+        metadata JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -351,7 +420,7 @@ const createTables = async () => {
         product_id INTEGER REFERENCES products(id),
         adjusted_by INTEGER REFERENCES users(id),
         quantity_change INTEGER NOT NULL,
-        reason VARCHAR(50) CHECK (reason IN ('damaged', 'lost', 'correction', 'transfer', 'received', 'expired')),
+        reason VARCHAR(50) CHECK (reason IN ('restock', 'damaged', 'returned', 'lost', 'correction', 'shrinkage', 'transfer', 'received', 'expired', 'other')),
         notes TEXT,
         status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
         approved_by INTEGER REFERENCES users(id),
@@ -365,6 +434,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS device_history (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         device_info TEXT,
         ip_address VARCHAR(50),
         login_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -391,6 +461,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS sessions (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         token_hash VARCHAR(255) NOT NULL,
         is_active BOOLEAN DEFAULT TRUE,
         ip_address VARCHAR(50),
@@ -407,6 +478,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS wishlists (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          session_id VARCHAR(255),
         product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, product_id)
@@ -422,6 +494,7 @@ const createTables = async () => {
         product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
         rating INTEGER CHECK (rating >= 1 AND rating <= 5),
         comment TEXT,
+        media_urls JSONB DEFAULT '[]'::jsonb,
         is_approved BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -531,6 +604,7 @@ const createTables = async () => {
         ('security', 'password_require_special', 'true'),
         ('security', 'session_timeout_minutes', '30'),
         ('security', '2fa_enforcement', 'optional'),
+        ('home', 'announcements_enabled', 'true'),
         ('store', 'name', '10th West Moto'),
         ('store', 'tagline', 'Motorcycle Parts & Accessories'),
         ('store', 'email', 'admin@10thwestmoto.com'),
@@ -553,6 +627,7 @@ const createTables = async () => {
         ('payment', 'maya_enabled', 'false'),
         ('payment', 'stripe_pk', ''),
         ('payment', 'stripe_sk', ''),
+        ('returns', 'return_window_days', '15'),
         ('email', 'order_confirmation', 'true'),
         ('email', 'shipping_update', 'true'),
         ('email', 'return_approval', 'true'),
@@ -591,10 +666,17 @@ const createTables = async () => {
 
     // -- Products table: new columns --
     const productsNewColumns = [
-      { name: 'status', definition: "VARCHAR(20) DEFAULT 'available'" },
+      { name: 'status', definition: "VARCHAR(20) DEFAULT 'draft'" },
       { name: 'expiry_date', definition: 'DATE' },
       { name: 'is_deleted', definition: 'BOOLEAN DEFAULT FALSE' },
       { name: 'subcategory_id', definition: 'INTEGER REFERENCES subcategories(id) ON DELETE SET NULL' },
+      { name: 'video_url', definition: 'VARCHAR(500)' },
+      { name: 'image_urls', definition: "JSONB DEFAULT '[]'::jsonb" },
+      { name: 'bulk_pricing', definition: "JSONB DEFAULT '[]'::jsonb" },
+      { name: 'variant_options', definition: "JSONB DEFAULT '[]'::jsonb" },
+      { name: 'shipping_option', definition: "VARCHAR(20) DEFAULT 'standard'" },
+      { name: 'shipping_weight_kg', definition: 'DECIMAL(10,3) DEFAULT 0.10' },
+      { name: 'shipping_dimensions', definition: 'JSONB' },
     ];
 
     for (const col of productsNewColumns) {
@@ -604,7 +686,108 @@ const createTables = async () => {
         console.log(`⚠️  Column products.${col.name} may already exist, skipping: ${err.message}`);
       }
     }
+
+    await client.query(`
+      UPDATE products
+      SET status = 'draft'
+      WHERE status = 'hidden';
+
+      UPDATE products
+      SET status = 'published'
+      WHERE status IN ('available', 'out_of_stock');
+
+      UPDATE products
+      SET status = 'draft'
+      WHERE status IS NULL;
+
+      ALTER TABLE products
+      ALTER COLUMN status SET DEFAULT 'draft';
+
+      ALTER TABLE products
+      DROP CONSTRAINT IF EXISTS products_status_check;
+
+      ALTER TABLE products
+      ADD CONSTRAINT products_status_check
+        CHECK (status IN ('draft', 'published'));
+    `).catch((err) => {
+      console.log(`⚠️  Could not enforce products status workflow: ${err.message}`);
+    });
+
+    await client.query(`
+      UPDATE products
+      SET shipping_option = 'standard'
+      WHERE shipping_option IS NULL;
+    `).catch((err) => {
+      console.log(`⚠️  Could not backfill products.shipping_option: ${err.message}`);
+    });
+
+    await client.query(`
+      UPDATE products
+      SET shipping_weight_kg = 0.10
+      WHERE shipping_weight_kg IS NULL;
+    `).catch((err) => {
+      console.log(`⚠️  Could not backfill products.shipping_weight_kg: ${err.message}`);
+    });
+
+    await client.query(`
+      ALTER TABLE products
+      ALTER COLUMN shipping_weight_kg SET DEFAULT 0.10;
+    `).catch((err) => {
+      console.log(`⚠️  Could not set default for products.shipping_weight_kg: ${err.message}`);
+    });
+
+    await client.query(`
+      ALTER TABLE products
+      ALTER COLUMN shipping_weight_kg SET NOT NULL;
+    `).catch((err) => {
+      console.log(`⚠️  Could not enforce NOT NULL on products.shipping_weight_kg: ${err.message}`);
+    });
+
     console.log('✅ Products table columns updated');
+
+    // -- Product Variants table: new columns --
+    const productVariantsNewColumns = [
+      { name: 'price', definition: 'DECIMAL(10,2)' },
+      { name: 'option_combination', definition: "JSONB DEFAULT '{}'::jsonb" },
+      { name: 'combination_key', definition: 'VARCHAR(255)' },
+      { name: 'image_url', definition: 'VARCHAR(500)' },
+      { name: 'updated_at', definition: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' },
+    ];
+
+    for (const col of productVariantsNewColumns) {
+      try {
+        await client.query(`ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS ${col.name} ${col.definition}`);
+      } catch (err) {
+        console.log(`⚠️  Column product_variants.${col.name} may already exist, skipping: ${err.message}`);
+      }
+    }
+
+    await client.query(`
+      UPDATE product_variants
+      SET option_combination = jsonb_build_object(
+        INITCAP(COALESCE(NULLIF(TRIM(variant_type), ''), 'Option')),
+        COALESCE(NULLIF(TRIM(variant_value), ''), 'Default')
+      )
+      WHERE (option_combination IS NULL OR option_combination = '{}'::jsonb)
+        AND variant_type IS NOT NULL
+        AND variant_value IS NOT NULL;
+    `).catch((err) => {
+      console.log(`⚠️  Could not backfill product_variants.option_combination: ${err.message}`);
+    });
+
+    await client.query(`
+      UPDATE product_variants
+      SET combination_key = LOWER(REGEXP_REPLACE(COALESCE(NULLIF(TRIM(variant_type), ''), 'option'), '[^a-z0-9]+', '-', 'g'))
+        || ':' ||
+        LOWER(REGEXP_REPLACE(COALESCE(NULLIF(TRIM(variant_value), ''), 'default'), '[^a-z0-9]+', '-', 'g'))
+      WHERE combination_key IS NULL
+        AND variant_type IS NOT NULL
+        AND variant_value IS NOT NULL;
+    `).catch((err) => {
+      console.log(`⚠️  Could not backfill product_variants.combination_key: ${err.message}`);
+    });
+
+    console.log('✅ Product Variants table columns updated');
 
     // -- Orders table: new columns --
     const ordersNewColumns = [
@@ -614,6 +797,10 @@ const createTables = async () => {
       { name: 'shipping_method', definition: "VARCHAR(50) DEFAULT 'standard'" },
       { name: 'delivery_notes', definition: 'TEXT' },
       { name: 'estimated_delivery', definition: 'DATE' },
+      { name: 'delivered_at', definition: 'TIMESTAMP' },
+      { name: 'rider_confirmed_delivery_at', definition: 'TIMESTAMP' },
+      { name: 'rider_confirmed_by', definition: 'INTEGER REFERENCES users(id)' },
+      { name: 'customer_confirmed_receipt_at', definition: 'TIMESTAMP' },
     ];
 
     for (const col of ordersNewColumns) {
@@ -624,6 +811,56 @@ const createTables = async () => {
       }
     }
     console.log('✅ Orders table columns updated');
+
+    await client.query(`
+      ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+      ALTER TABLE orders ADD CONSTRAINT orders_status_check
+        CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'delivered', 'completed', 'cancelled'));
+    `);
+    console.log('✅ Orders status workflow constraint updated');
+
+    await client.query(`
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_price_positive_check;
+      ALTER TABLE products ADD CONSTRAINT products_price_positive_check
+        CHECK (price > 0);
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_stock_quantity_non_negative_check;
+      ALTER TABLE products ADD CONSTRAINT products_stock_quantity_non_negative_check
+        CHECK (stock_quantity >= 0);
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_sale_price_positive_check;
+      ALTER TABLE products ADD CONSTRAINT products_sale_price_positive_check
+        CHECK (sale_price IS NULL OR sale_price > 0);
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_bulk_pricing_array_check;
+      ALTER TABLE products ADD CONSTRAINT products_bulk_pricing_array_check
+        CHECK (bulk_pricing IS NULL OR jsonb_typeof(bulk_pricing) = 'array');
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_variant_options_array_check;
+      ALTER TABLE products ADD CONSTRAINT products_variant_options_array_check
+        CHECK (variant_options IS NULL OR jsonb_typeof(variant_options) = 'array');
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_option_check;
+      ALTER TABLE products ADD CONSTRAINT products_shipping_option_check
+        CHECK (shipping_option IN ('standard', 'express'));
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_weight_positive_check;
+      ALTER TABLE products ADD CONSTRAINT products_shipping_weight_positive_check
+        CHECK (shipping_weight_kg > 0);
+
+      ALTER TABLE products DROP CONSTRAINT IF EXISTS products_shipping_dimensions_object_check;
+      ALTER TABLE products ADD CONSTRAINT products_shipping_dimensions_object_check
+        CHECK (shipping_dimensions IS NULL OR jsonb_typeof(shipping_dimensions) = 'object');
+
+      ALTER TABLE product_variants DROP CONSTRAINT IF EXISTS product_variants_stock_quantity_non_negative_check;
+      ALTER TABLE product_variants ADD CONSTRAINT product_variants_stock_quantity_non_negative_check
+        CHECK (stock_quantity >= 0);
+
+      ALTER TABLE product_variants DROP CONSTRAINT IF EXISTS product_variants_price_positive_check;
+      ALTER TABLE product_variants ADD CONSTRAINT product_variants_price_positive_check
+        CHECK (price IS NULL OR price > 0);
+    `);
+    console.log('✅ Product pricing and stock constraints updated');
 
     // ============================================================
     // INDEXES
@@ -650,7 +887,11 @@ const createTables = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_subcategories_category ON subcategories(category_id);
       CREATE INDEX IF NOT EXISTS idx_products_subcategory ON products(subcategory_id);
+      CREATE INDEX IF NOT EXISTS idx_products_shipping_option ON products(shipping_option);
       CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants(product_id);
+      CREATE INDEX IF NOT EXISTS idx_product_variants_product_key ON product_variants(product_id, combination_key);
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_product_variants_product_combination ON product_variants(product_id, combination_key) WHERE combination_key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_products_variant_options ON products USING GIN (variant_options);
       CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
       CREATE INDEX IF NOT EXISTS idx_stock_adjustments_product ON stock_adjustments(product_id);
       CREATE INDEX IF NOT EXISTS idx_stock_adjustments_adjusted_by ON stock_adjustments(adjusted_by);

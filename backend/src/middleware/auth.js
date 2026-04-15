@@ -2,17 +2,198 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../config/database.js';
 
-export const authenticateToken = async (req, res, next) => {
+const extractBearerToken = (authHeader) => {
+  if (typeof authHeader !== 'string') return null;
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : null;
+};
+
+const decodeSupabaseFallbackToken = (token) => {
+  if (typeof token !== 'string' || !token.startsWith('sb-token-')) {
+    return null;
+  }
+
+  const payloadBase64 = token.slice('sb-token-'.length);
+  if (!payloadBase64) return null;
+
+  try {
+    const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
+    if (!payload || typeof payload !== 'object') return null;
+
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) return null;
+
+    return {
+      id,
+      email: payload.email || null,
+      role: payload.role || null,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const readSessionAuth = (req) => {
+  const sessionAuth = req.session?.auth;
+  if (!sessionAuth || typeof sessionAuth !== 'object') return null;
+
+  const userId = Number(sessionAuth.userId);
+  if (!Number.isInteger(userId) || userId <= 0) return null;
+
+  const tokenHash = String(sessionAuth.tokenHash || '').trim();
+  if (!tokenHash) return null;
+
+  return {
+    userId,
+    tokenHash,
+    role: sessionAuth.role || null,
+  };
+};
+
+const hydrateUserFromSession = async (req) => {
+  const sessionAuth = readSessionAuth(req);
+  if (!sessionAuth) return null;
+
+  const sessionResult = await pool.query(
+    `SELECT id
+     FROM sessions
+     WHERE token_hash = $1
+       AND is_active = true
+       AND expires_at > NOW()`,
+    [sessionAuth.tokenHash]
+  );
+
+  if (sessionResult.rows.length === 0) {
+    return null;
+  }
+
+  const userResult = await pool.query(
+    `SELECT id, name, email, role, avatar, is_active
+     FROM users
+     WHERE id = $1
+     LIMIT 1`,
+    [sessionAuth.userId]
+  );
+
+  if (userResult.rows.length === 0 || !userResult.rows[0].is_active) {
+    return null;
+  }
+
+  await pool.query(
+    'UPDATE sessions SET last_active = NOW() WHERE token_hash = $1',
+    [sessionAuth.tokenHash]
+  );
+
+  return userResult.rows[0];
+};
+
+export const authenticateOptional = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = extractBearerToken(authHeader);
 
   if (!token) {
-    return res.status(401).json({ message: 'Access token required' });
+    try {
+      const sessionUser = await hydrateUserFromSession(req);
+      if (sessionUser) {
+        req.user = sessionUser;
+      }
+    } catch (error) {
+      console.error('Optional session authentication error:', error);
+    }
+    return next();
   }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const sessionResult = await pool.query(
+      'SELECT id FROM sessions WHERE token_hash = $1 AND is_active = true AND expires_at > NOW()',
+      [tokenHash]
+    );
 
+    if (sessionResult.rows.length === 0) {
+      const anySession = await pool.query('SELECT COUNT(*) FROM sessions WHERE user_id = $1', [decoded.id]);
+      if (parseInt(anySession.rows[0].count) > 0) {
+        return next(); // Expired, treat as guest
+      }
+    }
+
+    const userResult = await pool.query('SELECT is_active FROM users WHERE id = $1', [decoded.id]);
+    if (userResult.rows.length > 0 && userResult.rows[0].is_active) {
+      req.user = decoded;
+    }
+    next();
+  } catch (err) {
+    next(); // Invalid token, treat as guest
+  }
+};
+
+export const authenticateToken = async (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = extractBearerToken(authHeader);
+  const trySessionFallback = async () => {
+    const sessionUser = await hydrateUserFromSession(req);
+    if (!sessionUser) return false;
+    req.user = sessionUser;
+    return true;
+  };
+
+  if (!token) {
+    try {
+      if (await trySessionFallback()) {
+        return next();
+      }
+    } catch (error) {
+      console.error('Session authentication error:', error);
+      return res.status(500).json({
+        message: 'Authentication check failed. Please try again.',
+        code: 'AUTH_VALIDATION_FAILED',
+      });
+    }
+
+    return res.status(401).json({
+      message: 'Access token required',
+      code: 'AUTH_TOKEN_REQUIRED',
+    });
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET, { clockTolerance: 30 });
+  } catch (err) {
+    try {
+      if (await trySessionFallback()) {
+        return next();
+      }
+    } catch (sessionError) {
+      console.error('Session authentication fallback error:', sessionError);
+      return res.status(500).json({
+        message: 'Authentication check failed. Please try again.',
+        code: 'AUTH_VALIDATION_FAILED',
+      });
+    }
+
+    if (err?.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        message: 'Access token expired. Please log in again.',
+        code: 'AUTH_TOKEN_EXPIRED',
+      });
+    }
+
+    if (err?.name === 'JsonWebTokenError' || err?.name === 'NotBeforeError') {
+      return res.status(401).json({
+        message: 'Invalid access token.',
+        code: 'AUTH_INVALID_TOKEN',
+      });
+    }
+
+    return res.status(500).json({
+      message: 'Failed to validate authentication token.',
+      code: 'AUTH_VALIDATION_FAILED',
+    });
+  }
+
+  try {
     // Validate session is still active
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const sessionResult = await pool.query(
@@ -24,7 +205,10 @@ export const authenticateToken = async (req, res, next) => {
     if (sessionResult.rows.length === 0) {
       const anySession = await pool.query('SELECT COUNT(*) FROM sessions WHERE user_id = $1', [decoded.id]);
       if (parseInt(anySession.rows[0].count) > 0) {
-        return res.status(403).json({ message: 'Session expired or revoked. Please log in again.' });
+        return res.status(401).json({
+          message: 'Session expired or revoked. Please log in again.',
+          code: 'AUTH_SESSION_EXPIRED',
+        });
       }
     } else {
       // Touch last_active
@@ -34,13 +218,20 @@ export const authenticateToken = async (req, res, next) => {
     // Check user is_active
     const userResult = await pool.query('SELECT is_active FROM users WHERE id = $1', [decoded.id]);
     if (userResult.rows.length > 0 && !userResult.rows[0].is_active) {
-      return res.status(403).json({ message: 'Account deactivated. Contact support.' });
+      return res.status(403).json({
+        message: 'Account deactivated. Contact support.',
+        code: 'AUTH_ACCOUNT_DEACTIVATED',
+      });
     }
 
     req.user = decoded;
     next();
-  } catch (err) {
-    return res.status(403).json({ message: 'Invalid or expired token' });
+  } catch (error) {
+    console.error('Authentication middleware error:', error);
+    return res.status(500).json({
+      message: 'Authentication check failed. Please try again.',
+      code: 'AUTH_VALIDATION_FAILED',
+    });
   }
 };
 
@@ -90,4 +281,62 @@ export const requirePermission = (permissionName) => {
       res.status(500).json({ message: 'Server error' });
     }
   };
+};
+
+
+export const optionalAuth = async (req, res, next) => authenticateOptional(req, res, next);
+
+export const authenticateTokenOrSupabaseToken = async (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = extractBearerToken(authHeader);
+
+  if (!token) {
+    return res.status(401).json({
+      message: 'Access token required',
+      code: 'AUTH_TOKEN_REQUIRED',
+    });
+  }
+
+  const fallbackPayload = decodeSupabaseFallbackToken(token);
+  if (!fallbackPayload) {
+    return authenticateToken(req, res, next);
+  }
+
+  try {
+    const userResult = await pool.query(
+      'SELECT id, name, email, role, avatar, is_active FROM users WHERE id = $1 LIMIT 1',
+      [fallbackPayload.id],
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({
+        message: 'User not found for access token.',
+        code: 'AUTH_INVALID_TOKEN',
+      });
+    }
+
+    const user = userResult.rows[0];
+    if (!user.is_active) {
+      return res.status(403).json({
+        message: 'Account deactivated. Contact support.',
+        code: 'AUTH_ACCOUNT_DEACTIVATED',
+      });
+    }
+
+    req.user = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      avatar: user.avatar,
+    };
+
+    return next();
+  } catch (error) {
+    console.error('Hybrid token authentication error:', error);
+    return res.status(500).json({
+      message: 'Authentication check failed. Please try again.',
+      code: 'AUTH_VALIDATION_FAILED',
+    });
+  }
 };

@@ -3,14 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "postinstall": "cd frontend && npm install --legacy-peer-deps",
-    "dev": "cd frontend && npx vite --port 3010 --host",
-    "dev:frontend": "cd frontend && npx vite --port 3010 --host",
-    "dev:backend": "cd backend && node src/server.js",
-    "build": "cd frontend && npx vite build",
-    "install:frontend": "cd frontend && npm install --legacy-peer-deps",
-    "install:backend": "cd backend && npm install",
+    "postinstall": "npm run install:frontend && npm run install:backend",
+    "dev": "npm --prefix frontend run dev",
+    "dev:frontend": "npm --prefix frontend run dev:frontend",
+    "dev:backend": "npm --prefix backend run dev",
+    "build": "npm --prefix frontend run build",
+    "migrate": "npm --prefix backend run migrate",
+    "migrate:down": "npm --prefix backend run migrate:down",
+    "migrate:status": "npm --prefix backend run migrate:status",
+    "install:frontend": "npm --prefix frontend install --legacy-peer-deps",
+    "install:backend": "npm --prefix backend install",
     "install:all": "npm run install:frontend && npm run install:backend",
-    "start": "cd backend && node src/server.js"
+    "start": "npm --prefix backend run start"
   }
 }

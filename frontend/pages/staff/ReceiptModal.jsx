@@ -12,7 +12,7 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
         <div className="fixed inset-0 bg-slate-900 bg-opacity-75 transition-opacity" onClick={onClose}></div>
 
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle w-full max-w-sm">
+        <div className="inline-block align-bottom bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle w-full max-w-sm">
           {/* No-print control bar */}
           <div className="bg-slate-50 px-4 py-3 flex justify-between items-center border-b print:hidden">
             <h3 className="text-sm font-bold text-slate-700">Receipt Preview</h3>
@@ -26,18 +26,18 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
             </div>
           </div>
 
-          <div className="p-8 bg-white" id="receipt-content">
+          <div className="p-8 bg-gray-800" id="receipt-content">
             <div className="text-center mb-6">
               <div className="flex justify-center mb-2">
                 <Bike className="w-8 h-8 text-black" />
               </div>
               <h1 className="text-xl font-black uppercase tracking-widest text-black leading-none">10TH WEST</h1>
               <h2 className="text-xs font-bold uppercase tracking-widest text-black mb-2">Motorcycle Parts & Accessories</h2>
-              <p className="text-xs text-gray-500 mt-1">123 Moto Avenue, West District</p>
-              <p className="text-xs text-gray-500">Tel: (555) 999-MOTO</p>
+              <p className="text-xs text-gray-400 mt-1">123 Moto Avenue, West District</p>
+              <p className="text-xs text-gray-400">Tel: (555) 999-MOTO</p>
             </div>
 
-            <div className="border-b border-dashed border-gray-300 pb-4 mb-4 text-xs text-gray-500 font-mono">
+            <div className="border-b border-dashed border-gray-300 pb-4 mb-4 text-xs text-gray-400 font-mono">
               <div className="flex justify-between">
                 <span>Order #: {order.id}</span>
                 <span>{new Date(order.created_at).toLocaleDateString()}</span>
@@ -55,7 +55,7 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
                   <div key={idx} className="flex justify-between text-sm">
                     <div className="flex-1 pr-4">
                       <span className="text-black block font-bold">{item.product.name}</span>
-                      <span className="text-gray-500 text-xs">{item.quantity} x ₱{price.toFixed(2)}</span>
+                      <span className="text-gray-400 text-xs">{item.quantity} x ₱{price.toFixed(2)}</span>
                     </div>
                     <span className="text-black font-bold">₱{(item.quantity * price).toFixed(2)}</span>
                   </div>
@@ -94,7 +94,7 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
 
             <div className="mt-8 text-center">
               <div className="inline-block bg-black h-8 w-full opacity-10 mb-2"></div>
-              <p className="text-xs text-gray-500 font-bold uppercase">Ride Safe!</p>
+              <p className="text-xs text-gray-400 font-bold uppercase">Ride Safe!</p>
               <p className="text-[10px] text-gray-400 mt-1">No returns on electrical parts.</p>
             </div>
           </div>
@@ -108,7 +108,7 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
             </button>
             <button
               onClick={handlePrint}
-              className="mt-3 w-full inline-flex justify-center rounded-lg border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-bold text-slate-700 hover:bg-slate-50 sm:mt-0 sm:w-auto sm:text-sm"
+              className="mt-3 w-full inline-flex justify-center rounded-lg border border-slate-300 shadow-sm px-4 py-2 bg-gray-800 text-base font-bold text-slate-700 hover:bg-slate-50 sm:mt-0 sm:w-auto sm:text-sm"
             >
               Print
             </button>
@@ -138,3 +138,4 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
 };
 
 export default ReceiptModal;
+

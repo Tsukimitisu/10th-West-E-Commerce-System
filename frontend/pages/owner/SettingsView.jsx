@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Store, CreditCard, Truck, Mail, Receipt, Globe, Save, Bell, Loader2 } from 'lucide-react';
+﻿import React, { useState, useEffect } from 'react';
+import { Settings, Store, CreditCard, Truck, Mail, Receipt, Globe, Save, Bell, Loader2, RotateCcw } from 'lucide-react';
 import { getSystemSettings, updateSystemSettings } from '../../services/api';
 
 const SettingsView = () => {
@@ -35,11 +35,23 @@ const SettingsView = () => {
     promotions: false, fromName: '10th West Moto', fromEmail: '',
   });
 
+  const [returnsConfig, setReturnsConfig] = useState({
+    returnWindowDays: '15',
+  });
+
+  const [home, setHome] = useState({
+    heroAutoplay: true,
+    heroIntervalMs: '5000',
+    heroShowDots: true,
+    heroShowArrows: true,
+    heroPauseOnHover: true,
+  });
+
   useEffect(() => {
     (async () => {
       try {
         const allSettings = await getSystemSettings();
-        const parsed = { store: {}, tax: {}, shipping: {}, payment: {}, email: {} };
+        const parsed = { store: {}, tax: {}, shipping: {}, payment: {}, email: {}, returns: {}, home: {} };
         (Array.isArray(allSettings) ? allSettings : []).forEach(s => {
           if (parsed[s.category]) parsed[s.category][s.key] = s.value;
         });
@@ -81,6 +93,16 @@ const SettingsView = () => {
           returnApproval: parsed.email.return_approval !== 'false',
           promotions: parsed.email.promotions === 'true',
         });
+        setReturnsConfig({
+          returnWindowDays: parsed.returns.return_window_days || '15',
+        });
+        setHome({
+          heroAutoplay: parsed.home.hero_autoplay !== 'false',
+          heroIntervalMs: parsed.home.hero_interval_ms || '5000',
+          heroShowDots: parsed.home.hero_show_dots !== 'false',
+          heroShowArrows: parsed.home.hero_show_arrows !== 'false',
+          heroPauseOnHover: parsed.home.hero_pause_on_hover !== 'false',
+        });
       } catch (err) { console.error('Failed to load settings:', err); }
       setLoading(false);
     })();
@@ -106,6 +128,18 @@ const SettingsView = () => {
         case 'email':
           settingsMap = { from_name: email.fromName, from_email: email.fromEmail, order_confirmation: String(email.orderConfirmation), shipping_update: String(email.shippingUpdate), return_approval: String(email.returnApproval), promotions: String(email.promotions) };
           break;
+        case 'returns':
+          settingsMap = { return_window_days: returnsConfig.returnWindowDays };
+          break;
+        case 'home':
+          settingsMap = {
+            hero_autoplay: String(home.heroAutoplay),
+            hero_interval_ms: home.heroIntervalMs,
+            hero_show_dots: String(home.heroShowDots),
+            hero_show_arrows: String(home.heroShowArrows),
+            hero_pause_on_hover: String(home.heroPauseOnHover),
+          };
+          break;
       }
       await updateSystemSettings(tab, settingsMap);
       setSaveError('');
@@ -119,22 +153,24 @@ const SettingsView = () => {
     setSaving(false);
   };
 
-  const inputClass = "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300";
+  const inputClass = "w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300";
   const Label = ({ children }) => <label className="block text-xs font-medium text-gray-600 mb-1">{children}</label>;
 
   const tabs = [
     { id: 'store', label: 'Store', icon: Store },
+    { id: 'home', label: 'Home', icon: Globe },
     { id: 'tax', label: 'Tax', icon: Receipt },
     { id: 'shipping', label: 'Shipping', icon: Truck },
     { id: 'payment', label: 'Payment', icon: CreditCard },
     { id: 'email', label: 'Email', icon: Mail },
+    { id: 'returns', label: 'Returns', icon: RotateCcw },
   ];
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-orange-500 mr-2" />
-        <span className="text-sm text-gray-500">Loading settings...</span>
+        <Loader2 className="w-6 h-6 animate-spin text-red-500 mr-2" />
+        <span className="text-sm text-gray-400">Loading settings...</span>
       </div>
     );
   }
@@ -143,33 +179,33 @@ const SettingsView = () => {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="font-display font-bold text-xl text-gray-900">System Settings</h1>
-          <p className="text-sm text-gray-500">Configure store preferences and integrations</p>
+          <h1 className="font-display font-bold text-xl text-white">System Settings</h1>
+          <p className="text-sm text-gray-400">Configure store preferences and integrations</p>
         </div>
-        <button onClick={handleSave} disabled={saving} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 ${saved ? 'bg-green-600 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}>
+        <button onClick={handleSave} disabled={saving} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 ${saved ? 'bg-green-600 text-white' : 'bg-red-500/100 hover:bg-red-600 text-white'}`}>
           {saving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : saved ? <><Save size={14} /> Saved!</> : <><Save size={14} /> Save Changes</>}
         </button>
       </div>
 
       {saveError && (
         <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
-          <span>⚠</span> {saveError}
+          <span>âš </span> {saveError}
         </div>
       )}
 
-      <div className="flex gap-1 bg-white rounded-lg border border-gray-100 p-1 w-fit flex-wrap">
+      <div className="flex gap-1 bg-gray-800 rounded-lg border border-gray-700 p-1 w-fit flex-wrap">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-orange-50 text-orange-500' : 'text-gray-500 hover:text-gray-700'}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
             <t.icon size={14} /> {t.label}
           </button>
         ))}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 p-5">
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-5">
         {/* Store Settings */}
         {tab === 'store' && (
           <div className="space-y-4 max-w-xl">
-            <h3 className="font-display font-semibold text-gray-900">Store Information</h3>
+            <h3 className="font-display font-semibold text-white">Store Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div><Label>Store Name</Label><input value={store.name} onChange={e => setStore(s => ({...s, name: e.target.value}))} className={inputClass} /></div>
               <div><Label>Tagline</Label><input value={store.tagline} onChange={e => setStore(s => ({...s, tagline: e.target.value}))} className={inputClass} /></div>
@@ -195,22 +231,115 @@ const SettingsView = () => {
           </div>
         )}
 
+        {tab === 'returns' && (
+          <div className="space-y-4 max-w-xl">
+            <h3 className="font-display font-semibold text-white">Return Settings</h3>
+            <div>
+              <Label>Return Period (days)</Label>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                value={returnsConfig.returnWindowDays}
+                onChange={(e) => setReturnsConfig((prev) => ({ ...prev, returnWindowDays: e.target.value }))}
+                className={inputClass}
+              />
+              <p className="text-xs text-gray-400 mt-2">Delivered orders can request a return within this window.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Home */}
+        {tab === 'home' && (
+          <div className="space-y-4 max-w-xl">
+            <h3 className="font-display font-semibold text-white">Home Hero Carousel</h3>
+            <p className="text-sm text-gray-400">
+              These settings affect the hero section on the Home page only.
+            </p>
+
+            <label className="flex items-center justify-between p-3 border border-gray-700 rounded-lg cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-white">Auto-rotate slides</p>
+                <p className="text-[10px] text-gray-400">Automatically move to the next hero slide.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={home.heroAutoplay}
+                onChange={e => setHome(h => ({ ...h, heroAutoplay: e.target.checked }))}
+                className="w-4 h-4 text-red-500 rounded"
+              />
+            </label>
+
+            <div>
+              <Label>Slide Interval (milliseconds)</Label>
+              <input
+                type="number"
+                min="2000"
+                step="500"
+                value={home.heroIntervalMs}
+                onChange={e => setHome(h => ({ ...h, heroIntervalMs: e.target.value }))}
+                className={inputClass}
+              />
+              <p className="text-[10px] text-gray-400 mt-1">Recommended: 4000-7000ms for readability.</p>
+            </div>
+
+            <label className="flex items-center justify-between p-3 border border-gray-700 rounded-lg cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-white">Show navigation dots</p>
+                <p className="text-[10px] text-gray-400">Displays slide indicators below the hero.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={home.heroShowDots}
+                onChange={e => setHome(h => ({ ...h, heroShowDots: e.target.checked }))}
+                className="w-4 h-4 text-red-500 rounded"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-3 border border-gray-700 rounded-lg cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-white">Show left and right arrows</p>
+                <p className="text-[10px] text-gray-400">Lets users manually switch slides.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={home.heroShowArrows}
+                onChange={e => setHome(h => ({ ...h, heroShowArrows: e.target.checked }))}
+                className="w-4 h-4 text-red-500 rounded"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-3 border border-gray-700 rounded-lg cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-white">Pause on hover</p>
+                <p className="text-[10px] text-gray-400">Stops auto-rotation while reading desktop hero text.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={home.heroPauseOnHover}
+                onChange={e => setHome(h => ({ ...h, heroPauseOnHover: e.target.checked }))}
+                className="w-4 h-4 text-red-500 rounded"
+              />
+            </label>
+          </div>
+        )}
+
         {/* Tax */}
         {tab === 'tax' && (
           <div className="space-y-4 max-w-xl">
-            <h3 className="font-display font-semibold text-gray-900">Tax Configuration</h3>
+            <h3 className="font-display font-semibold text-white">Tax Configuration</h3>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={tax.enabled} onChange={e => setTax(t => ({...t, enabled: e.target.checked}))} className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500" />
+              <input type="checkbox" checked={tax.enabled} onChange={e => setTax(t => ({...t, enabled: e.target.checked}))} className="w-4 h-4 text-red-500 rounded focus:ring-orange-500" />
               Enable Tax Collection
             </label>
             {tax.enabled && (
-              <div className="space-y-4 pl-6 border-l-2 border-orange-100">
+              <div className="space-y-4 pl-6 border-l-2 border-red-100">
                 <div className="grid grid-cols-2 gap-4">
                   <div><Label>Tax Name</Label><input value={tax.name} onChange={e => setTax(t => ({...t, name: e.target.value}))} className={inputClass} /></div>
                   <div><Label>Tax Rate (%)</Label><input type="number" step="0.1" value={tax.rate} onChange={e => setTax(t => ({...t, rate: e.target.value}))} className={inputClass} /></div>
                 </div>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input type="checkbox" checked={tax.inclusive} onChange={e => setTax(t => ({...t, inclusive: e.target.checked}))} className="w-4 h-4 text-orange-500 rounded" />
+                  <input type="checkbox" checked={tax.inclusive} onChange={e => setTax(t => ({...t, inclusive: e.target.checked}))} className="w-4 h-4 text-red-500 rounded" />
                   Tax included in product prices
                 </label>
               </div>
@@ -221,21 +350,21 @@ const SettingsView = () => {
         {/* Shipping */}
         {tab === 'shipping' && (
           <div className="space-y-4 max-w-xl">
-            <h3 className="font-display font-semibold text-gray-900">Shipping Methods</h3>
+            <h3 className="font-display font-semibold text-white">Shipping Methods</h3>
             <div className="space-y-3">
-              <div className="p-4 border border-gray-100 rounded-lg space-y-3">
-                <h4 className="text-sm font-medium text-gray-900">Standard Shipping</h4>
+              <div className="p-4 border border-gray-700 rounded-lg space-y-3">
+                <h4 className="text-sm font-medium text-white">Standard Shipping</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div><Label>Flat Rate (P)</Label><input type="number" value={shipping.flatRate} onChange={e => setShipping(s => ({...s, flatRate: e.target.value}))} className={inputClass} /></div>
                   <div><Label>Free Shipping Threshold (P)</Label><input type="number" value={shipping.freeThreshold} onChange={e => setShipping(s => ({...s, freeThreshold: e.target.value}))} className={inputClass} /></div>
                 </div>
               </div>
-              <div className="p-4 border border-gray-100 rounded-lg space-y-3">
-                <h4 className="text-sm font-medium text-gray-900">Express Shipping</h4>
+              <div className="p-4 border border-gray-700 rounded-lg space-y-3">
+                <h4 className="text-sm font-medium text-white">Express Shipping</h4>
                 <div><Label>Express Rate (P)</Label><input type="number" value={shipping.expressRate} onChange={e => setShipping(s => ({...s, expressRate: e.target.value}))} className={inputClass} /></div>
               </div>
-              <label className="flex items-center gap-2 text-sm cursor-pointer p-3 border border-gray-100 rounded-lg">
-                <input type="checkbox" checked={shipping.enablePickup} onChange={e => setShipping(s => ({...s, enablePickup: e.target.checked}))} className="w-4 h-4 text-orange-500 rounded" />
+              <label className="flex items-center gap-2 text-sm cursor-pointer p-3 border border-gray-700 rounded-lg">
+                <input type="checkbox" checked={shipping.enablePickup} onChange={e => setShipping(s => ({...s, enablePickup: e.target.checked}))} className="w-4 h-4 text-red-500 rounded" />
                 Enable In-Store Pickup
               </label>
             </div>
@@ -245,7 +374,7 @@ const SettingsView = () => {
         {/* Payment */}
         {tab === 'payment' && (
           <div className="space-y-4 max-w-xl">
-            <h3 className="font-display font-semibold text-gray-900">Payment Methods</h3>
+            <h3 className="font-display font-semibold text-white">Payment Methods</h3>
             <div className="space-y-2">
               {[
                 { key: 'cash', label: 'Cash on Delivery / POS Cash' },
@@ -253,15 +382,15 @@ const SettingsView = () => {
                 { key: 'gcash', label: 'GCash' },
                 { key: 'maya', label: 'Maya' },
               ].map(m => (
-                <label key={m.key} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${payment[m.key] ? 'border-orange-200 bg-orange-50' : 'border-gray-100 bg-white'}`}>
-                  <span className="text-sm font-medium text-gray-900">{m.label}</span>
-                  <input type="checkbox" checked={payment[m.key]} onChange={e => setPayment(p => ({...p, [m.key]: e.target.checked}))} className="w-4 h-4 text-orange-500 rounded" />
+                <label key={m.key} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${payment[m.key] ? 'border-red-200 bg-red-500/10' : 'border-gray-700 bg-gray-800'}`}>
+                  <span className="text-sm font-medium text-white">{m.label}</span>
+                  <input type="checkbox" checked={payment[m.key]} onChange={e => setPayment(p => ({...p, [m.key]: e.target.checked}))} className="w-4 h-4 text-red-500 rounded" />
                 </label>
               ))}
             </div>
             {payment.card && (
-              <div className="space-y-3 p-4 border border-gray-100 rounded-lg">
-                <h4 className="text-sm font-medium text-gray-900">Stripe Configuration</h4>
+              <div className="space-y-3 p-4 border border-gray-700 rounded-lg">
+                <h4 className="text-sm font-medium text-white">Stripe Configuration</h4>
                 <div><Label>Publishable Key</Label><input type="password" value={payment.stripePk} onChange={e => setPayment(p => ({...p, stripePk: e.target.value}))} className={inputClass} placeholder="pk_..." /></div>
                 <div><Label>Secret Key</Label><input type="password" value={payment.stripeSk} onChange={e => setPayment(p => ({...p, stripeSk: e.target.value}))} className={inputClass} placeholder="sk_..." /></div>
               </div>
@@ -272,12 +401,12 @@ const SettingsView = () => {
         {/* Email */}
         {tab === 'email' && (
           <div className="space-y-4 max-w-xl">
-            <h3 className="font-display font-semibold text-gray-900">Email Settings</h3>
+            <h3 className="font-display font-semibold text-white">Email Settings</h3>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>From Name</Label><input value={email.fromName} onChange={e => setEmail(em => ({...em, fromName: e.target.value}))} className={inputClass} /></div>
               <div><Label>From Email</Label><input type="email" value={email.fromEmail} onChange={e => setEmail(em => ({...em, fromEmail: e.target.value}))} className={inputClass} /></div>
             </div>
-            <h4 className="text-sm font-medium text-gray-900 pt-2">Email Notifications</h4>
+            <h4 className="text-sm font-medium text-white pt-2">Email Notifications</h4>
             <div className="space-y-2">
               {[
                 { key: 'orderConfirmation', label: 'Order Confirmation', desc: 'Send email when a new order is placed' },
@@ -285,8 +414,8 @@ const SettingsView = () => {
                 { key: 'returnApproval', label: 'Return Approval', desc: 'Notify when return request is updated' },
                 { key: 'promotions', label: 'Promotional Emails', desc: 'Send marketing and promotion emails' },
               ].map(n => (
-                <label key={n.key} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${email[n.key] ? 'border-green-200 bg-green-50' : 'border-gray-100 bg-white'}`}>
-                  <div><p className="text-sm font-medium text-gray-900">{n.label}</p><p className="text-[10px] text-gray-500">{n.desc}</p></div>
+                <label key={n.key} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${email[n.key] ? 'border-green-200 bg-green-50' : 'border-gray-700 bg-gray-800'}`}>
+                  <div><p className="text-sm font-medium text-white">{n.label}</p><p className="text-[10px] text-gray-400">{n.desc}</p></div>
                   <input type="checkbox" checked={email[n.key]} onChange={e => setEmail(em => ({...em, [n.key]: e.target.checked}))} className="w-4 h-4 text-green-600 rounded" />
                 </label>
               ))}
@@ -299,3 +428,5 @@ const SettingsView = () => {
 };
 
 export default SettingsView;
+
+

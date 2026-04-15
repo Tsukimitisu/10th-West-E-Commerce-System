@@ -10,6 +10,7 @@ Backend REST API for the 10th West Moto E-Commerce System.
 - **Authentication:** JWT (JSON Web Tokens)
 - **Validation:** Express-validator
 - **Password Hashing:** bcryptjs
+- **Media Storage:** Cloudinary (all uploads: product images/videos, avatars, review media)
 
 ## Prerequisites
 
@@ -35,17 +36,25 @@ DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/
 SUPABASE_URL=https://[PROJECT-REF].supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 JWT_SECRET=your-super-secret-jwt-key
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+# Optional: prefix uploads by app/environment for scale and isolation
+CLOUDINARY_UPLOAD_ROOT=10th-west-moto
 ```
 
-3. Create schema in Supabase:
-```bash
-# Run backend/supabase-setup.sql in Supabase SQL Editor
-```
-
-4. Optional: run Node migrations/seeds against Supabase:
+3. Run database migrations (up):
 ```bash
 npm run migrate
-node src/database/migrate-auth.js
+```
+
+4. Roll back the latest migration batch (down):
+```bash
+npm run migrate:down
+```
+
+5. Optional: run seed scripts:
+```bash
 node src/database/seed.js
 node src/database/seed-sprint6.js
 ```
@@ -117,9 +126,10 @@ backend/
 │   │   ├── products.js          # Product routes
 │   │   └── categories.js        # Category routes
 │   ├── database/
-│   │   ├── migrate.js           # Database schema
 │   │   └── seed.js              # Seed data
 │   └── server.js                # Main server file
+├── migrations/                   # Knex up/down migrations
+├── knexfile.cjs                  # Knex migration config
 ├── .env                          # Environment variables
 ├── .env.example                  # Example env file
 ├── package.json

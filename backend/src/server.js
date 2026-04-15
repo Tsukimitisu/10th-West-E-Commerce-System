@@ -1,7 +1,10 @@
 import express from 'express';
+import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
@@ -28,14 +31,20 @@ import policyRoutes from './routes/policies.js';
 import staffRoutes from './routes/staff.js';
 import notificationRoutes from './routes/notifications.js';
 import bannerRoutes from './routes/banners.js';
+import announcementRoutes from './routes/announcements.js';
 import supplierRoutes from './routes/suppliers.js';
 import variantRoutes from './routes/variants.js';
 import subcategoryRoutes from './routes/subcategories.js';
 import shippingRoutes from './routes/shipping.js';
 import adminRoutes from './routes/admin.js';
+import wishlistRoutes from './routes/wishlist.js';
+import reviewRoutes from './routes/reviews.js';
+
 import { apiLimiter, authLimiter } from './middleware/rateLimiter.js';
 import { errorLogger } from './middleware/errorLogger.js';
+import { errorHandler } from './middleware/errorHandler.js';
 import { generateCsrfToken, validateCsrf } from './middleware/csrf.js';
+import pool from './config/database.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -56,11 +65,22 @@ const requiredEnvVars = [
   'EMAIL_FROM'
 ];
 
+if (process.env.NODE_ENV === 'production') {
+  requiredEnvVars.push('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET');
+}
+
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingVars.length > 0) {
   console.error('❌ Missing required environment variables:', missingVars.join(', '));
   console.error('Please copy backend/.env.example to backend/.env and fill in the values');
   process.exit(1);
+}
+
+const optionalUploadVars = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
+const missingUploadVars = optionalUploadVars.filter((varName) => !process.env[varName]);
+if (missingUploadVars.length > 0) {
+  console.warn('⚠️ Cloudinary is not configured. Product, review, and avatar uploads will be unavailable.');
+  console.warn('⚠️ Missing Cloudinary env vars:', missingUploadVars.join(', '));
 }
 
 // Log configuration on startup (no sensitive values)
@@ -69,13 +89,35 @@ console.log('   Stripe Secret:', process.env.STRIPE_SECRET_KEY ? '✅ SET' : '�
 console.log('   Stripe Public:', process.env.STRIPE_PUBLISHABLE_KEY ? '✅ SET' : '❌ NOT SET');
 console.log('   Email User:', process.env.EMAIL_USER ? '✅ SET' : '❌ NOT SET');
 console.log('   Email Password:', process.env.EMAIL_PASSWORD ? '✅ SET' : '❌ NOT SET');
+console.log('   Cloudinary:', (
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET
+) ? '✅ SET' : '❌ NOT SET');
 console.log('');
 
 const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
-const uploadsDir = path.join(__dirname, '..', 'uploads');
+const PgSessionStore = connectPgSimple(session);
+const configuredSessionSameSite = String(process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
+const sessionCookieSameSite = ['lax', 'strict', 'none'].includes(configuredSessionSameSite)
+  ? configuredSessionSameSite
+  : (process.env.NODE_ENV === 'production' ? 'none' : 'lax');
+const sessionCookieSecure = sessionCookieSameSite === 'none' || process.env.NODE_ENV === 'production';
+
+const sessionSecret = process.env.SESSION_SECRET;
+if (process.env.NODE_ENV === 'production' && !sessionSecret) {
+  console.error('❌ SESSION_SECRET is required in production.');
+  process.exit(1);
+}
+
+if (!sessionSecret) {
+  console.warn('⚠️ SESSION_SECRET is not set. Using an ephemeral secret for development only.');
+}
+
+const effectiveSessionSecret = sessionSecret || crypto.randomBytes(48).toString('hex');
 
 // Initialize Socket.IO
 const io = initSocket(httpServer, FRONTEND_URL);
@@ -98,6 +140,7 @@ function getAllowedOrigins() {
 const allowedOrigins = getAllowedOrigins();
 
 // Middleware
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 0);
 
 // C8: Security headers via Helmet (CSP, X-Frame-Options, HSTS, etc.)
 app.use(helmet({
@@ -119,6 +162,7 @@ app.use(helmet({
     preload: true,
   },
   crossOriginEmbedderPolicy: false, // allow loading external images
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
 // C9: HTTPS redirect in production
@@ -153,7 +197,26 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(uploadsDir));
+app.use(session({
+  store: new PgSessionStore({
+    pool,
+    tableName: 'http_sessions',
+    createTableIfMissing: true,
+  }),
+  name: 'twm.sid',
+  secret: effectiveSessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  rolling: true,
+  proxy: process.env.NODE_ENV === 'production',
+  cookie: {
+    secure: sessionCookieSecure,
+    httpOnly: true,
+    sameSite: sessionCookieSameSite,
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  }
+}));
 app.use(passport.initialize());
 app.use(activityLogger);
 app.use('/api', apiLimiter);
@@ -200,11 +263,14 @@ app.use('/api/policies', policyRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/banners', bannerRoutes);
+app.use('/api/announcements', announcementRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/variants', variantRoutes);
 app.use('/api/subcategories', subcategoryRoutes);
 app.use('/api/shipping', shippingRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/reviews', reviewRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -214,15 +280,8 @@ app.use((req, res) => {
 // Error logging middleware (logs to error_logs table)
 app.use(errorLogger);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  // Log full error server-side only
-  console.error('Error:', err.message);
-  // C11: Never expose stack traces to clients, even in development
-  res.status(err.status || 500).json({
-    message: err.message || 'Internal server error',
-  });
-});
+// Global Error handling middleware (formats responses, hides stack trace in production)
+app.use(errorHandler);
 
 // Start server with Socket.IO
 httpServer.listen(PORT, '0.0.0.0', () => {

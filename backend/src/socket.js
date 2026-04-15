@@ -1,4 +1,5 @@
 import { Server } from 'socket.io';
+import { PRODUCT_PUBLISHER_ROLE_SET, STAFF_ROLE_SET } from './constants/schemaEnums.js';
 
 let io = null;
 
@@ -23,23 +24,47 @@ export function initSocket(httpServer, frontendUrl) {
 
     // Join rooms based on user role
     socket.on('join', (data) => {
-      if (data.role === 'admin' || data.role === 'cashier' || data.role === 'manager') {
+      // Leave previously joined app rooms first so account switching in the same tab stays isolated.
+      const previousRooms = socket.data.joinedRooms || [];
+      for (const room of previousRooms) {
+        socket.leave(room);
+      }
+      const joinedRooms = [];
+
+      if (STAFF_ROLE_SET.has(data.role)) {
         socket.join('staff');
+        joinedRooms.push('staff');
         console.log(`   ↳ ${socket.id} joined [staff] room`);
       }
-      if (data.role === 'admin') {
+      if (PRODUCT_PUBLISHER_ROLE_SET.has(data.role)) {
         socket.join('admin');
+        joinedRooms.push('admin');
         console.log(`   ↳ ${socket.id} joined [admin] room`);
       }
       if (data.userId) {
-        socket.join(`user:${data.userId}`);
+        const userRoom = `user:${data.userId}`;
+        socket.join(userRoom);
+        joinedRooms.push(userRoom);
         console.log(`   ↳ ${socket.id} joined [user:${data.userId}] room`);
       }
       // POS terminal room
       if (data.isPOS) {
         socket.join('pos');
+        joinedRooms.push('pos');
         console.log(`   ↳ ${socket.id} joined [pos] room`);
       }
+
+      socket.data.joinedRooms = joinedRooms;
+    });
+
+    // Explicitly leave all app-specific rooms (used on logout).
+    socket.on('leaveAll', () => {
+      const previousRooms = socket.data.joinedRooms || [];
+      for (const room of previousRooms) {
+        socket.leave(room);
+      }
+      socket.data.joinedRooms = [];
+      console.log(`   ↳ ${socket.id} left all app rooms`);
     });
 
     socket.on('disconnect', (reason) => {

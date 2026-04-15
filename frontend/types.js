@@ -14,14 +14,14 @@ export const OrderStatus = {
   PAID: 'paid',
   PREPARING: 'preparing',
   SHIPPED: 'shipped',
+  DELIVERED: 'delivered',
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
 };
 
 // Return status constants
 export const ReturnStatus = {
-  REQUESTED: 'requested',
+  PENDING: 'pending',
   APPROVED: 'approved',
   REJECTED: 'rejected',
-  COMPLETED: 'completed',
 };

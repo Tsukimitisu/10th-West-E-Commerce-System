@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   Activity, FileText, AlertTriangle, Search, RefreshCw,
   Loader2, CheckCircle2, XCircle, Filter, Download,
@@ -11,6 +11,14 @@ import {
 const MonitoringView = () => {
   const [tab, setTab] = useState('activity');
   const [loading, setLoading] = useState(true);
+
+  const formatLogDetails = (details) => {
+    let obj = details;
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
+    if (typeof obj !== 'object' || obj === null) return String(obj);
+    return Object.entries(obj).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(', ');
+  };
   const [activityLogs, setActivityLogs] = useState([]);
   const [errorLogs, setErrorLogs] = useState([]);
   const [transactionLogs, setTransactionLogs] = useState([]);
@@ -69,24 +77,24 @@ const MonitoringView = () => {
   };
 
   const getActionColor = (action) => {
-    if (!action) return 'text-gray-500';
+    if (!action) return 'text-gray-400';
     if (action.includes('delete') || action.includes('lock') || action.includes('reject')) return 'text-red-500';
     if (action.includes('create') || action.includes('add') || action.includes('approve') || action.includes('unlock')) return 'text-green-500';
     if (action.includes('update') || action.includes('edit') || action.includes('change') || action.includes('reset')) return 'text-blue-500';
     if (action.includes('login') || action.includes('logout')) return 'text-purple-500';
-    if (action.includes('order') || action.includes('checkout') || action.includes('payment')) return 'text-orange-500';
-    return 'text-gray-500';
+    if (action.includes('order') || action.includes('checkout') || action.includes('payment')) return 'text-red-500';
+    return 'text-gray-400';
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={24} className="text-orange-500 animate-spin" /></div>;
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={24} className="text-red-500 animate-spin" /></div>;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Activity size={22} className="text-orange-500" /> Monitoring & Logs</h1>
-          <p className="text-sm text-gray-500 mt-1">View system activity, error logs, and transaction history</p>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2"><Activity size={22} className="text-red-500" /> Monitoring & Logs</h1>
+          <p className="text-sm text-gray-400 mt-1">View system activity, error logs, and transaction history</p>
         </div>
         <button onClick={loadData} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
           <RefreshCw size={14} /> Refresh
@@ -95,32 +103,32 @@ const MonitoringView = () => {
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 shadow-sm">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 flex items-center gap-3 shadow-sm">
           <div className="p-2 bg-blue-50 rounded-lg"><Activity size={18} className="text-blue-500" /></div>
-          <div><p className="text-xs text-gray-500">Activity Logs</p><p className="text-lg font-bold text-gray-900">{activityLogs.length}</p></div>
+          <div><p className="text-xs text-gray-400">Activity Logs</p><p className="text-lg font-bold text-white">{activityLogs.length}</p></div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 shadow-sm">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 flex items-center gap-3 shadow-sm">
           <div className="p-2 bg-red-50 rounded-lg"><AlertTriangle size={18} className="text-red-500" /></div>
-          <div><p className="text-xs text-gray-500">Error Logs</p><p className="text-lg font-bold text-gray-900">{errorLogs.length}</p></div>
+          <div><p className="text-xs text-gray-400">Error Logs</p><p className="text-lg font-bold text-white">{errorLogs.length}</p></div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 shadow-sm">
-          <div className="p-2 bg-orange-50 rounded-lg"><FileText size={18} className="text-orange-500" /></div>
-          <div><p className="text-xs text-gray-500">Transaction Logs</p><p className="text-lg font-bold text-gray-900">{transactionLogs.length}</p></div>
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 flex items-center gap-3 shadow-sm">
+          <div className="p-2 bg-red-500/10 rounded-lg"><FileText size={18} className="text-red-500" /></div>
+          <div><p className="text-xs text-gray-400">Transaction Logs</p><p className="text-lg font-bold text-white">{transactionLogs.length}</p></div>
         </div>
       </div>
 
       {/* Tabs + Search */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-1 bg-white border border-gray-100 p-1 rounded-xl flex-1 overflow-x-auto shadow-sm">
+        <div className="flex gap-1 bg-gray-800 border border-gray-700 p-1 rounded-xl flex-1 overflow-x-auto shadow-sm">
           {tabs.map(t => {
             const Icon = t.icon;
             return (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                  tab === t.id ? 'bg-orange-50 text-orange-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  tab === t.id ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
                 }`}>
                 <Icon size={14} /> {t.label}
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${tab === t.id ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>{t.count}</span>
+                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${tab === t.id ? 'bg-red-500/20 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>{t.count}</span>
               </button>
             );
           })}
@@ -128,13 +136,13 @@ const MonitoringView = () => {
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Search logs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 w-full sm:w-56" />
+            className="pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 w-full sm:w-56" />
         </div>
       </div>
 
       {/* Activity Logs */}
       {tab === 'activity' && (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
           <div className="max-h-[520px] overflow-y-auto">
             {filterLogs(activityLogs).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
@@ -143,13 +151,13 @@ const MonitoringView = () => {
               </div>
             ) : (
               <table className="w-full text-left">
-                <thead className="bg-gray-50 sticky top-0">
+                <thead className="bg-gray-900 sticky top-0">
                   <tr>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500">Action</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">User</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">IP Address</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Details</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 text-right">Time</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400">Action</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden md:table-cell">User</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden lg:table-cell">IP Address</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden lg:table-cell">Details</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 text-right">Time</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -158,10 +166,10 @@ const MonitoringView = () => {
                       <td className="px-4 py-3">
                         <span className={`text-xs font-medium ${getActionColor(log.action)}`}>{formatAction(log.action)}</span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">{log.user_name || 'System'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 hidden md:table-cell">{log.user_name || 'System'}</td>
                       <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell font-mono">{log.ip_address || '-'}</td>
                       <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell max-w-xs truncate">
-                        {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)).slice(0, 60) : '-'}
+                        {log.details ? formatLogDetails(log.details) : '-'}
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
                     </tr>
@@ -175,7 +183,7 @@ const MonitoringView = () => {
 
       {/* Error Logs */}
       {tab === 'errors' && (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
           <div className="max-h-[520px] overflow-y-auto">
             {filterLogs(errorLogs).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-green-500">
@@ -184,13 +192,13 @@ const MonitoringView = () => {
               </div>
             ) : (
               <table className="w-full text-left">
-                <thead className="bg-gray-50 sticky top-0">
+                <thead className="bg-gray-900 sticky top-0">
                   <tr>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500">Type</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500">Message</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Endpoint</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">User</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 text-right">Time</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400">Type</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400">Message</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden md:table-cell">Endpoint</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden lg:table-cell">User</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 text-right">Time</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -214,7 +222,7 @@ const MonitoringView = () => {
 
       {/* Transaction Logs */}
       {tab === 'transactions' && (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
           <div className="max-h-[520px] overflow-y-auto">
             {filterLogs(transactionLogs).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
@@ -223,12 +231,12 @@ const MonitoringView = () => {
               </div>
             ) : (
               <table className="w-full text-left">
-                <thead className="bg-gray-50 sticky top-0">
+                <thead className="bg-gray-900 sticky top-0">
                   <tr>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500">Action</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">User</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Details</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 text-right">Time</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400">Action</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden md:table-cell">User</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden lg:table-cell">Details</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 text-right">Time</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -237,7 +245,7 @@ const MonitoringView = () => {
                       <td className="px-4 py-3">
                         <span className={`text-xs font-medium ${getActionColor(log.action)}`}>{formatAction(log.action)}</span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">{log.user_name || '-'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 hidden md:table-cell">{log.user_name || '-'}</td>
                       <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell max-w-xs truncate">
                         {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)).slice(0, 60) : '-'}
                       </td>
@@ -255,3 +263,5 @@ const MonitoringView = () => {
 };
 
 export default MonitoringView;
+
+
