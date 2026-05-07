@@ -6,13 +6,13 @@ import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 
 const statusColors = {
-  pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  paid: 'bg-blue-50 text-blue-700 border-blue-200',
-  preparing: 'bg-red-500/10 text-orange-700 border-red-200',
-  shipped: 'bg-purple-50 text-purple-700 border-purple-200',
-  delivered: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  completed: 'bg-green-50 text-green-700 border-green-200',
-  cancelled: 'bg-red-50 text-red-600 border-red-200',
+  pending: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30',
+  paid: 'bg-blue-500/10 text-blue-300 border-blue-500/30',
+  preparing: 'bg-orange-500/10 text-orange-300 border-orange-500/30',
+  shipped: 'bg-purple-500/10 text-purple-300 border-purple-500/30',
+  delivered: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30',
+  completed: 'bg-green-500/10 text-green-300 border-green-500/30',
+  cancelled: 'bg-red-500/10 text-red-300 border-red-500/30',
 };
 const statusIcons = {
   pending: <Clock size={12} />, paid: <DollarSign size={12} />, preparing: <Package size={12} />,
@@ -153,6 +153,12 @@ const OrdersView = () => {
   });
 
   const statuses = Object.values(OrderStatus);
+  const statusCounts = orders.reduce((acc, order) => {
+    const key = String(order?.status || '').toLowerCase();
+    if (!key) return acc;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
   const nextStatusOptions = statusTarget ? (staffStatusTransitions[statusTarget.status] || []) : [];
   const pending = orders.filter(o => o.status === 'pending').length;
   const preparing = orders.filter(o => o.status === 'preparing').length;
@@ -171,12 +177,12 @@ const OrdersView = () => {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Revenue', value: `â‚±${totalRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
+          { label: 'Total Revenue', value: `\u20B1${totalRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Pending', value: pending.toString(), icon: <Clock size={18} />, color: 'bg-yellow-50 text-yellow-600' },
           { label: 'Preparing', value: preparing.toString(), icon: <Package size={18} />, color: 'bg-red-500/10 text-orange-600' },
           { label: 'Shipped', value: shipped.toString(), icon: <Truck size={18} />, color: 'bg-purple-50 text-purple-600' },
         ].map((kpi, i) => (
-          <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+          <div key={i} className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-4">
             <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
             <p className="text-lg font-bold text-white">{kpi.value}</p>
             <p className="text-xs text-gray-400">{kpi.label}</p>
@@ -185,22 +191,43 @@ const OrdersView = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search orders..." value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
+      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 overflow-hidden">
+        <div className="p-3 border-b border-white/10">
+          <div className="relative flex-1 max-w-sm">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search orders..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-gray-100 border border-gray-700 rounded-lg text-sm text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+            />
+          </div>
         </div>
-        <div className="flex gap-1 flex-wrap">
-          <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
+        <div className="p-1 flex gap-1 flex-wrap">
+          <button
+            onClick={() => setStatusFilter('')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${!statusFilter ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'text-gray-400 border-transparent hover:text-gray-300 hover:bg-[#202430]'}`}
+          >
+            All
+          </button>
           {statuses.map(s => (
-            <button key={s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all capitalize ${statusFilter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>{s}</button>
+            <button
+              key={s}
+              onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium border transition-all capitalize ${statusFilter === s ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'text-gray-400 border-transparent hover:text-gray-300 hover:bg-[#202430]'}`}
+            >
+              {s}
+              <span className={`${statusFilter === s ? 'bg-red-500/20 text-red-500' : 'bg-gray-100 text-gray-400'} text-[10px] px-1.5 py-0.5 rounded-full`}>
+                {statusCounts[s] || 0}
+              </span>
+            </button>
           ))}
         </div>
       </div>
 
       {/* Orders Table */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
@@ -210,7 +237,7 @@ const OrdersView = () => {
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead><tr className="bg-gray-50/80 border-b border-gray-700">
+            <thead><tr className="bg-[#202430]/80 border-b border-white/10">
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Order</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Customer</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Date</th>
@@ -219,30 +246,30 @@ const OrdersView = () => {
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Total</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-28">Actions</th>
             </tr></thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-white/10">
               {filtered.map(o => (
-                <tr key={o.id} className="hover:bg-gray-50/50 transition-colors">
+                <tr key={o.id} className="hover:bg-[#202430]/60 transition-colors">
                   <td className="px-4 py-3">
                     <p className="font-medium text-white">#{o.id.toString().padStart(4, '0')}</p>
                     <p className="text-[10px] text-gray-400">{o.items?.length || '-'} items</p>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
-                    <p className="text-sm text-gray-700">{o.customer_name || o.shipping_name || `User ${o.user_id}`}</p>
+                    <p className="text-sm text-gray-200">{o.customer_name || o.shipping_name || `User ${o.user_id}`}</p>
                     <p className="text-[10px] text-gray-400">{o.customer_email || ''}</p>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-400">{new Date(o.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-xs text-gray-300">{new Date(o.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
                     <button onClick={() => openStatusChange(o)} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer hover:opacity-80 ${statusColors[o.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>
                       {statusIcons[o.status]} {o.status}
                     </button>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
-                    <span className="text-xs text-gray-400 capitalize">{o.payment_method || '-'}</span>
+                    <span className="text-xs text-gray-300 capitalize">{o.payment_method || '-'}</span>
                   </td>
-                  <td className="px-4 py-3 text-right font-bold text-white">â‚±{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-right font-bold text-white">\u20B1{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openDetail(o)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="View"><Eye size={14} /></button>
+                      <button onClick={() => openDetail(o)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-400 hover:text-blue-400 transition-colors" title="View"><Eye size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -257,24 +284,24 @@ const OrdersView = () => {
         {detailOrder && (
           <div className="space-y-5">
             {/* Status + Date */}
-            <div className="flex items-center justify-between p-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/20 shadow-sm">
+            <div className="flex items-center justify-between p-4 bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/10">
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase border tracking-wider ${statusColors[detailOrder.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>
                 {statusIcons[detailOrder.status]} {detailOrder.status}
               </span>
               <div className="flex flex-col items-end">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Order Date</p>
-                <div className="flex items-center gap-1 text-xs font-bold text-white"><Calendar size={12} className="text-red-500" /> {new Date(detailOrder.created_at).toLocaleString()}</div>
+                <div className="flex items-center gap-1 text-xs font-bold text-gray-100"><Calendar size={12} className="text-red-400" /> {new Date(detailOrder.created_at).toLocaleString()}</div>
               </div>
             </div>
 
             {/* Customer & Shipping */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-3 bg-gray-900 rounded-lg">
+              <div className="p-3 bg-[#0f172a]/90 rounded-lg border border-white/10">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><User size={12} /> Customer</div>
                 <p className="text-sm font-medium text-white">{detailOrder.customer_name || detailOrder.shipping_name || `User #${detailOrder.user_id}`}</p>
                 <p className="text-xs text-gray-400">{detailOrder.customer_email || ''}</p>
               </div>
-              <div className="p-3 bg-gray-900 rounded-lg">
+              <div className="p-3 bg-[#0f172a]/90 rounded-lg border border-white/10">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><MapPin size={12} /> Shipping Address</div>
                   <div className="text-sm text-gray-300">
                     {detailOrder.shipping_address ? (
@@ -290,15 +317,15 @@ const OrdersView = () => {
 
             {/* Shipping Method, Tracking & Staff */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-3 bg-gray-900 rounded-lg">
+              <div className="p-3 bg-[#0f172a]/90 rounded-lg border border-white/10">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><Truck size={12} /> Shipping Method</div>
                 <p className="text-sm font-medium text-white capitalize">{detailOrder.shipping_method || '-'}</p>
               </div>
-              <div className="p-3 bg-gray-900 rounded-lg">
+              <div className="p-3 bg-[#0f172a]/90 rounded-lg border border-white/10">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><Package size={12} /> Tracking Number</div>
                 <p className="text-sm font-medium text-white">{detailOrder.tracking_number || '-'}</p>
               </div>
-              <div className="p-3 bg-gray-900 rounded-lg">
+              <div className="p-3 bg-[#0f172a]/90 rounded-lg border border-white/10">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><User size={12} /> Assigned Staff</div>
                 <p className="text-sm font-medium text-white">{detailOrder.assigned_staff_id ? `Staff #${detailOrder.assigned_staff_id}` : '-'}</p>
               </div>
@@ -306,20 +333,20 @@ const OrdersView = () => {
 
             {/* Cancellation Reason */}
             {detailOrder.status === 'cancelled' && detailOrder.cancellation_reason && (
-              <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-                <div className="flex items-center gap-2 text-xs font-medium text-red-600 mb-1"><XCircle size={12} /> Cancellation Reason</div>
-                <p className="text-sm text-red-700">{detailOrder.cancellation_reason}</p>
+              <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/30">
+                <div className="flex items-center gap-2 text-xs font-medium text-red-300 mb-1"><XCircle size={12} /> Cancellation Reason</div>
+                <p className="text-sm text-red-200">{detailOrder.cancellation_reason}</p>
               </div>
             )}
 
             {/* Items */}
             <div>
               <h4 className="text-xs font-medium text-gray-400 mb-2">Order Items</h4>
-              <div className="border border-gray-700 rounded-lg divide-y divide-gray-50 overflow-hidden">
+              <div className="border border-white/10 rounded-lg divide-y divide-white/10 overflow-hidden bg-[#111827]/70">
                 {detailOrder.items?.length > 0 ? detailOrder.items.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 hover:bg-gray-50/50">
+                  <div key={i} className="flex items-center justify-between p-3 hover:bg-[#202430]/60">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700">
+                      <div className="w-10 h-10 bg-[#202430] rounded-lg overflow-hidden flex-shrink-0 border border-white/10">
                         {item.image ? <img src={item.image} alt="" className="w-full h-full object-cover" /> : <Package size={14} className="m-auto text-gray-400 mt-2.5" />}
                       </div>
                       <div>
@@ -327,37 +354,37 @@ const OrdersView = () => {
                         <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
                       </div>
                     </div>
-                    <span className="text-sm font-bold text-white">â‚±{((item.price || 0) * (item.quantity || 1)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-bold text-white">{'\u20B1'}{((item.price || 0) * (item.quantity || 1)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                   </div>
                 )) : <div className="p-4 text-center text-xs text-gray-400">No item details available</div>}
               </div>
             </div>
 
             {/* Totals */}
-            <div className="p-4 bg-gray-900 rounded-lg space-y-2 text-sm">
-              <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>â‚±{(detailOrder.subtotal || detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-              {detailOrder.tax > 0 && <div className="flex justify-between text-gray-400"><span>Tax</span><span>â‚±{detailOrder.tax.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-              {detailOrder.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-â‚±{detailOrder.discount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-              <div className="flex justify-between font-bold text-white text-base pt-2 border-t border-gray-700"><span>Total</span><span>â‚±{(detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+            <div className="p-4 bg-gradient-to-b from-[#111827] to-[#0f172a] rounded-lg space-y-2 text-sm border border-white/10">
+              <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>{'\u20B1'}{(detailOrder.subtotal || detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+              {detailOrder.tax > 0 && <div className="flex justify-between text-gray-400"><span>Tax</span><span>{'\u20B1'}{detailOrder.tax.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+              {detailOrder.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{'\u20B1'}{detailOrder.discount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+              <div className="flex justify-between font-bold text-white text-base pt-2 border-t border-gray-700"><span>Total</span><span>{'\u20B1'}{(detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
             </div>
 
             {/* Actions */}
-            <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-700">
+            <div className="flex flex-wrap gap-2 pt-4 border-t border-white/10">
               <button
                 onClick={() => { setDetailOpen(false); openStatusChange(detailOrder); }}
-                className="flex-1 min-w-[140px] px-4 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
+                className="flex-1 min-w-[140px] px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-red-500/20 flex items-center justify-center gap-2"
               >
                 Update Status
               </button>
               <button
                 onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/orders/${detailOrder.id}/invoice`, '_blank')}
-                className="flex-1 min-w-[140px] px-4 py-2.5 bg-gray-800 border border-gray-700 hover:bg-gray-900 text-gray-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                className="flex-1 min-w-[140px] px-4 py-2.5 bg-[#111827] border border-white/10 hover:bg-[#1f2937] text-gray-300 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 <Printer size={14} /> Print Invoice
               </button>
               {!isStaff && (detailOrder.status === 'completed' || detailOrder.status === 'cancelled') && (
                 <button onClick={() => { setRefundOrder(detailOrder); setRefundAmount(detailOrder.total_amount); setShowRefundModal(true); }}
-                  className="px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg text-sm font-medium flex items-center gap-1">
+                  className="px-3 py-1.5 bg-amber-400/15 text-amber-300 border border-amber-400/30 hover:bg-amber-400/20 rounded-lg text-sm font-medium flex items-center gap-1">
                   <Undo size={14} /> Process Refund
                 </button>
               )}
@@ -369,28 +396,28 @@ const OrdersView = () => {
       {/* Status Update Modal */}
       <Modal isOpen={statusModalOpen} onClose={() => setStatusModalOpen(false)} title="Update Order Status" size="sm">
         <div className="space-y-4">
-          <div className="p-3 bg-gray-900 rounded-lg text-sm">
+          <div className="p-3 bg-[#111827] border border-white/10 rounded-lg text-sm">
             <span className="text-gray-400">Order </span><span className="font-bold text-white">#{statusTarget?.id.toString().padStart(4, '0')}</span>
-            <span className="text-gray-400"> - Current: </span><span className={`font-semibold capitalize ${(statusTarget?.status === 'completed' || statusTarget?.status === 'delivered') ? 'text-green-600' : 'text-white'}`}>{statusTarget?.status}</span>
+            <span className="text-gray-400"> - Current: </span><span className={`font-semibold capitalize ${(statusTarget?.status === 'completed' || statusTarget?.status === 'delivered') ? 'text-green-300' : 'text-white'}`}>{statusTarget?.status}</span>
           </div>
           {nextStatusOptions.length > 0 ? (
             <div className="space-y-1.5">
               {nextStatusOptions.map((s) => (
                 <button key={s} onClick={() => setNewStatus(s)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium border transition-all capitalize ${newStatus === s ? 'bg-red-500/10 border-red-200 text-orange-600' : 'bg-gray-800 border-gray-700 text-gray-600 hover:bg-gray-900'}`}>
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium border transition-all capitalize ${newStatus === s ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'bg-[#111827] border-white/10 text-gray-300 hover:bg-[#1f2937]'}`}>
                   {statusIcons[s]} {s}
                 </button>
               ))}
             </div>
           ) : (
-            <div className="p-3 bg-gray-900 rounded-lg border border-gray-700 text-xs text-gray-400">
+            <div className="p-3 bg-[#111827] rounded-lg border border-white/10 text-xs text-gray-400">
               No direct staff status transition available for the current state.
             </div>
           )}
 
           {statusTarget?.status === 'shipped' && (
-            <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
-              <p className="text-xs font-medium text-indigo-700 mb-2">
+            <div className="p-3 bg-indigo-500/10 rounded-lg border border-indigo-500/30">
+              <p className="text-xs font-medium text-indigo-200 mb-2">
                 Rider action: confirm delivery before customer can complete the order.
               </p>
               <button
@@ -403,42 +430,42 @@ const OrdersView = () => {
           )}
 
           {newStatus === 'shipped' && (
-            <div className="p-3 bg-red-500/10 rounded-lg border border-red-200">
-              <label className="block text-xs font-medium text-orange-700 mb-1.5">Tracking Number</label>
+            <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/30">
+              <label className="block text-xs font-medium text-red-300 mb-1.5">Tracking Number</label>
               <input
                 type="text"
                 value={trackingNumber}
                 onChange={e => setTrackingNumber(e.target.value)}
                 placeholder="Enter tracking number..."
-                className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 bg-gray-800"
+                className="w-full px-3 py-2 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500/20 bg-[#0f172a]"
               />
             </div>
           )}
           {newStatus === 'cancelled' && (
-            <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-              <label className="block text-xs font-medium text-red-700 mb-1.5">Cancellation Reason <span className="text-red-500">*</span></label>
+            <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/30">
+              <label className="block text-xs font-medium text-red-300 mb-1.5">Cancellation Reason <span className="text-red-400">*</span></label>
               <textarea
                 value={cancelReason}
                 onChange={e => setCancelReason(e.target.value)}
                 placeholder="Enter reason for cancellation..."
-                className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 bg-gray-800 resize-none"
+                className="w-full px-3 py-2 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500/20 bg-[#0f172a] resize-none"
                 rows={2}
               />
             </div>
           )}
 
           {statusError && (
-            <div className="p-3 bg-red-50 rounded-lg border border-red-200 text-sm text-red-700">
+            <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/30 text-sm text-red-200">
               {statusError}
             </div>
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={() => setStatusModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+            <button onClick={() => setStatusModalOpen(false)} className="px-4 py-2 text-sm text-gray-300 hover:bg-[#202430] rounded-lg transition-colors">Cancel</button>
             <button
               onClick={handleStatusUpdate}
               disabled={!newStatus || (newStatus === 'cancelled' && !cancelReason.trim())}
-              className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
             >
               Update Status
             </button>
@@ -446,36 +473,36 @@ const OrdersView = () => {
         </div>
       </Modal>
 
-      {/* Refund Modal â€” owner only */}
+      {/* Refund Modal - owner only */}
       {!isStaff && showRefundModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl p-6 w-full max-w-md border border-white/10 shadow-2xl">
             <h3 className="text-lg font-semibold text-white mb-4">Process Refund - Order #{refundOrder?.id}</h3>
             {refundError && (
-              <div className="mb-3 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+              <div className="mb-3 p-3 bg-red-500/10 text-red-200 text-sm rounded-lg border border-red-500/30 flex items-center gap-2">
                 <AlertCircle size={14} /> {refundError}
               </div>
             )}
             <div className="space-y-3">
               <div>
-                <label className="text-sm text-gray-600">Refund Amount ({'\u20B1'})</label>
+                <label className="text-sm text-gray-300">Refund Amount ({'\u20B1'})</label>
                 <input type="number" value={refundAmount} onChange={e => setRefundAmount(e.target.value)}
                   max={refundOrder?.total_amount} min="0" step="0.01"
-                  className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-red-500" />
+                  className="w-full mt-1 px-3 py-2 border border-white/10 rounded-lg bg-[#0f172a] text-white focus:ring-red-500/20 focus:border-red-500/40" />
                 <p className="text-xs text-gray-400 mt-1">Order total: {'\u20B1'}{refundOrder?.total_amount?.toLocaleString()}</p>
               </div>
               <div>
-                <label className="text-sm text-gray-600">Reason</label>
+                <label className="text-sm text-gray-300">Reason</label>
                 <textarea value={refundReason} onChange={e => setRefundReason(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-red-500"
+                  className="w-full mt-1 px-3 py-2 border border-white/10 rounded-lg bg-[#0f172a] text-white focus:ring-red-500/20 focus:border-red-500/40"
                   rows={3} placeholder="Reason for refund..." />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-5">
               <button onClick={() => { setShowRefundModal(false); setRefundOrder(null); }}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button>
+                className="px-4 py-2 text-gray-300 hover:bg-[#202430] rounded-lg text-sm">Cancel</button>
               <button onClick={handleRefund} disabled={refunding || !refundAmount}
-                className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white rounded-lg text-sm disabled:opacity-50">
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm disabled:opacity-50">
                 {refunding ? 'Processing...' : 'Confirm Refund'}
               </button>
             </div>
