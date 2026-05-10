@@ -12,6 +12,18 @@ const normalizePhone = (value) => {
   return text.replace(/[\s()-]/g, '');
 };
 
+const normalizeZip = (value) => {
+  const text = normalizeText(value);
+  if (!text) return null;
+  return text.replace(/\D/g, '');
+};
+
+const isPhilippineCountry = (value) => {
+  const text = normalizeText(value);
+  if (!text) return true;
+  return /^philippines$/i.test(text);
+};
+
 const parseCoordinate = (value, min, max) => {
   if (value === undefined || value === null || value === '') return null;
   const parsed = Number(value);
@@ -21,7 +33,7 @@ const parseCoordinate = (value, min, max) => {
 };
 
 const PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
-const ZIP_REGEX = /^\d{4}$/;
+const ZIP_REGEX = /^\d{5}$/;
 
 // Get all addresses for a user
 export const getUserAddresses = async (req, res) => {
@@ -69,7 +81,8 @@ export const createAddress = async (req, res) => {
   const barangay = normalizeText(req.body.barangay);
   const city = normalizeText(req.body.city);
   const state = normalizeText(req.body.state);
-  const postal_code = normalizeText(req.body.postal_code ?? req.body.zip);
+  const postal_code = normalizeZip(req.body.postal_code ?? req.body.zip);
+  const country = req.body.country;
   const is_default = !!req.body.is_default;
   const lat = parseCoordinate(req.body.lat, -90, 90);
   const lng = parseCoordinate(req.body.lng, -180, 180);
@@ -102,7 +115,8 @@ export const createAddress = async (req, res) => {
   if (!city) fieldErrors.city = 'City is required.';
   if (!state) fieldErrors.state = 'Province is required.';
   if (!postal_code) fieldErrors.postal_code = 'ZIP code is required.';
-  else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 4 digits.';
+  else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 5 digits.';
+  if (!isPhilippineCountry(country)) fieldErrors.country = 'Only Philippine addresses are allowed.';
   if (Number.isNaN(lat)) fieldErrors.lat = 'Latitude must be between -90 and 90.';
   if (Number.isNaN(lng)) fieldErrors.lng = 'Longitude must be between -180 and 180.';
 
@@ -157,7 +171,8 @@ export const updateAddress = async (req, res) => {
   const incomingBarangay = hasField('barangay') ? normalizeText(req.body.barangay) : undefined;
   const incomingCity = normalizeText(req.body.city);
   const incomingState = normalizeText(req.body.state);
-  const incomingPostalCode = normalizeText(req.body.postal_code ?? req.body.zip);
+  const incomingPostalCode = normalizeZip(req.body.postal_code ?? req.body.zip);
+  const incomingCountry = req.body.country;
   const incomingIsDefault = typeof req.body.is_default === 'boolean' ? req.body.is_default : null;
   const nextLat = hasField('lat') ? parseCoordinate(req.body.lat, -90, 90) : undefined;
   const nextLng = hasField('lng') ? parseCoordinate(req.body.lng, -180, 180) : undefined;
@@ -211,7 +226,8 @@ export const updateAddress = async (req, res) => {
     if (!city) fieldErrors.city = 'City is required.';
     if (!state) fieldErrors.state = 'Province is required.';
     if (!postal_code) fieldErrors.postal_code = 'ZIP code is required.';
-    else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 4 digits.';
+    else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 5 digits.';
+    if (!isPhilippineCountry(incomingCountry)) fieldErrors.country = 'Only Philippine addresses are allowed.';
     if (Number.isNaN(lat)) fieldErrors.lat = 'Latitude must be between -90 and 90.';
     if (Number.isNaN(lng)) fieldErrors.lng = 'Longitude must be between -180 and 180.';
 

@@ -251,7 +251,7 @@ const AddressDropdowns = ({
           value={selectedProvince.code}
           onChange={(e) => handleProvinceChange(e.target.value)}
           disabled={disabled || loadingProvince}
-          className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
+          className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white disabled:bg-gray-100 disabled:text-gray-700 disabled:opacity-100"
         >
           <option value="">Select a province</option>
           {provinces.map((p) => (
@@ -267,7 +267,7 @@ const AddressDropdowns = ({
           value={selectedCity.code}
           onChange={(e) => handleCityChange(e.target.value)}
           disabled={disabled || !selectedProvince.code || loadingCity}
-          className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white disabled:bg-gray-100 disabled:text-gray-600"
+          className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white disabled:bg-gray-100 disabled:text-gray-700 disabled:opacity-100"
         >
           <option value="">{selectedProvince.code ? 'Select a city/municipality' : 'Choose province first'}</option>
           {cities.map((c) => (
@@ -283,7 +283,7 @@ const AddressDropdowns = ({
           value={selectedBarangay}
           onChange={(e) => handleBarangayChange(e.target.value)}
           disabled={disabled || !selectedCity.code || loadingBarangay}
-          className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white disabled:bg-gray-100 disabled:text-gray-600"
+          className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white disabled:bg-gray-100 disabled:text-gray-700 disabled:opacity-100"
         >
           <option value="">{selectedCity.code ? 'Select a barangay' : 'Choose city/municipality first'}</option>
           {barangays.map((b) => (

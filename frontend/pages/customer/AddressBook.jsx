@@ -37,7 +37,7 @@ const AddressBook = () => {
   const digitsOnly = (value) => value.replace(/\D/g, '');
   const formatPhone = (value) => value.replace(/[^\d+]/g, '');
   const validatePhone = (phone) => /^(09\d{9}|\+639\d{9})$/.test(phone);
-  const validateZip = (zip) => /^\d{4}$/.test(zip);
+  const validateZip = (zip) => /^\d{5}$/.test(zip);
   const normalizeText = (value) => String(value || '').trim();
 
   const getAccountContactDefaults = () => {
@@ -135,7 +135,7 @@ const AddressBook = () => {
 
     const zipValid = validateZip(trimmedForm.zip);
     if (!zipValid) {
-      setZipError('Zip Code must contain exactly 4 digits.');
+      setZipError('ZIP Code must contain exactly 5 digits.');
       return;
     }
     try {
@@ -203,7 +203,7 @@ const AddressBook = () => {
     setShowForm(true);
     setPhoneError('');
     const existingZip = addr.zip || addr.postal_code || '';
-    setZipError(existingZip.length === 0 || validateZip(existingZip) ? '' : 'Zip Code must contain exactly 4 digits.');
+    setZipError(existingZip.length === 0 || validateZip(existingZip) ? '' : 'ZIP Code must contain exactly 5 digits.');
   };
 
   return (
@@ -309,10 +309,11 @@ const AddressBook = () => {
                     onChange={e => {
                       const val = digitsOnly(e.target.value);
                       setForm(f => ({...f, zip: val }));
-                      setZipError(val.length === 0 || validateZip(val) ? '' : 'Zip Code must contain exactly 4 digits.');
+                      setZipError(val.length === 0 || validateZip(val) ? '' : 'ZIP Code must contain exactly 5 digits.');
                     }}
                     inputMode="numeric"
                     pattern="[0-9]*"
+                    maxLength={5}
                     required
                     className={`w-full px-3 py-2.5 border rounded-lg text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 ${zipError ? 'border-red-300 focus:ring-red-400' : 'border-slate-300'}`}
                   />

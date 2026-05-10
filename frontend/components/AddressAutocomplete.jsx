@@ -1,4 +1,64 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+
+const normalizeSearchText = (value) => String(value || '')
+  .toLowerCase()
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[().,-]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const formatPostalCode = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length === 4) return `0${digits}`;
+  return digits.slice(0, 5);
+};
+
+const LOCAL_PH_SUGGESTIONS = [
+  {
+    place_id: 'local-malabon-dampalit-m-sioson',
+    display_name: 'M. Sioson Street, Dampalit, Malabon City, Metro Manila, Philippines',
+    address: {
+      road: 'M. Sioson Street',
+      suburb: 'Dampalit',
+      city: 'Malabon City',
+      state: 'Metro Manila (NCR)',
+      postcode: '01470',
+      country: 'Philippines',
+    },
+  },
+];
+
+const getLocalSuggestions = (query, context = {}) => {
+  const haystack = normalizeSearchText([
+    query,
+    context.barangay,
+    context.city,
+    context.state,
+  ].filter(Boolean).join(' '));
+
+  return LOCAL_PH_SUGGESTIONS.filter(() => {
+    const hasStreet = haystack.includes('m sioson') || haystack.includes('sioson');
+    const hasPlace = haystack.includes('dampalit') || haystack.includes('malabon');
+    return hasStreet && hasPlace;
+  });
+};
+
+const buildSearchQueries = (query, context = {}, strictContext = false) => {
+  const queryParts = query.split(',').map((part) => part.trim()).filter(Boolean);
+  const contextParts = [context.barangay, context.city, context.state].filter(Boolean);
+  const withContext = Array.from(new Set([...queryParts, ...contextParts, 'Philippines'])).join(', ');
+  const withoutPeriods = withContext.replace(/\./g, '');
+  const loose = Array.from(new Set([...queryParts, context.city, context.state, 'Philippines'].filter(Boolean))).join(', ');
+  const compact = `${normalizeSearchText(withContext)}, Philippines`;
+
+  return Array.from(new Set([
+    withContext,
+    withoutPeriods,
+    loose,
+    strictContext ? '' : compact,
+  ].filter(Boolean)));
+};
 
 // Lightweight PH-focused address autocomplete using Nominatim (OpenStreetMap).
 // Expects parent to manage the final form fields; this only suggests and returns parsed address parts.
@@ -29,7 +89,7 @@ const AddressAutocomplete = ({
       setOpen(false);
       setError('');
       if (abortRef.current) abortRef.current.abort();
-      return;
+      return undefined;
     }
 
     const controller = new AbortController();
@@ -39,23 +99,20 @@ const AddressAutocomplete = ({
 
     const timer = setTimeout(async () => {
       try {
-        // Clean up redundant parts if the user typed their full address
-        const queryParts = query.split(',').map(s => s.trim());
-        const allParts = [...queryParts, context.barangay, context.city, context.state, 'Philippines'].filter(Boolean);
-        const uniqueParts = Array.from(new Set(allParts));
-        const cleanQuery = uniqueParts.join(', ');
+        let list = getLocalSuggestions(query, context);
 
-        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=ph&q=${encodeURIComponent(cleanQuery)}`;
-        const res = await fetch(url, {
-          signal: controller.signal,
-          headers: {
-            'Accept-Language': 'en',
-            'User-Agent': '10th-west-moto-address-autocomplete'
-          }
-        });
-        if (!res.ok) throw new Error('Failed to fetch suggestions');
-        const data = await res.json();
-        let list = Array.isArray(data) ? data : [];
+        for (const searchQuery of buildSearchQueries(query, context, strictContext)) {
+          if (list.length > 0) break;
+
+          const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=ph&q=${encodeURIComponent(searchQuery)}`;
+          const res = await fetch(url, {
+            signal: controller.signal,
+            headers: { 'Accept-Language': 'en' },
+          });
+          if (!res.ok) throw new Error('Failed to fetch suggestions');
+          const data = await res.json();
+          list = Array.isArray(data) ? data : [];
+        }
 
         setSuggestions(list);
         setOpen(list.length > 0);
@@ -71,27 +128,31 @@ const AddressAutocomplete = ({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [query, context.barangay, context.city, context.state, strictContext]);
 
-  const handleSelect = (s) => {
+  const parseSuggestion = (s) => {
     const addr = s.address || {};
-    const barangay = addr.suburb || addr.village || addr.neighbourhood || addr.hamlet || '';
+    const barangay = addr.suburb || addr.village || addr.neighbourhood || addr.hamlet || addr.city_district || '';
     const city = addr.city || addr.town || addr.municipality || addr.county || '';
-    const province = addr.state || addr.region || '';
+    const province = addr.state || addr.region || addr.province || '';
     const street = [addr.house_number, addr.road].filter(Boolean).join(' ').trim() || addr.road || s.display_name || '';
-    const postal_code = addr.postcode || '';
 
-    onSelect?.({
+    return {
       street,
       barangay,
       city,
       state: province,
-      postal_code,
+      postal_code: formatPostalCode(addr.postcode),
       country: 'Philippines',
       lat: s.lat ? Number(s.lat) : null,
       lng: s.lon ? Number(s.lon) : null,
-    });
-    setQuery(street);
+    };
+  };
+
+  const handleSelect = (s) => {
+    const selected = parseSuggestion(s);
+    onSelect?.(selected);
+    setQuery(selected.street);
     setSuggestions([]);
     setOpen(false);
   };
@@ -111,10 +172,10 @@ const AddressAutocomplete = ({
   const renderLabel = (s) => {
     const addr = s.address || {};
     const primary = [addr.house_number, addr.road].filter(Boolean).join(' ').trim() || s.display_name;
-    const barangay = addr.suburb || addr.village || addr.neighbourhood || addr.hamlet || '';
+    const barangay = addr.suburb || addr.village || addr.neighbourhood || addr.hamlet || addr.city_district || '';
     const locality = addr.city || addr.town || addr.municipality || addr.county || '';
-    const province = addr.state || addr.region || '';
-    const zip = addr.postcode || '';
+    const province = addr.state || addr.region || addr.province || '';
+    const zip = formatPostalCode(addr.postcode);
     const secondary = [barangay, locality, province, zip].filter(Boolean).join(', ');
     return { primary, secondary };
   };
@@ -131,7 +192,7 @@ const AddressAutocomplete = ({
         }}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+        className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-100 disabled:text-gray-700"
         autoComplete="off"
         role="combobox"
         aria-expanded={open}
@@ -171,5 +232,3 @@ const AddressAutocomplete = ({
 };
 
 export default AddressAutocomplete;
-
-

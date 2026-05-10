@@ -38,6 +38,7 @@ const getRegistrationEmailError = (value) => {
 };
 
 const normalizeProfilePhone = (value) => String(value || '').trim().replace(/[\s()-]/g, '');
+const normalizeZipCode = (value) => String(value || '').trim().replace(/\D/g, '');
 
 const getProfilePhoneError = (value) => {
   const normalized = normalizeProfilePhone(value);
@@ -610,6 +611,13 @@ export const register = async (name, email, password, confirmPassword, consentDa
     method: 'POST',
     body: JSON.stringify({ name: trimmedName, email: normalizedEmail, password, confirmPassword, otp, ...consentData }),
   });
+};
+
+const getAddressZipError = (value) => {
+  const normalized = normalizeZipCode(value);
+  if (!normalized) return 'ZIP code is required.';
+  if (!/^\d{5}$/.test(normalized)) return 'ZIP code must contain exactly 5 digits.';
+  return '';
 };
 
 export const sendRegistrationOtp = async (email, name) => {
@@ -2968,6 +2976,10 @@ export const getAddresses = async (userId) => {
 };
 
 export const addAddress = async (address) => {
+  const postalCode = normalizeZipCode(address.postal_code ?? address.zip);
+  const zipError = getAddressZipError(postalCode);
+  if (zipError) throw new Error(zipError);
+
   const payload = {
     recipient_name: address.recipient_name ?? address.name,
     phone: address.phone,
@@ -2975,7 +2987,7 @@ export const addAddress = async (address) => {
     barangay: address.barangay ?? null,
     city: address.city,
     state: address.state,
-    postal_code: address.postal_code ?? address.zip,
+    postal_code: postalCode,
     country: 'Philippines',
     is_default: !!address.is_default,
     lat: address.lat ?? null,
@@ -3042,6 +3054,10 @@ export const addAddress = async (address) => {
 };
 
 export const updateAddress = async (id, updates) => {
+  const postalCode = normalizeZipCode(updates.postal_code ?? updates.zip);
+  const zipError = getAddressZipError(postalCode);
+  if (zipError) throw new Error(zipError);
+
   const payload = {
     recipient_name: updates.recipient_name ?? updates.name,
     phone: updates.phone,
@@ -3049,7 +3065,7 @@ export const updateAddress = async (id, updates) => {
     barangay: updates.barangay ?? null,
     city: updates.city,
     state: updates.state,
-    postal_code: updates.postal_code ?? updates.zip,
+    postal_code: postalCode,
     country: 'Philippines',
     is_default: updates.is_default,
     lat: updates.lat ?? null,
