@@ -4558,55 +4558,6 @@ export const updateProfile = async (userId, updates) => {
     payload.avatar = updates?.avatar || null;
   }
 
-  if (USE_SUPABASE) {
-    const currentUser = getCurrentUserFromToken();
-    if (!currentUser?.id) throw new Error('Not authenticated');
-
-    const { data: emailOwner, error: emailOwnerError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .neq('id', currentUser.id)
-      .maybeSingle();
-
-    if (emailOwnerError) throw new Error(emailOwnerError.message);
-    if (emailOwner?.id) {
-      const duplicateError = new Error('That email address is already in use.');
-      duplicateError.fieldErrors = { email: 'That email address is already in use.' };
-      throw duplicateError;
-    }
-
-    const { data, error } = await supabase
-      .from('users')
-      .update(payload)
-      .eq('id', currentUser.id)
-      .select('*')
-      .single();
-
-    if (error) throw new Error(error.message);
-
-    const user = {
-      id: data.id,
-      name: data.name,
-      email: data.email,
-      role: data.role,
-      phone: data.phone,
-      avatar: data.avatar,
-      store_credit: data.store_credit,
-      is_active: data.is_active,
-      last_login: data.last_login,
-      email_verified: data.email_verified,
-      two_factor_enabled: data.two_factor_enabled,
-    };
-
-    return {
-      user,
-      message: 'Profile updated successfully',
-      requiresEmailVerification: false,
-      pending_email: null,
-    };
-  }
-
   const data = await authenticatedFetch(`${API_URL}/users/profile`, {
     method: 'PUT',
     body: JSON.stringify(payload),

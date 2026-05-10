@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { getMissingCloudinaryVars, isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import dns from 'dns/promises';
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
@@ -14,9 +15,44 @@ const PROFILE_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[
 const PROFILE_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const EMAIL_CHANGE_WINDOW_MINUTES = 60;
+const BLOCKED_EMAIL_DOMAINS = new Set(['example.com', 'example.net', 'example.org', 'test.com', 'invalid', 'localhost']);
+const EMAIL_DNS_TIMEOUT_MS = 3000;
 
 const normalizeProfilePhone = (value) => String(value || '').trim().replace(/[\s()-]/g, '');
 const hashToken = (value) => crypto.createHash('sha256').update(value).digest('hex');
+
+const assertEmailDomainCanReceiveMail = async (email) => {
+  const domain = String(email || '').split('@')[1]?.toLowerCase();
+  if (!domain || BLOCKED_EMAIL_DOMAINS.has(domain)) {
+    const error = new Error('Use a real email address that can receive verification emails.');
+    error.status = 400;
+    error.fieldErrors = { email: 'Use a real email address that can receive verification emails.' };
+    throw error;
+  }
+
+  const lookup = dns.resolveMx(domain);
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => {
+      const error = new Error('Email validation timed out. Please try again.');
+      error.status = 503;
+      reject(error);
+    }, EMAIL_DNS_TIMEOUT_MS);
+  });
+
+  try {
+    const records = await Promise.race([lookup, timeout]);
+    if (Array.isArray(records) && records.some((record) => String(record.exchange || '').trim())) {
+      return;
+    }
+  } catch (error) {
+    if (error?.status === 503) throw error;
+  }
+
+  const error = new Error('Use a real email address that can receive verification emails.');
+  error.status = 400;
+  error.fieldErrors = { email: 'This email domain cannot receive verification emails.' };
+  throw error;
+};
 
 const createTransporter = () =>
   nodemailer.createTransport({
@@ -184,6 +220,8 @@ export const updateProfile = async (req, res) => {
     const emailChanged = rawEmail !== currentEmail;
 
     if (emailChanged) {
+      await assertEmailDomainCanReceiveMail(rawEmail);
+
       const duplicateResult = await client.query(
         'SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND id <> $2 LIMIT 1',
         [rawEmail, req.user.id]
@@ -285,6 +323,13 @@ export const updateProfile = async (req, res) => {
     } catch {}
 
     console.error('Update profile error:', error);
+    if (error?.status) {
+      return res.status(error.status).json({
+        message: error.message || 'Please correct the highlighted fields.',
+        fieldErrors: error.fieldErrors || {},
+      });
+    }
+
     if (error.code === '23505') {
       return res.status(409).json({
         message: 'That email address is already in use.',
