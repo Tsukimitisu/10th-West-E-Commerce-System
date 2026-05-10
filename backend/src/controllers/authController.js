@@ -901,6 +901,12 @@ export const oauthCallback = async (req, res) => {
     const { provider, id: oauthId, email, name, avatar } = req.oauthUser;
     const ip = req.clientIp;
     const ua = req.clientUa;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const redirectToLoginError = (errorCode) => res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent(errorCode)}`);
+
+    if (!email) {
+      return redirectToLoginError('oauth_missing_email');
+    }
 
     let result = await pool.query('SELECT * FROM users WHERE oauth_provider = $1 AND oauth_id = $2', [provider, oauthId]);
     let user;
@@ -908,13 +914,16 @@ export const oauthCallback = async (req, res) => {
     if (result.rows.length > 0) {
       user = result.rows[0];
       if (!user.is_active) {
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/#/login?error=account_deactivated`);
+        return redirectToLoginError('account_deactivated');
       }
       await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
     } else {
       result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
       if (result.rows.length > 0) {
         user = result.rows[0];
+        if (!user.is_active) {
+          return redirectToLoginError('account_deactivated');
+        }
         await pool.query(
           'UPDATE users SET oauth_provider = $1, oauth_id = $2, avatar = COALESCE(avatar, $3), email_verified = true, last_login = NOW() WHERE id = $4',
           [provider, oauthId, avatar, user.id]
@@ -941,12 +950,12 @@ export const oauthCallback = async (req, res) => {
 
     await logActivity({ userId: user.id, action: 'oauth_login', details: { provider }, ipAddress: ip, userAgent: ua });
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    // Only pass opaque code in URL — never expose JWT or PII in query params
+    // Only pass opaque code in URL; never expose JWT or PII in query params.
     res.redirect(`${frontendUrl}/#/oauth-callback?code=${oauthCode}`);
   } catch (error) {
     console.error('OAuth callback error:', error);
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/#/login?error=oauth_failed`);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent('oauth_failed')}`);
   }
 };
 
@@ -961,7 +970,12 @@ export const exchangeOAuthCode = async (req, res) => {
 
     const codeHash = crypto.createHash('sha256').update(code).digest('hex');
     const result = await pool.query(
-      `SELECT user_id FROM oauth_codes WHERE code_hash = $1 AND expires_at > NOW() AND used = false`,
+      `UPDATE oauth_codes
+          SET used = true
+        WHERE code_hash = $1
+          AND expires_at > NOW()
+          AND used = false
+        RETURNING user_id`,
       [codeHash]
     );
 
@@ -970,9 +984,6 @@ export const exchangeOAuthCode = async (req, res) => {
     }
 
     const userId = result.rows[0].user_id;
-
-    // Mark code as used (single-use)
-    await pool.query('UPDATE oauth_codes SET used = true WHERE code_hash = $1', [codeHash]);
 
     // Fetch user
     const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);

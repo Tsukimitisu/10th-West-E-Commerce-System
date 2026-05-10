@@ -23,6 +23,40 @@ import {
 
 const router = express.Router();
 
+const getFrontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173';
+
+const redirectToOAuthError = (res, errorCode) => {
+  res.redirect(`${getFrontendUrl()}/#/login?error=${encodeURIComponent(errorCode)}`);
+};
+
+const ensureOAuthProviderConfigured = (provider) => (req, res, next) => {
+  const isConfigured = provider === 'google'
+    ? Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+    : Boolean(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET);
+
+  if (!isConfigured || !passport._strategy(provider)) {
+    return redirectToOAuthError(res, `${provider}_not_configured`);
+  }
+
+  next();
+};
+
+const completeOAuthAuthentication = (provider) => (req, res, next) => {
+  passport.authenticate(provider, { session: false }, (err, user) => {
+    if (err) {
+      console.error(`${provider} OAuth error:`, err);
+      return redirectToOAuthError(res, `${provider}_failed`);
+    }
+
+    if (!user) {
+      return redirectToOAuthError(res, `${provider}_failed`);
+    }
+
+    req.oauthUser = user;
+    next();
+  })(req, res, next);
+};
+
 const GMAIL_TYPO_DOMAINS = new Set([
   'gmai.com',
   'gmial.com',
@@ -151,18 +185,24 @@ router.post('/reset-password',
 router.post('/exchange-code', body('code').notEmpty(), validate, exchangeOAuthCode);
 
 // ─── OAuth: Google ─────────────────────────────────────────────────
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
+router.get('/google',
+  ensureOAuthProviderConfigured('google'),
+  passport.authenticate('google', { scope: ['profile', 'email'], session: false })
+);
 router.get('/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: '/#/login?error=google_failed' }),
-  (req, res, next) => { req.oauthUser = req.user; next(); },
+  ensureOAuthProviderConfigured('google'),
+  completeOAuthAuthentication('google'),
   oauthCallback
 );
 
 // ─── OAuth: Facebook ───────────────────────────────────────────────
-router.get('/facebook', passport.authenticate('facebook', { scope: ['email'], session: false }));
+router.get('/facebook',
+  ensureOAuthProviderConfigured('facebook'),
+  passport.authenticate('facebook', { scope: ['email'], session: false })
+);
 router.get('/facebook/callback',
-  passport.authenticate('facebook', { session: false, failureRedirect: '/#/login?error=facebook_failed' }),
-  (req, res, next) => { req.oauthUser = req.user; next(); },
+  ensureOAuthProviderConfigured('facebook'),
+  completeOAuthAuthentication('facebook'),
   oauthCallback
 );
 
