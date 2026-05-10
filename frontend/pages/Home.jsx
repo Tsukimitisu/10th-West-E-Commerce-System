@@ -587,7 +587,7 @@ const Home = () => {
               whileInView="visible"
               viewport={{ once: true }}
               variants={stagger}
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+              className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] lg:grid-cols-4 gap-4 sm:gap-6"
             >
               {featured.map(p => (
                 <motion.div key={p.id} variants={fadeIn} className="bg-slate-800 rounded-lg p-4 shadow-md border border-slate-700 hover:border-red-500 hover:shadow-xl transition-all">
@@ -657,7 +657,7 @@ const Home = () => {
                 whileInView="visible"
                 viewport={{ once: true }}
                 variants={stagger}
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+                className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] lg:grid-cols-4 gap-4 sm:gap-6"
               >
                 {bestSellers.map(p => (
                   <motion.div key={p.id} variants={fadeIn} className="bg-gray-50 rounded-lg p-4 shadow-sm border border-gray-300 hover:shadow-lg hover:border-red-500 transition-all">
@@ -686,7 +686,7 @@ const Home = () => {
               </div>
               
               <div className="md:w-3/4 w-full">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] lg:grid-cols-4 gap-4">
                   {newArrivals.map((p) => (
                     <div key={p.id} className="bg-gray-50 rounded-lg p-4 shadow-sm border border-gray-300 hover:shadow-lg hover:border-red-500 transition-all">
                       <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />
@@ -708,7 +708,7 @@ const Home = () => {
               <div className="h-1 w-16 bg-red-600 mt-2 skew-x-[-20deg]"></div>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] lg:grid-cols-6 gap-3 sm:gap-4">
               {recentlyViewed.map(p => (
                 <div key={p.id} className="bg-gray-50 rounded-lg p-4 shadow-sm border border-gray-300 hover:shadow-lg hover:border-red-500 transition-all">
                   <ProductCard product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} />

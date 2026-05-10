@@ -57,8 +57,8 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
 
   if (view === 'list') {
     return (
-      <Link to={`/products/${product.id}`} className="group flex gap-4 bg-gray-100 border border-gray-300 rounded-xl p-4 hover:shadow-md hover:border-red-500 transition-all duration-300">
-        <div className="w-32 h-32 flex-shrink-0 bg-gray-300 rounded-lg overflow-hidden relative">
+      <Link to={`/products/${product.id}`} className="group flex flex-col sm:flex-row gap-4 bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md hover:border-red-500 transition-all duration-300">
+        <div className="w-full sm:w-32 aspect-square sm:h-32 flex-shrink-0 bg-gray-200 rounded-lg overflow-hidden relative">
           <img src={product.image || 'https://via.placeholder.com/300?text=No+Image'} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
           {isOutOfStock && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><span className="text-xs font-bold text-red-500 bg-gray-800 px-2 py-1 rounded">SOLD OUT</span></div>}
         </div>
@@ -73,13 +73,13 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
             </button>
           </div>
           <p className="text-sm text-gray-600 line-clamp-2 mt-1">{product.description}</p>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             {product.rating && <div className="flex items-center gap-1"><Star size={14} className="text-yellow-500 fill-yellow-500" /><span className="text-sm font-medium text-gray-900">{product.rating}</span></div>}
             {product.brand && <span className="text-xs text-gray-600">- {product.brand}</span>}
             <span className="text-xs text-gray-600">Stock: {stockLevel}</span>
             {isLowStock && <span className="text-xs text-amber-600 flex items-center gap-1"><AlertTriangle size={12} /> Low stock</span>}
           </div>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             {hasDiscount ? (
               <>
                 <span className="font-bold text-red-600">{formatPrice(product.sale_price)}</span>
@@ -96,7 +96,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
   }
 
   return (
-    <Link to={`/products/${product.id}`} className="group bg-gray-100 border border-gray-300 rounded-xl overflow-hidden hover:shadow-lg hover:border-red-500 transition-all duration-300">
+    <Link to={`/products/${product.id}`} className="group h-full min-h-[360px] bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg hover:border-red-500 transition-all duration-300 flex flex-col">
       <div className="relative aspect-square bg-gray-200 overflow-hidden">
         <img
           src={product.image || 'https://via.placeholder.com/300?text=No+Image'}
@@ -121,10 +121,10 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
         )}
       </div>
 
-      <div className="p-3.5">
-        <div className="flex items-center justify-between mb-1">
+      <div className="p-3.5 flex flex-1 flex-col">
+        <div className="flex items-center justify-between gap-2 mb-1 min-h-[1.125rem]">
           {product.category_name && <span className="text-[11px] font-semibold text-red-600 uppercase tracking-wide">{product.category_name}</span>}
-          {product.brand && <span className="text-[11px] text-gray-600">{product.brand}</span>}
+          {product.brand && <span className="text-[11px] text-gray-600 truncate">{product.brand}</span>}
         </div>
         <h3 className="font-semibold text-gray-900 text-sm group-hover:text-red-600 transition-colors line-clamp-2 min-h-[2.5rem]">{product.name}</h3>
         {product.rating !== undefined && (
@@ -135,8 +135,8 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
           </div>
         )}
         <p className="text-xs text-gray-600 mt-1">Stock: {stockLevel}</p>
-        <div className="flex items-center justify-between mt-2.5">
-          <div className="flex items-center gap-2">
+        <div className="flex items-end justify-between gap-2 mt-auto pt-2.5">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
             {hasDiscount ? (
               <>
                 <span className="font-bold text-red-600">{formatPrice(product.sale_price)}</span>

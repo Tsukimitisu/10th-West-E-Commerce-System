@@ -402,6 +402,34 @@ const App = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) return undefined;
+
+    let animationFrame = 0;
+    const updateScrollbarProximity = (event) => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const distanceFromRight = window.innerWidth - event.clientX;
+        document.documentElement.classList.toggle('scrollbar-near', distanceFromRight <= 44);
+      });
+    };
+
+    const clearScrollbarProximity = () => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      animationFrame = 0;
+      document.documentElement.classList.remove('scrollbar-near');
+    };
+
+    window.addEventListener('mousemove', updateScrollbarProximity, { passive: true });
+    window.addEventListener('mouseleave', clearScrollbarProximity);
+
+    return () => {
+      clearScrollbarProximity();
+      window.removeEventListener('mousemove', updateScrollbarProximity);
+      window.removeEventListener('mouseleave', clearScrollbarProximity);
+    };
+  }, []);
+
   const handleLogin = (userData, token) => {
     flushSync(() => setUser(userData));
     localStorage.setItem('shopCoreUser', JSON.stringify(userData));

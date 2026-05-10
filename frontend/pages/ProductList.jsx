@@ -333,7 +333,7 @@ const ProductList = () => {
             resultCount={filtered.length}
           />
 
-          <div className="flex-1 min-w-0 bg-white/15 backdrop-blur-md border border-white/30 rounded-2xl p-6 shadow-lg">
+          <div className="flex-1 min-w-0 bg-white/15 backdrop-blur-md border border-white/30 rounded-2xl p-3 sm:p-5 lg:p-6 shadow-lg">
             {filtered.length === 0 ? (
               <div className="text-center py-16 bg-white/20 backdrop-blur-sm rounded-3xl border border-white/30">
                 <div className="w-20 h-20 bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -346,7 +346,7 @@ const ProductList = () => {
                 </button>
               </div>
             ) : view === 'grid' ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))] xl:grid-cols-4 gap-3 sm:gap-4">
                 {filtered.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} view="grid" />)}
               </div>
             ) : (

@@ -23,6 +23,13 @@ html {
   --scrollbar-thumb-active-color: rgba(51, 65, 85, 0.8);
 }
 
+:root.scrollbar-near {
+  --scrollbar-size-current: 16px;
+  --scrollbar-track-color: rgba(148, 163, 184, 0.2);
+  --scrollbar-thumb-color: rgba(100, 116, 139, 0.62);
+  scrollbar-width: auto;
+}
+
 @media (hover: hover) and (pointer: fine) {
   *::-webkit-scrollbar {
     width: var(--scrollbar-size-current);
@@ -30,7 +37,8 @@ html {
   }
 
   *::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--scrollbar-track-color);
+    border-radius: 999px;
   }
 
   *::-webkit-scrollbar-thumb {
