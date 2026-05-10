@@ -20,6 +20,8 @@ const ALLOWED_PRODUCT_SHIPPING_OPTIONS = PRODUCT_SHIPPING_OPTION_SET;
 const PRODUCT_PUBLISHER_ROLES = PRODUCT_PUBLISHER_ROLE_SET;
 const PRODUCT_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
 const SKU_MAX_GENERATION_ATTEMPTS = 10;
+const TOP_SELLER_ORDER_STATUS_SQL = "('delivered', 'completed')";
+const TOP_SELLER_EXCLUDED_RETURN_STATUS_SQL = "('approved', 'refunded', 'exchanged')";
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -579,7 +581,14 @@ export const getProducts = async (req, res) => {
         SELECT SUM(oi.quantity)
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
-        WHERE oi.product_id = p.id AND o.status IN ('paid', 'completed')
+        WHERE oi.product_id = p.id
+          AND o.status IN ${TOP_SELLER_ORDER_STATUS_SQL}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM returns rt
+            WHERE rt.order_id = o.id
+              AND rt.status IN ${TOP_SELLER_EXCLUDED_RETURN_STATUS_SQL}
+          )
       ), 0) as total_sold,
       COALESCE((
         SELECT ROUND(AVG(r.rating)::numeric, 1)
@@ -697,7 +706,15 @@ export const getTopSellers = async (req, res) => {
     const safeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 8;
 
     const params = [safeLimit];
-    let whereClause = `WHERE o.status = 'completed'`;
+    let whereClause = `
+      WHERE o.status IN ${TOP_SELLER_ORDER_STATUS_SQL}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM returns rt
+          WHERE rt.order_id = o.id
+            AND rt.status IN ${TOP_SELLER_EXCLUDED_RETURN_STATUS_SQL}
+        )
+    `;
 
     if (!includeUnpublished) {
       whereClause += ` AND p.status = 'published'`;

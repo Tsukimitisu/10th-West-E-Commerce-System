@@ -1548,7 +1548,7 @@ export const getTopSellers = async (days = null) => {
     let query = supabase
       .from('orders')
       .select('id, created_at, order_items(quantity, product_id, products(id, name, part_number, image, description, price, sale_price, is_on_sale, stock_quantity, rating, brand, status, created_at, categories(name)))')
-      .eq('status', 'completed');
+      .in('status', ['delivered', 'completed']);
 
     if (days && days !== 'all') {
       const parsedDays = Number.parseInt(String(days), 10);
@@ -1562,8 +1562,22 @@ export const getTopSellers = async (days = null) => {
     const { data, error } = await query;
     if (error) throw new Error(error.message);
 
+    const orderIds = (data || []).map((order) => order.id).filter(Boolean);
+    let excludedReturnedOrderIds = new Set();
+    if (orderIds.length > 0) {
+      const { data: returnRows, error: returnError } = await supabase
+        .from('returns')
+        .select('order_id, status')
+        .in('order_id', orderIds)
+        .in('status', ['approved', 'refunded', 'exchanged']);
+
+      if (!returnError) {
+        excludedReturnedOrderIds = new Set((returnRows || []).map((row) => row.order_id).filter(Boolean));
+      }
+    }
+
     const topSellerMap = new Map();
-    (data || []).forEach((order) => {
+    (data || []).filter((order) => !excludedReturnedOrderIds.has(order.id)).forEach((order) => {
       (order.order_items || []).forEach((item) => {
         const product = item.products;
         const productId = Number(item.product_id || product?.id);

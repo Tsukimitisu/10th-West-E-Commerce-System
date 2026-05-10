@@ -106,14 +106,25 @@ const Home = () => {
     };
   },[]);
 
-  // --- Best Sellers Fetching ---
-  useEffect(() => {
+  const loadBestSellers = useCallback(() => {
     setLoadingBestSellers(true);
-    getTopSellers(topSellersDays)
+    return getTopSellers(topSellersDays)
       .then(setBestSellers)
       .catch(() => {})
       .finally(() => setLoadingBestSellers(false));
   }, [topSellersDays]);
+
+  // --- Best Sellers Fetching ---
+  useEffect(() => {
+    loadBestSellers();
+  }, [loadBestSellers]);
+
+  useSocketEvent('order:updated', (order) => {
+    const status = String(order?.status || '').toLowerCase();
+    if (['delivered', 'completed', 'cancelled'].includes(status)) {
+      loadBestSellers();
+    }
+  });
 
   // Update real-time viewed items
   useEffect(() => {
