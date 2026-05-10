@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle } from 'lucide-react';
 import { getProductById, getRelatedProducts, getProductReviews, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useCart } from '../context/CartContext';
+import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
 import StarRating from '../components/StarRating';
 import ReviewCard from '../components/ReviewCard';
@@ -148,6 +149,20 @@ const normalizeWishlistIds = (items = []) => (
     .filter(Boolean)
 );
 
+const writeRecentlyViewedProduct = (product) => {
+  if (!product?.id) return;
+
+  try {
+    const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+    const updated = [
+      product,
+      ...viewed.filter((item) => Number(item?.id) !== Number(product.id)),
+    ].slice(0, 10);
+    localStorage.setItem('recentlyViewed', JSON.stringify(updated));
+    window.dispatchEvent(new Event('recentlyViewedUpdated'));
+  } catch {}
+};
+
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -236,11 +251,7 @@ const ProductDetail = () => {
         setRelated(rel);
         setReviews(rev);
 
-        // Save to recently viewed
-        const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-        const updated = [p, ...viewed.filter((v) => v.id !== p.id)].slice(0, 10);
-        localStorage.setItem('recentlyViewed', JSON.stringify(updated));
-        window.dispatchEvent(new Event('recentlyViewedUpdated'));
+        writeRecentlyViewedProduct(p);
 
         recordProductView(Number(id)).catch(() => {});
       } catch {}
@@ -372,6 +383,44 @@ const ProductDetail = () => {
       variantOptions.every((option) => variant.option_combination?.[option.name] === selectedVariant?.[option.name])
     )) || null;
   }, [variantRows, variantOptions, selectedVariant, isVariantSelectionComplete]);
+
+  useSocketEvent('product:updated', (updatedProduct) => {
+    const updatedProductId = Number(updatedProduct?.id);
+    if (!updatedProductId || updatedProductId !== Number(id)) return;
+
+    setProduct((current) => {
+      const nextProduct = {
+        ...(current || {}),
+        ...updatedProduct,
+        id: updatedProductId,
+      };
+      writeRecentlyViewedProduct(nextProduct);
+      return nextProduct;
+    });
+  });
+
+  useEffect(() => {
+    if (!product) return;
+    if (hasVariants && variantOptions.length > 0 && !selectedVariantRow) return;
+
+    const nextMaxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
+    setQuantity((current) => {
+      const parsed = Number(current);
+      if (!Number.isFinite(parsed)) return current;
+      if (nextMaxStock <= 0) return parsed === 1 ? current : 1;
+      if (parsed > nextMaxStock) return nextMaxStock;
+      if (parsed < 1) return 1;
+      return current;
+    });
+
+    setQuantityError((current) => {
+      if (!current?.startsWith('Maximum available quantity')) return current;
+      const parsed = Number(quantity);
+      return Number.isFinite(parsed) && (nextMaxStock <= 0 || parsed > nextMaxStock)
+        ? `Maximum available quantity is ${nextMaxStock}.`
+        : '';
+    });
+  }, [hasVariants, product, quantity, selectedVariantRow, variantOptions.length]);
 
   const shareUrl = product
     ? `${window.location.origin}${window.location.pathname}${window.location.search}#/products/${product.id}`
@@ -949,7 +998,7 @@ const ProductDetail = () => {
                       errorMsg = `Maximum quantity limit is ${maxQty}.`;
                     }
                     if (val > maxStock) {
-                      val = maxStock;
+                      val = Math.max(1, maxStock);
                       errorMsg = `Maximum available quantity is ${maxStock}.`;
                     }
                     
@@ -974,7 +1023,7 @@ const ProductDetail = () => {
                       }
                       if (q >= maxStock) {
                         setQuantityError(`Maximum available quantity is ${maxStock}.`);
-                        return maxStock;
+                        return Math.max(1, maxStock);
                       }
                       setQuantityError('');
                       return q + 1;

@@ -74,9 +74,11 @@ export const CartProvider = ({ children }) => {
   const getCheckoutSelectionKey = () => `${getCartKey()}_checkout_selection`;
   const [cartScopeKey, setCartScopeKey] = useState(getCartKey());
   const cartScopeKeyRef = React.useRef(cartScopeKey);
+  const lastSelectedSnapshotRef = React.useRef(null);
 
   useEffect(() => {
     cartScopeKeyRef.current = cartScopeKey;
+    lastSelectedSnapshotRef.current = null;
   }, [cartScopeKey]);
 
   useEffect(() => {
@@ -195,8 +197,20 @@ export const CartProvider = ({ children }) => {
   };
 
   const normalizeSelectionIds = (ids, sourceItems = items) => {
-    const validIds = new Set(sourceItems.map((item) => item.productId));
-    return Array.from(new Set(Array.isArray(ids) ? ids : [])).filter((id) => validIds.has(id));
+    const validIds = new Set(
+      sourceItems
+        .map((item) => Number(item?.productId))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    );
+
+    return Array.from(new Set(Array.isArray(ids) ? ids : []))
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0 && validIds.has(id));
+  };
+
+  const areSelectionIdsEqual = (left = [], right = []) => {
+    if (left.length !== right.length) return false;
+    return left.every((id, index) => Number(id) === Number(right[index]));
   };
 
   const getCheckoutSelection = () => {
@@ -403,7 +417,7 @@ export const CartProvider = ({ children }) => {
         const saved = sessionStorage.getItem(getSelectedKey());
         if (saved) {
           const parsed = JSON.parse(saved);
-          setSelectedItemIds(Array.isArray(parsed) ? parsed : []);
+          setSelectedItemIds(normalizeSelectionIds(Array.isArray(parsed) ? parsed : []));
         } else {
           setSelectedItemIds([]);
         }
@@ -420,16 +434,33 @@ export const CartProvider = ({ children }) => {
     if (initialized && hasLoadedSelection) {
       sessionStorage.setItem(getCartKey(), JSON.stringify(items));
       // cleanup removed items
-      const itemIds = new Set(items.map(i => i.productId));
-      const cleanSelected = selectedItemIds.filter(id => itemIds.has(id));
-      if (cleanSelected.length !== selectedItemIds.length) {
+      const itemIds = new Set(items.map(i => Number(i.productId)));
+      const cleanSelected = normalizeSelectionIds(selectedItemIds);
+      if (!areSelectionIdsEqual(cleanSelected, selectedItemIds)) {
         setSelectedItemIds(cleanSelected);
       }
       sessionStorage.setItem(getSelectedKey(), JSON.stringify(cleanSelected));
-      const cleanCheckoutSelection = getCheckoutSelection().filter((id) => itemIds.has(id));
+      const cleanCheckoutSelection = getCheckoutSelection().filter((id) => itemIds.has(Number(id)));
       sessionStorage.setItem(getCheckoutSelectionKey(), JSON.stringify(cleanCheckoutSelection));
     }
   }, [items, selectedItemIds, initialized, hasLoadedSelection, cartScopeKey]);
+
+  useEffect(() => {
+    if (!initialized || !hasLoadedSelection) return;
+
+    const cleanSelected = normalizeSelectionIds(selectedItemIds);
+    const snapshot = JSON.stringify(cleanSelected);
+
+    if (lastSelectedSnapshotRef.current === null) {
+      lastSelectedSnapshotRef.current = snapshot;
+      return;
+    }
+
+    if (lastSelectedSnapshotRef.current !== snapshot) {
+      lastSelectedSnapshotRef.current = snapshot;
+      clearCheckoutSelection();
+    }
+  }, [selectedItemIds, initialized, hasLoadedSelection, cartScopeKey]);
 
   const resolveMaxStock = (product) => {
     const rawStock = Number(product?.stock_quantity);
@@ -892,15 +923,15 @@ export const CartProvider = ({ children }) => {
     const targetIdSet = new Set(normalizeTargetProductIds(targetIds));
     if (targetIdSet.size === 0) return;
 
-    setItems((prev) => prev.filter((item) => !targetIdSet.has(item.productId)));
-    setSelectedItemIds((prev) => prev.filter((id) => !targetIdSet.has(id)));
+    setItems((prev) => prev.filter((item) => !targetIdSet.has(Number(item.productId))));
+    setSelectedItemIds((prev) => prev.filter((id) => !targetIdSet.has(Number(id))));
     setError(null);
 
     const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
     const nextLocal = currentLocal.filter((item) => !targetIdSet.has(Number(item.productId)));
     sessionStorage.setItem(getCartKey(), JSON.stringify(nextLocal));
 
-    const nextCheckoutSelection = getCheckoutSelection().filter((id) => !targetIdSet.has(id));
+    const nextCheckoutSelection = getCheckoutSelection().filter((id) => !targetIdSet.has(Number(id)));
     persistCheckoutSelection(nextCheckoutSelection);
   };
 
@@ -975,16 +1006,19 @@ export const CartProvider = ({ children }) => {
   };
 
     const toggleSelection = (productId) => {
+        const normalizedProductId = Number(productId);
+        if (!Number.isInteger(normalizedProductId) || normalizedProductId <= 0) return;
+
         setSelectedItemIds(prev => normalizeSelectionIds(
-            prev.includes(productId)
-                ? prev.filter(id => id !== productId)
-                : [...prev, productId]
+            prev.includes(normalizedProductId)
+                ? prev.filter(id => id !== normalizedProductId)
+                : [...prev, normalizedProductId]
         ));
     };
 
     const toggleAllSelection = (selectAll) => {
         if (selectAll) {
-            setSelectedItemIds(items.map(i => i.productId));
+            setSelectedItemIds(normalizeSelectionIds(items.map(i => i.productId)));
         } else {
             setSelectedItemIds([]);
         }
@@ -1083,4 +1117,3 @@ export const useCart = () => {
   }
   return context;
 };
-

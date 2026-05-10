@@ -64,9 +64,9 @@ const Checkout = () => {
     const fallbackSelection = Array.isArray(selectedItemIds) ? selectedItemIds : [];
     const preferredSelection = routeSelection?.length
       ? routeSelection
-      : storedSelection?.length
-        ? storedSelection
-        : fallbackSelection;
+      : fallbackSelection.length
+        ? fallbackSelection
+        : storedSelection;
     return normalizeIdList(preferredSelection);
   });
 
@@ -137,13 +137,21 @@ const Checkout = () => {
   useEffect(() => {
     if (isBuyNow) return;
 
-    const availableIds = new Set(allCartItems.map((item) => item.productId));
+    const availableIds = new Set(
+      allCartItems
+        .map((item) => Number(item.productId))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    );
     const normalizeAvailable = (ids = []) => normalizeIdList(ids).filter((id) => availableIds.has(id));
 
     setCheckoutItemIds((current) => {
       const filteredCurrent = normalizeAvailable(current);
       const selectedFromCart = normalizeAvailable(selectedItemIds);
-      const desired = selectedFromCart.length > 0 ? selectedFromCart : filteredCurrent;
+      const desired = selectedFromCart.length > 0
+        ? selectedFromCart
+        : availableIds.size > 0
+          ? []
+          : filteredCurrent;
 
       if (areSameIds(current, desired)) {
         return current;
@@ -156,7 +164,7 @@ const Checkout = () => {
   const verifiedCartItems = useMemo(() => {
     if (isBuyNow) return [];
     const allowedIds = new Set(checkoutItemIds);
-    return allCartItems.filter((item) => allowedIds.has(item.productId));
+    return allCartItems.filter((item) => allowedIds.has(Number(item.productId)));
   }, [allCartItems, checkoutItemIds, isBuyNow]);
 
   const resolvedBuyNowQty = Math.max(1, Math.trunc(toFiniteNumber(buyNowQty, 1)));
