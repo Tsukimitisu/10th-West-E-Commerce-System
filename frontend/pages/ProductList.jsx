@@ -111,6 +111,8 @@ const ProductList = () => {
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchParams.get('search') || '');
+  const [searchSettling, setSearchSettling] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
   const [selectedBrand, setSelectedBrand] = useState('');
   const [priceRange, setPriceRange] = useState([0, 100000]);
@@ -180,6 +182,22 @@ const ProductList = () => {
   }, [searchParams]);
 
   useEffect(() => {
+    const nextSearch = String(searchQuery || '').trim();
+    if (nextSearch === debouncedSearchQuery) {
+      setSearchSettling(false);
+      return undefined;
+    }
+
+    setSearchSettling(Boolean(nextSearch));
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(nextSearch);
+      setSearchSettling(false);
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [searchQuery, debouncedSearchQuery]);
+
+  useEffect(() => {
     const openFilters = () => {
       if (window.innerWidth >= 1024) setShowDesktopFilters((prev) => !prev);
       else setMobileFiltersOpen(true);
@@ -196,13 +214,18 @@ const ProductList = () => {
 
   const filtered = useMemo(() => {
     let result = [...products];
-    const searchTerms = tokenizeSearchTerms(searchQuery);
-    const searchPhrase = normalizeSearchPhrase(searchQuery);
+    const searchTerms = tokenizeSearchTerms(debouncedSearchQuery);
+    const searchPhrase = normalizeSearchPhrase(debouncedSearchQuery);
     if (searchTerms.length > 0) {
-      result = result.filter((product) => {
+      const nameMatches = result.filter((product) => {
+        const name = normalizeSearchPhrase(product?.name);
+        return searchTerms.every((term) => name.includes(term));
+      });
+      const fallbackMatches = result.filter((product) => {
         const searchable = buildProductSearchableText(product);
         return searchTerms.every((term) => searchable.includes(term));
       });
+      result = nameMatches.length > 0 ? nameMatches : fallbackMatches;
 
       result.sort((a, b) => {
         const scoreA = getProductSearchScore(a, searchTerms, searchPhrase);
@@ -228,7 +251,7 @@ const ProductList = () => {
       case 'relevance': break;
     }
     return result;
-  }, [products, searchQuery, selectedCategory, selectedBrand, priceRange, inStockOnly, sortBy]);
+  }, [products, debouncedSearchQuery, selectedCategory, selectedBrand, priceRange, inStockOnly, sortBy]);
 
   const activeFilterCount = [selectedCategory, selectedBrand, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
 
@@ -280,7 +303,9 @@ const ProductList = () => {
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-gray-900">{filtered.length} products found</p>
-              <p className="text-xs text-gray-600">Use filters to narrow down your parts fast</p>
+              <p className="text-xs text-gray-600">
+                {searchSettling ? 'Searching product names...' : 'Use filters to narrow down your parts fast'}
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -334,13 +359,19 @@ const ProductList = () => {
           />
 
           <div className="flex-1 min-w-0 bg-white/15 backdrop-blur-md border border-white/30 rounded-2xl p-3 sm:p-5 lg:p-6 shadow-lg">
-            {filtered.length === 0 ? (
+            {searchSettling ? (
+              <div className="text-center py-16 bg-white/20 backdrop-blur-sm rounded-3xl border border-white/30">
+                <div className="w-10 h-10 border-2 border-red-500/30 border-t-red-600 rounded-full animate-spin mx-auto mb-4" />
+                <h3 className="font-semibold text-gray-900 mb-2">Searching products</h3>
+                <p className="text-sm text-gray-600">Results update as you type.</p>
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="text-center py-16 bg-white/20 backdrop-blur-sm rounded-3xl border border-white/30">
                 <div className="w-20 h-20 bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Search size={32} className="text-gray-300" />
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-2">No products found</h3>
-                <p className="text-sm text-gray-600 mb-4">Try adjusting your filters or search query.</p>
+                <p className="text-sm text-gray-600 mb-4">Try another product name or adjust your filters.</p>
                 <button onClick={clearAllFilters} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg">
                   Clear All Filters
                 </button>

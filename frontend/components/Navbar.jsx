@@ -459,7 +459,7 @@ const Navbar = ({ user, onLogout }) => {
                     value={globalSearch}
                     onChange={handleSearchChange}
                     onFocus={() => { if(globalSearch.length >= 2) setShowDropdown(true); }}
-                    placeholder="Search parts, brands..."
+                    placeholder={isShopRoute ? 'Search product names...' : 'Search parts, brands...'}
                     className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-700 bg-zinc-900 text-sm text-white placeholder-gray-400 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
                   />
                   {showDropdown && (
@@ -681,7 +681,7 @@ const Navbar = ({ user, onLogout }) => {
                   value={globalSearch}
                   onChange={handleSearchChange}
                   onFocus={() => { if(globalSearch.length >= 2) setShowDropdown(true); }}
-                  placeholder="Search parts..."
+                  placeholder={isShopRoute ? 'Search product names...' : 'Search parts...'}
                   className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-700 bg-zinc-900 text-sm text-gray-700 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
                 />
                 {showDropdown && (
