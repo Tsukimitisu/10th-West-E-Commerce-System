@@ -77,10 +77,12 @@ const Register = () => {
     });
   };
 
-  const focusEmailField = () => {
+  const focusEmailField = ({ scroll = true } = {}) => {
     requestAnimationFrame(() => {
       if (!emailInputRef.current) return;
-      emailInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (scroll) {
+        emailInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       emailInputRef.current.focus({ preventScroll: true });
     });
   };
@@ -165,7 +167,7 @@ const Register = () => {
         }
         setError(nextFieldErrors.email || 'This email is already in use. Please sign in or use a different email.');
         scrollToErrorBanner();
-        focusEmailField();
+        focusEmailField({ scroll: false });
         return;
       }
 

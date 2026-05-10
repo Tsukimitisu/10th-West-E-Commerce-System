@@ -269,6 +269,11 @@ const VerifyEmail = ({ onLogin }) => {
           return;
         }
 
+        if (result?.alreadyVerified) {
+          redirectToLoginWithMessage(result?.message || VERIFICATION_ALREADY_VERIFIED_MESSAGE, { verified: '1' }, 1200, cancelled);
+          return;
+        }
+
         if (result?.autoLogin && result?.token && result?.user) {
           const destination = getVerificationRedirect(result);
           finalizeAuthenticatedLogin(result.user, result.token, destination, cancelled);
@@ -307,7 +312,7 @@ const VerifyEmail = ({ onLogin }) => {
         }
 
         if (code === 'VERIFICATION_TOKEN_USED') {
-          if (!cancelled) setMessage(VERIFICATION_USED_MESSAGE);
+          redirectToLoginWithMessage(VERIFICATION_ALREADY_VERIFIED_MESSAGE, { verified: '1' }, 1200, cancelled);
           return;
         }
 

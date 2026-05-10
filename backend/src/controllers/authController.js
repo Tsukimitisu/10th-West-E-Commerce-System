@@ -2,6 +2,7 @@ import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import dns from 'dns/promises';
 import nodemailer from 'nodemailer';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
@@ -185,6 +186,49 @@ const createVerificationToken = () => {
   };
 };
 
+const BLOCKED_EMAIL_DOMAINS = new Set([
+  'example.com',
+  'example.net',
+  'example.org',
+  'test.com',
+  'invalid',
+  'localhost',
+]);
+
+const EMAIL_DNS_TIMEOUT_MS = 3000;
+
+const assertEmailDomainCanReceiveMail = async (email) => {
+  const domain = String(email || '').split('@')[1]?.toLowerCase();
+  if (!domain || BLOCKED_EMAIL_DOMAINS.has(domain)) {
+    const error = new Error('Use a real email address that can receive verification emails.');
+    error.status = 400;
+    error.fieldErrors = { email: 'Use a real email address that can receive verification emails.' };
+    throw error;
+  }
+
+  const lookup = dns.resolveMx(domain);
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => {
+      const error = new Error('Email validation timed out. Please try again.');
+      error.status = 503;
+      reject(error);
+    }, EMAIL_DNS_TIMEOUT_MS);
+  });
+
+  try {
+    const records = await Promise.race([lookup, timeout]);
+    const canReceiveMail = Array.isArray(records) && records.some((record) => String(record.exchange || '').trim());
+    if (canReceiveMail) return;
+  } catch (error) {
+    if (error?.status === 503) throw error;
+  }
+
+  const error = new Error('Use a real email address that can receive verification emails.');
+  error.status = 400;
+  error.fieldErrors = { email: 'This email domain cannot receive verification emails.' };
+  throw error;
+};
+
 const buildVerificationUrl = (token) => {
   const url = getFrontendUrl();
   url.hash = `/verify-email?token=${encodeURIComponent(token)}`;
@@ -324,6 +368,8 @@ export const sendRegistrationOtp = async (req, res) => {
       return res.status(400).json({ message: 'Email already registered' });
     }
 
+    await assertEmailDomainCanReceiveMail(email);
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
 
@@ -365,6 +411,12 @@ export const sendRegistrationOtp = async (req, res) => {
     res.json({ message: 'Verification code sent to your email.' });
   } catch (error) {
     console.error('Send OTP error:', error);
+    if (error?.status) {
+      return res.status(error.status).json({
+        message: error.message || 'Please use a valid email address.',
+        fieldErrors: error.fieldErrors || {},
+      });
+    }
     res.status(500).json({ message: 'Failed to send verification code' });
   }
 };
@@ -437,6 +489,8 @@ export const register = async (req, res) => {
       });
     }
 
+    await assertEmailDomainCanReceiveMail(email);
+
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     const newUserResult = await client.query(
@@ -493,6 +547,13 @@ export const register = async (req, res) => {
         fieldErrors: {
           email: 'This email is already in use.',
         },
+      });
+    }
+
+    if (error?.status) {
+      return res.status(error.status).json({
+        message: error.message || 'Please correct the highlighted fields.',
+        fieldErrors: error.fieldErrors || {},
       });
     }
 
@@ -1187,10 +1248,11 @@ export const verifyEmailToken = async (req, res) => {
       await client.query('ROLLBACK');
 
       if (usedTokenResult.rows.length > 0 && usedTokenResult.rows[0].email_verified) {
-        return sendResponse(409, {
-          success: false,
-          message: 'This verification link has already been used. Please log in or request a new one.',
+        return sendResponse(200, {
+          success: true,
+          message: 'This email is already verified. Please log in to continue.',
           code: 'VERIFICATION_TOKEN_USED',
+          alreadyVerified: true,
         });
       }
 
@@ -1229,8 +1291,8 @@ export const verifyEmailToken = async (req, res) => {
 
       await client.query('COMMIT');
 
-      return sendResponse(409, {
-        success: false,
+      return sendResponse(200, {
+        success: true,
         message: 'This email is already verified. Please log in to continue.',
         code: 'VERIFICATION_ALREADY_VERIFIED',
         alreadyVerified: true,
