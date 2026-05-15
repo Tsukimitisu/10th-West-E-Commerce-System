@@ -10,8 +10,7 @@ const normalizeSearchText = (value) => String(value || '')
 
 const formatPostalCode = (value) => {
   const digits = String(value || '').replace(/\D/g, '');
-  if (digits.length === 4) return `0${digits}`;
-  return digits.slice(0, 5);
+  return digits.slice(0, 4);
 };
 
 const LOCAL_PH_SUGGESTIONS = [
@@ -23,7 +22,7 @@ const LOCAL_PH_SUGGESTIONS = [
       suburb: 'Dampalit',
       city: 'Malabon City',
       state: 'Metro Manila (NCR)',
-      postcode: '01470',
+      postcode: '1470',
       country: 'Philippines',
     },
   },

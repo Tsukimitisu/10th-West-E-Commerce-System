@@ -223,6 +223,7 @@ const Checkout = () => {
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
     street: '', barangay: '', city: '', state: '', postal_code: '',
+    province_code: '', city_code: '', barangay_code: '',
     lat: null, lng: null,
   });
 
@@ -426,7 +427,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
     }
 
     if (!usingSavedAddress) {
-      if (!form.name || !form.phone || !form.street || !form.city || !form.state || !form.postal_code) {
+      if (!form.name || !form.phone || !form.street || !form.barangay || !form.city || !form.state || !form.postal_code) {
         setError('Please complete the shipping address and contact details.');
         return;
       }
@@ -455,6 +456,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
             shippingAddress = formatAddressParts([
               selectedAddr.recipient_name,
               selectedAddr.street,
+              selectedAddr.barangay,
               selectedAddr.city,
               stateZip,
               'Philippines'
@@ -502,15 +504,20 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         city: usingSavedAddress ? (selectedAddr?.city || null) : (form.city || null),
         state: usingSavedAddress ? (selectedAddr?.state || null) : (form.state || null),
         postal_code: usingSavedAddress ? (selectedAddr?.postal_code || null) : (form.postal_code || null),
+        province_code: usingSavedAddress ? (selectedAddr?.province_code || null) : (form.province_code || null),
+        city_code: usingSavedAddress ? (selectedAddr?.city_code || null) : (form.city_code || null),
+        barangay_code: usingSavedAddress ? (selectedAddr?.barangay_code || null) : (form.barangay_code || null),
         country: usingSavedAddress ? (selectedAddr?.country || 'Philippines') : 'Philippines',
         address_string: shippingAddress,
       };
 
+      let paymentIntentId = null;
       if (paymentMethod === 'card') {
-        await createPaymentIntent(Math.round(grandTotal), items.map((i) => ({
+        const paymentIntent = await createPaymentIntent(Math.round(grandTotal), items.map((i) => ({
           product_id: i.productId,
           quantity: Math.max(1, Math.trunc(toFiniteNumber(i.quantity, 1)))
         })), 'php');
+        paymentIntentId = paymentIntent?.payment_intent_id || null;
       }
 
       const orderData = {
@@ -528,6 +535,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         shipping_lng: shippingLng,
         shipping_method: shippingMethod,
         total_amount: grandTotal,
+        payment_intent_id: paymentIntentId,
         tax_amount: vatAmount,
         payment_method: paymentMethod,
         guest_info: !u ? { name: form.name, email: form.email } : undefined,
@@ -676,14 +684,20 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                     <div className="md:col-span-2">
                       <AddressDropdowns
                         province={form.state}
+                        provinceCode={form.province_code}
                         city={form.city}
+                        cityCode={form.city_code}
                         barangay={form.barangay}
-                        onChange={({ province, city, barangay }) => {
+                        barangayCode={form.barangay_code}
+                        onChange={({ province, provinceCode, city, cityCode, barangay, barangayCode }) => {
                           setForm((f) => ({
                             ...f,
                             state: province || '',
+                            province_code: provinceCode || '',
                             city: city || '',
+                            city_code: cityCode || '',
                             barangay: barangay || '',
+                            barangay_code: barangayCode || '',
                             lat: null,
                             lng: null,
                           }));
@@ -702,6 +716,9 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                             barangay: selected.barangay || f.barangay,
                             city: selected.city || f.city,
                             state: selected.state || f.state,
+                            province_code: selected.state && selected.state !== f.state ? '' : f.province_code,
+                            city_code: selected.city && selected.city !== f.city ? '' : f.city_code,
+                            barangay_code: selected.barangay && selected.barangay !== f.barangay ? '' : f.barangay_code,
                             postal_code: selected.postal_code || f.postal_code,
                             lat: selected.lat ?? null,
                             lng: selected.lng ?? null,

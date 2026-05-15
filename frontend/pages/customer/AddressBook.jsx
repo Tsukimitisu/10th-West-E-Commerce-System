@@ -14,6 +14,9 @@ const buildAddressForm = (overrides = {}) => ({
   barangay: '',
   city: '',
   state: '',
+  province_code: '',
+  city_code: '',
+  barangay_code: '',
   zip: '',
   country: 'Philippines',
   is_default: false,
@@ -37,7 +40,7 @@ const AddressBook = () => {
   const digitsOnly = (value) => value.replace(/\D/g, '');
   const formatPhone = (value) => value.replace(/[^\d+]/g, '');
   const validatePhone = (phone) => /^(09\d{9}|\+639\d{9})$/.test(phone);
-  const validateZip = (zip) => /^\d{5}$/.test(zip);
+  const validateZip = (zip) => /^\d{4}$/.test(zip);
   const normalizeText = (value) => String(value || '').trim();
 
   const getAccountContactDefaults = () => {
@@ -109,8 +112,8 @@ const AddressBook = () => {
       zip: digitsOnly(form.zip),
     };
 
-    if (!trimmedForm.street || !trimmedForm.city || !trimmedForm.state || !trimmedForm.zip) {
-      setSaveError('Please fill in all required fields (Street, City, Province, ZIP).');
+    if (!trimmedForm.street || !trimmedForm.barangay || !trimmedForm.city || !trimmedForm.state || !trimmedForm.zip) {
+      setSaveError('Please fill in all required fields (Street, Barangay, City, Province, ZIP).');
       return;
     }
 
@@ -135,7 +138,7 @@ const AddressBook = () => {
 
     const zipValid = validateZip(trimmedForm.zip);
     if (!zipValid) {
-      setZipError('ZIP Code must contain exactly 5 digits.');
+      setZipError('ZIP Code must contain exactly 4 digits.');
       return;
     }
     try {
@@ -186,6 +189,9 @@ const AddressBook = () => {
       barangay: addr.barangay || '',
       city: addr.city || '',
       state: addr.state || '',
+      province_code: addr.province_code || '',
+      city_code: addr.city_code || '',
+      barangay_code: addr.barangay_code || '',
       zip: addr.zip || addr.postal_code || '',
       country: 'Philippines',
       is_default: addr.is_default || false,
@@ -203,7 +209,7 @@ const AddressBook = () => {
     setShowForm(true);
     setPhoneError('');
     const existingZip = addr.zip || addr.postal_code || '';
-    setZipError(existingZip.length === 0 || validateZip(existingZip) ? '' : 'ZIP Code must contain exactly 5 digits.');
+    setZipError(existingZip.length === 0 || validateZip(existingZip) ? '' : 'ZIP Code must contain exactly 4 digits.');
   };
 
   return (
@@ -251,14 +257,20 @@ const AddressBook = () => {
               <div className="space-y-4">
                 <AddressDropdowns
                   province={form.state}
+                  provinceCode={form.province_code}
                   city={form.city}
+                  cityCode={form.city_code}
                   barangay={form.barangay}
-                  onChange={({ province, city, barangay }) => {
+                  barangayCode={form.barangay_code}
+                  onChange={({ province, provinceCode, city, cityCode, barangay, barangayCode }) => {
                     setForm(f => ({
                       ...f,
                       state: province || '',
+                      province_code: provinceCode || '',
                       city: city || '',
+                      city_code: cityCode || '',
                       barangay: barangay || '',
+                      barangay_code: barangayCode || '',
                       lat: null,
                       lng: null,
                     }));
@@ -276,6 +288,9 @@ const AddressBook = () => {
                         barangay: selected.barangay || f.barangay,
                         city: selected.city || f.city,
                         state: selected.state || f.state,
+                        province_code: selected.state && selected.state !== f.state ? '' : f.province_code,
+                        city_code: selected.city && selected.city !== f.city ? '' : f.city_code,
+                        barangay_code: selected.barangay && selected.barangay !== f.barangay ? '' : f.barangay_code,
                         zip: selected.postal_code || f.zip,
                         lat: selected.lat ?? null,
                         lng: selected.lng ?? null,
@@ -309,11 +324,11 @@ const AddressBook = () => {
                     onChange={e => {
                       const val = digitsOnly(e.target.value);
                       setForm(f => ({...f, zip: val }));
-                      setZipError(val.length === 0 || validateZip(val) ? '' : 'ZIP Code must contain exactly 5 digits.');
+                      setZipError(val.length === 0 || validateZip(val) ? '' : 'ZIP Code must contain exactly 4 digits.');
                     }}
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    maxLength={5}
+                    maxLength={4}
                     required
                     className={`w-full px-3 py-2.5 border rounded-lg text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 ${zipError ? 'border-red-300 focus:ring-red-400' : 'border-slate-300'}`}
                   />

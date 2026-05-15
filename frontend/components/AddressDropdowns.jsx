@@ -4,8 +4,11 @@
 // Emits chosen province/city/municipality/barangay names and codes via onChange.
 const AddressDropdowns = ({
   province = '',
+  provinceCode = '',
   city = '',
+  cityCode = '',
   barangay = '',
+  barangayCode = '',
   onChange,
   disabled = false,
   labels = { province: 'Province', city: 'City / Municipality', barangay: 'Barangay' },
@@ -14,9 +17,10 @@ const AddressDropdowns = ({
   const [cities, setCities] = useState([]);
   const [barangays, setBarangays] = useState([]);
 
-  const [selectedProvince, setSelectedProvince] = useState({ code: '', name: province || '' });
-  const [selectedCity, setSelectedCity] = useState({ code: '', name: city || '' });
+  const [selectedProvince, setSelectedProvince] = useState({ code: provinceCode || '', name: province || '' });
+  const [selectedCity, setSelectedCity] = useState({ code: cityCode || '', name: city || '' });
   const [selectedBarangay, setSelectedBarangay] = useState(barangay || '');
+  const [selectedBarangayCode, setSelectedBarangayCode] = useState(barangayCode || '');
 
   const [loadingProvince, setLoadingProvince] = useState(false);
   const [loadingCity, setLoadingCity] = useState(false);
@@ -94,6 +98,7 @@ const AddressDropdowns = ({
       city: next.city ?? selectedCity.name,
       cityCode: next.cityCode ?? selectedCity.code,
       barangay: next.barangay ?? selectedBarangay,
+      barangayCode: next.barangayCode ?? selectedBarangayCode,
     });
   };
 
@@ -123,6 +128,7 @@ const AddressDropdowns = ({
       const match = findProvinceMatch(selectedProvince.name);
       if (match) {
         setSelectedProvince({ code: match.code, name: match.name });
+        emitChange({ province: match.name, provinceCode: match.code });
       }
     }
   }, [provinces, selectedProvince.name, selectedProvince.code]);
@@ -168,6 +174,7 @@ const AddressDropdowns = ({
       const match = findCityMatch(selectedCity.name);
       if (match) {
         setSelectedCity({ code: match.code, name: match.name });
+        emitChange({ city: match.name, cityCode: match.code });
       }
     }
   }, [cities, selectedCity.name, selectedCity.code]);
@@ -208,9 +215,13 @@ const AddressDropdowns = ({
       const match = findBarangayMatch(selectedBarangay);
       if (!match) {
         setSelectedBarangay('');
+        setSelectedBarangayCode('');
+      } else if (match.code !== selectedBarangayCode) {
+        setSelectedBarangayCode(match.code);
+        emitChange({ barangay: match.name, barangayCode: match.code });
       }
     }
-  }, [barangays, selectedBarangay]);
+  }, [barangays, selectedBarangay, selectedBarangayCode]);
 
   // Emit on initial mount to sync defaults.
   useEffect(() => {
@@ -224,9 +235,10 @@ const AddressDropdowns = ({
     setSelectedProvince({ code, name });
     setSelectedCity({ code: '', name: '' });
     setSelectedBarangay('');
+    setSelectedBarangayCode('');
     setCities([]);
     setBarangays([]);
-    emitChange({ province: name, provinceCode: code, city: '', cityCode: '', barangay: '' });
+    emitChange({ province: name, provinceCode: code, city: '', cityCode: '', barangay: '', barangayCode: '' });
   };
 
   const handleCityChange = (code) => {
@@ -234,13 +246,17 @@ const AddressDropdowns = ({
     const name = found?.name || '';
     setSelectedCity({ code, name });
     setSelectedBarangay('');
+    setSelectedBarangayCode('');
     setBarangays([]);
-    emitChange({ city: name, cityCode: code, barangay: '' });
+    emitChange({ city: name, cityCode: code, barangay: '', barangayCode: '' });
   };
 
-  const handleBarangayChange = (name) => {
+  const handleBarangayChange = (code) => {
+    const found = barangays.find((b) => b.code === code);
+    const name = found?.name || '';
     setSelectedBarangay(name);
-    emitChange({ barangay: name });
+    setSelectedBarangayCode(code);
+    emitChange({ barangay: name, barangayCode: code });
   };
 
   return (
@@ -280,14 +296,14 @@ const AddressDropdowns = ({
       <div>
         <label className="block text-sm font-medium text-gray-800 mb-1">{labels.barangay}</label>
         <select
-          value={selectedBarangay}
+          value={selectedBarangayCode}
           onChange={(e) => handleBarangayChange(e.target.value)}
           disabled={disabled || !selectedCity.code || loadingBarangay}
           className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 bg-white disabled:bg-gray-100 disabled:text-gray-700 disabled:opacity-100"
         >
           <option value="">{selectedCity.code ? 'Select a barangay' : 'Choose city/municipality first'}</option>
           {barangays.map((b) => (
-            <option key={b.code} value={b.name}>{b.name}</option>
+            <option key={b.code} value={b.code}>{b.name}</option>
           ))}
         </select>
         {loadingBarangay && <p className="text-xs text-gray-700 mt-1">Loading barangays...</p>}
