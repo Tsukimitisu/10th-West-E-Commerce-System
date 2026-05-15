@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { getOrders, getOrderById, updateOrderStatus, confirmOrderDelivery, processRefund } from '../../services/api';
+import { getOrders, getOrderById, updateOrderStatus, confirmOrderDelivery, processRefund, generateJntWaybill, getOrderWaybillUrl } from '../../services/api';
 import { OrderStatus } from '../../types.js';
 import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock, Filter, ChevronDown, ChevronUp, ArrowLeft, Printer, DollarSign, MapPin, User, Calendar, CreditCard, AlertCircle, Undo } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
@@ -53,6 +53,7 @@ const OrdersView = () => {
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
+  const [waybillBusy, setWaybillBusy] = useState(false);
 
   const fetchOrders = async () => {
     try { const o = await getOrders(); setOrders(o); } catch (e) { console.error(e); }
@@ -143,6 +144,22 @@ const OrdersView = () => {
       setTimeout(() => setRefundError(''), 5000);
     }
     setRefunding(false);
+  };
+
+  const handleGenerateWaybill = async () => {
+    if (!detailOrder) return;
+    setStatusError('');
+    setWaybillBusy(true);
+    try {
+      const updated = await generateJntWaybill(detailOrder.id);
+      const full = await getOrderById(detailOrder.id).catch(() => updated);
+      setDetailOrder(full);
+      fetchOrders();
+    } catch (e) {
+      setStatusError(e.message || 'Failed to generate J&T waybill.');
+    } finally {
+      setWaybillBusy(false);
+    }
   };
 
   const filtered = orders.filter(o => {
@@ -297,6 +314,7 @@ const OrdersView = () => {
               <div className="p-3 bg-gray-900 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><Package size={12} /> Tracking Number</div>
                 <p className="text-sm font-medium text-white">{detailOrder.tracking_number || '-'}</p>
+                <p className="text-[10px] text-gray-400 mt-1">Waybill: {detailOrder.waybill_status || 'not requested'}</p>
               </div>
               <div className="p-3 bg-gray-900 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><User size={12} /> Assigned Staff</div>
@@ -343,6 +361,11 @@ const OrdersView = () => {
 
             {/* Actions */}
             <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-700">
+              {statusError && (
+                <div className="basis-full p-3 bg-red-50 rounded-lg border border-red-200 text-sm text-red-700">
+                  {statusError}
+                </div>
+              )}
               <button
                 onClick={() => { setDetailOpen(false); openStatusChange(detailOrder); }}
                 className="flex-1 min-w-[140px] px-4 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
@@ -355,6 +378,24 @@ const OrdersView = () => {
               >
                 <Printer size={14} /> Print Invoice
               </button>
+              {detailOrder.shipping_method !== 'pickup' && detailOrder.source !== 'pos' && ['paid', 'preparing'].includes(detailOrder.status) && (
+                detailOrder.waybill_number ? (
+                  <button
+                    onClick={() => window.open(getOrderWaybillUrl(detailOrder.id), '_blank')}
+                    className="flex-1 min-w-[140px] px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <Printer size={14} /> Print J&amp;T Waybill
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleGenerateWaybill}
+                    disabled={waybillBusy}
+                    className="flex-1 min-w-[140px] px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-500 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                  >
+                    <Truck size={14} /> {waybillBusy ? 'Generating...' : 'Generate J&T Waybill'}
+                  </button>
+                )
+              )}
               {!isStaff && (detailOrder.status === 'completed' || detailOrder.status === 'cancelled') && (
                 <button onClick={() => { setRefundOrder(detailOrder); setRefundAmount(detailOrder.total_amount); setShowRefundModal(true); }}
                   className="px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg text-sm font-medium flex items-center gap-1">
