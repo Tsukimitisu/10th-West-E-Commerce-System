@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "test": "node --test",
     "migrate": "knex migrate:latest --knexfile knexfile.cjs",
     "migrate:down": "knex migrate:rollback --knexfile knexfile.cjs",
     "migrate:status": "knex migrate:status --knexfile knexfile.cjs",
