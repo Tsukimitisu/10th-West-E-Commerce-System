@@ -10,6 +10,8 @@ const API_URL = import.meta.env.VITE_API_URL || (() => {
 })();
 const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK === 'true';
+const USE_BACKEND_ORDER_API = true;
+const USE_BACKEND_ADDRESS_API = true;
 export const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
 
 const REGISTRATION_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
@@ -616,7 +618,7 @@ export const register = async (name, email, password, confirmPassword, consentDa
 const getAddressZipError = (value) => {
   const normalized = normalizeZipCode(value);
   if (!normalized) return 'ZIP code is required.';
-  if (!/^\d{5}$/.test(normalized)) return 'ZIP code must contain exactly 5 digits.';
+  if (!/^\d{4}$/.test(normalized)) return 'ZIP code must contain exactly 4 digits.';
   return '';
 };
 
@@ -2331,6 +2333,12 @@ const mapOrderFromApi = (order) => {
     source: order.source ?? 'online',
     payment_method: order.payment_method,
     tracking_number: order.tracking_number ?? undefined,
+    courier: order.courier ?? undefined,
+    waybill_number: order.waybill_number ?? undefined,
+    waybill_status: order.waybill_status ?? undefined,
+    waybill_generated_at: order.waybill_generated_at ?? undefined,
+    waybill_label_payload: order.waybill_label_payload ?? undefined,
+    courier_metadata: order.courier_metadata ?? undefined,
     delivered_at: order.delivered_at ?? undefined,
     rider_confirmed_delivery_at: order.rider_confirmed_delivery_at ?? undefined,
     rider_confirmed_by: order.rider_confirmed_by ?? undefined,
@@ -2372,7 +2380,7 @@ export const getOrders = async () => {
     return [...MOCK_ORDERS];
   }
 
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE && !USE_BACKEND_ORDER_API) {
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(*, products(*))')
@@ -2399,7 +2407,7 @@ export const getUserOrders = async (userId) => {
     return MOCK_ORDERS.filter(order => order.user_id === userId);
   }
 
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE && !USE_BACKEND_ORDER_API) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
 
@@ -2432,7 +2440,7 @@ export const getOrderById = async (id) => {
     return order;
   }
 
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE && !USE_BACKEND_ORDER_API) {
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(*, products(*))')
@@ -2479,7 +2487,7 @@ export const createOrder = async (order) => {
     return newOrder;
   }
 
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE && !USE_BACKEND_ORDER_API) {
     // Create order
     const { data: orderData, error: orderError } = await supabase
       .from('orders')
@@ -2638,7 +2646,7 @@ export const updateOrderStatus = async (id, status, trackingNumber = '') => {
     return order;
   }
 
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE && !USE_BACKEND_ORDER_API) {
     if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
       throw new Error('Use delivery and receipt confirmations for delivered/completed statuses.');
     }
@@ -2732,7 +2740,7 @@ export const confirmOrderDelivery = async (id) => {
     return order;
   }
 
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE && !USE_BACKEND_ORDER_API) {
     const currentUser = getCurrentUserFromToken();
     const { data: currentOrder, error: currentOrderError } = await supabase
       .from('orders')
@@ -2776,6 +2784,15 @@ export const confirmOrderDelivery = async (id) => {
 
   return mapOrderFromApi(data.order ?? data);
 };
+
+export const generateJntWaybill = async (id) => {
+  const data = await authenticatedFetch(`${API_URL}/orders/${id}/jnt-waybill`, {
+    method: 'POST',
+  });
+  return mapOrderFromApi(data.order ?? data);
+};
+
+export const getOrderWaybillUrl = (id) => `${API_URL}/orders/${id}/waybill`;
 
 export const confirmOrderReceipt = async (id) => {
   if (USE_MOCK_DATA) {
@@ -2967,11 +2984,14 @@ export const getAddresses = async (userId) => {
     country: address?.country || 'Philippines',
     label: address?.label || 'Home',
     barangay: address?.barangay ?? '',
+    province_code: address?.province_code ?? address?.provinceCode ?? '',
+    city_code: address?.city_code ?? address?.cityCode ?? '',
+    barangay_code: address?.barangay_code ?? address?.barangayCode ?? '',
     lat: address?.lat ?? null,
     lng: address?.lng ?? null,
   });
 
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE && !USE_BACKEND_ADDRESS_API) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
 
@@ -3002,13 +3022,16 @@ export const addAddress = async (address) => {
     city: address.city,
     state: address.state,
     postal_code: postalCode,
+    province_code: address.province_code ?? address.provinceCode ?? null,
+    city_code: address.city_code ?? address.cityCode ?? null,
+    barangay_code: address.barangay_code ?? address.barangayCode ?? null,
     country: 'Philippines',
     is_default: !!address.is_default,
     lat: address.lat ?? null,
     lng: address.lng ?? null,
   };
 
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE && !USE_BACKEND_ADDRESS_API) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
 
@@ -3047,6 +3070,9 @@ export const addAddress = async (address) => {
       zip: data.postal_code ?? '',
       country: data.country || 'Philippines',
       label: data.label || 'Home',
+      province_code: data.province_code ?? '',
+      city_code: data.city_code ?? '',
+      barangay_code: data.barangay_code ?? '',
       lat: data.lat ?? null,
       lng: data.lng ?? null,
     };
@@ -3062,6 +3088,9 @@ export const addAddress = async (address) => {
     zip: data.address?.postal_code ?? '',
     country: data.address?.country || 'Philippines',
     label: data.address?.label || 'Home',
+    province_code: data.address?.province_code ?? '',
+    city_code: data.address?.city_code ?? '',
+    barangay_code: data.address?.barangay_code ?? '',
     lat: data.address?.lat ?? null,
     lng: data.address?.lng ?? null,
   };
@@ -3080,13 +3109,16 @@ export const updateAddress = async (id, updates) => {
     city: updates.city,
     state: updates.state,
     postal_code: postalCode,
+    province_code: updates.province_code ?? updates.provinceCode ?? null,
+    city_code: updates.city_code ?? updates.cityCode ?? null,
+    barangay_code: updates.barangay_code ?? updates.barangayCode ?? null,
     country: 'Philippines',
     is_default: updates.is_default,
     lat: updates.lat ?? null,
     lng: updates.lng ?? null,
   };
 
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE && !USE_BACKEND_ADDRESS_API) {
     const currentUser = getCurrentUserFromToken();
     if (!currentUser) throw new Error('Not authenticated');
 
@@ -3128,6 +3160,9 @@ export const updateAddress = async (id, updates) => {
       zip: data.postal_code ?? '',
       country: data.country || 'Philippines',
       label: data.label || 'Home',
+      province_code: data.province_code ?? '',
+      city_code: data.city_code ?? '',
+      barangay_code: data.barangay_code ?? '',
       lat: data.lat ?? null,
       lng: data.lng ?? null,
     };
@@ -3143,13 +3178,16 @@ export const updateAddress = async (id, updates) => {
     zip: data.address?.postal_code ?? '',
     country: data.address?.country || 'Philippines',
     label: data.address?.label || 'Home',
+    province_code: data.address?.province_code ?? '',
+    city_code: data.address?.city_code ?? '',
+    barangay_code: data.address?.barangay_code ?? '',
     lat: data.address?.lat ?? null,
     lng: data.address?.lng ?? null,
   };
 };
 
 export const deleteAddress = async (id) => {
-  if (USE_SUPABASE) {
+  if (USE_SUPABASE && !USE_BACKEND_ADDRESS_API) {
     const { error } = await supabase
       .from('addresses')
       .delete()
