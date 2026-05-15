@@ -48,6 +48,7 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id)',
   'CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)',
   'CREATE INDEX IF NOT EXISTS idx_addresses_user ON addresses(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_addresses_psgc_codes ON addresses(province_code, city_code, barangay_code)',
   'CREATE INDEX IF NOT EXISTS idx_returns_order ON returns(order_id)',
   'CREATE INDEX IF NOT EXISTS idx_returns_user ON returns(user_id)',
   'CREATE INDEX IF NOT EXISTS idx_refunds_return ON refunds(return_id)',
@@ -75,6 +76,8 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id)',
   'CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id)',
   'CREATE INDEX IF NOT EXISTS idx_orders_assigned_staff ON orders(assigned_staff_id)',
+  'CREATE INDEX IF NOT EXISTS idx_orders_waybill_number ON orders(waybill_number)',
+  'CREATE INDEX IF NOT EXISTS idx_orders_courier_status ON orders(courier, waybill_status)',
   'CREATE INDEX IF NOT EXISTS idx_system_settings_category ON system_settings(category)',
   'CREATE INDEX IF NOT EXISTS idx_error_logs_type ON error_logs(error_type)',
   'CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at)',
@@ -224,6 +227,12 @@ async function createTables(knex) {
     table.string('promo_code_used', 100);
     table.string('payment_intent_id', 255);
     table.string('tracking_number', 255);
+    table.string('courier', 50);
+    table.string('waybill_number', 100);
+    table.string('waybill_status', 30).notNullable().defaultTo('not_requested');
+    table.timestamp('waybill_generated_at');
+    table.jsonb('waybill_label_payload');
+    table.jsonb('courier_metadata');
     table.integer('assigned_staff_id').references('id').inTable('users');
     table.decimal('tax_amount', 10, 2).notNullable().defaultTo(0);
     table.string('shipping_method', 50).notNullable().defaultTo('standard');
@@ -255,6 +264,9 @@ async function createTables(knex) {
     table.string('phone', 50).notNullable();
     table.text('street').notNullable();
     table.string('barangay', 100);
+    table.string('province_code', 20);
+    table.string('city_code', 20);
+    table.string('barangay_code', 20);
     table.string('city', 100).notNullable();
     table.string('state', 100).notNullable();
     table.string('country', 100).notNullable().defaultTo('Philippines');
@@ -522,9 +534,18 @@ async function ensureCompatibilityColumns(knex) {
   await addColumnIfMissing(knex, 'orders', 'shipping_address_snapshot', (table) => table.jsonb('shipping_address_snapshot'));
   await addColumnIfMissing(knex, 'orders', 'shipping_lat', (table) => table.decimal('shipping_lat', 10, 7));
   await addColumnIfMissing(knex, 'orders', 'shipping_lng', (table) => table.decimal('shipping_lng', 10, 7));
+  await addColumnIfMissing(knex, 'orders', 'courier', (table) => table.string('courier', 50));
+  await addColumnIfMissing(knex, 'orders', 'waybill_number', (table) => table.string('waybill_number', 100));
+  await addColumnIfMissing(knex, 'orders', 'waybill_status', (table) => table.string('waybill_status', 30).defaultTo('not_requested'));
+  await addColumnIfMissing(knex, 'orders', 'waybill_generated_at', (table) => table.timestamp('waybill_generated_at'));
+  await addColumnIfMissing(knex, 'orders', 'waybill_label_payload', (table) => table.jsonb('waybill_label_payload'));
+  await addColumnIfMissing(knex, 'orders', 'courier_metadata', (table) => table.jsonb('courier_metadata'));
 
   await addColumnIfMissing(knex, 'addresses', 'country', (table) => table.string('country', 100).defaultTo('Philippines'));
   await addColumnIfMissing(knex, 'addresses', 'barangay', (table) => table.string('barangay', 100));
+  await addColumnIfMissing(knex, 'addresses', 'province_code', (table) => table.string('province_code', 20));
+  await addColumnIfMissing(knex, 'addresses', 'city_code', (table) => table.string('city_code', 20));
+  await addColumnIfMissing(knex, 'addresses', 'barangay_code', (table) => table.string('barangay_code', 20));
   await addColumnIfMissing(knex, 'addresses', 'lat', (table) => table.decimal('lat', 10, 7));
   await addColumnIfMissing(knex, 'addresses', 'lng', (table) => table.decimal('lng', 10, 7));
 

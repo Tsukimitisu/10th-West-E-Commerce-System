@@ -163,6 +163,12 @@ const createTables = async () => {
         promo_code_used VARCHAR(100),
         payment_intent_id VARCHAR(255),
         tracking_number VARCHAR(255),
+        courier VARCHAR(50),
+        waybill_number VARCHAR(100),
+        waybill_status VARCHAR(30) DEFAULT 'not_requested',
+        waybill_generated_at TIMESTAMP,
+        waybill_label_payload JSONB,
+        courier_metadata JSONB,
         assigned_staff_id INTEGER REFERENCES users(id),
         tax_amount DECIMAL(10, 2) DEFAULT 0,
         shipping_method VARCHAR(50) DEFAULT 'standard',
@@ -202,6 +208,9 @@ const createTables = async () => {
         phone VARCHAR(50) NOT NULL,
         street TEXT NOT NULL,
         barangay VARCHAR(100),
+        province_code VARCHAR(20),
+        city_code VARCHAR(20),
+        barangay_code VARCHAR(20),
         city VARCHAR(100) NOT NULL,
         state VARCHAR(100) NOT NULL,
         country VARCHAR(100) DEFAULT 'Philippines',
@@ -240,7 +249,10 @@ const createTables = async () => {
 
     await client.query(`
       ALTER TABLE addresses
-      ADD COLUMN IF NOT EXISTS barangay VARCHAR(100);
+      ADD COLUMN IF NOT EXISTS barangay VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS province_code VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS city_code VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS barangay_code VARCHAR(20);
     `);
     console.log('✅ Addresses table ensured barangay column');
 
@@ -792,6 +804,12 @@ const createTables = async () => {
     // -- Orders table: new columns --
     const ordersNewColumns = [
       { name: 'tracking_number', definition: 'VARCHAR(255)' },
+      { name: 'courier', definition: 'VARCHAR(50)' },
+      { name: 'waybill_number', definition: 'VARCHAR(100)' },
+      { name: 'waybill_status', definition: "VARCHAR(30) DEFAULT 'not_requested'" },
+      { name: 'waybill_generated_at', definition: 'TIMESTAMP' },
+      { name: 'waybill_label_payload', definition: 'JSONB' },
+      { name: 'courier_metadata', definition: 'JSONB' },
       { name: 'assigned_staff_id', definition: 'INTEGER REFERENCES users(id)' },
       { name: 'tax_amount', definition: 'DECIMAL(10,2) DEFAULT 0' },
       { name: 'shipping_method', definition: "VARCHAR(50) DEFAULT 'standard'" },
@@ -905,6 +923,9 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);
       CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
       CREATE INDEX IF NOT EXISTS idx_orders_assigned_staff ON orders(assigned_staff_id);
+      CREATE INDEX IF NOT EXISTS idx_orders_waybill_number ON orders(waybill_number);
+      CREATE INDEX IF NOT EXISTS idx_orders_courier_status ON orders(courier, waybill_status);
+      CREATE INDEX IF NOT EXISTS idx_addresses_psgc_codes ON addresses(province_code, city_code, barangay_code);
       CREATE INDEX IF NOT EXISTS idx_system_settings_category ON system_settings(category);
       CREATE INDEX IF NOT EXISTS idx_error_logs_type ON error_logs(error_type);
       CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at);

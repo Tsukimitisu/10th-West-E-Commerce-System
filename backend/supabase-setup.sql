@@ -151,6 +151,12 @@ CREATE TABLE IF NOT EXISTS orders (
   promo_code_used VARCHAR(100),
   payment_intent_id VARCHAR(255),
   tracking_number VARCHAR(255),
+  courier VARCHAR(50),
+  waybill_number VARCHAR(100),
+  waybill_status VARCHAR(30) DEFAULT 'not_requested',
+  waybill_generated_at TIMESTAMP,
+  waybill_label_payload JSONB,
+  courier_metadata JSONB,
   assigned_staff_id INTEGER REFERENCES users(id),
   tax_amount DECIMAL(10,2) DEFAULT 0,
   shipping_method VARCHAR(50) DEFAULT 'standard',
@@ -183,6 +189,9 @@ CREATE TABLE IF NOT EXISTS addresses (
   phone VARCHAR(50) NOT NULL,
   street TEXT NOT NULL,
   barangay VARCHAR(100),
+  province_code VARCHAR(20),
+  city_code VARCHAR(20),
+  barangay_code VARCHAR(20),
   city VARCHAR(100) NOT NULL,
   state VARCHAR(100) NOT NULL,
   country VARCHAR(100) DEFAULT 'Philippines',
@@ -208,6 +217,15 @@ ALTER TABLE addresses
 
 ALTER TABLE addresses
   ADD COLUMN IF NOT EXISTS barangay VARCHAR(100);
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS province_code VARCHAR(20);
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS city_code VARCHAR(20);
+
+ALTER TABLE addresses
+  ADD COLUMN IF NOT EXISTS barangay_code VARCHAR(20);
 
 -- 11. Returns
 CREATE TABLE IF NOT EXISTS returns (
@@ -625,6 +643,12 @@ ALTER TABLE products ALTER COLUMN shipping_weight_kg SET NOT NULL;
 
 -- Orders: new columns for tracking / fulfillment
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_number VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier VARCHAR(50);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS waybill_number VARCHAR(100);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS waybill_status VARCHAR(30) DEFAULT 'not_requested';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS waybill_generated_at TIMESTAMP;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS waybill_label_payload JSONB;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier_metadata JSONB;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_staff_id INTEGER REFERENCES users(id);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_amount DECIMAL(10,2) DEFAULT 0;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_method VARCHAR(50) DEFAULT 'standard';
