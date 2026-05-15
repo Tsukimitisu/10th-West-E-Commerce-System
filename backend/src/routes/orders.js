@@ -8,7 +8,10 @@ import {
   confirmOrderReceipt,
   createOrder,
   getOrderInvoice,
-  cancelOrder
+  cancelOrder,
+  createJntWaybill,
+  getOrderWaybill,
+  refreshJntTracking
 } from '../controllers/orderController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 
@@ -26,5 +29,8 @@ router.put('/:id/confirm-receipt', authenticateToken, confirmOrderReceipt);
 router.get('/', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), getAllOrders);
 router.put('/:id/status', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), updateOrderStatus);
 router.put('/:id/confirm-delivery', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), confirmOrderDelivery);
+router.post('/:id/jnt-waybill', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), createJntWaybill);
+router.get('/:id/waybill', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), getOrderWaybill);
+router.get('/:id/jnt-tracking', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), refreshJntTracking);
 
 export default router;

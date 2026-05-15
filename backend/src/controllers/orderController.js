@@ -4,6 +4,8 @@ import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.
 import { ORDER_STATUSES, STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
 import { buildOrderStatusMessage, createNotification as createUserNotification, ensureNotificationColumns } from '../utils/notifications.js';
+import { validatePhilippineAddress } from '../services/psgc.js';
+import { createJntWaybillForOrder, ensureJntOrderColumns, getJntWaybill, normalizeWaybillStatus } from '../services/jntShipments.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const STAFF_ROLES = STAFF_ROLE_SET;
@@ -44,9 +46,18 @@ const ensureOrderWorkflowColumns = async () => {
       ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS rider_confirmed_delivery_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS rider_confirmed_by INTEGER REFERENCES users(id),
-      ADD COLUMN IF NOT EXISTS customer_confirmed_receipt_at TIMESTAMP;
+      ADD COLUMN IF NOT EXISTS customer_confirmed_receipt_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS courier VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS waybill_number VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS waybill_status VARCHAR(30) NOT NULL DEFAULT 'not_requested',
+      ADD COLUMN IF NOT EXISTS waybill_generated_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS waybill_label_payload JSONB,
+      ADD COLUMN IF NOT EXISTS courier_metadata JSONB;
   `).catch((error) => {
     console.error('Failed to ensure order support columns:', error);
+  });
+  await ensureJntOrderColumns(pool).catch((error) => {
+    console.error('Failed to ensure J&T order columns:', error);
   });
 
   await pool.query(`
@@ -129,6 +140,9 @@ const buildShippingAddressSnapshot = (snapshotInput = {}, shippingAddress) => {
     city: normalizeText(snapshotInput.city),
     state: normalizeText(snapshotInput.state),
     postal_code: normalizeText(snapshotInput.postal_code),
+    province_code: normalizeText(snapshotInput.province_code ?? snapshotInput.provinceCode),
+    city_code: normalizeText(snapshotInput.city_code ?? snapshotInput.cityCode),
+    barangay_code: normalizeText(snapshotInput.barangay_code ?? snapshotInput.barangayCode),
     country: normalizeText(snapshotInput.country) || 'Philippines',
     address_string: normalizeText(snapshotInput.address_string) || normalizeText(shippingAddress),
   };
@@ -151,6 +165,12 @@ const mapOrderRecord = (order) => ({
   tax_amount: roundMoney(order.tax_amount || 0),
   shipping_method: resolveShippingMethod(order.shipping_method),
   shipping_address_snapshot: parseShippingAddressSnapshot(order),
+  courier: normalizeText(order.courier),
+  waybill_number: normalizeText(order.waybill_number),
+  waybill_status: normalizeWaybillStatus(order.waybill_status),
+  waybill_generated_at: order.waybill_generated_at || null,
+  waybill_label_payload: order.waybill_label_payload || null,
+  courier_metadata: order.courier_metadata || null,
 });
 
 const buildOrderReturnInfo = async (db, order, userId, isStaff) => {
@@ -633,6 +653,131 @@ export const cancelOrder = async (req, res) => {
   }
 };
 
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+export const createJntWaybill = async (req, res) => {
+  try {
+    const order = await createJntWaybillForOrder(pool, req.params.id, { generatedBy: req.user?.id || null });
+    res.json({
+      message: order.waybill_status === 'generated' ? 'J&T waybill ready' : 'J&T waybill request updated',
+      order: mapOrderRecord(order),
+    });
+  } catch (error) {
+    console.error('Create J&T waybill error:', error);
+    res.status(error.status || (error.code === 'JNT_NOT_CONFIGURED' ? 503 : 500)).json({
+      message: error.message || 'Failed to create J&T waybill',
+      code: error.code || 'JNT_WAYBILL_ERROR',
+    });
+  }
+};
+
+export const getOrderWaybill = async (req, res) => {
+  try {
+    const waybill = await getJntWaybill(pool, req.params.id);
+    if (!waybill) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    if (!waybill.waybill_number || waybill.waybill_status !== 'generated') {
+      return res.status(400).json({ message: 'Waybill has not been generated for this order.' });
+    }
+
+    const label = waybill.waybill_label_payload || {};
+    const recipient = label.recipient || {};
+    const sender = label.sender || {};
+    const pkg = label.package || {};
+    const waybillNumber = waybill.waybill_number;
+    const qrDataUrl = label.qr_data_url || '';
+
+    const html = `<!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>J&T Waybill ${escapeHtml(waybillNumber)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { margin: 0; padding: 24px; font-family: Arial, sans-serif; color: #111827; background: #f3f4f6; }
+          .label { width: 420px; margin: 0 auto; background: #fff; border: 2px solid #111827; }
+          .header { display: flex; justify-content: space-between; align-items: center; padding: 14px; border-bottom: 2px solid #111827; }
+          .brand { font-size: 24px; font-weight: 800; color: #dc2626; }
+          .service { font-size: 12px; font-weight: 700; text-transform: uppercase; }
+          .awb { padding: 14px; text-align: center; border-bottom: 2px solid #111827; }
+          .awb-value { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+          .qr { width: 150px; height: 150px; margin: 10px auto 0; display: block; }
+          .section { padding: 12px 14px; border-bottom: 1px solid #111827; }
+          .section h2 { margin: 0 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #4b5563; }
+          .section p { margin: 3px 0; font-size: 13px; line-height: 1.35; }
+          .footer { display: grid; grid-template-columns: 1fr 1fr 1fr; font-size: 11px; }
+          .footer div { padding: 10px; border-right: 1px solid #111827; min-height: 48px; }
+          .footer div:last-child { border-right: 0; }
+          @media print {
+            body { padding: 0; background: #fff; }
+            .label { margin: 0; width: 100%; border-width: 1px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="label">
+          <div class="header">
+            <div class="brand">J&amp;T Express</div>
+            <div class="service">Waybill</div>
+          </div>
+          <div class="awb">
+            <div class="awb-value">${escapeHtml(waybillNumber)}</div>
+            ${qrDataUrl ? `<img class="qr" src="${escapeHtml(qrDataUrl)}" alt="Waybill QR">` : ''}
+          </div>
+          <div class="section">
+            <h2>Receiver</h2>
+            <p><strong>${escapeHtml(recipient.name || 'Customer')}</strong></p>
+            <p>${escapeHtml(recipient.phone || '')}</p>
+            <p>${escapeHtml(recipient.address || '')}</p>
+          </div>
+          <div class="section">
+            <h2>Sender</h2>
+            <p><strong>${escapeHtml(sender.name || '10th West Moto')}</strong></p>
+            <p>${escapeHtml(sender.phone || '')}</p>
+            <p>${escapeHtml(sender.address || '')}</p>
+          </div>
+          <div class="footer">
+            <div><strong>Order</strong><br>${escapeHtml(label.order_number || label.order_id || waybill.id)}</div>
+            <div><strong>Weight</strong><br>${escapeHtml(pkg.weight_kg || '')} kg</div>
+            <div><strong>Qty</strong><br>${escapeHtml(pkg.qty || '')}</div>
+          </div>
+        </div>
+        <script>window.addEventListener('load', () => window.print());</script>
+      </body>
+      </html>`;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (error) {
+    console.error('Get waybill error:', error);
+    res.status(500).json({ message: 'Failed to render waybill' });
+  }
+};
+
+export const refreshJntTracking = async (req, res) => {
+  try {
+    const waybill = await getJntWaybill(pool, req.params.id);
+    if (!waybill) return res.status(404).json({ message: 'Order not found' });
+    if (!waybill.waybill_number) return res.status(400).json({ message: 'No J&T waybill exists for this order.' });
+
+    res.json({
+      message: 'J&T tracking refresh endpoint is available; configure the contracted tracking API to enable live refresh.',
+      tracking_number: waybill.tracking_number,
+      waybill_number: waybill.waybill_number,
+      courier_metadata: waybill.courier_metadata,
+    });
+  } catch (error) {
+    console.error('Refresh J&T tracking error:', error);
+    res.status(500).json({ message: 'Failed to refresh J&T tracking' });
+  }
+};
+
 // Create order (after payment)
 export const createOrder = async (req, res) => {
   const {
@@ -665,6 +810,7 @@ export const createOrder = async (req, res) => {
       product_id: item.product_id ?? item.productId,
       quantity: Number(item.quantity)
     }));
+    const resolvedShippingMethod = resolveShippingMethod(shipping_method);
 
     if (normalizedItems.length === 0) {
       await client.query('ROLLBACK');
@@ -674,6 +820,45 @@ export const createOrder = async (req, res) => {
     if (source !== 'pos' && !normalizeText(shipping_address)) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Shipping address is required' });
+    }
+
+    const initialAddressSnapshot = buildShippingAddressSnapshot(shipping_address_snapshot, shipping_address);
+    if (source !== 'pos' && resolvedShippingMethod !== 'pickup') {
+      const postalCode = normalizeText(initialAddressSnapshot.postal_code);
+      if (!postalCode || !/^\d{4}$/.test(postalCode)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: 'Please correct the highlighted address fields.',
+          fieldErrors: { postal_code: 'ZIP code must contain exactly 4 digits.' },
+        });
+      }
+
+      const addressValidation = await validatePhilippineAddress({
+        state: initialAddressSnapshot.state,
+        city: initialAddressSnapshot.city,
+        barangay: initialAddressSnapshot.barangay,
+        province_code: initialAddressSnapshot.province_code,
+        city_code: initialAddressSnapshot.city_code,
+        barangay_code: initialAddressSnapshot.barangay_code,
+      });
+
+      if (!addressValidation.valid) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: 'Please select a valid Philippine shipping address.',
+          fieldErrors: addressValidation.fieldErrors,
+        });
+      }
+
+      Object.assign(initialAddressSnapshot, addressValidation.normalized);
+      initialAddressSnapshot.address_string = [
+        initialAddressSnapshot.recipient_name,
+        initialAddressSnapshot.street,
+        initialAddressSnapshot.barangay,
+        initialAddressSnapshot.city,
+        `${initialAddressSnapshot.state} ${initialAddressSnapshot.postal_code || ''}`.trim(),
+        'Philippines',
+      ].filter(Boolean).join(', ');
     }
 
     if (source !== 'pos' && normalizedPaymentIntentId) {
@@ -744,7 +929,6 @@ export const createOrder = async (req, res) => {
       roundMoney(Math.max(0, toFiniteNumber(discount_amount, 0))),
       roundMoney(subtotalAmount)
     );
-    const resolvedShippingMethod = resolveShippingMethod(shipping_method);
     const shippingCost = roundMoney(computeShippingCost(roundMoney(subtotalAmount), resolvedShippingMethod));
     const taxableAmount = roundMoney(Math.max(0, roundMoney(subtotalAmount) - normalizedDiscountAmount + shippingCost));
     const vatAmount = roundMoney(taxableAmount * VAT_RATE);
@@ -761,7 +945,7 @@ export const createOrder = async (req, res) => {
       ? (payment_method || 'cash')
       : (payment_method || 'stripe');
     const resolvedCashierId = source === 'pos' ? (cashier_id || req.user?.id || null) : null;
-    const resolvedAddressSnapshot = buildShippingAddressSnapshot(shipping_address_snapshot, shipping_address);
+    const resolvedAddressSnapshot = initialAddressSnapshot;
 
     // Create order
     const orderResult = await client.query(
@@ -796,7 +980,7 @@ export const createOrder = async (req, res) => {
       ]
     );
 
-    const order = orderResult.rows[0];
+    let order = orderResult.rows[0];
 
     // Add order items and update stock
     const stockUpdates = [];
@@ -844,6 +1028,16 @@ export const createOrder = async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    if (order.source !== 'pos' && order.shipping_method !== 'pickup' && order.status === 'paid') {
+      try {
+        order = await createJntWaybillForOrder(pool, order.id, { generatedBy: req.user?.id || null });
+      } catch (waybillError) {
+        console.error('Auto J&T waybill generation failed:', waybillError.message);
+        const latestOrderResult = await pool.query('SELECT * FROM orders WHERE id = $1', [order.id]);
+        order = latestOrderResult.rows[0] || order;
+      }
+    }
 
     const itemsResult = await client.query(
       `SELECT 
