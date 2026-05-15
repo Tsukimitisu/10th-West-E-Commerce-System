@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { validatePhilippineAddress } from '../services/psgc.js';
 
 const normalizeText = (value) => {
   if (value === undefined || value === null) return null;
@@ -33,7 +34,19 @@ const parseCoordinate = (value, min, max) => {
 };
 
 const PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
-const ZIP_REGEX = /^\d{5}$/;
+const ZIP_REGEX = /^\d{4}$/;
+
+const ensureAddressColumns = async () => {
+  await pool.query(`
+    ALTER TABLE addresses
+      ADD COLUMN IF NOT EXISTS province_code VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS city_code VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS barangay_code VARCHAR(20);
+  `).catch((error) => {
+    console.error('Failed to ensure address PSGC columns:', error);
+  });
+};
+ensureAddressColumns();
 
 // Get all addresses for a user
 export const getUserAddresses = async (req, res) => {
@@ -81,6 +94,9 @@ export const createAddress = async (req, res) => {
   const barangay = normalizeText(req.body.barangay);
   const city = normalizeText(req.body.city);
   const state = normalizeText(req.body.state);
+  const province_code = normalizeText(req.body.province_code ?? req.body.provinceCode);
+  const city_code = normalizeText(req.body.city_code ?? req.body.cityCode);
+  const barangay_code = normalizeText(req.body.barangay_code ?? req.body.barangayCode);
   const postal_code = normalizeZip(req.body.postal_code ?? req.body.zip);
   const country = req.body.country;
   const is_default = !!req.body.is_default;
@@ -114,8 +130,9 @@ export const createAddress = async (req, res) => {
   if (!street) fieldErrors.street = 'Street is required.';
   if (!city) fieldErrors.city = 'City is required.';
   if (!state) fieldErrors.state = 'Province is required.';
+  if (!barangay) fieldErrors.barangay = 'Barangay is required.';
   if (!postal_code) fieldErrors.postal_code = 'ZIP code is required.';
-  else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 5 digits.';
+  else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 4 digits.';
   if (!isPhilippineCountry(country)) fieldErrors.country = 'Only Philippine addresses are allowed.';
   if (Number.isNaN(lat)) fieldErrors.lat = 'Latitude must be between -90 and 90.';
   if (Number.isNaN(lng)) fieldErrors.lng = 'Longitude must be between -180 and 180.';
@@ -123,6 +140,24 @@ export const createAddress = async (req, res) => {
   if (Object.keys(fieldErrors).length > 0) {
     return res.status(400).json({ message: 'Please correct the highlighted address fields.', fieldErrors });
   }
+
+  const psgcValidation = await validatePhilippineAddress({
+    state,
+    city,
+    barangay,
+    province_code,
+    city_code,
+    barangay_code,
+  });
+
+  if (!psgcValidation.valid) {
+    return res.status(400).json({
+      message: 'Please select a valid Philippine address.',
+      fieldErrors: psgcValidation.fieldErrors,
+    });
+  }
+
+  const validatedAddress = psgcValidation.normalized;
 
   const client = await pool.connect();
 
@@ -139,10 +174,29 @@ export const createAddress = async (req, res) => {
 
     // Insert new address
     const result = await client.query(
-      `INSERT INTO addresses (user_id, recipient_name, phone, street, barangay, city, state, postal_code, address_string, lat, lng, is_default)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO addresses (
+         user_id, recipient_name, phone, street, barangay, city, state, postal_code,
+         address_string, lat, lng, is_default, province_code, city_code, barangay_code
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
-      [req.user.id, resolvedRecipientName, resolvedPhone, street, barangay, city, state, postal_code, `${street}, ${barangay ? `${barangay}, ` : ''}${city}, ${state} ${postal_code}, Philippines`, lat, lng, is_default]
+      [
+        req.user.id,
+        resolvedRecipientName,
+        resolvedPhone,
+        street,
+        validatedAddress.barangay,
+        validatedAddress.city,
+        validatedAddress.state,
+        postal_code,
+        `${street}, ${validatedAddress.barangay}, ${validatedAddress.city}, ${validatedAddress.state} ${postal_code}, Philippines`,
+        lat,
+        lng,
+        is_default,
+        validatedAddress.province_code,
+        validatedAddress.city_code,
+        validatedAddress.barangay_code,
+      ]
     );
 
     await client.query('COMMIT');
@@ -171,6 +225,9 @@ export const updateAddress = async (req, res) => {
   const incomingBarangay = hasField('barangay') ? normalizeText(req.body.barangay) : undefined;
   const incomingCity = normalizeText(req.body.city);
   const incomingState = normalizeText(req.body.state);
+  const incomingProvinceCode = hasField('province_code') || hasField('provinceCode') ? normalizeText(req.body.province_code ?? req.body.provinceCode) : undefined;
+  const incomingCityCode = hasField('city_code') || hasField('cityCode') ? normalizeText(req.body.city_code ?? req.body.cityCode) : undefined;
+  const incomingBarangayCode = hasField('barangay_code') || hasField('barangayCode') ? normalizeText(req.body.barangay_code ?? req.body.barangayCode) : undefined;
   const incomingPostalCode = normalizeZip(req.body.postal_code ?? req.body.zip);
   const incomingCountry = req.body.country;
   const incomingIsDefault = typeof req.body.is_default === 'boolean' ? req.body.is_default : null;
@@ -213,6 +270,9 @@ export const updateAddress = async (req, res) => {
       : incomingBarangay;
     const city = incomingCity || normalizeText(existingAddress.city);
     const state = incomingState || normalizeText(existingAddress.state);
+    const province_code = incomingProvinceCode === undefined ? normalizeText(existingAddress.province_code) : incomingProvinceCode;
+    const city_code = incomingCityCode === undefined ? normalizeText(existingAddress.city_code) : incomingCityCode;
+    const barangay_code = incomingBarangayCode === undefined ? normalizeText(existingAddress.barangay_code) : incomingBarangayCode;
     const postal_code = incomingPostalCode || normalizeText(existingAddress.postal_code);
     const is_default = incomingIsDefault === null ? Boolean(existingAddress.is_default) : incomingIsDefault;
     const lat = nextLat === undefined ? existingAddress.lat : nextLat;
@@ -225,8 +285,9 @@ export const updateAddress = async (req, res) => {
     if (!street) fieldErrors.street = 'Street is required.';
     if (!city) fieldErrors.city = 'City is required.';
     if (!state) fieldErrors.state = 'Province is required.';
+    if (!barangay) fieldErrors.barangay = 'Barangay is required.';
     if (!postal_code) fieldErrors.postal_code = 'ZIP code is required.';
-    else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 5 digits.';
+    else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 4 digits.';
     if (!isPhilippineCountry(incomingCountry)) fieldErrors.country = 'Only Philippine addresses are allowed.';
     if (Number.isNaN(lat)) fieldErrors.lat = 'Latitude must be between -90 and 90.';
     if (Number.isNaN(lng)) fieldErrors.lng = 'Longitude must be between -180 and 180.';
@@ -235,6 +296,25 @@ export const updateAddress = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Please correct the highlighted address fields.', fieldErrors });
     }
+
+    const psgcValidation = await validatePhilippineAddress({
+      state,
+      city,
+      barangay,
+      province_code,
+      city_code,
+      barangay_code,
+    });
+
+    if (!psgcValidation.valid) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: 'Please select a valid Philippine address.',
+        fieldErrors: psgcValidation.fieldErrors,
+      });
+    }
+
+    const validatedAddress = psgcValidation.normalized;
 
     // If this is set as default, unset all other defaults
     if (is_default) {
@@ -258,10 +338,29 @@ export const updateAddress = async (req, res) => {
          lat = $9,
          lng = $10,
          is_default = $11,
+         province_code = $12,
+         city_code = $13,
+         barangay_code = $14,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $12
+       WHERE id = $15
        RETURNING *`,
-       [recipient_name, phone, street, barangay, city, state, postal_code, `${street}, ${barangay ? `${barangay}, ` : ''}${city}, ${state} ${postal_code}, Philippines`, lat, lng, is_default, id]
+       [
+        recipient_name,
+        phone,
+        street,
+        validatedAddress.barangay,
+        validatedAddress.city,
+        validatedAddress.state,
+        postal_code,
+        `${street}, ${validatedAddress.barangay}, ${validatedAddress.city}, ${validatedAddress.state} ${postal_code}, Philippines`,
+        lat,
+        lng,
+        is_default,
+        validatedAddress.province_code,
+        validatedAddress.city_code,
+        validatedAddress.barangay_code,
+        id,
+      ]
     );
 
     await client.query('COMMIT');
