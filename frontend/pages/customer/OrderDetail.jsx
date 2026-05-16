@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Package, ArrowLeft, Truck, MapPin, CreditCard, Clock, CheckCircle2, XCircle, Download, RotateCcw, Calendar, Mail, DollarSign, Printer, AlertTriangle } from 'lucide-react';
-import { getOrderById, cancelOrder, confirmOrderReceipt } from '../../services/api';
+import { Package, ArrowLeft, Truck, MapPin, CreditCard, Clock, CheckCircle2, XCircle, Download, RotateCcw, Calendar, Mail, DollarSign, Printer, AlertTriangle, MessageCircle } from 'lucide-react';
+import { getOrderById, cancelOrder, confirmOrderReceipt, createChatThread } from '../../services/api';
 
 const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Delivered', 'Completed'];
 const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, delivered: 4, completed: 5, cancelled: -1 };
@@ -33,6 +33,7 @@ const OrderDetail = () => {
   const [cancelReasonError, setCancelReasonError] = useState('');
   const [confirmingReceipt, setConfirmingReceipt] = useState(false);
   const [receiptError, setReceiptError] = useState('');
+  const [chatStatus, setChatStatus] = useState('');
 
   const loadOrder = async () => {
     try { const data = await getOrderById(Number(id)); setOrder(data); } catch {}
@@ -78,6 +79,21 @@ const OrderDetail = () => {
     }
 
     setConfirmingReceipt(false);
+  };
+
+  const handleChatSeller = async () => {
+    if (!order) return;
+    setChatStatus('');
+    try {
+      const thread = await createChatThread({
+        order_id: order.id,
+        subject: `Order #${order.order_number || order.id}`,
+        message: `Hi, I need help with order #${order.order_number || order.id}.`,
+      });
+      setChatStatus(`Chat #${thread.id || ''} opened with this order context.`);
+    } catch (error) {
+      setChatStatus(error?.message || 'Unable to open chat right now.');
+    }
   };
 
   if (loading) return (
@@ -157,6 +173,12 @@ const OrderDetail = () => {
           >
             <Printer size={14} /> View Invoice
           </button>
+          <button
+            onClick={handleChatSeller}
+            className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 flex items-center gap-1.5 transition-colors"
+          >
+            <MessageCircle size={14} /> Chat Seller
+          </button>
           {/* Cancel Order — only if not yet shipped */}
           {canCancel && (
             <button onClick={() => setShowCancelConfirm(true)}
@@ -185,6 +207,11 @@ const OrderDetail = () => {
       {receiptError && (
         <div className="mb-6 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
           <AlertTriangle size={14} /> {receiptError}
+        </div>
+      )}
+      {chatStatus && (
+        <div className="mb-6 p-3 bg-blue-50 text-blue-700 text-sm rounded-lg border border-blue-100 flex items-center gap-2">
+          <MessageCircle size={14} /> {chatStatus}
         </div>
       )}
 

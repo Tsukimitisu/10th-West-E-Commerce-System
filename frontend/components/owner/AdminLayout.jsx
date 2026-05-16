@@ -5,7 +5,7 @@ import {
   RotateCcw, UserCog, BarChart3, Users, Star,
   LogOut, Bell, Search, Menu, X,
   ChevronLeft, ExternalLink, Wifi, WifiOff, Image, Tag, Newspaper,
-  Settings, CircleHelp, House,
+  Settings, CircleHelp, House, MessageCircle,
   AlertTriangle, CheckCircle
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
@@ -17,6 +17,7 @@ const createNavItems = (badges = {}) => [
   { id: 'products', label: 'Products', icon: Package },
   { id: 'inventory', label: 'Inventory', icon: Boxes, badge: badges.lowStock },
   { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: badges.pendingOrders },
+  { id: 'chat', label: 'Chats', icon: MessageCircle },
   { id: 'customers', label: 'Customers', icon: Users },
   // Staff-only
   { id: 'pos', label: 'POS Terminal', icon: Monitor, external: '#/pos' },
@@ -32,11 +33,12 @@ const createNavItems = (badges = {}) => [
 ];
 
 // Nav items store_staff can see
-const STORE_STAFF_NAV = ['inventory', 'orders', 'pos', 'returns'];
+const STORE_STAFF_NAV = ['inventory', 'orders', 'chat', 'pos', 'returns'];
 
 // Nav items owner/admin can see (business management only)
 const OWNER_NAV = [
   'dashboard', 'products', 'inventory', 'orders', 'customers',
+  'chat',
   'returns',
   'staff', 'reviews', 'reports',
   'promotions', 'banners', 'content'

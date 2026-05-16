@@ -62,6 +62,8 @@ const InventoryView = () => {
   };
 
   const totalStock = products.reduce((s, p) => s + p.stock_quantity, 0);
+  const reservedStock = products.reduce((s, p) => s + Number(p.reserved_stock || 0), 0);
+  const damagedStock = products.reduce((s, p) => s + Number(p.damaged_stock || 0), 0);
   const totalValue = products.reduce((s, p) => s + (p.stock_quantity * p.price), 0);
   const outOfStock = products.filter(p => p.stock_quantity === 0).length;
 
@@ -93,8 +95,8 @@ const InventoryView = () => {
         {[
           { label: 'Total Units', value: totalStock.toLocaleString(), icon: <Boxes size={18} />, color: 'bg-blue-50 text-blue-600 ' },
           { label: 'Inventory Value', value: `â‚±${totalValue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <TrendingUp size={18} />, color: 'bg-green-50 text-green-600' },
-          { label: 'Low Stock', value: lowStock.length.toString(), icon: <AlertTriangle size={18} />, color: 'bg-amber-50 text-amber-600' },
-          { label: 'Out of Stock', value: outOfStock.toString(), icon: <Package size={18} />, color: 'bg-red-500/10 text-red-500' },
+          { label: 'Reserved / Damaged', value: `${reservedStock} / ${damagedStock}`, icon: <Package size={18} />, color: 'bg-purple-50 text-purple-600' },
+          { label: 'Low / Out', value: `${lowStock.length} / ${outOfStock}`, icon: <AlertTriangle size={18} />, color: 'bg-amber-50 text-amber-600' },
         ].map((kpi, i) => (
           <div key={i} className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border-b border-white/10 p-4">
             <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
@@ -141,6 +143,8 @@ const InventoryView = () => {
               <thead><tr className="bg-[#202430]/80 border-b border-white/10">
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Product</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Current Stock</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden lg:table-cell">Reserved</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden lg:table-cell">Damaged</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Threshold</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Status</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Value</th>
@@ -168,6 +172,8 @@ const InventoryView = () => {
                           <span className={`font-bold ${status === 'out' ? 'text-red-500' : status === 'low' ? 'text-amber-600' : 'text-white'}`}>{p.stock_quantity}</span>
                         </div>
                       </td>
+                      <td className="px-4 py-3 text-right text-gray-300 hidden lg:table-cell">{p.reserved_stock || 0}</td>
+                      <td className="px-4 py-3 text-right text-gray-300 hidden lg:table-cell">{p.damaged_stock || 0}</td>
                       <td className="px-4 py-3 text-right text-gray-400 hidden sm:table-cell">{p.low_stock_threshold}</td>
                       <td className="px-4 py-3 hidden md:table-cell">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${status === 'out' ? 'bg-red-500/10 text-red-500' : status === 'low' ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>

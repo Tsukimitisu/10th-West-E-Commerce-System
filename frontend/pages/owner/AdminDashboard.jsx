@@ -13,6 +13,7 @@ import ReportsView from './ReportsView';
 import BannersView from './BannersView';
 import PromotionsView from './PromotionsView';
 import ContentView from './ContentView';
+import ChatView from './ChatView';
 
 const AdminDashboard = ({ user, onLogout }) => {
   const canAccessAdmin = user?.role === 'owner' || user?.role === 'store_staff' || user?.role === 'admin';
@@ -38,6 +39,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       case 'promotions': return <PromotionsView />;
       case 'banners': return <BannersView />;
       case 'content': return <ContentView />;
+      case 'chat': return <ChatView />;
       default: return <DashboardView />;
     }
   };
