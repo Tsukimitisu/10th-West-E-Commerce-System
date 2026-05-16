@@ -21,6 +21,8 @@ export const getInventory = async (req, res) => {
     res.json(result.rows.map(product => ({
       ...product,
       stock_quantity: parseInt(product.stock_quantity),
+      reserved_stock: parseInt(product.reserved_stock || 0, 10),
+      damaged_stock: parseInt(product.damaged_stock || 0, 10),
       low_stock_threshold: parseInt(product.low_stock_threshold),
       price: parseFloat(product.price),
       buying_price: parseFloat(product.buying_price || 0),
@@ -50,6 +52,8 @@ export const getLowStockProducts = async (req, res) => {
       products: result.rows.map(product => ({
         ...product,
         stock_quantity: parseInt(product.stock_quantity),
+        reserved_stock: parseInt(product.reserved_stock || 0, 10),
+        damaged_stock: parseInt(product.damaged_stock || 0, 10),
         low_stock_threshold: parseInt(product.low_stock_threshold),
         price: parseFloat(product.price),
         buying_price: parseFloat(product.buying_price || 0)
