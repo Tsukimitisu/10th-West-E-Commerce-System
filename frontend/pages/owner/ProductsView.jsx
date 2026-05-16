@@ -37,9 +37,12 @@ const SKU_MODE_AUTO = 'auto';
 const SKU_MODE_MANUAL = 'manual';
 const ALLOWED_SHIPPING_OPTIONS = new Set(['standard', 'express']);
 const PRODUCT_STATUS_DRAFT = 'draft';
-const PRODUCT_STATUS_PUBLISHED = 'published';
-const PRODUCT_ALLOWED_STATUSES = new Set([PRODUCT_STATUS_DRAFT, PRODUCT_STATUS_PUBLISHED]);
-const PRODUCT_LEGACY_STATUSES = new Set(['available', 'hidden', 'out_of_stock']);
+const PRODUCT_STATUS_ACTIVE = 'active';
+const PRODUCT_STATUS_OUT_OF_STOCK = 'out_of_stock';
+const PRODUCT_STATUS_ARCHIVED = 'archived';
+const PRODUCT_STATUS_PUBLISHED = PRODUCT_STATUS_ACTIVE;
+const PRODUCT_ALLOWED_STATUSES = new Set([PRODUCT_STATUS_DRAFT, PRODUCT_STATUS_ACTIVE, PRODUCT_STATUS_OUT_OF_STOCK, PRODUCT_STATUS_ARCHIVED]);
+const PRODUCT_LEGACY_STATUSES = new Set(['available', 'hidden', 'published']);
 const PRODUCT_FORM_DRAFT_STORAGE_KEY = 'owner-products-form-draft-v1';
 const PRODUCT_FORM_DRAFT_AUTOSAVE_DELAY_MS = 450;
 const PRODUCT_VARIANT_MAX_OPTIONS = 5;
@@ -616,7 +619,9 @@ const resolveShippingOptionDraft = (value) => {
 const normalizeProductStatus = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === PRODUCT_STATUS_DRAFT || normalized === 'hidden') return PRODUCT_STATUS_DRAFT;
-  if (normalized === PRODUCT_STATUS_PUBLISHED || normalized === 'available' || normalized === 'out_of_stock') return PRODUCT_STATUS_PUBLISHED;
+  if (normalized === PRODUCT_STATUS_ACTIVE || normalized === 'published' || normalized === 'available') return PRODUCT_STATUS_ACTIVE;
+  if (normalized === PRODUCT_STATUS_OUT_OF_STOCK || normalized === 'out-of-stock') return PRODUCT_STATUS_OUT_OF_STOCK;
+  if (normalized === PRODUCT_STATUS_ARCHIVED) return PRODUCT_STATUS_ARCHIVED;
   return PRODUCT_STATUS_DRAFT;
 };
 
@@ -677,6 +682,12 @@ const createProductFormState = (overrides = {}) => ({
   image_urls: [],
   video_url: '',
   stock_quantity: '0',
+  reserved_stock: '0',
+  damaged_stock: '0',
+  product_type: 'single',
+  color: '',
+  fitments: [],
+  bundle_components: [],
   boxNumber: '',
   low_stock_threshold: '5',
   sale_price: '',
@@ -1137,7 +1148,13 @@ const ProductsView = () => {
       category_id: p.category_id?.toString() || '',
       subcategory_id: p.subcategory_id?.toString() || '',
       image: p.image || '',
-      stock_quantity: p.stock_quantity.toString(),
+      stock_quantity: String(p.available_stock ?? p.stock_quantity ?? 0),
+      reserved_stock: String(p.reserved_stock ?? 0),
+      damaged_stock: String(p.damaged_stock ?? 0),
+      product_type: p.product_type || 'single',
+      color: p.color || '',
+      fitments: Array.isArray(p.fitments) ? p.fitments : [],
+      bundle_components: Array.isArray(p.bundle_components) ? p.bundle_components : [],
       boxNumber: p.boxNumber || '',
       low_stock_threshold: p.low_stock_threshold.toString(),
       sale_price: p.sale_price?.toString() || '',
@@ -1187,6 +1204,15 @@ const ProductsView = () => {
       subcategory_id: p.subcategory_id?.toString() || '',
       image: p.image || '',
       stock_quantity: '0',
+      reserved_stock: '0',
+      damaged_stock: '0',
+      product_type: p.product_type || 'single',
+      color: p.color || '',
+      fitments: Array.isArray(p.fitments) ? p.fitments : [],
+      bundle_components: Array.isArray(p.bundle_components) ? p.bundle_components.map((component) => ({
+        ...component,
+        component_product_id: component.component_product_id,
+      })) : [],
       boxNumber: p.boxNumber || '',
       low_stock_threshold: p.low_stock_threshold.toString(),
       sale_price: p.sale_price?.toString() || '',
@@ -1763,6 +1789,12 @@ const ProductsView = () => {
         image_urls: normalizedMediaUrls,
         video_url: uploadedVideoUrl || null,
         stock_quantity: parseInt(form.stock_quantity, 10),
+        reserved_stock: parseInt(form.reserved_stock || '0', 10),
+        damaged_stock: parseInt(form.damaged_stock || '0', 10),
+        product_type: form.product_type || 'single',
+        color: form.color,
+        fitments: Array.isArray(form.fitments) ? form.fitments : [],
+        bundle_components: Array.isArray(form.bundle_components) ? form.bundle_components : [],
         shipping_option: shippingOption,
         shipping_weight_kg: shippingWeightKg,
         shipping_dimensions: shippingDimensionsPayload,
@@ -2151,10 +2183,14 @@ const ProductsView = () => {
                   const cat = categories.find(c => c.id === p.category_id);
                   const subcat = subcategories.find(s => s.id === p.subcategory_id);
                   const normalizedStatus = normalizeProductStatus(p.status);
-                  const displayStatus = normalizedStatus === PRODUCT_STATUS_PUBLISHED ? 'Published' : 'Draft';
-                  const displayStatusClass = normalizedStatus === PRODUCT_STATUS_PUBLISHED
+                  const displayStatus = normalizedStatus.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+                  const displayStatusClass = normalizedStatus === PRODUCT_STATUS_ACTIVE
                     ? 'bg-emerald-500/20 text-emerald-300'
-                    : 'bg-amber-500/20 text-amber-300';
+                    : normalizedStatus === PRODUCT_STATUS_OUT_OF_STOCK
+                      ? 'bg-red-500/20 text-red-300'
+                      : normalizedStatus === PRODUCT_STATUS_ARCHIVED
+                        ? 'bg-slate-500/20 text-slate-300'
+                        : 'bg-amber-500/20 text-amber-300';
                   return (
                     <tr key={p.id} className="hover:bg-[#202430]/60 transition-colors">
                       <td className="px-4 py-3">
@@ -2164,7 +2200,7 @@ const ProductsView = () => {
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-white text-sm truncate max-w-[200px]">{p.name}</p>
-                            <p className="text-[10px] text-gray-400 font-mono">{p.partNumber || 'â€”'}</p>
+                            <p className="text-[10px] text-gray-400 font-mono">{p.partNumber || '—'}{p.product_type === 'bundle' ? ' • Bundle' : ''}</p>
                           </div>
                           {p.is_on_sale && <span className="ml-1 px-1.5 py-0.5 bg-red-500/10 text-red-500 text-[10px] font-bold rounded">SALE</span>}
                         </div>
@@ -2513,6 +2549,31 @@ const ProductsView = () => {
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <InputField label="Product Type">
+                      <select
+                        value={form.product_type}
+                        onChange={(event) => setForm((prev) => ({
+                          ...prev,
+                          product_type: event.target.value,
+                          bundle_components: event.target.value === 'bundle' ? prev.bundle_components : [],
+                        }))}
+                        className={inputClass}
+                      >
+                        <option value="single">Single Product</option>
+                        <option value="bundle">Bundle / Set</option>
+                      </select>
+                    </InputField>
+                    <InputField label="Color">
+                      <input
+                        value={form.color}
+                        onChange={(event) => setForm((prev) => ({ ...prev, color: event.target.value }))}
+                        className={inputClass}
+                        placeholder="Matte Black"
+                      />
+                    </InputField>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <InputField label="Category" required>
                       <div className="space-y-2" ref={categoryDropdownRef}>
                         <div className={`relative rounded-lg border bg-[#202430] ${getInfoErrorMessage('category_id') ? 'border-red-400' : 'border-white/10'}`}>
@@ -2652,6 +2713,40 @@ const ProductsView = () => {
                       <p className="mt-1 text-xs text-red-300">{getFieldError('partNumber')}</p>
                     )}
                   </InputField>
+
+                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Motorcycle Fitments</p>
+                        <p className="text-xs text-gray-400">Add compatible brand, model, and year ranges.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setForm((prev) => ({
+                          ...prev,
+                          fitments: [...(prev.fitments || []), { brand: prev.brand || '', model: '', start_year: '', end_year: '' }],
+                        }))}
+                        className="px-3 py-1.5 bg-[#2a3244] hover:bg-[#37425b] text-gray-100 text-xs font-semibold rounded-lg"
+                      >
+                        + Add Fitment
+                      </button>
+                    </div>
+                    {(form.fitments || []).length === 0 ? (
+                      <p className="text-xs text-gray-500">No fitments added.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {form.fitments.map((fitment, index) => (
+                          <div key={`fitment-${index}`} className="grid grid-cols-12 gap-2">
+                            <input className={`${inputClass} col-span-3`} placeholder="Brand" value={fitment.brand || ''} onChange={(event) => setForm((prev) => ({ ...prev, fitments: prev.fitments.map((item, i) => i === index ? { ...item, brand: event.target.value } : item) }))} />
+                            <input className={`${inputClass} col-span-3`} placeholder="Model" value={fitment.model || ''} onChange={(event) => setForm((prev) => ({ ...prev, fitments: prev.fitments.map((item, i) => i === index ? { ...item, model: event.target.value } : item) }))} />
+                            <input className={`${inputClass} col-span-2`} placeholder="Start" type="number" value={fitment.start_year || ''} onChange={(event) => setForm((prev) => ({ ...prev, fitments: prev.fitments.map((item, i) => i === index ? { ...item, start_year: event.target.value } : item) }))} />
+                            <input className={`${inputClass} col-span-2`} placeholder="End" type="number" value={fitment.end_year || ''} onChange={(event) => setForm((prev) => ({ ...prev, fitments: prev.fitments.map((item, i) => i === index ? { ...item, end_year: event.target.value } : item) }))} />
+                            <button type="button" onClick={() => setForm((prev) => ({ ...prev, fitments: prev.fitments.filter((_, i) => i !== index) }))} className="col-span-2 rounded-lg bg-red-500/15 text-red-300 text-xs">Remove</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -2708,6 +2803,26 @@ const ProductsView = () => {
                         <p className="mt-1 text-xs text-red-300">{getFieldError('stock_quantity')}</p>
                       )}
                     </InputField>
+                    <InputField label="Reserved Stock">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={form.reserved_stock}
+                        onChange={e => setForm(f => ({ ...f, reserved_stock: e.target.value }))}
+                        className={inputClass}
+                      />
+                    </InputField>
+                    <InputField label="Damaged Stock">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={form.damaged_stock}
+                        onChange={e => setForm(f => ({ ...f, damaged_stock: e.target.value }))}
+                        className={inputClass}
+                      />
+                    </InputField>
                     <InputField label="Low Stock Alert">
                       <input
                         type="number"
@@ -2725,6 +2840,62 @@ const ProductsView = () => {
                       )}
                     </InputField>
                   </div>
+
+                  {form.product_type === 'bundle' && (
+                    <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">Included Parts</p>
+                          <p className="text-xs text-gray-400">Component stock is deducted when this bundle is sold.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setForm((prev) => ({
+                            ...prev,
+                            bundle_components: [...(prev.bundle_components || []), { component_product_id: '', quantity: 1, display_order: prev.bundle_components?.length || 0 }],
+                          }))}
+                          className="px-3 py-1.5 bg-[#2a3244] hover:bg-[#37425b] text-gray-100 text-xs font-semibold rounded-lg"
+                        >
+                          + Add Part
+                        </button>
+                      </div>
+                      {(form.bundle_components || []).length === 0 ? (
+                        <p className="text-xs text-amber-300">Add at least one included part before saving a bundle.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {form.bundle_components.map((component, index) => (
+                            <div key={`bundle-component-${index}`} className="grid grid-cols-12 gap-2">
+                              <select
+                                value={component.component_product_id || ''}
+                                onChange={(event) => setForm((prev) => ({
+                                  ...prev,
+                                  bundle_components: prev.bundle_components.map((item, i) => i === index ? { ...item, component_product_id: Number(event.target.value) || '' } : item),
+                                }))}
+                                className={`${inputClass} col-span-7`}
+                              >
+                                <option value="">Select product</option>
+                                {products.filter((product) => product.product_type !== 'bundle' && product.id !== editing?.id).map((product) => (
+                                  <option key={product.id} value={product.id}>{product.name} ({product.partNumber || product.sku || product.id})</option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={component.quantity || 1}
+                                onChange={(event) => setForm((prev) => ({
+                                  ...prev,
+                                  bundle_components: prev.bundle_components.map((item, i) => i === index ? { ...item, quantity: Number(event.target.value) || 1 } : item),
+                                }))}
+                                className={`${inputClass} col-span-3`}
+                              />
+                              <button type="button" onClick={() => setForm((prev) => ({ ...prev, bundle_components: prev.bundle_components.filter((_, i) => i !== index) }))} className="col-span-2 rounded-lg bg-red-500/15 text-red-300 text-xs">Remove</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
                       <div className="flex items-center justify-between gap-3">
@@ -3145,7 +3316,9 @@ const ProductsView = () => {
                       className={getInputClassName('status')}
                     >
                       <option value={PRODUCT_STATUS_DRAFT}>Save as Draft</option>
-                      <option value={PRODUCT_STATUS_PUBLISHED}>Publish Product</option>
+                      <option value={PRODUCT_STATUS_ACTIVE}>Active</option>
+                      <option value={PRODUCT_STATUS_OUT_OF_STOCK}>Out of Stock</option>
+                      <option value={PRODUCT_STATUS_ARCHIVED}>Archived</option>
                     </select>
                     {getFieldError('status') && (
                       <p className="mt-1 text-xs text-red-300">{getFieldError('status')}</p>
@@ -3192,7 +3365,7 @@ const ProductsView = () => {
                     <p className="text-xs uppercase tracking-wide text-gray-400">Preview</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-gray-200">
-                        Status: {normalizeProductStatus(form.status) === PRODUCT_STATUS_PUBLISHED ? 'Published' : 'Draft'}
+                        Status: {normalizeProductStatus(form.status).replace(/_/g, ' ')}
                       </span>
                       <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-gray-200">
                         Stock: {form.stock_quantity || 0}
