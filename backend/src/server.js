@@ -39,6 +39,7 @@ import shippingRoutes from './routes/shipping.js';
 import adminRoutes from './routes/admin.js';
 import wishlistRoutes from './routes/wishlist.js';
 import reviewRoutes from './routes/reviews.js';
+import chatRoutes from './routes/chat.js';
 
 import { apiLimiter, authLimiter } from './middleware/rateLimiter.js';
 import { errorLogger } from './middleware/errorLogger.js';
@@ -271,6 +272,7 @@ app.use('/api/shipping', shippingRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/chat', chatRoutes);
 
 // 404 handler
 app.use((req, res) => {

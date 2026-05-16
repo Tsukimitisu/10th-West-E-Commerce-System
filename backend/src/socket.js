@@ -67,6 +67,14 @@ export function initSocket(httpServer, frontendUrl) {
       console.log(`   ↳ ${socket.id} left all app rooms`);
     });
 
+    socket.on('chat:typing', (payload = {}) => {
+      const threadId = Number(payload.thread_id || payload.threadId);
+      if (!threadId) return;
+      socket.to('staff').emit('chat:typing', payload);
+      if (payload.customer_id) socket.to(`user:${payload.customer_id}`).emit('chat:typing', payload);
+      if (payload.assigned_staff_id) socket.to(`user:${payload.assigned_staff_id}`).emit('chat:typing', payload);
+    });
+
     socket.on('disconnect', (reason) => {
       console.log(`🔌 Socket disconnected: ${socket.id} (${reason})`);
     });
@@ -157,5 +165,39 @@ export function emitNotification(target, notification) {
     io.to('staff').emit('notification', notification);
   } else {
     io.to(`user:${target}`).emit('notification', notification);
+  }
+}
+
+// Chat
+export function emitChatMessage(thread, message) {
+  if (!io) return;
+  io.to('staff').emit('chat:message', { thread, message });
+  if (thread?.customer_id) {
+    io.to(`user:${thread.customer_id}`).emit('chat:message', { thread, message });
+  }
+  if (thread?.assigned_staff_id) {
+    io.to(`user:${thread.assigned_staff_id}`).emit('chat:message', { thread, message });
+  }
+}
+
+export function emitChatSeen(thread, payload) {
+  if (!io) return;
+  io.to('staff').emit('chat:seen', payload);
+  if (thread?.customer_id) {
+    io.to(`user:${thread.customer_id}`).emit('chat:seen', payload);
+  }
+  if (thread?.assigned_staff_id) {
+    io.to(`user:${thread.assigned_staff_id}`).emit('chat:seen', payload);
+  }
+}
+
+export function emitChatAssigned(thread) {
+  if (!io) return;
+  io.to('staff').emit('chat:assigned', thread);
+  if (thread?.customer_id) {
+    io.to(`user:${thread.customer_id}`).emit('chat:assigned', thread);
+  }
+  if (thread?.assigned_staff_id) {
+    io.to(`user:${thread.assigned_staff_id}`).emit('chat:assigned', thread);
   }
 }
