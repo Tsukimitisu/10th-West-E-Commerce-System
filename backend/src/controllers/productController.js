@@ -4,6 +4,7 @@ import {
   PRODUCT_PUBLISHER_ROLE_SET,
   PRODUCT_SHIPPING_OPTION_SET,
   PRODUCT_STATUS_SET,
+  PRODUCT_TYPE_SET,
 } from '../constants/schemaEnums.js';
 import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
 import {
@@ -16,6 +17,7 @@ import {
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
 const ALLOWED_PRODUCT_STATUSES = PRODUCT_STATUS_SET;
+const ALLOWED_PRODUCT_TYPES = PRODUCT_TYPE_SET;
 const ALLOWED_PRODUCT_SHIPPING_OPTIONS = PRODUCT_SHIPPING_OPTION_SET;
 const PRODUCT_PUBLISHER_ROLES = PRODUCT_PUBLISHER_ROLE_SET;
 const PRODUCT_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
@@ -336,8 +338,17 @@ const generateUniqueSku = async ({ partNumber, name, excludeProductId = null }) 
 
 const toNullableProductStatus = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'published' || normalized === 'available') return 'active';
+  if (normalized === 'hidden') return 'draft';
+  if (normalized === 'out-of-stock' || normalized === 'sold_out') return 'out_of_stock';
   if (!normalized) return null;
   return ALLOWED_PRODUCT_STATUSES.has(normalized) ? normalized : null;
+};
+
+const toNullableProductType = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return null;
+  return ALLOWED_PRODUCT_TYPES.has(normalized) ? normalized : null;
 };
 
 const canViewUnpublishedProducts = (user) => {
@@ -498,6 +509,213 @@ const deriveVariantOptionsFromRows = (rows = []) => {
   return optionOrder.map((name) => ({ name, values: optionValues.get(name) || [] }));
 };
 
+const normalizeFitmentsPayload = (value) => {
+  if (value === undefined) return { provided: false, value: [] };
+  if (value === null || value === '') return { provided: true, value: [] };
+
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return { provided: true, error: 'Fitments must be a valid JSON array.' };
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    return { provided: true, error: 'Fitments must be an array.' };
+  }
+
+  const normalized = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') continue;
+    const brand = sanitizePlainText(item.brand, { maxLength: 100 });
+    const model = sanitizePlainText(item.model ?? item.category, { maxLength: 100 });
+    const startYearRaw = item.start_year ?? item.startYear;
+    const endYearRaw = item.end_year ?? item.endYear;
+    const startYear = startYearRaw === undefined || startYearRaw === null || startYearRaw === '' ? null : Number(startYearRaw);
+    const endYear = endYearRaw === undefined || endYearRaw === null || endYearRaw === '' ? null : Number(endYearRaw);
+
+    if (!brand || !model) {
+      return { provided: true, error: 'Each fitment requires brand and model.' };
+    }
+    if ((startYear !== null && (!Number.isInteger(startYear) || startYear < 1900 || startYear > 2100)) ||
+        (endYear !== null && (!Number.isInteger(endYear) || endYear < 1900 || endYear > 2100))) {
+      return { provided: true, error: 'Fitment years must be between 1900 and 2100.' };
+    }
+    if (startYear !== null && endYear !== null && startYear > endYear) {
+      return { provided: true, error: 'Fitment start year cannot be later than end year.' };
+    }
+
+    normalized.push({ brand, model, start_year: startYear, end_year: endYear });
+  }
+
+  return { provided: true, value: normalized.slice(0, 100) };
+};
+
+const normalizeBundleComponentsPayload = (value) => {
+  if (value === undefined) return { provided: false, value: [] };
+  if (value === null || value === '') return { provided: true, value: [] };
+
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return { provided: true, error: 'Bundle components must be a valid JSON array.' };
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    return { provided: true, error: 'Bundle components must be an array.' };
+  }
+
+  const seen = new Set();
+  const normalized = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') continue;
+    const componentProductId = Number(item.component_product_id ?? item.componentProductId ?? item.product_id ?? item.productId);
+    const quantity = Number(item.quantity);
+    const displayOrder = Number(item.display_order ?? item.displayOrder ?? normalized.length);
+
+    if (!Number.isInteger(componentProductId) || componentProductId <= 0) {
+      return { provided: true, error: 'Each bundle component requires a valid component_product_id.' };
+    }
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      return { provided: true, error: 'Each bundle component quantity must be at least 1.' };
+    }
+    if (seen.has(componentProductId)) continue;
+    seen.add(componentProductId);
+    normalized.push({
+      component_product_id: componentProductId,
+      quantity,
+      display_order: Number.isInteger(displayOrder) ? displayOrder : normalized.length,
+    });
+  }
+
+  return { provided: true, value: normalized.slice(0, 100) };
+};
+
+const saveProductRelations = async (db, productId, { fitments, bundleComponents } = {}) => {
+  if (fitments?.provided) {
+    await db.query('DELETE FROM product_fitments WHERE product_id = $1', [productId]);
+    for (const fitment of fitments.value) {
+      await db.query(
+        `INSERT INTO product_fitments (product_id, brand, model, start_year, end_year)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [productId, fitment.brand, fitment.model, fitment.start_year, fitment.end_year]
+      );
+    }
+  }
+
+  if (bundleComponents?.provided) {
+    await db.query('DELETE FROM product_bundle_components WHERE bundle_product_id = $1', [productId]);
+    for (const component of bundleComponents.value) {
+      if (Number(component.component_product_id) === Number(productId)) {
+        throw new Error('A bundle cannot include itself as a component.');
+      }
+      await db.query(
+        `INSERT INTO product_bundle_components (bundle_product_id, component_product_id, quantity, display_order)
+         VALUES ($1, $2, $3, $4)`,
+        [productId, component.component_product_id, component.quantity, component.display_order]
+      );
+    }
+  }
+};
+
+const loadProductRelations = async (productIds = []) => {
+  const ids = [...new Set(productIds.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+  const relationMap = new Map(ids.map((id) => [id, { fitments: [], bundle_components: [] }]));
+  if (ids.length === 0) return relationMap;
+
+  const [fitmentsResult, componentsResult] = await Promise.all([
+    pool.query(
+      `SELECT id, product_id, brand, model, start_year, end_year
+       FROM product_fitments
+       WHERE product_id = ANY($1::int[])
+       ORDER BY brand ASC, model ASC, start_year ASC NULLS FIRST, id ASC`,
+      [ids]
+    ),
+    pool.query(
+      `SELECT bc.id, bc.bundle_product_id, bc.component_product_id, bc.quantity, bc.display_order,
+              p.name as component_name, p.part_number as component_part_number, p.sku as component_sku,
+              p.stock_quantity as component_stock_quantity, p.status as component_status
+       FROM product_bundle_components bc
+       LEFT JOIN products p ON p.id = bc.component_product_id
+       WHERE bc.bundle_product_id = ANY($1::int[])
+       ORDER BY bc.display_order ASC, bc.id ASC`,
+      [ids]
+    ),
+  ]);
+
+  for (const fitment of fitmentsResult.rows) {
+    relationMap.get(Number(fitment.product_id))?.fitments.push({
+      ...fitment,
+      start_year: fitment.start_year === null ? null : Number(fitment.start_year),
+      end_year: fitment.end_year === null ? null : Number(fitment.end_year),
+    });
+  }
+
+  for (const component of componentsResult.rows) {
+    relationMap.get(Number(component.bundle_product_id))?.bundle_components.push({
+      ...component,
+      quantity: Number(component.quantity),
+      display_order: Number(component.display_order),
+      component_stock_quantity: Number(component.component_stock_quantity || 0),
+    });
+  }
+
+  return relationMap;
+};
+
+const computePurchasableStock = (product, bundleComponents = []) => {
+  if (String(product.product_type || 'single') !== 'bundle') {
+    return Math.max(0, Number(product.stock_quantity || 0));
+  }
+
+  if (!bundleComponents.length) return 0;
+
+  return Math.max(0, Math.min(...bundleComponents.map((component) => {
+    const qty = Math.max(1, Number(component.quantity || 1));
+    return Math.floor(Math.max(0, Number(component.component_stock_quantity || 0)) / qty);
+  })));
+};
+
+const mapProductResponse = (product, { includeInternal = false, relations = null } = {}) => {
+  const rel = relations || { fitments: [], bundle_components: [] };
+  const purchasableStock = computePurchasableStock(product, rel.bundle_components);
+  const mapped = {
+    ...product,
+    product_type: product.product_type || 'single',
+    rating: parseFloat(product.review_rating ?? product.rating ?? 0),
+    review_count: parseInt(product.review_count ?? 0, 10),
+    price: parseFloat(product.price),
+    sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
+    shipping_option: toNullableShippingOption(product.shipping_option) || 'standard',
+    shipping_weight_kg: product.shipping_weight_kg !== null ? parseFloat(product.shipping_weight_kg) : null,
+    stock_quantity: purchasableStock,
+    available_stock: parseInt(product.stock_quantity ?? purchasableStock, 10),
+    reserved_stock: parseInt(product.reserved_stock ?? 0, 10),
+    damaged_stock: parseInt(product.damaged_stock ?? 0, 10),
+    total_sold: parseInt(product.total_sold ?? 0, 10),
+    fitments: rel.fitments,
+    bundle_components: rel.bundle_components,
+  };
+
+  if (includeInternal) {
+    mapped.buying_price = product.buying_price !== null && product.buying_price !== undefined
+      ? parseFloat(product.buying_price)
+      : null;
+    return mapped;
+  }
+
+  delete mapped.buying_price;
+  delete mapped.box_number;
+  delete mapped.product_box_number;
+  delete mapped.damaged_stock;
+  return mapped;
+};
+
 const ensureProductSchema = async () => {
   await pool.query(`
     ALTER TABLE products
@@ -508,19 +726,35 @@ const ensureProductSchema = async () => {
       ADD COLUMN IF NOT EXISTS variant_options JSONB DEFAULT '[]'::jsonb,
       ADD COLUMN IF NOT EXISTS shipping_option VARCHAR(20) DEFAULT 'standard',
       ADD COLUMN IF NOT EXISTS shipping_weight_kg DECIMAL(10, 3),
-      ADD COLUMN IF NOT EXISTS shipping_dimensions JSONB;
+      ADD COLUMN IF NOT EXISTS shipping_dimensions JSONB,
+      ADD COLUMN IF NOT EXISTS product_type VARCHAR(20) DEFAULT 'single',
+      ADD COLUMN IF NOT EXISTS reserved_stock INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS damaged_stock INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS color VARCHAR(100);
   `).catch((error) => {
     console.error('Failed to ensure product media columns:', error);
   });
 
   await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'product_status_enum') THEN
+        ALTER TABLE products ALTER COLUMN status TYPE varchar(20) USING status::text;
+        DROP TYPE product_status_enum;
+      END IF;
+    END $$;
+
     UPDATE products
     SET status = 'draft'
     WHERE status = 'hidden';
 
     UPDATE products
-    SET status = 'published'
-    WHERE status IN ('available', 'out_of_stock');
+    SET status = 'active'
+    WHERE status IN ('published', 'available');
+
+    UPDATE products
+    SET status = 'out_of_stock'
+    WHERE status IN ('sold_out', 'out-of-stock');
 
     UPDATE products
     SET status = 'draft'
@@ -534,7 +768,18 @@ const ensureProductSchema = async () => {
 
     ALTER TABLE products
     ADD CONSTRAINT products_status_check
-      CHECK (status IN ('draft', 'published'));
+      CHECK (status IN ('draft', 'active', 'out_of_stock', 'archived'));
+
+    UPDATE products SET product_type = 'single' WHERE product_type IS NULL OR product_type NOT IN ('single', 'bundle');
+    UPDATE products SET reserved_stock = 0 WHERE reserved_stock IS NULL OR reserved_stock < 0;
+    UPDATE products SET damaged_stock = 0 WHERE damaged_stock IS NULL OR damaged_stock < 0;
+
+    ALTER TABLE products
+    DROP CONSTRAINT IF EXISTS products_product_type_check;
+
+    ALTER TABLE products
+    ADD CONSTRAINT products_product_type_check
+      CHECK (product_type IN ('single', 'bundle'));
 
     UPDATE products
     SET shipping_option = 'standard'
@@ -560,6 +805,32 @@ const ensureProductSchema = async () => {
   `).catch((error) => {
     console.error('Failed to ensure variant columns:', error);
   });
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS product_fitments (
+      id SERIAL PRIMARY KEY,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      brand VARCHAR(100) NOT NULL,
+      model VARCHAR(100) NOT NULL,
+      start_year INTEGER,
+      end_year INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS product_bundle_components (
+      id SERIAL PRIMARY KEY,
+      bundle_product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      component_product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (bundle_product_id, component_product_id)
+    );
+  `).catch((error) => {
+    console.error('Failed to ensure product fitment/bundle tables:', error);
+  });
 };
 
 const ensureProductSchemaReady = ensureProductSchema().catch((error) => {
@@ -569,7 +840,8 @@ const ensureProductSchemaReady = ensureProductSchema().catch((error) => {
 // Get all products
 export const getProducts = async (req, res) => {
   try {
-    const { category, search, limit: limitParam } = req.validatedData || req.query;
+    const queryInput = { ...(req.query || {}), ...(req.validatedData || {}) };
+    const { category, search, limit: limitParam, brand, model, year } = queryInput;
     const searchTerms = tokenizeSearchTerms(search);
     const searchPhrase = normalizeSearchPhrase(search);
     const resultLimit = parseResultLimit(limitParam, null, 80);
@@ -609,14 +881,42 @@ export const getProducts = async (req, res) => {
     const params = [];
 
     if (!includeUnpublished) {
-      params.push('published');
-      whereClause += ` AND p.status = $${params.length}`;
+      whereClause += ` AND p.status IN ('active', 'out_of_stock') AND COALESCE(p.is_deleted, false) = false`;
+    } else if (queryInput.status) {
+      const cleanStatusFilter = toNullableProductStatus(queryInput.status);
+      if (cleanStatusFilter) {
+        params.push(cleanStatusFilter);
+        whereClause += ` AND p.status = $${params.length}`;
+      }
     }
 
     // Filter by category
     if (category) {
       params.push(category);
       whereClause += ` AND p.category_id = $${params.length}`;
+    }
+
+    const cleanFitmentBrand = sanitizePlainText(brand, { maxLength: 100 });
+    const cleanFitmentModel = sanitizePlainText(model, { maxLength: 100 });
+    const fitmentYear = year === undefined || year === null || year === '' ? null : Number(year);
+
+    if (cleanFitmentBrand || cleanFitmentModel || fitmentYear !== null) {
+      const fitmentFilters = ['pf.product_id = p.id'];
+      if (cleanFitmentBrand) {
+        params.push(cleanFitmentBrand);
+        fitmentFilters.push(`pf.brand ILIKE $${params.length}`);
+      }
+      if (cleanFitmentModel) {
+        params.push(cleanFitmentModel);
+        fitmentFilters.push(`pf.model ILIKE $${params.length}`);
+      }
+      if (Number.isInteger(fitmentYear)) {
+        params.push(fitmentYear);
+        const yearIdx = params.length;
+        fitmentFilters.push(`(pf.start_year IS NULL OR pf.start_year <= $${yearIdx})`);
+        fitmentFilters.push(`(pf.end_year IS NULL OR pf.end_year >= $${yearIdx})`);
+      }
+      whereClause += ` AND EXISTS (SELECT 1 FROM product_fitments pf WHERE ${fitmentFilters.join(' AND ')})`;
     }
 
     // Search by name and keyword/tag-style terms (e.g. "helmet, #modular")
@@ -677,18 +977,11 @@ export const getProducts = async (req, res) => {
 
     const query = `${selectClause} ${fromClause} ${whereClause} ${orderByClause}`;
     const result = await pool.query(query, params);
+    const relations = await loadProductRelations(result.rows.map((product) => product.id));
     
-    res.json(result.rows.map(product => ({
-      ...product,
-      rating: parseFloat(product.review_rating ?? product.rating ?? 0),
-      review_count: parseInt(product.review_count ?? 0, 10),
-      price: parseFloat(product.price),
-      buying_price: parseFloat(product.buying_price),
-      sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
-      shipping_option: toNullableShippingOption(product.shipping_option) || 'standard',
-      shipping_weight_kg: product.shipping_weight_kg !== null ? parseFloat(product.shipping_weight_kg) : null,
-      stock_quantity: parseInt(product.stock_quantity),
-      total_sold: parseInt(product.total_sold)
+    res.json(result.rows.map((product) => mapProductResponse(product, {
+      includeInternal: includeUnpublished,
+      relations: relations.get(Number(product.id)),
     })));
   } catch (error) {
     console.error('Get products error:', error);
@@ -717,7 +1010,7 @@ export const getTopSellers = async (req, res) => {
     `;
 
     if (!includeUnpublished) {
-      whereClause += ` AND p.status = 'published'`;
+      whereClause += ` AND p.status IN ('active', 'out_of_stock') AND COALESCE(p.is_deleted, false) = false`;
     }
 
     if (days && days !== 'all') {
@@ -731,8 +1024,9 @@ export const getTopSellers = async (req, res) => {
     // We MUST manually list columns instead of p.* because PostgreSQL strict GROUP BY
     const result = await pool.query(`
       SELECT 
-        p.id, p.name, p.brand, p.part_number, p.image, p.description, 
-        p.price, p.sale_price, p.is_on_sale, p.stock_quantity, p.rating, p.created_at,
+        p.id, p.name, p.brand, p.part_number, p.image, p.description, p.product_type,
+        p.price, p.sale_price, p.is_on_sale, p.stock_quantity, p.reserved_stock, p.damaged_stock,
+        p.low_stock_threshold, p.rating, p.created_at, p.status, p.shipping_option, p.shipping_weight_kg,
         c.name as category_name,
         COALESCE((
           SELECT ROUND(AVG(r.rating)::numeric, 1)
@@ -757,14 +1051,11 @@ export const getTopSellers = async (req, res) => {
       LIMIT $1
     `, params);
     
-    res.json(result.rows.map(product => ({
-      ...product,
-      rating: parseFloat(product.review_rating ?? product.rating ?? 0),
-      review_count: parseInt(product.review_count ?? 0, 10),
-      price: parseFloat(product.price),
-      sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
-      stock_quantity: parseInt(product.stock_quantity),
-      total_sold: parseInt(product.total_sold)
+    const relations = await loadProductRelations(result.rows.map((product) => product.id));
+
+    res.json(result.rows.map((product) => mapProductResponse(product, {
+      includeInternal: includeUnpublished,
+      relations: relations.get(Number(product.id)),
     })));
   } catch (error) {
     console.error('Get top sellers error:', error);
@@ -806,7 +1097,7 @@ export const getProductById = async (req, res) => {
 
     const product = result.rows[0];
 
-    if (!includeUnpublished && String(product.status || '').toLowerCase() !== 'published') {
+    if (!includeUnpublished && (!['active', 'out_of_stock'].includes(String(product.status || '').toLowerCase()) || product.is_deleted)) {
       return res.status(404).json({ message: 'Product not found' });
     }
 
@@ -895,16 +1186,14 @@ export const getProductById = async (req, res) => {
       ? storedVariantOptions
       : deriveVariantOptionsFromRows(variants);
 
+    const relations = await loadProductRelations([product.id]);
+    const mappedProduct = mapProductResponse(product, {
+      includeInternal: includeUnpublished,
+      relations: relations.get(Number(product.id)),
+    });
+
     res.json({
-      ...product,
-      rating: parseFloat(product.review_rating ?? product.rating ?? 0),
-      review_count: parseInt(product.review_count ?? 0, 10),
-      price: parseFloat(product.price),
-      buying_price: product.buying_price !== null ? parseFloat(product.buying_price) : null,
-      sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
-      shipping_option: toNullableShippingOption(product.shipping_option) || 'standard',
-      shipping_weight_kg: product.shipping_weight_kg !== null ? parseFloat(product.shipping_weight_kg) : null,
-      stock_quantity: parseInt(product.stock_quantity, 10),
+      ...mappedProduct,
       variant_options: variantOptions,
       variants,
     });
@@ -919,7 +1208,8 @@ export const createProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
     image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions, box_number,
-    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing, auto_generate_sku
+    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing, auto_generate_sku,
+    product_type, reserved_stock, damaged_stock, color, fitments, bundle_components
   } = req.body;
 
   try {
@@ -1006,6 +1296,9 @@ export const createProduct = async (req, res) => {
     const cleanLowStockThreshold = lowStockThresholdField.value;
     const cleanIsOnSale = toNullableBoolean(is_on_sale);
     const cleanStatus = toNullableProductStatus(status);
+    const cleanProductType = product_type === undefined ? 'single' : toNullableProductType(product_type);
+    const reservedStockField = parseOptionalIntegerField(reserved_stock);
+    const damagedStockField = parseOptionalIntegerField(damaged_stock);
     const cleanShippingOption = shipping_option === undefined
       ? 'standard'
       : toNullableShippingOption(shipping_option);
@@ -1014,6 +1307,9 @@ export const createProduct = async (req, res) => {
       : normalizeProductImageUrls(image_urls);
     const cleanBulkPricing = bulkPricingValidation.value ?? [];
     const cleanShippingDimensions = shippingDimensionsField.value;
+    const cleanColor = sanitizePlainText(color, { maxLength: 100 });
+    const fitmentsPayload = normalizeFitmentsPayload(fitments);
+    const bundleComponentsPayload = normalizeBundleComponentsPayload(bundle_components);
 
     if (image !== undefined && image !== null && image !== '' && !cleanImage) {
       return res.status(400).json({ message: 'Image URL is invalid' });
@@ -1025,6 +1321,30 @@ export const createProduct = async (req, res) => {
 
     if (status !== undefined && cleanStatus === null) {
       return res.status(400).json({ message: 'Invalid product status' });
+    }
+
+    if (cleanProductType === null) {
+      return res.status(400).json({ message: 'Invalid product type' });
+    }
+
+    if (!reservedStockField.valid || (reservedStockField.value !== null && reservedStockField.value < 0)) {
+      return res.status(400).json({ message: 'Reserved stock must be an integer 0 or higher' });
+    }
+
+    if (!damagedStockField.valid || (damagedStockField.value !== null && damagedStockField.value < 0)) {
+      return res.status(400).json({ message: 'Damaged stock must be an integer 0 or higher' });
+    }
+
+    if (fitmentsPayload.error) {
+      return res.status(400).json({ message: fitmentsPayload.error });
+    }
+
+    if (bundleComponentsPayload.error) {
+      return res.status(400).json({ message: bundleComponentsPayload.error });
+    }
+
+    if (cleanProductType === 'bundle' && (!bundleComponentsPayload.provided || bundleComponentsPayload.value.length === 0)) {
+      return res.status(400).json({ message: 'Bundle products require at least one component.' });
     }
 
     if (shipping_option !== undefined && cleanShippingOption === null) {
@@ -1050,19 +1370,25 @@ export const createProduct = async (req, res) => {
       `INSERT INTO products (
         part_number, name, description, price, buying_price, 
         image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions,
-        box_number, low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 'standard'), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb))
+        box_number, low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing,
+        product_type, reserved_stock, damaged_stock, color
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 'standard'), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb), COALESCE($23, 'single'), COALESCE($24, 0), COALESCE($25, 0), $26)
       RETURNING *`,
       [
         cleanPartNumber, cleanName, cleanDescription, parsedPrice, buyingPriceField.value,
         cleanImage, cleanVideoUrl, cleanCategoryId, parsedStockQuantity, cleanShippingOption, parsedShippingWeightKg,
         cleanShippingDimensions ? JSON.stringify(cleanShippingDimensions) : null,
         cleanBoxNumber, cleanLowStockThreshold ?? 5, cleanBrand, resolvedSku, cleanBarcode, cleanSalePrice,
-        resolvedIsOnSale, cleanStatus, JSON.stringify(cleanImageUrls), JSON.stringify(cleanBulkPricing)
+        resolvedIsOnSale, cleanStatus, JSON.stringify(cleanImageUrls), JSON.stringify(cleanBulkPricing),
+        cleanProductType, reservedStockField.value, damagedStockField.value, cleanColor
       ]
     );
 
     const newProduct = result.rows[0];
+    await saveProductRelations(pool, newProduct.id, {
+      fitments: fitmentsPayload,
+      bundleComponents: bundleComponentsPayload,
+    });
     emitProductCreated(newProduct);
 
     res.status(201).json({
@@ -1084,14 +1410,15 @@ export const updateProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
     image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions, box_number,
-    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing, auto_generate_sku
+    low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing, auto_generate_sku,
+    product_type, reserved_stock, damaged_stock, color, fitments, bundle_components
   } = req.body;
 
   try {
     if (!requireProductManagerAccess(req, res)) return;
 
     const existingResult = await pool.query(
-      `SELECT id, name, part_number, price, sale_price, is_on_sale
+      `SELECT id, name, part_number, price, sale_price, is_on_sale, product_type
        FROM products
        WHERE id = $1`,
       [id]
@@ -1111,6 +1438,10 @@ export const updateProduct = async (req, res) => {
     const hasCategoryIdPayload = hasBodyField(req.body, 'category_id');
     const hasLowStockPayload = hasBodyField(req.body, 'low_stock_threshold');
     const hasStatusPayload = hasBodyField(req.body, 'status');
+    const hasProductTypePayload = hasBodyField(req.body, 'product_type');
+    const hasReservedStockPayload = hasBodyField(req.body, 'reserved_stock');
+    const hasDamagedStockPayload = hasBodyField(req.body, 'damaged_stock');
+    const hasColorPayload = hasBodyField(req.body, 'color');
     const hasSalePricePayload = hasBodyField(req.body, 'sale_price');
     const hasIsOnSalePayload = hasBodyField(req.body, 'is_on_sale');
     const hasImageUrlsPayload = hasBodyField(req.body, 'image_urls');
@@ -1203,6 +1534,9 @@ export const updateProduct = async (req, res) => {
     const cleanLowStockThreshold = lowStockThresholdField.value;
     const cleanIsOnSale = hasIsOnSalePayload ? toNullableBoolean(is_on_sale) : null;
     const cleanStatus = toNullableProductStatus(status);
+    const cleanProductType = hasProductTypePayload ? toNullableProductType(product_type) : null;
+    const reservedStockField = parseOptionalIntegerField(reserved_stock);
+    const damagedStockField = parseOptionalIntegerField(damaged_stock);
     const cleanShippingOption = hasShippingOptionPayload ? toNullableShippingOption(shipping_option) : null;
     const cleanImageUrls = Array.isArray(image_urls)
       ? sanitizeUrlArray(image_urls, { maxItems: 9 })
@@ -1212,6 +1546,9 @@ export const updateProduct = async (req, res) => {
     const shippingDimensionsPayload = hasShippingDimensionsPayload
       ? (shippingDimensionsField.value ? JSON.stringify(shippingDimensionsField.value) : null)
       : null;
+    const cleanColor = sanitizePlainText(color, { maxLength: 100 });
+    const fitmentsPayload = normalizeFitmentsPayload(fitments);
+    const bundleComponentsPayload = normalizeBundleComponentsPayload(bundle_components);
 
     if (hasBodyField(req.body, 'image') && image !== null && image !== '' && !cleanImage) {
       return res.status(400).json({ message: 'Image URL is invalid' });
@@ -1223,6 +1560,30 @@ export const updateProduct = async (req, res) => {
 
     if (hasStatusPayload && cleanStatus === null) {
       return res.status(400).json({ message: 'Invalid product status' });
+    }
+
+    if (hasProductTypePayload && cleanProductType === null) {
+      return res.status(400).json({ message: 'Invalid product type' });
+    }
+
+    if (hasReservedStockPayload && (!reservedStockField.valid || reservedStockField.value === null || reservedStockField.value < 0)) {
+      return res.status(400).json({ message: 'Reserved stock must be an integer 0 or higher' });
+    }
+
+    if (hasDamagedStockPayload && (!damagedStockField.valid || damagedStockField.value === null || damagedStockField.value < 0)) {
+      return res.status(400).json({ message: 'Damaged stock must be an integer 0 or higher' });
+    }
+
+    if (fitmentsPayload.error) {
+      return res.status(400).json({ message: fitmentsPayload.error });
+    }
+
+    if (bundleComponentsPayload.error) {
+      return res.status(400).json({ message: bundleComponentsPayload.error });
+    }
+
+    if (hasProductTypePayload && cleanProductType === 'bundle' && existingProduct.product_type !== 'bundle' && (!bundleComponentsPayload.provided || bundleComponentsPayload.value.length === 0)) {
+      return res.status(400).json({ message: 'Bundle products require at least one component.' });
     }
 
     if (hasShippingOptionPayload && cleanShippingOption === null) {
@@ -1286,6 +1647,10 @@ export const updateProduct = async (req, res) => {
         shipping_option = CASE WHEN $24 THEN $25 ELSE shipping_option END,
         shipping_weight_kg = CASE WHEN $26 THEN $27 ELSE shipping_weight_kg END,
         shipping_dimensions = CASE WHEN $28 THEN $29::jsonb ELSE shipping_dimensions END,
+        product_type = CASE WHEN $32 THEN $33 ELSE product_type END,
+        reserved_stock = CASE WHEN $34 THEN $35 ELSE reserved_stock END,
+        damaged_stock = CASE WHEN $36 THEN $37 ELSE damaged_stock END,
+        color = CASE WHEN $38 THEN $39 ELSE color END,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $30
       RETURNING *`,
@@ -1320,11 +1685,23 @@ export const updateProduct = async (req, res) => {
         hasShippingDimensionsPayload,
         shippingDimensionsPayload,
         id,
-        hasBodyField(req.body, 'description')
+        hasBodyField(req.body, 'description'),
+        hasProductTypePayload,
+        cleanProductType,
+        hasReservedStockPayload,
+        hasReservedStockPayload ? reservedStockField.value : null,
+        hasDamagedStockPayload,
+        hasDamagedStockPayload ? damagedStockField.value : null,
+        hasColorPayload,
+        hasColorPayload ? cleanColor : null
       ]
     );
 
     const updatedProduct = result.rows[0];
+    await saveProductRelations(pool, id, {
+      fitments: fitmentsPayload,
+      bundleComponents: bundleComponentsPayload,
+    });
     emitProductUpdated(updatedProduct);
 
     res.json({
@@ -1428,7 +1805,10 @@ export const deleteProduct = async (req, res) => {
     if (!requireProductManagerAccess(req, res)) return;
 
     const result = await pool.query(
-      'DELETE FROM products WHERE id = $1 RETURNING id',
+      `UPDATE products
+       SET status = 'archived', is_deleted = true, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING id`,
       [id]
     );
 

@@ -19,7 +19,7 @@ import {
   sanitizeRichText,
   sanitizeUrlArray,
 } from '../utils/inputSanitizer.js';
-import { PRODUCT_SHIPPING_OPTIONS, PRODUCT_STATUSES } from '../constants/schemaEnums.js';
+import { PRODUCT_SHIPPING_OPTIONS, PRODUCT_STATUSES, PRODUCT_TYPES } from '../constants/schemaEnums.js';
 
 const router = express.Router();
 
@@ -187,6 +187,12 @@ const productValidation = [
     .withMessage('Sale price must be greater than 0 when provided'),
   body('category_id').optional().isInt({ min: 1 }).withMessage('Category ID must be a positive integer'),
   body('status').optional().isIn(PRODUCT_STATUSES).withMessage('Invalid product status'),
+  body('product_type').optional({ nullable: true }).isIn(PRODUCT_TYPES).withMessage('product_type must be single or bundle'),
+  body('reserved_stock').optional({ nullable: true }).isInt({ min: 0 }).withMessage('Reserved stock must be an integer 0 or higher'),
+  body('damaged_stock').optional({ nullable: true }).isInt({ min: 0 }).withMessage('Damaged stock must be an integer 0 or higher'),
+  body('color').optional({ nullable: true }).isString().isLength({ max: 100 }).withMessage('Color must be 100 characters or less'),
+  body('fitments').optional({ nullable: true }).isArray().withMessage('fitments must be an array'),
+  body('bundle_components').optional({ nullable: true }).isArray().withMessage('bundle_components must be an array'),
   body('shipping_option').optional({ nullable: true }).isIn(PRODUCT_SHIPPING_OPTIONS).withMessage('shipping_option must be standard or express'),
   body('shipping_weight_kg').exists({ checkNull: true }).withMessage('Shipping weight is required').bail()
     .isFloat({ gt: 0 }).withMessage('Shipping weight must be greater than 0'),
@@ -223,6 +229,12 @@ const productUpdateValidation = [
   body('sale_price').optional({ nullable: true }).custom((value) => value === '' || Number(value) > 0)
     .withMessage('Sale price must be greater than 0 when provided'),
   body('status').optional().isIn(PRODUCT_STATUSES).withMessage('Invalid product status'),
+  body('product_type').optional({ nullable: true }).isIn(PRODUCT_TYPES).withMessage('product_type must be single or bundle'),
+  body('reserved_stock').optional({ nullable: true }).isInt({ min: 0 }).withMessage('Reserved stock must be an integer 0 or higher'),
+  body('damaged_stock').optional({ nullable: true }).isInt({ min: 0 }).withMessage('Damaged stock must be an integer 0 or higher'),
+  body('color').optional({ nullable: true }).isString().isLength({ max: 100 }).withMessage('Color must be 100 characters or less'),
+  body('fitments').optional({ nullable: true }).isArray().withMessage('fitments must be an array'),
+  body('bundle_components').optional({ nullable: true }).isArray().withMessage('bundle_components must be an array'),
   body('shipping_option').optional({ nullable: true }).isIn(PRODUCT_SHIPPING_OPTIONS).withMessage('shipping_option must be standard or express'),
   body('shipping_weight_kg').optional({ nullable: true }).isFloat({ gt: 0 }).withMessage('Shipping weight must be greater than 0'),
   body('image').optional({ nullable: true }).custom((value) => value === '' || sanitizeHttpUrlOrPath(value) !== null)
