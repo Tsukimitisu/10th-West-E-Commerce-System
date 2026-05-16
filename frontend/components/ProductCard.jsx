@@ -29,7 +29,8 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
   }, [hasExternalWishlistState, normalizedProductId]);
 
   const stockLevel = Math.max(0, Number(product.stock_quantity ?? 0));
-  const isOutOfStock = stockLevel <= 0;
+  const isBundle = product.product_type === 'bundle';
+  const isOutOfStock = stockLevel <= 0 || product.status === 'out_of_stock';
   const isLowStock = stockLevel > 0 && stockLevel <= (product.low_stock_threshold || 5);
   const hasDiscount = product.is_on_sale && product.sale_price;
   const discountPercent = hasDiscount ? Math.round((1 - (product.sale_price / product.price)) * 100) : 0;
@@ -66,6 +67,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
           <div className="flex items-start justify-between gap-2">
             <div>
               {product.category_name && <span className="text-xs font-medium text-red-600">{product.category_name}</span>}
+              {isBundle && <span className="ml-2 text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">Bundle</span>}
               <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors line-clamp-1">{product.name}</h3>
             </div>
             <button onClick={handleWishlist} className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors flex-shrink-0">
@@ -124,6 +126,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
       <div className="p-3.5 flex flex-1 flex-col">
         <div className="flex items-center justify-between gap-2 mb-1 min-h-[1.125rem]">
           {product.category_name && <span className="text-[11px] font-semibold text-red-600 uppercase tracking-wide">{product.category_name}</span>}
+          {isBundle && <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">Bundle</span>}
           {product.brand && <span className="text-[11px] text-gray-600 truncate">{product.brand}</span>}
         </div>
         <h3 className="font-semibold text-gray-900 text-sm group-hover:text-red-600 transition-colors line-clamp-2 min-h-[2.5rem]">{product.name}</h3>

@@ -85,7 +85,7 @@ const PosTerminal = () => {
 
     const addToCart = (product) => {
         const stock = Number(product.stock_quantity ?? 0);
-        if (stock <= 0) return;
+        if (stock <= 0 || product.status === 'out_of_stock') return;
 
         setCartItems(current => {
             const existing = current.find(item => item.productId === product.id);

@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle } from 'lucide-react';
-import { getProductById, getRelatedProducts, getProductReviews, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, WISHLIST_SYNC_EVENT } from '../services/api';
+import { getProductById, getRelatedProducts, getProductReviews, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, createChatThread, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useCart } from '../context/CartContext';
 import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
@@ -180,6 +180,7 @@ const ProductDetail = () => {
   const [quantityError, setQuantityError] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
   const [shareMessage, setShareMessage] = useState(null);
+  const [chatMessage, setChatMessage] = useState('');
   const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
   const [reviewMediaFiles, setReviewMediaFiles] = useState([]);
   const [reviewMediaError, setReviewMediaError] = useState('');
@@ -622,6 +623,25 @@ const ProductDetail = () => {
     } catch {}
   };
 
+  const handleChatSeller = async () => {
+    if (!product) return;
+    const user = localStorage.getItem('shopCoreUser');
+    if (!user) {
+      navigate(`/login?redirect=/products/${product.id}`);
+      return;
+    }
+    try {
+      const thread = await createChatThread({
+        product_id: product.id,
+        subject: product.name,
+        message: `Hi, I have a question about ${product.name}.`,
+      });
+      setChatMessage(`Chat #${thread.id || ''} opened. The seller will see this product context.`);
+    } catch (error) {
+      setChatMessage(error?.message || 'Unable to open chat right now.');
+    }
+  };
+
   const handleWishlistToggle = (productId, shouldBeWishlisted) => {
     const normalizedId = Number(productId);
     if (!normalizedId) return;
@@ -823,7 +843,8 @@ const ProductDetail = () => {
 
   const images = extractProductImages(product);
   const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
-  const isOutOfStock = maxStock <= 0;
+  const isOutOfStock = maxStock <= 0 || product.status === 'out_of_stock';
+  const isBundle = product.product_type === 'bundle';
   const hasDiscount = !hasVariants && product.is_on_sale && product.sale_price;
   const displayPrice = hasVariants
     ? Number(selectedVariantRow?.price ?? product.price)
@@ -941,6 +962,7 @@ const ProductDetail = () => {
               <div className="flex flex-wrap gap-2 text-xs text-slate-600 mb-6 pb-6 border-b border-slate-200">
                 {product.sku && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">SKU: <strong className="text-slate-800">{product.sku}</strong></span>}
                 {product.brand && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">Brand: <strong className="text-slate-800">{product.brand}</strong></span>}
+                {isBundle && <span className="px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700">Bundle / Set</span>}
               </div>
             )}
 
@@ -1052,6 +1074,14 @@ const ProductDetail = () => {
               <button onClick={handleWishlist} className={`p-3 border rounded-xl transition-colors ${isWishlisted ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-300 bg-white text-slate-700 hover:text-red-500 hover:border-red-200'}`}>
                 <Heart size={20} className={isWishlisted ? 'fill-orange-500' : ''} />
               </button>
+              <button
+                type="button"
+                onClick={handleChatSeller}
+                className="p-3 border border-slate-300 bg-white text-slate-700 hover:text-red-500 hover:border-red-200 rounded-xl transition-colors"
+                title="Chat seller"
+              >
+                <MessageCircle size={20} />
+              </button>
               <div className="relative" data-share-menu>
                 <button
                   type="button"
@@ -1096,6 +1126,7 @@ const ProductDetail = () => {
                 )}
               </div>
             </div>
+            {chatMessage && <p className="text-xs text-slate-600 -mt-4 mb-4">{chatMessage}</p>}
             {shareMessage && (
               <p className={`mb-4 text-sm ${shareMessage.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
                 {shareMessage.message}
@@ -1143,10 +1174,20 @@ const ProductDetail = () => {
           {activeTab === 'description' && (
             <div className="prose prose-sm max-w-none text-slate-600 leading-relaxed animate-fade-in">
               <p>{product.description || 'No description available for this product.'}</p>
-              {product.category_name && (
+              {(product.fitments?.length > 0 || product.category_name) && (
                 <div className="mt-6 p-5 bg-slate-50 border border-slate-200 rounded-2xl">
                   <h4 className="font-display font-semibold text-slate-900 mb-2 flex items-center gap-2"><Package size={16} /> Motorcycle Compatibility</h4>
-                  <p className="text-sm">Compatible with: <strong>{product.category_name}</strong></p>
+                  {product.fitments?.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {product.fitments.map((fitment, index) => (
+                        <span key={`${fitment.brand}-${fitment.model}-${index}`} className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">
+                          {fitment.brand} {fitment.model} {fitment.start_year || fitment.end_year ? `(${fitment.start_year || '...'}-${fitment.end_year || '...'})` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm">Compatible with: <strong>{product.category_name}</strong></p>
+                  )}
                 </div>
               )}
             </div>
@@ -1159,6 +1200,8 @@ const ProductDetail = () => {
                   ['SKU', product.sku],
                   ['Brand', product.brand],
                   ['Category', product.category_name],
+                  ['Type', product.product_type === 'bundle' ? 'Bundle / Set' : 'Single Product'],
+                  ['Color', product.color],
                   ['Stock Quantity', String(product.stock_quantity)],
                 ].filter(([, v]) => v).map(([label, value], i) => (
                   <div key={label} className={`flex justify-between px-5 py-3 text-sm ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>

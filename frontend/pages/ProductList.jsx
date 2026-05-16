@@ -47,6 +47,7 @@ const buildProductSearchableText = (product) => {
     product?.description,
     product?.category_name,
     product?.brand,
+    ...(Array.isArray(product?.fitments) ? product.fitments.map((fitment) => `${fitment.brand} ${fitment.model} ${fitment.start_year || ''} ${fitment.end_year || ''}`) : []),
     product?.sku,
     product?.part_number,
     product?.partNumber,
@@ -115,6 +116,8 @@ const ProductList = () => {
   const [searchSettling, setSearchSettling] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
   const [selectedBrand, setSelectedBrand] = useState('');
+  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
   const [priceRange, setPriceRange] = useState([0, 100000]);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [sortBy, setSortBy] = useState(searchParams.get('sort') || (searchParams.get('search') ? 'relevance' : 'newest'));
@@ -208,9 +211,24 @@ const ProductList = () => {
 
   const brands = useMemo(() => {
     const b = new Set();
-    products.forEach(p => { if (p.brand) b.add(p.brand); });
+    products.forEach(p => {
+      if (p.brand) b.add(p.brand);
+      (p.fitments || []).forEach((fitment) => { if (fitment.brand) b.add(fitment.brand); });
+    });
     return Array.from(b).sort();
   }, [products]);
+
+  const models = useMemo(() => {
+    const m = new Set();
+    products.forEach((product) => {
+      (product.fitments || []).forEach((fitment) => {
+        if (!selectedBrand || fitment.brand === selectedBrand) {
+          if (fitment.model) m.add(fitment.model);
+        }
+      });
+    });
+    return Array.from(m).sort();
+  }, [products, selectedBrand]);
 
   const filtered = useMemo(() => {
     let result = [...products];
@@ -235,7 +253,22 @@ const ProductList = () => {
       });
     }
     if (selectedCategory) result = result.filter(p => String(p.category_id) === selectedCategory);
-    if (selectedBrand) result = result.filter(p => p.brand === selectedBrand);
+    if (selectedBrand || selectedModel || selectedYear) {
+      const yearNumber = selectedYear ? Number(selectedYear) : null;
+      result = result.filter((product) => {
+        const fitments = Array.isArray(product.fitments) ? product.fitments : [];
+        if (fitments.length === 0) return selectedBrand ? product.brand === selectedBrand : true;
+        return fitments.some((fitment) => {
+          if (selectedBrand && fitment.brand !== selectedBrand) return false;
+          if (selectedModel && fitment.model !== selectedModel) return false;
+          if (Number.isInteger(yearNumber)) {
+            if (fitment.start_year && Number(fitment.start_year) > yearNumber) return false;
+            if (fitment.end_year && Number(fitment.end_year) < yearNumber) return false;
+          }
+          return true;
+        });
+      });
+    } else if (selectedBrand) result = result.filter(p => p.brand === selectedBrand);
     if (inStockOnly) result = result.filter(p => p.stock_quantity > 0);
     result = result.filter(p => {
       const price = p.is_on_sale && p.sale_price ? p.sale_price : p.price;
@@ -251,12 +284,12 @@ const ProductList = () => {
       case 'relevance': break;
     }
     return result;
-  }, [products, debouncedSearchQuery, selectedCategory, selectedBrand, priceRange, inStockOnly, sortBy]);
+  }, [products, debouncedSearchQuery, selectedCategory, selectedBrand, selectedModel, selectedYear, priceRange, inStockOnly, sortBy]);
 
-  const activeFilterCount = [selectedCategory, selectedBrand, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
+  const activeFilterCount = [selectedCategory, selectedBrand, selectedModel, selectedYear, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
 
   const clearAllFilters = () => {
-    setSelectedCategory(''); setSelectedBrand(''); setPriceRange([0, 100000]); setInStockOnly(false); setSearchQuery('');
+    setSelectedCategory(''); setSelectedBrand(''); setSelectedModel(''); setSelectedYear(''); setPriceRange([0, 100000]); setInStockOnly(false); setSearchQuery('');
     setSearchParams({});
   };
 
@@ -335,6 +368,39 @@ const ProductList = () => {
                 <option value="top-rated">Top Rated</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        <div className="mb-4 bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl px-4 py-3 shadow-lg">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <select
+              value={selectedBrand}
+              onChange={(event) => {
+                setSelectedBrand(event.target.value);
+                setSelectedModel('');
+              }}
+              className="h-10 px-3 bg-white/80 border border-slate-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-700/30"
+            >
+              <option value="">Brand</option>
+              {brands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+            </select>
+            <select
+              value={selectedModel}
+              onChange={(event) => setSelectedModel(event.target.value)}
+              className="h-10 px-3 bg-white/80 border border-slate-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-700/30"
+            >
+              <option value="">Model</option>
+              {models.map((model) => <option key={model} value={model}>{model}</option>)}
+            </select>
+            <input
+              type="number"
+              value={selectedYear}
+              onChange={(event) => setSelectedYear(event.target.value)}
+              placeholder="Year"
+              min="1900"
+              max="2100"
+              className="h-10 px-3 bg-white/80 border border-slate-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-700/30"
+            />
           </div>
         </div>
 
