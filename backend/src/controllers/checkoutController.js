@@ -39,13 +39,32 @@ export const createPaymentIntent = async (req, res) => {
 
     const productIds = [...new Set(normalizedItems.map((item) => item.product_id))];
     const productResult = await pool.query(
-      `SELECT id, name, price, stock_quantity
+      `SELECT id, name, price, stock_quantity, product_type, status
        FROM products
        WHERE id = ANY($1::int[])`,
       [productIds]
     );
 
     const productMap = new Map(productResult.rows.map((row) => [Number(row.id), row]));
+    const bundleComponentsResult = await pool.query(
+      `SELECT bc.bundle_product_id, bc.component_product_id, bc.quantity, p.name, p.stock_quantity
+       FROM product_bundle_components bc
+       JOIN products p ON p.id = bc.component_product_id
+       WHERE bc.bundle_product_id = ANY($1::int[])`,
+      [productIds]
+    );
+    const componentsByBundle = new Map();
+    for (const row of bundleComponentsResult.rows) {
+      const bundleId = Number(row.bundle_product_id);
+      if (!componentsByBundle.has(bundleId)) componentsByBundle.set(bundleId, []);
+      componentsByBundle.get(bundleId).push({
+        component_product_id: Number(row.component_product_id),
+        quantity: Number(row.quantity),
+        name: row.name,
+        stock_quantity: Number(row.stock_quantity),
+      });
+    }
+    const stockNeeded = new Map();
     let minimumAmount = 0;
 
     for (const item of normalizedItems) {
@@ -54,10 +73,32 @@ export const createPaymentIntent = async (req, res) => {
         return res.status(404).json({ message: `Product ${item.product_id} not found` });
       }
 
-      if (Number(product.stock_quantity) < item.quantity) {
+      if (String(product.status || '').toLowerCase() !== 'active') {
         return res.status(400).json({
-          message: `Insufficient stock for ${product.name || `product ${item.product_id}`}`,
+          message: `${product.name || `Product ${item.product_id}`} is not currently purchasable`,
         });
+      }
+
+      if (String(product.product_type || 'single') === 'bundle') {
+        const components = componentsByBundle.get(item.product_id) || [];
+        if (components.length === 0) {
+          return res.status(400).json({ message: `${product.name} has no configured bundle components` });
+        }
+        for (const component of components) {
+          const nextRequired = (stockNeeded.get(component.component_product_id) || 0) + (component.quantity * item.quantity);
+          if (Number(component.stock_quantity) < nextRequired) {
+            return res.status(400).json({ message: `Insufficient stock for ${component.name}` });
+          }
+          stockNeeded.set(component.component_product_id, nextRequired);
+        }
+      } else {
+        const nextRequired = (stockNeeded.get(item.product_id) || 0) + item.quantity;
+        if (Number(product.stock_quantity) < nextRequired) {
+          return res.status(400).json({
+            message: `Insufficient stock for ${product.name || `product ${item.product_id}`}`,
+          });
+        }
+        stockNeeded.set(item.product_id, nextRequired);
       }
 
       minimumAmount += roundMoney(toFiniteNumber(product.price, 0) * item.quantity);

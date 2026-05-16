@@ -884,18 +884,40 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ message: 'Invalid items payload' });
     }
 
-    // Lock and validate all products in one query so stock checks and decrements stay consistent.
     const uniqueProductIds = [...new Set(normalizedItems.map(item => Number(item.product_id)))];
-    const productSnapshotResult = await client.query(
-      `SELECT id, name, price, stock_quantity
-       FROM products
-       WHERE id = ANY($1::int[])
-       FOR UPDATE`,
+
+    const bundleComponentsResult = await client.query(
+      `SELECT bc.bundle_product_id, bc.component_product_id, bc.quantity, bc.display_order
+       FROM product_bundle_components bc
+       WHERE bc.bundle_product_id = ANY($1::int[])`,
       [uniqueProductIds]
     );
 
+    const componentIds = bundleComponentsResult.rows.map((row) => Number(row.component_product_id));
+    const lockedProductIds = [...new Set([...uniqueProductIds, ...componentIds])];
+
+    // Lock purchased products and any bundle components in one transaction so stock checks and decrements stay consistent.
+    const productSnapshotResult = await client.query(
+      `SELECT id, name, price, stock_quantity, product_type, status
+       FROM products
+       WHERE id = ANY($1::int[])
+       FOR UPDATE`,
+      [lockedProductIds]
+    );
+
     const productMap = new Map(productSnapshotResult.rows.map(product => [Number(product.id), product]));
+    const bundleComponentsByBundle = new Map();
+    for (const component of bundleComponentsResult.rows) {
+      const bundleId = Number(component.bundle_product_id);
+      if (!bundleComponentsByBundle.has(bundleId)) bundleComponentsByBundle.set(bundleId, []);
+      bundleComponentsByBundle.get(bundleId).push({
+        component_product_id: Number(component.component_product_id),
+        quantity: Number(component.quantity),
+      });
+    }
+
     let subtotalAmount = 0;
+    const stockDeductionMap = new Map();
 
     for (const item of normalizedItems) {
       const product = productMap.get(Number(item.product_id));
@@ -907,10 +929,10 @@ export const createOrder = async (req, res) => {
         });
       }
 
-      if (Number(product.stock_quantity) < item.quantity) {
+      if (String(product.status || '').toLowerCase() !== 'active') {
         await client.query('ROLLBACK');
         return res.status(400).json({
-          message: `${product.name}: Maximum available quantity is ${product.stock_quantity}.`
+          message: `${product.name}: This product is not currently purchasable.`
         });
       }
 
@@ -923,6 +945,47 @@ export const createOrder = async (req, res) => {
       }
 
       subtotalAmount += roundMoney(productPrice * item.quantity);
+
+      if (String(product.product_type || 'single') === 'bundle') {
+        const components = bundleComponentsByBundle.get(Number(product.id)) || [];
+        if (components.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            message: `${product.name}: Bundle has no configured components.`
+          });
+        }
+
+        for (const component of components) {
+          const componentProduct = productMap.get(component.component_product_id);
+          const requiredQuantity = component.quantity * item.quantity;
+
+          if (!componentProduct) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              message: `${product.name}: A bundle component is no longer available.`
+            });
+          }
+
+          const nextRequired = (stockDeductionMap.get(component.component_product_id) || 0) + requiredQuantity;
+          if (Number(componentProduct.stock_quantity) < nextRequired) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              message: `${product.name}: Maximum available bundle quantity is limited by ${componentProduct.name}.`
+            });
+          }
+
+          stockDeductionMap.set(component.component_product_id, nextRequired);
+        }
+      } else {
+        const nextRequired = (stockDeductionMap.get(Number(product.id)) || 0) + item.quantity;
+        if (Number(product.stock_quantity) < nextRequired) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            message: `${product.name}: Maximum available quantity is ${product.stock_quantity}.`
+          });
+        }
+        stockDeductionMap.set(Number(product.id), nextRequired);
+      }
     }
 
     const normalizedDiscountAmount = Math.min(
@@ -982,7 +1045,7 @@ export const createOrder = async (req, res) => {
 
     let order = orderResult.rows[0];
 
-    // Add order items and update stock
+    // Add order items for purchased products. Stock is deducted from singles or bundle components below.
     const stockUpdates = [];
     for (const item of normalizedItems) {
       const product = productMap.get(Number(item.product_id));
@@ -994,18 +1057,22 @@ export const createOrder = async (req, res) => {
         [order.id, item.product_id, product.name, roundMoney(product.price), item.quantity]
       );
 
+    }
+
+    for (const [deductProductId, quantityToDeduct] of stockDeductionMap.entries()) {
+      const deductionProduct = productMap.get(Number(deductProductId));
       const stockUpdateResult = await client.query(
         `UPDATE products
          SET stock_quantity = stock_quantity - $1
          WHERE id = $2 AND stock_quantity >= $1
          RETURNING id, name, stock_quantity`,
-        [item.quantity, item.product_id]
+        [quantityToDeduct, deductProductId]
       );
 
       if (stockUpdateResult.rowCount === 0) {
         await client.query('ROLLBACK');
         return res.status(400).json({
-          message: `${product.name}: Unable to update stock. Please try checkout again.`
+          message: `${deductionProduct?.name || `Product #${deductProductId}`}: Unable to update stock. Please try checkout again.`
         });
       }
 
