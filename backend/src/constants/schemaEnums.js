@@ -23,7 +23,27 @@ export const PRODUCT_PUBLISHER_ROLES = Object.freeze([
 
 export const PRODUCT_STATUSES = Object.freeze([
   'draft',
-  'published',
+  'active',
+  'out_of_stock',
+  'archived',
+]);
+
+export const PRODUCT_TYPES = Object.freeze([
+  'single',
+  'bundle',
+]);
+
+export const CHAT_THREAD_STATUSES = Object.freeze([
+  'open',
+  'closed',
+  'blocked',
+]);
+
+export const CHAT_MESSAGE_TYPES = Object.freeze([
+  'text',
+  'image',
+  'video',
+  'system',
 ]);
 
 export const PRODUCT_SHIPPING_OPTIONS = Object.freeze([
@@ -50,4 +70,7 @@ export const REVIEW_STATUSES = Object.freeze([
 export const STAFF_ROLE_SET = new Set(STAFF_ROLES);
 export const PRODUCT_PUBLISHER_ROLE_SET = new Set(PRODUCT_PUBLISHER_ROLES);
 export const PRODUCT_STATUS_SET = new Set(PRODUCT_STATUSES);
+export const PRODUCT_TYPE_SET = new Set(PRODUCT_TYPES);
 export const PRODUCT_SHIPPING_OPTION_SET = new Set(PRODUCT_SHIPPING_OPTIONS);
+export const CHAT_THREAD_STATUS_SET = new Set(CHAT_THREAD_STATUSES);
+export const CHAT_MESSAGE_TYPE_SET = new Set(CHAT_MESSAGE_TYPES);
