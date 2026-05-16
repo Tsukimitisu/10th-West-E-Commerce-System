@@ -730,6 +730,7 @@ const ensureProductSchema = async () => {
       ADD COLUMN IF NOT EXISTS product_type VARCHAR(20) DEFAULT 'single',
       ADD COLUMN IF NOT EXISTS reserved_stock INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS damaged_stock INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS rating DECIMAL(3, 1) DEFAULT 0,
       ADD COLUMN IF NOT EXISTS color VARCHAR(100);
   `).catch((error) => {
     console.error('Failed to ensure product media columns:', error);
@@ -866,13 +867,13 @@ export const getProducts = async (req, res) => {
         SELECT ROUND(AVG(r.rating)::numeric, 1)
         FROM reviews r
         WHERE r.product_id = p.id
-          AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+          AND COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
       ), p.rating, 0) as review_rating,
       COALESCE((
         SELECT COUNT(*)
         FROM reviews r
         WHERE r.product_id = p.id
-          AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+          AND COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
       ), 0) as review_count
     `;
     let fromClause = 'FROM products p LEFT JOIN categories c ON p.category_id = c.id';
@@ -1032,13 +1033,13 @@ export const getTopSellers = async (req, res) => {
           SELECT ROUND(AVG(r.rating)::numeric, 1)
           FROM reviews r
           WHERE r.product_id = p.id
-            AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+            AND COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
         ), p.rating, 0) as review_rating,
         COALESCE((
           SELECT COUNT(*)
           FROM reviews r
           WHERE r.product_id = p.id
-            AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+            AND COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
         ), 0) as review_count,
         SUM(oi.quantity) as total_sold
       FROM orders o
@@ -1077,13 +1078,13 @@ export const getProductById = async (req, res) => {
                 SELECT ROUND(AVG(r.rating)::numeric, 1)
                 FROM reviews r
                 WHERE r.product_id = p.id
-                  AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+                  AND COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
               ), p.rating, 0) as review_rating,
               COALESCE((
                 SELECT COUNT(*)
                 FROM reviews r
                 WHERE r.product_id = p.id
-                  AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
+                  AND COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
               ), 0) as review_count
        FROM products p 
        LEFT JOIN categories c ON p.category_id = c.id 

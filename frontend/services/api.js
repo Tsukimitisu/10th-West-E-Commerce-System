@@ -3674,8 +3674,8 @@ export const addReview = async (review) => {
         rating,
         comment,
         media_urls: mediaUrls,
-        review_status: 'pending',
-        is_approved: false,
+        review_status: 'approved',
+        is_approved: true,
       })
       .select('id, user_id, product_id, rating, comment, created_at, updated_at, review_status, is_approved, media_urls')
       .single();
@@ -3690,7 +3690,7 @@ export const addReview = async (review) => {
     const savedReview = insertedReview;
 
     return {
-      message: 'Review submitted and is pending moderation.',
+      message: 'Review published successfully.',
       review: {
         ...savedReview,
         rating: Number(savedReview.rating || 0),

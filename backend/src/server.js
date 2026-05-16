@@ -196,6 +196,10 @@ app.use(cors({
   },
   credentials: true
 }));
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
+  fallthrough: true,
+  maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(session({

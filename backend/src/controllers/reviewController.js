@@ -66,6 +66,42 @@ const mapReviewRow = (row) => ({
   media_urls: normalizeReviewMedia(row.media_urls),
 });
 
+const getRequestOrigin = (req) => `${req.protocol}://${req.get('host')}`;
+
+const resolvePublicReviewMediaUrl = (url, req) => {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return rawUrl;
+
+  const origin = getRequestOrigin(req);
+  if (rawUrl.startsWith('/uploads/')) {
+    return `${origin}${rawUrl}`;
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+    const isLocalBackendUrl = ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)
+      && parsed.pathname.startsWith('/uploads/');
+    if (isLocalBackendUrl) {
+      return `${origin}${parsed.pathname}${parsed.search}`;
+    }
+  } catch {
+    return rawUrl;
+  }
+
+  return rawUrl;
+};
+
+const mapReviewResponse = (row, req) => {
+  const mapped = mapReviewRow(row);
+  return {
+    ...mapped,
+    media_urls: mapped.media_urls.map((item) => ({
+      ...item,
+      url: resolvePublicReviewMediaUrl(item.url, req),
+    })),
+  };
+};
+
 const ensureReviewSchema = async () => {
   if (reviewSchemaEnsured) return;
   if (reviewSchemaPromise) {
@@ -172,7 +208,7 @@ const syncProductRating = async (productId) => {
           COALESCE(ROUND(AVG(r.rating)::numeric, 1), 0)::DECIMAL(3, 1) AS avg_rating
         FROM reviews r
         WHERE r.product_id = $1
-          AND COALESCE(r.review_status, CASE WHEN r.is_approved THEN '${REVIEW_STATUS.APPROVED}' ELSE '${REVIEW_STATUS.PENDING}' END) = '${REVIEW_STATUS.APPROVED}'
+          AND COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN '${REVIEW_STATUS.APPROVED}' ELSE '${REVIEW_STATUS.PENDING}' END) = '${REVIEW_STATUS.APPROVED}'
       ) stats
       WHERE p.id = stats.product_id
     `,
@@ -225,7 +261,7 @@ export const getProductReviews = async (req, res) => {
       [productId],
     );
 
-    res.json(result.rows.map(mapReviewRow));
+    res.json(result.rows.map((row) => mapReviewResponse(row, req)));
   } catch (error) {
     console.error('Get product reviews error:', error);
     res.status(500).json({ message: 'Failed to load reviews.' });
@@ -310,23 +346,23 @@ export const createReview = async (req, res) => {
           review_status,
           created_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, false, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES ($1, $2, $3, $4, $5, true, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         RETURNING *
       `,
-      [req.user.id, productId, rating, comment, JSON.stringify(mediaUrls), REVIEW_STATUS.PENDING],
+      [req.user.id, productId, rating, comment, JSON.stringify(mediaUrls), REVIEW_STATUS.APPROVED],
     );
     const review = inserted.rows[0];
 
     await syncProductRating(productId);
 
     res.status(201).json({
-      message: 'Review submitted and is pending moderation.',
-      review: mapReviewRow({
+      message: 'Review published successfully.',
+      review: mapReviewResponse({
         ...review,
         user_name: req.user.name || 'You',
         user_avatar: req.user.avatar || null,
         verified_purchase: true,
-      }),
+      }, req),
     });
   } catch (error) {
     console.error('Create review error:', error);
@@ -393,7 +429,7 @@ export const getModerationReviews = async (req, res) => {
     const whereClauses = [];
     if (statusFilter !== 'all') {
       params.push(statusFilter);
-      whereClauses.push(`COALESCE(r.review_status, CASE WHEN r.is_approved THEN '${REVIEW_STATUS.APPROVED}' ELSE '${REVIEW_STATUS.PENDING}' END) = $${params.length}`);
+      whereClauses.push(`COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN '${REVIEW_STATUS.APPROVED}' ELSE '${REVIEW_STATUS.PENDING}' END) = $${params.length}`);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -424,7 +460,7 @@ export const getModerationReviews = async (req, res) => {
         LEFT JOIN users moderator ON moderator.id = r.moderated_by
         ${whereSql}
         ORDER BY
-          CASE COALESCE(r.review_status, CASE WHEN r.is_approved THEN '${REVIEW_STATUS.APPROVED}' ELSE '${REVIEW_STATUS.PENDING}' END)
+          CASE COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN '${REVIEW_STATUS.APPROVED}' ELSE '${REVIEW_STATUS.PENDING}' END)
             WHEN '${REVIEW_STATUS.PENDING}' THEN 0
             WHEN '${REVIEW_STATUS.REJECTED}' THEN 1
             ELSE 2
@@ -434,7 +470,7 @@ export const getModerationReviews = async (req, res) => {
       params,
     );
 
-    res.json(result.rows.map(mapReviewRow));
+    res.json(result.rows.map((row) => mapReviewResponse(row, req)));
   } catch (error) {
     console.error('Get moderation reviews error:', error);
     res.status(500).json({ message: 'Failed to load review moderation queue.' });
@@ -484,7 +520,7 @@ export const moderateReview = async (req, res) => {
 
     res.json({
       message: status === REVIEW_STATUS.APPROVED ? 'Review approved.' : 'Review rejected.',
-      review: mapReviewRow(result.rows[0]),
+      review: mapReviewResponse(result.rows[0], req),
     });
   } catch (error) {
     console.error('Moderate review error:', error);

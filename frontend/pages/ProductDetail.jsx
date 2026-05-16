@@ -1219,7 +1219,7 @@ const ProductDetail = () => {
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h3 className="font-display text-lg font-semibold text-gray-900">Write a review</h3>
-                    <p className="text-sm text-gray-600">Share your experience with this product. Reviews are moderated before they go live.</p>
+                    <p className="text-sm text-gray-600">Share your experience with this product. Reviews publish immediately after submission.</p>
                   </div>
                   {!userId && (
                     <Link to="/login" className="text-sm font-medium text-red-500 hover:text-red-600">
