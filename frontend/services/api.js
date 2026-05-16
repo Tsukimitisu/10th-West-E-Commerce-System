@@ -988,13 +988,15 @@ export const getStaffPerformance = async (id, period = 30) => {
 // ==================== SUPABASE PRODUCT HELPERS ====================
 
 const PRODUCT_DRAFT_STATUS = 'draft';
-const PRODUCT_PUBLISHED_STATUS = 'published';
+const PRODUCT_PUBLISHED_STATUS = 'active';
 const PRODUCT_MANAGEMENT_ROLES = new Set(['admin', 'super_admin', 'owner']);
 
 const normalizeProductPublicationStatus = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'draft' || normalized === 'hidden') return PRODUCT_DRAFT_STATUS;
-  if (normalized === 'published' || normalized === 'available' || normalized === 'out_of_stock') return PRODUCT_PUBLISHED_STATUS;
+  if (normalized === 'published' || normalized === 'available' || normalized === 'active') return PRODUCT_PUBLISHED_STATUS;
+  if (normalized === 'out_of_stock' || normalized === 'out-of-stock') return 'out_of_stock';
+  if (normalized === 'archived') return 'archived';
   return PRODUCT_DRAFT_STATUS;
 };
 
@@ -1693,6 +1695,10 @@ export const getProducts = async (params = {}) => {
   const queryParams = new URLSearchParams();
   if (params.search) queryParams.append('search', params.search);
   if (params.category) queryParams.append('category', params.category);
+  if (params.brand) queryParams.append('brand', params.brand);
+  if (params.model) queryParams.append('model', params.model);
+  if (params.year) queryParams.append('year', String(params.year));
+  if (params.status) queryParams.append('status', params.status);
   if (resultLimit) queryParams.append('limit', String(resultLimit));
   const qString = queryParams.toString() ? `?${queryParams.toString()}` : '';
 
@@ -1799,6 +1805,12 @@ export const addProduct = async (product) => {
       : {}),
     box_number: sanitizeClientPlainText(product.boxNumber, 100),
     low_stock_threshold: product.low_stock_threshold,
+    product_type: product.product_type || 'single',
+    reserved_stock: product.reserved_stock ?? 0,
+    damaged_stock: product.damaged_stock ?? 0,
+    color: sanitizeClientPlainText(product.color, 100),
+    fitments: Array.isArray(product.fitments) ? product.fitments : [],
+    bundle_components: Array.isArray(product.bundle_components) ? product.bundle_components : [],
     brand: sanitizeClientPlainText(product.brand, 100),
     sku: sanitizeClientPlainText(product.sku, 100),
     barcode: sanitizeClientPlainText(product.barcode, 100),
@@ -1868,6 +1880,12 @@ export const updateProduct = async (id, product) => {
       : {}),
     box_number: sanitizeClientPlainText(product.boxNumber, 100),
     low_stock_threshold: product.low_stock_threshold,
+    product_type: product.product_type || 'single',
+    reserved_stock: product.reserved_stock ?? 0,
+    damaged_stock: product.damaged_stock ?? 0,
+    color: sanitizeClientPlainText(product.color, 100),
+    fitments: Array.isArray(product.fitments) ? product.fitments : [],
+    bundle_components: Array.isArray(product.bundle_components) ? product.bundle_components : [],
     brand: sanitizeClientPlainText(product.brand, 100),
     sku: sanitizeClientPlainText(product.sku, 100),
     barcode: sanitizeClientPlainText(product.barcode, 100),
@@ -1914,6 +1932,42 @@ export const deleteProduct = async (id) => {
     method: 'DELETE',
   });
 };
+
+export const getChatThreads = async () => authenticatedFetch(`${API_URL}/chat/threads`).catch(() => []);
+
+export const createChatThread = async (payload = {}) => {
+  const data = await authenticatedFetch(`${API_URL}/chat/threads`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return data.thread || data;
+};
+
+export const getChatThread = async (id) => authenticatedFetch(`${API_URL}/chat/threads/${id}`);
+
+export const sendChatMessage = async (threadId, payload = {}) => {
+  const data = await authenticatedFetch(`${API_URL}/chat/threads/${threadId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return data.message || data;
+};
+
+export const markChatThreadRead = async (threadId) => authenticatedFetch(`${API_URL}/chat/threads/${threadId}/read`, {
+  method: 'PUT',
+});
+
+export const assignChatThread = async (threadId, assignedStaffId) => authenticatedFetch(`${API_URL}/chat/threads/${threadId}/assign`, {
+  method: 'PUT',
+  body: JSON.stringify({ assigned_staff_id: assignedStaffId }),
+});
+
+export const getChatQuickReplies = async () => authenticatedFetch(`${API_URL}/chat/quick-replies`).catch(() => []);
+
+export const saveChatQuickReply = async (quickReply) => authenticatedFetch(`${API_URL}/chat/quick-replies`, {
+  method: 'POST',
+  body: JSON.stringify(quickReply),
+});
 
 export const uploadProductImage = async (file) => {
   if (!file) throw new Error('Image file is required');
