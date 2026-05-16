@@ -85,17 +85,36 @@ const ensureReviewSchema = async () => {
     `);
 
     await pool.query(`
-      UPDATE reviews
-      SET review_status = CASE
-        WHEN COALESCE(is_approved, false) = true THEN '${REVIEW_STATUS.APPROVED}'
-        ELSE '${REVIEW_STATUS.PENDING}'
-      END
-      WHERE review_status IS NULL;
-    `);
+      DO $$
+      DECLARE
+        is_enum BOOLEAN;
+      BEGIN
+        SELECT udt_name = 'review_status_enum'
+        INTO is_enum
+        FROM information_schema.columns
+        WHERE table_name = 'reviews'
+          AND column_name = 'review_status';
 
-    await pool.query(`
-      ALTER TABLE reviews
-      ALTER COLUMN review_status SET DEFAULT '${REVIEW_STATUS.PENDING}';
+        IF is_enum THEN
+          UPDATE reviews
+          SET review_status = (
+            CASE
+              WHEN COALESCE(is_approved, false) = true THEN '${REVIEW_STATUS.APPROVED}'
+              ELSE '${REVIEW_STATUS.PENDING}'
+            END
+          )::review_status_enum
+          WHERE review_status IS NULL;
+          ALTER TABLE reviews ALTER COLUMN review_status SET DEFAULT '${REVIEW_STATUS.PENDING}'::review_status_enum;
+        ELSE
+          UPDATE reviews
+          SET review_status = CASE
+            WHEN COALESCE(is_approved, false) = true THEN '${REVIEW_STATUS.APPROVED}'
+            ELSE '${REVIEW_STATUS.PENDING}'
+          END
+          WHERE review_status IS NULL;
+          ALTER TABLE reviews ALTER COLUMN review_status SET DEFAULT '${REVIEW_STATUS.PENDING}';
+        END IF;
+      END $$;
     `);
 
     await pool.query(`
@@ -120,7 +139,7 @@ const ensureReviewSchema = async () => {
             SELECT array_agg(a.attname ORDER BY a.attname)
             FROM unnest(c.conkey) AS colnum
             JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = colnum
-          ) = ARRAY['product_id', 'user_id'];
+          ) = ARRAY['product_id', 'user_id']::name[];
 
         IF review_unique_constraint IS NOT NULL THEN
           EXECUTE format('ALTER TABLE public.reviews DROP CONSTRAINT IF EXISTS %I', review_unique_constraint);

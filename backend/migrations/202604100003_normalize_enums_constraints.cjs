@@ -35,7 +35,7 @@ async function createEnumType(knex, typeName, values) {
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '${typeName}') THEN
-        EXECUTE 'CREATE TYPE ${typeName} AS ENUM (${sqlValues})';
+        CREATE TYPE ${typeName} AS ENUM (${sqlValues});
       END IF;
     END $$;
   `);
@@ -216,6 +216,19 @@ async function normalizeData(knex) {
 
 async function convertColumnsToEnums(knex) {
   await knex.raw(`
+    ALTER TABLE users ALTER COLUMN role DROP DEFAULT;
+    ALTER TABLE products ALTER COLUMN status DROP DEFAULT;
+    ALTER TABLE products ALTER COLUMN shipping_option DROP DEFAULT;
+    ALTER TABLE orders ALTER COLUMN status DROP DEFAULT;
+    ALTER TABLE orders ALTER COLUMN source DROP DEFAULT;
+    ALTER TABLE orders ALTER COLUMN shipping_method DROP DEFAULT;
+    ALTER TABLE returns ALTER COLUMN status DROP DEFAULT;
+    ALTER TABLE returns ALTER COLUMN return_type DROP DEFAULT;
+    ALTER TABLE refunds ALTER COLUMN method DROP DEFAULT;
+    ALTER TABLE reviews ALTER COLUMN review_status DROP DEFAULT;
+    ALTER TABLE support_tickets ALTER COLUMN status DROP DEFAULT;
+    ALTER TABLE stock_adjustments ALTER COLUMN status DROP DEFAULT;
+
     ALTER TABLE users
       ALTER COLUMN role TYPE user_role_enum USING role::user_role_enum,
       ALTER COLUMN role SET DEFAULT 'customer'::user_role_enum,
