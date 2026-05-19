@@ -1,4 +1,4 @@
-﻿import { Role, OrderStatus, ReturnStatus } from '../types.js';
+import { Role, OrderStatus, ReturnStatus } from '../types.js';
 import { supabase } from './supabase.js';
 // Used only by custom Supabase fallback auth paths for secure password hashing.
 import bcrypt from 'bcryptjs';
@@ -2649,7 +2649,7 @@ export const createOrder = async (order) => {
     notifyAdminStaff(
       'order.new',
       'New Order Received',
-      `Order #${String(orderData.id).padStart(4, '0')} â€” â‚±${roundCurrency(order.total_amount).toLocaleString()} (${orderItems.length} item${orderItems.length !== 1 ? 's' : ''})`,
+      `Order #${String(orderData.id).padStart(4, '0')} â€” ₱${roundCurrency(order.total_amount).toLocaleString()} (${orderItems.length} item${orderItems.length !== 1 ? 's' : ''})`,
       orderData.id,
       'order'
     );
@@ -3756,7 +3756,7 @@ export const validateDiscount = async (code, amount) => {
     if (!data) throw new Error('Invalid discount code');
     // Only enforce min_purchase if it's set and greater than 0
     if (data.min_purchase && parseFloat(data.min_purchase) > 0 && amount < parseFloat(data.min_purchase)) {
-      throw new Error(`Minimum purchase of â‚±${parseFloat(data.min_purchase).toLocaleString()} required`);
+      throw new Error(`Minimum purchase of ₱${parseFloat(data.min_purchase).toLocaleString()} required`);
     }
     if (data.max_uses && data.max_uses > 0 && data.used_count >= data.max_uses) throw new Error('Discount code usage limit reached');
     if (data.expires_at && new Date(data.expires_at) < new Date()) throw new Error('Discount code has expired');

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getOrders, getOrderById, updateOrderStatus, confirmOrderDelivery, processRefund, generateJntWaybill, getOrderWaybillUrl } from '../../services/api';
 import { OrderStatus } from '../../types.js';
 import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock, Filter, ChevronDown, ChevronUp, ArrowLeft, Printer, DollarSign, MapPin, User, Calendar, CreditCard, AlertCircle, Undo } from 'lucide-react';
@@ -188,7 +188,7 @@ const OrdersView = () => {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Revenue', value: `â‚±${totalRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
+          { label: 'Total Revenue', value: `₱${totalRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Pending', value: pending.toString(), icon: <Clock size={18} />, color: 'bg-yellow-50 text-yellow-600' },
           { label: 'Preparing', value: preparing.toString(), icon: <Package size={18} />, color: 'bg-red-500/10 text-orange-600' },
           { label: 'Shipped', value: shipped.toString(), icon: <Truck size={18} />, color: 'bg-purple-50 text-purple-600' },
@@ -256,7 +256,7 @@ const OrdersView = () => {
                   <td className="px-4 py-3 hidden sm:table-cell">
                     <span className="text-xs text-gray-400 capitalize">{o.payment_method || '-'}</span>
                   </td>
-                  <td className="px-4 py-3 text-right font-bold text-white">â‚±{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-right font-bold text-white">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => openDetail(o)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="View"><Eye size={14} /></button>
@@ -345,7 +345,7 @@ const OrdersView = () => {
                         <p className="text-xs text-gray-400">Qty: {item.quantity}</p>
                       </div>
                     </div>
-                    <span className="text-sm font-bold text-white">â‚±{((item.price || 0) * (item.quantity || 1)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-bold text-white">₱{((item.price || 0) * (item.quantity || 1)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                   </div>
                 )) : <div className="p-4 text-center text-xs text-gray-400">No item details available</div>}
               </div>
@@ -353,10 +353,10 @@ const OrdersView = () => {
 
             {/* Totals */}
             <div className="p-4 bg-gray-900 rounded-lg space-y-2 text-sm">
-              <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>â‚±{(detailOrder.subtotal || detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-              {detailOrder.tax > 0 && <div className="flex justify-between text-gray-400"><span>Tax</span><span>â‚±{detailOrder.tax.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-              {detailOrder.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-â‚±{detailOrder.discount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-              <div className="flex justify-between font-bold text-white text-base pt-2 border-t border-gray-700"><span>Total</span><span>â‚±{(detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+              <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>₱{(detailOrder.subtotal || detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+              {detailOrder.tax > 0 && <div className="flex justify-between text-gray-400"><span>Tax</span><span>₱{detailOrder.tax.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+              {detailOrder.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-₱{detailOrder.discount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+              <div className="flex justify-between font-bold text-white text-base pt-2 border-t border-gray-700"><span>Total</span><span>₱{(detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
             </div>
 
             {/* Actions */}

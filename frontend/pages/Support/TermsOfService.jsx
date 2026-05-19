@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, FileText } from 'lucide-react';
 
@@ -49,7 +49,7 @@ const TermsOfService = () => {
 
             <h2 className="font-display font-semibold text-lg text-white mt-8">3. Products & Pricing</h2>
             <ul className="list-disc pl-6 space-y-1">
-              <li>All prices are displayed in <strong>Philippine Pesos (â‚±)</strong> and are inclusive of applicable taxes unless stated otherwise.</li>
+              <li>All prices are displayed in <strong>Philippine Pesos (₱)</strong> and are inclusive of applicable taxes unless stated otherwise.</li>
               <li>We make every effort to ensure product descriptions and prices are accurate but reserve the right to correct errors.</li>
               <li>Product availability is subject to change without prior notice.</li>
               <li>Images are for illustration purposes and may vary slightly from the actual product.</li>

@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { X, RotateCcw, AlertTriangle, Package, CreditCard, Wallet } from 'lucide-react';
 import { createReturn } from '../../services/api';
 
@@ -150,7 +150,7 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-white truncate">{item.product.name}</p>
-                      <p className="text-xs text-gray-400">â‚±{item.product.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })} x {item.quantity}</p>
+                      <p className="text-xs text-gray-400">₱{item.product.price.toLocaleString('en-PH', { minimumFractionDigits: 2 })} x {item.quantity}</p>
                     </div>
                     {isSelected && (
                       <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -249,7 +249,7 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
                   <div className="border-t border-gray-700 pt-2 flex justify-between">
                     <span className="text-gray-700 font-bold">Total Refund</span>
                     <span className="text-orange-600 font-bold text-base">
-                      â‚±{refundTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                      ₱{refundTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>

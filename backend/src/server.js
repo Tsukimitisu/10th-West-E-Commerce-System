@@ -107,6 +107,20 @@ const sessionCookieSameSite = ['lax', 'strict', 'none'].includes(configuredSessi
   ? configuredSessionSameSite
   : (process.env.NODE_ENV === 'production' ? 'none' : 'lax');
 const sessionCookieSecure = sessionCookieSameSite === 'none' || process.env.NODE_ENV === 'production';
+const configuredSessionStore = String(process.env.SESSION_STORE || '').trim().toLowerCase();
+const usePostgresSessionStore = configuredSessionStore === 'postgres' ||
+  (process.env.NODE_ENV === 'production' && configuredSessionStore !== 'memory');
+const sessionStore = usePostgresSessionStore
+  ? new PgSessionStore({
+      pool,
+      tableName: 'http_sessions',
+      createTableIfMissing: true,
+    })
+  : undefined;
+
+if (!usePostgresSessionStore) {
+  console.warn('Using in-memory sessions. Set SESSION_STORE=postgres to persist sessions in PostgreSQL.');
+}
 
 const sessionSecret = process.env.SESSION_SECRET;
 if (process.env.NODE_ENV === 'production' && !sessionSecret) {
@@ -203,11 +217,7 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
-  store: new PgSessionStore({
-    pool,
-    tableName: 'http_sessions',
-    createTableIfMissing: true,
-  }),
+  ...(sessionStore ? { store: sessionStore } : {}),
   name: 'twm.sid',
   secret: effectiveSessionSecret,
   resave: false,

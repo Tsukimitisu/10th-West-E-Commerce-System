@@ -1,12 +1,32 @@
 import pool from '../config/database.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
+
+const getCategoriesFromSupabaseRest = async () => {
+  const categories = await supabaseRestFetch('categories', {
+    select: '*',
+    order: 'name.asc',
+  });
+  return Array.isArray(categories) ? categories : [];
+};
 
 // Get all categories
 export const getCategories = async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json(await getCategoriesFromSupabaseRest());
+    }
+
     const result = await pool.query('SELECT * FROM categories ORDER BY name');
     res.json(result.rows);
   } catch (error) {
     console.error('Get categories error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      try {
+        return res.json(await getCategoriesFromSupabaseRest());
+      } catch (fallbackError) {
+        console.error('Get categories Supabase REST fallback error:', fallbackError);
+      }
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };

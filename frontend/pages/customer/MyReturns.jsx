@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RotateCcw, Package, Clock, CheckCircle2, XCircle, Calendar } from 'lucide-react';
 import AccountLayout from '../../components/customer/AccountLayout';
@@ -72,7 +72,7 @@ const MyReturns = () => {
                     <div className="text-right flex-shrink-0">
                       {ret.refund_amount > 0 && (
                         <p className="font-semibold text-gray-900 text-sm">
-                          â‚±{Number(ret.refund_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                          ₱{Number(ret.refund_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                         </p>
                       )}
                     </div>

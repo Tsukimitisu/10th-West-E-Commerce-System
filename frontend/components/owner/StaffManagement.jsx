@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   getStaffList, getStaffById, addStaff, editStaff, toggleStaffStatus, deleteStaff,
   getStaffActivity, updateStaffPermissions, getAllPermissions, getStaffPerformance,
@@ -320,7 +320,7 @@ const StaffManagement = () => {
                 <p className="text-xs text-slate-500">Orders Processed</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-slate-900">â‚±{performance.orders.totalRevenue.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-slate-900">₱{performance.orders.totalRevenue.toLocaleString()}</p>
                 <p className="text-xs text-slate-500">Revenue</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3 text-center">

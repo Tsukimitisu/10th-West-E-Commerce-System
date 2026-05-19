@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getSalesReport, getSalesByChannel, getTopProducts, getDailySalesTrend, getStockLevelsReport, getProfitReport, getOrders } from '../../services/api';
 import { BarChart3, Download, Calendar, TrendingUp, Package, DollarSign, ShoppingBag, Boxes, FileText, Printer, Users } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
@@ -170,9 +170,9 @@ const ReportsView = () => {
               {/* Sales KPIs */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'Total Sales', value: `â‚±${(salesReport?.total_sales || 0).toLocaleString()}`, color: 'bg-green-50 text-green-600' },
+                  { label: 'Total Sales', value: `₱${(salesReport?.total_sales || 0).toLocaleString()}`, color: 'bg-green-50 text-green-600' },
                   { label: 'Orders', value: (salesReport?.total_orders || 0).toString(), color: 'bg-blue-50 text-blue-600' },
-                  { label: 'Avg Order', value: `â‚±${(salesReport?.avg_order_value || 0).toFixed(0)}`, color: 'bg-purple-50 text-purple-600' },
+                  { label: 'Avg Order', value: `₱${(salesReport?.avg_order_value || 0).toFixed(0)}`, color: 'bg-purple-50 text-purple-600' },
                   { label: 'Items Sold', value: (salesReport?.total_items || 0).toString(), color: 'bg-amber-50 text-amber-600' },
                 ].map((kpi, i) => (
                   <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
@@ -191,7 +191,7 @@ const ReportsView = () => {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                         <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#9ca3af" />
                         <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                        <Tooltip formatter={(v) => [`â‚±${Number(v).toLocaleString()}`, '']} />
+                        <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
                         <Area type="monotone" dataKey="revenue" stroke="#f97316" fill="url(#salesGrad)" strokeWidth={2} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -241,7 +241,7 @@ const ReportsView = () => {
                           <tr key={i} className="hover:bg-gray-50/50">
                             <td className="px-4 py-3 font-bold text-gray-400">{i + 1}</td>
                             <td className="px-4 py-3 font-medium text-white">{p.name}</td>
-                            <td className="px-4 py-3 text-right text-white">â‚±{(p.price || 0).toLocaleString()}</td>
+                            <td className="px-4 py-3 text-right text-white">₱{(p.price || 0).toLocaleString()}</td>
                             <td className="px-4 py-3 text-right text-amber-600">â˜… {(p.rating || 0).toFixed(1)}</td>
                           </tr>
                         ))}
@@ -280,9 +280,9 @@ const ReportsView = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'Gross Revenue', value: `â‚±${(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}` },
-                  { label: 'Total Cost', value: `â‚±${(profitReport?.total_cost || 0).toLocaleString()}` },
-                  { label: 'Net Profit', value: `â‚±${(profitReport?.net_profit || 0).toLocaleString()}` },
+                  { label: 'Gross Revenue', value: `₱${(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}` },
+                  { label: 'Total Cost', value: `₱${(profitReport?.total_cost || 0).toLocaleString()}` },
+                  { label: 'Net Profit', value: `₱${(profitReport?.net_profit || 0).toLocaleString()}` },
                   { label: 'Margin', value: `${(profitReport?.margin || 0).toFixed(1)}%` },
                 ].map((kpi, i) => (
                   <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
@@ -301,19 +301,19 @@ const ReportsView = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between py-2 border-b border-gray-700">
                     <span className="text-sm text-gray-600">Gross Revenue (Sales)</span>
-                    <span className="text-sm font-semibold text-white">â‚±{(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}</span>
+                    <span className="text-sm font-semibold text-white">₱{(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-gray-700">
                     <span className="text-sm text-gray-600">Cost of Goods Sold (Buying Price)</span>
-                    <span className="text-sm font-semibold text-red-500">- â‚±{(profitReport?.total_cost || 0).toLocaleString()}</span>
+                    <span className="text-sm font-semibold text-red-500">- ₱{(profitReport?.total_cost || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-dashed border-gray-700">
                     <span className="text-sm font-medium text-gray-700">Gross Profit</span>
-                    <span className="text-sm font-bold text-white">â‚±{((profitReport?.gross_revenue || salesReport?.total_sales || 0) - (profitReport?.total_cost || 0)).toLocaleString()}</span>
+                    <span className="text-sm font-bold text-white">₱{((profitReport?.gross_revenue || salesReport?.total_sales || 0) - (profitReport?.total_cost || 0)).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between py-3 bg-red-500/10 rounded-lg px-3 -mx-1">
                     <span className="text-sm font-bold text-orange-700">Net Profit</span>
-                    <span className="text-lg font-bold text-orange-600">â‚±{(profitReport?.net_profit || 0).toLocaleString()}</span>
+                    <span className="text-lg font-bold text-orange-600">₱{(profitReport?.net_profit || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-gray-600">Profit Margin</span>
@@ -328,7 +328,7 @@ const ReportsView = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                    <Tooltip formatter={(v) => [`â‚±${Number(v).toLocaleString()}`, '']} />
+                    <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
                     <Legend />
                     <Bar dataKey="revenue" fill="#f97316" name="Revenue" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="cost" fill="#9ca3af" name="Cost" radius={[4, 4, 0, 0]} />
@@ -409,7 +409,7 @@ const ReportsView = () => {
                             <td className="px-4 py-3 text-right">
                               <span className="px-2 py-0.5 bg-red-500/10 text-orange-600 text-xs font-semibold rounded-full">{customer.orders}</span>
                             </td>
-                            <td className="px-4 py-3 text-right font-semibold text-white">â‚±{customer.total.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-white">₱{customer.total.toLocaleString()}</td>
                           </tr>
                         ))}
                       </tbody>

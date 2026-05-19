@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, ChevronDown, ChevronUp, HelpCircle, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getFAQs } from '../../services/api';
@@ -7,7 +7,7 @@ const defaultFAQs = [
   { category: 'Orders', question: 'How do I track my order?', answer: 'Go to My Account â†’ Orders and click on your order to see the latest tracking information.' },
   { category: 'Orders', question: 'Can I cancel my order?', answer: 'You can cancel your order within 1 hour of placing it. Go to My Account â†’ Orders, find the order and click Cancel.' },
   { category: 'Shipping', question: 'How long does shipping take?', answer: 'Standard shipping takes 3â€“7 business days within Metro Manila. Express shipping delivers within 1â€“2 business days.' },
-  { category: 'Shipping', question: 'Do you offer free shipping?', answer: 'Yes! Orders over â‚±2,500 qualify for free standard shipping.' },
+  { category: 'Shipping', question: 'Do you offer free shipping?', answer: 'Yes! Orders over ₱2,500 qualify for free standard shipping.' },
   { category: 'Returns', question: 'What is your return policy?', answer: 'We accept returns within 15 days of delivery. Items must be unused and in original packaging. See our Returns page for details.' },
   { category: 'Returns', question: 'How do I request a return?', answer: 'Go to My Account â†’ Orders, select the order, and click "Request Return". Fill out the form and we\'ll provide a return label.' },
   { category: 'Payment', question: 'What payment methods do you accept?', answer: 'We accept credit/debit cards (Visa, Mastercard), GCash, and Cash on Delivery (COD).' },

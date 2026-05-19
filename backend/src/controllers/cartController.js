@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import pool from '../config/database.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback } from '../services/supabaseRest.js';
 
 const MAX_ITEM_QUANTITY = 99;
 
@@ -275,6 +276,15 @@ export const mergeGuestCartIntoUserCart = async (guestSessionId, userId) => {
 // Get cart for current owner
 export const getCart = async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json({
+        cart_id: null,
+        degraded: true,
+        items: null,
+        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
+      });
+    }
+
     const cart = await getOrCreateCart(req);
 
     const items = await pool.query(
@@ -304,6 +314,14 @@ export const getCart = async (req, res) => {
     });
   } catch (error) {
     console.error('Get cart error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json({
+        cart_id: null,
+        degraded: true,
+        items: null,
+        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
+      });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };

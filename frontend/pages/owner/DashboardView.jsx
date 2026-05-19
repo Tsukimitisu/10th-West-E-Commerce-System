@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { DollarSign, ShoppingCart, TrendingUp, AlertTriangle, Package, Clock, ArrowUpRight, RotateCcw, MessageSquare } from 'lucide-react';
 import { getDashboardStats, getOrders, getProducts } from '../../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend, ScatterChart, Scatter } from 'recharts';
@@ -187,8 +187,8 @@ const DashboardView = () => {
               <LineChart data={stats?.salesTrend || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={d => new Date(d).toLocaleDateString('en', { month: 'short', day: 'numeric' })} />
-                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `â‚±${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => `â‚±${v.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} labelFormatter={d => new Date(d).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} />
+                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v) => `₱${v.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} labelFormatter={d => new Date(d).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} />
                 <Line type="monotone" dataKey="amount" stroke="#ef4444" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} dot={false} strokeDasharray="4 4" />
               </LineChart>
@@ -204,7 +204,7 @@ const DashboardView = () => {
                 <Pie data={stats?.salesByChannel || []} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} style={{ fontSize: 11 }}>
                   {(stats?.salesByChannel || []).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={(v) => `â‚±${v.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} />
+                <Tooltip formatter={(v) => `₱${v.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} />
               </PieChart>
             </ResponsiveContainer>
           </div>

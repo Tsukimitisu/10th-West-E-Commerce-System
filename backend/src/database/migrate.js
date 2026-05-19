@@ -87,7 +87,7 @@ const createTables = async () => {
         bulk_pricing JSONB DEFAULT '[]'::jsonb,
         variant_options JSONB DEFAULT '[]'::jsonb,
         is_on_sale BOOLEAN DEFAULT FALSE,
-        status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+        status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'out_of_stock', 'archived')),
         expiry_date DATE,
         is_deleted BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -702,15 +702,25 @@ const createTables = async () => {
     await client.query(`
       UPDATE products
       SET status = 'draft'
-      WHERE status = 'hidden';
+      WHERE lower(btrim(status::text)) = 'hidden';
 
       UPDATE products
-      SET status = 'published'
-      WHERE status IN ('available', 'out_of_stock');
+      SET status = 'active'
+      WHERE lower(btrim(status::text)) IN ('published', 'available', 'active');
+
+      UPDATE products
+      SET status = 'out_of_stock'
+      WHERE lower(btrim(status::text)) IN ('out_of_stock', 'out-of-stock', 'sold_out', 'sold out');
+
+      UPDATE products
+      SET status = 'archived'
+      WHERE lower(btrim(status::text)) IN ('archived', 'deleted');
 
       UPDATE products
       SET status = 'draft'
-      WHERE status IS NULL;
+      WHERE status IS NULL
+         OR btrim(status::text) = ''
+         OR lower(btrim(status::text)) NOT IN ('draft', 'active', 'out_of_stock', 'archived');
 
       ALTER TABLE products
       ALTER COLUMN status SET DEFAULT 'draft';
@@ -720,7 +730,7 @@ const createTables = async () => {
 
       ALTER TABLE products
       ADD CONSTRAINT products_status_check
-        CHECK (status IN ('draft', 'published'));
+        CHECK (status IN ('draft', 'active', 'out_of_stock', 'archived'));
     `).catch((err) => {
       console.log(`⚠️  Could not enforce products status workflow: ${err.message}`);
     });

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getInventory, getStockAdjustments, getLowStockProducts, adjustStock } from '../../services/api';
 import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, TrendingDown, History, Plus, Minus, ScanBarcode } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
@@ -94,7 +94,7 @@ const InventoryView = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 ">
         {[
           { label: 'Total Units', value: totalStock.toLocaleString(), icon: <Boxes size={18} />, color: 'bg-blue-50 text-blue-600 ' },
-          { label: 'Inventory Value', value: `â‚±${totalValue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <TrendingUp size={18} />, color: 'bg-green-50 text-green-600' },
+          { label: 'Inventory Value', value: `₱${totalValue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <TrendingUp size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Reserved / Damaged', value: `${reservedStock} / ${damagedStock}`, icon: <Package size={18} />, color: 'bg-purple-50 text-purple-600' },
           { label: 'Low / Out', value: `${lowStock.length} / ${outOfStock}`, icon: <AlertTriangle size={18} />, color: 'bg-amber-50 text-amber-600' },
         ].map((kpi, i) => (

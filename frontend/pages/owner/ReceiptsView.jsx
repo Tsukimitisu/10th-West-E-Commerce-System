@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getOrders } from '../../services/api';
 import { FileText, Search, Printer, Mail, Eye, Receipt, Calendar, Download } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
@@ -40,9 +40,9 @@ const ReceiptsView = () => {
         <p>Date: ${new Date(order.created_at).toLocaleString()}</p>
         <p>Customer: ${order.customer_name || order.shipping_name || 'Walk-in'}</p>
         <div class="line"></div>
-        ${order.items?.map((it) => `<p>${it.name || it.product_name} x${it.quantity} - â‚±${((it.price || 0) * (it.quantity || 1)).toFixed(2)}</p>`).join('') || '<p>Items unavailable</p>'}
+        ${order.items?.map((it) => `<p>${it.name || it.product_name} x${it.quantity} - ₱${((it.price || 0) * (it.quantity || 1)).toFixed(2)}</p>`).join('') || '<p>Items unavailable</p>'}
         <div class="line"></div>
-        <p class="total">TOTAL: â‚±${(order.total_amount || 0).toFixed(2)}</p>
+        <p class="total">TOTAL: ₱${(order.total_amount || 0).toFixed(2)}</p>
         <p>Payment: ${order.payment_method || 'N/A'}</p>
         <div class="line"></div>
         <p class="center">Thank you for your purchase!</p>
@@ -115,7 +115,7 @@ const ReceiptsView = () => {
                       <td className="px-4 py-3 text-gray-600 hidden sm:table-cell">{o.customer_name || o.shipping_name || `User ${o.user_id}`}</td>
                       <td className="px-4 py-3 text-xs text-gray-400">{new Date(o.created_at).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-xs text-gray-400 capitalize hidden md:table-cell">{o.payment_method || '-'}</td>
-                      <td className="px-4 py-3 text-right font-bold text-white">â‚±{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-3 text-right font-bold text-white">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => setPreviewOrder(o)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="Preview"><Eye size={14} /></button>
@@ -185,12 +185,12 @@ const ReceiptsView = () => {
               <p>Date: {new Date().toLocaleString()}</p>
               <p>Customer: Walk-in</p>
               <div className="border-t border-dashed border-gray-400 my-3" />
-              <p>Brake Pad Set x1 - â‚±450.00</p>
-              <p>Oil Filter x2 - â‚±300.00</p>
+              <p>Brake Pad Set x1 - ₱450.00</p>
+              <p>Oil Filter x2 - ₱300.00</p>
               <div className="border-t border-dashed border-gray-400 my-3" />
-              <p className="font-bold text-base">TOTAL: â‚±750.00</p>
+              <p className="font-bold text-base">TOTAL: ₱750.00</p>
               <p>Payment: Cash</p>
-              <p>Change: â‚±250.00</p>
+              <p>Change: ₱250.00</p>
               <div className="border-t border-dashed border-gray-400 my-3" />
               {template.showBarcode && <div className="h-8 bg-gradient-to-r from-gray-900 via-gray-400 to-gray-900 rounded my-2" style={{ backgroundSize: '4px 100%', backgroundImage: 'repeating-linear-gradient(90deg, #000 0px, #000 1px, #fff 1px, #fff 3px)' }} />}
               <p className="text-center text-gray-400">{template.footer}</p>
@@ -215,7 +215,7 @@ const ReceiptsView = () => {
                 <p key={i}>{it.name || it.product_name} x{it.quantity} - \u20b1{((it.price || 0) * (it.quantity || 1)).toFixed(2)}</p>
               )) || <p>Items unavailable</p>}
               <div className="border-t border-dashed border-gray-400 my-3" />
-              <p className="font-bold text-base">TOTAL: â‚±{(previewOrder.total_amount || 0).toFixed(2)}</p>
+              <p className="font-bold text-base">TOTAL: ₱{(previewOrder.total_amount || 0).toFixed(2)}</p>
               <div className="border-t border-dashed border-gray-400 my-3" />
               <p className="text-center text-gray-400">{template.footer}</p>
             </div>

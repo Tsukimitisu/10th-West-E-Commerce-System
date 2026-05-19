@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS products (
   bulk_pricing JSONB DEFAULT '[]'::jsonb,
   variant_options JSONB DEFAULT '[]'::jsonb,
   is_on_sale BOOLEAN DEFAULT FALSE,
-  status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+  status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'out_of_stock', 'archived')),
   expiry_date DATE,
   is_deleted BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -565,21 +565,31 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft'
 
 UPDATE products
 SET status = 'draft'
-WHERE status = 'hidden';
+WHERE lower(btrim(status::text)) = 'hidden';
 
 UPDATE products
-SET status = 'published'
-WHERE status IN ('available', 'out_of_stock');
+SET status = 'active'
+WHERE lower(btrim(status::text)) IN ('published', 'available', 'active');
+
+UPDATE products
+SET status = 'out_of_stock'
+WHERE lower(btrim(status::text)) IN ('out_of_stock', 'out-of-stock', 'sold_out', 'sold out');
+
+UPDATE products
+SET status = 'archived'
+WHERE lower(btrim(status::text)) IN ('archived', 'deleted');
 
 UPDATE products
 SET status = 'draft'
-WHERE status IS NULL;
+WHERE status IS NULL
+   OR btrim(status::text) = ''
+   OR lower(btrim(status::text)) NOT IN ('draft', 'active', 'out_of_stock', 'archived');
 
 ALTER TABLE products ALTER COLUMN status SET DEFAULT 'draft';
 
 ALTER TABLE products DROP CONSTRAINT IF EXISTS products_status_check;
 ALTER TABLE products ADD CONSTRAINT products_status_check
-  CHECK (status IN ('draft', 'published'));
+  CHECK (status IN ('draft', 'active', 'out_of_stock', 'archived'));
 
 -- Products: strict pricing and stock guards
 ALTER TABLE products DROP CONSTRAINT IF EXISTS products_price_positive_check;
@@ -776,7 +786,9 @@ CREATE INDEX IF NOT EXISTS idx_request_rate_limits_reset ON request_rate_limits(
 -- Returns true for anon/authenticated/service_role connections.
 CREATE OR REPLACE FUNCTION public.app_access_check()
 RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
 SET search_path = pg_catalog
 AS $$ SELECT current_setting('role', true) = ANY(ARRAY['anon', 'authenticated', 'service_role']) $$;
 
@@ -1250,6 +1262,46 @@ CREATE POLICY insert_policy ON backup_history FOR INSERT WITH CHECK (app_access_
 CREATE POLICY update_policy ON backup_history FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check());
 CREATE POLICY delete_policy ON backup_history FOR DELETE USING (app_access_check());
 
+-- Motorcycle catalog relationship tables
+DO $$
+DECLARE
+  table_name text;
+BEGIN
+  FOREACH table_name IN ARRAY ARRAY['product_fitments', 'product_bundle_components']
+  LOOP
+    IF to_regclass(format('public.%I', table_name)) IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', table_name || '_select_policy', table_name);
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', table_name || '_insert_policy', table_name);
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', table_name || '_update_policy', table_name);
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', table_name || '_delete_policy', table_name);
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT USING (true)', table_name || '_select_policy', table_name);
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR INSERT WITH CHECK (app_access_check())', table_name || '_insert_policy', table_name);
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR UPDATE USING (app_access_check()) WITH CHECK (app_access_check())', table_name || '_update_policy', table_name);
+      EXECUTE format('CREATE POLICY %I ON public.%I FOR DELETE USING (app_access_check())', table_name || '_delete_policy', table_name);
+    END IF;
+  END LOOP;
+END $$;
+
+-- Chat tables are accessed through the backend API only.
+DO $$
+DECLARE
+  table_name text;
+BEGIN
+  FOREACH table_name IN ARRAY ARRAY['chat_threads', 'chat_participants', 'chat_messages', 'chat_quick_replies']
+  LOOP
+    IF to_regclass(format('public.%I', table_name)) IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', table_name || '_service_role_policy', table_name);
+      EXECUTE format(
+        'CREATE POLICY %I ON public.%I FOR ALL USING (current_setting(''role'', true) = ''service_role'') WITH CHECK (current_setting(''role'', true) = ''service_role'')',
+        table_name || '_service_role_policy',
+        table_name
+      );
+    END IF;
+  END LOOP;
+END $$;
+
 -- Storage: review media uploads
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('review-media', 'review-media', true)
@@ -1260,10 +1312,6 @@ DROP POLICY IF EXISTS review_media_select_policy ON storage.objects;
 DROP POLICY IF EXISTS review_media_insert_policy ON storage.objects;
 DROP POLICY IF EXISTS review_media_update_policy ON storage.objects;
 DROP POLICY IF EXISTS review_media_delete_policy ON storage.objects;
-
-CREATE POLICY review_media_select_policy
-ON storage.objects FOR SELECT
-USING (bucket_id = 'review-media');
 
 CREATE POLICY review_media_insert_policy
 ON storage.objects FOR INSERT
@@ -1369,7 +1417,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO policies (type, title, content) VALUES
   ('return_policy',    'Return & Exchange Policy', '<h2>Return Policy</h2><p>We accept returns within 30 days of purchase. Items must be in original condition.</p>'),
   ('shipping_policy',  'Shipping Policy',          '<h2>Shipping Information</h2><p>Standard 3-5 business days. Shipping cost is calculated at checkout.</p>'),
-  ('privacy_policy',   'Privacy Policy',            '<h2>Privacy Policy</h2><p>We collect and protect your personal information. We do not sell your data.</p>'),
+  ('privacy_policy',   'Privacy Policy',            '<h2>Privacy Policy</h2><p>Customer personal information is collected and protected. We do not sell customer data.</p>'),
   ('terms_of_service', 'Terms of Service',          '<h2>Terms of Service</h2><p>By using our service you agree to these terms.</p>')
 ON CONFLICT (type) DO UPDATE SET title = EXCLUDED.title, content = EXCLUDED.content;
 
@@ -1377,9 +1425,9 @@ ON CONFLICT (type) DO UPDATE SET title = EXCLUDED.title, content = EXCLUDED.cont
 INSERT INTO faqs (question, answer, is_active, display_order)
 SELECT v.question, v.answer, v.is_active, v.display_order
 FROM (VALUES
-  ('What is your return policy?',          'We accept returns within 30 days of purchase for most items. Items must be in original condition with all packaging.', TRUE, 1),
+  ('What is the return policy?',           'We accept returns within 30 days of purchase for most items. Items must be in original condition with all packaging.', TRUE, 1),
   ('How long does shipping take?',         'Standard shipping typically takes 3-5 business days. Expedited shipping options are available at checkout.', TRUE, 2),
-  ('How can I track my order?',            'You can track your order by logging into your account and viewing your order history.', TRUE, 3),
+  ('How can I track my order?',            'Orders can be tracked from order history.', TRUE, 3),
   ('What payment methods do you accept?',  'We accept major cards, online payments, in-store cash, and store credit.', TRUE, 4)
 ) AS v(question, answer, is_active, display_order)
 WHERE NOT EXISTS (SELECT 1 FROM faqs f WHERE f.question = v.question);

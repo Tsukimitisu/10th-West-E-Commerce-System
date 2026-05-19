@@ -8,6 +8,7 @@ import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { logActivity } from '../middleware/activityLogger.js';
 import { mergeGuestCartIntoUserCart, rotateGuestSession } from './cartController.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
@@ -40,6 +41,62 @@ const sanitizeUser = (row) => ({
   last_login: row.last_login,
   email_verified: row.email_verified || false,
 });
+
+const getUserFromSupabaseRestByEmail = async (email) => {
+  const rows = await supabaseRestFetch('users', {
+    select: 'id,name,email,role,phone,avatar,store_credit,is_active,is_deleted,two_factor_enabled,oauth_provider,last_login,email_verified,password_hash',
+    email: `eq.${email}`,
+    limit: 1,
+  });
+
+  return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+};
+
+const getUserFromSupabaseRestById = async (id) => {
+  const rows = await supabaseRestFetch('users', {
+    select: 'id,name,email,role,phone,avatar,store_credit,is_active,two_factor_enabled,oauth_provider,last_login,email_verified,created_at',
+    id: `eq.${id}`,
+    limit: 1,
+  });
+
+  return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+};
+
+const loginWithSupabaseRestFallback = async (req, res) => {
+  const { email, password } = req.validatedData || req.body;
+  const user = await getUserFromSupabaseRestByEmail(email);
+
+  if (!user) {
+    return res.status(401).json({ message: 'Invalid email or password' });
+  }
+
+  if (!user.is_active || user.is_deleted) {
+    return res.status(403).json({ message: 'Your account is currently unavailable. Please contact support.' });
+  }
+
+  const isValid = await bcrypt.compare(password, user.password_hash || '');
+  if (!isValid) {
+    return res.status(401).json({ message: 'Invalid email or password' });
+  }
+
+  if (!user.email_verified) {
+    return res.status(403).json({
+      message: 'Your account is not verified. Please check your email.',
+      requiresVerification: true,
+      email: user.email,
+      code: 'EMAIL_NOT_VERIFIED',
+    });
+  }
+
+  const token = signToken(user);
+  await prepareAuthenticatedSession(req, user, token);
+
+  return res.json({
+    user: sanitizeUser({ ...user, last_login: user.last_login || new Date(), email_verified: true }),
+    token,
+    session_degraded: true,
+  });
+};
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -570,6 +627,10 @@ export const login = async (req, res) => {
   const guestCartSessionId = req.session?.cartSessionId || null;
 
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      return await loginWithSupabaseRestFallback(req, res);
+    }
+
     if (await isAccountLocked(email)) {
       return res.status(429).json({
         message: 'Too many failed login attempts. Please try again later.',
@@ -629,6 +690,13 @@ export const login = async (req, res) => {
     res.json({ user: sanitizeUser({ ...user, last_login: new Date(), email_verified: true }), token });
   } catch (error) {
     console.error('Login error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      try {
+        return await loginWithSupabaseRestFallback(req, res);
+      } catch (fallbackError) {
+        console.error('Login Supabase REST fallback error:', fallbackError);
+      }
+    }
     res.status(500).json({ message: 'Login failed' });
   }
 };
@@ -668,6 +736,12 @@ export const logout = async (req, res) => {
 // ─── GET PROFILE ───────────────────────────────────────────────────
 export const getProfile = async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      const user = await getUserFromSupabaseRestById(req.user.id);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      return res.json(sanitizeUser(user));
+    }
+
     const result = await pool.query(
       `SELECT id, name, email, role, phone, avatar, store_credit, is_active,
               two_factor_enabled, oauth_provider, last_login, email_verified, created_at
@@ -678,6 +752,15 @@ export const getProfile = async (req, res) => {
     res.json(sanitizeUser(result.rows[0]));
   } catch (error) {
     console.error('Get profile error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      try {
+        const user = await getUserFromSupabaseRestById(req.user.id);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        return res.json(sanitizeUser(user));
+      } catch (fallbackError) {
+        console.error('Get profile Supabase REST fallback error:', fallbackError);
+      }
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };

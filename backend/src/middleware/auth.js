@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../config/database.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback } from '../services/supabaseRest.js';
 
 const extractBearerToken = (authHeader) => {
   if (typeof authHeader !== 'string') return null;
@@ -92,6 +93,10 @@ export const authenticateOptional = async (req, res, next) => {
   const token = extractBearerToken(authHeader);
 
   if (!token) {
+    if (shouldUseDatabaseReadFallback()) {
+      return next();
+    }
+
     try {
       const sessionUser = await hydrateUserFromSession(req);
       if (sessionUser) {
@@ -105,6 +110,12 @@ export const authenticateOptional = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (shouldUseDatabaseReadFallback()) {
+      req.user = decoded;
+      return next();
+    }
+
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const sessionResult = await pool.query(
       'SELECT id FROM sessions WHERE token_hash = $1 AND is_active = true AND expires_at > NOW()',
@@ -124,6 +135,11 @@ export const authenticateOptional = async (req, res, next) => {
     }
     next();
   } catch (err) {
+    if (isDatabaseConnectivityError(err)) {
+      try {
+        req.user = jwt.verify(token, process.env.JWT_SECRET);
+      } catch {}
+    }
     next(); // Invalid token, treat as guest
   }
 };
@@ -228,6 +244,11 @@ export const authenticateToken = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Authentication middleware error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      req.user = decoded;
+      return next();
+    }
+
     return res.status(500).json({
       message: 'Authentication check failed. Please try again.',
       code: 'AUTH_VALIDATION_FAILED',

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tag, Plus, Trash2, X, Gift, Percent, DollarSign, Calendar, CheckCircle2, XCircle, AlertCircle, AlertTriangle } from 'lucide-react';
 import { getDiscounts, createDiscount, deleteDiscount } from '../../services/api';
 
@@ -183,10 +183,10 @@ const PromotionsView = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-white">
-                        {d.type === 'percentage' ? `${d.value}%` : `â‚±${parseFloat(d.value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
+                        {d.type === 'percentage' ? `${d.value}%` : `₱${parseFloat(d.value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
                       </td>
                       <td className="px-4 py-3 text-right text-gray-400 hidden md:table-cell">
-                        {d.min_purchase ? `â‚±${parseFloat(d.min_purchase).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '-'}
+                        {d.min_purchase ? `₱${parseFloat(d.min_purchase).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '-'}
                       </td>
                       <td className="px-4 py-3 text-center hidden sm:table-cell">
                         <span className="text-xs text-gray-600">
@@ -271,13 +271,13 @@ const PromotionsView = () => {
                     className={inputClass}
                   >
                     <option value="percentage">Percentage (%)</option>
-                    <option value="fixed">Fixed Amount (â‚±)</option>
+                    <option value="fixed">Fixed Amount (₱)</option>
                   </select>
                 </InputField>
-                <InputField label={`Value ${form.type === 'percentage' ? '(%)' : '(â‚±)'}`} required>
+                <InputField label={`Value ${form.type === 'percentage' ? '(%)' : '(₱)'}`} required>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
-                      {form.type === 'percentage' ? '%' : 'â‚±'}
+                      {form.type === 'percentage' ? '%' : '₱'}
                     </span>
                     <input
                       type="number"
@@ -295,7 +295,7 @@ const PromotionsView = () => {
 
               {/* Min Purchase & Max Uses */}
               <div className="grid grid-cols-2 gap-4">
-                <InputField label="Minimum Purchase (â‚±)">
+                <InputField label="Minimum Purchase (₱)">
                   <input
                     type="number"
                     step="1"

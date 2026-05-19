@@ -120,7 +120,7 @@ const Navbar = ({ user, onLogout }) => {
       .replace(/â€™/g, "'")
       .replace(/â€œ/g, '"')
       .replace(/â€/g, '"')
-      .replace(/â‚±/g, '₱');
+      .replace(/₱/g, '₱');
   };
 
   const getNotificationTypeLabel = (notification) => {

@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { shouldUseDatabaseReadFallback } from '../services/supabaseRest.js';
 
 const rateLimitMap = new Map();
 let hasWarnedDbLimiterFallback = false;
@@ -108,7 +109,7 @@ const rateLimit = (windowMs = 60000, maxRequests = 100, options = {}) => {
       let count = 1;
       let retryAfter = Math.ceil(windowMs / 1000);
 
-      if (storage === 'db') {
+      if (storage === 'db' && !shouldUseDatabaseReadFallback()) {
         try {
           const dbRecord = await getDbRateLimitRecord(key, windowMs);
           count = dbRecord.count;

@@ -7,6 +7,7 @@ import {
   PRODUCT_TYPE_SET,
 } from '../constants/schemaEnums.js';
 import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 import {
   sanitizeHttpUrlOrPath,
   sanitizePlainText,
@@ -716,6 +717,88 @@ const mapProductResponse = (product, { includeInternal = false, relations = null
   return mapped;
 };
 
+const mapSupabaseRestProduct = (product, { includeInternal = false } = {}) => {
+  const categoryName = product.category_name || product.categories?.name || null;
+  return mapProductResponse({
+    ...product,
+    category_name: categoryName,
+    review_rating: product.rating || 0,
+    review_count: product.review_count || 0,
+    total_sold: product.total_sold || 0,
+    product_type: product.product_type || 'single',
+    reserved_stock: product.reserved_stock || 0,
+    damaged_stock: product.damaged_stock || 0,
+    shipping_option: product.shipping_option || 'standard',
+    shipping_weight_kg: product.shipping_weight_kg ?? 0.1,
+  }, {
+    includeInternal,
+    relations: {
+      fitments: [],
+      bundle_components: [],
+    },
+  });
+};
+
+const getSupabaseRestProductsFallback = async ({ queryInput = {}, includeInternal = false, singleId = null } = {}) => {
+  const limit = parseResultLimit(queryInput.limit, null, 80);
+  const params = {
+    select: '*,categories(name)',
+    order: 'id.desc',
+  };
+
+  if (singleId) {
+    params.id = `eq.${singleId}`;
+    params.limit = 1;
+  } else if (limit) {
+    params.limit = limit;
+  }
+
+  if (!includeInternal) {
+    params.status = 'in.(active,out_of_stock)';
+    params.is_deleted = 'eq.false';
+  } else if (queryInput.status) {
+    const cleanStatusFilter = toNullableProductStatus(queryInput.status);
+    if (cleanStatusFilter) {
+      params.status = `eq.${cleanStatusFilter}`;
+    }
+  }
+
+  if (queryInput.category) {
+    params.category_id = `eq.${queryInput.category}`;
+  }
+
+  const searchPhrase = normalizeSearchPhrase(queryInput.search);
+  if (searchPhrase) {
+    const term = searchPhrase.replace(/[(),]/g, ' ');
+    params.or = `(name.ilike.*${term}*,part_number.ilike.*${term}*,description.ilike.*${term}*,brand.ilike.*${term}*,sku.ilike.*${term}*)`;
+  }
+
+  let products = await supabaseRestFetch('products', params);
+  products = Array.isArray(products) ? products : [];
+
+  if (!singleId && (queryInput.brand || queryInput.model || queryInput.year)) {
+    const fitmentParams = {
+      select: 'product_id,brand,model,start_year,end_year',
+    };
+    if (queryInput.brand) fitmentParams.brand = `ilike.${String(queryInput.brand).trim()}`;
+    if (queryInput.model) fitmentParams.model = `ilike.${String(queryInput.model).trim()}`;
+
+    const fitments = await supabaseRestFetch('product_fitments', fitmentParams).catch(() => []);
+    const year = queryInput.year === undefined || queryInput.year === null || queryInput.year === '' ? null : Number(queryInput.year);
+    const matchingIds = new Set((Array.isArray(fitments) ? fitments : [])
+      .filter((fitment) => {
+        if (!Number.isInteger(year)) return true;
+        const start = fitment.start_year === null || fitment.start_year === undefined ? null : Number(fitment.start_year);
+        const end = fitment.end_year === null || fitment.end_year === undefined ? null : Number(fitment.end_year);
+        return (start === null || start <= year) && (end === null || end >= year);
+      })
+      .map((fitment) => Number(fitment.product_id)));
+    products = products.filter((product) => matchingIds.has(Number(product.id)));
+  }
+
+  return products.map((product) => mapSupabaseRestProduct(product, { includeInternal }));
+};
+
 const ensureProductSchema = async () => {
   await pool.query(`
     ALTER TABLE products
@@ -847,6 +930,11 @@ export const getProducts = async (req, res) => {
     const searchPhrase = normalizeSearchPhrase(search);
     const resultLimit = parseResultLimit(limitParam, null, 80);
     const includeUnpublished = canViewUnpublishedProducts(req.user);
+
+    if (shouldUseDatabaseReadFallback()) {
+      const fallbackProducts = await getSupabaseRestProductsFallback({ queryInput, includeInternal: includeUnpublished });
+      return res.json(fallbackProducts);
+    }
     
     let selectClause = `
       SELECT p.*, c.name as category_name,
@@ -986,6 +1074,17 @@ export const getProducts = async (req, res) => {
     })));
   } catch (error) {
     console.error('Get products error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      try {
+        const fallbackProducts = await getSupabaseRestProductsFallback({
+          queryInput: { ...(req.query || {}), ...(req.validatedData || {}) },
+          includeInternal: canViewUnpublishedProducts(req.user),
+        });
+        return res.json(fallbackProducts);
+      } catch (fallbackError) {
+        console.error('Get products Supabase REST fallback error:', fallbackError);
+      }
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -998,6 +1097,14 @@ export const getTopSellers = async (req, res) => {
 
     const parsedLimit = Number.parseInt(String(limit), 10);
     const safeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 8;
+
+    if (shouldUseDatabaseReadFallback()) {
+      const fallbackProducts = await getSupabaseRestProductsFallback({
+        queryInput: { limit: safeLimit },
+        includeInternal: includeUnpublished,
+      });
+      return res.json(fallbackProducts.slice(0, safeLimit));
+    }
 
     const params = [safeLimit];
     let whereClause = `
@@ -1060,6 +1167,20 @@ export const getTopSellers = async (req, res) => {
     })));
   } catch (error) {
     console.error('Get top sellers error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      try {
+        const { limit = 8 } = req.validatedData || req.query;
+        const parsedLimit = Number.parseInt(String(limit), 10);
+        const safeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 8;
+        const fallbackProducts = await getSupabaseRestProductsFallback({
+          queryInput: { limit: safeLimit },
+          includeInternal: canViewUnpublishedProducts(req.user),
+        });
+        return res.json(fallbackProducts.slice(0, safeLimit));
+      } catch (fallbackError) {
+        console.error('Get top sellers Supabase REST fallback error:', fallbackError);
+      }
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1071,6 +1192,24 @@ export const getProductById = async (req, res) => {
 
     const { id } = req.validatedData || req.params;
     const includeUnpublished = canViewUnpublishedProducts(req.user);
+
+    if (shouldUseDatabaseReadFallback()) {
+      const fallbackProducts = await getSupabaseRestProductsFallback({
+        queryInput: {},
+        includeInternal: includeUnpublished,
+        singleId: id,
+      });
+
+      if (fallbackProducts.length === 0) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+
+      return res.json({
+        ...fallbackProducts[0],
+        variant_options: [],
+        variants: [],
+      });
+    }
     
     const result = await pool.query(
       `SELECT p.*, c.name as category_name,
@@ -1200,6 +1339,28 @@ export const getProductById = async (req, res) => {
     });
   } catch (error) {
     console.error('Get product error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      try {
+        const { id } = req.validatedData || req.params;
+        const fallbackProducts = await getSupabaseRestProductsFallback({
+          queryInput: {},
+          includeInternal: canViewUnpublishedProducts(req.user),
+          singleId: id,
+        });
+
+        if (fallbackProducts.length === 0) {
+          return res.status(404).json({ message: 'Product not found' });
+        }
+
+        return res.json({
+          ...fallbackProducts[0],
+          variant_options: [],
+          variants: [],
+        });
+      } catch (fallbackError) {
+        console.error('Get product Supabase REST fallback error:', fallbackError);
+      }
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };

@@ -338,6 +338,12 @@ export const CartProvider = ({ children }) => {
       
       if (response.ok) {
         const data = await response.json();
+        if (data?.degraded || !Array.isArray(data?.items)) {
+          const savedCart = sessionStorage.getItem(getCartKey());
+          setItems(savedCart ? JSON.parse(savedCart) : []);
+          setInitialized(true);
+          return false;
+        }
         const mappedItems = mapCartItemsFromBackend(data.items || []);
         const stableItems = orderCartItems(mappedItems);
         setItems(stableItems);
