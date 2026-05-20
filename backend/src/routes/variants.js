@@ -1,6 +1,7 @@
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 const router = express.Router();
 
@@ -363,6 +364,32 @@ const ensureVariantSchemaReady = ensureVariantSchema().catch((error) => {
 });
 
 const fetchProductVariantContext = async (productId) => {
+  if (shouldUseDatabaseReadFallback()) {
+    const products = await supabaseRestFetch('products', {
+      select: 'id,price,variant_options',
+      id: `eq.${productId}`,
+      limit: 1,
+    });
+
+    if (!Array.isArray(products) || products.length === 0) {
+      return null;
+    }
+
+    const rows = await supabaseRestFetch('product_variants', {
+      select: 'id,product_id,variant_type,variant_value,price_adjustment,price,stock_quantity,sku,image_url,option_combination,combination_key,created_at',
+      product_id: `eq.${productId}`,
+      order: 'created_at.asc,id.asc',
+    }).catch(() => []);
+
+    return {
+      product: {
+        ...products[0],
+        variant_options: products[0]?.variant_options || [],
+      },
+      rows: Array.isArray(rows) ? rows : [],
+    };
+  }
+
   const productResult = await pool.query(
     `SELECT id, price, COALESCE(variant_options, '[]'::jsonb) AS variant_options
      FROM products
@@ -422,6 +449,13 @@ router.get('/product/:productId', async (req, res) => {
       variants,
     });
   } catch (error) {
+    if (isDatabaseConnectivityError(error)) {
+      return res.json({
+        product_id: Number.parseInt(req.params.productId, 10),
+        options: [],
+        variants: [],
+      });
+    }
     res.status(500).json({ message: error.message });
   }
 });

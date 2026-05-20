@@ -1,7 +1,43 @@
 import pool from '../config/database.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 export const getWishlist = async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      const wishlistRows = await supabaseRestFetch('wishlists', {
+        select: 'id,user_id,product_id,created_at',
+        user_id: `eq.${req.user.id}`,
+        order: 'created_at.desc',
+      });
+
+      const rows = Array.isArray(wishlistRows) ? wishlistRows : [];
+      if (rows.length === 0) return res.json([]);
+
+      const productIds = rows
+        .map((row) => Number(row.product_id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+
+      const products = productIds.length > 0
+        ? await supabaseRestFetch('products', {
+            select: '*,categories(name)',
+            id: `in.(${productIds.join(',')})`,
+          }).catch(() => [])
+        : [];
+      const productById = new Map((Array.isArray(products) ? products : []).map((product) => [Number(product.id), product]));
+
+      return res.json(rows.map((row) => {
+        const product = productById.get(Number(row.product_id)) || {};
+        return {
+          wishlist_id: row.id,
+          user_id: row.user_id,
+          product_id: row.product_id,
+          created_at: row.created_at,
+          ...product,
+          category_name: product.categories?.name || product.category_name || null,
+        };
+      }));
+    }
+
     const result = await pool.query(`
       SELECT w.id as wishlist_id, w.user_id, w.product_id, w.created_at,
              p.*, 
@@ -15,6 +51,9 @@ export const getWishlist = async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Get wishlist error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json([]);
+    }
     res.status(500).json({ message: 'Failed to to get wishlist' });
   }
 };

@@ -3,8 +3,64 @@ import bcrypt from 'bcryptjs';
 import pool from '../config/database.js';
 import { USER_ROLES } from '../constants/schemaEnums.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 const router = express.Router();
+
+// Public settings reads are used by storefront pages.
+router.get('/settings', async (req, res) => {
+  try {
+    const { category } = req.query;
+    if (shouldUseDatabaseReadFallback()) {
+      const params = {
+        select: '*',
+        order: 'category.asc,key.asc',
+      };
+      if (category) {
+        params.category = `eq.${category}`;
+        params.order = 'key.asc';
+      }
+      const settings = await supabaseRestFetch('system_settings', params);
+      return res.json(Array.isArray(settings) ? settings : []);
+    }
+
+    let result;
+    if (category) {
+      result = await pool.query('SELECT * FROM system_settings WHERE category = $1 ORDER BY key', [category]);
+    } else {
+      result = await pool.query('SELECT * FROM system_settings ORDER BY category, key');
+    }
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get settings error:', err);
+    if (isDatabaseConnectivityError(err)) {
+      return res.json([]);
+    }
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.get('/settings/:category', async (req, res) => {
+  try {
+    if (shouldUseDatabaseReadFallback()) {
+      const settings = await supabaseRestFetch('system_settings', {
+        select: '*',
+        category: `eq.${req.params.category}`,
+        order: 'key.asc',
+      });
+      return res.json(Array.isArray(settings) ? settings : []);
+    }
+
+    const result = await pool.query('SELECT * FROM system_settings WHERE category = $1 ORDER BY key', [req.params.category]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get settings by category error:', err);
+    if (isDatabaseConnectivityError(err)) {
+      return res.json([]);
+    }
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // All admin/system routes require super_admin only
 router.use(authenticateToken, requireRole('super_admin'));

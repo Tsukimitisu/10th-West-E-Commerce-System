@@ -1,6 +1,7 @@
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 const router = express.Router();
 
@@ -21,6 +22,18 @@ const toBoolean = (value, fallback = false) => {
 };
 
 const getAnnouncementsEnabled = async () => {
+  if (shouldUseDatabaseReadFallback()) {
+    const settings = await supabaseRestFetch('system_settings', {
+      select: 'value',
+      category: `eq.${SETTINGS_CATEGORY}`,
+      key: `eq.${SETTINGS_KEY}`,
+      limit: 1,
+    });
+
+    if (!Array.isArray(settings) || settings.length === 0) return true;
+    return toBoolean(settings[0]?.value, true);
+  }
+
   const result = await pool.query(
     'SELECT value FROM system_settings WHERE category = $1 AND key = $2 LIMIT 1',
     [SETTINGS_CATEGORY, SETTINGS_KEY],
@@ -52,6 +65,19 @@ router.get('/', async (req, res) => {
     const enabled = await getAnnouncementsEnabled();
     if (!enabled) return res.json([]);
 
+    if (shouldUseDatabaseReadFallback()) {
+      const announcements = await supabaseRestFetch('announcements', {
+        select: '*',
+        is_published: 'eq.true',
+      });
+
+      return res.json((Array.isArray(announcements) ? announcements : []).sort((a, b) => {
+        const left = new Date(a?.published_at || a?.created_at || 0).getTime();
+        const right = new Date(b?.published_at || b?.created_at || 0).getTime();
+        return right - left;
+      }));
+    }
+
     const result = await pool.query(
       `SELECT * FROM announcements
        WHERE is_published = true
@@ -60,6 +86,9 @@ router.get('/', async (req, res) => {
 
     res.json(result.rows);
   } catch (error) {
+    if (isDatabaseConnectivityError(error)) {
+      return res.json([]);
+    }
     res.status(500).json({ message: error.message });
   }
 });

@@ -1,18 +1,32 @@
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 const router = express.Router();
 
 // Get user notifications
 router.get('/', authenticateToken, async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      const notifications = await supabaseRestFetch('notifications', {
+        select: '*',
+        user_id: `eq.${req.user.id}`,
+        order: 'created_at.desc',
+        limit: 50,
+      });
+      return res.json(Array.isArray(notifications) ? notifications : []);
+    }
+
     const result = await pool.query(
       'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
       [req.user.id]
     );
     res.json(result.rows);
   } catch (error) {
+    if (isDatabaseConnectivityError(error)) {
+      return res.json([]);
+    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -20,12 +34,24 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get unread count
 router.get('/unread-count', authenticateToken, async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      const result = await supabaseRestFetch('notifications', {
+        select: 'id',
+        user_id: `eq.${req.user.id}`,
+        is_read: 'eq.false',
+      });
+      return res.json({ count: Array.isArray(result) ? result.length : 0 });
+    }
+
     const result = await pool.query(
       'SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false',
       [req.user.id]
     );
     res.json({ count: parseInt(result.rows[0].count) });
   } catch (error) {
+    if (isDatabaseConnectivityError(error)) {
+      return res.json({ count: 0 });
+    }
     res.status(500).json({ message: error.message });
   }
 });
