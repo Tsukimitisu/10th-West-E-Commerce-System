@@ -4,7 +4,7 @@ const PRODUCT_SHIPPING_OPTIONS = ['standard', 'express'];
 const ORDER_STATUSES = ['pending', 'paid', 'preparing', 'shipped', 'delivered', 'completed', 'cancelled'];
 const ORDER_SOURCES = ['online', 'pos'];
 const ORDER_PAYMENT_METHODS = ['cash', 'card', 'cod', 'online', 'stripe', 'gcash', 'maya', 'bank_transfer'];
-const ORDER_SHIPPING_METHODS = ['standard', 'express', 'pickup'];
+const ORDER_SHIPPING_METHODS = ['standard', 'express', 'pickup', 'jnt'];
 const RETURN_STATUSES = ['pending', 'approved', 'rejected', 'refunded', 'exchanged'];
 const RETURN_TYPES = ['online', 'in-store'];
 const REFUND_METHODS = ['original', 'store_credit'];
@@ -132,6 +132,7 @@ async function normalizeData(knex) {
       WHEN lower(btrim(shipping_method)) IN ('standard') THEN 'standard'
       WHEN lower(btrim(shipping_method)) IN ('express') THEN 'express'
       WHEN lower(btrim(shipping_method)) IN ('pickup', 'pick_up', 'pick-up') THEN 'pickup'
+      WHEN lower(btrim(shipping_method)) IN ('jnt', 'j&t', 'j and t', 'j&t express', 'jnt express') THEN 'jnt'
       ELSE 'standard'
     END;
 

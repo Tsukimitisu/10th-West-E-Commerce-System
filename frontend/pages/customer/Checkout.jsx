@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { getAddresses, createOrder, createPaymentIntent, getProductById, validateDiscountCode } from '../../services/api';
+import { getAddresses, createGcashCheckout, getProductById, validateDiscountCode } from '../../services/api';
 import AddressDropdowns from '../../components/AddressDropdowns';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
@@ -12,7 +12,6 @@ const CHECKOUT_TERMS_SESSION_KEY = 'checkoutTermsAccepted';
 const CHECKOUT_VAT_RATE = 0.12;
 const CHECKOUT_FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
 const CHECKOUT_STANDARD_SHIPPING_FEE = 150;
-const CHECKOUT_EXPRESS_SHIPPING_FEE = 300;
 
 const toFiniteNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -32,7 +31,6 @@ const Checkout = () => {
     discountAmount: cartDiscountAmount,
     applyDiscount: applyCartDiscount,
     removeDiscount: removeCartDiscount,
-    clearItemsByIds,
     updateQuantity,
     persistCheckoutSelection,
     getCheckoutSelection,
@@ -207,8 +205,8 @@ const Checkout = () => {
   const [promoError, setPromoError] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
-  const [shippingMethod, setShippingMethod] = useState('standard');
-  const [paymentMethod, setPaymentMethod] = useState('card');
+  const [shippingMethod] = useState('jnt');
+  const [paymentMethod] = useState('gcash');
   const [agreeTerms, setAgreeTerms] = useState(() => {
     try {
       const storedAgreement = sessionStorage.getItem(CHECKOUT_TERMS_SESSION_KEY);
@@ -325,13 +323,9 @@ const Checkout = () => {
     }).catch(() => {});
   }, []);
 
-  const shippingCost = shippingMethod === 'pickup'
+  const shippingCost = subtotal >= CHECKOUT_FREE_STANDARD_SHIPPING_THRESHOLD
     ? 0
-    : shippingMethod === 'express'
-      ? CHECKOUT_EXPRESS_SHIPPING_FEE
-      : subtotal >= CHECKOUT_FREE_STANDARD_SHIPPING_THRESHOLD
-        ? 0
-        : CHECKOUT_STANDARD_SHIPPING_FEE;
+    : CHECKOUT_STANDARD_SHIPPING_FEE;
   const vatBase = roundCurrency(Math.max(0, total + shippingCost));
   const vatAmount = roundCurrency(vatBase * CHECKOUT_VAT_RATE);
   const grandTotal = roundCurrency(vatBase + vatAmount);
@@ -511,16 +505,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         address_string: shippingAddress,
       };
 
-      let paymentIntentId = null;
-      if (paymentMethod === 'card') {
-        const paymentIntent = await createPaymentIntent(Math.round(grandTotal), items.map((i) => ({
-          product_id: i.productId,
-          quantity: Math.max(1, Math.trunc(toFiniteNumber(i.quantity, 1)))
-        })), 'php');
-        paymentIntentId = paymentIntent?.payment_intent_id || null;
-      }
-
-      const orderData = {
+      const checkoutData = {
         user_id: u?.id,
         items: items.map((i) => ({
           productId: i.productId,
@@ -535,7 +520,6 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         shipping_lng: shippingLng,
         shipping_method: shippingMethod,
         total_amount: grandTotal,
-        payment_intent_id: paymentIntentId,
         tax_amount: vatAmount,
         payment_method: paymentMethod,
         guest_info: !u ? { name: form.name, email: form.email } : undefined,
@@ -543,15 +527,18 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         promo_code_used: activeDiscount?.code,
       };
 
-      const order = await createOrder(orderData);
+      const checkout = await createGcashCheckout(checkoutData);
       if (!isBuyNow) {
-        await clearItemsByIds(checkoutItemIds);
         clearCheckoutSelection();
       } else {
         sessionStorage.removeItem(BUY_NOW_SESSION_KEY);
         clearCheckoutSelection();
       }
-      navigate(`/order-confirmation/${order.id}`);
+      if (checkout?.checkout_url) {
+        window.location.assign(checkout.checkout_url);
+      } else {
+        navigate(`/payment-result?order=${checkout?.order_id || ''}&status=pending`);
+      }
     } catch (err) {
       setError(err.message || 'Something went wrong');
     } finally {
@@ -765,75 +752,31 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
               </Section>
 
               <Section title="Shipping Method" icon={<Truck size={18} />}>
-                <div className="space-y-2">
-                  {[
-                    { id: 'standard', label: 'Standard Shipping', desc: '3-5 business days', price: subtotal >= CHECKOUT_FREE_STANDARD_SHIPPING_THRESHOLD ? 'Free' : `PHP ${CHECKOUT_STANDARD_SHIPPING_FEE.toFixed(2)}` },
-                    { id: 'express', label: 'Express Shipping', desc: '1-2 business days', price: 'PHP 300.00' },
-                    { id: 'pickup', label: 'Store Pickup', desc: 'Pick up at our store', price: 'Free' },
-                  ].map((method) => (
-                    <label key={method.id} className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-colors ${shippingMethod === method.id ? 'border-red-500 bg-red-500/10' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                      <div className="flex items-center gap-3">
-                        <input type="radio" name="shipping" checked={shippingMethod === method.id} onChange={() => setShippingMethod(method.id)} className="text-red-500 focus:ring-red-500" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{method.label}</p>
-                          <p className="text-xs text-gray-500">{method.desc}</p>
-                        </div>
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <Truck size={18} className="text-red-600" />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">J&T Express Delivery</p>
+                        <p className="text-xs text-gray-600">All online orders ship through J&T with waybill and tracking updates.</p>
                       </div>
-                      <span className={`text-sm font-medium ${method.price === 'Free' ? 'text-green-600' : 'text-gray-900'}`}>{method.price}</span>
-                    </label>
-                  ))}
+                    </div>
+                    <span className={`text-sm font-semibold ${shippingCost === 0 ? 'text-green-600' : 'text-gray-900'}`}>
+                      {shippingCost === 0 ? 'Free' : formatPrice(shippingCost)}
+                    </span>
+                  </div>
                 </div>
               </Section>
 
               <Section title="Payment Method" icon={<CreditCard size={18} />}>
-                <div className="space-y-2 mb-4">
-                  {[
-                    { id: 'card', label: 'Credit/Debit Card', desc: 'Visa, Mastercard' },
-                    { id: 'gcash', label: 'GCash', desc: 'Pay via GCash e-wallet' },
-                    { id: 'bank_transfer', label: 'Bank Transfer', desc: 'BDO, BPI, UnionBank, etc.' },
-                    { id: 'cod', label: 'Cash on Delivery', desc: 'Pay when you receive' },
-                  ].map((method) => (
-                    <label key={method.id} className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${paymentMethod === method.id ? 'border-red-500 bg-red-500/10' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                      <input type="radio" name="payment" checked={paymentMethod === method.id} onChange={() => setPaymentMethod(method.id)} className="text-red-500 focus:ring-red-500" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{method.label}</p>
-                        <p className="text-xs text-gray-500">{method.desc}</p>
-                      </div>
-                    </label>
-                  ))}
+                <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield size={16} className="text-blue-700" />
+                    <p className="text-sm font-semibold text-blue-800">GCash via PayMongo</p>
+                  </div>
+                  <p className="text-xs text-blue-700 mb-3">After placing your order, you will be redirected to PayMongo to complete secure GCash payment. Your items are reserved while payment is pending.</p>
+                  <Input label="GCash Mobile Number" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: digitsOnly(v) }))} inputMode="numeric" pattern="[0-9]*" placeholder="09XX XXX XXXX" />
                 </div>
-
-                {paymentMethod === 'card' && (
-                  <div className="p-4 bg-gray-50/80 rounded-xl border border-slate-200">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Shield size={16} className="text-green-600" />
-                      <p className="text-sm font-medium text-gray-700">Secure Card Payment via Stripe</p>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-3">
-                      Your card details are collected and processed securely by Stripe. Card numbers never touch our servers - fully PCI-DSS compliant.
-                    </p>
-                    <div className="bg-white border border-slate-200 rounded-lg p-4 text-center text-sm text-gray-500" id="stripe-card-element">
-                      <CreditCard size={24} className="mx-auto mb-2 text-gray-600" />
-                      Stripe Card Element loads here
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-2 text-center">Protected by Stripe - 256-bit SSL encryption</p>
-                  </div>
-                )}
-
-                {paymentMethod === 'gcash' && (
-                  <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-                    <p className="text-sm font-medium text-blue-700 mb-2">GCash Payment</p>
-                    <p className="text-xs text-blue-600 mb-3">You will receive payment instructions after placing your order. Please send payment to our GCash number and upload your proof of payment.</p>
-                    <Input label="GCash Number" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: digitsOnly(v) }))} inputMode="numeric" pattern="[0-9]*" placeholder="09XX XXX XXXX" />
-                  </div>
-                )}
-
-                {paymentMethod === 'bank_transfer' && (
-                  <div className="p-4 bg-green-50 rounded-xl border border-green-200">
-                    <p className="text-sm font-medium text-green-700 mb-2">Bank Transfer</p>
-                    <p className="text-xs text-green-600 mb-3">After placing your order, bank account details for payment will be emailed to you along with your order confirmation. Your order will be processed once payment is confirmed.</p>
-                  </div>
-                )}
               </Section>
             </div>
 
@@ -1002,9 +945,9 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                   className="w-full mt-4 py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
                 >
                   {processing ? (
-                    <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing...</span>
+                    <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Redirecting to GCash...</span>
                   ) : (
-                    <span className="flex items-center gap-2"><Shield size={16} /> Place Order - {formatPrice(grandTotal)}</span>
+                    <span className="flex items-center gap-2"><Shield size={16} /> Pay with GCash - {formatPrice(grandTotal)}</span>
                   )}
                 </button>
               </div>

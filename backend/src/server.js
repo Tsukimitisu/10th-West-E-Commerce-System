@@ -19,6 +19,7 @@ import categoryRoutes from './routes/categories.js';
 import cartRoutes from './routes/cart.js';
 import orderRoutes from './routes/orders.js';
 import checkoutRoutes from './routes/checkout.js';
+import paymentRoutes from './routes/payments.js';
 import emailRoutes from './routes/email.js';
 import inventoryRoutes from './routes/inventory.js';
 import reportsRoutes from './routes/reports.js';
@@ -214,7 +215,13 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
   fallthrough: true,
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
 }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    if (String(req.originalUrl || '').startsWith('/api/payments/paymongo/webhook')) {
+      req.rawBody = Buffer.from(buf);
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
   ...(sessionStore ? { store: sessionStore } : {}),
@@ -266,6 +273,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/checkout', checkoutRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/reports', reportsRoutes);

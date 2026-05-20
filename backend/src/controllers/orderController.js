@@ -6,6 +6,7 @@ import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy
 import { buildOrderStatusMessage, createNotification as createUserNotification, ensureNotificationColumns } from '../utils/notifications.js';
 import { validatePhilippineAddress } from '../services/psgc.js';
 import { createJntWaybillForOrder, ensureJntOrderColumns, getJntWaybill, normalizeWaybillStatus } from '../services/jntShipments.js';
+import { ensurePaymentOrderColumns } from './paymentController.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const STAFF_ROLES = STAFF_ROLE_SET;
@@ -58,6 +59,9 @@ const ensureOrderWorkflowColumns = async () => {
   });
   await ensureJntOrderColumns(pool).catch((error) => {
     console.error('Failed to ensure J&T order columns:', error);
+  });
+  await ensurePaymentOrderColumns(pool).catch((error) => {
+    console.error('Failed to ensure payment order columns:', error);
   });
 
   await pool.query(`
@@ -171,6 +175,12 @@ const mapOrderRecord = (order) => ({
   waybill_generated_at: order.waybill_generated_at || null,
   waybill_label_payload: order.waybill_label_payload || null,
   courier_metadata: order.courier_metadata || null,
+  payment_provider: normalizeText(order.payment_provider),
+  payment_status: normalizeText(order.payment_status) || (['paid', 'preparing', 'shipped', 'delivered', 'completed'].includes(String(order.status || '').toLowerCase()) ? 'paid' : 'pending'),
+  payment_reference: normalizeText(order.payment_reference),
+  payment_checkout_url: normalizeText(order.payment_checkout_url),
+  payment_metadata: order.payment_metadata || null,
+  paid_at: order.paid_at || null,
 });
 
 const buildOrderReturnInfo = async (db, order, userId, isStaff) => {

@@ -162,6 +162,13 @@ const createTables = async () => {
         discount_amount DECIMAL(10, 2) DEFAULT 0.00,
         promo_code_used VARCHAR(100),
         payment_intent_id VARCHAR(255),
+        payment_provider VARCHAR(50),
+        payment_status VARCHAR(30) DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'failed', 'expired', 'refunded')),
+        payment_reference VARCHAR(255),
+        payment_checkout_url TEXT,
+        payment_metadata JSONB,
+        paid_at TIMESTAMP,
+        payment_expires_at TIMESTAMP,
         tracking_number VARCHAR(255),
         courier VARCHAR(50),
         waybill_number VARCHAR(100),
@@ -635,7 +642,7 @@ const createTables = async () => {
         ('shipping', 'enable_pickup', 'true'),
         ('payment', 'cash_enabled', 'true'),
         ('payment', 'card_enabled', 'true'),
-        ('payment', 'gcash_enabled', 'false'),
+        ('payment', 'gcash_enabled', 'true'),
         ('payment', 'maya_enabled', 'false'),
         ('payment', 'stripe_pk', ''),
         ('payment', 'stripe_sk', ''),
@@ -823,6 +830,13 @@ const createTables = async () => {
       { name: 'assigned_staff_id', definition: 'INTEGER REFERENCES users(id)' },
       { name: 'tax_amount', definition: 'DECIMAL(10,2) DEFAULT 0' },
       { name: 'shipping_method', definition: "VARCHAR(50) DEFAULT 'standard'" },
+      { name: 'payment_provider', definition: 'VARCHAR(50)' },
+      { name: 'payment_status', definition: "VARCHAR(30) DEFAULT 'pending'" },
+      { name: 'payment_reference', definition: 'VARCHAR(255)' },
+      { name: 'payment_checkout_url', definition: 'TEXT' },
+      { name: 'payment_metadata', definition: 'JSONB' },
+      { name: 'paid_at', definition: 'TIMESTAMP' },
+      { name: 'payment_expires_at', definition: 'TIMESTAMP' },
       { name: 'delivery_notes', definition: 'TEXT' },
       { name: 'estimated_delivery', definition: 'DATE' },
       { name: 'delivered_at', definition: 'TIMESTAMP' },
@@ -844,6 +858,14 @@ const createTables = async () => {
       ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
       ALTER TABLE orders ADD CONSTRAINT orders_status_check
         CHECK (status IN ('pending', 'preparing', 'paid', 'shipped', 'delivered', 'completed', 'cancelled'));
+
+      ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_status_check;
+      ALTER TABLE orders ADD CONSTRAINT orders_payment_status_check
+        CHECK (payment_status IN ('pending', 'paid', 'failed', 'expired', 'refunded'));
+
+      CREATE INDEX IF NOT EXISTS idx_orders_payment_reference ON orders(payment_reference);
+      CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
+      CREATE INDEX IF NOT EXISTS idx_orders_payment_provider ON orders(payment_provider);
     `);
     console.log('✅ Orders status workflow constraint updated');
 

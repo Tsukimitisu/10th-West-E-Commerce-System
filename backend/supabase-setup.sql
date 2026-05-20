@@ -150,6 +150,13 @@ CREATE TABLE IF NOT EXISTS orders (
   discount_amount DECIMAL(10,2) DEFAULT 0.00,
   promo_code_used VARCHAR(100),
   payment_intent_id VARCHAR(255),
+  payment_provider VARCHAR(50),
+  payment_status VARCHAR(30) DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'failed', 'expired', 'refunded')),
+  payment_reference VARCHAR(255),
+  payment_checkout_url TEXT,
+  payment_metadata JSONB,
+  paid_at TIMESTAMP,
+  payment_expires_at TIMESTAMP,
   tracking_number VARCHAR(255),
   courier VARCHAR(50),
   waybill_number VARCHAR(100),
@@ -662,6 +669,19 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier_metadata JSONB;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_staff_id INTEGER REFERENCES users(id);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_amount DECIMAL(10,2) DEFAULT 0;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_method VARCHAR(50) DEFAULT 'standard';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(50);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) DEFAULT 'pending';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(255);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_checkout_url TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_metadata JSONB;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_expires_at TIMESTAMP;
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_status_check;
+ALTER TABLE orders ADD CONSTRAINT orders_payment_status_check
+  CHECK (payment_status IN ('pending', 'paid', 'failed', 'expired', 'refunded'));
+CREATE INDEX IF NOT EXISTS idx_orders_payment_reference ON orders(payment_reference);
+CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
+CREATE INDEX IF NOT EXISTS idx_orders_payment_provider ON orders(payment_provider);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_notes TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS estimated_delivery DATE;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP;
@@ -1462,7 +1482,7 @@ INSERT INTO system_settings (category, key, value) VALUES
   ('shipping', 'enable_pickup',  'true'),
   ('payment',  'cash_enabled',  'true'),
   ('payment',  'card_enabled',  'true'),
-  ('payment',  'gcash_enabled', 'false'),
+  ('payment',  'gcash_enabled', 'true'),
   ('payment',  'maya_enabled',  'false'),
   ('payment',  'stripe_pk',    ''),
   ('payment',  'stripe_sk',    ''),
@@ -1478,9 +1498,10 @@ ON CONFLICT (category, key) DO NOTHING;
 INSERT INTO shipping_rates (method, label, base_fee, min_purchase_free, estimated_days, is_active)
 SELECT v.method, v.label, v.base_fee, v.min_purchase_free, v.estimated_days, v.is_active
 FROM (VALUES
-  ('standard', 'Standard Shipping', 150.00, 3000.00, '3-5 business days', TRUE),
-  ('express',  'Express Shipping',  350.00, NULL,     '1-2 business days', TRUE),
-  ('pickup',   'Store Pickup',      0.00,   NULL,     'Same day',          TRUE)
+  ('standard', 'Standard Shipping', 150.00, 3000.00, '3-5 business days', FALSE),
+  ('express',  'Express Shipping',  350.00, NULL,     '1-2 business days', FALSE),
+  ('pickup',   'Store Pickup',      0.00,   NULL,     'Same day',          FALSE),
+  ('jnt',      'J&T Express',       150.00, 2500.00,  '3-5 business days', TRUE)
 ) AS v(method, label, base_fee, min_purchase_free, estimated_days, is_active)
 WHERE NOT EXISTS (SELECT 1 FROM shipping_rates sr WHERE sr.method = v.method);
 

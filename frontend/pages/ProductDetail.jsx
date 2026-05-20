@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle } from 'lucide-react';
+import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle, Play } from 'lucide-react';
 import { getProductById, getRelatedProducts, getProductReviews, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, createChatThread, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useCart } from '../context/CartContext';
 import { useSocketEvent } from '../context/SocketContext';
@@ -89,6 +89,30 @@ const extractProductImages = (product) => {
 
   const images = Array.from(unique);
   return images.length > 0 ? images : [PRODUCT_IMAGE_FALLBACK];
+};
+
+const extractProductMedia = (product) => {
+  const images = extractProductImages(product);
+  const media = images.map((src, index) => ({
+    type: 'image',
+    src,
+    poster: src,
+    label: `Image ${index + 1}`,
+  }));
+
+  if (product?.video_url) {
+    return [
+      {
+        type: 'video',
+        src: product.video_url,
+        poster: images[0],
+        label: 'Video',
+      },
+      ...media,
+    ];
+  }
+
+  return media;
 };
 
 const setMetaTag = (attribute, key, content) => {
@@ -826,7 +850,7 @@ const ProductDetail = () => {
   const selectedReviewMediaCount = reviewMediaFiles.length;
   const remainingReviewMediaSlots = Math.max(0, REVIEW_MAX_MEDIA_FILES - selectedReviewMediaCount);
 
-  const formatPrice = (p) => `\u20B1${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const formatPrice = (p) => `PHP ${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
   if (loading) {
     return (
@@ -841,7 +865,8 @@ const ProductDetail = () => {
 
   if (!product) return <div className="text-center py-20 text-gray-600">Product not found.</div>;
 
-  const images = extractProductImages(product);
+  const mediaItems = extractProductMedia(product);
+  const selectedMedia = mediaItems[Math.min(selectedImage, mediaItems.length - 1)] || mediaItems[0];
   const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
   const isOutOfStock = maxStock <= 0 || product.status === 'out_of_stock';
   const isBundle = product.product_type === 'bundle';
@@ -885,12 +910,25 @@ const ProductDetail = () => {
       </div>
 
       {/* Product Section */}
-      <div className="max-w-7xl mx-auto px-4 pb-16 pt-4">
+      <div className="max-w-7xl mx-auto px-4 pb-28 pt-4 md:pb-16">
         <div className="grid md:grid-cols-2 gap-8 lg:gap-12 bg-white border border-slate-200/80 rounded-3xl p-5 md:p-8 shadow-[0_20px_55px_-32px_rgba(15,23,42,0.35)]">
           {/* Images */}
           <div className="space-y-4">
             <div className="aspect-square bg-gradient-to-b from-slate-50 to-slate-100 rounded-3xl overflow-hidden zoom-container relative border border-slate-200/90">
-              <img src={images[selectedImage]} alt={product.name} className="w-full h-full object-cover" />
+              {selectedMedia?.type === 'video' ? (
+                <video
+                  src={selectedMedia.src}
+                  poster={selectedMedia.poster}
+                  className="h-full w-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  controls
+                />
+              ) : (
+                <img src={selectedMedia?.src || PRODUCT_IMAGE_FALLBACK} alt={product.name} className="w-full h-full object-cover" />
+              )}
               {hasDiscount && (
                 <span className="absolute top-4 left-4 bg-red-600 text-white text-sm font-bold px-3 py-1.5 rounded-full shadow-sm">
                   -{Math.round((1 - product.sale_price / product.price) * 100)}% OFF
@@ -902,11 +940,20 @@ const ProductDetail = () => {
                 </div>
               )}
             </div>
-            {images.length > 1 && (
+            {mediaItems.length > 1 && (
               <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-                {images.map((img, i) => (
+                {mediaItems.map((media, i) => (
                   <button key={i} onClick={() => setSelectedImage(i)} className={`w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition-colors ${i === selectedImage ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 hover:border-red-200'}`}>
-                    <img src={img} alt="" className="w-full h-full object-cover" />
+                    {media.type === 'video' ? (
+                      <span className="relative block h-full w-full bg-slate-950">
+                        <img src={media.poster || PRODUCT_IMAGE_FALLBACK} alt="" className="h-full w-full object-cover opacity-70" />
+                        <span className="absolute inset-0 grid place-items-center text-white">
+                          <Play size={18} className="fill-white" />
+                        </span>
+                      </span>
+                    ) : (
+                      <img src={media.src} alt="" className="w-full h-full object-cover" />
+                    )}
                   </button>
                 ))}
               </div>
@@ -1141,7 +1188,7 @@ const ProductDetail = () => {
                   <Truck size={18} className="text-slate-700" />
                 </span>
                 <p className="text-xs text-slate-800 font-semibold">Free Shipping</p>
-                <p className="text-[11px] text-slate-500">Orders \u20B12,500+</p>
+                <p className="text-[11px] text-slate-500">Orders PHP 2,500+</p>
               </div>
               <div className="text-center p-2 sm:border-x border-slate-200">
                 <span className="inline-flex w-9 h-9 items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm mb-2">
@@ -1156,6 +1203,22 @@ const ProductDetail = () => {
                 </span>
                 <p className="text-xs text-slate-800 font-semibold">Easy Returns</p>
                 <p className="text-[11px] text-slate-500">7-day return</p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 sm:grid-cols-2">
+              <div className="flex items-start gap-3">
+                <Truck size={18} className="mt-0.5 text-red-600" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">J&T delivery only</p>
+                  <p className="text-xs text-slate-600">Paid online orders are prepared for J&T waybill and tracking.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Shield size={18} className="mt-0.5 text-red-600" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">GCash checkout</p>
+                  <p className="text-xs text-slate-600">Online checkout redirects securely through PayMongo GCash.</p>
+                </div>
               </div>
             </div>
           </div>
@@ -1382,6 +1445,35 @@ const ProductDetail = () => {
             </div>
           </div>
         )}
+      </div>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-3 shadow-[0_-10px_35px_-24px_rgba(15,23,42,0.45)] backdrop-blur md:hidden">
+        <div className="mx-auto grid max-w-xl grid-cols-[52px_52px_minmax(0,1fr)] gap-2">
+          <button
+            type="button"
+            onClick={handleChatSeller}
+            className="grid h-12 place-items-center rounded-xl border border-slate-200 text-slate-700"
+            aria-label="Chat seller"
+          >
+            <MessageCircle size={20} />
+          </button>
+          <button
+            type="button"
+            onClick={handleAddToCart}
+            disabled={isOutOfStock}
+            className="grid h-12 place-items-center rounded-xl bg-slate-900 text-white disabled:bg-slate-300"
+            aria-label="Add to cart"
+          >
+            {addedToCart ? <Check size={19} /> : <ShoppingCart size={19} />}
+          </button>
+          <button
+            type="button"
+            onClick={handleBuyNow}
+            disabled={isOutOfStock}
+            className="h-12 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white disabled:bg-slate-300"
+          >
+            Buy Now
+          </button>
+        </div>
       </div>
     </div>
   );

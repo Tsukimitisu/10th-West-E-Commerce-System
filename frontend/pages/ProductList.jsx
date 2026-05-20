@@ -4,6 +4,7 @@ import { Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide
 import { getProducts, getCategories, getWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
+import ShoppableFeed from '../components/ShoppableFeed';
 
 const tokenizeSearchTerms = (value) => {
   const normalized = String(value || '')
@@ -370,6 +371,12 @@ const ProductList = () => {
             </div>
           </div>
         </div>
+
+        <ShoppableFeed
+          products={filtered.length > 0 ? filtered : products}
+          wishlistedIds={wishlistedIds}
+          onWishlistToggle={handleWishlistToggle}
+        />
 
         <div className="mb-4 bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl px-4 py-3 shadow-lg">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

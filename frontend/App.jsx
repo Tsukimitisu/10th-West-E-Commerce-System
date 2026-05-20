@@ -15,6 +15,7 @@ import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
 import Cart from './pages/customer/Cart';
 import Checkout from './pages/customer/Checkout';
 import OrderConfirmation from './pages/customer/OrderConfirmation';
+import PaymentResult from './pages/customer/PaymentResult';
 import PosTerminal from './pages/staff/PosTerminal';
 import Profile from './pages/customer/Profile';
 import OrderHistory from './pages/customer/OrderHistory';
@@ -27,6 +28,7 @@ import TermsOfService from './pages/Support/TermsOfService';
 import ReturnPolicy from './pages/Support/ReturnPolicy';
 import PrivacyBanner from './components/PrivacyBanner';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
+import FloatingChatButton from './components/FloatingChatButton';
 import RequestReturn from './pages/customer/RequestReturn';
 import MyReturns from './pages/customer/MyReturns';
 import Wishlist from './pages/customer/Wishlist';
@@ -115,6 +117,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                 }
               />
               <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
+              <Route path="/payment-result" element={user ? <PaymentResult /> : <Navigate to="/login" />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/faq" element={<FAQ />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
@@ -135,6 +138,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
         </AnimatePresence>
       </div>
       {!hideChrome && !isSuperAdmin && <Footer />}
+      {!hideChrome && !isSuperAdmin && <FloatingChatButton user={user} />}
       <PrivacyBanner />
     </div>
   );

@@ -54,7 +54,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
     }
   };
 
-  const formatPrice = (p) => `${'\u20B1'}${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const formatPrice = (p) => `PHP ${p.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
   if (view === 'list') {
     return (

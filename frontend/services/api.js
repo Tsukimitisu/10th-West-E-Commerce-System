@@ -2969,6 +2969,26 @@ export const createPaymentIntent = async (amount, items, currency = 'php') => {
   });
 };
 
+export const createGcashCheckout = async (checkoutPayload) => {
+  if (USE_MOCK_DATA) {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const orderId = Math.floor(Math.random() * 100000);
+    return {
+      order_id: orderId,
+      checkout_url: `#/payment-result?order=${orderId}&status=success`,
+      payment_reference: `MOCK-${Date.now()}`,
+      payment_status: 'pending',
+    };
+  }
+
+  return authenticatedFetch(`${API_URL}/payments/gcash/checkout`, {
+    method: 'POST',
+    body: JSON.stringify(checkoutPayload),
+  });
+};
+
+export const getPaymentOrderStatus = async (orderId) => authenticatedFetch(`${API_URL}/payments/orders/${orderId}/status`);
+
 // ==================== DASHBOARD STATS ====================
 
 export const getDashboardStats = async () => {
