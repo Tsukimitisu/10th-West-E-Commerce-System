@@ -623,9 +623,25 @@ export const CartProvider = ({ children }) => {
         }, { includeJson: true });
 
         if (response.ok) {
-          await syncCart();
-            setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
-            return true;
+          const payload = await response.clone().json().catch(() => ({}));
+          if (payload?.degraded) {
+            const fallbackAdded = addToCartLocal(product, requestedQty);
+            if (!fallbackAdded) {
+              setError('Failed to add item to cart');
+            }
+            return fallbackAdded;
+          }
+
+          const synced = await syncCart();
+          if (!synced) {
+            const fallbackAdded = addToCartLocal(product, requestedQty);
+            if (!fallbackAdded) {
+              setError('Failed to add item to cart');
+            }
+            return fallbackAdded;
+          }
+          setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
+          return true;
         } else {
           throw new Error('Failed to add item to cart');
         }
@@ -743,7 +759,9 @@ export const CartProvider = ({ children }) => {
         });
 
         if (response.ok) {
-          await syncCart();
+          const payload = await response.clone().json().catch(() => ({}));
+          const synced = payload?.degraded ? false : await syncCart();
+          if (!synced) removeFromCartLocal(productId);
         } else {
           throw new Error('Failed to remove item');
         }
@@ -827,7 +845,9 @@ export const CartProvider = ({ children }) => {
         }, { includeJson: true });
 
         if (response.ok) {
-          await syncCart();
+          const payload = await response.clone().json().catch(() => ({}));
+          const synced = payload?.degraded ? false : await syncCart();
+          if (!synced) updateQuantityLocal(productId, quantity);
         } else {
           throw new Error('Failed to update quantity');
         }

@@ -95,17 +95,21 @@ The API will run on `http://localhost:5000`
 
 ## Default Users (After Seeding)
 
-**Admin:**
-- Email: admin@10thwest.com
-- Password: admin123
+**Super Admin:**
+- Email: superadmin@10thwest.com
+- Password: Admin@123
 
-**Cashier:**
-- Email: cashier@10thwest.com
-- Password: cashier123
+**Store Owner:**
+- Email: owner@10thwest.com
+- Password: Admin@123
+
+**Store Staff:**
+- Email: staff@10thwest.com
+- Password: Staff@123
 
 **Customer:**
 - Email: customer@10thwest.com
-- Password: customer123
+- Password: Customer@123
 
 ## Project Structure
 

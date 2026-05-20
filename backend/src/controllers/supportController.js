@@ -1,5 +1,11 @@
 import pool from '../config/database.js';
 import nodemailer from 'nodemailer';
+import {
+  isDatabaseConnectivityError,
+  shouldUseDatabaseReadFallback,
+  supabaseRestFetch,
+  supabaseRestRequest,
+} from '../services/supabaseRest.js';
 
 // Create email transporter
 const createTransporter = () => {
@@ -14,6 +20,46 @@ const createTransporter = () => {
   });
 };
 
+const createTicketViaRest = async ({ userId, name, email, subject, message }) => {
+  const rows = await supabaseRestRequest('support_tickets', {
+    method: 'POST',
+    prefer: 'return=representation',
+    body: {
+      user_id: userId,
+      name,
+      email,
+      subject,
+      message,
+      status: 'open',
+    },
+  });
+
+  return Array.isArray(rows) ? rows[0] : rows;
+};
+
+const sendTicketNotification = async (ticket, { name, email, subject, message }) => {
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || '10th West Moto <noreply@10thwest.com>',
+      to: process.env.SUPPORT_EMAIL || process.env.EMAIL_USER,
+      subject: `New Support Ticket #${ticket.id}: ${subject}`,
+      html: `
+        <h2>New Support Ticket</h2>
+        <p><strong>Ticket ID:</strong> ${ticket.id}</p>
+        <p><strong>From:</strong> ${name} (${email})</p>
+        <p><strong>Subject:</strong> ${subject}</p>
+        <p><strong>Message:</strong></p>
+        <p>${message}</p>
+        <hr>
+        <p><small>Submitted: ${new Date(ticket.created_at || Date.now()).toLocaleString()}</small></p>
+      `,
+    });
+  } catch (emailError) {
+    console.error('Failed to send ticket notification email:', emailError);
+  }
+};
+
 // Create support ticket
 export const createTicket = async (req, res) => {
   const { name, email, subject, message } = req.body;
@@ -24,38 +70,21 @@ export const createTicket = async (req, res) => {
 
   try {
     const userId = req.user?.id || null;
+    let ticket = null;
 
-    const result = await pool.query(
-      `INSERT INTO support_tickets (user_id, name, email, subject, message, status)
-       VALUES ($1, $2, $3, $4, $5, 'open')
-       RETURNING *`,
-      [userId, name, email, subject, message]
-    );
-
-    const ticket = result.rows[0];
-
-    // Send email notification to support team
-    try {
-      const transporter = createTransporter();
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || '10th West Moto <noreply@10thwest.com>',
-        to: process.env.SUPPORT_EMAIL || process.env.EMAIL_USER,
-        subject: `New Support Ticket #${ticket.id}: ${subject}`,
-        html: `
-          <h2>New Support Ticket</h2>
-          <p><strong>Ticket ID:</strong> ${ticket.id}</p>
-          <p><strong>From:</strong> ${name} (${email})</p>
-          <p><strong>Subject:</strong> ${subject}</p>
-          <p><strong>Message:</strong></p>
-          <p>${message}</p>
-          <hr>
-          <p><small>Submitted: ${new Date(ticket.created_at).toLocaleString()}</small></p>
-        `
-      });
-    } catch (emailError) {
-      console.error('Failed to send ticket notification email:', emailError);
-      // Don't fail the ticket creation if email fails
+    if (shouldUseDatabaseReadFallback()) {
+      ticket = await createTicketViaRest({ userId, name, email, subject, message });
+    } else {
+      const result = await pool.query(
+        `INSERT INTO support_tickets (user_id, name, email, subject, message, status)
+         VALUES ($1, $2, $3, $4, $5, 'open')
+         RETURNING *`,
+        [userId, name, email, subject, message]
+      );
+      ticket = result.rows[0];
     }
+
+    await sendTicketNotification(ticket, { name, email, subject, message });
 
     res.status(201).json({
       message: 'Support ticket created successfully',
@@ -63,6 +92,20 @@ export const createTicket = async (req, res) => {
     });
   } catch (error) {
     console.error('Create ticket error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      try {
+        const userId = req.user?.id || null;
+        const ticket = await createTicketViaRest({ userId, name, email, subject, message });
+        await sendTicketNotification(ticket, { name, email, subject, message });
+        return res.status(201).json({
+          message: 'Support ticket created successfully',
+          ticket,
+          degraded: true,
+        });
+      } catch (fallbackError) {
+        console.error('Create ticket Supabase REST fallback error:', fallbackError);
+      }
+    }
     res.status(500).json({ message: 'Failed to create support ticket' });
   }
 };
@@ -70,6 +113,15 @@ export const createTicket = async (req, res) => {
 // Get user's tickets
 export const getUserTickets = async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      const tickets = await supabaseRestFetch('support_tickets', {
+        select: '*',
+        user_id: `eq.${req.user.id}`,
+        order: 'created_at.desc',
+      });
+      return res.json(Array.isArray(tickets) ? tickets : []);
+    }
+
     const result = await pool.query(
       `SELECT * FROM support_tickets 
        WHERE user_id = $1 
@@ -80,6 +132,9 @@ export const getUserTickets = async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Get user tickets error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json([]);
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -88,6 +143,15 @@ export const getUserTickets = async (req, res) => {
 export const getAllTickets = async (req, res) => {
   try {
     const { status } = req.query;
+    if (shouldUseDatabaseReadFallback()) {
+      const params = {
+        select: '*',
+        order: 'created_at.desc',
+      };
+      if (status) params.status = `eq.${status}`;
+      const tickets = await supabaseRestFetch('support_tickets', params);
+      return res.json(Array.isArray(tickets) ? tickets : []);
+    }
 
     let query = `
       SELECT st.*, u.name as user_name
@@ -109,6 +173,9 @@ export const getAllTickets = async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Get all tickets error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json([]);
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };

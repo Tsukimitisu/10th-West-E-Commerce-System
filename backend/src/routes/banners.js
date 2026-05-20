@@ -1,17 +1,30 @@
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 const router = express.Router();
 
 // Get active banners (public)
 router.get('/', async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      const banners = await supabaseRestFetch('banners', {
+        select: '*',
+        is_active: 'eq.true',
+        order: 'display_order.asc',
+      });
+      return res.json(Array.isArray(banners) ? banners : []);
+    }
+
     const result = await pool.query(
       'SELECT * FROM banners WHERE is_active = true ORDER BY display_order ASC'
     );
     res.json(result.rows);
   } catch (error) {
+    if (isDatabaseConnectivityError(error)) {
+      return res.json([]);
+    }
     res.status(500).json({ message: error.message });
   }
 });

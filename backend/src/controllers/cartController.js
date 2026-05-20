@@ -342,6 +342,13 @@ export const addToCart = async (req, res) => {
   }
 
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json({
+        degraded: true,
+        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
+      });
+    }
+
     await withCartTransaction(req, async (client, cart) => {
       const productResult = await client.query(
         `SELECT id, stock_quantity
@@ -412,6 +419,12 @@ export const addToCart = async (req, res) => {
       return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Add to cart error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json({
+        degraded: true,
+        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
+      });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -432,6 +445,13 @@ export const updateCartItem = async (req, res) => {
   }
 
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json({
+        degraded: true,
+        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
+      });
+    }
+
     await withCartTransaction(req, async (client, cart) => {
       const itemResult = await client.query(
         `SELECT ci.id, ci.product_id, p.stock_quantity
@@ -472,6 +492,12 @@ export const updateCartItem = async (req, res) => {
       return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Update cart error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json({
+        degraded: true,
+        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
+      });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -485,6 +511,13 @@ export const removeFromCart = async (req, res) => {
   }
 
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json({
+        degraded: true,
+        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
+      });
+    }
+
     await withCartTransaction(req, async (client, cart) => {
       const result = await client.query(
         'DELETE FROM cart_items WHERE id = $1 AND cart_id = $2 RETURNING id',
@@ -506,6 +539,12 @@ export const removeFromCart = async (req, res) => {
       return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Remove from cart error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json({
+        degraded: true,
+        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
+      });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -513,6 +552,13 @@ export const removeFromCart = async (req, res) => {
 // Clear cart
 export const clearCart = async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json({
+        degraded: true,
+        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
+      });
+    }
+
     await withCartTransaction(req, async (client, cart) => {
       await client.query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
       await touchCart(client, cart.id);
@@ -521,6 +567,12 @@ export const clearCart = async (req, res) => {
     res.json({ message: 'Cart cleared successfully' });
   } catch (error) {
     console.error('Clear cart error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json({
+        degraded: true,
+        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
+      });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };

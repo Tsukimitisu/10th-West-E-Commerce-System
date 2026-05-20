@@ -9,13 +9,18 @@ const router = express.Router();
 router.get('/', authenticateToken, async (req, res) => {
   try {
     if (shouldUseDatabaseReadFallback()) {
-      const notifications = await supabaseRestFetch('notifications', {
-        select: '*',
-        user_id: `eq.${req.user.id}`,
-        order: 'created_at.desc',
-        limit: 50,
-      });
-      return res.json(Array.isArray(notifications) ? notifications : []);
+      try {
+        const notifications = await supabaseRestFetch('notifications', {
+          select: '*',
+          user_id: `eq.${req.user.id}`,
+          order: 'created_at.desc',
+          limit: 50,
+        });
+        return res.json(Array.isArray(notifications) ? notifications : []);
+      } catch (fallbackError) {
+        console.error('Notifications Supabase REST fallback error:', fallbackError);
+        return res.json([]);
+      }
     }
 
     const result = await pool.query(
@@ -35,12 +40,17 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/unread-count', authenticateToken, async (req, res) => {
   try {
     if (shouldUseDatabaseReadFallback()) {
-      const result = await supabaseRestFetch('notifications', {
-        select: 'id',
-        user_id: `eq.${req.user.id}`,
-        is_read: 'eq.false',
-      });
-      return res.json({ count: Array.isArray(result) ? result.length : 0 });
+      try {
+        const result = await supabaseRestFetch('notifications', {
+          select: 'id',
+          user_id: `eq.${req.user.id}`,
+          is_read: 'eq.false',
+        });
+        return res.json({ count: Array.isArray(result) ? result.length : 0 });
+      } catch (fallbackError) {
+        console.error('Notification count Supabase REST fallback error:', fallbackError);
+        return res.json({ count: 0 });
+      }
     }
 
     const result = await pool.query(

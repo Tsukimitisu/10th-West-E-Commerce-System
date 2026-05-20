@@ -28,7 +28,6 @@ import TermsOfService from './pages/Support/TermsOfService';
 import ReturnPolicy from './pages/Support/ReturnPolicy';
 import PrivacyBanner from './components/PrivacyBanner';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
-import FloatingChatButton from './components/FloatingChatButton';
 import RequestReturn from './pages/customer/RequestReturn';
 import MyReturns from './pages/customer/MyReturns';
 import Wishlist from './pages/customer/Wishlist';
@@ -138,7 +137,6 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
         </AnimatePresence>
       </div>
       {!hideChrome && !isSuperAdmin && <Footer />}
-      {!hideChrome && !isSuperAdmin && <FloatingChatButton user={user} />}
       <PrivacyBanner />
     </div>
   );
@@ -332,13 +330,15 @@ const App = () => {
         }
       }
 
-      // Validate active token and restore cookie-backed sessions after redirects.
-      try {
-        const profile = await getProfile();
-        if (isMounted) setUser(profile);
-        localStorage.setItem('shopCoreUser', JSON.stringify(profile));
-      } catch {
-        clearLocalSession();
+      // Validate active token after redirects. Skip this for fresh guests to avoid noisy 401s.
+      if (token) {
+        try {
+          const profile = await getProfile();
+          if (isMounted) setUser(profile);
+          localStorage.setItem('shopCoreUser', JSON.stringify(profile));
+        } catch {
+          clearLocalSession();
+        }
       }
 
       const handleAuthChanged = () => {

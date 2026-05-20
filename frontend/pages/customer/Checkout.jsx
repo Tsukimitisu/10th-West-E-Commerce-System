@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield } from 'lucide-react';
+import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield, Wallet } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { getAddresses, createGcashCheckout, getProductById, validateDiscountCode } from '../../services/api';
+import { getAddresses, createGcashCheckout, createOrder, getProductById, validateDiscountCode } from '../../services/api';
 import AddressDropdowns from '../../components/AddressDropdowns';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
@@ -206,7 +206,7 @@ const Checkout = () => {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [shippingMethod] = useState('jnt');
-  const [paymentMethod] = useState('gcash');
+  const [paymentMethod, setPaymentMethod] = useState('cod');
   const [agreeTerms, setAgreeTerms] = useState(() => {
     try {
       const storedAgreement = sessionStorage.getItem(CHECKOUT_TERMS_SESSION_KEY);
@@ -435,7 +435,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
       const u = user ? JSON.parse(user) : null;
 
         const streetWithBarangay = form.barangay ? `${form.street}, ${form.barangay}` : form.street;
-        if (!usingSavedAddress && form.lat && form.lng) {
+        if (!usingSavedAddress && form.lat != null && form.lng != null) {
           const key = `${streetWithBarangay}|${form.city}|${form.state}`;
           const stored = JSON.parse(localStorage.getItem('addressGeo') || '{}');
           stored[key] = { lat: form.lat, lng: form.lng };
@@ -443,7 +443,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         }
           
           const formatAddressParts = (parts) => parts.filter(p => p != null && p !== '').join(', ');
-          const coordLabel = !usingSavedAddress && form.lat && form.lng ? ` (lat:${form.lat}, lng:${form.lng})` : '';
+          const coordLabel = !usingSavedAddress && form.lat != null && form.lng != null ? ` (lat:${form.lat}, lng:${form.lng})` : '';
           let shippingAddress = '';
           if (selectedAddr) {
             const stateZip = [selectedAddr.state, selectedAddr.postal_code].filter(Boolean).join(' ');
@@ -503,6 +503,8 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         barangay_code: usingSavedAddress ? (selectedAddr?.barangay_code || null) : (form.barangay_code || null),
         country: usingSavedAddress ? (selectedAddr?.country || 'Philippines') : 'Philippines',
         address_string: shippingAddress,
+        lat: shippingLat,
+        lng: shippingLng,
       };
 
       const checkoutData = {
@@ -527,15 +529,27 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
         promo_code_used: activeDiscount?.code,
       };
 
-      const checkout = await createGcashCheckout(checkoutData);
+      let checkout = null;
+      if (paymentMethod === 'gcash') {
+        checkout = await createGcashCheckout(checkoutData);
+      } else {
+        const order = await createOrder(checkoutData);
+        checkout = {
+          order_id: order?.id || order?.order_id,
+          payment_status: 'cod',
+        };
+      }
+
       if (!isBuyNow) {
         clearCheckoutSelection();
       } else {
         sessionStorage.removeItem(BUY_NOW_SESSION_KEY);
         clearCheckoutSelection();
       }
-      if (checkout?.checkout_url) {
+      if (paymentMethod === 'gcash' && checkout?.checkout_url) {
         window.location.assign(checkout.checkout_url);
+      } else if (checkout?.order_id) {
+        navigate(`/order-confirmation/${checkout.order_id}`);
       } else {
         navigate(`/payment-result?order=${checkout?.order_id || ''}&status=pending`);
       }
@@ -660,8 +674,13 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                       barangay={addresses.find((a) => a.id === selectedAddress)?.barangay || ''}
                       city={addresses.find((a) => a.id === selectedAddress)?.city}
                       state={addresses.find((a) => a.id === selectedAddress)?.state}
-                      onChange={() => {}}
-                      disabled
+                      lat={addresses.find((a) => a.id === selectedAddress)?.lat}
+                      lng={addresses.find((a) => a.id === selectedAddress)?.lng}
+                      onChange={({ lat, lng }) => {
+                        setAddresses((current) => current.map((addr) => (
+                          addr.id === selectedAddress ? { ...addr, lat, lng } : addr
+                        )));
+                      }}
                     />
                   </div>
                 )}
@@ -769,14 +788,36 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
               </Section>
 
               <Section title="Payment Method" icon={<CreditCard size={18} />}>
-                <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Shield size={16} className="text-blue-700" />
-                    <p className="text-sm font-semibold text-blue-800">GCash via PayMongo</p>
-                  </div>
-                  <p className="text-xs text-blue-700 mb-3">After placing your order, you will be redirected to PayMongo to complete secure GCash payment. Your items are reserved while payment is pending.</p>
-                  <Input label="GCash Mobile Number" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: digitsOnly(v) }))} inputMode="numeric" pattern="[0-9]*" placeholder="09XX XXX XXXX" />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('cod')}
+                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'cod' ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                  >
+                    <Wallet size={18} className={paymentMethod === 'cod' ? 'text-red-600' : 'text-slate-500'} />
+                    <span>
+                      <span className="block text-sm font-semibold text-gray-900">Cash on Delivery</span>
+                      <span className="block text-xs text-gray-600">Pay the rider when your J&T delivery arrives.</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('gcash')}
+                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'gcash' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                  >
+                    <Shield size={18} className={paymentMethod === 'gcash' ? 'text-blue-700' : 'text-slate-500'} />
+                    <span>
+                      <span className="block text-sm font-semibold text-gray-900">GCash via PayMongo</span>
+                      <span className="block text-xs text-gray-600">Redirect to secure GCash checkout.</span>
+                    </span>
+                  </button>
                 </div>
+                {paymentMethod === 'gcash' && (
+                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                    <p className="mb-3 text-xs text-blue-700">After placing your order, you will be redirected to PayMongo to complete secure GCash payment.</p>
+                    <Input label="GCash Mobile Number" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: digitsOnly(v) }))} inputMode="numeric" pattern="[0-9]*" placeholder="09XX XXX XXXX" />
+                  </div>
+                )}
               </Section>
             </div>
 
@@ -945,9 +986,12 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                   className="w-full mt-4 py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
                 >
                   {processing ? (
-                    <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Redirecting to GCash...</span>
+                    <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {paymentMethod === 'gcash' ? 'Redirecting to GCash...' : 'Placing order...'}</span>
                   ) : (
-                    <span className="flex items-center gap-2"><Shield size={16} /> Pay with GCash - {formatPrice(grandTotal)}</span>
+                    <span className="flex items-center gap-2">
+                      {paymentMethod === 'gcash' ? <Shield size={16} /> : <Wallet size={16} />}
+                      {paymentMethod === 'gcash' ? 'Pay with GCash' : 'Place COD Order'} - {formatPrice(grandTotal)}
+                    </span>
                   )}
                 </button>
               </div>

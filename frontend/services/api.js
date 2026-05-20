@@ -2660,6 +2660,9 @@ export const createOrder = async (order) => {
   const items = (order.items || []).map(item => ({
     product_id: (item).productId ?? (item).product_id,
     quantity: (item).quantity ?? (item).quantity,
+    price: (item).price ?? (item).product_price ?? (item).product?.price,
+    product_price: (item).product_price ?? (item).price ?? (item).product?.price,
+    product_name: (item).product_name ?? (item).name ?? (item).product?.name,
   }));
 
   const payload = {

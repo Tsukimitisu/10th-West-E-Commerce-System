@@ -7,6 +7,7 @@ import { buildOrderStatusMessage, createNotification as createUserNotification, 
 import { validatePhilippineAddress } from '../services/psgc.js';
 import { createJntWaybillForOrder, ensureJntOrderColumns, getJntWaybill, normalizeWaybillStatus } from '../services/jntShipments.js';
 import { ensurePaymentOrderColumns } from './paymentController.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const STAFF_ROLES = STAFF_ROLE_SET;
@@ -27,6 +28,12 @@ const STAFF_STATUS_TRANSITIONS = {
 };
 const DEFAULT_ORDER_LIMIT = 20;
 const MAX_ORDER_LIMIT = 100;
+const memoryOrderStore = {
+  nextOrderId: -1001,
+  nextItemId: -1,
+  orders: [],
+  items: [],
+};
 
 const ORDER_NOTIFICATION_DETAIL_QUERY = `
   SELECT o.id, o.user_id, o.status, o.order_number, o.tracking_number,
@@ -183,6 +190,99 @@ const mapOrderRecord = (order) => ({
   paid_at: order.paid_at || null,
 });
 
+const getMemoryOrderBundle = (id) => {
+  const order = memoryOrderStore.orders.find((item) => Number(item.id) === Number(id));
+  if (!order) return null;
+  const items = memoryOrderStore.items
+    .filter((item) => Number(item.order_id) === Number(order.id))
+    .sort((a, b) => Number(a.id) - Number(b.id));
+  return { order, items };
+};
+
+const mapMemoryOrderBundle = ({ order, items }) => ({
+  ...mapOrderRecord(order),
+  return_eligible: false,
+  return_eligibility_message: '',
+  return_request: null,
+  items: items.map((item) => ({
+    ...item,
+    product_price: roundMoney(item.product_price),
+    price: roundMoney(item.product_price),
+  })),
+});
+
+const createMemoryOrder = (req) => {
+  const body = req.body || {};
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+  const normalizedItems = rawItems.map((item) => ({
+    product_id: Number(item.product_id ?? item.productId),
+    quantity: Math.max(1, Math.trunc(toFiniteNumber(item.quantity, 1))),
+    product_name: normalizeText(item.product_name ?? item.name ?? item.product?.name) || `Product #${item.product_id ?? item.productId}`,
+    product_price: roundMoney(item.product_price ?? item.price ?? item.product?.price ?? 0),
+  })).filter((item) => Number.isInteger(item.product_id) && item.product_id > 0);
+
+  if (normalizedItems.length === 0) {
+    return { status: 400, body: { message: 'Order must contain at least one item' } };
+  }
+
+  if (!normalizeText(body.shipping_address)) {
+    return { status: 400, body: { message: 'Shipping address is required' } };
+  }
+
+  const paymentMethod = normalizeText(body.payment_method) || 'cod';
+  const timestamp = new Date().toISOString();
+  const order = {
+    id: memoryOrderStore.nextOrderId--,
+    order_number: null,
+    user_id: req.user?.id || null,
+    guest_name: body.guest_info?.name || null,
+    guest_email: body.guest_info?.email || null,
+    total_amount: roundMoney(body.total_amount || 0),
+    shipping_address: normalizeText(body.shipping_address),
+    shipping_lat: body.shipping_lat ?? null,
+    shipping_lng: body.shipping_lng ?? null,
+    payment_intent_id: normalizeText(body.payment_intent_id),
+    status: paymentMethod === 'cod' ? 'pending' : 'paid',
+    discount_amount: roundMoney(body.discount_amount || 0),
+    tax_amount: roundMoney(body.tax_amount || 0),
+    shipping_method: resolveShippingMethod(body.shipping_method),
+    promo_code_used: normalizeText(body.promo_code_used),
+    payment_method: paymentMethod,
+    source: normalizeText(body.source) || 'online',
+    shipping_address_snapshot: buildShippingAddressSnapshot(body.shipping_address_snapshot || {}, body.shipping_address),
+    courier: paymentMethod === 'cod' ? 'jnt' : null,
+    waybill_status: 'not_requested',
+    payment_provider: paymentMethod === 'gcash' ? 'paymongo' : 'cod',
+    payment_status: paymentMethod === 'cod' ? 'pending' : 'paid',
+    payment_reference: paymentMethod === 'cod' ? `COD-${Date.now()}` : null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  memoryOrderStore.orders.unshift(order);
+  for (const item of normalizedItems) {
+    memoryOrderStore.items.push({
+      id: memoryOrderStore.nextItemId--,
+      order_id: order.id,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      product_price: item.product_price,
+      price: item.product_price,
+      quantity: item.quantity,
+    });
+  }
+
+  const fullOrder = mapMemoryOrderBundle(getMemoryOrderBundle(order.id));
+  emitNewOrder(fullOrder);
+  return {
+    status: 201,
+    body: {
+      message: 'Order created successfully',
+      order: fullOrder,
+    },
+  };
+};
+
 const buildOrderReturnInfo = async (db, order, userId, isStaff) => {
   const [settings, latestReturnResult] = await Promise.all([
     getReturnSettings(db),
@@ -223,6 +323,19 @@ const buildOrderReturnInfo = async (db, order, userId, isStaff) => {
 export const getAllOrders = async (req, res) => {
   try {
     const { page, limit, offset, paginated } = parsePagination(req.query || {});
+    if (shouldUseDatabaseReadFallback()) {
+      const orders = await getOrdersFallback({ page, limit, paginated });
+      if (paginated) {
+        return res.json({
+          orders,
+          page,
+          limit,
+          total: orders.length,
+          totalPages: Math.max(1, Math.ceil(orders.length / limit)),
+        });
+      }
+      return res.json(orders);
+    }
 
     const query = `
       SELECT o.*, 
@@ -262,6 +375,20 @@ export const getAllOrders = async (req, res) => {
     res.json(orders);
   } catch (error) {
     console.error('Get all orders error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      const { page, limit, paginated } = parsePagination(req.query || {});
+      const orders = await getOrdersFallback({ page, limit, paginated });
+      if (paginated) {
+        return res.json({
+          orders,
+          page,
+          limit,
+          total: orders.length,
+          totalPages: Math.max(1, Math.ceil(orders.length / limit)),
+        });
+      }
+      return res.json(orders);
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -271,6 +398,19 @@ export const getUserOrders = async (req, res) => {
   try {
     const userId = req.user.id;
     const { page, limit, offset, paginated } = parsePagination(req.query || {});
+    if (shouldUseDatabaseReadFallback()) {
+      const orders = await getOrdersFallback({ userId, page, limit, paginated });
+      if (paginated) {
+        return res.json({
+          orders,
+          page,
+          limit,
+          total: orders.length,
+          totalPages: Math.max(1, Math.ceil(orders.length / limit)),
+        });
+      }
+      return res.json(orders);
+    }
 
     const query = `
       SELECT o.*, COUNT(oi.id) as item_count
@@ -308,6 +448,21 @@ export const getUserOrders = async (req, res) => {
     res.json(orders);
   } catch (error) {
     console.error('Get user orders error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      const userId = req.user.id;
+      const { page, limit, paginated } = parsePagination(req.query || {});
+      const orders = await getOrdersFallback({ userId, page, limit, paginated });
+      if (paginated) {
+        return res.json({
+          orders,
+          page,
+          limit,
+          total: orders.length,
+          totalPages: Math.max(1, Math.ceil(orders.length / limit)),
+        });
+      }
+      return res.json(orders);
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -318,6 +473,65 @@ export const getOrderById = async (req, res) => {
     const { id } = req.params;
     const userId = req.user?.id;
     const isStaff = STAFF_ROLES.has(req.user?.role);
+    const memoryBundle = getMemoryOrderBundle(id);
+
+    if (memoryBundle) {
+      if (!isStaff && Number(memoryBundle.order.user_id) !== Number(userId)) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      return res.json(mapMemoryOrderBundle(memoryBundle));
+    }
+
+    if (shouldUseDatabaseReadFallback()) {
+      const rows = await supabaseRestFetch('orders', {
+        select: '*,customer:users!orders_user_id_fkey(name,email)',
+        id: `eq.${id}`,
+        limit: 1,
+      });
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(404).json({ message: 'Order not found' });
+      }
+
+      const order = {
+        ...rows[0],
+        customer_name: rows[0].customer?.name,
+        customer_email: rows[0].customer?.email,
+      };
+
+      if (!isStaff && Number(order.user_id) !== Number(userId)) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      const items = await supabaseRestFetch('order_items', {
+        select: '*,products(name,image,part_number,price,buying_price,box_number,category_id,stock_quantity,low_stock_threshold,sale_price,is_on_sale,sku,barcode)',
+        order_id: `eq.${id}`,
+        order: 'id.asc',
+      }).catch(() => []);
+
+      return res.json({
+        ...mapOrderRecord(order),
+        return_eligible: false,
+        return_eligibility_message: '',
+        return_request: null,
+        items: (Array.isArray(items) ? items : []).map((item) => ({
+          ...item,
+          product_name: item.product_name || item.products?.name,
+          product_image: item.products?.image,
+          product_part_number: item.products?.part_number,
+          product_price_current: item.products?.price,
+          product_buying_price: item.products?.buying_price,
+          product_box_number: item.products?.box_number,
+          product_category_id: item.products?.category_id,
+          product_stock_quantity: item.products?.stock_quantity,
+          product_low_stock_threshold: item.products?.low_stock_threshold,
+          product_sale_price: item.products?.sale_price,
+          product_is_on_sale: item.products?.is_on_sale,
+          product_sku: item.products?.sku,
+          product_barcode: item.products?.barcode,
+          product_price: roundMoney(item.product_price),
+        })),
+      });
+    }
 
     // Get order
     const orderResult = await pool.query(
@@ -372,6 +586,11 @@ export const getOrderById = async (req, res) => {
     });
   } catch (error) {
     console.error('Get order error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      const memoryBundle = getMemoryOrderBundle(req.params.id);
+      if (memoryBundle) return res.json(mapMemoryOrderBundle(memoryBundle));
+      return res.status(503).json({ message: 'Order details are temporarily unavailable. Please try again.' });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -663,6 +882,54 @@ export const cancelOrder = async (req, res) => {
   }
 };
 
+const getOrdersFallback = async ({ userId = null, page, limit, paginated } = {}) => {
+  const params = {
+    select: '*,customer:users!orders_user_id_fkey(name,email)',
+    order: 'created_at.desc',
+    limit: paginated ? limit : 5000,
+  };
+  if (userId) {
+    params.user_id = `eq.${userId}`;
+  }
+
+  const orders = await supabaseRestFetch('orders', params).catch(() => []);
+  const rows = Array.isArray(orders) ? orders : [];
+  const ids = rows.map((order) => Number(order.id)).filter(Boolean);
+  let itemCounts = new Map();
+
+  if (ids.length > 0) {
+    const items = await supabaseRestFetch('order_items', {
+      select: 'order_id',
+      order_id: `in.(${ids.join(',')})`,
+      limit: 10000,
+    }).catch(() => []);
+    itemCounts = (Array.isArray(items) ? items : []).reduce((map, item) => {
+      const orderId = Number(item.order_id);
+      map.set(orderId, (map.get(orderId) || 0) + 1);
+      return map;
+    }, new Map());
+  }
+
+  const restOrders = rows.map((order) => ({
+    ...mapOrderRecord({
+      ...order,
+      customer_name: order.customer?.name || order.customer_name,
+      customer_email: order.customer?.email || order.customer_email,
+    }),
+    item_count: itemCounts.get(Number(order.id)) || 0,
+  }));
+
+  const memoryOrders = memoryOrderStore.orders
+    .filter((order) => !userId || Number(order.user_id) === Number(userId))
+    .map((order) => ({
+      ...mapOrderRecord(order),
+      item_count: memoryOrderStore.items.filter((item) => Number(item.order_id) === Number(order.id)).length,
+    }));
+
+  return [...memoryOrders, ...restOrders]
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+};
+
 const escapeHtml = (value) => String(value ?? '')
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -808,9 +1075,10 @@ export const createOrder = async (req, res) => {
     cashier_id
   } = req.body;
 
-  const client = await pool.connect();
+  let client;
 
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     const userId = source === 'pos' ? null : req.user?.id;
@@ -1017,6 +1285,7 @@ export const createOrder = async (req, res) => {
     const resolvedPaymentMethod = source === 'pos'
       ? (payment_method || 'cash')
       : (payment_method || 'stripe');
+    const isCashOnDelivery = source !== 'pos' && String(resolvedPaymentMethod || '').toLowerCase() === 'cod';
     const resolvedCashierId = source === 'pos' ? (cashier_id || req.user?.id || null) : null;
     const resolvedAddressSnapshot = initialAddressSnapshot;
 
@@ -1039,7 +1308,7 @@ export const createOrder = async (req, res) => {
         shipping_lat ?? null,
         shipping_lng ?? null,
         normalizedPaymentIntentId,
-        'paid',
+        isCashOnDelivery ? 'pending' : 'paid',
         normalizedDiscountAmount,
         vatAmount,
         resolvedShippingMethod,
@@ -1163,7 +1432,9 @@ export const createOrder = async (req, res) => {
       order: fullOrder
     });
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (client) {
+      await client.query('ROLLBACK').catch(() => {});
+    }
 
     if (error?.code === '23505') {
       const duplicatePaymentIntent = normalizeText(req.body?.payment_intent_id);
@@ -1184,9 +1455,15 @@ export const createOrder = async (req, res) => {
     }
 
     console.error('Create order error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      const fallback = createMemoryOrder(req);
+      return res.status(fallback.status).json(fallback.body);
+    }
     res.status(500).json({ message: 'Failed to create order' });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 // Generate invoice HTML for an order

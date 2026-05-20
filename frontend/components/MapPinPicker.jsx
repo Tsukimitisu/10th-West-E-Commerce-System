@@ -1,266 +1,473 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Crosshair, ExternalLink, LocateFixed, RefreshCw } from 'lucide-react';
 
-// Lightweight Leaflet-based map picker loaded via CDN (no extra dependency in package.json).
-// Hidden until Province + City + Barangay are all selected.
-// Phase 1 â€” centres on barangay. Phase 2 â€” refines to street-level.
-// Accepts optional `lat` / `lng` props to jump to a position immediately (e.g. from autocomplete).
-// Emits { lat, lng } through onChange. Pin is fixed to detected location.
-const MapPinPicker = ({ street, barangay, city, state, lat: externalLat, lng: externalLng, onChange, height = 280, disabled = false }) => {
-  const mapContainerRef = useRef(null);
-  const mapRef = useRef(null);
-  const markerRef = useRef(null);
-  const [leafletReady, setLeafletReady] = useState(typeof window !== 'undefined' && !!window.L);
-  const [geocoding, setGeocoding] = useState(false);
-  const [error, setError] = useState('');
-  const [errorType, setErrorType] = useState('');
-  const [lastGeoKey, setLastGeoKey] = useState('');
-  const [lastExternalKey, setLastExternalKey] = useState('');
+const PHILIPPINES_CENTER = { lat: 12.8797, lng: 121.7740 };
 
-  /* â”€â”€ Load Leaflet from CDN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-  const loadLeaflet = () => new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') return reject(new Error('No window'));
-    if (window.L) return resolve(window.L);
+const normalizeText = (value) => String(value || '')
+  .toLowerCase()
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
 
-    const loadCss = () => new Promise((cssResolve) => {
-      const existingCss = document.getElementById('leaflet-css');
-      if (existingCss) return cssResolve();
-      const link = document.createElement('link');
-      link.id = 'leaflet-css';
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      link.onload = () => cssResolve();
-      link.onerror = () => cssResolve();
-      document.head.appendChild(link);
-    });
+const toFiniteCoordinate = (value, min, max) => {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < min || number > max) return null;
+  return number;
+};
 
-    const loadScript = () => new Promise((scriptResolve, scriptReject) => {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.async = true;
-      script.onload = () => scriptResolve(window.L);
-      script.onerror = scriptReject;
-      document.body.appendChild(script);
-    });
+const formatCoordinate = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(6) : '';
+};
 
-    Promise.all([loadCss(), loadScript()]).then(([, L]) => resolve(L)).catch(reject);
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+const latLngToWorldPoint = ({ lat, lng }, zoom) => {
+  const scale = 256 * (2 ** zoom);
+  const sinLat = clamp(Math.sin((lat * Math.PI) / 180), -0.9999, 0.9999);
+  return {
+    x: ((lng + 180) / 360) * scale,
+    y: (0.5 - (Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI))) * scale,
+  };
+};
+
+const worldPointToLatLng = ({ x, y }, zoom) => {
+  const scale = 256 * (2 ** zoom);
+  const lng = (x / scale) * 360 - 180;
+  const n = Math.PI - (2 * Math.PI * y) / scale;
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  return {
+    lat: clamp(lat, -90, 90),
+    lng: clamp(lng, -180, 180),
+  };
+};
+
+const buildAddressQuery = ({ street, barangay, city, state }) => {
+  const parts = [street, barangay, city, state, 'Philippines']
+    .map((part) => String(part || '').trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts)).join(', ');
+};
+
+const buildGoogleEmbedUrl = ({ lat, lng, query, zoom = 17 }) => {
+  const q = lat && lng ? `${lat},${lng}` : query;
+  return `https://maps.google.com/maps?q=${encodeURIComponent(q || 'Philippines')}&z=${zoom}&output=embed`;
+};
+
+const buildGoogleDirectionsUrl = ({ lat, lng, query }) => {
+  const q = lat && lng ? `${lat},${lng}` : query;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q || 'Philippines')}`;
+};
+
+const getAddressAreaText = (address = {}) => normalizeText([
+  address.road,
+  address.suburb,
+  address.village,
+  address.neighbourhood,
+  address.hamlet,
+  address.quarter,
+  address.city_district,
+  address.city,
+  address.town,
+  address.municipality,
+  address.county,
+  address.state,
+  address.state_district,
+  address.region,
+  address.province,
+].filter(Boolean).join(' '));
+
+const reverseGeocode = async ({ lat, lng, signal }) => {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+  const response = await fetch(url, {
+    signal,
+    headers: { 'Accept-Language': 'en' },
   });
 
-  const destroyMap = () => {
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-      markerRef.current = null;
+  if (!response.ok) throw new Error('Reverse geocoding failed');
+  return response.json();
+};
+
+const geocodeAddress = async ({ street, barangay, city, state, signal }) => {
+  const contextParts = [barangay, city, state].filter(Boolean);
+  const streetParts = String(street || '').split(',').map((part) => part.trim()).filter(Boolean);
+  const queries = [];
+
+  if (streetParts.length > 0) {
+    queries.push([...streetParts, ...contextParts, 'Philippines'].join(', '));
+    queries.push([...streetParts].reverse().concat(contextParts, 'Philippines').join(', '));
+  }
+
+  if (barangay) queries.push([barangay, city, state, 'Philippines'].filter(Boolean).join(', '));
+  queries.push([city, state, 'Philippines'].filter(Boolean).join(', '));
+
+  for (const query of Array.from(new Set(queries.filter(Boolean)))) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ph&q=${encodeURIComponent(query)}`;
+    const response = await fetch(url, {
+      signal,
+      headers: { 'Accept-Language': 'en' },
+    });
+
+    if (!response.ok) continue;
+    const data = await response.json();
+    const hit = Array.isArray(data) ? data[0] : null;
+    const lat = toFiniteCoordinate(hit?.lat, -90, 90);
+    const lng = toFiniteCoordinate(hit?.lon, -180, 180);
+    if (lat !== null && lng !== null) {
+      return { lat, lng };
+    }
+  }
+
+  return null;
+};
+
+const MapPinPicker = ({
+  street,
+  barangay,
+  city,
+  state,
+  lat: externalLat,
+  lng: externalLng,
+  onChange,
+  height = 280,
+  disabled = false,
+}) => {
+  const mapRef = useRef(null);
+  const reverseControllerRef = useRef(null);
+  const geocodeControllerRef = useRef(null);
+  const [coords, setCoords] = useState(() => {
+    const lat = toFiniteCoordinate(externalLat, -90, 90);
+    const lng = toFiniteCoordinate(externalLng, -180, 180);
+    return lat !== null && lng !== null ? { lat, lng } : null;
+  });
+  const [zoom, setZoom] = useState(coords ? 18 : 15);
+  const [locating, setLocating] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
+  const [accuracy, setAccuracy] = useState(null);
+  const [status, setStatus] = useState('');
+  const [statusTone, setStatusTone] = useState('muted');
+  const [lastGeoKey, setLastGeoKey] = useState('');
+  const [dragging, setDragging] = useState(false);
+  const [markerOffset, setMarkerOffset] = useState({ x: 0, y: 0 });
+
+  const addressQuery = useMemo(
+    () => buildAddressQuery({ street, barangay, city, state }),
+    [street, barangay, city, state],
+  );
+
+  const requiredAreaReady = Boolean(barangay && city && state);
+
+  const emitCoords = (nextCoords, nextAccuracy = null) => {
+    setCoords(nextCoords);
+    setZoom(18);
+    setMarkerOffset({ x: 0, y: 0 });
+    if (nextAccuracy !== null) setAccuracy(nextAccuracy);
+    onChange?.({
+      lat: Number(nextCoords.lat.toFixed(7)),
+      lng: Number(nextCoords.lng.toFixed(7)),
+    });
+  };
+
+  const coordsFromPointer = (event) => {
+    const rect = mapRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+
+    const center = latLngToWorldPoint({ lat: displayLat, lng: displayLng }, zoom);
+    const dx = event.clientX - (rect.left + rect.width / 2);
+    const dy = event.clientY - (rect.top + rect.height / 2);
+    return worldPointToLatLng({ x: center.x + dx, y: center.y + dy }, zoom);
+  };
+
+  const updateMarkerOffset = (event) => {
+    const rect = mapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setMarkerOffset({
+      x: event.clientX - (rect.left + rect.width / 2),
+      y: event.clientY - (rect.top + rect.height / 2),
+    });
+  };
+
+  const handlePointerDown = (event) => {
+    if (disabled || geocoding || locating) return;
+    event.preventDefault();
+    mapRef.current?.setPointerCapture?.(event.pointerId);
+    setDragging(true);
+    updateMarkerOffset(event);
+  };
+
+  const handlePointerMove = (event) => {
+    if (!dragging || disabled) return;
+    updateMarkerOffset(event);
+  };
+
+  const handlePointerUp = (event) => {
+    if (!dragging || disabled) return;
+    const nextCoords = coordsFromPointer(event);
+    setDragging(false);
+    if (!nextCoords) {
+      setMarkerOffset({ x: 0, y: 0 });
+      return;
+    }
+    emitCoords(nextCoords);
+    setStatus('Pin moved. Latitude and longitude were updated.');
+    setStatusTone('success');
+    checkSelectedArea(nextCoords);
+  };
+
+  const checkSelectedArea = async (nextCoords) => {
+    reverseControllerRef.current?.abort();
+    const controller = new AbortController();
+    reverseControllerRef.current = controller;
+
+    try {
+      const data = await reverseGeocode({
+        lat: nextCoords.lat,
+        lng: nextCoords.lng,
+        signal: controller.signal,
+      });
+
+      const areaText = getAddressAreaText(data?.address || {});
+      const selectedParts = [barangay, city, state].map(normalizeText).filter(Boolean);
+      const cityMatches = selectedParts.some((part) => part && areaText.includes(part));
+
+      if (cityMatches) {
+        setStatus('Exact location detected inside the selected area.');
+        setStatusTone('success');
+      } else if (areaText) {
+        setStatus('Location found, but it may be outside the selected area.');
+        setStatusTone('warning');
+      }
+    } catch {
+      if (!controller.signal.aborted) {
+        setStatus('Location selected. Area verification is unavailable right now.');
+        setStatusTone('muted');
+      }
     }
   };
 
+  const locateCurrentPosition = () => {
+    if (disabled || !navigator.geolocation) {
+      setStatus('Your browser cannot provide exact GPS location.');
+      setStatusTone('warning');
+      return;
+    }
+
+    setLocating(true);
+    setStatus('');
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextCoords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        const nextAccuracy = Number.isFinite(position.coords.accuracy)
+          ? Math.round(position.coords.accuracy)
+          : null;
+
+        emitCoords(nextCoords, nextAccuracy);
+        setLocating(false);
+        setStatus(nextAccuracy ? `Exact device location captured within about ${nextAccuracy}m.` : 'Exact device location captured.');
+        setStatusTone('success');
+        checkSelectedArea(nextCoords);
+      },
+      (error) => {
+        setLocating(false);
+        const denied = error.code === error.PERMISSION_DENIED;
+        setStatus(denied ? 'Location permission was denied.' : 'Could not get your exact location. Try again near the delivery address.');
+        setStatusTone('warning');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0,
+      },
+    );
+  };
+
+  const refineFromAddress = () => {
+    if (disabled || !requiredAreaReady) return;
+
+    geocodeControllerRef.current?.abort();
+    const controller = new AbortController();
+    geocodeControllerRef.current = controller;
+
+    setGeocoding(true);
+    setStatus('');
+
+    geocodeAddress({ street, barangay, city, state, signal: controller.signal })
+      .then((nextCoords) => {
+        if (!nextCoords || controller.signal.aborted) {
+          setStatus('Could not locate this address in Google Maps. Use current location for exact pin.');
+          setStatusTone('warning');
+          return;
+        }
+
+        emitCoords(nextCoords);
+        setStatus(street ? 'Address location found. Use current location if you need GPS-level precision.' : 'Area location found. Add street or use current location for exact pin.');
+        setStatusTone(street ? 'success' : 'muted');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setStatus('Could not locate this address. Use current location for exact pin.');
+          setStatusTone('warning');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setGeocoding(false);
+      });
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    loadLeaflet().then(() => {
-      if (!cancelled) setLeafletReady(true);
-    }).catch(() => {
-      if (!cancelled) {
-        setError('Map failed to load.');
-        setErrorType('map');
-      }
-    });
-    return () => { cancelled = true; };
-  }, []);
-
-  /* â”€â”€ Initialise map once Leaflet is ready â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-  useEffect(() => {
-    if (!leafletReady || !window.L || !mapContainerRef.current || mapRef.current) return;
-    if (!barangay || !city || !state) return;
-    const L = window.L;
-    const fallbackCenter = [12.8797, 121.7740]; // Philippines centroid
-    const map = L.map(mapContainerRef.current).setView(fallbackCenter, 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map);
-
-    const marker = L.marker(fallbackCenter, { draggable: !disabled }).addTo(map);
-
-    marker.on('dragend', () => {
-      const pos = marker.getLatLng();
-      onChange?.({ lat: pos.lat, lng: pos.lng });
-    });
-
-    mapRef.current = map;
-    markerRef.current = marker;
-
-    }, [leafletReady, barangay, city, state, onChange]);
-
-  useEffect(() => { if (!barangay || !city || !state) { destroyMap(); } }, [barangay, city, state]);
-
-  useEffect(() => { return () => { destroyMap(); }; }, []);
-
+    const lat = toFiniteCoordinate(externalLat, -90, 90);
+    const lng = toFiniteCoordinate(externalLng, -180, 180);
+    if (lat === null || lng === null) return;
+    if (coords && Number(coords.lat) === lat && Number(coords.lng) === lng) return;
+    emitCoords({ lat, lng });
+  }, [externalLat, externalLng]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
-    const timer = setTimeout(() => map.invalidateSize(), 100);
-    return () => clearTimeout(timer);
-  }, [leafletReady, barangay, city, state]);
+    if (!requiredAreaReady) return;
 
-  /* â”€â”€ Fly to external coords (autocomplete selection) â”€â”€â”€â”€ */
-  useEffect(() => {
-    if (!leafletReady || !externalLat || !externalLng) return;
-    const key = `${externalLat}|${externalLng}`;
-    if (key === lastExternalKey) return;
-    setLastExternalKey(key);
-
-    const map = mapRef.current;
-    const marker = markerRef.current;
-    if (!map || !marker) return;
-
-    const pos = [Number(externalLat), Number(externalLng)];
-    map.setView(pos, 17);
-    marker.setLatLng(pos);
-    onChange?.({ lat: pos[0], lng: pos[1] });
-    setError('');
-    setErrorType('');
-    // Sync geocode key so the next effect doesn't reâ€‘fire for the same address
-    setLastGeoKey(`${street || ''}|${barangay || ''}|${city || ''}|${state || ''}`);
-  }, [leafletReady, externalLat, externalLng, onChange, lastExternalKey, street, barangay, city, state]);
-
-  /* â”€â”€ Geocode when address parts change â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-  // Fires in two scenarios:
-  //   1. Only barangay + city + state â†’ centres on barangay (zoom 15)
-  //   2. street + context â†’ pins the exact location (zoom 17)
-  useEffect(() => {
-    if (!leafletReady || !city || !state) return;
-    // At minimum we need barangay OR street
-    if (!barangay && !street) return;
-
-    const geoKey = `${street || ''}|${barangay || ''}|${city}|${state}`;
+    const geoKey = `${street || ''}|${barangay || ''}|${city || ''}|${state || ''}`;
     if (geoKey === lastGeoKey) return;
     setLastGeoKey(geoKey);
 
-    const map = mapRef.current;
-    const marker = markerRef.current;
-    if (!map || !marker) return;
+    const lat = toFiniteCoordinate(externalLat, -90, 90);
+    const lng = toFiniteCoordinate(externalLng, -180, 180);
+    if (lat !== null && lng !== null) return;
 
-    // Build the query â€“ more parts â†’ more accurate
-    const hasStreet = street && street.trim().length >= 2;
-    const queries = [];
+    refineFromAddress();
+  }, [street, barangay, city, state, requiredAreaReady]);
 
-    if (hasStreet) {
-      // Split street in case user entered "City, Barangay, Street" and deduplicate with selected location context
-      const streetParts = street.split(',').map(s => s.trim());
-      const contextParts = [barangay, city, state].filter(Boolean);
-      const allParts = [...streetParts, ...contextParts];
-      const uniqueParts = Array.from(new Set(allParts)).filter(Boolean);
-
-      // Try the raw unique parts joined
-      queries.push(`${uniqueParts.join(', ')}, Philippines`);
-
-      // Try reverse order (often fixes "City, Barangay, Street" input for Nominatim which prefers "Street, City")
-      queries.push(`${uniqueParts.slice().reverse().join(', ')}, Philippines`);
-
-      // Try just the first part of the street with context (fixes if user typed entire address in street but we just want the street name)
-      const streetFirstPart = streetParts[streetParts.length - 1]; // if "City, Barangay, Street", last part is street typically, wait.
-      const streetFirstPartA = streetParts[0]; // if "Street, Barangay, City"
-      queries.push(`${streetFirstPartA}, ${contextParts.join(', ')}, Philippines`);
-      if (streetFirstPart !== streetFirstPartA) {
-        queries.push(`${streetFirstPart}, ${contextParts.join(', ')}, Philippines`);
-      }
+  useEffect(() => {
+    if (!requiredAreaReady) {
+      setCoords(null);
+      setAccuracy(null);
+      setStatus('');
+      setLastGeoKey('');
     }
-    
-    if (barangay) {
-      queries.push(`${barangay}, ${city}, ${state}, Philippines`);
-    }
-    queries.push(`${city}, ${state}, Philippines`);
+  }, [requiredAreaReady]);
 
-    setGeocoding(true);
-    setError('');
-    setErrorType('');
-    const controller = new AbortController();
+  useEffect(() => () => {
+    reverseControllerRef.current?.abort();
+    geocodeControllerRef.current?.abort();
+  }, []);
 
-    const tryGeocode = async (queryList) => {
-      for (const q of queryList) {
-        if (controller.signal.aborted) return true;
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ph&q=${encodeURIComponent(q)}`, {
-            headers: {
-              'Accept-Language': 'en',
-              'User-Agent': '10th-west-moto-map-pin',
-            },
-            signal: controller.signal,
-          });
-          if (!res.ok) continue;
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const { lat, lon } = data[0];
-            const next = [Number(lat), Number(lon)];
-            map.setView(next, hasStreet ? 17 : 15);
-            marker.setLatLng(next);
-            onChange?.({ lat: Number(lat), lng: Number(lon) });
-            return true;
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-      return false;
-    };
+  if (!requiredAreaReady) return null;
 
-    tryGeocode(queries).then((success) => {
-      if (!success && !controller.signal.aborted) {
-        setError('Could not locate exact location. Pin might not be perfectly precise.');
-        setErrorType('geocode');
-      }
-    }).finally(() => {
-      if (!controller.signal.aborted) setGeocoding(false);
-    });
-
-    return () => controller.abort();
-  }, [leafletReady, street, barangay, city, state, onChange, lastGeoKey]);
-
-  /* â”€â”€ Render guard: hidden until Province + City + Barangay selected â”€â”€ */
-  if (!barangay || !city || !state) return null;
-
-  const handleRetry = () => {
-    setError('');
-    setErrorType('');
-    setLastGeoKey('');
-  };
+  const displayLat = coords?.lat ?? PHILIPPINES_CENTER.lat;
+  const displayLng = coords?.lng ?? PHILIPPINES_CENTER.lng;
+  const mapUrl = buildGoogleEmbedUrl({
+    lat: coords?.lat,
+    lng: coords?.lng,
+    query: addressQuery,
+    zoom,
+  });
+  const googleMapsUrl = buildGoogleDirectionsUrl({
+    lat: coords?.lat,
+    lng: coords?.lng,
+    query: addressQuery,
+  });
+  const statusClass = statusTone === 'success'
+    ? 'text-emerald-600'
+    : statusTone === 'warning'
+      ? 'text-amber-600'
+      : 'text-gray-500';
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-gray-200">Pin exact location</p>
-        {geocoding && <span className="text-xs text-gray-400">Locatingâ€¦</span>}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-gray-800">Pin exact location</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={refineFromAddress}
+            disabled={disabled || geocoding || locating}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw size={13} className={geocoding ? 'animate-spin' : ''} />
+            {geocoding ? 'Finding' : 'Find address'}
+          </button>
+          <button
+            type="button"
+            onClick={locateCurrentPosition}
+            disabled={disabled || locating}
+            className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LocateFixed size={13} className={locating ? 'animate-pulse' : ''} />
+            {locating ? 'Locating' : 'Use exact location'}
+          </button>
+        </div>
       </div>
+
       <div
-        className="w-full rounded-lg border border-gray-700 overflow-hidden relative"
-        style={{ height: `${height}px`, minHeight: `${height}px`, minWidth: '100%' }}
+        ref={mapRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={() => {
+          setDragging(false);
+          setMarkerOffset({ x: 0, y: 0 });
+        }}
+        className="relative w-full overflow-hidden rounded-lg border border-slate-300 bg-slate-100"
+        style={{
+          height: `${height}px`,
+          minHeight: `${height}px`,
+          minWidth: '100%',
+          cursor: disabled ? 'default' : dragging ? 'grabbing' : 'grab',
+          touchAction: 'none',
+        }}
       >
-        {(!leafletReady || !window.L) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-xs text-gray-400">
-            Loading mapâ€¦
+        <iframe
+          title="Google map location picker"
+          src={mapUrl}
+          className="h-full w-full border-0"
+          style={{ pointerEvents: 'none' }}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          aria-label="Google map showing selected delivery location"
+        />
+        <div
+          className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-full flex-col items-center"
+          style={{ marginLeft: `${markerOffset.x}px`, marginTop: `${markerOffset.y}px` }}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-white shadow-lg ring-4 ring-white/90">
+            <Crosshair size={18} />
+          </div>
+          <div className="h-4 w-1 rounded-b-full bg-red-600 shadow" />
+        </div>
+        {(geocoding || locating) && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/60 text-sm font-medium text-gray-700">
+            {locating ? 'Getting exact GPS location...' : 'Finding address...'}
           </div>
         )}
-        <div
-          ref={mapContainerRef}
-          className="w-full h-full"
-          style={{ pointerEvents: disabled ? 'none' : 'auto', filter: disabled ? 'grayscale(0.6)' : 'none' }}
-        />
       </div>
-      {error && (
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-red-500">{error}</p>
-          {errorType === 'geocode' && (
-            <button type="button" onClick={handleRetry} className="text-xs text-orange-600 hover:text-orange-700 font-medium">
-              Retry
-            </button>
-          )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="text-gray-500">
+          Lat {formatCoordinate(displayLat)}, Lng {formatCoordinate(displayLng)}
+          {accuracy ? `, accuracy about ${accuracy}m` : ''}
         </div>
-      )}
-      <p className="text-xs text-gray-400">Pin placement updates automatically. If the location is inaccurate, you can drag the pin to your exact location.</p>
+        <a
+          href={googleMapsUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 font-medium text-red-600 hover:text-red-700"
+        >
+          Open in Google Maps
+          <ExternalLink size={12} />
+        </a>
+      </div>
+
+      {status && <p className={`text-xs ${statusClass}`}>{status}</p>}
+      <p className="text-xs text-gray-500">
+        Drag the pin, tap the map, or use exact location while you are at the delivery address.
+      </p>
     </div>
   );
 };
 
 export default MapPinPicker;
-
-

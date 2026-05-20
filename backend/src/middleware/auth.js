@@ -155,6 +155,13 @@ export const authenticateToken = async (req, res, next) => {
   };
 
   if (!token) {
+    if (shouldUseDatabaseReadFallback()) {
+      return res.status(401).json({
+        message: 'Access token required',
+        code: 'AUTH_TOKEN_REQUIRED',
+      });
+    }
+
     try {
       if (await trySessionFallback()) {
         return next();
@@ -207,6 +214,11 @@ export const authenticateToken = async (req, res, next) => {
       message: 'Failed to validate authentication token.',
       code: 'AUTH_VALIDATION_FAILED',
     });
+  }
+
+  if (shouldUseDatabaseReadFallback()) {
+    req.user = decoded;
+    return next();
   }
 
   try {

@@ -4,7 +4,10 @@ let bypassDatabaseReadsUntil = 0;
 
 const getSupabaseRestConfig = () => {
   const baseUrl = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
-  const apiKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    || process.env.SUPABASE_ANON_KEY
+    || process.env.SUPABASE_KEY
+    || process.env.VITE_SUPABASE_ANON_KEY;
 
   if (!baseUrl || !apiKey) {
     return null;
@@ -60,7 +63,7 @@ export const shouldUseDatabaseReadFallback = () => {
   return Date.now() < bypassDatabaseReadsUntil;
 };
 
-export const supabaseRestFetch = async (path, queryParams = {}) => {
+const buildSupabaseRestUrl = (path, queryParams = {}) => {
   const config = getSupabaseRestConfig();
   if (!config) {
     throw new Error('Supabase REST credentials are not configured.');
@@ -73,6 +76,18 @@ export const supabaseRestFetch = async (path, queryParams = {}) => {
   });
 
   const url = `${config.restUrl}/${String(path).replace(/^\/+/, '')}${params.toString() ? `?${params.toString()}` : ''}`;
+
+  return { config, url };
+};
+
+export const supabaseRestRequest = async (path, {
+  method = 'GET',
+  queryParams = {},
+  body,
+  prefer,
+  headers = {},
+} = {}) => {
+  const { config, url } = buildSupabaseRestUrl(path, queryParams);
   const timeoutMs = Number.isFinite(SUPABASE_REST_TIMEOUT_MS) && SUPABASE_REST_TIMEOUT_MS > 0
     ? SUPABASE_REST_TIMEOUT_MS
     : 10000;
@@ -81,24 +96,32 @@ export const supabaseRestFetch = async (path, queryParams = {}) => {
 
   try {
     const response = await fetch(url, {
+      method,
       headers: {
         apikey: config.apiKey,
         Authorization: `Bearer ${config.apiKey}`,
         Accept: 'application/json',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(prefer ? { Prefer: prefer } : {}),
+        ...headers,
       },
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
     });
 
-    const body = await response.json().catch(() => null);
+    const responseBody = await response.json().catch(() => null);
     if (!response.ok) {
-      const error = new Error(body?.message || body?.hint || `Supabase REST request failed with ${response.status}`);
+      const error = new Error(responseBody?.message || responseBody?.hint || `Supabase REST request failed with ${response.status}`);
       error.status = response.status;
-      error.body = body;
+      error.body = responseBody;
       throw error;
     }
 
-    return body;
+    return responseBody;
   } finally {
     clearTimeout(timeout);
   }
 };
+
+export const supabaseRestFetch = async (path, queryParams = {}) =>
+  supabaseRestRequest(path, { method: 'GET', queryParams });

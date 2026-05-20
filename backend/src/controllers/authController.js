@@ -8,7 +8,7 @@ import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { logActivity } from '../middleware/activityLogger.js';
 import { mergeGuestCartIntoUserCart, rotateGuestSession } from './cartController.js';
-import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch, supabaseRestRequest } from '../services/supabaseRest.js';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
@@ -60,6 +60,32 @@ const getUserFromSupabaseRestById = async (id) => {
   });
 
   return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+};
+
+const updateUserViaSupabaseRest = async (id, patch) => {
+  const rows = await supabaseRestRequest('users', {
+    method: 'PATCH',
+    queryParams: { id: `eq.${id}` },
+    prefer: 'return=representation',
+    body: patch,
+  });
+
+  return Array.isArray(rows) ? rows[0] : rows;
+};
+
+const upsertRegistrationOtpViaSupabaseRest = async ({ email, otpHash, expiresAt }) => {
+  const rows = await supabaseRestRequest('registration_otps', {
+    method: 'POST',
+    queryParams: { on_conflict: 'email' },
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: {
+      email,
+      otp_hash: otpHash,
+      expires_at: expiresAt.toISOString(),
+    },
+  });
+
+  return Array.isArray(rows) ? rows[0] : rows;
 };
 
 const loginWithSupabaseRestFallback = async (req, res) => {
@@ -420,8 +446,15 @@ initOtpTable();
 export const sendRegistrationOtp = async (req, res) => {
   const { email, name } = req.body;
   try {
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) {
+    let existingUser = null;
+    if (shouldUseDatabaseReadFallback()) {
+      existingUser = await getUserFromSupabaseRestByEmail(email);
+    } else {
+      const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+      existingUser = existing.rows[0] || null;
+    }
+
+    if (existingUser) {
       return res.status(400).json({ message: 'Email already registered' });
     }
 
@@ -429,13 +462,18 @@ export const sendRegistrationOtp = async (req, res) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-    await pool.query(
-      `INSERT INTO registration_otps (email, otp_hash, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '15 minutes')
-       ON CONFLICT (email) DO UPDATE SET otp_hash = $2, expires_at = NOW() + INTERVAL '15 minutes'`,
-      [email, otpHash]
-    );
+    if (shouldUseDatabaseReadFallback()) {
+      await upsertRegistrationOtpViaSupabaseRest({ email, otpHash, expiresAt });
+    } else {
+      await pool.query(
+        `INSERT INTO registration_otps (email, otp_hash, expires_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (email) DO UPDATE SET otp_hash = $2, expires_at = $3`,
+        [email, otpHash, expiresAt]
+      );
+    }
 
     const transporter = createTransporter();
     await transporter.sendMail({
@@ -468,10 +506,22 @@ export const sendRegistrationOtp = async (req, res) => {
     res.json({ message: 'Verification code sent to your email.' });
   } catch (error) {
     console.error('Send OTP error:', error);
-    if (error?.status) {
+    if (error?.status && error.fieldErrors) {
       return res.status(error.status).json({
         message: error.message || 'Please use a valid email address.',
         fieldErrors: error.fieldErrors || {},
+      });
+    }
+    if (error?.status) {
+      return res.status(202).json({
+        message: 'Verification code request accepted. Please continue with email verification.',
+        degraded: true,
+      });
+    }
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(202).json({
+        message: 'Verification code request accepted. Please continue with email verification.',
+        degraded: true,
       });
     }
     res.status(500).json({ message: 'Failed to send verification code' });
@@ -488,9 +538,97 @@ export const register = async (req, res) => {
     age_confirmed,
   } = req.validatedData || req.body;
 
-  const client = await pool.connect();
+  let client;
 
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      const existingUser = await getUserFromSupabaseRestByEmail(email);
+      const verificationToken = createVerificationToken();
+
+      if (existingUser) {
+        if (existingUser.email_verified) {
+          return res.status(409).json({
+            message: 'Email already in use.',
+            fieldErrors: {
+              email: 'This email is already in use.',
+            },
+          });
+        }
+
+        await updateUserViaSupabaseRest(existingUser.id, {
+          email_verification_token: verificationToken.tokenHash,
+          email_verification_expires: verificationToken.expiresAt.toISOString(),
+        });
+
+        try {
+          await sendVerificationEmail({
+            email: existingUser.email,
+            name: existingUser.name,
+            token: verificationToken.token,
+          });
+        } catch (emailError) {
+          console.error('Registration resend email error:', emailError);
+          return res.status(503).json({
+            message: 'Your account is still pending verification, but we could not send a new verification email right now. Please try again shortly.',
+            requiresVerification: true,
+            email,
+            code: 'VERIFICATION_EMAIL_FAILED',
+          });
+        }
+
+        return res.json({
+          message: 'This email is already registered but not verified. A new verification email has been sent.',
+          requiresVerification: true,
+          email,
+          degraded: true,
+        });
+      }
+
+      await assertEmailDomainCanReceiveMail(email);
+
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      const rows = await supabaseRestRequest('users', {
+        method: 'POST',
+        prefer: 'return=representation',
+        body: {
+          name,
+          email,
+          password_hash: passwordHash,
+          role: 'customer',
+          email_verified: false,
+          consent_given_at: consent_given ? new Date().toISOString() : null,
+          age_confirmed_at: age_confirmed ? new Date().toISOString() : null,
+          email_verification_token: verificationToken.tokenHash,
+          email_verification_expires: verificationToken.expiresAt.toISOString(),
+        },
+      });
+      const newUser = Array.isArray(rows) ? rows[0] : rows;
+
+      try {
+        await sendVerificationEmail({
+          email: newUser.email,
+          name: newUser.name,
+          token: verificationToken.token,
+        });
+      } catch (emailError) {
+        console.error('Registration email error:', emailError);
+        return res.status(503).json({
+          message: 'Registration successful, but we could not send the verification email right now. Please use resend verification shortly.',
+          requiresVerification: true,
+          email,
+          code: 'VERIFICATION_EMAIL_FAILED',
+        });
+      }
+
+      return res.status(201).json({
+        message: 'Registration successful. Please check your email to verify your account.',
+        requiresVerification: true,
+        email,
+        degraded: true,
+      });
+    }
+
+    client = await pool.connect();
     await client.query('BEGIN');
 
     const existingResult = await client.query(
@@ -592,9 +730,11 @@ export const register = async (req, res) => {
       email,
     });
   } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch {}
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {}
+    }
 
     console.error('Registration error:', error);
 
@@ -608,15 +748,18 @@ export const register = async (req, res) => {
     }
 
     if (error?.status) {
-      return res.status(error.status).json({
+      const status = error.status === 409 ? 409 : error.status;
+      return res.status(status).json({
         message: error.message || 'Please correct the highlighted fields.',
-        fieldErrors: error.fieldErrors || {},
+        fieldErrors: error.status === 409
+          ? { email: 'This email is already in use.' }
+          : (error.fieldErrors || {}),
       });
     }
 
     res.status(500).json({ message: 'Failed to create account' });
   } finally {
-    client.release();
+    client?.release();
   }
 };
 
@@ -770,12 +913,14 @@ export const forgotPassword = async (req, res) => {
   const { email } = req.validatedData || req.body;
 
   try {
-    const result = await pool.query('SELECT id, name, email, oauth_provider, password_hash FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) {
+    const user = shouldUseDatabaseReadFallback()
+      ? await getUserFromSupabaseRestByEmail(email)
+      : (await pool.query('SELECT id, name, email, oauth_provider, password_hash FROM users WHERE email = $1', [email])).rows[0];
+
+    if (!user) {
       return res.json({ message: 'If that email exists, a password reset link has been sent.' });
     }
 
-    const user = result.rows[0];
     if (user.oauth_provider && !user.password_hash) {
       return res.json({ message: 'If that email exists, a password reset link has been sent.' });
     }
@@ -784,10 +929,17 @@ export const forgotPassword = async (req, res) => {
     const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
     const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    await pool.query(
-      'UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3',
-      [hashedToken, expires, user.id]
-    );
+    if (shouldUseDatabaseReadFallback()) {
+      await updateUserViaSupabaseRest(user.id, {
+        password_reset_token: hashedToken,
+        password_reset_expires: expires.toISOString(),
+      });
+    } else {
+      await pool.query(
+        'UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3',
+        [hashedToken, expires, user.id]
+      );
+    }
 
     const frontendUrl = getFrontendUrl();
     // Security: token-only URL — no email/PII in URL (RA 10173 §20)
@@ -828,7 +980,7 @@ export const forgotPassword = async (req, res) => {
     res.json({ message: 'If that email exists, a password reset link has been sent.' });
   } catch (error) {
     console.error('Forgot password error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.json({ message: 'If that email exists, a password reset link has been sent.' });
   }
 };
 
@@ -1537,16 +1689,16 @@ export const resendVerification = async (req, res) => {
   const { email } = req.validatedData || req.body;
 
   try {
-    const existingResult = await pool.query(
-      'SELECT id, name, email, email_verified FROM users WHERE email = $1',
-      [email]
-    );
+    const user = shouldUseDatabaseReadFallback()
+      ? await getUserFromSupabaseRestByEmail(email)
+      : (await pool.query(
+        'SELECT id, name, email, email_verified FROM users WHERE email = $1',
+        [email]
+      )).rows[0];
 
-    if (existingResult.rows.length === 0) {
+    if (!user) {
       return res.json({ message: 'If an unverified account exists for this email, a verification email has been sent.' });
     }
-
-    const user = existingResult.rows[0];
 
     if (user.email_verified) {
       return res.status(400).json({ message: 'This account is already verified. You can log in.' });
@@ -1554,10 +1706,17 @@ export const resendVerification = async (req, res) => {
 
     const verificationToken = createVerificationToken();
 
-    await pool.query(
-      'UPDATE users SET email_verification_token = $1, email_verification_expires = $2 WHERE id = $3',
-      [verificationToken.tokenHash, verificationToken.expiresAt, user.id]
-    );
+    if (shouldUseDatabaseReadFallback()) {
+      await updateUserViaSupabaseRest(user.id, {
+        email_verification_token: verificationToken.tokenHash,
+        email_verification_expires: verificationToken.expiresAt.toISOString(),
+      });
+    } else {
+      await pool.query(
+        'UPDATE users SET email_verification_token = $1, email_verification_expires = $2 WHERE id = $3',
+        [verificationToken.tokenHash, verificationToken.expiresAt, user.id]
+      );
+    }
 
     try {
       await sendVerificationEmail({
@@ -1578,6 +1737,9 @@ export const resendVerification = async (req, res) => {
     });
   } catch (err) {
     console.error('Resend verification error:', err);
+    if (isDatabaseConnectivityError(err) || err?.status) {
+      return res.json({ message: 'If an unverified account exists for this email, a verification email has been sent.' });
+    }
     res.status(500).json({ message: 'Failed to resend verification email' });
   }
 };

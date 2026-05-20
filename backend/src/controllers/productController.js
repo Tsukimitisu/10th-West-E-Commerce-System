@@ -7,7 +7,7 @@ import {
   PRODUCT_TYPE_SET,
 } from '../constants/schemaEnums.js';
 import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
-import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch, supabaseRestRequest } from '../services/supabaseRest.js';
 import {
   sanitizeHttpUrlOrPath,
   sanitizePlainText,
@@ -329,6 +329,7 @@ const generateUniqueSku = async ({ partNumber, name, excludeProductId = null }) 
 
   for (let attempt = 0; attempt < SKU_MAX_GENERATION_ATTEMPTS; attempt += 1) {
     const candidate = `${base}-${randomSkuSuffix()}`;
+    if (shouldUseDatabaseReadFallback()) return candidate;
     const exists = await skuExists(candidate, excludeProductId);
     if (!exists) return candidate;
   }
@@ -1528,6 +1529,49 @@ export const createProduct = async (req, res) => {
 
     const resolvedIsOnSale = cleanIsOnSale ?? cleanSalePrice !== null;
 
+    if (shouldUseDatabaseReadFallback()) {
+      const rows = await supabaseRestRequest('products', {
+        method: 'POST',
+        prefer: 'return=representation',
+        body: {
+          part_number: cleanPartNumber,
+          name: cleanName,
+          description: cleanDescription,
+          price: parsedPrice,
+          buying_price: buyingPriceField.value,
+          image: cleanImage,
+          video_url: cleanVideoUrl,
+          category_id: cleanCategoryId,
+          stock_quantity: parsedStockQuantity,
+          shipping_option: cleanShippingOption || 'standard',
+          shipping_weight_kg: parsedShippingWeightKg,
+          shipping_dimensions: cleanShippingDimensions,
+          box_number: cleanBoxNumber,
+          low_stock_threshold: cleanLowStockThreshold ?? 5,
+          brand: cleanBrand,
+          sku: resolvedSku,
+          barcode: cleanBarcode,
+          sale_price: cleanSalePrice,
+          is_on_sale: resolvedIsOnSale,
+          status: cleanStatus || 'draft',
+          image_urls: cleanImageUrls,
+          bulk_pricing: cleanBulkPricing,
+          product_type: cleanProductType || 'single',
+          reserved_stock: reservedStockField.value ?? 0,
+          damaged_stock: damagedStockField.value ?? 0,
+          color: cleanColor,
+        },
+      });
+      const newProduct = Array.isArray(rows) ? rows[0] : rows;
+      emitProductCreated(newProduct);
+
+      return res.status(201).json({
+        message: 'Product created successfully',
+        product: newProduct,
+        degraded: true,
+      });
+    }
+
     const result = await pool.query(
       `INSERT INTO products (
         part_number, name, description, price, buying_price, 
@@ -1562,6 +1606,9 @@ export const createProduct = async (req, res) => {
     if (error.code === '23505') { // Unique violation
       return res.status(400).json({ message: 'Product with this part number, SKU, or barcode already exists' });
     }
+    if (error.status === 409) {
+      return res.status(400).json({ message: 'Product with this part number, SKU, or barcode already exists' });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1579,18 +1626,27 @@ export const updateProduct = async (req, res) => {
   try {
     if (!requireProductManagerAccess(req, res)) return;
 
-    const existingResult = await pool.query(
-      `SELECT id, name, part_number, price, sale_price, is_on_sale, product_type
-       FROM products
-       WHERE id = $1`,
-      [id]
-    );
-
-    if (existingResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Product not found' });
+    let existingProduct = null;
+    if (shouldUseDatabaseReadFallback()) {
+      const rows = await supabaseRestFetch('products', {
+        select: 'id,name,part_number,price,sale_price,is_on_sale,product_type',
+        id: `eq.${id}`,
+        limit: 1,
+      });
+      existingProduct = Array.isArray(rows) ? rows[0] : null;
+    } else {
+      const existingResult = await pool.query(
+        `SELECT id, name, part_number, price, sale_price, is_on_sale, product_type
+         FROM products
+         WHERE id = $1`,
+        [id]
+      );
+      existingProduct = existingResult.rows[0] || null;
     }
 
-    const existingProduct = existingResult.rows[0];
+    if (!existingProduct) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
 
     const hasNamePayload = hasBodyField(req.body, 'name');
     const hasPartNumberPayload = hasBodyField(req.body, 'part_number');
@@ -1785,6 +1841,54 @@ export const updateProduct = async (req, res) => {
       });
     }
 
+    if (shouldUseDatabaseReadFallback()) {
+      const patch = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (hasPartNumberPayload) patch.part_number = cleanPartNumber;
+      if (hasNamePayload) patch.name = cleanName;
+      if (hasBodyField(req.body, 'description')) patch.description = cleanDescription;
+      if (hasPricePayload) patch.price = parsedPrice;
+      if (hasBuyingPricePayload) patch.buying_price = buyingPriceField.value;
+      if (hasBodyField(req.body, 'image')) patch.image = cleanImage;
+      if (hasCategoryIdPayload) patch.category_id = cleanCategoryId;
+      if (hasStockPayload) patch.stock_quantity = parsedStockQuantity;
+      if (hasBodyField(req.body, 'box_number')) patch.box_number = cleanBoxNumber;
+      if (hasLowStockPayload) patch.low_stock_threshold = cleanLowStockThreshold;
+      if (hasBodyField(req.body, 'brand')) patch.brand = cleanBrand;
+      if (requestedAutoSku || hasSkuPayload) patch.sku = resolvedSku;
+      if (hasBodyField(req.body, 'barcode')) patch.barcode = cleanBarcode;
+      if (hasSalePricePayload) patch.sale_price = salePriceField.value;
+      if (hasIsOnSalePayload) patch.is_on_sale = cleanIsOnSale;
+      if (hasStatusPayload) patch.status = cleanStatus;
+      if (hasVideoUrlPayload) patch.video_url = cleanVideoUrl;
+      if (hasImageUrlsPayload) patch.image_urls = cleanImageUrls;
+      if (hasBulkPricingPayload) patch.bulk_pricing = bulkPricingValidation.value ?? [];
+      if (hasShippingOptionPayload) patch.shipping_option = cleanShippingOption;
+      if (hasShippingWeightPayload) patch.shipping_weight_kg = shippingWeightField.value;
+      if (hasShippingDimensionsPayload) patch.shipping_dimensions = shippingDimensionsField.value;
+      if (hasProductTypePayload) patch.product_type = cleanProductType;
+      if (hasReservedStockPayload) patch.reserved_stock = reservedStockField.value;
+      if (hasDamagedStockPayload) patch.damaged_stock = damagedStockField.value;
+      if (hasColorPayload) patch.color = cleanColor;
+
+      const rows = await supabaseRestRequest('products', {
+        method: 'PATCH',
+        queryParams: { id: `eq.${id}` },
+        prefer: 'return=representation',
+        body: patch,
+      });
+      const updatedProduct = Array.isArray(rows) ? rows[0] : rows;
+      emitProductUpdated(updatedProduct);
+
+      return res.json({
+        message: 'Product updated successfully',
+        product: updatedProduct,
+        degraded: true,
+      });
+    }
+
     const result = await pool.query(
       `UPDATE products SET
         part_number = COALESCE($1, part_number),
@@ -1873,6 +1977,9 @@ export const updateProduct = async (req, res) => {
   } catch (error) {
     console.error('Update product error:', error);
     if (error.code === '23505') {
+      return res.status(400).json({ message: 'Product with this part number, SKU, or barcode already exists' });
+    }
+    if (error.status === 409) {
       return res.status(400).json({ message: 'Product with this part number, SKU, or barcode already exists' });
     }
     res.status(500).json({ message: 'Server error' });
@@ -1966,6 +2073,29 @@ export const deleteProduct = async (req, res) => {
   try {
     if (!requireProductManagerAccess(req, res)) return;
 
+    if (shouldUseDatabaseReadFallback()) {
+      const rows = await supabaseRestRequest('products', {
+        method: 'PATCH',
+        queryParams: { id: `eq.${id}` },
+        prefer: 'return=representation',
+        body: {
+          status: 'archived',
+          is_deleted: true,
+          updated_at: new Date().toISOString(),
+        },
+      });
+
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+
+      emitProductDeleted(id);
+      return res.json({
+        message: 'Product deleted successfully',
+        degraded: true,
+      });
+    }
+
     const result = await pool.query(
       `UPDATE products
        SET status = 'archived', is_deleted = true, updated_at = CURRENT_TIMESTAMP
@@ -1983,6 +2113,9 @@ export const deleteProduct = async (req, res) => {
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {
     console.error('Delete product error:', error);
+    if (error?.status === 404) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
