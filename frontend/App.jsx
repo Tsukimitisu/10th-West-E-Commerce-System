@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -39,7 +39,7 @@ import { supabase, onAuthStateChange } from './services/supabase.js';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { Role } from './types.js';
 
-const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
+const USE_SUPABASE = false;
 const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
 
 const AppLayout = ({ user, onLogout, onLogin }) => {
@@ -67,7 +67,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col ${isAccountRoute ? 'bg-slate-50' : 'bg-zinc-900'}`}>
+    <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-100">
       {!hideChrome && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
       {!hideChrome && !isSuperAdmin && user && <EmailVerificationBanner user={user} />}
       <div className="flex-1">
@@ -78,7 +78,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
             animate={{ opacity: 1 }}
             exit={shouldReduceMotion || isAccountRoute ? { opacity: 1 } : { opacity: 0 }}
             transition={{ duration: shouldReduceMotion || isAccountRoute ? 0 : 0.2, ease: 'easeOut' }}
-            className={`h-full ${isAccountRoute ? 'bg-slate-50' : ''}`}
+            className="h-full bg-zinc-950"
           >
             <Routes location={location}>
               <Route path="/" element={<Home />} />

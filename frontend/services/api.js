@@ -1,14 +1,14 @@
 import { Role, OrderStatus, ReturnStatus } from '../types.js';
 import { supabase } from './supabase.js';
-// Used only by custom Supabase fallback auth paths for secure password hashing.
-import bcrypt from 'bcryptjs';
 
 // Configuration
 const API_URL = import.meta.env.VITE_API_URL || (() => {
   const host = window.location.hostname;
   return `http://${host}:5000/api`;
 })();
-const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
+// Direct browser access to application tables is intentionally disabled. All
+// authentication and private data access must go through the backend API.
+const USE_SUPABASE = false;
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK === 'true';
 const USE_BACKEND_ORDER_API = true;
 const USE_BACKEND_ADDRESS_API = true;
@@ -2659,6 +2659,7 @@ export const createOrder = async (order) => {
 
   const items = (order.items || []).map(item => ({
     product_id: (item).productId ?? (item).product_id,
+    variant_id: (item).variantId ?? (item).variant_id ?? (item).product?.selected_variant?.id ?? null,
     quantity: (item).quantity ?? (item).quantity,
     price: (item).price ?? (item).product_price ?? (item).product?.price,
     product_price: (item).product_price ?? (item).price ?? (item).product?.price,
@@ -2670,8 +2671,10 @@ export const createOrder = async (order) => {
     items,
   };
 
-  const data = await authenticatedFetch(`${API_URL}/orders`, {
+  const orderEndpoint = order.source === 'pos' ? `${API_URL}/pos/orders` : `${API_URL}/orders`;
+  const data = await authenticatedFetch(orderEndpoint, {
     method: 'POST',
+    headers: { 'Idempotency-Key': order.idempotency_key || crypto.randomUUID() },
     body: JSON.stringify(payload),
   });
 
@@ -2984,8 +2987,9 @@ export const createGcashCheckout = async (checkoutPayload) => {
     };
   }
 
-  return authenticatedFetch(`${API_URL}/payments/gcash/checkout`, {
+  return authenticatedFetch(`${API_URL}/payments/paymongo/checkout`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': checkoutPayload.idempotency_key || crypto.randomUUID() },
     body: JSON.stringify(checkoutPayload),
   });
 };
@@ -3768,7 +3772,7 @@ export const getDiscounts = async () => {
   return authenticatedFetch(`${API_URL}/discounts`).catch(() => []);
 };
 
-export const validateDiscount = async (code, amount) => {
+export const validateDiscount = async (code, amount, items = []) => {
   if (USE_SUPABASE) {
     const { data } = await supabase
       .from('discounts')
@@ -3789,7 +3793,7 @@ export const validateDiscount = async (code, amount) => {
   }
   return authenticatedFetch(`${API_URL}/discounts/validate`, {
     method: 'POST',
-    body: JSON.stringify({ code, amount }),
+    body: JSON.stringify({ discount_code: code, items }),
   });
 };
 export const validateDiscountCode = validateDiscount;
