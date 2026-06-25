@@ -9,7 +9,7 @@ const API_URL = import.meta.env.VITE_API_URL || (() => {
 // Direct browser access to application tables is intentionally disabled. All
 // authentication and private data access must go through the backend API.
 const USE_SUPABASE = false;
-const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK === 'true';
+const USE_MOCK_DATA = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true';
 const USE_BACKEND_ORDER_API = true;
 const USE_BACKEND_ADDRESS_API = true;
 export const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
@@ -1028,6 +1028,7 @@ const mapProductFromSupabase = (p) => ({
   bulk_pricing: normalizeBulkPricing(p.bulk_pricing),
   rating: Number(p.rating || 0),
   reviewCount: Number(p.review_count ?? p.reviewCount ?? 0),
+  viewCount: Number(p.view_count ?? p.viewCount ?? 0),
 });
 
 const normalizeProductImageUrls = (value) => {
@@ -1181,7 +1182,7 @@ const REVIEW_MEDIA_BUCKET = 'review-media';
 const REVIEW_MEDIA_MAX_FILES = 4;
 const REVIEW_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const REVIEW_VIDEO_MAX_BYTES = 25 * 1024 * 1024;
-const REVIEW_ELIGIBLE_ORDER_STATUSES = ['delivered', 'completed'];
+const REVIEW_ELIGIBLE_ORDER_STATUSES = ['delivered'];
 
 const buildReviewEligibilityError = () => {
   const eligibilityError = new Error('Only customers with delivered orders for this product can leave a review.');
@@ -1552,7 +1553,7 @@ export const getTopSellers = async (days = null) => {
     let query = supabase
       .from('orders')
       .select('id, created_at, order_items(quantity, product_id, products(id, name, part_number, image, description, price, sale_price, is_on_sale, stock_quantity, rating, brand, status, created_at, categories(name)))')
-      .in('status', ['delivered', 'completed']);
+      .in('status', ['delivered']);
 
     if (days && days !== 'all') {
       const parsedDays = Number.parseInt(String(days), 10);
@@ -2491,13 +2492,23 @@ const mapOrderFromApi = (order) => {
 };
 
 const STAFF_ORDER_STATUS_TRANSITIONS = {
-  pending: new Set(['paid', 'preparing', 'cancelled']),
-  paid: new Set(['preparing', 'cancelled']),
-  preparing: new Set(['shipped', 'cancelled']),
-  shipped: new Set([]),
+  pending: new Set(['processing', 'cancelled']),
+  payment_pending: new Set(['paid', 'failed', 'cancelled']),
+  paid: new Set(['processing']),
+  processing: new Set(['packed', 'cancelled']),
+  packed: new Set(['ready_for_pickup', 'cancelled']),
+  ready_for_pickup: new Set(['shipped', 'cancelled']),
+  shipped: new Set(['out_for_delivery']),
+  out_for_delivery: new Set([]),
   delivered: new Set([]),
-  completed: new Set([]),
   cancelled: new Set([]),
+  return_requested: new Set(['return_approved', 'return_rejected']),
+  return_approved: new Set(['returned']),
+  returned: new Set(['refund_processing']),
+  refund_processing: new Set(['refunded', 'partially_refunded']),
+  refunded: new Set([]),
+  partially_refunded: new Set([]),
+  failed: new Set([]),
 };
 
 const canTransitionStaffOrderStatus = (currentStatus, nextStatus) => {
@@ -2772,8 +2783,8 @@ export const updateOrderStatus = async (id, status, trackingNumber = '') => {
     await new Promise(resolve => setTimeout(resolve, 300));
     const order = MOCK_ORDERS.find(o => o.id === id);
     if (!order) throw new Error('Order not found');
-    if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
-      throw new Error('Use delivery and receipt confirmations for delivered/completed statuses.');
+    if (normalizedStatus === 'delivered') {
+      throw new Error('Use delivery confirmation for delivered status.');
     }
     if (!canTransitionStaffOrderStatus(order.status, normalizedStatus)) {
       throw new Error(`Invalid status transition from ${order.status} to ${normalizedStatus}`);
@@ -2786,8 +2797,8 @@ export const updateOrderStatus = async (id, status, trackingNumber = '') => {
   }
 
   if (USE_SUPABASE && !USE_BACKEND_ORDER_API) {
-    if (normalizedStatus === 'delivered' || normalizedStatus === 'completed') {
-      throw new Error('Use delivery and receipt confirmations for delivered/completed statuses.');
+    if (normalizedStatus === 'delivered') {
+      throw new Error('Use delivery confirmation for delivered status.');
     }
 
     const { data: currentOrder, error: currentOrderError } = await supabase
@@ -2939,9 +2950,8 @@ export const confirmOrderReceipt = async (id) => {
     const order = MOCK_ORDERS.find(o => o.id === id);
     if (!order) throw new Error('Order not found');
     if (order.status !== 'delivered') {
-      throw new Error('Order can be completed only after rider delivery confirmation.');
+      throw new Error('Receipt can only be confirmed after rider delivery confirmation.');
     }
-    order.status = 'completed';
     order.customer_confirmed_receipt_at = new Date().toISOString();
     order.delivered_at = order.delivered_at || new Date().toISOString();
     return order;
@@ -2966,14 +2976,13 @@ export const confirmOrderReceipt = async (id) => {
     }
 
     if (currentOrder.status !== 'delivered') {
-      throw new Error('Order can be completed only after rider delivery confirmation.');
+      throw new Error('Receipt can only be confirmed after rider delivery confirmation.');
     }
 
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from('orders')
       .update({
-        status: 'completed',
         customer_confirmed_receipt_at: nowIso,
         delivered_at: currentOrder.delivered_at || nowIso,
         updated_at: nowIso,
@@ -3042,18 +3051,6 @@ export const cancelOrder = async (id, reason = '') => {
   return mapOrderFromApi(data.order ?? data);
 };
 
-export const createPaymentIntent = async (amount, items, currency = 'php') => {
-  if (USE_MOCK_DATA) {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    return { clientSecret: 'mock_secret_' + Math.random() };
-  }
-
-  return authenticatedFetch(`${API_URL}/checkout/create-payment-intent`, {
-    method: 'POST',
-    body: JSON.stringify({ amount, items, currency }),
-  });
-};
-
 export const createGcashCheckout = async (checkoutPayload) => {
   if (USE_MOCK_DATA) {
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -3072,6 +3069,22 @@ export const createGcashCheckout = async (checkoutPayload) => {
     body: JSON.stringify(checkoutPayload),
   });
 };
+
+export const getCheckout = async (checkoutId) => authenticatedFetch(`${API_URL}/checkout/${encodeURIComponent(checkoutId)}`);
+
+export const confirmCheckout = async (payload) => authenticatedFetch(`${API_URL}/checkout/confirm`, {
+  method: 'POST',
+  body: JSON.stringify(payload),
+});
+
+export const cancelCheckout = async (checkoutId) => authenticatedFetch(`${API_URL}/checkout/${encodeURIComponent(checkoutId)}/cancel`, {
+  method: 'POST',
+});
+
+export const retryPayment = async (orderId) => authenticatedFetch(`${API_URL}/payments/${orderId}/retry`, {
+  method: 'POST',
+  headers: { 'Idempotency-Key': crypto.randomUUID() },
+});
 
 export const getPaymentOrderStatus = async (orderId) => authenticatedFetch(`${API_URL}/payments/orders/${orderId}/status`);
 
@@ -3649,6 +3662,9 @@ export const getReviews = async (productId) => {
     if (Array.isArray(backendReviews)) {
       return backendReviews.map((review) => mapReviewForDisplay(review, { currentUser, currentUserId }));
     }
+    if (Array.isArray(backendReviews?.reviews)) {
+      return backendReviews.reviews.map((review) => mapReviewForDisplay(review, { currentUser, currentUserId }));
+    }
 
     const { data: reviewRows, error: reviewError } = await supabase
       .from('reviews')
@@ -3686,7 +3702,8 @@ export const getReviews = async (productId) => {
     });
   }
 
-  return authenticatedFetch(`${API_URL}/products/${normalizedProductId}/reviews`).catch(() => []);
+  const response = await authenticatedFetch(`${API_URL}/products/${normalizedProductId}/reviews`).catch(() => []);
+  return Array.isArray(response) ? response : (Array.isArray(response?.reviews) ? response.reviews : []);
 };
 export const getProductReviews = getReviews;
 
@@ -4740,8 +4757,11 @@ export const getRelatedProducts = async (productId, categoryId) => {
   return products.filter(p => p.category_id === categoryId && p.id !== productId).slice(0, 4);
 };
 export const recordProductView = async (productId) => {
-  // Mock implementation - would track views in real app
-  return Promise.resolve();
+  const normalizedProductId = Number(productId);
+  if (!Number.isInteger(normalizedProductId) || normalizedProductId <= 0) return null;
+  return authenticatedFetch(`${API_URL}/products/${normalizedProductId}/view`, {
+    method: 'POST',
+  }).catch(() => null);
 };
 
 // User profile functions
@@ -4929,7 +4949,7 @@ export const batchReceiveStock = async (items, notes) => {
 
 export const getSalesReport = async (range = 'daily', startDate, endDate) => {
   if (USE_SUPABASE) {
-    let query = supabase.from('orders').select('*').in('status', ['paid', 'completed']);
+    let query = supabase.from('orders').select('*').in('status', ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered']);
     const now = new Date();
     if (range === 'daily') {
       query = query.gte('created_at', new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString());
@@ -4971,7 +4991,7 @@ export const getSalesReport = async (range = 'daily', startDate, endDate) => {
 
 export const getSalesByChannel = async (startDate, endDate) => {
   if (USE_SUPABASE) {
-    let query = supabase.from('orders').select('source, total_amount').in('status', ['paid', 'completed']);
+    let query = supabase.from('orders').select('source, total_amount').in('status', ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered']);
     if (startDate && endDate) {
       query = query.gte('created_at', startDate).lte('created_at', endDate);
     }
@@ -5024,7 +5044,7 @@ export const getStockLevelsReport = async () => {
 
 export const getTopProducts = async (limit = 10, startDate, endDate) => {
   if (USE_SUPABASE) {
-    let query = supabase.from('orders').select('id, created_at, status, order_items(quantity, product_price, product_id, products(id, name, part_number, image, price, stock_quantity, categories(name)))').in('status', ['paid', 'completed']);
+    let query = supabase.from('orders').select('id, created_at, status, order_items(quantity, product_price, product_id, products(id, name, part_number, image, price, stock_quantity, categories(name)))').in('status', ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered']);
     if (startDate && endDate) {
       query = query.gte('created_at', startDate).lte('created_at', endDate);
     }
@@ -5063,7 +5083,7 @@ export const getDailySalesTrend = async (days = 30) => {
   if (USE_SUPABASE) {
     const since = new Date();
     since.setDate(since.getDate() - days);
-    const { data, error } = await supabase.from('orders').select('created_at, total_amount, source').in('status', ['paid', 'completed']).gte('created_at', since.toISOString());
+    const { data, error } = await supabase.from('orders').select('created_at, total_amount, source').in('status', ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered']).gte('created_at', since.toISOString());
     if (error) throw new Error(error.message);
     const dayMap = {};
     (data || []).forEach(o => {
@@ -5082,7 +5102,7 @@ export const getDailySalesTrend = async (days = 30) => {
 
 export const getProfitReport = async (startDate, endDate) => {
   if (USE_SUPABASE) {
-    let query = supabase.from('orders').select('total_amount, discount_amount, order_items(quantity, product_price, products(buying_price))').in('status', ['paid', 'completed']);
+    let query = supabase.from('orders').select('total_amount, discount_amount, order_items(quantity, product_price, products(buying_price))').in('status', ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered']);
     if (startDate && endDate) {
       query = query.gte('created_at', startDate).lte('created_at', endDate);
     }
