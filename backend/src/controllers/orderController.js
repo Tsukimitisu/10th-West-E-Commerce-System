@@ -5,7 +5,13 @@ import { ORDER_STATUSES, STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
 import { buildOrderStatusMessage, createNotification as createUserNotification, ensureNotificationColumns } from '../utils/notifications.js';
 import { validatePhilippineAddress } from '../services/psgc.js';
-import { createJntWaybillForOrder, ensureJntOrderColumns, getJntWaybill, normalizeWaybillStatus } from '../services/jntShipments.js';
+import {
+  createJntWaybillForOrder,
+  ensureJntOrderColumns,
+  getJntWaybill,
+  normalizeWaybillStatus,
+  refreshJntTrackingForOrder,
+} from '../services/jntShipments.js';
 import { ensurePaymentOrderColumns } from './paymentController.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
@@ -18,13 +24,17 @@ const FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
 const STANDARD_SHIPPING_FEE = 150;
 const EXPRESS_SHIPPING_FEE = 300;
 const STAFF_STATUS_TRANSITIONS = {
-  pending: new Set(['paid', 'preparing', 'cancelled']),
-  paid: new Set(['preparing', 'cancelled']),
-  preparing: new Set(['shipped', 'cancelled']),
-  shipped: new Set([]),
+  pending: new Set(['processing', 'cancelled']),
+  payment_pending: new Set(['paid', 'failed', 'cancelled']),
+  paid: new Set(['processing', 'refund_processing']),
+  processing: new Set(['packed', 'cancelled', 'refund_processing']),
+  packed: new Set(['ready_for_pickup', 'cancelled', 'refund_processing']),
+  ready_for_pickup: new Set(['shipped', 'cancelled', 'refund_processing']),
+  shipped: new Set(['out_for_delivery']),
+  out_for_delivery: new Set([]),
   delivered: new Set([]),
-  completed: new Set([]),
   cancelled: new Set([]),
+  failed: new Set([]),
 };
 const DEFAULT_ORDER_LIMIT = 20;
 const MAX_ORDER_LIMIT = 100;
@@ -185,7 +195,7 @@ const mapOrderRecord = (order) => ({
   waybill_label_payload: order.waybill_label_payload || null,
   courier_metadata: order.courier_metadata || null,
   payment_provider: normalizeText(order.payment_provider),
-  payment_status: normalizeText(order.payment_status) || (['paid', 'preparing', 'shipped', 'delivered', 'completed'].includes(String(order.status || '').toLowerCase()) ? 'paid' : 'pending'),
+  payment_status: normalizeText(order.payment_status) || (['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered'].includes(String(order.status || '').toLowerCase()) ? 'paid' : 'pending'),
   payment_reference: normalizeText(order.payment_reference),
   payment_checkout_url: normalizeText(order.payment_checkout_url),
   payment_metadata: order.payment_metadata || null,
@@ -607,11 +617,9 @@ export const updateOrderStatus = async (req, res) => {
     return res.status(400).json({ message: 'Invalid status' });
   }
 
-  if (status === 'delivered' || status === 'completed') {
+  if (status === 'delivered') {
     return res.status(400).json({
-      message: status === 'delivered'
-        ? 'Use rider delivery confirmation to mark this order as delivered.'
-        : 'Order completion requires customer receipt confirmation.',
+      message: 'Use rider delivery confirmation to mark this order as delivered.',
     });
   }
 
@@ -705,9 +713,9 @@ export const confirmOrderDelivery = async (req, res) => {
 
     const orderDetail = orderDetailResult.rows[0];
     const currentStatus = String(orderDetail.status || '').toLowerCase();
-    if (currentStatus !== 'shipped') {
+    if (!['shipped', 'out_for_delivery'].includes(currentStatus)) {
       return res.status(400).json({
-        message: 'Only shipped orders can be confirmed as delivered by a rider.',
+        message: 'Only shipped or out-for-delivery orders can be confirmed as delivered by a rider.',
       });
     }
 
@@ -719,7 +727,7 @@ export const confirmOrderDelivery = async (req, res) => {
            rider_confirmed_by = COALESCE(rider_confirmed_by, $2),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
-         AND status = 'shipped'
+         AND status IN ('shipped', 'out_for_delivery')
        RETURNING *`,
       [id, riderId || null]
     );
@@ -731,6 +739,11 @@ export const confirmOrderDelivery = async (req, res) => {
     }
 
     const updatedOrder = result.rows[0];
+    await pool.query(
+      `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note)
+       VALUES ($1, $2, 'delivered', 'staff', $3, 'Delivery confirmed by rider')`,
+      [updatedOrder.id, currentStatus, riderId || null]
+    );
     emitOrderStatusUpdate(updatedOrder);
 
     if (orderDetail.user_id) {
@@ -783,14 +796,13 @@ export const confirmOrderReceipt = async (req, res) => {
     const currentStatus = String(orderDetail.status || '').toLowerCase();
     if (currentStatus !== 'delivered') {
       return res.status(400).json({
-        message: 'Order can be completed only after rider delivery confirmation.',
+        message: 'Receipt can only be confirmed after rider delivery confirmation.',
       });
     }
 
     const result = await pool.query(
       `UPDATE orders
-       SET status = 'completed',
-           delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
+       SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
            customer_confirmed_receipt_at = COALESCE(customer_confirmed_receipt_at, CURRENT_TIMESTAMP),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
@@ -807,20 +819,25 @@ export const confirmOrderReceipt = async (req, res) => {
     }
 
     const updatedOrder = result.rows[0];
+    await pool.query(
+      `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note)
+       VALUES ($1, 'delivered', 'delivered', 'customer', $2, 'Customer confirmed receipt')`,
+      [updatedOrder.id, userId]
+    );
     emitOrderStatusUpdate(updatedOrder);
 
     await createUserNotification(pool, {
       user_id: userId,
       type: 'order.status',
-      title: `Order #${String(orderDetail.order_number || updatedOrder.id).padStart(4, '0')} completed`,
+      title: `Order #${String(orderDetail.order_number || updatedOrder.id).padStart(4, '0')} receipt confirmed`,
       message: orderDetail.product_name
-        ? `${buildOrderStatusMessage('completed')} Item: ${orderDetail.product_name}.`
-        : buildOrderStatusMessage('completed'),
+        ? `Thank you for confirming receipt. Item: ${orderDetail.product_name}.`
+        : 'Thank you for confirming receipt.',
       reference_id: updatedOrder.id,
       reference_type: 'order',
       thumbnail_url: orderDetail.product_image || null,
       metadata: {
-        status: 'completed',
+        status: 'delivered',
         order_id: updatedOrder.id,
         order_number: orderDetail.order_number || updatedOrder.id,
         customer_confirmed_receipt_at: updatedOrder.customer_confirmed_receipt_at,
@@ -830,7 +847,7 @@ export const confirmOrderReceipt = async (req, res) => {
     });
 
     res.json({
-      message: 'Order receipt confirmed. Order completed.',
+      message: 'Order receipt confirmed.',
       order: updatedOrder,
     });
   } catch (error) {
@@ -839,7 +856,7 @@ export const confirmOrderReceipt = async (req, res) => {
   }
 };
 
-// Cancel order (customer - only if not yet shipped/preparing)
+// Cancel order (customer - only while cancellation is still allowed)
 export const cancelOrder = async (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
@@ -1041,19 +1058,15 @@ export const getOrderWaybill = async (req, res) => {
 
 export const refreshJntTracking = async (req, res) => {
   try {
-    const waybill = await getJntWaybill(pool, req.params.id);
-    if (!waybill) return res.status(404).json({ message: 'Order not found' });
-    if (!waybill.waybill_number) return res.status(400).json({ message: 'No J&T waybill exists for this order.' });
-
-    res.json({
-      message: 'J&T tracking refresh endpoint is available; configure the contracted tracking API to enable live refresh.',
-      tracking_number: waybill.tracking_number,
-      waybill_number: waybill.waybill_number,
-      courier_metadata: waybill.courier_metadata,
-    });
+    const tracking = await refreshJntTrackingForOrder(pool, req.params.id, { requestedBy: req.user?.id || null });
+    emitOrderStatusUpdate(req.params.id, tracking.order_status);
+    res.json(tracking);
   } catch (error) {
     console.error('Refresh J&T tracking error:', error);
-    res.status(500).json({ message: 'Failed to refresh J&T tracking' });
+    res.status(error.status || (error.code === 'JNT_TRACKING_NOT_CONFIGURED' ? 503 : 500)).json({
+      message: error.message || 'Failed to refresh J&T tracking',
+      code: error.code || 'JNT_TRACKING_ERROR',
+    });
   }
 };
 
