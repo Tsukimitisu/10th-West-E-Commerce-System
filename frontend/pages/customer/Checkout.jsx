@@ -9,7 +9,7 @@ import MapPinPicker from '../../components/MapPinPicker';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 const CHECKOUT_TERMS_SESSION_KEY = 'checkoutTermsAccepted';
-const CHECKOUT_VAT_RATE = 0.12;
+const CHECKOUT_VAT_RATE = 0;
 const CHECKOUT_FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
 const CHECKOUT_STANDARD_SHIPPING_FEE = 150;
 
@@ -341,7 +341,11 @@ const Checkout = () => {
     setPromoError('');
     try {
       if (isBuyNow) {
-        const result = await validateDiscountCode(promoCode, subtotal);
+        const result = await validateDiscountCode(promoCode, subtotal, items.map((item) => ({
+          product_id: item.productId,
+          variant_id: item.variantId || item.product?.selected_variant?.id || null,
+          quantity: item.quantity,
+        })));
         setBuyNowDiscount(result?.discount || result);
         setBuyNowDiscountAmount(Number(result?.discountAmount ?? 0));
       } else {
@@ -398,6 +402,12 @@ const Checkout = () => {
 
 const isNewAddressMode = showNewAddress || addresses.length === 0;
       const usingSavedAddress = selectedAddress && !isNewAddressMode;
+
+      if (!usingSavedAddress) {
+        setError('Save and select a delivery address before checkout.');
+        setProcessing(false);
+        return;
+      }
       const selectedAddr = addresses.find((a) => a.id === selectedAddress);
       if (!usingSavedAddress && !isNewAddressMode) {
       setError('Please select a shipping address.');
@@ -508,25 +518,15 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
       };
 
       const checkoutData = {
-        user_id: u?.id,
+        idempotency_key: crypto.randomUUID(),
         items: items.map((i) => ({
-          productId: i.productId,
+          product_id: i.productId,
+          variant_id: i.variantId || i.product?.selected_variant?.id || null,
           quantity: Math.max(1, Math.trunc(toFiniteNumber(i.quantity, 1))),
-          price: getEffectiveItemUnitPrice(i),
-          product_name: i.product?.name,
-          product_price: getEffectiveItemUnitPrice(i)
         })),
-        shipping_address: shippingAddress,
-        shipping_address_snapshot: shippingAddressSnapshot,
-        shipping_lat: shippingLat,
-        shipping_lng: shippingLng,
-        shipping_method: shippingMethod,
-        total_amount: grandTotal,
-        tax_amount: vatAmount,
+        address_id: Number(selectedAddress),
         payment_method: paymentMethod,
-        guest_info: !u ? { name: form.name, email: form.email } : undefined,
-        discount_amount: discountAmount,
-        promo_code_used: activeDiscount?.code,
+        discount_code: activeDiscount?.code || null,
       };
 
       let checkout = null;
