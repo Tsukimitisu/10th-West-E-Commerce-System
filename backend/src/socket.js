@@ -239,12 +239,39 @@ export function emitNewOrder(order) {
   }
 }
 
-export function emitOrderStatusUpdate(order) {
-  if (!io) return;
+const emitOrderPayload = (order) => {
+  if (!io || !order) return;
   io.to('staff').emit('order:updated', order);
   if (order.user_id) {
     io.to(`user:${order.user_id}`).emit('order:updated', order);
   }
+};
+
+export function emitOrderStatusUpdate(orderOrId, status = null, extra = {}) {
+  if (!io) return;
+  if (orderOrId && typeof orderOrId === 'object') {
+    emitOrderPayload(orderOrId);
+    return;
+  }
+
+  const orderId = Number(orderOrId);
+  if (!Number.isInteger(orderId) || orderId <= 0) return;
+
+  const fallbackPayload = { id: orderId, order_id: orderId, ...(status ? { status } : {}), ...extra };
+  io.to('staff').emit('order:updated', fallbackPayload);
+
+  pool.query(
+    `SELECT id, user_id, status, payment_status, tracking_number, courier, waybill_number,
+            waybill_status, updated_at
+     FROM orders
+     WHERE id = $1`,
+    [orderId]
+  ).then((result) => {
+    const order = result.rows[0];
+    if (order) emitOrderPayload({ ...order, ...extra });
+  }).catch((error) => {
+    console.error('Failed to resolve order for socket update:', error.message || error);
+  });
 }
 
 // Products
