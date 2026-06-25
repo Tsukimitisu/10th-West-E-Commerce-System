@@ -4,6 +4,7 @@ import {
   getProducts,
   getProductById,
   getTopSellers,
+  recordProductView,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -268,6 +269,7 @@ router.post(
   uploadProductVideo
 );
 router.get('/:id/reviews', productIdValidation, validate, getProductReviews);
+router.post('/:id/view', optionalAuth, productIdValidation, validate, recordProductView);
 router.get('/:id', optionalAuth, productIdValidation, validate, getProductById);
 
 // Protected routes (Admin, Super Admin, Owner)

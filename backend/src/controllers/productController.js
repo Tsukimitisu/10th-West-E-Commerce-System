@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import crypto from 'crypto';
 import { emitProductCreated, emitProductUpdated, emitProductDeleted } from '../socket.js';
 import {
   PRODUCT_PUBLISHER_ROLE_SET,
@@ -23,7 +24,7 @@ const ALLOWED_PRODUCT_SHIPPING_OPTIONS = PRODUCT_SHIPPING_OPTION_SET;
 const PRODUCT_PUBLISHER_ROLES = PRODUCT_PUBLISHER_ROLE_SET;
 const PRODUCT_VIDEO_MAX_BYTES = 20 * 1024 * 1024;
 const SKU_MAX_GENERATION_ATTEMPTS = 10;
-const TOP_SELLER_ORDER_STATUS_SQL = "('delivered', 'completed')";
+const TOP_SELLER_ORDER_STATUS_SQL = "('delivered')";
 const TOP_SELLER_EXCLUDED_RETURN_STATUS_SQL = "('approved', 'refunded', 'exchanged')";
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
@@ -691,6 +692,7 @@ const mapProductResponse = (product, { includeInternal = false, relations = null
     product_type: product.product_type || 'single',
     rating: parseFloat(product.review_rating ?? product.rating ?? 0),
     review_count: parseInt(product.review_count ?? 0, 10),
+    view_count: parseInt(product.view_count ?? 0, 10),
     price: parseFloat(product.price),
     sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
     shipping_option: toNullableShippingOption(product.shipping_option) || 'standard',
@@ -1365,6 +1367,59 @@ export const getProductById = async (req, res) => {
       }
     }
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const recordProductView = async (req, res) => {
+  const productId = Number(req.params.id);
+  if (!Number.isInteger(productId) || productId <= 0) {
+    return res.status(400).json({ message: 'Invalid product ID.' });
+  }
+
+  try {
+    const product = await pool.query(
+      `SELECT id FROM products WHERE id = $1 AND status = 'active' AND COALESCE(is_deleted, false) = false`,
+      [productId]
+    );
+    if (!product.rowCount) return res.status(404).json({ message: 'Product not found.' });
+
+    const userId = req.user?.id || null;
+    const visitorSource = userId
+      ? `user:${userId}`
+      : `${req.ip || ''}:${req.get('user-agent') || ''}`;
+    const visitorHash = crypto
+      .createHash('sha256')
+      .update(`${process.env.VIEW_TRACKING_SALT || process.env.JWT_SECRET || '10th-west-moto'}:${visitorSource}`)
+      .digest('hex');
+
+    const inserted = await pool.query(
+      `INSERT INTO product_views (product_id, user_id, visitor_hash)
+       SELECT $1, $2, $3
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM product_views
+         WHERE product_id = $1
+           AND created_at > NOW() - INTERVAL '30 minutes'
+           AND (
+             ($2::int IS NOT NULL AND user_id = $2)
+             OR ($2::int IS NULL AND visitor_hash = $3)
+           )
+       )
+       RETURNING id`,
+      [productId, userId, visitorHash]
+    );
+
+    if (inserted.rowCount) {
+      await pool.query(
+        `UPDATE products SET view_count = COALESCE(view_count, 0) + 1, updated_at = NOW() WHERE id = $1`,
+        [productId]
+      );
+    }
+
+    return res.status(202).json({ recorded: inserted.rowCount > 0 });
+  } catch (error) {
+    console.error('Record product view error:', error);
+    return res.status(500).json({ message: 'Product view could not be recorded.' });
   }
 };
 
