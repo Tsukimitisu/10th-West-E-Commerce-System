@@ -1,7 +1,9 @@
 import pool from '../config/database.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
-const PAID_REPORT_STATUSES = new Set(['paid', 'completed', 'delivered']);
+const REVENUE_ORDER_STATUSES = ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered'];
+const REVENUE_ORDER_STATUS_SQL = REVENUE_ORDER_STATUSES.map((status) => `'${status}'`).join(', ');
+const PAID_REPORT_STATUSES = new Set(REVENUE_ORDER_STATUSES);
 
 const toNumber = (value) => {
   const parsed = Number(value);
@@ -49,7 +51,7 @@ const inWindow = (createdAt, window) => {
 const getReportOrdersFallback = async (filters = {}) => {
   const orders = await supabaseRestFetch('orders', {
     select: 'id,total_amount,discount_amount,source,status,created_at',
-    status: 'in.(paid,completed,delivered)',
+    status: `in.(${REVENUE_ORDER_STATUSES.join(',')})`,
     order: 'created_at.desc',
     limit: 5000,
   }).catch((error) => {
@@ -245,7 +247,7 @@ export const getSalesReport = async (req, res) => {
         COALESCE(SUM(CASE WHEN o.source = 'online' THEN o.total_amount ELSE 0 END), 0) as online_revenue,
         COALESCE(SUM(CASE WHEN o.source = 'pos' THEN o.total_amount ELSE 0 END), 0) as pos_revenue
       FROM orders o
-      WHERE o.status IN ('paid', 'completed')
+      WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
       ${dateFilter}
     `);
 
@@ -298,7 +300,7 @@ export const getSalesByChannel = async (req, res) => {
         COALESCE(SUM(total_amount), 0) as total_revenue,
         COALESCE(AVG(total_amount), 0) as avg_order_value
       FROM orders
-      WHERE status IN ('paid', 'completed')
+      WHERE status IN (${REVENUE_ORDER_STATUS_SQL})
       ${dateFilter}
       GROUP BY source
       ORDER BY total_revenue DESC
@@ -413,7 +415,7 @@ export const getTopProducts = async (req, res) => {
       JOIN products p ON oi.product_id = p.id
       LEFT JOIN categories c ON p.category_id = c.id
       JOIN orders o ON oi.order_id = o.id
-      WHERE o.status IN ('paid', 'completed')
+      WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
       ${dateFilter}
       GROUP BY p.id, p.name, p.part_number, p.image, p.price, p.stock_quantity, c.name
       ORDER BY total_sold DESC
@@ -454,7 +456,7 @@ export const getDailySalesTrend = async (req, res) => {
         COUNT(CASE WHEN source = 'online' THEN 1 END) as online_orders,
         COUNT(CASE WHEN source = 'pos' THEN 1 END) as pos_orders
       FROM orders
-      WHERE status IN ('paid', 'completed')
+      WHERE status IN (${REVENUE_ORDER_STATUS_SQL})
         AND created_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
       GROUP BY DATE(created_at)
       ORDER BY date ASC
@@ -500,7 +502,7 @@ export const getProfitReport = async (req, res) => {
       FROM orders o
       JOIN order_items oi ON o.id = oi.order_id
       JOIN products p ON oi.product_id = p.id
-      WHERE o.status IN ('paid', 'completed')
+      WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
       ${dateFilter}
     `);
 
