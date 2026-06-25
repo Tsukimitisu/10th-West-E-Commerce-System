@@ -24,7 +24,13 @@ const signToken = (user) =>
   jwt.sign(
     { id: user.id, email: user.email, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: '24h' }
+    {
+      algorithm: 'HS256',
+      expiresIn: '24h',
+      issuer: process.env.JWT_ISSUER || '10th-west-moto-api',
+      audience: process.env.JWT_AUDIENCE || '10th-west-moto-web',
+      subject: String(user.id),
+    }
   );
 
 const sanitizeUser = (row) => ({
@@ -44,7 +50,7 @@ const sanitizeUser = (row) => ({
 
 const getUserFromSupabaseRestByEmail = async (email) => {
   const rows = await supabaseRestFetch('users', {
-    select: 'id,name,email,role,phone,avatar,store_credit,is_active,is_deleted,two_factor_enabled,oauth_provider,last_login,email_verified,password_hash',
+    select: 'id,name,email,role,phone,avatar,store_credit,is_active,is_deleted,two_factor_enabled,two_factor_secret,oauth_provider,last_login,email_verified,password_hash',
     email: `eq.${email}`,
     limit: 1,
   });
@@ -88,8 +94,31 @@ const upsertRegistrationOtpViaSupabaseRest = async ({ email, otpHash, expiresAt 
   return Array.isArray(rows) ? rows[0] : rows;
 };
 
+const persistSessionViaSupabaseRest = async (user, ipAddress, userAgent) => {
+  const token = signToken(user);
+  const tokenHash = hashToken(token);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  await supabaseRestRequest('sessions', {
+    method: 'POST',
+    prefer: 'return=minimal',
+    body: {
+      user_id: user.id,
+      token_hash: tokenHash,
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      expires_at: expiresAt.toISOString(),
+      is_active: true,
+    },
+  });
+
+  return token;
+};
+
 const loginWithSupabaseRestFallback = async (req, res) => {
-  const { email, password } = req.validatedData || req.body;
+  const { email, password, totp_code: totpCode } = req.validatedData || req.body;
+  const ipAddress = req.clientIp;
+  const userAgent = req.clientUa;
   const user = await getUserFromSupabaseRestByEmail(email);
 
   if (!user) {
@@ -114,8 +143,37 @@ const loginWithSupabaseRestFallback = async (req, res) => {
     });
   }
 
-  const token = signToken(user);
+  if (user.two_factor_enabled) {
+    if (!totpCode) {
+      return res.json({
+        requires_2fa: true,
+        code: 'TWO_FACTOR_REQUIRED',
+        message: 'Enter the code from your authenticator app.',
+      });
+    }
+
+    const validTotp = Boolean(user.two_factor_secret) && speakeasy.totp.verify({
+      secret: user.two_factor_secret,
+      encoding: 'base32',
+      token: String(totpCode),
+      window: 1,
+    });
+
+    if (!validTotp) {
+      return res.status(401).json({
+        message: 'Invalid two-factor authentication code.',
+        code: 'TWO_FACTOR_INVALID',
+        requires_2fa: true,
+      });
+    }
+  }
+
+  const token = await persistSessionViaSupabaseRest(user, ipAddress, userAgent);
   await prepareAuthenticatedSession(req, user, token);
+
+  void updateUserViaSupabaseRest(user.id, { last_login: new Date().toISOString() }).catch((error) => {
+    console.warn('Unable to update fallback login timestamp:', error.message || error);
+  });
 
   return res.json({
     user: sanitizeUser({ ...user, last_login: user.last_login || new Date(), email_verified: true }),
@@ -403,6 +461,8 @@ const initOtpTable = async () => {
 };
 
 const ensureAuthSchema = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await pool.query(`
     ALTER TABLE users
       ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255),
@@ -764,7 +824,7 @@ export const register = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  const { email, password } = req.validatedData || req.body;
+  const { email, password, totp_code: totpCode } = req.validatedData || req.body;
   const ipAddress = req.clientIp;
   const userAgent = req.clientUa;
   const guestCartSessionId = req.session?.cartSessionId || null;
@@ -814,6 +874,33 @@ export const login = async (req, res) => {
       });
     }
 
+    if (user.two_factor_enabled) {
+      if (!totpCode) {
+        return res.json({
+          requires_2fa: true,
+          code: 'TWO_FACTOR_REQUIRED',
+          message: 'Enter the code from your authenticator app.',
+        });
+      }
+
+      const validTotp = Boolean(user.two_factor_secret) && speakeasy.totp.verify({
+        secret: user.two_factor_secret,
+        encoding: 'base32',
+        token: String(totpCode),
+        window: 1,
+      });
+
+      if (!validTotp) {
+        await recordLoginAttempt(email, ipAddress, false);
+        await logActivity({ userId: user.id, action: 'login_2fa_failed', ipAddress, userAgent });
+        return res.status(401).json({
+          message: 'Invalid two-factor authentication code.',
+          code: 'TWO_FACTOR_INVALID',
+          requires_2fa: true,
+        });
+      }
+    }
+
     await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
 
     await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
@@ -840,7 +927,11 @@ export const login = async (req, res) => {
         console.error('Login Supabase REST fallback error:', fallbackError);
       }
     }
-    res.status(500).json({ message: 'Login failed' });
+
+    res.status(500).json({
+      message: 'Login failed',
+      code: 'LOGIN_FAILED',
+    });
   }
 };
 

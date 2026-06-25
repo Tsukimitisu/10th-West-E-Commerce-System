@@ -145,6 +145,11 @@ const registerValidation = [
 const loginValidation = [
   emailValidation(),
   body('password').notEmpty().withMessage('Password is required'),
+  body('totp_code')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .matches(/^\d{6}$/)
+    .withMessage('Two-factor code must contain exactly 6 digits'),
 ];
 
 // ─── Public routes ─────────────────────────────────────────────────

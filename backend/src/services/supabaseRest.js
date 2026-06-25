@@ -4,10 +4,8 @@ let bypassDatabaseReadsUntil = 0;
 
 const getSupabaseRestConfig = () => {
   const baseUrl = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
-  const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    || process.env.SUPABASE_ANON_KEY
-    || process.env.SUPABASE_KEY
-    || process.env.VITE_SUPABASE_ANON_KEY;
+  // Server-side REST fallback must never run with an anonymous/browser key.
+  const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!baseUrl || !apiKey) {
     return null;
@@ -50,13 +48,6 @@ export const shouldUseDatabaseReadFallback = () => {
   }
 
   if (readMode === 'supabase_rest') {
-    return true;
-  }
-
-  if (
-    process.env.NODE_ENV !== 'production' &&
-    getSupabaseRestConfig()
-  ) {
     return true;
   }
 

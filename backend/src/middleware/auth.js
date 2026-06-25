@@ -3,35 +3,19 @@ import crypto from 'crypto';
 import pool from '../config/database.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback } from '../services/supabaseRest.js';
 
+const JWT_ISSUER = process.env.JWT_ISSUER || '10th-west-moto-api';
+const JWT_AUDIENCE = process.env.JWT_AUDIENCE || '10th-west-moto-web';
+const JWT_VERIFY_OPTIONS = {
+  algorithms: ['HS256'],
+  issuer: JWT_ISSUER,
+  audience: JWT_AUDIENCE,
+  clockTolerance: 30,
+};
+
 const extractBearerToken = (authHeader) => {
   if (typeof authHeader !== 'string') return null;
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   return match ? match[1].trim() : null;
-};
-
-const decodeSupabaseFallbackToken = (token) => {
-  if (typeof token !== 'string' || !token.startsWith('sb-token-')) {
-    return null;
-  }
-
-  const payloadBase64 = token.slice('sb-token-'.length);
-  if (!payloadBase64) return null;
-
-  try {
-    const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
-    if (!payload || typeof payload !== 'object') return null;
-
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) return null;
-
-    return {
-      id,
-      email: payload.email || null,
-      role: payload.role || null,
-    };
-  } catch {
-    return null;
-  }
 };
 
 const readSessionAuth = (req) => {
@@ -69,14 +53,19 @@ const hydrateUserFromSession = async (req) => {
   }
 
   const userResult = await pool.query(
-    `SELECT id, name, email, role, avatar, is_active
+    `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified
      FROM users
      WHERE id = $1
      LIMIT 1`,
     [sessionAuth.userId]
   );
 
-  if (userResult.rows.length === 0 || !userResult.rows[0].is_active) {
+  if (
+    userResult.rows.length === 0
+    || !userResult.rows[0].is_active
+    || userResult.rows[0].is_deleted
+    || !userResult.rows[0].email_verified
+  ) {
     return null;
   }
 
@@ -88,15 +77,17 @@ const hydrateUserFromSession = async (req) => {
   return userResult.rows[0];
 };
 
+const userFromDecodedToken = (decoded) => ({
+  id: decoded.id,
+  email: decoded.email || null,
+  role: decoded.role || null,
+});
+
 export const authenticateOptional = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = extractBearerToken(authHeader);
 
   if (!token) {
-    if (shouldUseDatabaseReadFallback()) {
-      return next();
-    }
-
     try {
       const sessionUser = await hydrateUserFromSession(req);
       if (sessionUser) {
@@ -109,35 +100,37 @@ export const authenticateOptional = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!process.env.JWT_SECRET) return next();
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);
 
     if (shouldUseDatabaseReadFallback()) {
-      req.user = decoded;
+      req.user = userFromDecodedToken(decoded);
       return next();
     }
 
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const sessionResult = await pool.query(
-      'SELECT id FROM sessions WHERE token_hash = $1 AND is_active = true AND expires_at > NOW()',
-      [tokenHash]
+      'SELECT id FROM sessions WHERE token_hash = $1 AND user_id = $2 AND is_active = true AND expires_at > NOW()',
+      [tokenHash, decoded.id]
     );
 
-    if (sessionResult.rows.length === 0) {
-      const anySession = await pool.query('SELECT COUNT(*) FROM sessions WHERE user_id = $1', [decoded.id]);
-      if (parseInt(anySession.rows[0].count) > 0) {
-        return next(); // Expired, treat as guest
-      }
-    }
+    if (sessionResult.rows.length === 0) return next();
 
-    const userResult = await pool.query('SELECT is_active FROM users WHERE id = $1', [decoded.id]);
-    if (userResult.rows.length > 0 && userResult.rows[0].is_active) {
-      req.user = decoded;
+    const userResult = await pool.query(
+      `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified
+       FROM users WHERE id = $1 LIMIT 1`,
+      [decoded.id]
+    );
+    const user = userResult.rows[0];
+    if (user?.is_active && !user?.is_deleted && user?.email_verified) {
+      req.user = user;
     }
     next();
-  } catch (err) {
-    if (isDatabaseConnectivityError(err)) {
+  } catch (error) {
+    if (isDatabaseConnectivityError(error)) {
       try {
-        req.user = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);
+        req.user = userFromDecodedToken(decoded);
       } catch {}
     }
     next(); // Invalid token, treat as guest
@@ -155,13 +148,6 @@ export const authenticateToken = async (req, res, next) => {
   };
 
   if (!token) {
-    if (shouldUseDatabaseReadFallback()) {
-      return res.status(401).json({
-        message: 'Access token required',
-        code: 'AUTH_TOKEN_REQUIRED',
-      });
-    }
-
     try {
       if (await trySessionFallback()) {
         return next();
@@ -182,7 +168,10 @@ export const authenticateToken = async (req, res, next) => {
 
   let decoded;
   try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET, { clockTolerance: 30 });
+    if (!process.env.JWT_SECRET) {
+      throw Object.assign(new Error('JWT secret is not configured'), { name: 'JwtConfigurationError' });
+    }
+    decoded = jwt.verify(token, process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);
   } catch (err) {
     try {
       if (await trySessionFallback()) {
@@ -217,7 +206,7 @@ export const authenticateToken = async (req, res, next) => {
   }
 
   if (shouldUseDatabaseReadFallback()) {
-    req.user = decoded;
+    req.user = userFromDecodedToken(decoded);
     return next();
   }
 
@@ -225,45 +214,54 @@ export const authenticateToken = async (req, res, next) => {
     // Validate session is still active
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const sessionResult = await pool.query(
-      'SELECT id FROM sessions WHERE token_hash = $1 AND is_active = true AND expires_at > NOW()',
-      [tokenHash]
+      'SELECT id FROM sessions WHERE token_hash = $1 AND user_id = $2 AND is_active = true AND expires_at > NOW()',
+      [tokenHash, decoded.id]
     );
 
-    // If sessions table is populated, check validity; allow legacy tokens without sessions
     if (sessionResult.rows.length === 0) {
-      const anySession = await pool.query('SELECT COUNT(*) FROM sessions WHERE user_id = $1', [decoded.id]);
-      if (parseInt(anySession.rows[0].count) > 0) {
-        return res.status(401).json({
-          message: 'Session expired or revoked. Please log in again.',
-          code: 'AUTH_SESSION_EXPIRED',
-        });
-      }
+      return res.status(401).json({
+        message: 'Session expired or revoked. Please log in again.',
+        code: 'AUTH_SESSION_EXPIRED',
+      });
     } else {
       // Touch last_active
       await pool.query('UPDATE sessions SET last_active = NOW() WHERE id = $1', [sessionResult.rows[0].id]);
     }
 
-    // Check user is_active
-    const userResult = await pool.query('SELECT is_active FROM users WHERE id = $1', [decoded.id]);
-    if (userResult.rows.length > 0 && !userResult.rows[0].is_active) {
+    const userResult = await pool.query(
+      `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified
+       FROM users WHERE id = $1 LIMIT 1`,
+      [decoded.id]
+    );
+    const currentUser = userResult.rows[0];
+    if (!currentUser || !currentUser.is_active || currentUser.is_deleted) {
       return res.status(403).json({
         message: 'Account deactivated. Contact support.',
         code: 'AUTH_ACCOUNT_DEACTIVATED',
       });
     }
 
-    req.user = decoded;
+    if (!currentUser.email_verified) {
+      return res.status(403).json({
+        message: 'Email verification is required.',
+        code: 'EMAIL_NOT_VERIFIED',
+        requiresVerification: true,
+      });
+    }
+
+    // Always use current database roles and account state, never JWT role claims.
+    req.user = currentUser;
     next();
   } catch (error) {
     console.error('Authentication middleware error:', error);
     if (isDatabaseConnectivityError(error)) {
-      req.user = decoded;
+      req.user = userFromDecodedToken(decoded);
       return next();
     }
 
-    return res.status(500).json({
-      message: 'Authentication check failed. Please try again.',
-      code: 'AUTH_VALIDATION_FAILED',
+    return res.status(503).json({
+      message: 'Authentication service is temporarily unavailable. Please try again.',
+      code: 'AUTH_SERVICE_UNAVAILABLE',
     });
   }
 };
@@ -319,57 +317,6 @@ export const requirePermission = (permissionName) => {
 
 export const optionalAuth = async (req, res, next) => authenticateOptional(req, res, next);
 
-export const authenticateTokenOrSupabaseToken = async (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = extractBearerToken(authHeader);
-
-  if (!token) {
-    return res.status(401).json({
-      message: 'Access token required',
-      code: 'AUTH_TOKEN_REQUIRED',
-    });
-  }
-
-  const fallbackPayload = decodeSupabaseFallbackToken(token);
-  if (!fallbackPayload) {
-    return authenticateToken(req, res, next);
-  }
-
-  try {
-    const userResult = await pool.query(
-      'SELECT id, name, email, role, avatar, is_active FROM users WHERE id = $1 LIMIT 1',
-      [fallbackPayload.id],
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(401).json({
-        message: 'User not found for access token.',
-        code: 'AUTH_INVALID_TOKEN',
-      });
-    }
-
-    const user = userResult.rows[0];
-    if (!user.is_active) {
-      return res.status(403).json({
-        message: 'Account deactivated. Contact support.',
-        code: 'AUTH_ACCOUNT_DEACTIVATED',
-      });
-    }
-
-    req.user = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      avatar: user.avatar,
-    };
-
-    return next();
-  } catch (error) {
-    console.error('Hybrid token authentication error:', error);
-    return res.status(500).json({
-      message: 'Authentication check failed. Please try again.',
-      code: 'AUTH_VALIDATION_FAILED',
-    });
-  }
-};
+// Kept as a compatibility export for existing routes. It now accepts only
+// signed backend tokens and secure server-side sessions.
+export const authenticateTokenOrSupabaseToken = authenticateToken;
