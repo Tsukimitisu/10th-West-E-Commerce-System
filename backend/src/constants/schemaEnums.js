@@ -37,12 +37,14 @@ export const CHAT_THREAD_STATUSES = Object.freeze([
   'open',
   'closed',
   'blocked',
+  'archived',
 ]);
 
 export const CHAT_MESSAGE_TYPES = Object.freeze([
   'text',
   'image',
   'video',
+  'file',
   'system',
 ]);
 

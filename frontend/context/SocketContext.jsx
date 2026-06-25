@@ -14,6 +14,7 @@ const SocketContext = createContext({
   connected: false,
   on: () => {},
   off: () => {},
+  emit: () => {},
   toast: () => {},
 });
 
@@ -169,8 +170,12 @@ export const SocketProvider = ({ children }) => {
     socketRef.current?.off(event, handler);
   };
 
+  const emit = (event, payload) => {
+    socketRef.current?.emit(event, payload);
+  };
+
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, connected, on, off, toast: addToast }}>
+    <SocketContext.Provider value={{ socket: socketRef.current, connected, on, off, emit, toast: addToast }}>
       {children}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </SocketContext.Provider>

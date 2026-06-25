@@ -1969,6 +1969,85 @@ export const saveChatQuickReply = async (quickReply) => authenticatedFetch(`${AP
   body: JSON.stringify(quickReply),
 });
 
+const buildChatQuery = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    query.set(key, String(value));
+  });
+  const suffix = query.toString();
+  return suffix ? `?${suffix}` : '';
+};
+
+export const startProductChat = async (payload = {}) => {
+  const data = await authenticatedFetch(`${API_URL}/chats/product/start`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return data.conversation || data.thread || data;
+};
+
+export const getBuyerChatConversations = async (params = {}) => {
+  const data = await authenticatedFetch(`${API_URL}/chats/my-conversations${buildChatQuery(params)}`).catch(() => ({ conversations: [] }));
+  return data.conversations || data || [];
+};
+
+export const getChatConversationMessages = async (conversationId, params = {}) => (
+  authenticatedFetch(`${API_URL}/chats/${conversationId}/messages${buildChatQuery(params)}`)
+);
+
+export const sendConversationMessage = async (conversationId, payload = {}) => {
+  const data = await authenticatedFetch(`${API_URL}/chats/${conversationId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return data.message || data;
+};
+
+export const markConversationRead = async (conversationId) => authenticatedFetch(`${API_URL}/chats/${conversationId}/read`, {
+  method: 'PATCH',
+});
+
+export const getSellerChatConversations = async (params = {}) => {
+  const data = await authenticatedFetch(`${API_URL}/seller/chats${buildChatQuery(params)}`).catch(() => ({ conversations: [] }));
+  return data.conversations || data || [];
+};
+
+export const getSellerChat = async (conversationId) => authenticatedFetch(`${API_URL}/seller/chats/${conversationId}`);
+
+export const sendSellerChatMessage = async (conversationId, payload = {}) => {
+  const data = await authenticatedFetch(`${API_URL}/seller/chats/${conversationId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return data.message || data;
+};
+
+export const markSellerChatRead = async (conversationId) => authenticatedFetch(`${API_URL}/seller/chats/${conversationId}/read`, {
+  method: 'PATCH',
+});
+
+export const archiveSellerChat = async (conversationId, archived = true) => {
+  const data = await authenticatedFetch(`${API_URL}/seller/chats/${conversationId}/archive`, {
+    method: 'PATCH',
+    body: JSON.stringify({ archived }),
+  });
+  return data.conversation || data;
+};
+
+export const pinSellerChat = async (conversationId, pinned = true) => {
+  const data = await authenticatedFetch(`${API_URL}/seller/chats/${conversationId}/pin`, {
+    method: 'PATCH',
+    body: JSON.stringify({ pinned }),
+  });
+  return data.conversation || data;
+};
+
+export const getSellerChatUnreadCount = async () => {
+  const data = await authenticatedFetch(`${API_URL}/seller/chats/unread-count`).catch(() => ({ count: 0 }));
+  return data.count || 0;
+};
+
 export const uploadProductImage = async (file) => {
   if (!file) throw new Error('Image file is required');
 

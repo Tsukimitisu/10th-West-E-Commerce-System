@@ -21,6 +21,7 @@ import Profile from './pages/customer/Profile';
 import OrderHistory from './pages/customer/OrderHistory';
 import OrderDetail from './pages/customer/OrderDetail';
 import AddressBook from './pages/customer/AddressBook';
+import Messages from './pages/customer/Messages';
 import Contact from './pages/Support/Contact';
 import FAQ from './pages/Support/FAQ';
 import PrivacyPolicy from './pages/Support/PolicyPrivacy';
@@ -58,7 +59,8 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
     location.pathname.startsWith('/orders/') ||
     location.pathname === '/my-returns' ||
     location.pathname === '/addresses' ||
-    location.pathname === '/wishlist'
+    location.pathname === '/wishlist' ||
+    location.pathname === '/messages'
   );
 
   // Super Admin can ONLY access /super-admin — redirect everything else
@@ -129,6 +131,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
               <Route path="/my-returns" element={user ? <MyReturns /> : <Navigate to="/login" />} />
               <Route path="/addresses" element={user ? <AddressBook /> : <Navigate to="/login" />} />
               <Route path="/wishlist" element={user ? <Wishlist /> : <Navigate to="/login" />} />
+              <Route path="/messages" element={user ? <Messages /> : <Navigate to="/login?redirect=/messages" />} />
               <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF || user?.role === Role.ADMIN ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
               <Route path="/super-admin" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
               <Route path="/pos" element={(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) ? <PosTerminal /> : <Navigate to="/login" replace />} />

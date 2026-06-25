@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle, Play } from 'lucide-react';
-import { getProductById, getRelatedProducts, getProductReviews, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, createChatThread, WISHLIST_SYNC_EVENT } from '../services/api';
+import { getProductById, getRelatedProducts, getProductReviews, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, startProductChat, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useCart } from '../context/CartContext';
 import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
@@ -654,13 +654,23 @@ const ProductDetail = () => {
       navigate(`/login?redirect=/products/${product.id}`);
       return;
     }
+
+    if (hasVariants && variantOptions.length > 0 && !selectedVariantRow) {
+      const missingOption = variantOptions.find((option) => !selectedVariant?.[option.name]);
+      setVariantError(missingOption
+        ? `Please select ${missingOption.name.toLowerCase()} before chatting about this item.`
+        : 'This variant combination is unavailable. Please pick another combination.');
+      return;
+    }
+
     try {
-      const thread = await createChatThread({
+      const conversation = await startProductChat({
         product_id: product.id,
-        subject: product.name,
-        message: `Hi, I have a question about ${product.name}.`,
+        variant_id: selectedVariantRow?.id || null,
+        initial_message: `Hi, I have a question about ${product.name}.`,
       });
-      setChatMessage(`Chat #${thread.id || ''} opened. The seller will see this product context.`);
+      setChatMessage('Chat opened. The seller will see this product context.');
+      navigate(`/messages?conversation=${conversation.id || conversation.conversation_id || ''}`);
     } catch (error) {
       setChatMessage(error?.message || 'Unable to open chat right now.');
     }

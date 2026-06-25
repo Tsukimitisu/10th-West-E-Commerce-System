@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List } from 'lucide-react';
-import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements, getProducts } from '../services/api';
+import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List, MessageCircle } from 'lucide-react';
+import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements, getProducts, getBuyerChatConversations } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
 import { useSocket } from '../context/SocketContext';
@@ -15,6 +15,7 @@ const Navbar = ({ user, onLogout }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const { itemCount } = useCart();
@@ -235,12 +236,33 @@ const Navbar = ({ user, onLogout }) => {
     } catch { }
   }, [user]);
 
+  const refreshMessageUnread = useCallback(async () => {
+    if (!user || user.role !== Role.CUSTOMER) {
+      setMessageUnreadCount(0);
+      return;
+    }
+    try {
+      const unreadChats = await getBuyerChatConversations({ status: 'unread' });
+      const total = (unreadChats || []).reduce((sum, chat) => sum + Number(chat.unread_count || 0), 0);
+      setMessageUnreadCount(total);
+    } catch {
+      setMessageUnreadCount(0);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
     refreshNotifications();
     const interval = setInterval(refreshNotifications, 30000);
     return () => clearInterval(interval);
   }, [user, refreshNotifications]);
+
+  useEffect(() => {
+    if (!user) return;
+    refreshMessageUnread();
+    const interval = setInterval(refreshMessageUnread, 30000);
+    return () => clearInterval(interval);
+  }, [user, refreshMessageUnread]);
 
   useEffect(() => {
     if (!user || !connected) return;
@@ -267,13 +289,17 @@ const Navbar = ({ user, onLogout }) => {
     on('notification', handleNotification);
     on('order:new', handleOrderEvent);
     on('order:updated', handleOrderEvent);
+    on('message:new', refreshMessageUnread);
+    on('message:read', refreshMessageUnread);
 
     return () => {
       off('notification', handleNotification);
       off('order:new', handleOrderEvent);
       off('order:updated', handleOrderEvent);
+      off('message:new', refreshMessageUnread);
+      off('message:read', refreshMessageUnread);
     };
-  }, [user, connected, on, off, refreshNotifications]);
+  }, [user, connected, on, off, refreshNotifications, refreshMessageUnread]);
 
   useEffect(() => {
     const notifHandler = (e) => {
@@ -600,6 +626,17 @@ const Navbar = ({ user, onLogout }) => {
                 </Link>
               )}
 
+              {user?.role === Role.CUSTOMER && (
+                <Link to="/messages" className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors hidden sm:flex relative">
+                  <MessageCircle size={20} />
+                  {messageUnreadCount > 0 && (
+                    <span className="absolute top-1 right-1 bg-gradient-to-br from-orange-500 to-red-600 text-white text-[10px] font-bold rounded-full min-w-5 h-5 px-1 flex items-center justify-center shadow-md">
+                      {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
+                    </span>
+                  )}
+                </Link>
+              )}
+
               {/* Cart */}
               <button onClick={() => setCartOpen(true)} className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
                 <ShoppingCart size={20} />
@@ -636,6 +673,16 @@ const Navbar = ({ user, onLogout }) => {
                       </div>
                       <Link to="/profile" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><User size={16} className="text-red-400" /> My Profile</Link>
                       <Link to="/orders" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Package size={16} className="text-red-400" /> My Orders</Link>
+                      {user?.role === Role.CUSTOMER && (
+                        <Link to="/messages" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}>
+                          <MessageCircle size={16} className="text-red-400" /> Messages
+                          {messageUnreadCount > 0 && (
+                            <span className="ml-auto rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                              {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
+                            </span>
+                          )}
+                        </Link>
+                      )}
                       <Link to="/wishlist" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Heart size={16} className="text-red-400" /> Wishlist</Link>
                       <Link to="/addresses" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><MapPin size={16} className="text-red-400" /> Addresses</Link>
                       <Link to="/my-returns" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><RotateCcw size={16} className="text-red-400" /> Returns</Link>
@@ -766,6 +813,16 @@ const Navbar = ({ user, onLogout }) => {
                   <div className="border-t border-zinc-800 my-2" />
                   <Link to="/profile" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/profile' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Profile</Link>
                   <Link to="/orders" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/orders' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Orders</Link>
+                  {user?.role === Role.CUSTOMER && (
+                    <Link to="/messages" onClick={() => setMobileOpen(false)} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/messages' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>
+                      <span>Messages</span>
+                      {messageUnreadCount > 0 && (
+                        <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                          {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
+                        </span>
+                      )}
+                    </Link>
+                  )}
                   <Link to="/wishlist" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/wishlist' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Wishlist</Link>
                   <Link to="/addresses" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/addresses' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Address Book</Link>
                   <Link to="/my-returns" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/my-returns' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Returns</Link>

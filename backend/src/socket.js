@@ -6,6 +6,41 @@ import { PRODUCT_PUBLISHER_ROLE_SET, STAFF_ROLE_SET } from './constants/schemaEn
 
 let io = null;
 
+const chatRoomName = (conversationId) => `conversation:${conversationId}`;
+
+const canAccessConversation = async (conversationId, user) => {
+  if (!conversationId || !user?.id) return null;
+  const result = await pool.query(
+    `SELECT id, customer_id, seller_id, assigned_staff_id
+     FROM chat_threads
+     WHERE id = $1
+       AND (
+         customer_id = $2
+         OR seller_id = $2
+         OR assigned_staff_id = $2
+         OR $3 = true
+       )
+     LIMIT 1`,
+    [conversationId, user.id, STAFF_ROLE_SET.has(user.role)]
+  );
+  return result.rows[0] || null;
+};
+
+const emitToConversationTargets = (thread, event, payload) => {
+  if (!io || !thread?.id) return;
+
+  const rooms = new Set([chatRoomName(thread.id), 'staff']);
+  if (thread.customer_id) rooms.add(`user:${thread.customer_id}`);
+  if (thread.seller_id) rooms.add(`user:${thread.seller_id}`);
+  if (thread.assigned_staff_id) rooms.add(`user:${thread.assigned_staff_id}`);
+
+  let target = io;
+  for (const room of rooms) {
+    target = target.to(room);
+  }
+  target.emit(event, payload);
+};
+
 export function initSocket(httpServer, frontendUrl) {
   io = new Server(httpServer, {
     cors: {
@@ -64,6 +99,7 @@ export function initSocket(httpServer, frontendUrl) {
   io.on('connection', (socket) => {
     const user = socket.data.user;
     console.log(`🔌 Socket connected: ${socket.id}`);
+    socket.broadcast.emit('user:online', { user_id: user.id });
 
     // Join rooms based on user role
     socket.on('join', (data = {}) => {
@@ -129,8 +165,55 @@ export function initSocket(httpServer, frontendUrl) {
       } catch {}
     });
 
+    socket.on('chat:join', async (payload = {}) => {
+      const conversationId = Number(payload.conversation_id || payload.conversationId || payload.thread_id || payload.threadId);
+      if (!conversationId) return;
+      try {
+        const thread = await canAccessConversation(conversationId, user);
+        if (!thread) return;
+        socket.join(chatRoomName(conversationId));
+        socket.emit('conversation:joined', { conversation_id: conversationId, thread_id: conversationId });
+      } catch {}
+    });
+
+    socket.on('chat:leave', (payload = {}) => {
+      const conversationId = Number(payload.conversation_id || payload.conversationId || payload.thread_id || payload.threadId);
+      if (!conversationId) return;
+      socket.leave(chatRoomName(conversationId));
+    });
+
+    const relayTyping = async (eventName, payload = {}) => {
+      const conversationId = Number(payload.conversation_id || payload.conversationId || payload.thread_id || payload.threadId);
+      if (!conversationId) return;
+      try {
+        const thread = await canAccessConversation(conversationId, user);
+        if (!thread) return;
+        const safePayload = {
+          conversation_id: conversationId,
+          thread_id: conversationId,
+          user_id: user.id,
+          is_typing: eventName === 'typing:start',
+        };
+        socket.to(chatRoomName(conversationId)).emit(eventName, safePayload);
+        socket.to(chatRoomName(conversationId)).emit('chat:typing', safePayload);
+        socket.to('staff').emit(eventName, safePayload);
+        if (thread.customer_id) socket.to(`user:${thread.customer_id}`).emit(eventName, safePayload);
+        if (thread.seller_id) socket.to(`user:${thread.seller_id}`).emit(eventName, safePayload);
+        if (thread.assigned_staff_id) socket.to(`user:${thread.assigned_staff_id}`).emit(eventName, safePayload);
+      } catch {}
+    };
+
+    socket.on('typing:start', (payload = {}) => {
+      relayTyping('typing:start', payload);
+    });
+
+    socket.on('typing:stop', (payload = {}) => {
+      relayTyping('typing:stop', payload);
+    });
+
     socket.on('disconnect', (reason) => {
       console.log(`🔌 Socket disconnected: ${socket.id} (${reason})`);
+      socket.broadcast.emit('user:offline', { user_id: user.id });
     });
   });
 
@@ -225,33 +308,42 @@ export function emitNotification(target, notification) {
 // Chat
 export function emitChatMessage(thread, message) {
   if (!io) return;
-  io.to('staff').emit('chat:message', { thread, message });
-  if (thread?.customer_id) {
-    io.to(`user:${thread.customer_id}`).emit('chat:message', { thread, message });
-  }
-  if (thread?.assigned_staff_id) {
-    io.to(`user:${thread.assigned_staff_id}`).emit('chat:message', { thread, message });
-  }
+  emitToConversationTargets(thread, 'chat:message', { thread, message });
+  emitToConversationTargets(thread, 'message:new', {
+    conversation: thread,
+    thread,
+    message,
+  });
 }
 
 export function emitChatSeen(thread, payload) {
   if (!io) return;
-  io.to('staff').emit('chat:seen', payload);
-  if (thread?.customer_id) {
-    io.to(`user:${thread.customer_id}`).emit('chat:seen', payload);
-  }
-  if (thread?.assigned_staff_id) {
-    io.to(`user:${thread.assigned_staff_id}`).emit('chat:seen', payload);
-  }
+  emitToConversationTargets(thread, 'chat:seen', payload);
+  emitToConversationTargets(thread, 'message:read', payload);
 }
 
 export function emitChatAssigned(thread) {
   if (!io) return;
-  io.to('staff').emit('chat:assigned', thread);
-  if (thread?.customer_id) {
-    io.to(`user:${thread.customer_id}`).emit('chat:assigned', thread);
-  }
-  if (thread?.assigned_staff_id) {
-    io.to(`user:${thread.assigned_staff_id}`).emit('chat:assigned', thread);
-  }
+  emitToConversationTargets(thread, 'chat:assigned', thread);
+  emitToConversationTargets(thread, 'conversation:updated', thread);
+}
+
+export function emitConversationMessage(thread, message) {
+  if (!io) return;
+  emitToConversationTargets(thread, 'message:new', {
+    conversation: thread,
+    thread,
+    message,
+  });
+}
+
+export function emitConversationRead(thread, payload) {
+  if (!io) return;
+  emitToConversationTargets(thread, 'message:read', payload);
+  emitToConversationTargets(thread, 'chat:seen', payload);
+}
+
+export function emitConversationUpdated(thread, conversation = thread) {
+  if (!io) return;
+  emitToConversationTargets(thread, 'conversation:updated', conversation);
 }

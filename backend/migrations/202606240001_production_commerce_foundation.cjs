@@ -29,28 +29,30 @@ async function addColumn(knex, tableName, columnName, callback) {
 exports.up = async function up(knex) {
   // Keep workflow values explicit and extensible. The legacy enum omitted most real
   // fulfilment states, so use a constrained varchar instead.
+  await knex.raw('ALTER TABLE orders ALTER COLUMN status DROP DEFAULT');
+  await knex.raw('ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check');
+  await knex.raw('ALTER TABLE orders ALTER COLUMN status TYPE varchar(40) USING status::text');
+  await knex.raw("UPDATE orders SET status = 'processing' WHERE status::text = 'preparing'");
+  await knex.raw("UPDATE orders SET status = 'delivered' WHERE status::text = 'completed'");
+  await knex.raw("ALTER TABLE orders ALTER COLUMN status SET DEFAULT 'pending'");
   await knex.raw(`
-    ALTER TABLE orders ALTER COLUMN status DROP DEFAULT;
-    ALTER TABLE orders ALTER COLUMN status TYPE varchar(40) USING status::text;
-    UPDATE orders SET status = 'processing' WHERE status = 'preparing';
-    UPDATE orders SET status = 'delivered' WHERE status = 'completed';
-    ALTER TABLE orders ALTER COLUMN status SET DEFAULT 'pending';
-    ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
     ALTER TABLE orders ADD CONSTRAINT orders_status_check
-      CHECK (status IN (${ORDER_STATUSES.map((s) => `'${s}'`).join(', ')}));
-
-    UPDATE returns SET status = 'approved' WHERE status::text = 'exchanged';
-    ALTER TABLE returns ALTER COLUMN status DROP DEFAULT;
-    ALTER TABLE returns ALTER COLUMN status TYPE varchar(40) USING status::text;
-    ALTER TABLE returns ALTER COLUMN status SET DEFAULT 'pending';
-    ALTER TABLE returns DROP CONSTRAINT IF EXISTS returns_status_check;
-    ALTER TABLE returns ADD CONSTRAINT returns_status_check
-      CHECK (status IN ('pending', 'approved', 'rejected', 'received', 'refund_processing', 'refunded', 'cancelled'));
-
-    ALTER TABLE refunds ALTER COLUMN method DROP DEFAULT;
-    ALTER TABLE refunds ALTER COLUMN method TYPE varchar(40) USING method::text;
-    ALTER TABLE refunds ALTER COLUMN method SET DEFAULT 'original';
+      CHECK (status IN (${ORDER_STATUSES.map((s) => `'${s}'`).join(', ')}))
   `);
+
+  await knex.raw("UPDATE returns SET status = 'approved' WHERE status::text = 'exchanged'");
+  await knex.raw('ALTER TABLE returns ALTER COLUMN status DROP DEFAULT');
+  await knex.raw('ALTER TABLE returns DROP CONSTRAINT IF EXISTS returns_status_check');
+  await knex.raw('ALTER TABLE returns ALTER COLUMN status TYPE varchar(40) USING status::text');
+  await knex.raw("ALTER TABLE returns ALTER COLUMN status SET DEFAULT 'pending'");
+  await knex.raw(`
+    ALTER TABLE returns ADD CONSTRAINT returns_status_check
+      CHECK (status IN ('pending', 'approved', 'rejected', 'received', 'refund_processing', 'refunded', 'cancelled'))
+  `);
+
+  await knex.raw('ALTER TABLE refunds ALTER COLUMN method DROP DEFAULT');
+  await knex.raw('ALTER TABLE refunds ALTER COLUMN method TYPE varchar(40) USING method::text');
+  await knex.raw("ALTER TABLE refunds ALTER COLUMN method SET DEFAULT 'original'");
 
   await addColumn(knex, 'cart_items', 'variant_id', (t) => t.integer('variant_id').references('id').inTable('product_variants').onDelete('CASCADE'));
   await addColumn(knex, 'order_items', 'variant_id', (t) => t.integer('variant_id').references('id').inTable('product_variants').onDelete('SET NULL'));
