@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import pool from '../config/database.js';
-import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback } from '../services/supabaseRest.js';
+import { isDatabaseConnectivityError } from '../services/supabaseRest.js';
 
 const MAX_ITEM_QUANTITY = 99;
 
@@ -11,6 +11,8 @@ const toPositiveInt = (value) => {
 };
 
 const ensureCartSchema = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await pool.query(
     `ALTER TABLE carts
      ADD COLUMN IF NOT EXISTS session_id VARCHAR(255)`
@@ -224,11 +226,11 @@ export const mergeGuestCartIntoUserCart = async (guestSessionId, userId) => {
     }
 
     const guestItemsResult = await client.query(
-      `SELECT product_id, SUM(quantity)::int AS quantity
+      `SELECT product_id, variant_id, SUM(quantity)::int AS quantity
        FROM cart_items
        WHERE cart_id = $1
-       GROUP BY product_id
-       ORDER BY product_id ASC`,
+       GROUP BY product_id, variant_id
+       ORDER BY product_id, variant_id NULLS FIRST`,
       [guestCart.id]
     );
 
@@ -236,10 +238,10 @@ export const mergeGuestCartIntoUserCart = async (guestSessionId, userId) => {
       const existingItemResult = await client.query(
         `SELECT id, quantity
          FROM cart_items
-         WHERE cart_id = $1 AND product_id = $2
+         WHERE cart_id = $1 AND product_id = $2 AND variant_id IS NOT DISTINCT FROM $3
          FOR UPDATE
          LIMIT 1`,
-        [userCart.id, guestItem.product_id]
+        [userCart.id, guestItem.product_id, guestItem.variant_id]
       );
 
       if (existingItemResult.rows.length > 0) {
@@ -252,9 +254,9 @@ export const mergeGuestCartIntoUserCart = async (guestSessionId, userId) => {
         );
       } else {
         await client.query(
-          `INSERT INTO cart_items (cart_id, product_id, quantity)
-           VALUES ($1, $2, $3)`,
-          [userCart.id, guestItem.product_id, guestItem.quantity]
+          `INSERT INTO cart_items (cart_id, product_id, variant_id, quantity)
+           VALUES ($1, $2, $3, $4)`,
+          [userCart.id, guestItem.product_id, guestItem.variant_id, guestItem.quantity]
         );
       }
     }
@@ -276,22 +278,17 @@ export const mergeGuestCartIntoUserCart = async (guestSessionId, userId) => {
 // Get cart for current owner
 export const getCart = async (req, res) => {
   try {
-    if (shouldUseDatabaseReadFallback()) {
-      return res.json({
-        cart_id: null,
-        degraded: true,
-        items: null,
-        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
-      });
-    }
-
     const cart = await getOrCreateCart(req);
 
     const items = await pool.query(
-      `SELECT ci.id, ci.cart_id, ci.product_id, ci.quantity,
-              p.name, p.price, p.image, p.stock_quantity
+      `SELECT ci.id, ci.cart_id, ci.product_id, ci.variant_id, ci.quantity,
+              p.name, p.price, p.sale_price, p.is_on_sale, p.image, p.status,
+              pv.variant_type, pv.variant_value, pv.sku AS variant_sku, pv.image_url AS variant_image,
+              COALESCE(pv.price, CASE WHEN pv.id IS NOT NULL THEN p.price + pv.price_adjustment ELSE p.price END) AS effective_price,
+              COALESCE(pv.stock_quantity - pv.reserved_stock, p.stock_quantity - p.reserved_stock) AS available_stock
        FROM cart_items ci
        JOIN products p ON ci.product_id = p.id
+       LEFT JOIN product_variants pv ON pv.id = ci.variant_id AND pv.product_id = ci.product_id
        WHERE ci.cart_id = $1
        ORDER BY ci.id ASC`,
       [cart.id]
@@ -302,33 +299,32 @@ export const getCart = async (req, res) => {
       items: items.rows.map((item) => ({
         id: item.id,
         product_id: item.product_id,
+        variant_id: item.variant_id,
         quantity: item.quantity,
+        available_stock: Number(item.available_stock),
+        is_available: item.status === 'active' && Number(item.available_stock) >= Number(item.quantity),
+        warning: item.status !== 'active' ? 'Product is unavailable' : (Number(item.available_stock) < Number(item.quantity) ? 'Quantity exceeds available stock' : null),
         product: {
           id: item.product_id,
           name: item.name,
-          price: parseFloat(item.price),
-          image: item.image,
-          stock_quantity: item.stock_quantity,
+          price: parseFloat(item.effective_price),
+          image: item.variant_image || item.image,
+          stock_quantity: Number(item.available_stock),
         },
+        variant: item.variant_id ? { id: item.variant_id, type: item.variant_type, value: item.variant_value, sku: item.variant_sku } : null,
       })),
     });
   } catch (error) {
     console.error('Get cart error:', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.json({
-        cart_id: null,
-        degraded: true,
-        items: null,
-        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
-      });
-    }
-    res.status(500).json({ message: 'Server error' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Cart is temporarily unavailable.' });
   }
 };
 
 // Add item to cart
 export const addToCart = async (req, res) => {
   const productId = toPositiveInt(req.body?.product_id);
+  const rawVariantId = req.body?.variant_id ?? req.body?.variantId;
+  const variantId = rawVariantId === undefined || rawVariantId === null || rawVariantId === '' ? null : toPositiveInt(rawVariantId);
   const quantity = toPositiveInt(req.body?.quantity ?? 1);
 
   if (!productId) {
@@ -342,18 +338,12 @@ export const addToCart = async (req, res) => {
   }
 
   try {
-    if (shouldUseDatabaseReadFallback()) {
-      return res.json({
-        degraded: true,
-        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
-      });
-    }
-
     await withCartTransaction(req, async (client, cart) => {
       const productResult = await client.query(
-        `SELECT id, stock_quantity
+        `SELECT id, stock_quantity, reserved_stock,
+                EXISTS (SELECT 1 FROM product_variants WHERE product_id = products.id) AS has_variants
          FROM products
-         WHERE id = $1
+         WHERE id = $1 AND status = 'active' AND COALESCE(is_deleted, false) = false
          FOR UPDATE`,
         [productId]
       );
@@ -365,7 +355,25 @@ export const addToCart = async (req, res) => {
       }
 
       const product = productResult.rows[0];
-      if (Number(product.stock_quantity) < quantity) {
+      if (product.has_variants && !variantId) {
+        const variantError = new Error('A product variant is required');
+        variantError.statusCode = 400;
+        throw variantError;
+      }
+      let availableStock = Number(product.stock_quantity) - Number(product.reserved_stock || 0);
+      if (variantId) {
+        const variantResult = await client.query(
+          `SELECT stock_quantity, reserved_stock FROM product_variants WHERE id = $1 AND product_id = $2 FOR UPDATE`,
+          [variantId, productId]
+        );
+        if (!variantResult.rowCount) {
+          const variantError = new Error('Selected variant is invalid');
+          variantError.statusCode = 400;
+          throw variantError;
+        }
+        availableStock = Number(variantResult.rows[0].stock_quantity) - Number(variantResult.rows[0].reserved_stock || 0);
+      }
+      if (availableStock < quantity) {
         const stockError = new Error('Insufficient stock');
         stockError.statusCode = 400;
         throw stockError;
@@ -374,17 +382,17 @@ export const addToCart = async (req, res) => {
       const existingResult = await client.query(
         `SELECT id, quantity
          FROM cart_items
-         WHERE cart_id = $1 AND product_id = $2
+         WHERE cart_id = $1 AND product_id = $2 AND variant_id IS NOT DISTINCT FROM $3
          FOR UPDATE
          LIMIT 1`,
-        [cart.id, productId]
+        [cart.id, productId, variantId]
       );
 
       if (existingResult.rows.length > 0) {
         const existingItem = existingResult.rows[0];
         const nextQuantity = Number(existingItem.quantity) + quantity;
 
-        if (nextQuantity > Number(product.stock_quantity)) {
+        if (nextQuantity > availableStock) {
           const stockError = new Error('Insufficient stock');
           stockError.statusCode = 400;
           throw stockError;
@@ -405,8 +413,8 @@ export const addToCart = async (req, res) => {
         );
       } else {
         await client.query(
-          'INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3)',
-          [cart.id, productId, quantity]
+          'INSERT INTO cart_items (cart_id, product_id, variant_id, quantity) VALUES ($1, $2, $3, $4)',
+          [cart.id, productId, variantId, quantity]
         );
       }
 
@@ -419,13 +427,7 @@ export const addToCart = async (req, res) => {
       return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Add to cart error:', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.json({
-        degraded: true,
-        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
-      });
-    }
-    res.status(500).json({ message: 'Server error' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Cart is temporarily unavailable.' });
   }
 };
 
@@ -445,18 +447,13 @@ export const updateCartItem = async (req, res) => {
   }
 
   try {
-    if (shouldUseDatabaseReadFallback()) {
-      return res.json({
-        degraded: true,
-        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
-      });
-    }
-
     await withCartTransaction(req, async (client, cart) => {
       const itemResult = await client.query(
-        `SELECT ci.id, ci.product_id, p.stock_quantity
+        `SELECT ci.id, ci.product_id, ci.variant_id,
+                COALESCE(pv.stock_quantity - pv.reserved_stock, p.stock_quantity - p.reserved_stock) AS available_stock
          FROM cart_items ci
          JOIN products p ON p.id = ci.product_id
+         LEFT JOIN product_variants pv ON pv.id = ci.variant_id
          WHERE ci.id = $1 AND ci.cart_id = $2
          FOR UPDATE OF ci, p`,
         [itemId, cart.id]
@@ -469,7 +466,7 @@ export const updateCartItem = async (req, res) => {
       }
 
       const item = itemResult.rows[0];
-      if (Number(item.stock_quantity) < quantity) {
+      if (Number(item.available_stock) < quantity) {
         const stockError = new Error('Insufficient stock');
         stockError.statusCode = 400;
         throw stockError;
@@ -492,13 +489,7 @@ export const updateCartItem = async (req, res) => {
       return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Update cart error:', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.json({
-        degraded: true,
-        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
-      });
-    }
-    res.status(500).json({ message: 'Server error' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Cart is temporarily unavailable.' });
   }
 };
 
@@ -511,13 +502,6 @@ export const removeFromCart = async (req, res) => {
   }
 
   try {
-    if (shouldUseDatabaseReadFallback()) {
-      return res.json({
-        degraded: true,
-        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
-      });
-    }
-
     await withCartTransaction(req, async (client, cart) => {
       const result = await client.query(
         'DELETE FROM cart_items WHERE id = $1 AND cart_id = $2 RETURNING id',
@@ -539,26 +523,13 @@ export const removeFromCart = async (req, res) => {
       return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Remove from cart error:', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.json({
-        degraded: true,
-        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
-      });
-    }
-    res.status(500).json({ message: 'Server error' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Cart is temporarily unavailable.' });
   }
 };
 
 // Clear cart
 export const clearCart = async (req, res) => {
   try {
-    if (shouldUseDatabaseReadFallback()) {
-      return res.json({
-        degraded: true,
-        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
-      });
-    }
-
     await withCartTransaction(req, async (client, cart) => {
       await client.query('DELETE FROM cart_items WHERE cart_id = $1', [cart.id]);
       await touchCart(client, cart.id);
@@ -567,12 +538,6 @@ export const clearCart = async (req, res) => {
     res.json({ message: 'Cart cleared successfully' });
   } catch (error) {
     console.error('Clear cart error:', error);
-    if (isDatabaseConnectivityError(error)) {
-      return res.json({
-        degraded: true,
-        message: 'Cart database is temporarily unavailable. Use local cart fallback.',
-      });
-    }
-    res.status(500).json({ message: 'Server error' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Cart is temporarily unavailable.' });
   }
 };
