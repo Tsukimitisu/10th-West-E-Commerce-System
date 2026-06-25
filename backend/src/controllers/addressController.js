@@ -37,6 +37,8 @@ const PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
 const ZIP_REGEX = /^\d{4}$/;
 
 const ensureAddressColumns = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await pool.query(`
     ALTER TABLE addresses
       ADD COLUMN IF NOT EXISTS province_code VARCHAR(20),
@@ -100,8 +102,8 @@ export const createAddress = async (req, res) => {
   const postal_code = normalizeZip(req.body.postal_code ?? req.body.zip);
   const country = req.body.country;
   const is_default = !!req.body.is_default;
-  const lat = parseCoordinate(req.body.lat, -90, 90);
-  const lng = parseCoordinate(req.body.lng, -180, 180);
+  const lat = parseCoordinate(req.body.lat, 4.2, 21.3);
+  const lng = parseCoordinate(req.body.lng, 116, 127);
 
   let accountName = null;
   let accountPhone = null;
@@ -134,8 +136,8 @@ export const createAddress = async (req, res) => {
   if (!postal_code) fieldErrors.postal_code = 'ZIP code is required.';
   else if (!ZIP_REGEX.test(postal_code)) fieldErrors.postal_code = 'ZIP code must contain exactly 4 digits.';
   if (!isPhilippineCountry(country)) fieldErrors.country = 'Only Philippine addresses are allowed.';
-  if (Number.isNaN(lat)) fieldErrors.lat = 'Latitude must be between -90 and 90.';
-  if (Number.isNaN(lng)) fieldErrors.lng = 'Longitude must be between -180 and 180.';
+  if (Number.isNaN(lat)) fieldErrors.lat = 'Latitude must be within the Philippines.';
+  if (Number.isNaN(lng)) fieldErrors.lng = 'Longitude must be within the Philippines.';
 
   if (Object.keys(fieldErrors).length > 0) {
     return res.status(400).json({ message: 'Please correct the highlighted address fields.', fieldErrors });
@@ -231,8 +233,8 @@ export const updateAddress = async (req, res) => {
   const incomingPostalCode = normalizeZip(req.body.postal_code ?? req.body.zip);
   const incomingCountry = req.body.country;
   const incomingIsDefault = typeof req.body.is_default === 'boolean' ? req.body.is_default : null;
-  const nextLat = hasField('lat') ? parseCoordinate(req.body.lat, -90, 90) : undefined;
-  const nextLng = hasField('lng') ? parseCoordinate(req.body.lng, -180, 180) : undefined;
+  const nextLat = hasField('lat') ? parseCoordinate(req.body.lat, 4.2, 21.3) : undefined;
+  const nextLng = hasField('lng') ? parseCoordinate(req.body.lng, 116, 127) : undefined;
 
   const client = await pool.connect();
 
