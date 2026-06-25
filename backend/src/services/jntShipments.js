@@ -57,6 +57,8 @@ const getConfig = () => {
 };
 
 export const ensureJntOrderColumns = async (db) => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await db.query(`
     ALTER TABLE orders
       ADD COLUMN IF NOT EXISTS courier VARCHAR(50),
@@ -282,7 +284,14 @@ export const createJntWaybillForOrder = async (db, orderId, { generatedBy = null
       return getJntWaybill(db, orderId);
     }
 
-    if (!['paid', 'preparing'].includes(String(locked.status || '').toLowerCase())) {
+    if (locked.waybill_status === 'pending') {
+      await client.query('ROLLBACK');
+      const error = new Error('A courier booking is already in progress for this order.');
+      error.status = 409;
+      throw error;
+    }
+
+    if (!['paid', 'processing', 'packed', 'ready_for_pickup'].includes(String(locked.status || '').toLowerCase())) {
       await client.query('ROLLBACK');
       const error = new Error('J&T waybill can only be generated for paid or preparing orders.');
       error.status = 400;
@@ -358,8 +367,7 @@ export const createJntWaybillForOrder = async (db, orderId, { generatedBy = null
         JSON.stringify(labelPayload),
         JSON.stringify({
           jnt_mode: config.mode,
-          request: apiResult.request,
-          response: apiResult.response,
+          provider_reference: waybillNumber,
           generated_by: generatedBy,
         }),
       ]
@@ -381,9 +389,7 @@ export const createJntWaybillForOrder = async (db, orderId, { generatedBy = null
         JSON.stringify({
           error: error.message,
           code: error.code || null,
-          response: error.responseBody || null,
           failed_at: new Date().toISOString(),
-          request: requestPayload,
         }),
       ]
     );
