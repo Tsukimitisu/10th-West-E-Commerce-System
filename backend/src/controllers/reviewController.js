@@ -102,6 +102,18 @@ const mapReviewResponse = (row, req) => {
   };
 };
 
+const sanitizeReviewComment = (value) => String(value || '')
+  .replace(/<[^>]*>/g, ' ')
+  .replace(/[\u0000-\u001f\u007f]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const parsePositiveInt = (value, fallback, max = 100) => {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
+};
+
 const ensureReviewSchema = async () => {
   // Schema is managed exclusively by Knex migrations.
   return;
@@ -225,7 +237,7 @@ const getVerifiedPurchaseExpression = `
     JOIN orders o ON o.id = oi.order_id
     WHERE oi.product_id = r.product_id
       AND o.user_id = r.user_id
-      AND o.status IN ('delivered', 'completed')
+      AND o.status = 'delivered'
     LIMIT 1
   )
 `;
@@ -239,7 +251,12 @@ export const getProductReviews = async (req, res) => {
   try {
     await ensureReviewSchema();
 
-    const result = await pool.query(
+    const page = parsePositiveInt(req.query.page, 1, 100000);
+    const limit = parsePositiveInt(req.query.limit, 20, 50);
+    const offset = (page - 1) * limit;
+
+    const [result, summaryResult] = await Promise.all([
+      pool.query(
       `
         SELECT
           r.id,
@@ -258,12 +275,51 @@ export const getProductReviews = async (req, res) => {
         FROM reviews r
         JOIN users u ON u.id = r.user_id
         WHERE r.product_id = $1
+          AND COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN '${REVIEW_STATUS.APPROVED}' ELSE '${REVIEW_STATUS.PENDING}' END) = '${REVIEW_STATUS.APPROVED}'
         ORDER BY r.created_at DESC
+        LIMIT $2 OFFSET $3
       `,
-      [productId],
-    );
+      [productId, limit, offset],
+      ),
+      pool.query(
+        `
+          SELECT
+            COUNT(*)::int AS total,
+            COALESCE(ROUND(AVG(rating)::numeric, 1), 0)::float AS average_rating,
+            COUNT(*) FILTER (WHERE rating = 5)::int AS five_star,
+            COUNT(*) FILTER (WHERE rating = 4)::int AS four_star,
+            COUNT(*) FILTER (WHERE rating = 3)::int AS three_star,
+            COUNT(*) FILTER (WHERE rating = 2)::int AS two_star,
+            COUNT(*) FILTER (WHERE rating = 1)::int AS one_star
+          FROM reviews
+          WHERE product_id = $1
+            AND COALESCE(review_status::text, CASE WHEN is_approved THEN '${REVIEW_STATUS.APPROVED}' ELSE '${REVIEW_STATUS.PENDING}' END) = '${REVIEW_STATUS.APPROVED}'
+        `,
+        [productId],
+      ),
+    ]);
 
-    res.json(result.rows.map((row) => mapReviewResponse(row, req)));
+    const summary = summaryResult.rows[0] || {};
+    res.json({
+      reviews: result.rows.map((row) => mapReviewResponse(row, req)),
+      pagination: {
+        page,
+        limit,
+        total: Number(summary.total || 0),
+        total_pages: Math.max(1, Math.ceil(Number(summary.total || 0) / limit)),
+      },
+      summary: {
+        average_rating: Number(summary.average_rating || 0),
+        total: Number(summary.total || 0),
+        breakdown: {
+          5: Number(summary.five_star || 0),
+          4: Number(summary.four_star || 0),
+          3: Number(summary.three_star || 0),
+          2: Number(summary.two_star || 0),
+          1: Number(summary.one_star || 0),
+        },
+      },
+    });
   } catch (error) {
     console.error('Get product reviews error:', error);
     res.status(500).json({ message: 'Failed to load reviews.' });
@@ -273,7 +329,7 @@ export const getProductReviews = async (req, res) => {
 export const createReview = async (req, res) => {
   const productId = Number(req.body.product_id ?? req.body.productId);
   const rating = Number(req.body.rating);
-  const comment = typeof req.body.comment === 'string' ? req.body.comment.trim() : '';
+  const comment = sanitizeReviewComment(req.body.comment);
   const rawMediaUrls = req.body.media_urls ?? req.body.mediaUrls;
   const mediaUrls = normalizeReviewMedia(rawMediaUrls);
   const fieldErrors = {};
@@ -324,7 +380,7 @@ export const createReview = async (req, res) => {
         JOIN orders o ON o.id = oi.order_id
         WHERE oi.product_id = $1
           AND o.user_id = $2
-          AND o.status IN ('delivered', 'completed')
+          AND o.status = 'delivered'
         LIMIT 1
       `,
       [productId, req.user.id],
@@ -335,6 +391,24 @@ export const createReview = async (req, res) => {
         message: 'You can only review products from orders that have been delivered.',
       });
     }
+
+    const recentReview = await pool.query(
+      `
+        SELECT id
+        FROM reviews
+        WHERE user_id = $1
+          AND product_id = $2
+          AND created_at > NOW() - INTERVAL '5 minutes'
+        LIMIT 1
+      `,
+      [req.user.id, productId],
+    );
+    if (recentReview.rowCount) {
+      return res.status(429).json({ message: 'Please wait before submitting another review for this product.' });
+    }
+
+    const autoApprove = String(process.env.REVIEWS_AUTO_APPROVE || '').trim().toLowerCase() === 'true';
+    const reviewStatus = autoApprove ? REVIEW_STATUS.APPROVED : REVIEW_STATUS.PENDING;
 
     const inserted = await pool.query(
       `
@@ -348,17 +422,17 @@ export const createReview = async (req, res) => {
           review_status,
           created_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, true, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         RETURNING *
       `,
-      [req.user.id, productId, rating, comment, JSON.stringify(mediaUrls), REVIEW_STATUS.APPROVED],
+      [req.user.id, productId, rating, comment, JSON.stringify(mediaUrls), autoApprove, reviewStatus],
     );
     const review = inserted.rows[0];
 
-    await syncProductRating(productId);
+    if (autoApprove) await syncProductRating(productId);
 
     res.status(201).json({
-      message: 'Review published successfully.',
+      message: autoApprove ? 'Review published successfully.' : 'Review submitted for moderation.',
       review: mapReviewResponse({
         ...review,
         user_name: req.user.name || 'You',

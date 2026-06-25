@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken, authenticateTokenOrSupabaseToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, authenticateTokenOrSupabaseToken, requirePermission, requireRole } from '../middleware/auth.js';
 import { createReview, getModerationReviews, moderateReview, uploadReviewMedia } from '../controllers/reviewController.js';
 
 const router = express.Router();
@@ -11,7 +11,19 @@ router.post(
 	uploadReviewMedia,
 );
 router.post('/', authenticateToken, createReview);
-router.get('/moderation', authenticateToken, requireRole('owner', 'admin', 'super_admin'), getModerationReviews);
-router.patch('/:id/moderate', authenticateToken, requireRole('owner', 'admin', 'super_admin'), moderateReview);
+router.get(
+  '/moderation',
+  authenticateToken,
+  requireRole('owner', 'admin', 'super_admin'),
+  requirePermission('reviews.moderate'),
+  getModerationReviews,
+);
+router.patch(
+  '/:id/moderate',
+  authenticateToken,
+  requireRole('owner', 'admin', 'super_admin'),
+  requirePermission('reviews.moderate'),
+  moderateReview,
+);
 
 export default router;
