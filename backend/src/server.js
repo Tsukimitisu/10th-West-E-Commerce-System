@@ -41,6 +41,11 @@ import adminRoutes from './routes/admin.js';
 import wishlistRoutes from './routes/wishlist.js';
 import reviewRoutes from './routes/reviews.js';
 import chatRoutes from './routes/chat.js';
+import shipmentRoutes from './routes/shipments.js';
+import waybillRoutes from './routes/waybills.js';
+import discountRoutes from './routes/discounts.js';
+import refundRoutes from './routes/refunds.js';
+import posRoutes from './routes/pos.js';
 
 import { apiLimiter, authLimiter } from './middleware/rateLimiter.js';
 import { errorLogger } from './middleware/errorLogger.js';
@@ -59,8 +64,7 @@ dotenv.config({ path: envPath });
 
 // Validate required environment variables
 const requiredEnvVars = [
-  'STRIPE_SECRET_KEY',
-  'STRIPE_PUBLISHABLE_KEY',
+  'JWT_SECRET',
   'EMAIL_USER',
   'EMAIL_PASSWORD',
   'EMAIL_HOST',
@@ -68,7 +72,15 @@ const requiredEnvVars = [
 ];
 
 if (process.env.NODE_ENV === 'production') {
-  requiredEnvVars.push('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET');
+  requiredEnvVars.push(
+    'SESSION_SECRET',
+    'PAYMONGO_SECRET_KEY',
+    'PAYMONGO_PUBLIC_KEY',
+    'PAYMONGO_WEBHOOK_SECRET',
+    'CLOUDINARY_CLOUD_NAME',
+    'CLOUDINARY_API_KEY',
+    'CLOUDINARY_API_SECRET'
+  );
 }
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -87,8 +99,7 @@ if (missingUploadVars.length > 0) {
 
 // Log configuration on startup (no sensitive values)
 console.log('\n🔐 Configuration loaded:');
-console.log('   Stripe Secret:', process.env.STRIPE_SECRET_KEY ? '✅ SET' : '❌ NOT SET');
-console.log('   Stripe Public:', process.env.STRIPE_PUBLISHABLE_KEY ? '✅ SET' : '❌ NOT SET');
+console.log('   PayMongo:', process.env.PAYMONGO_SECRET_KEY && process.env.PAYMONGO_WEBHOOK_SECRET ? 'configured' : 'not configured');
 console.log('   Email User:', process.env.EMAIL_USER ? '✅ SET' : '❌ NOT SET');
 console.log('   Email Password:', process.env.EMAIL_PASSWORD ? '✅ SET' : '❌ NOT SET');
 console.log('   Cloudinary:', (
@@ -115,7 +126,7 @@ const sessionStore = usePostgresSessionStore
   ? new PgSessionStore({
       pool,
       tableName: 'http_sessions',
-      createTableIfMissing: true,
+      createTableIfMissing: false,
     })
   : undefined;
 
@@ -163,12 +174,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://js.stripe.com"],
+      scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
-      connectSrc: ["'self'", ...allowedOrigins, "https://api.stripe.com"],
-      frameSrc: ["'self'", "https://js.stripe.com"],
+      connectSrc: ["'self'", ...allowedOrigins],
+      frameSrc: ["'self'"],
     },
   },
   // C9: HSTS — enforce HTTPS in production
@@ -200,9 +211,9 @@ app.use(cors({
     try {
       const url = new URL(origin);
       const host = url.hostname;
-      if (host === 'localhost' || host === '127.0.0.1' ||
+      if (process.env.NODE_ENV !== 'production' && (host === 'localhost' || host === '127.0.0.1' ||
           host.startsWith('192.168.') || host.startsWith('10.') ||
-          /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
+          /^172\.(1[6-9]|2\d|3[01])\./.test(host))) {
         return callback(null, true);
       }
     } catch {}
@@ -217,7 +228,8 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
 }));
 app.use(express.json({
   verify: (req, _res, buf) => {
-    if (String(req.originalUrl || '').startsWith('/api/payments/paymongo/webhook')) {
+    if (String(req.originalUrl || '').startsWith('/api/payments/paymongo/webhook')
+      || String(req.originalUrl || '').startsWith('/api/shipments/webhook')) {
       req.rawBody = Buffer.from(buf);
     }
   },
@@ -295,6 +307,11 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/shipments', shipmentRoutes);
+app.use('/api/waybills', waybillRoutes);
+app.use('/api/discounts', discountRoutes);
+app.use('/api/refunds', refundRoutes);
+app.use('/api/pos', posRoutes);
 
 // 404 handler
 app.use((req, res) => {

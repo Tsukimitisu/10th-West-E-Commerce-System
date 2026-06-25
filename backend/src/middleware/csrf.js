@@ -4,6 +4,8 @@ const CSRF_TTL_MS = Number(process.env.CSRF_TOKEN_TTL_MS || 60 * 60 * 1000);
 const CSRF_SECRET = process.env.CSRF_SECRET || process.env.SESSION_SECRET || 'dev-csrf-secret';
 const CSRF_PATH_EXEMPTIONS = new Set([
   '/auth/verify-email',
+  '/payments/paymongo/webhook',
+  '/shipments/webhook',
 ]);
 
 const toBase64Url = (value) => Buffer.from(value).toString('base64url');

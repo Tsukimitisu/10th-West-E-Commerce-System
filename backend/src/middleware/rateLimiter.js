@@ -6,6 +6,8 @@ let hasWarnedDbLimiterFallback = false;
 let rateLimitTableInitPromise = null;
 
 const ensureRateLimitTable = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   if (!rateLimitTableInitPromise) {
     rateLimitTableInitPromise = pool.query(`
       CREATE TABLE IF NOT EXISTS request_rate_limits (
