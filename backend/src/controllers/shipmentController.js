@@ -124,6 +124,54 @@ export const getTracking = async (req, res) => {
   }
 };
 
+export const getShipmentDetail = getTracking;
+
+export const cancelShipment = async (req, res) => {
+  const orderId = Number(req.params.orderId || req.body?.order_id);
+  if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: 'Valid order ID is required.' });
+  const reason = String(req.body?.reason || '').trim().slice(0, 500) || 'Shipment cancelled by staff';
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(`SELECT * FROM shipments WHERE order_id = $1 FOR UPDATE`, [orderId]);
+    const shipment = result.rows[0];
+    if (!shipment) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Shipment not found.' });
+    }
+    if (['delivered', 'cancelled', 'returned'].includes(shipment.status)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'This shipment can no longer be cancelled.' });
+    }
+    if (shipment.provider_shipment_id && !['pending', 'failed'].includes(shipment.status)) {
+      await client.query('ROLLBACK');
+      return res.status(501).json({ message: 'Courier-side cancellation is not configured for booked J&T shipments.' });
+    }
+    await client.query(
+      `UPDATE shipments SET status = 'cancelled', cancelled_at = NOW(), provider_metadata = COALESCE(provider_metadata, '{}'::jsonb) || $2::jsonb, updated_at = NOW()
+       WHERE id = $1`,
+      [shipment.id, JSON.stringify({ cancel_reason: reason, cancelled_by: req.user.id })]
+    );
+    await client.query(
+      `INSERT INTO shipment_events (shipment_id, provider_event_id, status, description, payload, occurred_at)
+       VALUES ($1, $2, 'cancelled', $3, $4::jsonb, NOW())
+       ON CONFLICT (shipment_id, provider_event_id) DO NOTHING`,
+      [shipment.id, `local-cancel-${shipment.id}`, reason, JSON.stringify({ reason, cancelled_by: req.user.id })]
+    );
+    await client.query(
+      `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, metadata)
+       VALUES ($1, 'shipment.cancel', 'shipment', $2, $3, $4, $5::jsonb)`,
+      [req.user.id, String(shipment.id), req.ip, req.get('user-agent'), JSON.stringify({ order_id: orderId, reason })]
+    );
+    await client.query('COMMIT');
+    return res.json({ message: 'Shipment cancelled.', order_id: orderId, status: 'cancelled' });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Cancel shipment failed:', error);
+    return res.status(500).json({ message: 'Shipment could not be cancelled.' });
+  } finally { client.release(); }
+};
+
 export const generateWaybill = async (req, res) => {
   req.body = { ...req.body, order_id: Number(req.params.orderId) };
   return bookShipment(req, res);
@@ -141,4 +189,23 @@ export const printWaybill = async (req, res) => {
     );
     return res.json({ ...result.rows[0], print_instructions: 'Render this label payload in the protected staff print view.' });
   } catch (error) { return res.status(500).json({ message: 'Waybill could not be loaded.' }); }
+};
+
+export const getWaybill = async (req, res) => {
+  try {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: 'Invalid order ID.' });
+    const result = await pool.query(
+      `SELECT w.*, s.provider, s.tracking_number, s.status AS shipment_status
+       FROM waybills w
+       LEFT JOIN shipments s ON s.id = w.shipment_id
+       WHERE w.order_id = $1`,
+      [orderId]
+    );
+    if (!result.rowCount) return res.status(404).json({ message: 'Waybill not found.' });
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Get waybill failed:', error);
+    return res.status(500).json({ message: 'Waybill could not be loaded.' });
+  }
 };
