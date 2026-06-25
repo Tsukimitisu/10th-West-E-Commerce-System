@@ -93,7 +93,7 @@ const OrdersView = () => {
       if (newStatus === 'cancelled') {
         // Admin cancel: update status and store reason directly
         const { supabase } = await import('../../services/supabase');
-        const USE_SUPABASE = (import.meta.env.VITE_USE_SUPABASE ?? 'true') === 'true';
+        const USE_SUPABASE = false;
         if (USE_SUPABASE) {
           await supabase.from('orders').update({
             status: 'cancelled',

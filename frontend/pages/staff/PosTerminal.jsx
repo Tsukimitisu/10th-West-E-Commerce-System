@@ -249,7 +249,8 @@ const PosTerminal = () => {
                 amount_tendered: tendered,
                 change_due: change,
                 cashier_id: user?.id,
-                discount_amount: discountAmount
+                discount_amount: 0,
+                idempotency_key: crypto.randomUUID()
             };
 
             const newOrder = await createOrder(orderData);
