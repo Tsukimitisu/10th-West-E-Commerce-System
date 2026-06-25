@@ -32,11 +32,14 @@ const getConfig = () => {
   const mockMode = String(process.env.JNT_MOCK_MODE || '').trim().toLowerCase() === 'true';
   const baseUrl = normalizeText(mode === 'production' ? process.env.JNT_PRODUCTION_URL : process.env.JNT_SANDBOX_URL)
     || normalizeText(process.env.JNT_API_URL);
+  const trackingUrl = normalizeText(mode === 'production' ? process.env.JNT_PRODUCTION_TRACKING_URL : process.env.JNT_SANDBOX_TRACKING_URL)
+    || normalizeText(process.env.JNT_TRACKING_URL);
 
   return {
     mode,
     mockMode,
     baseUrl,
+    trackingUrl,
     username: normalizeText(process.env.JNT_USERNAME),
     apiKey: normalizeText(process.env.JNT_API_KEY),
     customerCode: normalizeText(process.env.JNT_CUSTOMER_CODE),
@@ -153,6 +156,11 @@ const extractWaybillNumber = (responseBody) => {
 
 const requestJntWaybill = async (payload, config) => {
   if (config.mockMode) {
+    if (process.env.NODE_ENV === 'production') {
+      const error = new Error('J&T mock mode cannot be used in production.');
+      error.code = 'JNT_MOCK_DISABLED_IN_PRODUCTION';
+      throw error;
+    }
     return {
       response: {
         is_success: 'true',
@@ -200,6 +208,106 @@ const requestJntWaybill = async (payload, config) => {
     }
 
     return { response: responseBody, request: payload };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+const normalizeTrackingStatus = (value) => {
+  const normalized = String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+  if (['delivered', 'signed'].includes(normalized)) return 'delivered';
+  if (['out_for_delivery', 'delivery'].includes(normalized)) return 'out_for_delivery';
+  if (['picked_up', 'pickup', 'collected'].includes(normalized)) return 'picked_up';
+  if (['return', 'returned', 'returning'].includes(normalized)) return 'returned';
+  if (['failed', 'exception', 'delivery_failed'].includes(normalized)) return 'failed';
+  return 'in_transit';
+};
+
+const TRACKING_TO_ORDER = {
+  picked_up: 'shipped',
+  in_transit: 'shipped',
+  out_for_delivery: 'out_for_delivery',
+  delivered: 'delivered',
+  failed: 'failed',
+  returned: 'returned',
+};
+
+const extractTrackingEvents = (body, waybillNumber) => {
+  const candidates = Array.isArray(body?.data) ? body.data
+    : Array.isArray(body?.detail) ? body.detail
+      : Array.isArray(body?.events) ? body.events
+        : Array.isArray(body?.data?.events) ? body.data.events
+          : [];
+
+  return candidates.map((event, index) => {
+    const rawStatus = event.status || event.scanType || event.scan_type || event.type || event.state;
+    const status = normalizeTrackingStatus(rawStatus);
+    const occurredAt = new Date(event.time || event.scanTime || event.scan_time || event.created_at || Date.now());
+    return {
+      provider_event_id: normalizeText(event.id || event.event_id || event.scanId || `${waybillNumber}-${status}-${occurredAt.getTime()}-${index}`),
+      status,
+      location: normalizeText(event.location || event.scanSite || event.scan_site || event.city),
+      description: normalizeText(event.description || event.desc || event.remark || rawStatus) || status,
+      occurred_at: Number.isNaN(occurredAt.getTime()) ? new Date() : occurredAt,
+      payload: event,
+    };
+  }).filter((event) => event.provider_event_id);
+};
+
+const requestJntTracking = async (waybillNumber, config) => {
+  if (config.mockMode) {
+    if (process.env.NODE_ENV === 'production') {
+      const error = new Error('J&T mock tracking cannot be used in production.');
+      error.code = 'JNT_MOCK_DISABLED_IN_PRODUCTION';
+      throw error;
+    }
+    return {
+      response: { mock: true, waybill_number: waybillNumber },
+      events: [{
+        provider_event_id: `mock-${waybillNumber}-${Date.now()}`,
+        status: 'in_transit',
+        location: 'Mock sorting hub',
+        description: 'Development mock tracking update',
+        occurred_at: new Date(),
+        payload: { mock: true },
+      }],
+    };
+  }
+
+  if (!config.trackingUrl || !config.username || !config.apiKey || !config.signingKey) {
+    const error = new Error('J&T tracking API is not configured.');
+    error.code = 'JNT_TRACKING_NOT_CONFIGURED';
+    throw error;
+  }
+
+  const dataParam = JSON.stringify({ detail: [{ billcode: waybillNumber, customer_code: config.customerCode || '' }] });
+  const form = new URLSearchParams();
+  form.set('data_param', dataParam);
+  form.set('data_sign', signPayload(dataParam, config.signingKey));
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(config.trackingUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form,
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    let responseBody = {};
+    try {
+      responseBody = JSON.parse(text);
+    } catch {
+      responseBody = { raw: text };
+    }
+    if (!res.ok) {
+      const error = new Error(responseBody?.error_message || `J&T tracking API failed with ${res.status}`);
+      error.code = 'JNT_TRACKING_API_ERROR';
+      error.responseBody = responseBody;
+      throw error;
+    }
+    return { response: responseBody, events: extractTrackingEvents(responseBody, waybillNumber) };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -293,7 +401,7 @@ export const createJntWaybillForOrder = async (db, orderId, { generatedBy = null
 
     if (!['paid', 'processing', 'packed', 'ready_for_pickup'].includes(String(locked.status || '').toLowerCase())) {
       await client.query('ROLLBACK');
-      const error = new Error('J&T waybill can only be generated for paid or preparing orders.');
+      const error = new Error('J&T waybill can only be generated for paid, processing, packed, or ready-for-pickup orders.');
       error.status = 400;
       throw error;
     }
@@ -374,7 +482,31 @@ export const createJntWaybillForOrder = async (db, orderId, { generatedBy = null
     );
 
     if (updateResult.rows.length === 0) return getJntWaybill(db, orderId);
-    return updateResult.rows[0];
+    const generatedOrder = updateResult.rows[0];
+    const shipmentResult = await db.query(
+      `INSERT INTO shipments (
+         order_id, provider, status, provider_shipment_id, tracking_number, shipping_fee, booking_idempotency_key, booked_at
+       ) VALUES ($1, 'jnt', 'booked', $2, $2, $3, $4, NOW())
+       ON CONFLICT (order_id) DO UPDATE SET
+         status = 'booked',
+         provider_shipment_id = EXCLUDED.provider_shipment_id,
+         tracking_number = EXCLUDED.tracking_number,
+         booked_at = COALESCE(shipments.booked_at, NOW()),
+         updated_at = NOW()
+       RETURNING *`,
+      [orderId, waybillNumber, roundMoney(generatedOrder.shipping_fee || 0), `jnt-waybill:${orderId}`]
+    );
+    await db.query(
+      `INSERT INTO waybills (order_id, shipment_id, waybill_number, label_payload, generated_by)
+       VALUES ($1, $2, $3, $4::jsonb, $5)
+       ON CONFLICT (order_id) DO UPDATE SET
+         shipment_id = EXCLUDED.shipment_id,
+         waybill_number = EXCLUDED.waybill_number,
+         label_payload = EXCLUDED.label_payload,
+         updated_at = NOW()`,
+      [orderId, shipmentResult.rows[0]?.id || null, waybillNumber, JSON.stringify(labelPayload), generatedBy]
+    );
+    return generatedOrder;
   } catch (error) {
     await db.query(
       `UPDATE orders
@@ -407,6 +539,91 @@ export const getJntWaybill = async (db, orderId) => {
     [orderId]
   );
   return result.rows[0] || null;
+};
+
+export const refreshJntTrackingForOrder = async (db, orderId, { requestedBy = null } = {}) => {
+  const waybill = await getJntWaybill(db, orderId);
+  if (!waybill) {
+    const error = new Error('Order not found');
+    error.status = 404;
+    throw error;
+  }
+  if (!waybill.waybill_number) {
+    const error = new Error('No J&T waybill exists for this order.');
+    error.status = 400;
+    throw error;
+  }
+
+  const config = getConfig();
+  const tracking = await requestJntTracking(waybill.waybill_number, config);
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const shipmentResult = await client.query(
+      `SELECT * FROM shipments WHERE order_id = $1 FOR UPDATE`,
+      [orderId]
+    );
+    const shipment = shipmentResult.rows[0];
+    if (!shipment) {
+      const error = new Error('Shipment record not found for this waybill.');
+      error.status = 409;
+      throw error;
+    }
+
+    let latestStatus = shipment.status;
+    const savedEvents = [];
+    for (const event of tracking.events) {
+      const inserted = await client.query(
+        `INSERT INTO shipment_events (shipment_id, provider_event_id, status, location, description, payload, occurred_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+         ON CONFLICT (shipment_id, provider_event_id) DO NOTHING
+         RETURNING status, location, description, occurred_at`,
+        [shipment.id, event.provider_event_id, event.status, event.location, event.description, JSON.stringify(event.payload), event.occurred_at]
+      );
+      if (inserted.rows[0]) {
+        latestStatus = event.status;
+        savedEvents.push(inserted.rows[0]);
+      }
+    }
+
+    await client.query(
+      `UPDATE shipments
+       SET status = $2,
+           provider_metadata = COALESCE(provider_metadata, '{}'::jsonb) || $3::jsonb,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [shipment.id, latestStatus, JSON.stringify({ last_tracking_refresh_at: new Date().toISOString(), requested_by: requestedBy })]
+    );
+
+    const orderResult = await client.query(`SELECT status FROM orders WHERE id = $1 FOR UPDATE`, [orderId]);
+    const nextOrderStatus = TRACKING_TO_ORDER[latestStatus] || orderResult.rows[0]?.status;
+    if (nextOrderStatus && orderResult.rows[0]?.status !== nextOrderStatus) {
+      await client.query(
+        `UPDATE orders SET status = $2, delivered_at = CASE WHEN $2 = 'delivered' THEN NOW() ELSE delivered_at END, updated_at = NOW() WHERE id = $1`,
+        [orderId, nextOrderStatus]
+      );
+      await client.query(
+        `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note, metadata)
+         VALUES ($1, $2, $3, 'courier', $4, 'J&T tracking refresh', $5::jsonb)`,
+        [orderId, orderResult.rows[0]?.status, nextOrderStatus, requestedBy, JSON.stringify({ waybill_number: waybill.waybill_number })]
+      );
+    }
+
+    await client.query('COMMIT');
+    return {
+      tracking_number: waybill.tracking_number || waybill.waybill_number,
+      waybill_number: waybill.waybill_number,
+      status: latestStatus,
+      order_status: nextOrderStatus,
+      events_saved: savedEvents.length,
+      provider_response: tracking.response,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export const normalizeWaybillStatus = (value) => {

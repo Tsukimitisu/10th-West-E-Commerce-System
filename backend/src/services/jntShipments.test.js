@@ -114,3 +114,20 @@ test('createJntWaybillForOrder is idempotent when a waybill already exists', asy
   assert.equal(waybill.waybill_status, 'generated');
   assert.equal(db.queries.some((query) => query.includes('waybill_number = $2')), false);
 });
+
+test('createJntWaybillForOrder rejects mock mode in production', async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  process.env.JNT_MOCK_MODE = 'true';
+
+  try {
+    const db = makeDb();
+    await assert.rejects(
+      () => createJntWaybillForOrder(db, 42, { generatedBy: 1 }),
+      (error) => error?.code === 'JNT_MOCK_DISABLED_IN_PRODUCTION'
+    );
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+  }
+});
