@@ -8,7 +8,7 @@ import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRes
 const router = express.Router();
 
 // Public settings reads are used by storefront pages.
-router.get('/settings', async (req, res) => {
+router.get('/settings', authenticateToken, requireRole('super_admin'), async (req, res) => {
   try {
     const { category } = req.query;
     if (shouldUseDatabaseReadFallback()) {
@@ -40,7 +40,7 @@ router.get('/settings', async (req, res) => {
   }
 });
 
-router.get('/settings/:category', async (req, res) => {
+router.get('/settings/:category', authenticateToken, requireRole('super_admin'), async (req, res) => {
   try {
     if (shouldUseDatabaseReadFallback()) {
       const settings = await supabaseRestFetch('system_settings', {
