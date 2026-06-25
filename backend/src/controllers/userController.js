@@ -119,6 +119,8 @@ const sendEmailChangeVerificationEmail = async ({ email, currentName, token }) =
 };
 
 const ensureUserProfileColumns = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await pool.query(`
     ALTER TABLE users
       ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255),

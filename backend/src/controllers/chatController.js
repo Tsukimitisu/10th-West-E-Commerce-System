@@ -17,6 +17,8 @@ const memoryChatStore = {
 const isStaffUser = (user) => STAFF_ROLES.has(String(user?.role || '').toLowerCase());
 
 const ensureChatSchema = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await pool.query(`
     CREATE TABLE IF NOT EXISTS chat_threads (
       id SERIAL PRIMARY KEY,

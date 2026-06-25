@@ -333,6 +333,8 @@ const mapDbRowToVariant = (row, optionOrder, basePrice) => {
 };
 
 const ensureVariantSchema = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await pool.query(`
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS variant_options JSONB DEFAULT '[]'::jsonb;

@@ -801,6 +801,8 @@ const getSupabaseRestProductsFallback = async ({ queryInput = {}, includeInterna
 };
 
 const ensureProductSchema = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await pool.query(`
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft',

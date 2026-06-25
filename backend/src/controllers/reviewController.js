@@ -103,6 +103,8 @@ const mapReviewResponse = (row, req) => {
 };
 
 const ensureReviewSchema = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   if (reviewSchemaEnsured) return;
   if (reviewSchemaPromise) {
     await reviewSchemaPromise;
