@@ -48,6 +48,8 @@ const ORDER_NOTIFICATION_DETAIL_QUERY = `
 `;
 
 const ensureOrderWorkflowColumns = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await pool.query(`
     ALTER TABLE orders
       ADD COLUMN IF NOT EXISTS shipping_address_snapshot JSONB,

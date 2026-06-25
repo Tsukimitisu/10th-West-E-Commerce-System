@@ -13,7 +13,9 @@ import {
   getOrderWaybill,
   refreshJntTracking
 } from '../controllers/orderController.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
+import { createCheckout } from '../controllers/secureCheckoutController.js';
+import { cancelOrderSecure, getOrderTimeline, updateOrderStatusSecure } from '../controllers/orderWorkflowController.js';
 
 const router = express.Router();
 
@@ -21,13 +23,19 @@ const router = express.Router();
 router.get('/my-orders', authenticateToken, getUserOrders);
 router.get('/:id', authenticateToken, getOrderById);
 router.get('/:id/invoice', authenticateToken, getOrderInvoice);
-router.post('/', authenticateToken, createOrder);
-router.put('/:id/cancel', authenticateToken, cancelOrder);
+router.post('/', authenticateToken, (req, res, next) => {
+  req.body = { ...req.body, payment_method: 'cod' };
+  return createCheckout(req, res, next);
+});
+router.post('/:id/cancel', authenticateToken, cancelOrderSecure);
+router.put('/:id/cancel', authenticateToken, cancelOrderSecure);
+router.get('/:id/timeline', authenticateToken, getOrderTimeline);
 router.put('/:id/confirm-receipt', authenticateToken, confirmOrderReceipt);
 
 // Admin routes
 router.get('/', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), getAllOrders);
-router.put('/:id/status', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), updateOrderStatus);
+router.patch('/:id/status', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('orders.edit'), updateOrderStatusSecure);
+router.put('/:id/status', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('orders.edit'), updateOrderStatusSecure);
 router.put('/:id/confirm-delivery', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), confirmOrderDelivery);
 router.post('/:id/jnt-waybill', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), createJntWaybill);
 router.get('/:id/waybill', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), getOrderWaybill);
