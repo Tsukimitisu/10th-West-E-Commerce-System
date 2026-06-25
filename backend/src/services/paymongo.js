@@ -17,8 +17,9 @@ const getPublicBaseUrl = () => (
 
 const buildAuthHeader = () => {
   const secretKey = getSecretKey();
-  if (!secretKey) {
-    const error = new Error('PayMongo secret key is not configured.');
+  const publicKey = normalizeText(process.env.PAYMONGO_PUBLIC_KEY);
+  if (!secretKey || !publicKey) {
+    const error = new Error('PayMongo secret and public keys are not configured.');
     error.code = 'PAYMONGO_NOT_CONFIGURED';
     throw error;
   }
@@ -81,6 +82,7 @@ export const createPaymongoGcashCheckout = async ({ order, items }) => {
           cancel_url: `${baseUrl}/#/payment-result?order=${orderId}&status=cancelled`,
           metadata: {
             order_id: String(orderId),
+            payment_id: String(order.payment_id || ''),
             order_number: String(orderNumber),
             payment_reference: String(order.payment_reference || ''),
           },
@@ -108,6 +110,34 @@ export const createPaymongoGcashCheckout = async ({ order, items }) => {
   };
 };
 
+export const createPaymongoRefund = async ({ paymentId, amount, idempotencyKey, notes }) => {
+  if (!paymentId || !Number.isInteger(Number(amount)) || Number(amount) <= 0) {
+    throw new Error('A PayMongo payment ID and positive centavo amount are required.');
+  }
+  const response = await fetch(`${PAYMONGO_BASE_URL}/refunds`, {
+    method: 'POST',
+    headers: {
+      Authorization: buildAuthHeader(),
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      data: {
+        attributes: {
+          amount: Number(amount),
+          payment_id: String(paymentId),
+          reason: 'requested_by_customer',
+          notes: String(notes || 'Approved merchandise return').slice(0, 255),
+        },
+      },
+    }),
+  });
+  const body = await parsePaymongoResponse(response);
+  if (!body?.data?.id) throw new Error('PayMongo did not return a refund reference.');
+  return { id: body.data.id, status: body.data.attributes?.status || 'pending', raw: body };
+};
+
 const parseSignatureHeader = (header) => {
   const parts = {};
   String(header || '').split(',').forEach((part) => {
@@ -120,13 +150,19 @@ const parseSignatureHeader = (header) => {
 
 export const verifyPaymongoWebhookSignature = ({ rawBody, signatureHeader }) => {
   const webhookSecret = normalizeText(process.env.PAYMONGO_WEBHOOK_SECRET);
-  if (!webhookSecret) return true;
+  if (!webhookSecret) return false;
 
   const parts = parseSignatureHeader(signatureHeader);
   const timestamp = parts.t;
   const expected = process.env.NODE_ENV === 'production' ? parts.li : (parts.te || parts.li);
 
   if (!timestamp || !expected || !rawBody) return false;
+
+  const timestampSeconds = Number(timestamp);
+  const toleranceSeconds = Math.max(60, Number(process.env.PAYMONGO_WEBHOOK_TOLERANCE_SECONDS || 300));
+  if (!Number.isFinite(timestampSeconds) || Math.abs(Math.floor(Date.now() / 1000) - timestampSeconds) > toleranceSeconds) {
+    return false;
+  }
 
   const payload = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody);
   const signedPayload = `${timestamp}.${payload}`;

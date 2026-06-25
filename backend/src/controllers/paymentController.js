@@ -49,6 +49,8 @@ const computeShippingCost = (subtotal) => (
 );
 
 export const ensurePaymentOrderColumns = async (db = pool) => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await db.query(`
     DO $$
     BEGIN
