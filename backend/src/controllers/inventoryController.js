@@ -81,7 +81,7 @@ export const updateStock = async (req, res) => {
 
     // Get current stock
     const productResult = await client.query(
-      'SELECT id, name, stock_quantity FROM products WHERE id = $1',
+      'SELECT id, name, stock_quantity, reserved_stock FROM products WHERE id = $1 FOR UPDATE',
       [productId]
     );
 
@@ -109,10 +109,21 @@ export const updateStock = async (req, res) => {
       return res.status(400).json({ message: 'Stock cannot be negative' });
     }
 
+    if (newStock < Number(productResult.rows[0].reserved_stock || 0)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Stock cannot be set below currently reserved stock.' });
+    }
+
     // Update stock
     const updateResult = await client.query(
       'UPDATE products SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
       [newStock, productId]
+    );
+
+    await client.query(
+      `INSERT INTO stock_movements (product_id, quantity_delta, stock_before, stock_after, reason, reference_type, created_by, metadata)
+       VALUES ($1,$2,$3,$4,'adjustment','manual',$5,$6::jsonb)`,
+      [productId, newStock - currentStock, currentStock, newStock, req.user.id, JSON.stringify({ adjustment_type, reason: reason || null })]
     );
 
     await client.query('COMMIT');
@@ -154,6 +165,30 @@ export const updateStock = async (req, res) => {
     res.status(500).json({ message: 'Failed to update stock' });
   } finally {
     client.release();
+  }
+};
+
+export const getStockMovements = async (req, res) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
+  const productId = req.query.product_id ? Number(req.query.product_id) : null;
+  try {
+    const params = [limit, (page - 1) * limit];
+    const filter = Number.isInteger(productId) && productId > 0 ? `WHERE sm.product_id = $3` : '';
+    if (filter) params.push(productId);
+    const result = await pool.query(
+      `SELECT sm.*, p.name AS product_name, pv.variant_value, u.name AS created_by_name,
+              COUNT(*) OVER()::int AS total_count
+       FROM stock_movements sm JOIN products p ON p.id = sm.product_id
+       LEFT JOIN product_variants pv ON pv.id = sm.variant_id
+       LEFT JOIN users u ON u.id = sm.created_by
+       ${filter} ORDER BY sm.created_at DESC, sm.id DESC LIMIT $1 OFFSET $2`,
+      params
+    );
+    return res.json({ data: result.rows, pagination: { page, limit, total: result.rows[0]?.total_count || 0 } });
+  } catch (error) {
+    console.error('Get stock movements failed:', error);
+    return res.status(500).json({ message: 'Stock movements could not be loaded.' });
   }
 };
 
