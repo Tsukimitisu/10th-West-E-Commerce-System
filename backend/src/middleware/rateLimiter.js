@@ -195,6 +195,15 @@ export const loginLimiter = rateLimit(5 * 60 * 1000, 10, {
   keyGenerator: authKeyByEmail('login'),
   storage: 'db',
 });
+// Support form limiter: stricter than the general API limiter because guests can submit tickets.
+export const supportLimiter = rateLimit(15 * 60 * 1000, 5, {
+  keyGenerator: (req) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const email = normalizeIdentifier(req.body?.email);
+    return `support:${ip}:${email}`;
+  },
+  storage: 'db',
+});
 // General API limiter
 export const apiLimiter = rateLimit(60 * 1000, 100);
 // Webhook limiter

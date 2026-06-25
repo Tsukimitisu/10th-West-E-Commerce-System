@@ -20,6 +20,20 @@ const createTransporter = () => {
   });
 };
 
+const cleanText = (value, maxLength = 1000) => String(value || '')
+  .replace(/<[^>]*>/g, ' ')
+  .replace(/[\u0000-\u001f\u007f]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .slice(0, maxLength);
+
+const escapeHtml = (value) => String(value || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
 const createTicketViaRest = async ({ userId, name, email, subject, message }) => {
   const rows = await supabaseRestRequest('support_tickets', {
     method: 'POST',
@@ -47,10 +61,10 @@ const sendTicketNotification = async (ticket, { name, email, subject, message })
       html: `
         <h2>New Support Ticket</h2>
         <p><strong>Ticket ID:</strong> ${ticket.id}</p>
-        <p><strong>From:</strong> ${name} (${email})</p>
-        <p><strong>Subject:</strong> ${subject}</p>
+        <p><strong>From:</strong> ${escapeHtml(name)} (${escapeHtml(email)})</p>
+        <p><strong>Subject:</strong> ${escapeHtml(subject)}</p>
         <p><strong>Message:</strong></p>
-        <p>${message}</p>
+        <p>${escapeHtml(message)}</p>
         <hr>
         <p><small>Submitted: ${new Date(ticket.created_at || Date.now()).toLocaleString()}</small></p>
       `,
@@ -62,10 +76,16 @@ const sendTicketNotification = async (ticket, { name, email, subject, message })
 
 // Create support ticket
 export const createTicket = async (req, res) => {
-  const { name, email, subject, message } = req.body;
+  const name = cleanText(req.body?.name, 120);
+  const email = cleanText(req.body?.email, 255).toLowerCase();
+  const subject = cleanText(req.body?.subject, 160);
+  const message = cleanText(req.body?.message, 5000);
 
   if (!name || !email || !subject || !message) {
     return res.status(400).json({ message: 'All fields are required' });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ message: 'A valid email address is required' });
   }
 
   try {
