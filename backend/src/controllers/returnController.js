@@ -7,6 +7,8 @@ import { createNotification as createUserNotification } from '../utils/notificat
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
 const ensureReturnReviewColumns = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await pool.query(`
     ALTER TABLE returns
       ADD COLUMN IF NOT EXISTS reviewed_by INTEGER REFERENCES users(id),
@@ -308,7 +310,7 @@ export const approveReturn = async (req, res) => {
     await client.query('BEGIN');
 
     const existingResult = await client.query(
-      'SELECT id, status FROM returns WHERE id = $1 FOR UPDATE',
+      'SELECT id, order_id, status FROM returns WHERE id = $1 FOR UPDATE',
       [id]
     );
 
@@ -331,6 +333,13 @@ export const approveReturn = async (req, res) => {
        WHERE id = $2
        RETURNING *`,
       ['approved', id, req.user.id]
+    );
+
+    await client.query(`UPDATE orders SET status = 'return_approved', updated_at = NOW() WHERE id = $1`, [existingResult.rows[0].order_id]);
+    await client.query(
+      `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note, metadata)
+       SELECT $1, 'return_requested', 'return_approved', 'return', $2, $3, $4::jsonb FROM orders WHERE id = $1`,
+      [existingResult.rows[0].order_id, req.user.id, String(req.body?.note || '').slice(0, 1000) || 'Return approved', JSON.stringify({ return_id: Number(id) })]
     );
 
     await client.query('COMMIT');
@@ -382,7 +391,7 @@ export const rejectReturn = async (req, res) => {
     await client.query('BEGIN');
 
     const existingResult = await client.query(
-      'SELECT id, status FROM returns WHERE id = $1 FOR UPDATE',
+      'SELECT id, order_id, status FROM returns WHERE id = $1 FOR UPDATE',
       [id]
     );
 
@@ -405,6 +414,13 @@ export const rejectReturn = async (req, res) => {
        WHERE id = $2
        RETURNING *`,
       ['rejected', id, req.user.id]
+    );
+
+    await client.query(`UPDATE orders SET status = 'return_rejected', updated_at = NOW() WHERE id = $1`, [existingResult.rows[0].order_id]);
+    await client.query(
+      `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note, metadata)
+       SELECT $1, 'return_requested', 'return_rejected', 'return', $2, $3, $4::jsonb FROM orders WHERE id = $1`,
+      [existingResult.rows[0].order_id, req.user.id, String(req.body?.note || '').slice(0, 1000) || 'Return rejected', JSON.stringify({ return_id: Number(id) })]
     );
 
     await client.query('COMMIT');
