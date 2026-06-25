@@ -1,37 +1,18 @@
 import express from 'express';
 import pool from '../config/database.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
-import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
+import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Get user notifications
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    if (shouldUseDatabaseReadFallback()) {
-      try {
-        const notifications = await supabaseRestFetch('notifications', {
-          select: '*',
-          user_id: `eq.${req.user.id}`,
-          order: 'created_at.desc',
-          limit: 50,
-        });
-        return res.json(Array.isArray(notifications) ? notifications : []);
-      } catch (fallbackError) {
-        console.error('Notifications Supabase REST fallback error:', fallbackError);
-        return res.json([]);
-      }
-    }
-
     const result = await pool.query(
       'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
       [req.user.id]
     );
     res.json(result.rows);
   } catch (error) {
-    if (isDatabaseConnectivityError(error)) {
-      return res.json([]);
-    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -39,29 +20,12 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get unread count
 router.get('/unread-count', authenticateToken, async (req, res) => {
   try {
-    if (shouldUseDatabaseReadFallback()) {
-      try {
-        const result = await supabaseRestFetch('notifications', {
-          select: 'id',
-          user_id: `eq.${req.user.id}`,
-          is_read: 'eq.false',
-        });
-        return res.json({ count: Array.isArray(result) ? result.length : 0 });
-      } catch (fallbackError) {
-        console.error('Notification count Supabase REST fallback error:', fallbackError);
-        return res.json({ count: 0 });
-      }
-    }
-
     const result = await pool.query(
       'SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false',
       [req.user.id]
     );
     res.json({ count: parseInt(result.rows[0].count) });
   } catch (error) {
-    if (isDatabaseConnectivityError(error)) {
-      return res.json({ count: 0 });
-    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -92,21 +56,31 @@ router.put('/read-all', authenticateToken, async (req, res) => {
   }
 });
 
-// Create notification (internal use)
-router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), async (req, res) => {
+router.get('/deliveries', authenticateToken, requireRole('admin', 'super_admin', 'owner'), requirePermission('notifications.manage'), async (req, res) => {
   try {
-    const { user_id, type, title, message, reference_id, reference_type, thumbnail_url, metadata } = req.body;
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
     const result = await pool.query(
-      `INSERT INTO notifications (
-        user_id, type, title, message, reference_id, reference_type, thumbnail_url, metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
-      RETURNING *`,
-      [user_id, type, title, message, reference_id, reference_type, thumbnail_url || null, metadata ? JSON.stringify(metadata) : null]
+      `SELECT nd.*, n.type, n.title, n.reference_id, n.reference_type
+       FROM notification_deliveries nd LEFT JOIN notifications n ON n.id = nd.notification_id
+       ORDER BY nd.created_at DESC LIMIT $1`,
+      [limit]
     );
-    res.status(201).json(result.rows[0]);
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
+});
+
+router.post('/deliveries/:id/retry', authenticateToken, requireRole('admin', 'super_admin', 'owner'), requirePermission('notifications.manage'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE notification_deliveries SET status='queued', next_attempt_at=NOW(), last_error=NULL, updated_at=NOW()
+       WHERE id=$1 AND status='failed' RETURNING *`,
+      [req.params.id]
+    );
+    if (!result.rowCount) return res.status(404).json({ message: 'Failed delivery not found.' });
+    return res.json(result.rows[0]);
+  } catch (error) { return res.status(500).json({ message: 'Delivery could not be queued.' }); }
 });
 
 // Delete notification

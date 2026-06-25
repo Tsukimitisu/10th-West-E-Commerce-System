@@ -2,6 +2,8 @@ import pool from '../config/database.js';
 import { emitNotification } from '../socket.js';
 
 export const ensureNotificationColumns = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
   await pool.query(`
     ALTER TABLE notifications
       ADD COLUMN IF NOT EXISTS thumbnail_url VARCHAR(500),
