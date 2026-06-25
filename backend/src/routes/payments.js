@@ -1,5 +1,12 @@
 import express from 'express';
-import { createCheckout, getPaymentStatus, handlePaymongoWebhook } from '../controllers/secureCheckoutController.js';
+import {
+  createCheckout,
+  expirePaymentSession,
+  getPaymentReconciliation,
+  getPaymentStatus,
+  handlePaymongoWebhook,
+  retryPayment,
+} from '../controllers/secureCheckoutController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -13,6 +20,9 @@ router.post('/gcash/checkout', authenticateToken, (req, res, next) => {
   return createCheckout(req, res, next);
 });
 router.post('/paymongo/webhook', handlePaymongoWebhook);
+router.post('/:orderId/retry', authenticateToken, retryPayment);
+router.post('/:orderId/expire', authenticateToken, expirePaymentSession);
+router.get('/:orderId/reconciliation', authenticateToken, getPaymentReconciliation);
 router.get('/:orderId/status', authenticateToken, getPaymentStatus);
 router.get('/orders/:orderId/status', authenticateToken, getPaymentStatus);
 

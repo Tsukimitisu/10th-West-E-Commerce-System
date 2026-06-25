@@ -217,6 +217,10 @@ export const createCheckout = async (req, res) => {
         await client.query('COMMIT');
         return res.status(saved.response_status || 200).json(saved.response_body);
       }
+      if (saved.status === 'failed') {
+        await client.query('COMMIT');
+        return res.status(saved.response_status || 502).json(saved.response_body || { message: 'Previous checkout attempt failed. Please retry with a new idempotency key.' });
+      }
       throw fail(409, 'This checkout is already being processed.');
     }
     await client.query(
@@ -285,7 +289,16 @@ export const createCheckout = async (req, res) => {
       totals: { subtotal, shipping_fee: shippingFee, discount, tax: taxAmount, total },
     };
     if (paymentMethod === 'gcash') {
+      let attemptId = null;
       try {
+        const attempt = await pool.query(
+          `INSERT INTO payment_attempts (payment_id, idempotency_key, status)
+           VALUES ($1, $2, 'started')
+           ON CONFLICT (idempotency_key) DO UPDATE SET status = 'started', error_message = NULL
+           RETURNING id`,
+          [paymentResult.rows[0].id, `${idempotencyKey}:paymongo-checkout`]
+        );
+        attemptId = attempt.rows[0]?.id || null;
         const checkout = await createPaymongoGcashCheckout({
           order: { ...order, payment_id: paymentResult.rows[0].id },
           items: snapshots,
@@ -298,8 +311,24 @@ export const createCheckout = async (req, res) => {
           `UPDATE orders SET payment_intent_id = $2, payment_reference = $2, payment_checkout_url = $3, updated_at = NOW() WHERE id = $1`,
           [order.id, checkout.id, checkout.checkout_url]
         );
+        if (attemptId) {
+          await pool.query(
+            `UPDATE payment_attempts
+             SET status = 'succeeded', http_status = 201, provider_response = $2::jsonb, completed_at = NOW()
+             WHERE id = $1`,
+            [attemptId, JSON.stringify({ checkout_id: checkout.id })]
+          );
+        }
         response = { ...response, checkout_url: checkout.checkout_url, payment_reference: checkout.id };
       } catch (providerError) {
+        if (attemptId) {
+          await pool.query(
+            `UPDATE payment_attempts
+             SET status = 'failed', error_message = $2, completed_at = NOW()
+             WHERE id = $1`,
+            [attemptId, String(providerError.message || 'PayMongo checkout failed').slice(0, 1000)]
+          ).catch(() => {});
+        }
         const releaseClient = await pool.connect();
         try {
           await releaseClient.query('BEGIN');
@@ -310,6 +339,18 @@ export const createCheckout = async (req, res) => {
           await releaseClient.query('ROLLBACK').catch(() => {});
           console.error('Checkout reservation release failed:', releaseError);
         } finally { releaseClient.release(); }
+        await pool.query(
+          `UPDATE idempotency_keys
+           SET status = 'failed', response_status = $4, response_body = $5::jsonb, updated_at = NOW()
+           WHERE user_id = $1 AND scope = 'checkout' AND key = $2 AND request_hash = $3`,
+          [
+            req.user.id,
+            idempotencyKey,
+            requestHash,
+            providerError.code === 'PAYMONGO_NOT_CONFIGURED' ? 503 : 502,
+            JSON.stringify({ message: providerError.message || 'Payment checkout creation failed.' }),
+          ]
+        ).catch(() => {});
         throw providerError;
       }
     }
@@ -475,6 +516,345 @@ export const getPaymentStatus = async (req, res) => {
   }
 };
 
+export const retryPayment = async (req, res) => {
+  const orderId = Number(req.params.orderId);
+  const key = String(req.get('Idempotency-Key') || '').trim();
+  if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: 'Invalid order ID.' });
+  if (!/^[A-Za-z0-9._:-]{8,255}$/.test(key)) return res.status(400).json({ message: 'A valid Idempotency-Key header is required.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const orderResult = await client.query(
+      `SELECT * FROM orders WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+      [orderId, req.user.id]
+    );
+    const order = orderResult.rows[0];
+    if (!order) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Order not found.' });
+    }
+    if (order.payment_method !== 'gcash' || order.payment_provider !== 'paymongo') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Only PayMongo GCash payments can be retried.' });
+    }
+    if (order.payment_status === 'paid' || order.status === 'paid') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'This order is already paid.' });
+    }
+    const reservationResult = await client.query(
+      `SELECT 1 FROM stock_reservations WHERE order_id = $1 AND status = 'active' LIMIT 1`,
+      [orderId]
+    );
+    if (!reservationResult.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'The stock reservation has expired. Start a new checkout.' });
+    }
+    const paymentResult = await client.query(
+      `SELECT * FROM payments WHERE order_id = $1 AND provider = 'paymongo' ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+      [orderId]
+    );
+    const payment = paymentResult.rows[0];
+    if (!payment) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Payment record not found.' });
+    }
+    const existingAttempt = await client.query(
+      `SELECT * FROM payment_attempts WHERE idempotency_key = $1 FOR UPDATE`,
+      [key]
+    );
+    if (existingAttempt.rows[0]?.status === 'succeeded' && payment.metadata?.checkout_url) {
+      await client.query('COMMIT');
+      return res.json({ order_id: orderId, checkout_url: payment.metadata.checkout_url, payment_reference: payment.external_checkout_id || payment.reference });
+    }
+    const attempt = await client.query(
+      `INSERT INTO payment_attempts (payment_id, idempotency_key, status)
+       VALUES ($1, $2, 'started')
+       ON CONFLICT (idempotency_key) DO UPDATE SET status = 'started', error_message = NULL
+       RETURNING id`,
+      [payment.id, key]
+    );
+    await client.query('COMMIT');
+
+    const items = (await pool.query(
+      `SELECT product_id, product_name, product_price, quantity FROM order_items WHERE order_id = $1 ORDER BY id`,
+      [orderId]
+    )).rows;
+    const checkout = await createPaymongoGcashCheckout({
+      order: { ...order, payment_id: payment.id },
+      items,
+    });
+    await pool.query(
+      `UPDATE payments
+       SET status = 'pending', external_checkout_id = $2, reference = $2,
+           metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb, updated_at = NOW()
+       WHERE id = $1`,
+      [payment.id, checkout.id, JSON.stringify({ checkout_url: checkout.checkout_url, retry: true })]
+    );
+    await pool.query(
+      `UPDATE orders
+       SET status = 'payment_pending', payment_status = 'pending', payment_reference = $2,
+           payment_checkout_url = $3, updated_at = NOW()
+       WHERE id = $1`,
+      [orderId, checkout.id, checkout.checkout_url]
+    );
+    await pool.query(
+      `UPDATE payment_attempts
+       SET status = 'succeeded', http_status = 201, provider_response = $2::jsonb, completed_at = NOW()
+       WHERE id = $1`,
+      [attempt.rows[0].id, JSON.stringify({ checkout_id: checkout.id })]
+    );
+    emitOrderStatusUpdate(orderId, 'payment_pending');
+    return res.json({ order_id: orderId, checkout_url: checkout.checkout_url, payment_reference: checkout.id, payment_status: 'pending' });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    await pool.query(
+      `UPDATE payment_attempts SET status = 'failed', error_message = $2, completed_at = NOW() WHERE idempotency_key = $1`,
+      [key, String(error.message || 'Payment retry failed').slice(0, 1000)]
+    ).catch(() => {});
+    console.error('Retry payment failed:', error);
+    return res.status(error.status || (error.code === 'PAYMONGO_NOT_CONFIGURED' ? 503 : 500)).json({ message: error.message || 'Payment retry failed.' });
+  } finally { client.release(); }
+};
+
+export const expirePaymentSession = async (req, res) => {
+  const orderId = Number(req.params.orderId);
+  if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: 'Invalid order ID.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const staff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user.role);
+    const result = await client.query(
+      `SELECT * FROM orders WHERE id = $1 AND ($2::boolean OR user_id = $3) FOR UPDATE`,
+      [orderId, staff, req.user.id]
+    );
+    const order = result.rows[0];
+    if (!order) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Order not found.' });
+    }
+    if (order.payment_status === 'paid') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Paid payment sessions cannot be expired.' });
+    }
+    await releaseOrderReservations(client, orderId, 'failed', 'Payment session expired');
+    await client.query(`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE order_id = $1 AND status <> 'paid'`, [orderId]);
+    await client.query('COMMIT');
+    emitOrderStatusUpdate(orderId, 'failed');
+    return res.json({ message: 'Payment session expired.', order_id: orderId, status: 'failed', payment_status: 'expired' });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Expire payment session failed:', error);
+    return res.status(500).json({ message: 'Payment session could not be expired.' });
+  } finally { client.release(); }
+};
+
+export const getPaymentReconciliation = async (req, res) => {
+  const orderId = Number(req.params.orderId);
+  if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: 'Invalid order ID.' });
+  try {
+    const staff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user.role);
+    const paymentResult = await pool.query(
+      `SELECT p.* FROM payments p JOIN orders o ON o.id = p.order_id
+       WHERE p.order_id = $1 AND ($2::boolean OR o.user_id = $3)
+       ORDER BY p.created_at DESC LIMIT 1`,
+      [orderId, staff, req.user.id]
+    );
+    const payment = paymentResult.rows[0];
+    if (!payment) return res.status(404).json({ message: 'Payment not found.' });
+    const [events, reconciliations, attempts] = await Promise.all([
+      pool.query(
+        `SELECT external_event_id, event_type, processing_status, processed_at, created_at
+         FROM payment_events WHERE payment_id = $1 ORDER BY created_at DESC`,
+        [payment.id]
+      ),
+      pool.query(
+        `SELECT result, expected_amount, received_amount, expected_currency, received_currency, details, created_at
+         FROM payment_reconciliations WHERE payment_id = $1 ORDER BY created_at DESC`,
+        [payment.id]
+      ),
+      pool.query(
+        `SELECT status, http_status, error_message, created_at, completed_at
+         FROM payment_attempts WHERE payment_id = $1 ORDER BY created_at DESC`,
+        [payment.id]
+      ),
+    ]);
+    return res.json({ payment, events: events.rows, reconciliations: reconciliations.rows, attempts: attempts.rows });
+  } catch (error) {
+    console.error('Get payment reconciliation failed:', error);
+    return res.status(500).json({ message: 'Payment reconciliation could not be loaded.' });
+  }
+};
+
+const checkoutOrderWhere = (checkoutId, staff) => {
+  const numericId = Number(checkoutId);
+  if (Number.isInteger(numericId) && numericId > 0) {
+    return {
+      sql: `o.id = $1 AND ($2::boolean OR o.user_id = $3)`,
+      params: [numericId, staff],
+    };
+  }
+  const key = String(checkoutId || '').trim();
+  if (!/^[A-Za-z0-9._:-]{8,255}$/.test(key)) throw fail(400, 'Invalid checkout ID.');
+  return {
+    sql: `o.checkout_idempotency_key = $1 AND ($2::boolean OR o.user_id = $3)`,
+    params: [key, staff],
+  };
+};
+
+const loadCheckoutOrder = async (client, { checkoutId, user, forUpdate = false }) => {
+  const staff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(user.role);
+  const where = checkoutOrderWhere(checkoutId, staff);
+  const lock = forUpdate ? ' FOR UPDATE OF o' : '';
+  const result = await client.query(
+    `SELECT o.*
+     FROM orders o
+     WHERE ${where.sql}${lock}`,
+    [...where.params, user.id]
+  );
+  return result.rows[0] || null;
+};
+
+const buildCheckoutResponse = async (client, order) => {
+  const [itemsResult, paymentResult] = await Promise.all([
+    client.query(
+      `SELECT id, product_id, variant_id, product_name, product_price, quantity,
+              sku_snapshot, variant_name_snapshot, image_snapshot
+       FROM order_items
+       WHERE order_id = $1
+       ORDER BY id`,
+      [order.id]
+    ),
+    client.query(
+      `SELECT id, provider, method, status, amount, currency, external_checkout_id,
+              external_payment_id, reference, metadata, expires_at, paid_at, updated_at
+       FROM payments
+       WHERE order_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [order.id]
+    ),
+  ]);
+  const payment = paymentResult.rows[0] || null;
+  const metadata = payment?.metadata && typeof payment.metadata === 'object' ? payment.metadata : {};
+  return {
+    checkout_id: order.checkout_idempotency_key || String(order.id),
+    order_id: order.id,
+    status: order.status,
+    payment_status: payment?.status || order.payment_status,
+    payment_method: order.payment_method,
+    payment_provider: order.payment_provider,
+    checkout_url: metadata.checkout_url || order.payment_checkout_url || null,
+    payment_reference: payment?.reference || order.payment_reference || null,
+    expires_at: payment?.expires_at || order.payment_expires_at || null,
+    currency: order.currency || 'PHP',
+    totals: {
+      subtotal: money(order.subtotal_amount),
+      shipping_fee: money(order.shipping_fee),
+      discount: money(order.discount_amount),
+      tax: money(order.tax_amount),
+      total: money(order.total_amount),
+    },
+    items: itemsResult.rows.map((item) => ({
+      ...item,
+      product_price: money(item.product_price),
+      quantity: Number(item.quantity),
+    })),
+    payment,
+  };
+};
+
+export const getCheckout = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const order = await loadCheckoutOrder(client, {
+      checkoutId: req.params.checkoutId,
+      user: req.user,
+    });
+    if (!order) return res.status(404).json({ message: 'Checkout not found.' });
+    return res.json(await buildCheckoutResponse(client, order));
+  } catch (error) {
+    console.error('Get checkout failed:', error);
+    return res.status(error.status || 500).json({ message: error.status ? error.message : 'Checkout could not be loaded.' });
+  } finally { client.release(); }
+};
+
+export const confirmCheckout = async (req, res) => {
+  const checkoutId = req.body?.checkout_id || req.body?.checkoutId || req.body?.order_id || req.body?.orderId;
+  if (!checkoutId) return res.status(400).json({ message: 'checkout_id or order_id is required.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const order = await loadCheckoutOrder(client, { checkoutId, user: req.user, forUpdate: true });
+    if (!order) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Checkout not found.' });
+    }
+    const payment = await client.query(
+      `SELECT * FROM payments WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+      [order.id]
+    );
+    const currentPayment = payment.rows[0] || null;
+    if (currentPayment?.expires_at && new Date(currentPayment.expires_at) <= new Date() && currentPayment.status !== 'paid') {
+      await releaseOrderReservations(client, order.id, 'failed', 'Payment reservation expired during checkout confirmation');
+      await client.query(`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE id = $1`, [currentPayment.id]);
+      await client.query('COMMIT');
+      emitOrderStatusUpdate(order.id, 'failed');
+      return res.status(409).json({ message: 'Checkout payment session has expired.', status: 'failed', payment_status: 'expired' });
+    }
+    await client.query('COMMIT');
+    const statusCode = currentPayment?.status === 'paid' || order.payment_method === 'cod' ? 200 : 202;
+    return res.status(statusCode).json(await buildCheckoutResponse(pool, order));
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Confirm checkout failed:', error);
+    return res.status(error.status || 500).json({ message: error.status ? error.message : 'Checkout could not be confirmed.' });
+  } finally { client.release(); }
+};
+
+export const cancelCheckout = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const order = await loadCheckoutOrder(client, {
+      checkoutId: req.params.checkoutId,
+      user: req.user,
+      forUpdate: true,
+    });
+    if (!order) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Checkout not found.' });
+    }
+    if (order.payment_status === 'paid' || order.status === 'paid') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Paid orders must be cancelled through the order cancellation flow.' });
+    }
+    if (!['pending', 'payment_pending', 'failed'].includes(order.status)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'This checkout can no longer be cancelled.' });
+    }
+    await releaseOrderReservations(client, order.id, 'cancelled', 'Checkout cancelled by user');
+    await client.query(`UPDATE payments SET status = 'cancelled', updated_at = NOW() WHERE order_id = $1 AND status <> 'paid'`, [order.id]);
+    await client.query('COMMIT');
+    emitOrderStatusUpdate(order.id, 'cancelled');
+    return res.json({ message: 'Checkout cancelled.', order_id: order.id, status: 'cancelled', payment_status: 'cancelled' });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Cancel checkout failed:', error);
+    return res.status(error.status || 500).json({ message: error.status ? error.message : 'Checkout could not be cancelled.' });
+  } finally { client.release(); }
+};
+
+export const cleanupExpiredReservations = async (_req, res) => {
+  try {
+    const released = await releaseExpiredReservations();
+    return res.json({ message: 'Expired checkout reservations cleaned up.', released });
+  } catch (error) {
+    console.error('Manual reservation cleanup failed:', error);
+    return res.status(500).json({ message: 'Expired checkout reservations could not be cleaned up.' });
+  }
+};
+
 export const validateDiscount = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -519,10 +899,28 @@ export const releaseExpiredReservations = async () => {
       await releaseOrderReservations(client, row.order_id, 'failed', 'Payment reservation expired');
       await client.query(`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE order_id = $1 AND status IN ('pending','processing')`, [row.order_id]);
       await client.query('COMMIT');
+      emitOrderStatusUpdate(row.order_id, 'failed');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       console.error('Expired reservation cleanup failed:', { orderId: row.order_id, error: error.message });
     } finally { client.release(); }
   }
   return result.rowCount;
+};
+
+let reservationCleanupTimer = null;
+
+export const startExpiredReservationCleanup = ({ intervalMs = Number(process.env.RESERVATION_CLEANUP_INTERVAL_MS || 60000) } = {}) => {
+  if (reservationCleanupTimer || String(process.env.RESERVATION_CLEANUP_DISABLED || '').toLowerCase() === 'true') {
+    return reservationCleanupTimer;
+  }
+
+  const safeInterval = Math.max(15000, Number(intervalMs) || 60000);
+  reservationCleanupTimer = setInterval(() => {
+    releaseExpiredReservations().catch((error) => {
+      console.error('Scheduled reservation cleanup failed:', error);
+    });
+  }, safeInterval);
+  reservationCleanupTimer.unref?.();
+  return reservationCleanupTimer;
 };

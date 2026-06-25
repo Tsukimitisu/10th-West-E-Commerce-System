@@ -54,6 +54,7 @@ import { errorLogger } from './middleware/errorLogger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { generateCsrfToken, validateCsrf } from './middleware/csrf.js';
 import pool from './config/database.js';
+import { startExpiredReservationCleanup } from './controllers/secureCheckoutController.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -274,6 +275,23 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/api/ready', async (_req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({
+      status: 'ready',
+      database: 'ok',
+      paymongo: process.env.PAYMONGO_SECRET_KEY && process.env.PAYMONGO_WEBHOOK_SECRET ? 'configured' : 'not_configured',
+      jnt: process.env.JNT_MOCK_MODE === 'true'
+        ? 'mock'
+        : (process.env.JNT_API_URL || process.env.JNT_SANDBOX_URL || process.env.JNT_PRODUCTION_URL) ? 'configured' : 'not_configured',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(503).json({ status: 'not_ready', database: 'unavailable', timestamp: new Date().toISOString() });
+  }
+});
+
 // CSRF token endpoint (C12)
 app.get('/api/csrf-token', generateCsrfToken, (req, res) => {
   res.json({ csrfToken: req.csrfToken });
@@ -329,6 +347,8 @@ app.use(errorLogger);
 app.use(errorHandler);
 
 // Start server with Socket.IO
+startExpiredReservationCleanup();
+
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log('╔══════════════════════════════════════════════╗');
   console.log('║    10TH WEST MOTO - Backend API Server     ║');
