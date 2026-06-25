@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getOrders, getOrderById, updateOrderStatus, confirmOrderDelivery, processRefund, generateJntWaybill, getOrderWaybillUrl } from '../../services/api';
+import { getOrders, getOrderById, updateOrderStatus, confirmOrderDelivery, processRefund, generateJntWaybill, getOrderWaybillUrl, cancelOrder } from '../../services/api';
 import { OrderStatus } from '../../types.js';
 import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock, Filter, ChevronDown, ChevronUp, ArrowLeft, Printer, DollarSign, MapPin, User, Calendar, CreditCard, AlertCircle, Undo } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
@@ -7,26 +7,38 @@ import { useSocketEvent } from '../../context/SocketContext';
 
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  payment_pending: 'bg-amber-50 text-amber-700 border-amber-200',
   paid: 'bg-blue-50 text-blue-700 border-blue-200',
-  preparing: 'bg-red-500/10 text-orange-700 border-red-200',
+  processing: 'bg-red-500/10 text-orange-700 border-red-200',
+  packed: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  ready_for_pickup: 'bg-teal-50 text-teal-700 border-teal-200',
   shipped: 'bg-purple-50 text-purple-700 border-purple-200',
+  out_for_delivery: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   delivered: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  completed: 'bg-green-50 text-green-700 border-green-200',
   cancelled: 'bg-red-50 text-red-600 border-red-200',
+  refund_processing: 'bg-orange-50 text-orange-700 border-orange-200',
+  refunded: 'bg-green-50 text-green-700 border-green-200',
+  partially_refunded: 'bg-lime-50 text-lime-700 border-lime-200',
+  failed: 'bg-red-50 text-red-700 border-red-200',
 };
 const statusIcons = {
-  pending: <Clock size={12} />, paid: <DollarSign size={12} />, preparing: <Package size={12} />,
-  shipped: <Truck size={12} />, delivered: <CheckCircle2 size={12} />, completed: <CheckCircle2 size={12} />, cancelled: <XCircle size={12} />,
+  pending: <Clock size={12} />, payment_pending: <Clock size={12} />, paid: <DollarSign size={12} />, processing: <Package size={12} />,
+  packed: <Package size={12} />, ready_for_pickup: <Package size={12} />, shipped: <Truck size={12} />, out_for_delivery: <Truck size={12} />,
+  delivered: <CheckCircle2 size={12} />, cancelled: <XCircle size={12} />, failed: <XCircle size={12} />,
 };
 
 const staffStatusTransitions = {
-  pending: ['paid', 'preparing', 'cancelled'],
-  paid: ['preparing', 'cancelled'],
-  preparing: ['shipped', 'cancelled'],
-  shipped: [],
+  pending: ['processing', 'cancelled'],
+  payment_pending: ['cancelled'],
+  paid: ['processing'],
+  processing: ['packed', 'cancelled'],
+  packed: ['ready_for_pickup', 'cancelled'],
+  ready_for_pickup: ['shipped', 'cancelled'],
+  shipped: ['out_for_delivery'],
+  out_for_delivery: [],
   delivered: [],
-  completed: [],
   cancelled: [],
+  failed: [],
 };
 
 const OrdersView = () => {
@@ -91,18 +103,7 @@ const OrdersView = () => {
 
     try {
       if (newStatus === 'cancelled') {
-        // Admin cancel: update status and store reason directly
-        const { supabase } = await import('../../services/supabase');
-        const USE_SUPABASE = false;
-        if (USE_SUPABASE) {
-          await supabase.from('orders').update({
-            status: 'cancelled',
-            cancellation_reason: cancelReason.trim(),
-            updated_at: new Date().toISOString(),
-          }).eq('id', statusTarget.id);
-        } else {
-          await updateOrderStatus(statusTarget.id, 'cancelled');
-        }
+        await cancelOrder(statusTarget.id, cancelReason.trim());
       } else {
         await updateOrderStatus(statusTarget.id, newStatus, trackingNumber || undefined);
       }
@@ -172,7 +173,7 @@ const OrdersView = () => {
   const statuses = Object.values(OrderStatus);
   const nextStatusOptions = statusTarget ? (staffStatusTransitions[statusTarget.status] || []) : [];
   const pending = orders.filter(o => o.status === 'pending').length;
-  const preparing = orders.filter(o => o.status === 'preparing').length;
+  const processing = orders.filter(o => ['processing', 'packed', 'ready_for_pickup'].includes(o.status)).length;
   const shipped = orders.filter(o => o.status === 'shipped').length;
   const totalRev = orders.reduce((s, o) => s + (o.total_amount || 0), 0);
 
@@ -190,7 +191,7 @@ const OrdersView = () => {
         {[
           { label: 'Total Revenue', value: `₱${totalRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Pending', value: pending.toString(), icon: <Clock size={18} />, color: 'bg-yellow-50 text-yellow-600' },
-          { label: 'Preparing', value: preparing.toString(), icon: <Package size={18} />, color: 'bg-red-500/10 text-orange-600' },
+          { label: 'Processing', value: processing.toString(), icon: <Package size={18} />, color: 'bg-red-500/10 text-orange-600' },
           { label: 'Shipped', value: shipped.toString(), icon: <Truck size={18} />, color: 'bg-purple-50 text-purple-600' },
         ].map((kpi, i) => (
           <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
@@ -378,7 +379,7 @@ const OrdersView = () => {
               >
                 <Printer size={14} /> Print Invoice
               </button>
-              {detailOrder.shipping_method !== 'pickup' && detailOrder.source !== 'pos' && ['paid', 'preparing'].includes(detailOrder.status) && (
+              {detailOrder.shipping_method !== 'pickup' && detailOrder.source !== 'pos' && ['paid', 'processing', 'packed', 'ready_for_pickup'].includes(detailOrder.status) && (
                 detailOrder.waybill_number ? (
                   <button
                     onClick={() => window.open(getOrderWaybillUrl(detailOrder.id), '_blank')}
@@ -396,7 +397,7 @@ const OrdersView = () => {
                   </button>
                 )
               )}
-              {!isStaff && (detailOrder.status === 'completed' || detailOrder.status === 'cancelled') && (
+              {!isStaff && (['delivered', 'refunded', 'partially_refunded', 'cancelled'].includes(detailOrder.status)) && (
                 <button onClick={() => { setRefundOrder(detailOrder); setRefundAmount(detailOrder.total_amount); setShowRefundModal(true); }}
                   className="px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg text-sm font-medium flex items-center gap-1">
                   <Undo size={14} /> Process Refund
@@ -412,7 +413,7 @@ const OrdersView = () => {
         <div className="space-y-4">
           <div className="p-3 bg-gray-900 rounded-lg text-sm">
             <span className="text-gray-400">Order </span><span className="font-bold text-white">#{statusTarget?.id.toString().padStart(4, '0')}</span>
-            <span className="text-gray-400"> - Current: </span><span className={`font-semibold capitalize ${(statusTarget?.status === 'completed' || statusTarget?.status === 'delivered') ? 'text-green-600' : 'text-white'}`}>{statusTarget?.status}</span>
+            <span className="text-gray-400"> - Current: </span><span className={`font-semibold capitalize ${statusTarget?.status === 'delivered' ? 'text-green-600' : 'text-white'}`}>{statusTarget?.status}</span>
           </div>
           {nextStatusOptions.length > 0 ? (
             <div className="space-y-1.5">
