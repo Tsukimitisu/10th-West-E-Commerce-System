@@ -398,11 +398,11 @@ const Navbar = ({ user, onLogout }) => {
   return (
     <>
       {/* Main navbar */}
-      <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'backdrop-blur-xl shadow-lg' : 'bg-transparent shadow-none'}`}>
+      <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'bg-zinc-950/85 backdrop-blur-md border-b border-zinc-800/80 shadow-lg shadow-black/20' : 'bg-transparent shadow-none'}`}>
         <div className="max-w-7xl mx-auto px-4 lg:px-6">
           <div className="flex items-center justify-between h-16">
             {/* Mobile menu button */}
-            <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 -ml-2 text-gray-600 hover:text-white hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 -ml-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
               <Menu size={22} />
             </button>
 
@@ -418,26 +418,26 @@ const Navbar = ({ user, onLogout }) => {
             </Link>
 
             {/* Desktop navigation - Center */}
-            <nav className="hidden lg:flex items-center gap-0.5 ml-8 flex-1">
-              <Link to="/" className={`px-7 py-2 rounded-lg text-sm font-semibold transition-colors duration-500 ease-in-out ${location.pathname === '/' ? 'text-red-600 border-b-2 border-red-600' : 'text-red-500 hover:text-red-600'}`}>
+            <nav className="hidden lg:flex items-center gap-2 ml-8 flex-1">
+              <Link to="/" className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${location.pathname === '/' ? 'text-red-500 font-bold bg-zinc-800/40 border border-red-500/20 shadow-sm shadow-red-950/20' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/40'}`}>
                 Home
               </Link>
-              <Link to="/shop" className={`px-7 py-2 rounded-lg text-sm font-semibold transition-colors duration-500 ease-in-out ${location.pathname === '/shop' ? 'text-red-600 border-b-2 border-red-600' : 'text-red-500 hover:text-red-600'}`}>
+              <Link to="/shop" className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${location.pathname === '/shop' ? 'text-red-500 font-bold bg-zinc-800/40 border border-red-500/20 shadow-sm shadow-red-950/20' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/40'}`}>
                 Shop
               </Link>
               <div ref={moreMenuRef} className="relative">
                 <button
                   onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors duration-300 ease-in-out flex items-center gap-1.5 ${location.pathname === '/faq' || location.pathname === '/contact' ? 'text-red-600 border-b-2 border-red-600' : 'text-red-500 hover:text-red-600'}`}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 flex items-center gap-1.5 ${location.pathname === '/faq' || location.pathname === '/contact' ? 'text-red-500 font-bold bg-zinc-800/40 border border-red-500/20 shadow-sm shadow-red-950/20' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/40'}`}
                 >
-                  More <ChevronDown size={16} className={`transition-transform duration-300 ease-in-out ${moreMenuOpen ? 'rotate-180' : ''}`} />
+                  More <ChevronDown size={14} className={`transition-transform duration-300 ${moreMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {moreMenuOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-zinc-900 rounded-2xl shadow-xl border border-gray-700 py-2 animate-fade-in z-50 transition-all duration-300 ease-in-out">
-                    <Link to="/faq" className="block px-4 py-2.5 text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 ease-in-out">
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-zinc-950 rounded-2xl shadow-xl border border-zinc-800/85 py-2 animate-fade-in z-50 transition-all duration-300 ease-in-out">
+                    <Link to="/faq" className="block px-4 py-2.5 text-sm font-medium text-zinc-400 hover:text-red-500 hover:bg-zinc-900 transition-all duration-200 ease-in-out">
                       FAQ
                     </Link>
-                    <Link to="/contact" className="block px-4 py-2.5 text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 ease-in-out">
+                    <Link to="/contact" className="block px-4 py-2.5 text-sm font-medium text-zinc-400 hover:text-red-500 hover:bg-zinc-900 transition-all duration-200 ease-in-out">
                       Contact
                     </Link>
                   </div>
@@ -511,7 +511,7 @@ const Navbar = ({ user, onLogout }) => {
               {/* Notifications */}
               {user && (
                 <div ref={notifRef} className="relative">
-                  <button onClick={() => setNotifOpen(!notifOpen)} className="p-2.5 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors relative">
+                  <button onClick={() => setNotifOpen(!notifOpen)} className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
                     <Bell size={20} />
                     {unreadCount > 0 && (
                       <span className="absolute top-1 right-1 bg-gradient-to-br from-red-500 to-red-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
@@ -595,13 +595,13 @@ const Navbar = ({ user, onLogout }) => {
 
               {/* Wishlist */}
               {user && (
-                <Link to="/wishlist" className="p-2.5 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors hidden sm:flex">
+                <Link to="/wishlist" className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors hidden sm:flex">
                   <Heart size={20} />
                 </Link>
               )}
 
               {/* Cart */}
-              <button onClick={() => setCartOpen(true)} className="p-2.5 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors relative">
+              <button onClick={() => setCartOpen(true)} className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
                 <ShoppingCart size={20} />
                 {itemCount > 0 && (
                   <span className="absolute top-1 right-1 bg-gradient-to-br from-red-500 to-red-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
@@ -682,7 +682,7 @@ const Navbar = ({ user, onLogout }) => {
                   onChange={handleSearchChange}
                   onFocus={() => { if(globalSearch.length >= 2) setShowDropdown(true); }}
                   placeholder={isShopRoute ? 'Search product names...' : 'Search parts...'}
-                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-700 bg-zinc-900 text-sm text-gray-700 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
+                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-zinc-750 bg-zinc-900 text-sm text-white placeholder-zinc-500 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-all duration-200"
                 />
                 {showDropdown && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[350px] flex flex-col overflow-hidden">
@@ -734,59 +734,59 @@ const Navbar = ({ user, onLogout }) => {
       {mobileOpen && (
         <div className="fixed inset-0 z-[100] lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-zinc-900 shadow-2xl animate-fade-in overflow-y-auto">
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+          <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-zinc-900 border-r border-zinc-800 shadow-2xl animate-fade-in overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-800">
               <Link to="/" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
                 <div className="w-8 h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center">
                   <span className="text-white font-bold text-sm font-display">10</span>
                 </div>
                 <span className="font-display font-bold text-white">10TH WEST</span>
               </Link>
-              <button onClick={() => setMobileOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><X size={20} /></button>
+              <button onClick={() => setMobileOpen(false)} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"><X size={20} /></button>
             </div>
             {user && (
-              <div className="p-4 border-b border-gray-700 bg-gradient-to-r from-red-50 to-pink-50">
+              <div className="p-4 border-b border-zinc-800 bg-zinc-950/40">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-red-100 to-red-200 text-red-600 rounded-lg flex items-center justify-center font-bold">{user.name.charAt(0).toUpperCase()}</div>
+                  <div className="w-10 h-10 bg-red-500/10 text-red-500 rounded-lg flex items-center justify-center font-bold">{user.name.charAt(0).toUpperCase()}</div>
                   <div>
                     <p className="font-semibold text-white text-sm">{user.name}</p>
-                    <p className="text-xs text-gray-400">{user.email}</p>
+                    <p className="text-xs text-zinc-400">{user.email}</p>
                   </div>
                 </div>
               </div>
             )}
             <nav className="p-4 space-y-1">
-              <Link to="/" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">Home</Link>
-              <Link to="/shop" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">Shop All</Link>
-              <div className="border-t border-gray-700 my-2" />
-              <Link to="/faq" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">FAQ</Link>
-              <Link to="/contact" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">Contact</Link>
+              <Link to="/" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Home</Link>
+              <Link to="/shop" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/shop' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Shop All</Link>
+              <div className="border-t border-zinc-800 my-2" />
+              <Link to="/faq" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/faq' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>FAQ</Link>
+              <Link to="/contact" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/contact' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Contact</Link>
               {user && (
                 <>
-                  <div className="border-t border-gray-700 my-2" />
-                  <Link to="/profile" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">My Profile</Link>
-                  <Link to="/orders" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">My Orders</Link>
-                  <Link to="/wishlist" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">Wishlist</Link>
-                  <Link to="/addresses" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">Address Book</Link>
-                  <Link to="/my-returns" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">My Returns</Link>
+                  <div className="border-t border-zinc-800 my-2" />
+                  <Link to="/profile" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/profile' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Profile</Link>
+                  <Link to="/orders" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/orders' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Orders</Link>
+                  <Link to="/wishlist" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/wishlist' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Wishlist</Link>
+                  <Link to="/addresses" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/addresses' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Address Book</Link>
+                  <Link to="/my-returns" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/my-returns' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Returns</Link>
                 </>
               )}
               {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
-                <Link to="/admin" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">Admin Panel</Link>
+                <Link to="/admin" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all">Admin Panel</Link>
               )}
               {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
-                <Link to="/pos" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-300 ease-in-out">POS Terminal</Link>
+                <Link to="/pos" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all">POS Terminal</Link>
               )}
             </nav>
-            <div className="p-4 border-t border-gray-700">
+            <div className="p-4 border-t border-zinc-800">
               {user ? (
-                <button onClick={() => { onLogout(); setMobileOpen(false); }} className="w-full px-4 py-2.5 border border-gray-700 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-900 transition-all duration-200 flex items-center justify-center gap-2">
+                <button onClick={() => { onLogout(); setMobileOpen(false); }} className="w-full px-4 py-2.5 border border-zinc-800 text-zinc-300 rounded-lg text-sm font-semibold hover:bg-zinc-850 hover:text-white transition-all duration-200 flex items-center justify-center gap-2">
                   <LogOut size={16} /> Sign Out
                 </button>
               ) : (
                 <div className="space-y-2">
-                  <Link to="/login" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg text-sm font-semibold text-center hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-md">Sign In</Link>
-                  <Link to="/register" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 border border-gray-700 text-gray-700 rounded-lg text-sm font-semibold text-center hover:bg-gray-900 transition-all duration-200">Create Account</Link>
+                  <Link to="/login" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-semibold text-center hover:bg-red-700 transition-all duration-200 shadow-md">Sign In</Link>
+                  <Link to="/register" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 border border-zinc-850 text-zinc-300 rounded-lg text-sm font-semibold text-center hover:bg-zinc-800 hover:text-white transition-all duration-200">Create Account</Link>
                 </div>
               )}
             </div>
@@ -800,30 +800,30 @@ const Navbar = ({ user, onLogout }) => {
 
       {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-96 border border-gray-700 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-zinc-900 p-8 rounded-3xl shadow-2xl w-96 border border-zinc-800 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-4 mb-6">
-              <div className="bg-gradient-to-br from-red-50 to-pink-50 p-3 rounded-2xl">
-                <LogOut className="w-8 h-8 text-red-600" />
+              <div className="bg-red-500/10 p-3 rounded-2xl">
+                <LogOut className="w-8 h-8 text-red-500" />
               </div>
               <div>
                 <h3 className="text-2xl font-black text-white">Sign Out?</h3>
-                <p className="text-gray-400 font-semibold text-sm mt-1">Confirm to logout</p>
+                <p className="text-zinc-400 font-semibold text-sm mt-1">Confirm to logout</p>
               </div>
             </div>
-            <p className="text-gray-600 mb-6">
+            <p className="text-zinc-400 mb-6 font-medium">
               Are you sure you want to sign out of your account?
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowLogoutConfirm(false)}
-                className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-2xl font-bold transition-all duration-200"
+                className="flex-1 py-3 text-zinc-400 hover:bg-zinc-800 hover:text-white rounded-2xl font-bold transition-all duration-200"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { setShowLogoutConfirm(false); onLogout(); }}
-                className="flex-1 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-2xl hover:from-red-600 hover:to-red-700 font-bold shadow-lg hover:shadow-xl transition-all duration-200"
+                className="flex-1 py-3 bg-red-600 text-white rounded-2xl hover:bg-red-700 font-bold shadow-lg hover:shadow-xl transition-all duration-200"
               >
                 Sign Out
               </button>
