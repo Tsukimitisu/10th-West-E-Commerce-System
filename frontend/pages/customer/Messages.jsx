@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
-  ImageIcon,
   Inbox,
   MessageCircle,
   Package,
@@ -454,13 +453,6 @@ const Messages = () => {
 
                 <form onSubmit={handleSend} className="border-t border-slate-200 bg-white p-3">
                   <div className="flex items-end gap-2">
-                    <button
-                      type="button"
-                      className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500"
-                      title="Image attachments are coming soon"
-                    >
-                      <ImageIcon size={18} />
-                    </button>
                     <textarea
                       value={draft}
                       onChange={handleDraftChange}
