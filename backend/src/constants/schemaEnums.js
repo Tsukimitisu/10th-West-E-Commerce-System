@@ -55,12 +55,23 @@ export const PRODUCT_SHIPPING_OPTIONS = Object.freeze([
 
 export const ORDER_STATUSES = Object.freeze([
   'pending',
+  'payment_pending',
   'paid',
-  'preparing',
+  'processing',
+  'packed',
+  'ready_for_pickup',
   'shipped',
+  'out_for_delivery',
   'delivered',
-  'completed',
   'cancelled',
+  'return_requested',
+  'return_approved',
+  'return_rejected',
+  'returned',
+  'refund_processing',
+  'refunded',
+  'partially_refunded',
+  'failed',
 ]);
 
 export const REVIEW_STATUSES = Object.freeze([

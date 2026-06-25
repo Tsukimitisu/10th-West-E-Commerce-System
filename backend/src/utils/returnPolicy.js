@@ -1,7 +1,7 @@
 import pool from '../config/database.js';
 
 export const DEFAULT_RETURN_WINDOW_DAYS = 15;
-export const RETURNABLE_ORDER_STATUSES = new Set(['completed', 'delivered']);
+export const RETURNABLE_ORDER_STATUSES = new Set(['delivered']);
 const ACTIVE_RETURN_STATUSES = new Set(['pending', 'approved']);
 
 const normalizeWindowDays = (value) => {
