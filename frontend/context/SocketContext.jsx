@@ -48,8 +48,11 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     const url = getSocketUrl();
     console.log(`[Socket] connecting to ${url}`);
+    const initialToken = localStorage.getItem('shopCoreToken') || '';
 
     const s = io(url, {
+      auth: { token: initialToken },
+      autoConnect: Boolean(initialToken),
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -117,7 +120,16 @@ export const SocketProvider = ({ children }) => {
       addToast(`Low stock alert: ${product.name} (${product.stock_quantity} left)`, 'error');
     });
 
-    const onAuthChanged = () => emitJoinFromStorage(true);
+    const onAuthChanged = () => {
+      const nextToken = localStorage.getItem('shopCoreToken') || '';
+      if (s.auth?.token !== nextToken) {
+        s.auth = { ...(s.auth || {}), token: nextToken };
+        if (s.connected) s.disconnect();
+        if (nextToken) s.connect();
+        return;
+      }
+      emitJoinFromStorage(true);
+    };
     const onSessionExpired = () => {
       const now = Date.now();
       if (now - lastSessionToastAtRef.current < 2000) return;
