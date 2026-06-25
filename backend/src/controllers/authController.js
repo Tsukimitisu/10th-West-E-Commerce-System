@@ -901,21 +901,32 @@ export const login = async (req, res) => {
       }
     }
 
-    await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
-
-    await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
-    await pool.query(
-      `DELETE FROM login_attempts
-       WHERE email = $1
-         AND success = false
-         AND created_at > NOW() - make_interval(mins => $2)`,
-      [email, LOCK_DURATION_MINUTES]
-    );
-    await recordLoginAttempt(email, ipAddress, true);
+    try {
+      await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
+    } catch (cartMergeError) {
+      console.warn('Unable to merge guest cart during login:', cartMergeError.message || cartMergeError);
+    }
 
     const token = await persistSession(pool, user, ipAddress, userAgent);
     await prepareAuthenticatedSession(req, user, token);
-    await logActivity({ userId: user.id, action: 'login', ipAddress, userAgent });
+
+    // Post-login bookkeeping must not block a valid authentication response.
+    void (async () => {
+      try {
+        await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+        await pool.query(
+          `DELETE FROM login_attempts
+           WHERE email = $1
+             AND success = false
+             AND created_at > NOW() - make_interval(mins => $2)`,
+          [email, LOCK_DURATION_MINUTES]
+        );
+        await recordLoginAttempt(email, ipAddress, true);
+        await logActivity({ userId: user.id, action: 'login', ipAddress, userAgent });
+      } catch (bookkeepingError) {
+        console.warn('Unable to complete login bookkeeping:', bookkeepingError.message || bookkeepingError);
+      }
+    })();
 
     res.json({ user: sanitizeUser({ ...user, last_login: new Date(), email_verified: true }), token });
   } catch (error) {

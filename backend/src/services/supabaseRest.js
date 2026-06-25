@@ -17,6 +17,8 @@ const getSupabaseRestConfig = () => {
   };
 };
 
+export const hasSupabaseRestConfig = () => Boolean(getSupabaseRestConfig());
+
 export const isDatabaseConnectivityError = (error) => {
   const message = String(error?.message || '').toLowerCase();
   const code = String(error?.code || '').toUpperCase();
@@ -42,16 +44,20 @@ export const markDatabaseReadFallback = () => {
 };
 
 export const shouldUseDatabaseReadFallback = () => {
+  const hasRestConfig = hasSupabaseRestConfig();
   const readMode = String(process.env.DB_READ_MODE || '').trim().toLowerCase();
   if (readMode === 'postgres') {
     return false;
   }
 
   if (readMode === 'supabase_rest') {
-    return true;
+    if (!hasRestConfig) {
+      console.warn('DB_READ_MODE=supabase_rest ignored because SUPABASE_SERVICE_ROLE_KEY is not configured.');
+    }
+    return hasRestConfig;
   }
 
-  return Date.now() < bypassDatabaseReadsUntil;
+  return hasRestConfig && Date.now() < bypassDatabaseReadsUntil;
 };
 
 const buildSupabaseRestUrl = (path, queryParams = {}) => {
