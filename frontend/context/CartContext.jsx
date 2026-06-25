@@ -6,7 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || (() => {
   const host = window.location.hostname;
   return `http://${host}:5000/api`;
 })();
-const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
+const USE_SUPABASE = false;
 const GUEST_CART_KEY = 'shopCoreGuestCart';
 const GUEST_SELECTED_KEY = `${GUEST_CART_KEY}_selected`;
 const GUEST_CHECKOUT_SELECTION_KEY = `${GUEST_CART_KEY}_checkout_selection`;
@@ -51,13 +51,6 @@ export const CartProvider = ({ children }) => {
   const getCurrentUserFromToken = () => {
     const token = localStorage.getItem('shopCoreToken');
     if (!token) return null;
-    if (token.startsWith('sb-token-')) {
-      try {
-        return JSON.parse(atob(token.replace('sb-token-', '')));
-      } catch {
-        return null;
-      }
-    }
     return decodeJwtPayload(token);
   };
 
@@ -112,6 +105,8 @@ export const CartProvider = ({ children }) => {
     return rows.map((item) => ({
       cartItemId: item.id,
       productId: item.product_id ?? item.product?.id,
+      variantId: item.variant_id ?? item.variant?.id ?? null,
+      variant: item.variant || null,
       quantity: item.quantity,
       product: {
         ...(item.product || {}),
@@ -543,7 +538,8 @@ export const CartProvider = ({ children }) => {
       return false;
     }
 
-    const existingItem = items.find((item) => item.productId === product.id);
+    const variantId = product?.selected_variant?.id ?? product?.variant_id ?? null;
+    const existingItem = items.find((item) => item.productId === product.id && Number(item.variantId || 0) === Number(variantId || 0));
     const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
     const currentQty = existingItem?.quantity || 0;
     const nextQty = currentQty + requestedQty;
@@ -618,6 +614,7 @@ export const CartProvider = ({ children }) => {
           method: 'POST',
           body: JSON.stringify({
             product_id: product.id,
+            variant_id: variantId,
             quantity: requestedQty
           })
         }, { includeJson: true });
@@ -669,7 +666,8 @@ export const CartProvider = ({ children }) => {
       return false;
     }
 
-    const existingItem = items.find(item => item.productId === product.id);
+    const variantId = product?.selected_variant?.id ?? product?.variant_id ?? null;
+    const existingItem = items.find(item => item.productId === product.id && Number(item.variantId || 0) === Number(variantId || 0));
     const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
 
     if (Number.isFinite(maxStock) && maxStock <= 0) {
@@ -691,7 +689,7 @@ export const CartProvider = ({ children }) => {
     setError(null);
 
     setItems(currentItems => {
-      const existing = currentItems.find(item => item.productId === product.id);
+      const existing = currentItems.find(item => item.productId === product.id && Number(item.variantId || 0) === Number(variantId || 0));
       if (existing) {
         return currentItems.map(item =>
           item.productId === product.id
@@ -699,7 +697,7 @@ export const CartProvider = ({ children }) => {
             : item
         );
       }
-      return [...currentItems, { productId: product.id, product, quantity: requestedQty }];
+      return [...currentItems, { productId: product.id, variantId, product, quantity: requestedQty }];
     });
     setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
     return true;
@@ -1089,8 +1087,9 @@ export const CartProvider = ({ children }) => {
   const applyDiscount = async (code) => {
       setError(null);
       try {
-          const validDiscount = await validateDiscountCode(code, subtotal);
-          setDiscount(validDiscount);
+          const checkoutItems = selectedItems.map((item) => ({ product_id: item.productId, variant_id: item.variantId || item.product?.selected_variant?.id || null, quantity: item.quantity }));
+          const result = await validateDiscountCode(code, subtotal, checkoutItems);
+          setDiscount(result?.discount || result);
       } catch (e) {
           setError(e.message || "Failed to apply discount");
           setDiscount(null);
