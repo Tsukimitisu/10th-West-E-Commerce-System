@@ -81,7 +81,7 @@ const PrivacyPolicy = () => {
             <h2 className="font-display font-semibold text-lg text-white mt-8">5. Third-Party Sharing</h2>
             <p>We only share your data with the following parties when necessary:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li><strong>Payment processors</strong> (Stripe, GCash, Maya) - to process payments</li>
+              <li><strong>Payment processors</strong> (PayMongo/GCash) - to process payments</li>
               <li><strong>Shipping couriers</strong> (J&T, LBC, Grab) - to deliver your orders</li>
               <li><strong>Cloud infrastructure</strong> (Supabase/AWS) - to host and secure data</li>
             </ul>

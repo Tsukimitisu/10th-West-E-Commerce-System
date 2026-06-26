@@ -25,8 +25,7 @@ const SystemConfigView = () => {
   });
 
   const [payment, setPayment] = useState({
-    cash_enabled: 'true', card_enabled: 'true', gcash_enabled: 'false', maya_enabled: 'false',
-    stripe_pk: '', stripe_sk: '',
+    cash_enabled: 'true', gcash_enabled: 'false',
   });
 
   const [email, setEmail] = useState({
@@ -211,22 +210,13 @@ const SystemConfigView = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               { key: 'cash_enabled', label: 'Cash Payment', desc: 'Accept cash for POS and COD' },
-              { key: 'card_enabled', label: 'Card Payment', desc: 'Accept credit/debit cards' },
               { key: 'gcash_enabled', label: 'GCash', desc: 'Accept GCash mobile payments' },
-              { key: 'maya_enabled', label: 'Maya', desc: 'Accept Maya/PayMaya payments' },
             ].map((method) => (
               <div key={method.key} className={`p-4 rounded-xl border transition-all ${payment[method.key] === 'true' ? 'border-red-300 bg-red-500/10' : 'border-gray-700 bg-gray-900'}`}>
                 <Toggle value={payment[method.key]} onChange={() => setPayment({ ...payment, [method.key]: payment[method.key] === 'true' ? 'false' : 'true' })} label={method.label} />
                 <p className="text-[10px] text-gray-400 mt-1 ml-13">{method.desc}</p>
               </div>
             ))}
-          </div>
-          <div className="pt-4 border-t border-gray-700">
-            <h4 className="text-xs font-semibold text-gray-400 mb-4">Stripe Integration</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Stripe Publishable Key" value={payment.stripe_pk} onChange={(e) => setPayment({ ...payment, stripe_pk: e.target.value })} placeholder="pk_live_..." hint="Your Stripe publishable key" />
-              <Input label="Stripe Secret Key" value={payment.stripe_sk} onChange={(e) => setPayment({ ...payment, stripe_sk: e.target.value })} placeholder="sk_live_..." hint="Your Stripe secret key (kept server-side)" />
-            </div>
           </div>
         </div>
       )}

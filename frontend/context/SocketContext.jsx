@@ -26,7 +26,6 @@ export function useSocketEvent(event, handler) {
   useEffect(() => {
     on(event, handler);
     return () => off(event, handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event, handler]);
 }
 

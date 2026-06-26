@@ -226,13 +226,11 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
       setSuccess('');
       setCombinationWarning('');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, product?.id]);
 
   useEffect(() => {
     if (!isOpen) return;
     setVariants((currentRows) => rebuildVariantMatrix(options, currentRows));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options, basePrice, isOpen]);
 
   const updateOptionName = (optionId, value) => {

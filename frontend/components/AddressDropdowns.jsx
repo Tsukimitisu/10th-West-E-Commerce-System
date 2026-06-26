@@ -226,7 +226,6 @@ const AddressDropdowns = ({
   // Emit on initial mount to sync defaults.
   useEffect(() => {
     emitChange({});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleProvinceChange = (code) => {

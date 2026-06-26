@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, LogIn } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
+const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
+
 const CartDrawer = ({ isOpen, onClose }) => {
   const { 
     items, 
@@ -167,7 +169,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
                         className="w-4 h-4 mt-7 rounded border-slate-300 text-red-600 focus:ring-red-400"
                       />
                       <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
-                        <img src={item.product.image || 'https://via.placeholder.com/80'} alt={item.product.name} className="w-full h-full object-cover" />
+                        <img src={item.product.image || PRODUCT_IMAGE_FALLBACK} alt={item.product.name} className="w-full h-full object-cover" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <Link to={`/products/${item.productId}`} onClick={onClose} className="text-sm font-semibold text-slate-900 hover:text-red-600 transition-colors line-clamp-2">

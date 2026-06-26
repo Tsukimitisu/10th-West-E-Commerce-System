@@ -12,7 +12,7 @@ const getPrimaryMedia = (product) => {
   if (product?.video_url) return { type: 'video', src: product.video_url };
   if (product?.image) return { type: 'image', src: product.image };
   if (Array.isArray(product?.image_urls) && product.image_urls[0]) return { type: 'image', src: product.image_urls[0] };
-  return { type: 'image', src: 'https://via.placeholder.com/720x960?text=10th+West+Moto' };
+  return { type: 'image', src: '/images/product-fallback.svg' };
 };
 
 const ShoppableFeed = ({ products = [], wishlistedIds = [], onWishlistToggle }) => {

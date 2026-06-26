@@ -59,7 +59,7 @@ const TermsOfService = () => {
             <h2 className="font-display font-semibold text-lg text-white mt-8">4. Orders & Payment</h2>
             <ul className="list-disc pl-6 space-y-1">
               <li>Placing an order constitutes an offer to purchase. Acceptance occurs when we confirm your order.</li>
-              <li>We accept the following payment methods: <strong>Credit/Debit Card (via Stripe), GCash, Bank Transfer, and Cash on Delivery (COD)</strong>.</li>
+              <li>We accept the following payment methods: <strong>GCash via PayMongo and Cash on Delivery (COD)</strong>.</li>
               <li>Orders may be cancelled before the status changes to "Preparing".</li>
               <li>We do not store credit or debit card numbers on our systems. All card payments are securely processed by our payment processor.</li>
               <li>All transactions are issued an official receipt or invoice per government regulations.</li>

@@ -26,8 +26,7 @@ const SettingsView = () => {
   });
 
   const [payment, setPayment] = useState({
-    cash: true, card: true, gcash: false, maya: false,
-    stripePk: '', stripeSk: '',
+    cash: true, gcash: false,
   });
 
   const [email, setEmail] = useState({
@@ -79,11 +78,7 @@ const SettingsView = () => {
         });
         setPayment({
           cash: parsed.payment.cash_enabled !== 'false',
-          card: parsed.payment.card_enabled !== 'false',
           gcash: parsed.payment.gcash_enabled === 'true',
-          maya: parsed.payment.maya_enabled === 'true',
-          stripePk: parsed.payment.stripe_pk || '',
-          stripeSk: parsed.payment.stripe_sk || '',
         });
         setEmail({
           fromName: parsed.email.from_name || '10th West Moto',
@@ -123,7 +118,7 @@ const SettingsView = () => {
           settingsMap = { flat_rate: shipping.flatRate, free_threshold: shipping.freeThreshold, express_rate: shipping.expressRate, enable_pickup: String(shipping.enablePickup) };
           break;
         case 'payment':
-          settingsMap = { cash_enabled: String(payment.cash), card_enabled: String(payment.card), gcash_enabled: String(payment.gcash), maya_enabled: String(payment.maya), stripe_pk: payment.stripePk, stripe_sk: payment.stripeSk };
+          settingsMap = { cash_enabled: String(payment.cash), gcash_enabled: String(payment.gcash) };
           break;
         case 'email':
           settingsMap = { from_name: email.fromName, from_email: email.fromEmail, order_confirmation: String(email.orderConfirmation), shipping_update: String(email.shippingUpdate), return_approval: String(email.returnApproval), promotions: String(email.promotions) };
@@ -378,9 +373,7 @@ const SettingsView = () => {
             <div className="space-y-2">
               {[
                 { key: 'cash', label: 'Cash on Delivery / POS Cash' },
-                { key: 'card', label: 'Credit/Debit Card (Stripe)' },
                 { key: 'gcash', label: 'GCash' },
-                { key: 'maya', label: 'Maya' },
               ].map(m => (
                 <label key={m.key} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${payment[m.key] ? 'border-red-200 bg-red-500/10' : 'border-gray-700 bg-gray-800'}`}>
                   <span className="text-sm font-medium text-white">{m.label}</span>
@@ -388,13 +381,6 @@ const SettingsView = () => {
                 </label>
               ))}
             </div>
-            {payment.card && (
-              <div className="space-y-3 p-4 border border-gray-700 rounded-lg">
-                <h4 className="text-sm font-medium text-white">Stripe Configuration</h4>
-                <div><Label>Publishable Key</Label><input type="password" value={payment.stripePk} onChange={e => setPayment(p => ({...p, stripePk: e.target.value}))} className={inputClass} placeholder="pk_..." /></div>
-                <div><Label>Secret Key</Label><input type="password" value={payment.stripeSk} onChange={e => setPayment(p => ({...p, stripeSk: e.target.value}))} className={inputClass} placeholder="sk_..." /></div>
-              </div>
-            )}
           </div>
         )}
 

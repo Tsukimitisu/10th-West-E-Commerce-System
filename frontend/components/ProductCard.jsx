@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Heart, Star, Tag, AlertTriangle } from 'lucide-react';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../services/api';
 
+const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
+
 const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }) => {
   const hasExternalWishlistState = Array.isArray(wishlistedIds);
   const normalizedWishlistedIds = hasExternalWishlistState ? wishlistedIds : [];
@@ -60,7 +62,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
     return (
       <Link to={`/products/${product.id}`} className="group flex flex-col sm:flex-row gap-4 bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md hover:border-red-500 transition-all duration-300">
         <div className="w-full sm:w-32 aspect-square sm:h-32 flex-shrink-0 bg-gray-200 rounded-lg overflow-hidden relative">
-          <img src={product.image || 'https://via.placeholder.com/300?text=No+Image'} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img src={product.image || PRODUCT_IMAGE_FALLBACK} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
           {isOutOfStock && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><span className="text-xs font-bold text-red-500 bg-gray-800 px-2 py-1 rounded">SOLD OUT</span></div>}
         </div>
         <div className="flex-1 min-w-0">
@@ -101,7 +103,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
     <Link to={`/products/${product.id}`} className="group h-full min-h-[360px] bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg hover:border-red-500 transition-all duration-300 flex flex-col">
       <div className="relative aspect-square bg-gray-200 overflow-hidden">
         <img
-          src={product.image || 'https://via.placeholder.com/300?text=No+Image'}
+          src={product.image || PRODUCT_IMAGE_FALLBACK}
           alt={product.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />

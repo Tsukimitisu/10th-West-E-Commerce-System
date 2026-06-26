@@ -9,7 +9,7 @@ import StarRating from '../components/StarRating';
 import ReviewCard from '../components/ReviewCard';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
-const PRODUCT_IMAGE_FALLBACK = 'https://via.placeholder.com/600?text=No+Image';
+const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
 const DEFAULT_SHARE_METADATA = {
   title: '10th West Moto Parts',
   description: 'Shop motorcycle parts, accessories, and riding essentials from 10th West Moto.',
