@@ -6,8 +6,6 @@ let hasWarnedDbLimiterFallback = false;
 let rateLimitTableInitPromise = null;
 
 const ensureRateLimitTable = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
   if (!rateLimitTableInitPromise) {
     rateLimitTableInitPromise = pool.query(`
       CREATE TABLE IF NOT EXISTS request_rate_limits (
@@ -117,6 +115,14 @@ const rateLimit = (windowMs = 60000, maxRequests = 100, options = {}) => {
           count = dbRecord.count;
           retryAfter = dbRecord.retryAfterSeconds;
         } catch (dbError) {
+          if (process.env.NODE_ENV === 'production') {
+            console.error('Rate limiter DB storage unavailable in production:', dbError.message || dbError);
+            return res.status(503).json({
+              message: 'Rate limiting service is temporarily unavailable. Please try again later.',
+              code: 'RATE_LIMIT_UNAVAILABLE',
+            });
+          }
+
           if (!hasWarnedDbLimiterFallback) {
             hasWarnedDbLimiterFallback = true;
             console.warn('Rate limiter DB storage unavailable, falling back to in-memory mode:', dbError.message || dbError);
@@ -147,6 +153,15 @@ const rateLimit = (windowMs = 60000, maxRequests = 100, options = {}) => {
       return next();
     }
   };
+};
+
+export const cleanupRateLimitRecords = async () => {
+  await ensureRateLimitTable();
+  const result = await pool.query(
+    `DELETE FROM request_rate_limits
+     WHERE reset_at < NOW() - INTERVAL '1 hour'`
+  );
+  return result.rowCount || 0;
 };
 
 const authKeyByEmail = (action) => (req) => {

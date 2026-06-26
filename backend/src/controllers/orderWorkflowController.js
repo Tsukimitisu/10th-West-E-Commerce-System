@@ -125,7 +125,10 @@ export const updateOrderStatusSecure = async (req, res) => {
     );
     await client.query('COMMIT');
     stockUpdates.forEach(emitStockUpdate);
-    emitOrderStatusUpdate(orderId, nextStatus);
+    emitOrderStatusUpdate(orderId, nextStatus, {
+      previous_status: order.status,
+      timeline_event: { source: 'staff', note },
+    });
     return res.json({ order_id: orderId, status: nextStatus });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -184,7 +187,11 @@ export const cancelOrderSecure = async (req, res) => {
       [req.user.id, String(orderId), req.ip, req.get('user-agent'), JSON.stringify({ status: order.status }), JSON.stringify({ status: nextStatus, reason })]
     );
     await client.query('COMMIT');
-    emitOrderStatusUpdate(orderId, nextStatus);
+    emitOrderStatusUpdate(orderId, nextStatus, {
+      previous_status: order.status,
+      payment_status: isCaptured ? 'processing' : 'cancelled',
+      timeline_event: { source: 'cancellation', note: reason },
+    });
     return res.json({ order_id: orderId, status: nextStatus, refund_required: isCaptured });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});

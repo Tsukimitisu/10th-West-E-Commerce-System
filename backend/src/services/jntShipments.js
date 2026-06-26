@@ -30,9 +30,11 @@ const parseJsonMaybe = (value, fallback = null) => {
 const getConfig = () => {
   const mode = String(process.env.JNT_MODE || 'sandbox').trim().toLowerCase();
   const mockMode = String(process.env.JNT_MOCK_MODE || '').trim().toLowerCase() === 'true';
-  const baseUrl = normalizeText(mode === 'production' ? process.env.JNT_PRODUCTION_URL : process.env.JNT_SANDBOX_URL)
+  const baseUrl = normalizeText(process.env.JNT_API_BASE_URL)
+    || normalizeText(mode === 'production' ? process.env.JNT_PRODUCTION_URL : process.env.JNT_SANDBOX_URL)
     || normalizeText(process.env.JNT_API_URL);
-  const trackingUrl = normalizeText(mode === 'production' ? process.env.JNT_PRODUCTION_TRACKING_URL : process.env.JNT_SANDBOX_TRACKING_URL)
+  const trackingUrl = normalizeText(process.env.JNT_TRACKING_API_BASE_URL)
+    || normalizeText(mode === 'production' ? process.env.JNT_PRODUCTION_TRACKING_URL : process.env.JNT_SANDBOX_TRACKING_URL)
     || normalizeText(process.env.JNT_TRACKING_URL);
 
   return {
@@ -43,7 +45,8 @@ const getConfig = () => {
     username: normalizeText(process.env.JNT_USERNAME),
     apiKey: normalizeText(process.env.JNT_API_KEY),
     customerCode: normalizeText(process.env.JNT_CUSTOMER_CODE),
-    signingKey: normalizeText(process.env.JNT_SIGNING_KEY),
+    signingKey: normalizeText(process.env.JNT_SECRET_KEY || process.env.JNT_SIGNING_KEY),
+    webhookSecret: normalizeText(process.env.JNT_WEBHOOK_SECRET || process.env.COURIER_WEBHOOK_SECRET),
     sender: {
       name: normalizeText(process.env.JNT_SENDER_NAME || process.env.STORE_NAME) || '10th West Moto',
       contact: normalizeText(process.env.JNT_SENDER_CONTACT || process.env.JNT_SENDER_NAME || process.env.STORE_NAME) || '10th West Moto',
@@ -56,6 +59,30 @@ const getConfig = () => {
     defaultWeightKg: Math.max(0.01, toFiniteNumber(process.env.JNT_DEFAULT_WEIGHT_KG, DEFAULT_WEIGHT_KG)),
     serviceType: Number.parseInt(process.env.JNT_SERVICE_TYPE || '1', 10),
     expressType: normalizeText(process.env.JNT_EXPRESS_TYPE) || '1',
+  };
+};
+
+export const getJntConfigurationStatus = () => {
+  const config = getConfig();
+  const required = {
+    JNT_API_BASE_URL: config.baseUrl,
+    JNT_TRACKING_API_BASE_URL: config.trackingUrl,
+    JNT_USERNAME: config.username,
+    JNT_API_KEY: config.apiKey,
+    JNT_CUSTOMER_CODE: config.customerCode,
+    JNT_SECRET_KEY: config.signingKey,
+    JNT_WEBHOOK_SECRET: config.webhookSecret,
+    JNT_SENDER_PHONE: config.sender.phone,
+    JNT_SENDER_ADDRESS: config.sender.address,
+  };
+  const missing = Object.entries(required)
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+  return {
+    configured: !config.mockMode && missing.length === 0,
+    mock: config.mockMode,
+    mode: config.mode,
+    missing,
   };
 };
 
@@ -172,9 +199,10 @@ const requestJntWaybill = async (payload, config) => {
     };
   }
 
-  if (!config.baseUrl || !config.username || !config.apiKey || !config.signingKey) {
+  if (!config.baseUrl || !config.username || !config.apiKey || !config.customerCode || !config.signingKey) {
     const error = new Error('J&T API is not configured.');
     error.code = 'JNT_NOT_CONFIGURED';
+    error.missing = getJntConfigurationStatus().missing;
     throw error;
   }
 
@@ -274,9 +302,10 @@ const requestJntTracking = async (waybillNumber, config) => {
     };
   }
 
-  if (!config.trackingUrl || !config.username || !config.apiKey || !config.signingKey) {
+  if (!config.trackingUrl || !config.username || !config.apiKey || !config.customerCode || !config.signingKey) {
     const error = new Error('J&T tracking API is not configured.');
     error.code = 'JNT_TRACKING_NOT_CONFIGURED';
+    error.missing = getJntConfigurationStatus().missing;
     throw error;
   }
 

@@ -55,6 +55,9 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { generateCsrfToken, validateCsrf } from './middleware/csrf.js';
 import pool from './config/database.js';
 import { startExpiredReservationCleanup } from './controllers/secureCheckoutController.js';
+import { getPaymongoConfigurationStatus } from './services/paymongo.js';
+import { getJntConfigurationStatus } from './services/jntShipments.js';
+import { startMaintenanceWorkers } from './services/maintenance.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -82,8 +85,22 @@ if (process.env.NODE_ENV === 'production') {
     'PAYMONGO_WEBHOOK_SECRET',
     'CLOUDINARY_CLOUD_NAME',
     'CLOUDINARY_API_KEY',
-    'CLOUDINARY_API_SECRET'
+    'CLOUDINARY_API_SECRET',
+    'JNT_API_BASE_URL',
+    'JNT_TRACKING_API_BASE_URL',
+    'JNT_USERNAME',
+    'JNT_API_KEY',
+    'JNT_CUSTOMER_CODE',
+    'JNT_SECRET_KEY',
+    'JNT_WEBHOOK_SECRET',
+    'JNT_SENDER_PHONE',
+    'JNT_SENDER_ADDRESS'
   );
+}
+
+if (process.env.NODE_ENV === 'production' && String(process.env.JNT_MOCK_MODE || '').toLowerCase() === 'true') {
+  console.error('❌ JNT_MOCK_MODE cannot be true in production.');
+  process.exit(1);
 }
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -102,7 +119,8 @@ if (missingUploadVars.length > 0) {
 
 // Log configuration on startup (no sensitive values)
 console.log('\n🔐 Configuration loaded:');
-console.log('   PayMongo:', process.env.PAYMONGO_SECRET_KEY && process.env.PAYMONGO_WEBHOOK_SECRET ? 'configured' : 'not configured');
+console.log('   PayMongo:', getPaymongoConfigurationStatus().configured ? 'configured' : 'not configured');
+console.log('   J&T:', getJntConfigurationStatus().mock ? 'mock' : (getJntConfigurationStatus().configured ? 'configured' : 'not configured'));
 console.log('   Email User:', process.env.EMAIL_USER ? '✅ SET' : '❌ NOT SET');
 console.log('   Email Password:', process.env.EMAIL_PASSWORD ? '✅ SET' : '❌ NOT SET');
 console.log('   Cloudinary:', (
@@ -281,10 +299,10 @@ app.get('/api/ready', async (_req, res) => {
     res.json({
       status: 'ready',
       database: 'ok',
-      paymongo: process.env.PAYMONGO_SECRET_KEY && process.env.PAYMONGO_WEBHOOK_SECRET ? 'configured' : 'not_configured',
-      jnt: process.env.JNT_MOCK_MODE === 'true'
-        ? 'mock'
-        : (process.env.JNT_API_URL || process.env.JNT_SANDBOX_URL || process.env.JNT_PRODUCTION_URL) ? 'configured' : 'not_configured',
+      paymongo: getPaymongoConfigurationStatus().configured ? 'configured' : 'not_configured',
+      paymongo_missing: getPaymongoConfigurationStatus().configured ? [] : getPaymongoConfigurationStatus().missing,
+      jnt: getJntConfigurationStatus().mock ? 'mock' : (getJntConfigurationStatus().configured ? 'configured' : 'not_configured'),
+      jnt_missing: getJntConfigurationStatus().configured || getJntConfigurationStatus().mock ? [] : getJntConfigurationStatus().missing,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -348,6 +366,7 @@ app.use(errorHandler);
 
 // Start server with Socket.IO
 startExpiredReservationCleanup();
+startMaintenanceWorkers();
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log('╔══════════════════════════════════════════════╗');

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../config/database.js';
-import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback } from '../services/supabaseRest.js';
+import { isDatabaseConnectivityError } from '../services/supabaseRest.js';
 
 const JWT_ISSUER = process.env.JWT_ISSUER || '10th-west-moto-api';
 const JWT_AUDIENCE = process.env.JWT_AUDIENCE || '10th-west-moto-web';
@@ -77,12 +77,6 @@ const hydrateUserFromSession = async (req) => {
   return userResult.rows[0];
 };
 
-const userFromDecodedToken = (decoded) => ({
-  id: decoded.id,
-  email: decoded.email || null,
-  role: decoded.role || null,
-});
-
 export const authenticateOptional = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = extractBearerToken(authHeader);
@@ -102,11 +96,6 @@ export const authenticateOptional = async (req, res, next) => {
   try {
     if (!process.env.JWT_SECRET) return next();
     const decoded = jwt.verify(token, process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);
-
-    if (shouldUseDatabaseReadFallback()) {
-      req.user = userFromDecodedToken(decoded);
-      return next();
-    }
 
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const sessionResult = await pool.query(
@@ -128,10 +117,7 @@ export const authenticateOptional = async (req, res, next) => {
     next();
   } catch (error) {
     if (isDatabaseConnectivityError(error)) {
-      try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);
-        req.user = userFromDecodedToken(decoded);
-      } catch {}
+      console.error('Optional token authentication skipped because the database is unavailable:', error.message || error);
     }
     next(); // Invalid token, treat as guest
   }
@@ -205,11 +191,6 @@ export const authenticateToken = async (req, res, next) => {
     });
   }
 
-  if (shouldUseDatabaseReadFallback()) {
-    req.user = userFromDecodedToken(decoded);
-    return next();
-  }
-
   try {
     // Validate session is still active
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -254,11 +235,6 @@ export const authenticateToken = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Authentication middleware error:', error);
-    if (isDatabaseConnectivityError(error)) {
-      req.user = userFromDecodedToken(decoded);
-      return next();
-    }
-
     return res.status(503).json({
       message: 'Authentication service is temporarily unavailable. Please try again.',
       code: 'AUTH_SERVICE_UNAVAILABLE',

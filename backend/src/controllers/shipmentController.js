@@ -60,7 +60,7 @@ const secureCompare = (left, right) => {
 };
 
 export const shipmentWebhook = async (req, res) => {
-  const secret = String(process.env.COURIER_WEBHOOK_SECRET || '').trim();
+  const secret = String(process.env.JNT_WEBHOOK_SECRET || process.env.COURIER_WEBHOOK_SECRET || '').trim();
   const signature = String(req.get('X-Courier-Signature') || '').trim();
   if (!secret || !req.rawBody || !signature) return res.status(400).json({ message: 'Invalid courier signature.' });
   const digest = crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex');
@@ -98,7 +98,11 @@ export const shipmentWebhook = async (req, res) => {
       );
     }
     await client.query('COMMIT');
-    emitOrderStatusUpdate(shipment.order_id, nextOrderStatus);
+    emitOrderStatusUpdate(shipment.order_id, nextOrderStatus, {
+      previous_status: order.rows[0]?.status || null,
+      shipment_status: status,
+      timeline_event: { source: 'courier', event_id: eventId, note: req.body?.description || status },
+    });
     return res.json({ message: 'SUCCESS' });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});

@@ -239,11 +239,30 @@ export function emitNewOrder(order) {
   }
 }
 
-const emitOrderPayload = (order) => {
+const normalizeOrderUpdatePayload = (order, extra = {}) => {
+  if (!order) return null;
+  const orderId = Number(order.order_id ?? order.id);
+  if (!Number.isInteger(orderId) || orderId <= 0) return null;
+  return {
+    id: orderId,
+    order_id: orderId,
+    user_id: order.user_id ?? extra.user_id ?? null,
+    status: extra.status ?? order.status ?? null,
+    previous_status: extra.previous_status ?? order.previous_status ?? null,
+    payment_status: extra.payment_status ?? order.payment_status ?? null,
+    shipment_status: extra.shipment_status ?? order.shipment_status ?? order.waybill_status ?? null,
+    updated_at: extra.updated_at ?? order.updated_at ?? new Date().toISOString(),
+    timeline_event: extra.timeline_event ?? order.timeline_event ?? null,
+  };
+};
+
+const emitOrderPayload = (order, extra = {}) => {
   if (!io || !order) return;
-  io.to('staff').emit('order:updated', order);
-  if (order.user_id) {
-    io.to(`user:${order.user_id}`).emit('order:updated', order);
+  const payload = normalizeOrderUpdatePayload(order, extra);
+  if (!payload) return;
+  io.to('staff').emit('order:updated', payload);
+  if (payload.user_id) {
+    io.to(`user:${payload.user_id}`).emit('order:updated', payload);
   }
 };
 
@@ -257,18 +276,16 @@ export function emitOrderStatusUpdate(orderOrId, status = null, extra = {}) {
   const orderId = Number(orderOrId);
   if (!Number.isInteger(orderId) || orderId <= 0) return;
 
-  const fallbackPayload = { id: orderId, order_id: orderId, ...(status ? { status } : {}), ...extra };
-  io.to('staff').emit('order:updated', fallbackPayload);
-
   pool.query(
-    `SELECT id, user_id, status, payment_status, tracking_number, courier, waybill_number,
-            waybill_status, updated_at
-     FROM orders
-     WHERE id = $1`,
+    `SELECT o.id, o.user_id, o.status, o.payment_status, o.updated_at,
+            s.status AS shipment_status
+     FROM orders o
+     LEFT JOIN shipments s ON s.order_id = o.id
+     WHERE o.id = $1`,
     [orderId]
   ).then((result) => {
     const order = result.rows[0];
-    if (order) emitOrderPayload({ ...order, ...extra });
+    if (order) emitOrderPayload(order, { ...extra, ...(status ? { status } : {}) });
   }).catch((error) => {
     console.error('Failed to resolve order for socket update:', error.message || error);
   });
@@ -374,3 +391,7 @@ export function emitConversationUpdated(thread, conversation = thread) {
   if (!io) return;
   emitToConversationTargets(thread, 'conversation:updated', conversation);
 }
+
+export const __testing = {
+  normalizeOrderUpdatePayload,
+};

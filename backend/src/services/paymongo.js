@@ -9,18 +9,42 @@ const normalizeText = (value) => {
 
 const getSecretKey = () => normalizeText(process.env.PAYMONGO_SECRET_KEY);
 
+export const getPaymongoConfigurationStatus = () => {
+  const required = [
+    'PAYMONGO_PUBLIC_KEY',
+    'PAYMONGO_SECRET_KEY',
+    'PAYMONGO_WEBHOOK_SECRET',
+  ];
+  const missing = required.filter((key) => !normalizeText(process.env[key]));
+  return {
+    configured: missing.length === 0,
+    missing,
+    mode: normalizeText(process.env.PAYMONGO_SECRET_KEY)?.startsWith('sk_live_') ? 'live' : 'test',
+  };
+};
+
 const getPublicBaseUrl = () => (
   normalizeText(process.env.PUBLIC_APP_URL)
   || normalizeText(process.env.FRONTEND_URL)
   || 'http://localhost:3000'
 ).replace(/\/+$/, '');
 
+const buildRedirectUrl = (envName, fallbackStatus, orderId) => {
+  const configured = normalizeText(process.env[envName]);
+  const fallback = `${getPublicBaseUrl()}/#/payment-result?order=${encodeURIComponent(orderId)}&status=${fallbackStatus}`;
+  const template = configured || fallback;
+  return template
+    .replaceAll('{orderId}', encodeURIComponent(orderId))
+    .replaceAll('{status}', encodeURIComponent(fallbackStatus));
+};
+
 const buildAuthHeader = () => {
   const secretKey = getSecretKey();
-  const publicKey = normalizeText(process.env.PAYMONGO_PUBLIC_KEY);
-  if (!secretKey || !publicKey) {
+  const status = getPaymongoConfigurationStatus();
+  if (!secretKey || !status.configured) {
     const error = new Error('PayMongo secret and public keys are not configured.');
     error.code = 'PAYMONGO_NOT_CONFIGURED';
+    error.missing = status.missing;
     throw error;
   }
 
@@ -44,7 +68,6 @@ const parsePaymongoResponse = async (response) => {
 };
 
 export const createPaymongoGcashCheckout = async ({ order, items }) => {
-  const baseUrl = getPublicBaseUrl();
   const orderId = Number(order.id);
   const orderNumber = order.order_number || `TWM-${String(orderId).padStart(8, '0')}`;
   let lineItems = items.map((item) => ({
@@ -78,13 +101,14 @@ export const createPaymongoGcashCheckout = async ({ order, items }) => {
           description: `10th West Moto Order #${orderId}`,
           line_items: lineItems,
           payment_method_types: ['gcash'],
-          success_url: `${baseUrl}/#/payment-result?order=${orderId}&status=success`,
-          cancel_url: `${baseUrl}/#/payment-result?order=${orderId}&status=cancelled`,
+          success_url: buildRedirectUrl('PAYMONGO_SUCCESS_URL', 'success', orderId),
+          cancel_url: buildRedirectUrl('PAYMONGO_CANCEL_URL', 'cancelled', orderId),
           metadata: {
             order_id: String(orderId),
             payment_id: String(order.payment_id || ''),
             order_number: String(orderNumber),
             payment_reference: String(order.payment_reference || ''),
+            failed_url: buildRedirectUrl('PAYMONGO_FAILED_URL', 'failed', orderId),
           },
         },
       },
