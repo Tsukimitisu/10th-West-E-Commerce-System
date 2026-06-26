@@ -50,6 +50,14 @@ const ensureAddressColumns = async () => {
 };
 ensureAddressColumns();
 
+const buildAddressString = ({ street, barangay, city, state, postal_code }) => [
+  street,
+  barangay,
+  city,
+  `${state || ''} ${postal_code || ''}`.trim(),
+  'Philippines',
+].filter(Boolean).join(', ');
+
 // Get all addresses for a user
 export const getUserAddresses = async (req, res) => {
   try {
@@ -177,10 +185,10 @@ export const createAddress = async (req, res) => {
     // Insert new address
     const result = await client.query(
       `INSERT INTO addresses (
-         user_id, recipient_name, phone, street, barangay, city, state, postal_code,
+         user_id, recipient_name, phone, street, barangay, city, state, postal_code, country,
          address_string, lat, lng, is_default, province_code, city_code, barangay_code
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Philippines', $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         req.user.id,
@@ -191,7 +199,7 @@ export const createAddress = async (req, res) => {
         validatedAddress.city,
         validatedAddress.state,
         postal_code,
-        `${street}, ${validatedAddress.barangay}, ${validatedAddress.city}, ${validatedAddress.state} ${postal_code}, Philippines`,
+        buildAddressString({ street, barangay: validatedAddress.barangay, city: validatedAddress.city, state: validatedAddress.state, postal_code }),
         lat,
         lng,
         is_default,
@@ -336,6 +344,7 @@ export const updateAddress = async (req, res) => {
          city = $5,
          state = $6,
          postal_code = $7,
+         country = 'Philippines',
          address_string = $8,
          lat = $9,
          lng = $10,
@@ -354,7 +363,7 @@ export const updateAddress = async (req, res) => {
         validatedAddress.city,
         validatedAddress.state,
         postal_code,
-        `${street}, ${validatedAddress.barangay}, ${validatedAddress.city}, ${validatedAddress.state} ${postal_code}, Philippines`,
+        buildAddressString({ street, barangay: validatedAddress.barangay, city: validatedAddress.city, state: validatedAddress.state, postal_code }),
         lat,
         lng,
         is_default,

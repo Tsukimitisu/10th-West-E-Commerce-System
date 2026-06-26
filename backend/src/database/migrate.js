@@ -199,6 +199,7 @@ const createTables = async () => {
         product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
         product_name VARCHAR(255) NOT NULL,
         product_price DECIMAL(10, 2) NOT NULL,
+        price DECIMAL(10, 2),
         quantity INTEGER NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -250,6 +251,7 @@ const createTables = async () => {
     // Backfill country column for existing deployments
     await client.query(`
       ALTER TABLE addresses
+      ADD COLUMN IF NOT EXISTS address_string TEXT,
       ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'Philippines';
     `);
     console.log('✅ Addresses table ensured country column');
@@ -641,11 +643,7 @@ const createTables = async () => {
         ('shipping', 'express_rate', '350'),
         ('shipping', 'enable_pickup', 'true'),
         ('payment', 'cash_enabled', 'true'),
-        ('payment', 'card_enabled', 'true'),
         ('payment', 'gcash_enabled', 'true'),
-        ('payment', 'maya_enabled', 'false'),
-        ('payment', 'stripe_pk', ''),
-        ('payment', 'stripe_sk', ''),
         ('returns', 'return_window_days', '15'),
         ('email', 'order_confirmation', 'true'),
         ('email', 'shipping_update', 'true'),

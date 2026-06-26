@@ -26,11 +26,7 @@ const SYSTEM_SETTINGS = [
   { category: 'shipping', key: 'express_rate', value: '350' },
   { category: 'shipping', key: 'enable_pickup', value: 'true' },
   { category: 'payment', key: 'cash_enabled', value: 'true' },
-  { category: 'payment', key: 'card_enabled', value: 'true' },
-  { category: 'payment', key: 'gcash_enabled', value: 'false' },
-  { category: 'payment', key: 'maya_enabled', value: 'false' },
-  { category: 'payment', key: 'stripe_pk', value: '' },
-  { category: 'payment', key: 'stripe_sk', value: '' },
+  { category: 'payment', key: 'gcash_enabled', value: 'true' },
   { category: 'returns', key: 'return_window_days', value: '15' },
   { category: 'email', key: 'order_confirmation', value: 'true' },
   { category: 'email', key: 'shipping_update', value: 'true' },
@@ -252,6 +248,7 @@ async function createTables(knex) {
     table.integer('product_id').references('id').inTable('products').onDelete('SET NULL');
     table.string('product_name', 255).notNullable();
     table.decimal('product_price', 10, 2).notNullable();
+    table.decimal('price', 10, 2);
     table.integer('quantity').notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
   });

@@ -21,6 +21,7 @@ const router = express.Router();
 
 // Customer routes
 router.get('/my-orders', authenticateToken, getUserOrders);
+router.get('/:id/timeline', authenticateToken, getOrderTimeline);
 router.get('/:id', authenticateToken, getOrderById);
 router.get('/:id/invoice', authenticateToken, getOrderInvoice);
 router.post('/', authenticateToken, (req, res, next) => {
@@ -29,7 +30,6 @@ router.post('/', authenticateToken, (req, res, next) => {
 });
 router.post('/:id/cancel', authenticateToken, cancelOrderSecure);
 router.put('/:id/cancel', authenticateToken, cancelOrderSecure);
-router.get('/:id/timeline', authenticateToken, getOrderTimeline);
 router.put('/:id/confirm-receipt', authenticateToken, confirmOrderReceipt);
 
 // Admin routes

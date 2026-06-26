@@ -75,6 +75,7 @@ const addressSnapshot = (address) => ({
   barangay_code: address.barangay_code,
   lat: address.lat,
   lng: address.lng,
+  address_string: address.address_string || formatAddress(address),
 });
 
 const formatAddress = (address) => [
@@ -252,9 +253,9 @@ export const createCheckout = async (req, res) => {
     const order = orderResult.rows[0];
     for (const item of snapshots) {
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, variant_id, product_name, product_price, quantity, sku_snapshot, variant_name_snapshot, image_snapshot)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [order.id, item.product_id, item.variant_id, item.product_name, item.product_price, item.quantity,
+        `INSERT INTO order_items (order_id, product_id, variant_id, product_name, product_price, price, quantity, sku_snapshot, variant_name_snapshot, image_snapshot)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [order.id, item.product_id, item.variant_id, item.product_name, item.product_price, item.product_price, item.quantity,
           item.sku_snapshot, item.variant_name_snapshot, item.image_snapshot]
       );
       await client.query(
@@ -487,7 +488,15 @@ export const handlePaymongoWebhook = async (req, res) => {
       [inserted.rows[0].id, payment.id]
     );
     await client.query('COMMIT');
-    emitOrderStatusUpdate(payment.order_id, payment.status === 'paid' ? 'paid' : 'payment_pending');
+    const emittedStatus = ['payment.paid', 'checkout_session.payment.paid'].includes(event.eventType)
+      ? 'paid'
+      : ['payment.failed', 'checkout_session.payment.failed', 'checkout_session.expired'].includes(event.eventType)
+        ? 'failed'
+        : 'payment_pending';
+    emitOrderStatusUpdate(payment.order_id, emittedStatus, {
+      payment_status: emittedStatus === 'paid' ? 'paid' : emittedStatus,
+      timeline_event: { source: 'payment', event_id: event.eventId, event_type: event.eventType },
+    });
     return res.json({ message: 'SUCCESS' });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -604,7 +613,7 @@ export const retryPayment = async (req, res) => {
        WHERE id = $1`,
       [attempt.rows[0].id, JSON.stringify({ checkout_id: checkout.id })]
     );
-    emitOrderStatusUpdate(orderId, 'payment_pending');
+    emitOrderStatusUpdate(orderId, 'payment_pending', { payment_status: 'pending' });
     return res.json({ order_id: orderId, checkout_url: checkout.checkout_url, payment_reference: checkout.id, payment_status: 'pending' });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -640,7 +649,7 @@ export const expirePaymentSession = async (req, res) => {
     await releaseOrderReservations(client, orderId, 'failed', 'Payment session expired');
     await client.query(`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE order_id = $1 AND status <> 'paid'`, [orderId]);
     await client.query('COMMIT');
-    emitOrderStatusUpdate(orderId, 'failed');
+    emitOrderStatusUpdate(orderId, 'failed', { payment_status: 'expired' });
     return res.json({ message: 'Payment session expired.', order_id: orderId, status: 'failed', payment_status: 'expired' });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -899,7 +908,7 @@ export const releaseExpiredReservations = async () => {
       await releaseOrderReservations(client, row.order_id, 'failed', 'Payment reservation expired');
       await client.query(`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE order_id = $1 AND status IN ('pending','processing')`, [row.order_id]);
       await client.query('COMMIT');
-      emitOrderStatusUpdate(row.order_id, 'failed');
+      emitOrderStatusUpdate(row.order_id, 'failed', { payment_status: 'expired' });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       console.error('Expired reservation cleanup failed:', { orderId: row.order_id, error: error.message });
