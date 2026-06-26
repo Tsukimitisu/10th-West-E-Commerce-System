@@ -13,7 +13,8 @@
     "migrate:status": "knex migrate:status --knexfile knexfile.cjs",
     "migrate:make": "knex migrate:make --knexfile knexfile.cjs",
     "migrate:legacy": "node src/database/migrate.js",
-    "migrate:auth:legacy": "node src/database/migrate-auth.js"
+    "migrate:auth:legacy": "node src/database/migrate-auth.js",
+    "lint": "eslint ."
   },
   "keywords": [
     "ecommerce",
@@ -44,10 +45,10 @@
     "qrcode": "^1.5.4",
     "sanitize-html": "^2.17.2",
     "socket.io": "^4.8.3",
-    "speakeasy": "^2.0.0",
-    "stripe": "^20.3.1"
+    "speakeasy": "^2.0.0"
   },
   "devDependencies": {
+    "eslint": "^9.39.2",
     "knex": "^3.1.0",
     "nodemon": "^3.0.2"
   }
