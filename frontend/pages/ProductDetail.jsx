@@ -7,6 +7,7 @@ import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
 import StarRating from '../components/StarRating';
 import ReviewCard from '../components/ReviewCard';
+import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
@@ -214,14 +215,13 @@ const ProductDetail = () => {
   const [reviewFieldErrors, setReviewFieldErrors] = useState({});
   const { addToCart } = useCart();
 
-  const user = localStorage.getItem('shopCoreUser');
-  const currentUser = user ? JSON.parse(user) : null;
+  const currentUser = getCurrentAuthUser();
   const userId = currentUser?.id ?? null;
   const isWishlisted = wishlistedIds.includes(Number(id));
 
   useEffect(() => {
     const loadWishlist = async () => {
-      const storedUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+      const storedUser = getCurrentAuthUser();
       if (!storedUser?.id) {
         setWishlistedIds([]);
         return;
@@ -243,11 +243,11 @@ const ProductDetail = () => {
 
     window.addEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
     window.addEventListener('focus', syncWishlist);
-    window.addEventListener('storage', syncWishlist);
+    const unsubscribeAuth = subscribeAuthChanges(syncWishlist);
     return () => {
       window.removeEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
       window.removeEventListener('focus', syncWishlist);
-      window.removeEventListener('storage', syncWishlist);
+      unsubscribeAuth();
     };
   }, [userId]);
 
@@ -624,8 +624,7 @@ const ProductDetail = () => {
 
     sessionStorage.setItem(BUY_NOW_SESSION_KEY, JSON.stringify(buyNowSession));
 
-    const user = localStorage.getItem('shopCoreUser');
-    if (!user) {
+    if (!getCurrentAuthUser()) {
       navigate('/login?redirect=/checkout&buyNow=1');
     } else {
       navigate('/checkout?buyNow=1', { state: { buyNowSessionId: buyNowSession.sessionId } });
@@ -649,8 +648,7 @@ const ProductDetail = () => {
 
   const handleChatSeller = async () => {
     if (!product) return;
-    const user = localStorage.getItem('shopCoreUser');
-    if (!user) {
+    if (!getCurrentAuthUser()) {
       navigate(`/login?redirect=/products/${product.id}`);
       return;
     }

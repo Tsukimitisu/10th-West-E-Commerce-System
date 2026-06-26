@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, X, Loader, Mail } from 'lucide-react';
 import { verifyEmailToken, resendVerificationEmail, confirmEmailChangeToken } from '../services/api';
+import { getCurrentAuthUser, requestAuthRefresh, setCurrentAuthUser } from '../services/authSession';
 
 const VERIFY_REQUEST_TIMEOUT_MS = 8000;
 const VERIFICATION_LOADING_MESSAGE = 'Verifying...';
@@ -63,6 +64,7 @@ const publishAuthVerifiedSignal = (user = null) => {
       source: 'verify-email',
     },
   }));
+  requestAuthRefresh();
 };
 
 const createVerificationTimeoutError = () => {
@@ -186,20 +188,13 @@ const VerifyEmail = ({ onLogin }) => {
     }, delayMs);
   };
 
-  const finalizeAuthenticatedLogin = (user, authToken, destination, cancelled) => {
-    try {
-      localStorage.setItem('shopCoreUser', JSON.stringify(user));
-      localStorage.setItem('shopCoreToken', authToken);
-      window.dispatchEvent(new Event('auth:changed'));
-    } catch {
-      // Ignore storage sync failures.
-    }
-
+  const finalizeAuthenticatedLogin = (user, destination, cancelled) => {
+    setCurrentAuthUser(user);
     if (onLoginRef.current) {
       try {
-        onLoginRef.current(user, authToken);
+        onLoginRef.current(user);
       } catch {
-        // Fall through to the redirect. Local session state was already written.
+        // Fall through to the redirect. Session state was already updated.
       }
     }
 
@@ -246,17 +241,12 @@ const VerifyEmail = ({ onLogin }) => {
         ));
 
         if (normalizedEmailChangeToken) {
-          try {
-            const existingUser = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
-            if (existingUser && result?.user && Number(existingUser.id) === Number(result.user.id)) {
-              localStorage.setItem('shopCoreUser', JSON.stringify({ ...existingUser, ...result.user }));
-              window.dispatchEvent(new Event('auth:changed'));
-            }
-          } catch {
-            // Ignore local cache merge failures.
+          const existingUser = getCurrentAuthUser();
+          if (existingUser && result?.user && Number(existingUser.id) === Number(result.user.id)) {
+            setCurrentAuthUser({ ...existingUser, ...result.user });
           }
 
-          const destination = localStorage.getItem('shopCoreToken') ? '/profile' : '/login';
+          const destination = existingUser ? '/profile' : '/login';
           if (!cancelled) {
             setStatus('success');
             setNextRoute(destination);
@@ -274,9 +264,9 @@ const VerifyEmail = ({ onLogin }) => {
           return;
         }
 
-        if (result?.autoLogin && result?.token && result?.user) {
+        if (result?.autoLogin && result?.user) {
           const destination = getVerificationRedirect(result);
-          finalizeAuthenticatedLogin(result.user, result.token, destination, cancelled);
+          finalizeAuthenticatedLogin(result.user, destination, cancelled);
           return;
         }
 

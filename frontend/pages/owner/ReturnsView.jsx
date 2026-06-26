@@ -3,6 +3,7 @@ import { getReturns, updateReturnStatus } from '../../services/api';
 import { RotateCcw, Search, Eye, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
+import { getCurrentAuthUser } from '../../services/authSession';
 
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -11,8 +12,7 @@ const statusColors = {
 };
 
 const ReturnsView = () => {
-  const userStr = localStorage.getItem('shopCoreUser');
-  const currentUser = userStr ? JSON.parse(userStr) : null;
+  const currentUser = getCurrentAuthUser();
   const isStaff = currentUser?.role === 'store_staff';
 
   const [returns, setReturns] = useState([]);

@@ -2,6 +2,7 @@
 import { Link } from 'react-router-dom';
 import { Heart, Star, Tag, AlertTriangle } from 'lucide-react';
 import { addToWishlist, removeFromWishlist, getWishlist } from '../services/api';
+import { getCurrentAuthUser } from '../services/authSession.js';
 
 const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
 
@@ -20,9 +21,8 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
     if (hasExternalWishlistState) return;
     const checkWishlist = async () => {
       try {
-        const user = localStorage.getItem('shopCoreUser');
-        if (!user) return;
-        const userId = JSON.parse(user).id;
+        const userId = getCurrentAuthUser()?.id;
+        if (!userId) return;
         const items = await getWishlist(userId);
         setLocalWishlisted(items.some((item) => Number(item.product_id ?? item.product?.id ?? item.id) === normalizedProductId));
       } catch {}
@@ -41,9 +41,8 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
     e.preventDefault();
     e.stopPropagation();
     try {
-      const user = localStorage.getItem('shopCoreUser');
-      if (!user) return;
-      const userId = JSON.parse(user).id;
+      const userId = getCurrentAuthUser()?.id;
+      if (!userId) return;
       
       const newStatus = !localWishlisted;
       setLocalWishlisted(newStatus);

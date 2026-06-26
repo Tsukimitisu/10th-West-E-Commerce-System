@@ -5,6 +5,7 @@ import { ArrowRight, Truck, Shield, Wrench, Search, Zap, ChevronRight, ChevronLe
 import { getProducts, getCategories, getBanners, getAnnouncements, getWishlist, getSystemSettings, getProductById, getTopSellers, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
+import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
 
 const Home = () => {
   // --- Data & API State ---
@@ -76,7 +77,7 @@ const Home = () => {
 
     const loadWishlist = async () => {
       try {
-        const user = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+        const user = getCurrentAuthUser();
         if (!user?.id) {
           setWishlistedIds([]);
           return;
@@ -96,13 +97,13 @@ const Home = () => {
     };
 
     window.addEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
-    window.addEventListener('storage', syncWishlist);
     window.addEventListener('focus', syncWishlist);
+    const unsubscribeAuth = subscribeAuthChanges(syncWishlist);
 
     return () => {
       window.removeEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
-      window.removeEventListener('storage', syncWishlist);
       window.removeEventListener('focus', syncWishlist);
+      unsubscribeAuth();
     };
   },[]);
 

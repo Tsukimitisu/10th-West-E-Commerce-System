@@ -6,6 +6,7 @@ import { getAddresses, createGcashCheckout, createOrder, getProductById, validat
 import AddressDropdowns from '../../components/AddressDropdowns';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
+import { getCurrentAuthUser } from '../../services/authSession.js';
 
 const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
 
@@ -298,10 +299,9 @@ const Checkout = () => {
   }, [agreeTerms]);
 
   useEffect(() => {
-    const user = localStorage.getItem('shopCoreUser');
-    if (!user) return;
+    const u = getCurrentAuthUser();
+    if (!u) return;
 
-    const u = JSON.parse(user);
     setProfile(u);
     setForm((f) => ({
       ...f,
@@ -443,8 +443,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
     setError('');
 
     try {
-      const user = localStorage.getItem('shopCoreUser');
-      const u = user ? JSON.parse(user) : null;
+      const u = getCurrentAuthUser();
 
         const streetWithBarangay = form.barangay ? `${form.street}, ${form.barangay}` : form.street;
         if (!usingSavedAddress && form.lat != null && form.lng != null) {

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Package, ChevronRight, Search, Calendar, Truck, CheckCircle2, Clock, XCircle, AlertTriangle } from 'lucide-react';
 import { getUserOrders } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
+import { getCurrentAuthUser } from '../../services/authSession';
 
 const statusConfig = {
   pending: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' },
@@ -32,8 +33,7 @@ const OrderHistory = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const userData = localStorage.getItem('shopCoreUser');
-        const user = userData ? JSON.parse(userData) : null;
+        const user = getCurrentAuthUser();
         if (!user) {
           setLoading(false);
           return;

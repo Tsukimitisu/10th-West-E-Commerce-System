@@ -1,6 +1,7 @@
 ﻿import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { ToastContainer } from '../components/Toast';
+import { getCurrentAuthUser } from '../services/authSession.js';
 
 function getSocketUrl() {
   const envUrl = import.meta.env?.VITE_API_URL;
@@ -48,11 +49,11 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     const url = getSocketUrl();
     console.log(`[Socket] connecting to ${url}`);
-    const initialToken = localStorage.getItem('shopCoreToken') || '';
+    const initialUser = getCurrentAuthUser();
 
     const s = io(url, {
-      auth: { token: initialToken },
-      autoConnect: Boolean(initialToken),
+      withCredentials: true,
+      autoConnect: Boolean(initialUser?.id),
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -63,17 +64,14 @@ export const SocketProvider = ({ children }) => {
 
     const emitJoinFromStorage = (force = false) => {
       try {
-        const savedUser = localStorage.getItem('shopCoreUser');
-        if (!savedUser) {
+        const user = getCurrentAuthUser();
+        if (!user?.id) {
           if (force || joinedSignatureRef.current) {
             s.emit('leaveAll');
             joinedSignatureRef.current = '';
           }
           return;
         }
-
-        const user = JSON.parse(savedUser);
-        if (!user?.id) return;
 
         const payload = {
           userId: user.id,
@@ -87,7 +85,7 @@ export const SocketProvider = ({ children }) => {
         s.emit('join', payload);
         joinedSignatureRef.current = signature;
       } catch {
-        // Ignore malformed localStorage values.
+        // Ignore transient auth state changes.
       }
     };
 
@@ -121,13 +119,16 @@ export const SocketProvider = ({ children }) => {
     });
 
     const onAuthChanged = () => {
-      const nextToken = localStorage.getItem('shopCoreToken') || '';
-      if (s.auth?.token !== nextToken) {
-        s.auth = { ...(s.auth || {}), token: nextToken };
-        if (s.connected) s.disconnect();
-        if (nextToken) s.connect();
+      const nextUser = getCurrentAuthUser();
+      if (!nextUser?.id) {
+        if (s.connected) {
+          s.emit('leaveAll');
+          s.disconnect();
+        }
+        joinedSignatureRef.current = '';
         return;
       }
+      if (!s.connected) s.connect();
       emitJoinFromStorage(true);
     };
     const onSessionExpired = () => {
@@ -137,24 +138,17 @@ export const SocketProvider = ({ children }) => {
       addToast('Your session expired. Please sign in again.', 'error');
     };
     const onFocus = () => emitJoinFromStorage(false);
-    const onStorage = (event) => {
-      if (event.key === 'shopCoreUser' || event.key === 'shopCoreToken') {
-        emitJoinFromStorage(true);
-      }
-    };
     const syncInterval = setInterval(() => emitJoinFromStorage(false), 5000);
 
     window.addEventListener('auth:changed', onAuthChanged);
     window.addEventListener('auth:session-expired', onSessionExpired);
     window.addEventListener('focus', onFocus);
-    window.addEventListener('storage', onStorage);
 
     return () => {
       clearInterval(syncInterval);
       window.removeEventListener('auth:changed', onAuthChanged);
       window.removeEventListener('auth:session-expired', onSessionExpired);
       window.removeEventListener('focus', onFocus);
-      window.removeEventListener('storage', onStorage);
       s.disconnect();
       socketRef.current = null;
       joinedSignatureRef.current = '';

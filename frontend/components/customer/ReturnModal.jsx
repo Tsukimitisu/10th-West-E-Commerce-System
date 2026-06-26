@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, RotateCcw, AlertTriangle, Package, CreditCard, Wallet } from 'lucide-react';
 import { createReturn } from '../../services/api';
+import { getCurrentAuthUser } from '../../services/authSession.js';
 
 const RETURN_REASONS = [
   { value: 'wrong_size', label: 'Wrong Size / Fitment' },
@@ -20,7 +21,7 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const user = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
+  const user = getCurrentAuthUser() || {};
 
   const toggleItem = (productId, maxQty) => {
     setSelectedItems(prev => {

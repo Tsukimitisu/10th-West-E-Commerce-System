@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft, LogIn, X } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { getCurrentAuthUser } from '../../services/authSession.js';
 
 const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
 
@@ -64,8 +65,7 @@ const Cart = () => {
     const checkoutSelectionIds = persistCheckoutSelection();
     if (checkoutSelectionIds.length === 0) return;
 
-    const user = localStorage.getItem('shopCoreUser');
-    if (!user) {
+    if (!getCurrentAuthUser()) {
       setShowLoginModal(true);
       return;
     }

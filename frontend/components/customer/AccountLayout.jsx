@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import { User as UserIcon, Package, MapPin, Heart, RotateCcw, Wallet, ChevronRight } from 'lucide-react';
+import { getCurrentAuthUser } from '../../services/authSession.js';
 
 const menuItems = [
   { path: '/profile', label: 'My Profile', icon: UserIcon },
@@ -15,8 +16,7 @@ const getMenuIndex = (pathname) => menuItems.findIndex((item) => item.path === p
 
 const AccountLayout = ({ children }) => {
   const location = useLocation();
-  const userData = localStorage.getItem('shopCoreUser');
-  const user = userData ? JSON.parse(userData) : null;
+  const user = getCurrentAuthUser();
   const previousPathRef = useRef(location.pathname);
 
   const previousPath = previousPathRef.current;

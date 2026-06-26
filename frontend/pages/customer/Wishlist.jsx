@@ -4,6 +4,7 @@ import { Heart, ShoppingCart, Trash2, Eye, Package, AlertTriangle } from 'lucide
 import { getWishlist, removeFromWishlist, WISHLIST_SYNC_EVENT } from '../../services/api';
 import { useCart } from '../../context/CartContext';
 import AccountLayout from '../../components/customer/AccountLayout';
+import { getCurrentAuthUser, subscribeAuthChanges } from '../../services/authSession';
 
 const Wishlist = () => {
   const [items, setItems] = useState([]);
@@ -15,8 +16,7 @@ const Wishlist = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const userData = localStorage.getItem('shopCoreUser');
-        const user = userData ? JSON.parse(userData) : null;
+        const user = getCurrentAuthUser();
         if (!user) {
           setItems([]);
           setLoading(false);
@@ -38,20 +38,19 @@ const Wishlist = () => {
     };
 
     window.addEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
-    window.addEventListener('storage', syncWishlist);
+    const unsubscribeAuth = subscribeAuthChanges(syncWishlist);
     window.addEventListener('focus', syncWishlist);
 
     return () => {
       window.removeEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
-      window.removeEventListener('storage', syncWishlist);
+      unsubscribeAuth();
       window.removeEventListener('focus', syncWishlist);
     };
   }, []);
 
   const handleRemove = async (productId) => {
     try {
-      const userData = localStorage.getItem('shopCoreUser');
-      const user = userData ? JSON.parse(userData) : null;
+      const user = getCurrentAuthUser();
       if (!user) return;
       await removeFromWishlist(user.id, productId);
       setItems((prev) => prev.filter((item) => Number(item.product_id ?? item.product?.id ?? item.id) !== Number(productId)));

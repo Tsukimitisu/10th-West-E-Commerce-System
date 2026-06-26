@@ -131,3 +131,34 @@ test('createJntWaybillForOrder rejects mock mode in production', async () => {
     else process.env.NODE_ENV = previousNodeEnv;
   }
 });
+
+test('createJntWaybillForOrder rejects live booking when J&T credentials are missing', async () => {
+  const keys = [
+    'JNT_MOCK_MODE',
+    'JNT_API_BASE_URL',
+    'JNT_SANDBOX_URL',
+    'JNT_PRODUCTION_URL',
+    'JNT_USERNAME',
+    'JNT_API_KEY',
+    'JNT_CUSTOMER_CODE',
+    'JNT_SECRET_KEY',
+    'JNT_SIGNING_KEY',
+  ];
+  const previousEnv = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+
+  for (const key of keys) delete process.env[key];
+  process.env.JNT_MOCK_MODE = 'false';
+
+  try {
+    const db = makeDb();
+    await assert.rejects(
+      () => createJntWaybillForOrder(db, 42, { generatedBy: 1 }),
+      (error) => error?.code === 'JNT_NOT_CONFIGURED'
+    );
+  } finally {
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});

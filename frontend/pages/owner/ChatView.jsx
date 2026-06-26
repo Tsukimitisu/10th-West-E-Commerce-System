@@ -21,16 +21,9 @@ import {
   sendSellerChatMessage,
 } from '../../services/api';
 import { useSocket } from '../../context/SocketContext';
+import { getCurrentAuthUser } from '../../services/authSession';
 
 const STAFF_ROLES = new Set(['owner', 'admin', 'store_staff', 'cashier', 'super_admin']);
-
-const getCurrentUser = () => {
-  try {
-    return JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
-  } catch {
-    return null;
-  }
-};
 
 const formatTime = (value) => {
   if (!value) return '';
@@ -182,7 +175,7 @@ const MessageBubble = ({ message }) => {
 };
 
 const ChatView = () => {
-  const currentUser = useMemo(getCurrentUser, []);
+  const currentUser = useMemo(() => getCurrentAuthUser(), []);
   const { connected, emit, on, off } = useSocket();
   const [conversations, setConversations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);

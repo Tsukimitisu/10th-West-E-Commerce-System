@@ -1,6 +1,7 @@
 ﻿import React, { createContext, useContext, useState, useEffect } from 'react';
 import { validateDiscountCode, ensureCsrfToken } from '../services/api';
 import { supabase } from '../services/supabase.js';
+import { getCurrentAuthUser } from '../services/authSession.js';
 
 const API_URL = import.meta.env.VITE_API_URL || (() => {
   const host = window.location.hostname;
@@ -23,35 +24,12 @@ export const CartProvider = ({ children }) => {
   const [initialized, setInitialized] = useState(false);
   const itemsRef = React.useRef(items);
 
-  const getToken = () => {
-    return localStorage.getItem('shopCoreToken');
-  };
-
   const getStoredUser = () => {
-    try {
-      const raw = localStorage.getItem('shopCoreUser');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const decodeJwtPayload = (token) => {
-    try {
-      const [, payload] = token.split('.');
-      if (!payload) return null;
-      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-      const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4);
-      return JSON.parse(atob(padded));
-    } catch {
-      return null;
-    }
+    return getCurrentAuthUser();
   };
 
   const getCurrentUserFromToken = () => {
-    const token = localStorage.getItem('shopCoreToken');
-    if (!token) return null;
-    return decodeJwtPayload(token);
+    return getCurrentAuthUser();
   };
 
   const getCurrentUser = () => {
@@ -151,16 +129,11 @@ export const CartProvider = ({ children }) => {
   };
 
   const buildRequestHeaders = async ({ includeJson = false, forceRefresh = false } = {}) => {
-    const token = getToken();
     const headers = {};
 
     const csrfToken = await ensureCsrfToken({ forceRefresh });
     if (csrfToken) {
       headers['x-csrf-token'] = csrfToken;
-    }
-
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
     }
 
     if (includeJson) {
@@ -277,8 +250,6 @@ export const CartProvider = ({ children }) => {
 
   // Sync cart from backend when user logs in
   const syncCart = async () => {
-    const token = getToken();
-
     if (USE_SUPABASE) {
       try {
         const currentUser = getCurrentUserFromToken();
@@ -322,13 +293,8 @@ export const CartProvider = ({ children }) => {
     }
 
     try {
-      const headers = {};
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
       const response = await fetch(`${API_URL}/cart`, {
         credentials: 'include',
-        headers,
       });
       
       if (response.ok) {
@@ -342,12 +308,12 @@ export const CartProvider = ({ children }) => {
         const mappedItems = mapCartItemsFromBackend(data.items || []);
         const stableItems = orderCartItems(mappedItems);
         setItems(stableItems);
-        // Save to localStorage as backup
+        // Save to tab-scoped storage as backup
         sessionStorage.setItem(getCartKey(), JSON.stringify(stableItems));
         setInitialized(true);
         return true;
       } else {
-        // Fall back to localStorage
+        // Fall back to tab-scoped storage
         const savedCart = sessionStorage.getItem(getCartKey());
         setItems(savedCart ? JSON.parse(savedCart) : []);
         setInitialized(true);
@@ -367,7 +333,7 @@ export const CartProvider = ({ children }) => {
     syncCart();
   }, [cartScopeKey]);
 
-  // Monitor localStorage for login changes
+  // Monitor auth changes that affect cart scope
   useEffect(() => {
     const handleStorageChange = async () => {
       const previousScopeKey = cartScopeKeyRef.current;
@@ -402,10 +368,8 @@ export const CartProvider = ({ children }) => {
         clearGuestCartStorage();
       }
     };
-    window.addEventListener('storage', handleStorageChange);
     window.addEventListener('auth:changed', handleStorageChange);
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('auth:changed', handleStorageChange);
     };
   }, []);
@@ -430,7 +394,7 @@ export const CartProvider = ({ children }) => {
     }
   }, [initialized, hasLoadedSelection, cartScopeKey]);
 
-  // Save to localStorage as backup
+  // Save cart state in tab-scoped storage for guest/offline fallback.
   useEffect(() => {
     if (initialized && hasLoadedSelection) {
       sessionStorage.setItem(getCartKey(), JSON.stringify(items));
@@ -555,8 +519,8 @@ export const CartProvider = ({ children }) => {
     }
 
     setError(null);
-    const token = getToken();
-    if (USE_SUPABASE && !token) {
+    const cachedUser = getCurrentAuthUser();
+    if (USE_SUPABASE && !cachedUser?.id) {
       return addToCartLocal(product, requestedQty);
     }
     if (true) {
@@ -704,8 +668,8 @@ export const CartProvider = ({ children }) => {
   };
 
   const removeFromCart = async (productId) => {
-    const token = getToken();
-    if (USE_SUPABASE && !token) {
+    const cachedUser = getCurrentAuthUser();
+    if (USE_SUPABASE && !cachedUser?.id) {
       removeFromCartLocal(productId);
       return;
     }
@@ -790,8 +754,8 @@ export const CartProvider = ({ children }) => {
     }
     setError(null);
     
-    const token = getToken();
-    if (USE_SUPABASE && !token) {
+    const cachedUser = getCurrentAuthUser();
+    if (USE_SUPABASE && !cachedUser?.id) {
       updateQuantityLocal(productId, quantity);
       return;
     }
@@ -878,8 +842,8 @@ export const CartProvider = ({ children }) => {
   };
 
   const clearCart = async () => {
-    const token = getToken();
-    if (USE_SUPABASE && !token) {
+    const cachedUser = getCurrentAuthUser();
+    if (USE_SUPABASE && !cachedUser?.id) {
       clearCartLocal();
       return;
     }
@@ -963,8 +927,8 @@ export const CartProvider = ({ children }) => {
     const targetIds = normalizeTargetProductIds(ids);
     if (targetIds.length === 0) return;
 
-    const token = getToken();
-    if (USE_SUPABASE && !token) {
+    const cachedUser = getCurrentAuthUser();
+    if (USE_SUPABASE && !cachedUser?.id) {
       removeItemsFromLocalState(targetIds);
       return;
     }

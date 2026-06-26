@@ -4,6 +4,7 @@ import { OrderStatus } from '../../types.js';
 import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock, Filter, ChevronDown, ChevronUp, ArrowLeft, Printer, DollarSign, MapPin, User, Calendar, CreditCard, AlertCircle, Undo } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
+import { getCurrentAuthUser } from '../../services/authSession';
 
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -43,8 +44,7 @@ const staffStatusTransitions = {
 
 const OrdersView = () => {
   // Role check: staff cannot process refunds
-  const userStr = localStorage.getItem('shopCoreUser');
-  const currentUser = userStr ? JSON.parse(userStr) : null;
+  const currentUser = getCurrentAuthUser();
   const isStaff = currentUser?.role === 'store_staff';
 
   const [orders, setOrders] = useState([]);

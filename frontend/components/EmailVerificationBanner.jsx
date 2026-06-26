@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Send } from 'lucide-react';
 import { resendVerificationEmail } from '../services/api';
+import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
 
 const EmailVerificationBanner = () => {
   const [visible, setVisible] = useState(false);
@@ -9,16 +10,18 @@ const EmailVerificationBanner = () => {
   const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
-    try {
-      const userData = localStorage.getItem('shopCoreUser');
-      if (!userData) return;
-
-      const user = JSON.parse(userData);
+    const syncVisibility = (user = getCurrentAuthUser()) => {
       if (user && user.id && !user.email_verified) {
         setUserEmail(user.email || '');
         setVisible(true);
+      } else {
+        setVisible(false);
+        setUserEmail('');
       }
-    } catch {}
+    };
+
+    syncVisibility();
+    return subscribeAuthChanges(syncVisibility);
   }, []);
 
   const handleResend = async () => {

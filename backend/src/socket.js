@@ -41,10 +41,57 @@ const emitToConversationTargets = (thread, event, payload) => {
   target.emit(event, payload);
 };
 
-export function initSocket(httpServer, frontendUrl) {
+const hydrateSocketUserFromSession = async (sessionAuth) => {
+  const userId = Number(sessionAuth?.userId);
+  const tokenHash = String(sessionAuth?.tokenHash || '').trim();
+  if (!Number.isInteger(userId) || userId <= 0 || !tokenHash) return null;
+
+  const result = await pool.query(
+    `SELECT u.id, u.name, u.email, u.role, u.is_active, u.is_deleted, u.email_verified,
+            EXISTS (
+              SELECT 1 FROM permissions p
+              LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
+              LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
+              WHERE p.name = 'pos.access' AND COALESCE(up.granted, rp.id IS NOT NULL)
+            ) AS can_access_pos,
+            EXISTS (
+              SELECT 1 FROM permissions p
+              LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
+              LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
+              WHERE p.name = 'orders.view' AND COALESCE(up.granted, rp.id IS NOT NULL)
+            ) AS can_view_orders
+     FROM users u
+     JOIN sessions s ON s.user_id = u.id
+     WHERE u.id = $1
+       AND s.token_hash = $2
+       AND s.is_active = true
+       AND s.expires_at > NOW()
+     LIMIT 1`,
+    [userId, tokenHash]
+  );
+
+  const user = result.rows[0];
+  if (!user || !user.is_active || user.is_deleted || !user.email_verified) return null;
+  return user;
+};
+
+const hydrateSocketUserFromBearer = async (token) => {
+  if (!token || !process.env.JWT_SECRET) return null;
+
+  const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+    algorithms: ['HS256'],
+    issuer: process.env.JWT_ISSUER || '10th-west-moto-api',
+    audience: process.env.JWT_AUDIENCE || '10th-west-moto-web',
+    clockTolerance: 30,
+  });
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  return hydrateSocketUserFromSession({ userId: decoded.id, tokenHash });
+};
+
+export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = {}) {
   io = new Server(httpServer, {
     cors: {
-      origin: frontendUrl,
+      origin: frontendOrigins,
       methods: ['GET', 'POST', 'PUT', 'DELETE'],
       credentials: true,
     },
@@ -54,43 +101,26 @@ export function initSocket(httpServer, frontendUrl) {
     pingInterval: 25000,
   });
 
+  if (sessionMiddleware) {
+    io.engine.use(sessionMiddleware);
+  }
+
   io.use(async (socket, next) => {
     try {
-      const token = String(socket.handshake.auth?.token || '').trim();
-      if (!token || !process.env.JWT_SECRET) return next(new Error('Authentication required'));
-      const decoded = jwt.verify(token, process.env.JWT_SECRET, {
-        algorithms: ['HS256'],
-        issuer: process.env.JWT_ISSUER || '10th-west-moto-api',
-        audience: process.env.JWT_AUDIENCE || '10th-west-moto-web',
-        clockTolerance: 30,
-      });
-      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      const result = await pool.query(
-        `SELECT u.id, u.name, u.email, u.role, u.is_active, u.is_deleted, u.email_verified,
-                EXISTS (
-                  SELECT 1 FROM permissions p
-                  LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
-                  LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
-                  WHERE p.name = 'pos.access' AND COALESCE(up.granted, rp.id IS NOT NULL)
-                ) AS can_access_pos,
-                EXISTS (
-                  SELECT 1 FROM permissions p
-                  LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
-                  LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
-                  WHERE p.name = 'orders.view' AND COALESCE(up.granted, rp.id IS NOT NULL)
-                ) AS can_view_orders
-         FROM users u
-         JOIN sessions s ON s.user_id = u.id
-         WHERE u.id = $1 AND s.token_hash = $2 AND s.is_active = true AND s.expires_at > NOW()
-         LIMIT 1`,
-        [decoded.id, tokenHash]
-      );
-      const user = result.rows[0];
-      if (!user || !user.is_active || user.is_deleted || !user.email_verified) {
-        return next(new Error('Invalid or inactive session'));
+      const sessionUser = await hydrateSocketUserFromSession(socket.request?.session?.auth);
+      if (sessionUser) {
+        socket.data.user = sessionUser;
+        return next();
       }
-      socket.data.user = user;
-      return next();
+
+      const token = String(socket.handshake.auth?.token || '').trim();
+      const bearerUser = await hydrateSocketUserFromBearer(token);
+      if (bearerUser) {
+        socket.data.user = bearerUser;
+        return next();
+      }
+
+      return next(new Error('Authentication required'));
     } catch {
       return next(new Error('Invalid or expired session'));
     }

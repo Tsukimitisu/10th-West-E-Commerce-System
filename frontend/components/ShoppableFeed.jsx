@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Heart, MessageCircle, Package, Play, ShoppingBag, Star, Truck } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { addToWishlist, createChatThread, removeFromWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
+import { getCurrentAuthUser } from '../services/authSession.js';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 
@@ -41,7 +42,7 @@ const ShoppableFeed = ({ products = [], wishlistedIds = [], onWishlistToggle }) 
   const unitPrice = product.is_on_sale && product.sale_price ? product.sale_price : product.price;
 
   const handleWishlist = async () => {
-    const user = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+    const user = getCurrentAuthUser();
     if (!user?.id) {
       navigate('/login');
       return;
@@ -58,7 +59,7 @@ const ShoppableFeed = ({ products = [], wishlistedIds = [], onWishlistToggle }) 
   };
 
   const handleChat = async () => {
-    const user = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+    const user = getCurrentAuthUser();
     if (!user?.id) {
       navigate(`/login?redirect=/products/${product.id}`);
       return;

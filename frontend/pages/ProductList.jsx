@@ -5,6 +5,7 @@ import { getProducts, getCategories, getWishlist, WISHLIST_SYNC_EVENT } from '..
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
 import ShoppableFeed from '../components/ShoppableFeed';
+import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
 
 const tokenizeSearchTerms = (value) => {
   const normalized = String(value || '')
@@ -133,7 +134,7 @@ const ProductList = () => {
   useEffect(() => {
     const loadWishlist = async () => {
       try {
-        const user = JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
+        const user = getCurrentAuthUser();
         if (!user?.id) {
           setWishlistedIds([]);
           return;
@@ -152,13 +153,13 @@ const ProductList = () => {
     };
 
     window.addEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
-    window.addEventListener('storage', syncWishlist);
     window.addEventListener('focus', syncWishlist);
+    const unsubscribeAuth = subscribeAuthChanges(syncWishlist);
 
     return () => {
       window.removeEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
-      window.removeEventListener('storage', syncWishlist);
       window.removeEventListener('focus', syncWishlist);
+      unsubscribeAuth();
     };
   }, []);
 

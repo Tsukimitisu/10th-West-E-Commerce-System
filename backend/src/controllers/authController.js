@@ -94,10 +94,39 @@ const upsertRegistrationOtpViaSupabaseRest = async ({ email, otpHash, expiresAt 
   return Array.isArray(rows) ? rows[0] : rows;
 };
 
+const parseDurationMs = (value, fallbackMs) => {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return fallbackMs;
+
+  const match = text.match(/^(\d+)(ms|s|m|h|d)?$/);
+  if (!match) return fallbackMs;
+
+  const amount = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(amount) || amount <= 0) return fallbackMs;
+
+  const unit = match[2] || 's';
+  const multipliers = {
+    ms: 1,
+    s: 1000,
+    m: 60 * 1000,
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000,
+  };
+
+  return amount * multipliers[unit];
+};
+
+const getSessionTtlMs = () => parseDurationMs(
+  process.env.SESSION_TTL || process.env.SESSION_TTL_SECONDS,
+  Number(process.env.SESSION_TTL_MS || 7 * 24 * 60 * 60 * 1000)
+);
+
+const getSessionExpiresAt = () => new Date(Date.now() + getSessionTtlMs());
+
 const persistSessionViaSupabaseRest = async (user, ipAddress, userAgent) => {
   const token = signToken(user);
   const tokenHash = hashToken(token);
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const expiresAt = getSessionExpiresAt();
 
   await supabaseRestRequest('sessions', {
     method: 'POST',
@@ -177,7 +206,6 @@ const loginWithSupabaseRestFallback = async (req, res) => {
 
   return res.json({
     user: sanitizeUser({ ...user, last_login: user.last_login || new Date(), email_verified: true }),
-    token,
     session_degraded: true,
   });
 };
@@ -238,16 +266,20 @@ const getPostVerificationRedirectPath = (user) => {
 };
 
 const getSessionCookieSameSite = () => {
-  const configured = String(process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
+  const configured = String(process.env.COOKIE_SAME_SITE || process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
   if (['lax', 'strict', 'none'].includes(configured)) {
     return configured;
   }
 
-  return process.env.NODE_ENV === 'production' ? 'none' : 'lax';
+  return process.env.NODE_ENV === 'production' ? 'lax' : 'lax';
 };
 
-const isSessionCookieSecure = () =>
-  getSessionCookieSameSite() === 'none' || process.env.NODE_ENV === 'production';
+const isSessionCookieSecure = () => {
+  const configured = String(process.env.COOKIE_SECURE || '').trim().toLowerCase();
+  if (['true', '1', 'yes'].includes(configured)) return true;
+  if (['false', '0', 'no'].includes(configured)) return false;
+  return getSessionCookieSameSite() === 'none' || process.env.NODE_ENV === 'production';
+};
 
 const saveRequestSession = (req) =>
   new Promise((resolve, reject) => {
@@ -379,11 +411,12 @@ const buildVerificationUrl = (token) => {
 const persistSession = async (client, user, ipAddress, userAgent) => {
   const token = signToken(user);
   const tokenHash = hashToken(token);
+  const expiresAt = getSessionExpiresAt();
 
   await client.query(
     `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
-     VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours')`,
-    [user.id, tokenHash, ipAddress, userAgent]
+     VALUES ($1, $2, $3, $4, $5)`,
+    [user.id, tokenHash, ipAddress, userAgent, expiresAt]
   );
 
   return token;
@@ -928,7 +961,7 @@ export const login = async (req, res) => {
       }
     })();
 
-    res.json({ user: sanitizeUser({ ...user, last_login: new Date(), email_verified: true }), token });
+    res.json({ user: sanitizeUser({ ...user, last_login: new Date(), email_verified: true }) });
   } catch (error) {
     console.error('Login error:', error);
     if (isDatabaseConnectivityError(error)) {
@@ -1395,11 +1428,13 @@ export const exchangeOAuthCode = async (req, res) => {
 
     await pool.query(
       `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
-       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '24 hours')`,
-      [user.id, tokenHash, ip, ua]
+       VALUES ($1, $2, $3, $4, $5)`,
+      [user.id, tokenHash, ip, ua, getSessionExpiresAt()]
     );
 
-    res.json({ user: sanitizeUser(user), token });
+    await prepareAuthenticatedSession(req, user, token);
+
+    res.json({ user: sanitizeUser(user) });
   } catch (error) {
     console.error('Exchange OAuth code error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -1683,7 +1718,6 @@ export const verifyEmailToken = async (req, res) => {
       success: true,
       message: 'Email verified successfully. Logging you in...',
       user: sanitizeUser(updatedUser),
-      token: sessionToken,
       redirectTo: getPostVerificationRedirectPath(updatedUser),
       authenticated: true,
       autoLogin: true,

@@ -2,6 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, LogIn } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { getCurrentAuthUser } from '../services/authSession.js';
 
 const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
 
@@ -226,8 +227,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
                 disabled={selectedItemIds.length === 0}
                 onClick={() => {
                   if (selectedItemIds.length === 0) return;
-                  const user = localStorage.getItem('shopCoreUser');
-                  if (!user) {
+                  if (!getCurrentAuthUser()) {
                     setShowLoginModal(true);
                   } else {
                     onClose();

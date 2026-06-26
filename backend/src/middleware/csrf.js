@@ -2,6 +2,16 @@ import crypto from 'crypto';
 
 const CSRF_TTL_MS = Number(process.env.CSRF_TOKEN_TTL_MS || 60 * 60 * 1000);
 const CSRF_SECRET = process.env.CSRF_SECRET || process.env.SESSION_SECRET || 'dev-csrf-secret';
+const getCookieSecure = () => {
+  const configured = String(process.env.COOKIE_SECURE || '').trim().toLowerCase();
+  if (['true', '1', 'yes'].includes(configured)) return true;
+  if (['false', '0', 'no'].includes(configured)) return false;
+  return process.env.NODE_ENV === 'production';
+};
+const getCookieSameSite = () => {
+  const configured = String(process.env.CSRF_COOKIE_SAME_SITE || process.env.COOKIE_SAME_SITE || '').trim().toLowerCase();
+  return ['lax', 'strict', 'none'].includes(configured) ? configured : 'strict';
+};
 const CSRF_PATH_EXEMPTIONS = new Set([
   '/auth/verify-email',
   '/payments/paymongo/webhook',
@@ -66,8 +76,8 @@ export const generateCsrfToken = (req, res, next) => {
 
     res.cookie('csrf-token', token, {
       httpOnly: false,
-      sameSite: 'strict',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: getCookieSameSite(),
+      secure: getCookieSecure(),
     });
 
     req.csrfToken = token;

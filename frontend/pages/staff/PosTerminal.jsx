@@ -5,6 +5,7 @@ import { Loader2, Search, Trash2, Plus, Minus, LogOut, RotateCcw, Monitor, Shopp
 import PaymentModal from './PaymentModal';
 import ReceiptModal from './ReceiptModal';
 import { useSocketEvent } from '../../context/SocketContext';
+import { getCurrentAuthUser } from '../../services/authSession';
 
 const PosTerminal = () => {
     const navigate = useNavigate();
@@ -53,8 +54,7 @@ const PosTerminal = () => {
     const [shiftTotalSales, setShiftTotalSales] = useState(0);
 
     // User
-    const userString = localStorage.getItem('shopCoreUser');
-    const user = userString ? JSON.parse(userString) : null;
+    const user = getCurrentAuthUser();
 
     const searchInputRef = useRef(null);
 

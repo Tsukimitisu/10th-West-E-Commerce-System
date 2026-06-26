@@ -80,6 +80,11 @@ const requiredEnvVars = [
 if (process.env.NODE_ENV === 'production') {
   requiredEnvVars.push(
     'SESSION_SECRET',
+    'SESSION_STORE',
+    'FRONTEND_ORIGIN',
+    'COOKIE_SECURE',
+    'COOKIE_SAME_SITE',
+    'CSRF_SECRET',
     'PAYMONGO_SECRET_KEY',
     'PAYMONGO_PUBLIC_KEY',
     'PAYMONGO_WEBHOOK_SECRET',
@@ -133,13 +138,36 @@ console.log('');
 const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const FRONTEND_URL = process.env.FRONTEND_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000';
 const PgSessionStore = connectPgSimple(session);
-const configuredSessionSameSite = String(process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
+const parseDurationMs = (value, fallbackMs) => {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return fallbackMs;
+  const match = text.match(/^(\d+)(ms|s|m|h|d)?$/);
+  if (!match) return fallbackMs;
+  const amount = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(amount) || amount <= 0) return fallbackMs;
+  const unit = match[2] || 's';
+  const multipliers = {
+    ms: 1,
+    s: 1000,
+    m: 60 * 1000,
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000,
+  };
+  return amount * multipliers[unit];
+};
+const configuredSessionSameSite = String(process.env.COOKIE_SAME_SITE || process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
 const sessionCookieSameSite = ['lax', 'strict', 'none'].includes(configuredSessionSameSite)
   ? configuredSessionSameSite
-  : (process.env.NODE_ENV === 'production' ? 'none' : 'lax');
-const sessionCookieSecure = sessionCookieSameSite === 'none' || process.env.NODE_ENV === 'production';
+  : 'lax';
+const configuredCookieSecure = String(process.env.COOKIE_SECURE || '').trim().toLowerCase();
+const sessionCookieSecure = ['true', '1', 'yes'].includes(configuredCookieSecure)
+  || (!['false', '0', 'no'].includes(configuredCookieSecure) && (sessionCookieSameSite === 'none' || process.env.NODE_ENV === 'production'));
+const sessionTtlMs = parseDurationMs(
+  process.env.SESSION_TTL || process.env.SESSION_TTL_SECONDS,
+  Number(process.env.SESSION_TTL_MS || 7 * 24 * 60 * 60 * 1000)
+);
 const configuredSessionStore = String(process.env.SESSION_STORE || '').trim().toLowerCase();
 const usePostgresSessionStore = configuredSessionStore === 'postgres' ||
   (process.env.NODE_ENV === 'production' && configuredSessionStore !== 'memory');
@@ -155,6 +183,11 @@ if (!usePostgresSessionStore) {
   console.warn('Using in-memory sessions. Set SESSION_STORE=postgres to persist sessions in PostgreSQL.');
 }
 
+if (process.env.NODE_ENV === 'production' && configuredSessionStore !== 'postgres') {
+  console.error('❌ SESSION_STORE=postgres is required in production.');
+  process.exit(1);
+}
+
 const sessionSecret = process.env.SESSION_SECRET;
 if (process.env.NODE_ENV === 'production' && !sessionSecret) {
   console.error('❌ SESSION_SECRET is required in production.');
@@ -167,12 +200,17 @@ if (!sessionSecret) {
 
 const effectiveSessionSecret = sessionSecret || crypto.randomBytes(48).toString('hex');
 
-// Initialize Socket.IO
-const io = initSocket(httpServer, FRONTEND_URL);
-
 // Build allowed origins for LAN access
 function getAllowedOrigins() {
   const origins = [FRONTEND_URL];
+  const extraOrigins = String(process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  origins.push(...extraOrigins);
+  if (process.env.NODE_ENV === 'production') {
+    return Array.from(new Set(origins));
+  }
   // Add all LAN IPs with the frontend port
   const port = new URL(FRONTEND_URL).port || '3000';
   const ifaces = os.networkInterfaces();
@@ -186,6 +224,26 @@ function getAllowedOrigins() {
   return origins;
 }
 const allowedOrigins = getAllowedOrigins();
+const sessionMiddleware = session({
+  ...(sessionStore ? { store: sessionStore } : {}),
+  name: 'twm.sid',
+  secret: effectiveSessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  rolling: true,
+  proxy: process.env.NODE_ENV === 'production',
+  cookie: {
+    secure: sessionCookieSecure,
+    httpOnly: true,
+    sameSite: sessionCookieSameSite,
+    path: '/',
+    maxAge: sessionTtlMs
+  }
+});
+
+// Initialize Socket.IO after session middleware is created so sockets can use
+// the same HttpOnly session cookie as HTTP requests.
+const io = initSocket(httpServer, allowedOrigins, { sessionMiddleware });
 
 // Middleware
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 0);
@@ -256,22 +314,7 @@ app.use(express.json({
   },
 }));
 app.use(express.urlencoded({ extended: true }));
-app.use(session({
-  ...(sessionStore ? { store: sessionStore } : {}),
-  name: 'twm.sid',
-  secret: effectiveSessionSecret,
-  resave: false,
-  saveUninitialized: false,
-  rolling: true,
-  proxy: process.env.NODE_ENV === 'production',
-  cookie: {
-    secure: sessionCookieSecure,
-    httpOnly: true,
-    sameSite: sessionCookieSameSite,
-    path: '/',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-  }
-}));
+app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(activityLogger);
 app.use('/api', apiLimiter);
@@ -303,6 +346,9 @@ app.get('/api/ready', async (_req, res) => {
       paymongo_missing: getPaymongoConfigurationStatus().configured ? [] : getPaymongoConfigurationStatus().missing,
       jnt: getJntConfigurationStatus().mock ? 'mock' : (getJntConfigurationStatus().configured ? 'configured' : 'not_configured'),
       jnt_missing: getJntConfigurationStatus().configured || getJntConfigurationStatus().mock ? [] : getJntConfigurationStatus().missing,
+      session_store: usePostgresSessionStore ? 'postgres' : 'memory',
+      cookie_secure: sessionCookieSecure,
+      cookie_same_site: sessionCookieSameSite,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

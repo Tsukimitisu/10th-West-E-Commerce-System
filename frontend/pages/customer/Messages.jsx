@@ -16,6 +16,7 @@ import {
   sendConversationMessage,
 } from '../../services/api';
 import { useSocket } from '../../context/SocketContext';
+import { getCurrentAuthUser } from '../../services/authSession';
 
 const formatTime = (value) => {
   if (!value) return '';
@@ -35,14 +36,6 @@ const resolveImageUrl = (url) => {
   if (/^https?:\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) return url;
   if (url.startsWith('/')) return `${API_ORIGIN}${url}`;
   return url;
-};
-
-const getCurrentUser = () => {
-  try {
-    return JSON.parse(localStorage.getItem('shopCoreUser') || 'null');
-  } catch {
-    return null;
-  }
 };
 
 const mergeConversation = (items, next) => {
@@ -154,7 +147,7 @@ const MessageBubble = ({ message, currentUserId }) => {
 const Messages = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentUser = useMemo(getCurrentUser, []);
+  const currentUser = useMemo(() => getCurrentAuthUser(), []);
   const { connected, emit, on, off } = useSocket();
   const [conversations, setConversations] = useState([]);
   const [selectedId, setSelectedId] = useState(() => Number(searchParams.get('conversation')) || null);

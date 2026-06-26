@@ -5,6 +5,7 @@ import AccountLayout from '../../components/customer/AccountLayout';
 import AddressDropdowns from '../../components/AddressDropdowns';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
+import { getCurrentAuthUser } from '../../services/authSession.js';
 
 const buildAddressForm = (overrides = {}) => ({
   label: 'Home',
@@ -44,16 +45,11 @@ const AddressBook = () => {
   const normalizeText = (value) => String(value || '').trim();
 
   const getAccountContactDefaults = () => {
-    try {
-      const rawUser = localStorage.getItem('shopCoreUser');
-      const user = rawUser ? JSON.parse(rawUser) : null;
-      return {
-        name: normalizeText(user?.name || ''),
-        phone: formatPhone(user?.phone || ''),
-      };
-    } catch {
-      return { name: '', phone: '' };
-    }
+    const user = getCurrentAuthUser();
+    return {
+      name: normalizeText(user?.name || ''),
+      phone: formatPhone(user?.phone || ''),
+    };
   };
 
   const resetForm = () => {
@@ -81,8 +77,7 @@ const AddressBook = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const userData = localStorage.getItem('shopCoreUser');
-        const user = userData ? JSON.parse(userData) : null;
+        const user = getCurrentAuthUser();
         if (!user) { setLoading(false); return; }
         const data = await getAddresses(user.id); setAddresses(data);
       } catch {}

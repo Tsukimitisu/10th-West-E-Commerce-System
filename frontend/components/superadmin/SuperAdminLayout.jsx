@@ -1,11 +1,12 @@
 ﻿import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Shield, Settings, Activity,
   Database, LogOut, Menu, X, ChevronLeft,
   KeyRound, Wifi, WifiOff
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
+import { logoutApi } from '../../services/api';
+import { clearCurrentAuthUser } from '../../services/authSession';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -17,7 +18,6 @@ const NAV_ITEMS = [
 ];
 
 const SuperAdminLayout = ({ activeView, onNavigate, user, children }) => {
-  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -28,12 +28,15 @@ const SuperAdminLayout = ({ activeView, onNavigate, user, children }) => {
     setMobileOpen(false);
   };
 
-  const confirmLogout = () => {
-    localStorage.removeItem('shopCoreUser');
-    localStorage.removeItem('shopCoreToken');
+  const confirmLogout = async () => {
+    try {
+      await logoutApi();
+    } catch {
+      // Continue with local session cleanup.
+    }
+    clearCurrentAuthUser();
     setShowLogoutConfirm(false);
     window.location.href = window.location.origin + window.location.pathname + '#/login';
-    window.location.reload();
   };
 
   const SidebarContent = ({ mobile = false }) => (

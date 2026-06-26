@@ -9,6 +9,7 @@ import {
   adminResetUserPassword, adminUpdateUserRole,
   addStaff, editStaff, adminDeleteUser
 } from '../../services/api';
+import { getCurrentAuthUser } from '../../services/authSession';
 
 const ROLES = [
   { value: 'super_admin', label: 'Super Admin', color: 'bg-red-50 text-red-600 border-red-200' },
@@ -34,7 +35,7 @@ const UserManagementView = () => {
   const [resetPwForm, setResetPwForm] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const currentUser = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
+  const currentUser = getCurrentAuthUser() || {};
 
   const loadUsers = async () => {
     setLoading(true);

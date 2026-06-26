@@ -1,5 +1,6 @@
 import { Role, OrderStatus, ReturnStatus } from '../types.js';
 import { supabase } from './supabase.js';
+import { clearCurrentAuthUser, getCurrentAuthUser } from './authSession.js';
 
 // Configuration
 const API_URL = import.meta.env.VITE_API_URL || (() => {
@@ -113,11 +114,6 @@ const sanitizeClientUrlArray = (value, maxItems = 9) => {
   });
 
   return cleaned.slice(0, maxItems);
-};
-
-// Helper function to get auth token
-const getAuthToken = () => {
-  return localStorage.getItem('shopCoreToken');
 };
 
 let csrfTokenCache = {
@@ -304,9 +300,7 @@ export const initializeSecurityContext = ({
 };
 
 const clearAuthSession = () => {
-  localStorage.removeItem('shopCoreUser');
-  localStorage.removeItem('shopCoreToken');
-  window.dispatchEvent(new Event('auth:changed'));
+  clearCurrentAuthUser();
 };
 
 const AUTH_FAILURE_CODES = new Set([
@@ -316,16 +310,9 @@ const AUTH_FAILURE_CODES = new Set([
   'AUTH_ACCOUNT_DEACTIVATED',
 ]);
 
-const isSessionAuthFailure = (status, responseBody = {}, token = '') => {
+const isSessionAuthFailure = (status, responseBody = {}) => {
   const code = String(responseBody.code || '').toUpperCase();
-  const isSupabaseToken = typeof token === 'string' && token.startsWith('sb-token-');
   if (code.startsWith('CSRF_')) return false;
-
-  // Supabase fallback mode stores a local token shape (`sb-token-*`) that is not a backend JWT.
-  // Treat backend AUTH_INVALID_TOKEN as a request-level error, not a global session-expiry event.
-  if (isSupabaseToken && code === 'AUTH_INVALID_TOKEN') {
-    return false;
-  }
 
   if (AUTH_FAILURE_CODES.has(code)) {
     return true;
@@ -341,10 +328,6 @@ const isSessionAuthFailure = (status, responseBody = {}, token = '') => {
   const reauthHint = message.includes('log in again') || message.includes('login again') || message.includes('access token required');
   const deactivatedHint = message.includes('account deactivated');
 
-  if (isSupabaseToken && tokenHint) {
-    return false;
-  }
-
   if (status === 401) {
     return tokenHint || sessionHint || reauthHint || deactivatedHint;
   }
@@ -358,13 +341,7 @@ const isSessionAuthFailure = (status, responseBody = {}, token = '') => {
 
 // Helper: get current user info from token (for Supabase custom auth)
 const getCurrentUserFromToken = () => {
-  const token = getAuthToken();
-  if (!token || !token.startsWith('sb-token-')) return null;
-  try {
-    return JSON.parse(atob(token.replace('sb-token-', '')));
-  } catch {
-    return null;
-  }
+  return getCurrentAuthUser();
 };
 
 // Helper: log staff activity to activity_logs table via Supabase
@@ -394,7 +371,6 @@ const authenticatedFetch = async (url, options = {}) => {
     skipCsrf = false,
     ...requestOptions
   } = options;
-  const token = getAuthToken();
   const headers = {
     ...(requestOptions.headers || {}),
   };
@@ -407,10 +383,6 @@ const authenticatedFetch = async (url, options = {}) => {
 
   if (!hasContentTypeHeader && !isFormDataBody && !isBlobBody) {
     headers['Content-Type'] = 'application/json';
-  }
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
   }
 
   if (isStateChangingMethod && !hasCsrfHeader && !skipCsrf) {
@@ -484,7 +456,7 @@ const authenticatedFetch = async (url, options = {}) => {
   }
 
   if (!response.ok) {
-    if (token && isSessionAuthFailure(response.status, responseBody, token)) {
+    if (isSessionAuthFailure(response.status, responseBody)) {
       clearAuthSession();
       window.dispatchEvent(new Event('auth:session-expired'));
     }
@@ -581,7 +553,7 @@ export const login = async (email, password, totp_code) => {
     return { user: {}, token: '', requires_2fa: true };
   }
 
-  return { user: data.user, token: data.token };
+  return { user: data.user, token: '' };
 };
 
 export const register = async (name, email, password, confirmPassword, consentData = {}, otp = '') => {
@@ -635,7 +607,7 @@ export const sendRegistrationOtp = async (email, name) => {
 
 export const logoutApi = async () => {
   if (USE_SUPABASE) {
-    localStorage.removeItem('shopCoreToken');
+    clearCurrentAuthUser();
     return;
   }
   await authenticatedFetch(`${API_URL}/auth/logout`, { method: 'POST' });
@@ -644,10 +616,9 @@ export const logoutApi = async () => {
 // Get authenticated user profile (used by OAuth callback to avoid PII in URL)
 export const getProfile = async () => {
   if (USE_SUPABASE) {
-    const tokenData = localStorage.getItem('shopCoreToken');
-    if (!tokenData) throw new Error('Not authenticated');
-    const payload = JSON.parse(atob(tokenData.replace('sb-token-', '')));
-    const { data, error } = await supabase.from('users').select('*').eq('id', payload.id).single();
+    const cachedUser = getCurrentAuthUser();
+    if (!cachedUser?.id) throw new Error('Not authenticated');
+    const { data, error } = await supabase.from('users').select('*').eq('id', cachedUser.id).single();
     if (error || !data) throw new Error('User not found');
     return {
       id: data.id, name: data.name, email: data.email, role: data.role,
@@ -661,7 +632,7 @@ export const getProfile = async () => {
 // Delete account - Right to be Forgotten (RA 10173 Â§18)
 export const deleteAccount = async (password) => {
   if (USE_SUPABASE) {
-    const user = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
+    const user = getCurrentAuthUser() || {};
     if (!user.id) throw new Error('Not authenticated');
 
     // Require password confirmation for password-based accounts.
@@ -693,7 +664,7 @@ export const deleteAccount = async (password) => {
 // Data export / portability - RA 10173 Â§18
 export const exportMyData = async () => {
   if (USE_SUPABASE) {
-    const user = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
+    const user = getCurrentAuthUser() || {};
     if (!user.id) throw new Error('Not authenticated');
     const { data: userData } = await supabase.from('users').select('id, name, email, phone, role, created_at, last_login').eq('id', user.id).single();
     const { data: orders } = await supabase.from('orders').select('id, status, total_amount, created_at').eq('user_id', user.id);
@@ -805,8 +776,7 @@ export const exchangeOAuthCode = async (code) => {
     body: JSON.stringify({ code }),
   });
   if (USE_SUPABASE && data && data.user) {
-    const token = "sb-token-" + btoa(JSON.stringify({ id: data.user.id, email: data.user.email, role: data.user.role }));
-    return { user: data.user, token };
+    return { user: data.user, token: '' };
   }
   return data;
 };
@@ -1001,18 +971,7 @@ const normalizeProductPublicationStatus = (value) => {
 };
 
 const canCurrentUserViewDraftProducts = () => {
-  const roleFromProfile = (() => {
-    if (typeof localStorage === 'undefined') return '';
-    try {
-      const parsed = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
-      return String(parsed?.role || '').trim().toLowerCase();
-    } catch {
-      return '';
-    }
-  })();
-
-  const fallbackRole = String(getCurrentUserFromToken()?.role || '').trim().toLowerCase();
-  const normalizedRole = roleFromProfile || fallbackRole;
+  const normalizedRole = String(getCurrentAuthUser()?.role || getCurrentUserFromToken()?.role || '').trim().toLowerCase();
   return PRODUCT_MANAGEMENT_ROLES.has(normalizedRole);
 };
 
@@ -2052,8 +2011,7 @@ export const getSellerChatUnreadCount = async () => {
 export const uploadProductImage = async (file) => {
   if (!file) throw new Error('Image file is required');
 
-  const token = getAuthToken();
-  if (!token) throw new Error('You must be logged in to upload images');
+  if (!getCurrentAuthUser()) throw new Error('You must be logged in to upload images');
 
   const data = await authenticatedFetch(`${API_URL}/products/upload-image`, {
     method: 'POST',
@@ -2076,8 +2034,7 @@ export const uploadProductImage = async (file) => {
 export const uploadProductVideo = async (file) => {
   if (!file) throw new Error('Video file is required');
 
-  const token = getAuthToken();
-  if (!token) throw new Error('You must be logged in to upload videos');
+  if (!getCurrentAuthUser()) throw new Error('You must be logged in to upload videos');
 
   const data = await authenticatedFetch(`${API_URL}/products/upload-video`, {
     method: 'POST',
@@ -4822,8 +4779,7 @@ export const updateProfile = async (userId, updates) => {
 export const uploadProfileAvatar = async (file) => {
   if (!file) throw new Error('Image file is required.');
 
-  const token = getAuthToken();
-  if (!token) throw new Error('You must be logged in to upload a profile picture.');
+  if (!getCurrentAuthUser()) throw new Error('You must be logged in to upload a profile picture.');
 
   const data = await authenticatedFetch(`${API_URL}/users/profile/avatar`, {
     method: 'POST',

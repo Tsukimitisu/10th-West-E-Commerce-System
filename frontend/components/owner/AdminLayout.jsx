@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
 import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, logoutApi } from '../../services/api';
+import { clearCurrentAuthUser } from '../../services/authSession';
 
 const createNavItems = (badges = {}) => [
   // Core
@@ -238,8 +239,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
     } catch (e) {
       // Ignore logout API errors
     }
-    localStorage.removeItem('shopCoreUser');
-    localStorage.removeItem('shopCoreToken');
+    clearCurrentAuthUser();
     setShowLogoutConfirm(false);
     // Call parent logout handler to clear React user state
     if (parentLogout) {

@@ -2,6 +2,7 @@
 import { User, Mail, Phone, Lock, Eye, EyeOff, Save, Check, AlertCircle, Shield, Camera, Trash2, AlertTriangle, Download } from 'lucide-react';
 import { updateProfile, uploadProfileAvatar, changePassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
+import { clearCurrentAuthUser, getCurrentAuthUser, setCurrentAuthUser, subscribeAuthChanges } from '../../services/authSession';
 
 const ALLOWED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
@@ -12,8 +13,7 @@ const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}
 const normalizePhoneInput = (value) => String(value || '').trim().replace(/[\s()-]/g, '');
 
 const Profile = () => {
-  const userData = localStorage.getItem('shopCoreUser');
-  const user = userData ? JSON.parse(userData) : null;
+  const [user, setUser] = useState(() => getCurrentAuthUser());
 
   const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '', phone: user?.phone || '' });
   const [passData, setPassData] = useState({ current: '', new: '', confirm: '' });
@@ -39,6 +39,26 @@ const Profile = () => {
   const [avatarError, setAvatarError] = useState('');
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef(null);
+
+  const saveAuthUser = (nextUser) => {
+    setCurrentAuthUser(nextUser);
+    setUser(nextUser);
+  };
+
+  useEffect(() => (
+    subscribeAuthChanges(() => {
+      const nextUser = getCurrentAuthUser();
+      setUser(nextUser);
+      if (nextUser) {
+        setForm({
+          name: nextUser.name || '',
+          email: nextUser.email || '',
+          phone: nextUser.phone || '',
+        });
+        setTwoFAEnabled(Boolean(nextUser.two_factor_enabled));
+      }
+    })
+  ), []);
 
   useEffect(() => {
     if (!avatarFile) {
@@ -172,8 +192,7 @@ const Profile = () => {
       try {
         const avatarUrl = await uploadProfileAvatar(avatarFile);
         const saved = { ...user, avatar: avatarUrl };
-        localStorage.setItem('shopCoreUser', JSON.stringify(saved));
-        window.dispatchEvent(new Event('auth:changed'));
+        saveAuthUser(saved);
         setAvatarFile(null);
         setAvatarPreview(avatarUrl || '');
         resetAvatarInput();
@@ -210,8 +229,7 @@ const Profile = () => {
       const profileUpdateResult = await updateProfile(user?.id, { ...sanitized, avatar: avatarUrl });
       const updated = profileUpdateResult?.user || {};
       const saved = { ...user, ...updated };
-      localStorage.setItem('shopCoreUser', JSON.stringify(saved));
-      window.dispatchEvent(new Event('auth:changed'));
+      saveAuthUser(saved);
       setForm({
         name: updated.name || '',
         email: updated.email || '',
@@ -289,7 +307,7 @@ const Profile = () => {
       setTwoFASetup(null);
       setTotpCode('');
       const saved = { ...user, two_factor_enabled: true };
-      localStorage.setItem('shopCoreUser', JSON.stringify(saved));
+      saveAuthUser(saved);
     } catch {}
   };
 
@@ -300,7 +318,7 @@ const Profile = () => {
       await disable2FA(password);
       setTwoFAEnabled(false);
       const saved = { ...user, two_factor_enabled: false };
-      localStorage.setItem('shopCoreUser', JSON.stringify(saved));
+      saveAuthUser(saved);
     } catch {}
   };
 
@@ -314,10 +332,8 @@ const Profile = () => {
     setDeleteError('');
     try {
       await deleteAccount(deletePassword);
-      localStorage.removeItem('shopCoreUser');
-      localStorage.removeItem('shopCoreToken');
+      clearCurrentAuthUser();
       window.location.href = '/#/login';
-      window.location.reload();
     } catch (err) {
       setDeleteError(err.message || 'Failed to delete account');
     } finally {
