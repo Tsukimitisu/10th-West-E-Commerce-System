@@ -1,10 +1,7 @@
 import pool from '../config/database.js';
-import Stripe from 'stripe';
 import { emitReturnCreated, emitReturnUpdated, emitStockUpdate } from '../socket.js';
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
 import { createNotification as createUserNotification } from '../utils/notifications.js';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
 const ensureReturnReviewColumns = async () => {
   // Schema is managed exclusively by Knex migrations.
@@ -512,19 +509,9 @@ export const processRefund = async (req, res) => {
 
       refundReference = 'STORE_CREDIT_' + id;
     } else {
-      // Process refund via Stripe (if payment_intent_id exists)
       if (returnData.payment_intent_id) {
-        try {
-          const refund = await stripe.refunds.create({
-            payment_intent: returnData.payment_intent_id,
-            amount: Math.round(parseFloat(returnData.refund_amount) * 100), // Convert to cents
-          });
-          refundReference = refund.id;
-        } catch (stripeError) {
-          console.error('Stripe refund error:', stripeError);
-          await client.query('ROLLBACK');
-          return res.status(500).json({ message: 'Stripe refund failed: ' + stripeError.message });
-        }
+        await client.query('ROLLBACK');
+        return res.status(501).json({ message: 'Legacy Stripe refunds are not supported. Use the PayMongo refund workflow.' });
       } else {
         refundReference = 'MANUAL_REFUND_' + id;
       }

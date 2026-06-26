@@ -1,5 +1,4 @@
 import pool from '../config/database.js';
-import Stripe from 'stripe';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { ORDER_STATUSES, STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
@@ -15,7 +14,6 @@ import {
 import { ensurePaymentOrderColumns } from './paymentController.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
 const STAFF_ROLES = STAFF_ROLE_SET;
 const VALID_ORDER_STATUSES = ORDER_STATUSES;
 const ORDER_STATUS_SQL_LIST = ORDER_STATUSES.map((status) => `'${status}'`).join(', ');
@@ -1299,7 +1297,7 @@ export const createOrder = async (req, res) => {
     // Respect the payment method from the frontend for online orders
     const resolvedPaymentMethod = source === 'pos'
       ? (payment_method || 'cash')
-      : (payment_method || 'stripe');
+      : (payment_method || 'gcash');
     const isCashOnDelivery = source !== 'pos' && String(resolvedPaymentMethod || '').toLowerCase() === 'cod';
     const resolvedCashierId = source === 'pos' ? (cashier_id || req.user?.id || null) : null;
     const resolvedAddressSnapshot = initialAddressSnapshot;
