@@ -1,16 +1,14 @@
 import bigsellerProvider from './bigsellerProvider.js';
 import mockProvider from './mockShippingProvider.js';
-import payreconProvider from './payreconProvider.js';
 import { ProviderError } from '../providerError.js';
 
 const PROVIDERS = {
   bigseller: bigsellerProvider,
   mock: mockProvider,
-  payrecon: payreconProvider,
 };
 
 export const getSelectedShippingProviderName = () => String(
-  process.env.SHIPPING_PROVIDER || 'payrecon'
+  process.env.SHIPPING_PROVIDER || 'bigseller'
 ).trim().toLowerCase();
 
 export const getShippingProvider = (name = getSelectedShippingProviderName()) => {

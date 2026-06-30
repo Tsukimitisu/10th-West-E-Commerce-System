@@ -4,7 +4,10 @@ import { configuration } from '../../shipping/providers/providerUtils.js';
 const PROVIDER = 'trackingmore';
 const REQUIRED = ['TRACKINGMORE_API_KEY', 'TRACKINGMORE_WEBHOOK_SECRET'];
 
-export const getConfigurationStatus = () => configuration(PROVIDER, REQUIRED);
+export const getConfigurationStatus = () => configuration(PROVIDER, REQUIRED, {
+  markets: ['PH'],
+  carriers: ['jtexpress-ph'],
+});
 export const validateConfig = getConfigurationStatus;
 
 const unavailable = (operation) => {

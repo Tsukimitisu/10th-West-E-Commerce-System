@@ -3,7 +3,16 @@ export const envValue = (name) => {
   return value || null;
 };
 
-export const configuration = (provider, requiredNames, { implemented = false, mock = false } = {}) => {
+export const configuration = (
+  provider,
+  requiredNames,
+  {
+    implemented = false,
+    mock = false,
+    markets = [],
+    carriers = [],
+  } = {}
+) => {
   const missing = requiredNames.filter((name) => !envValue(name));
   const productionBlocked = mock && process.env.NODE_ENV === 'production';
   return {
@@ -13,6 +22,8 @@ export const configuration = (provider, requiredNames, { implemented = false, mo
     mock,
     productionBlocked,
     missing,
+    markets,
+    carriers,
     ready: missing.length === 0 && implemented && !productionBlocked,
     status: productionBlocked
       ? 'blocked_in_production'

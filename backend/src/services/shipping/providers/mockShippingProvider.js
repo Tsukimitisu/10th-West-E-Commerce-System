@@ -7,7 +7,12 @@ const assertDevelopment = () => {
 };
 const orderToken = (payload) => String(payload?.order?.id || payload?.orderId || 'UNKNOWN');
 
-export const getConfigurationStatus = () => configuration(PROVIDER, [], { implemented: true, mock: true });
+export const getConfigurationStatus = () => configuration(PROVIDER, [], {
+  implemented: true,
+  mock: true,
+  markets: ['PH'],
+  carriers: ['jtexpress-ph'],
+});
 export const validateConfig = getConfigurationStatus;
 
 export const calculateRates = async () => {
@@ -32,6 +37,7 @@ export const createShipment = async (payload) => {
     shipment_id: `MOCK-SHIP-${token}`,
     trackingNumber: `MOCK-TRACK-${token}`,
     tracking_number: `MOCK-TRACK-${token}`,
+    courierSlug: 'jtexpress-ph',
     providerStatus: 'booked',
     normalizedStatus: 'booked',
     status: 'booked',

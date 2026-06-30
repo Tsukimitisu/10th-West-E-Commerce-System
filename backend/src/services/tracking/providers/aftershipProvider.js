@@ -6,7 +6,11 @@ const PROVIDER = 'aftership';
 const REQUIRED = ['AFTERSHIP_API_KEY', 'AFTERSHIP_WEBHOOK_SECRET'];
 const DEFAULT_BASE_URL = 'https://api.aftership.com/tracking/2026-01';
 
-export const getConfigurationStatus = () => configuration(PROVIDER, REQUIRED, { implemented: true });
+export const getConfigurationStatus = () => configuration(PROVIDER, REQUIRED, {
+  implemented: true,
+  markets: ['PH'],
+  carriers: ['jtexpress-ph'],
+});
 export const validateConfig = getConfigurationStatus;
 
 const assertConfigured = () => {
@@ -62,12 +66,13 @@ const normalizeTracking = (data) => {
 };
 
 export const registerTracking = async ({ trackingNumber, courierSlug, orderId }) => {
+  const selectedCourier = courierSlug || envValue('SHIPPING_CARRIER') || 'jtexpress-ph';
   const data = await request('/trackings', {
     method: 'POST',
     body: JSON.stringify({
       tracking: {
         tracking_number: trackingNumber,
-        ...(courierSlug ? { slug: courierSlug } : {}),
+        slug: selectedCourier,
         ...(orderId ? { order_number: String(orderId), title: `Order ${orderId}` } : {}),
       },
     }),

@@ -12,7 +12,7 @@ const PROVIDERS = {
 };
 
 export const getSelectedTrackingProviderName = () => String(
-  process.env.TRACKING_PROVIDER || 'shipping_provider'
+  process.env.TRACKING_PROVIDER || 'aftership'
 ).trim().toLowerCase();
 
 export const getTrackingProvider = (name = getSelectedTrackingProviderName()) => {

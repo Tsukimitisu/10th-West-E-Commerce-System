@@ -91,3 +91,11 @@ test('TrackingMore remains a safe shell without credentials or an assumed contra
     );
   });
 });
+
+test('selectable tracking providers declare Philippine carrier support', () => {
+  for (const provider of [aftershipProvider, trackingMoreProvider]) {
+    const status = provider.getConfigurationStatus();
+    assert.ok(status.markets.includes('PH'));
+    assert.ok(status.carriers.includes('jtexpress-ph'));
+  }
+});

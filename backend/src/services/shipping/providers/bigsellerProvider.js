@@ -1,5 +1,5 @@
 import { notConfigured, notImplemented } from '../providerError.js';
-import { configuration } from './providerUtils.js';
+import { configuration, envValue } from './providerUtils.js';
 
 const PROVIDER = 'bigseller';
 // BigSeller Open API access and its private contract must be approved before the
@@ -11,6 +11,7 @@ const REQUIRED = [
   'BIGSELLER_ACCESS_TOKEN',
   'BIGSELLER_WEBHOOK_SECRET',
   'BIGSELLER_WAREHOUSE_ID',
+  'BIGSELLER_JT_PH_VIP_CODE',
   'SHIPPER_NAME',
   'SHIPPER_PHONE',
   'SHIPPER_ADDRESS_LINE1',
@@ -18,7 +19,23 @@ const REQUIRED = [
   'SHIPPER_POSTAL_CODE',
 ];
 
-export const getConfigurationStatus = () => configuration(PROVIDER, REQUIRED);
+export const getConfigurationStatus = () => {
+  const status = configuration(PROVIDER, REQUIRED, {
+    markets: ['PH'],
+    carriers: ['jtexpress-ph'],
+  });
+  const supportedRoute = (
+    (envValue('SHIPPING_COUNTRY') || 'PH').toUpperCase() === 'PH'
+    && (envValue('SHIPPING_CARRIER') || 'jtexpress-ph').toLowerCase() === 'jtexpress-ph'
+  );
+  return {
+    ...status,
+    configured: status.configured && supportedRoute,
+    ready: status.ready && supportedRoute,
+    supportedRoute,
+    status: supportedRoute ? status.status : 'unsupported_market_or_carrier',
+  };
+};
 export const validateConfig = getConfigurationStatus;
 
 const unavailable = (operation) => {

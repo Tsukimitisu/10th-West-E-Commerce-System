@@ -2,22 +2,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import bigsellerProvider from './bigsellerProvider.js';
 import mockProvider from './mockShippingProvider.js';
-import payreconProvider from './payreconProvider.js';
 import { getShippingProvider } from './index.js';
 
 const ENV_NAMES = [
   'NODE_ENV',
-  'PAYRECON_API_BASE_URL',
-  'PAYRECON_API_KEY',
-  'PAYRECON_API_SECRET',
-  'PAYRECON_WEBHOOK_SECRET',
-  'PAYRECON_ACCOUNT_ID',
   'BIGSELLER_API_BASE_URL',
   'BIGSELLER_APP_KEY',
   'BIGSELLER_APP_SECRET',
   'BIGSELLER_ACCESS_TOKEN',
   'BIGSELLER_WEBHOOK_SECRET',
   'BIGSELLER_WAREHOUSE_ID',
+  'BIGSELLER_JT_PH_VIP_CODE',
+  'SHIPPING_COUNTRY',
+  'SHIPPING_CARRIER',
   'SHIPPER_NAME',
   'SHIPPER_PHONE',
   'SHIPPER_ADDRESS_LINE1',
@@ -39,36 +36,6 @@ const withEnvironment = async (values, callback) => {
   }
 };
 
-test('PayRecon reports missing credentials without fabricating a booking', async () => {
-  await withEnvironment({ NODE_ENV: 'test' }, async () => {
-    await assert.rejects(
-      () => payreconProvider.createShipment({ order: { id: 42 } }),
-      (error) => error.code === 'PROVIDER_NOT_CONFIGURED' && error.status === 503
-    );
-  });
-});
-
-test('PayRecon fails as not implemented when credentials exist but no verified contract exists', async () => {
-  await withEnvironment({
-    NODE_ENV: 'test',
-    PAYRECON_API_BASE_URL: 'https://provider.invalid',
-    PAYRECON_API_KEY: 'test-key',
-    PAYRECON_API_SECRET: 'test-secret',
-    PAYRECON_WEBHOOK_SECRET: 'test-webhook',
-    PAYRECON_ACCOUNT_ID: 'test-account',
-    SHIPPER_NAME: 'Test Store',
-    SHIPPER_PHONE: '09170000000',
-    SHIPPER_ADDRESS_LINE1: 'Test address',
-    SHIPPER_CITY: 'Quezon City',
-    SHIPPER_POSTAL_CODE: '1100',
-  }, async () => {
-    await assert.rejects(
-      () => payreconProvider.generateWaybill({ order: { id: 42 } }),
-      (error) => error.code === 'PROVIDER_NOT_IMPLEMENTED' && error.status === 501
-    );
-  });
-});
-
 test('BigSeller distinguishes missing credentials from an unavailable private contract', async () => {
   await withEnvironment({ NODE_ENV: 'test' }, async () => {
     await assert.rejects(
@@ -84,6 +51,9 @@ test('BigSeller distinguishes missing credentials from an unavailable private co
     BIGSELLER_ACCESS_TOKEN: 'test-token',
     BIGSELLER_WEBHOOK_SECRET: 'test-webhook',
     BIGSELLER_WAREHOUSE_ID: 'warehouse-1',
+    BIGSELLER_JT_PH_VIP_CODE: 'MNL-V0123',
+    SHIPPING_COUNTRY: 'PH',
+    SHIPPING_CARRIER: 'jtexpress-ph',
     SHIPPER_NAME: 'Test Store',
     SHIPPER_PHONE: '09170000000',
     SHIPPER_ADDRESS_LINE1: 'Test address',
@@ -94,6 +64,31 @@ test('BigSeller distinguishes missing credentials from an unavailable private co
       () => bigsellerProvider.calculateRates({}),
       (error) => error.code === 'PROVIDER_NOT_IMPLEMENTED'
     );
+  });
+});
+
+test('BigSeller configuration rejects routes outside its verified Philippine carrier path', async () => {
+  await withEnvironment({
+    NODE_ENV: 'test',
+    BIGSELLER_API_BASE_URL: 'https://provider.invalid',
+    BIGSELLER_APP_KEY: 'test-key',
+    BIGSELLER_APP_SECRET: 'test-secret',
+    BIGSELLER_ACCESS_TOKEN: 'test-token',
+    BIGSELLER_WEBHOOK_SECRET: 'test-webhook',
+    BIGSELLER_WAREHOUSE_ID: 'warehouse-1',
+    BIGSELLER_JT_PH_VIP_CODE: 'MNL-V0123',
+    SHIPPING_COUNTRY: 'SG',
+    SHIPPING_CARRIER: 'jtexpress-ph',
+    SHIPPER_NAME: 'Test Store',
+    SHIPPER_PHONE: '09170000000',
+    SHIPPER_ADDRESS_LINE1: 'Test address',
+    SHIPPER_CITY: 'Quezon City',
+    SHIPPER_POSTAL_CODE: '1100',
+  }, async () => {
+    const status = bigsellerProvider.getConfigurationStatus();
+    assert.equal(status.supportedRoute, false);
+    assert.equal(status.configured, false);
+    assert.equal(status.status, 'unsupported_market_or_carrier');
   });
 });
 
@@ -124,5 +119,17 @@ test('unknown shipping provider is rejected', () => {
   assert.throws(
     () => getShippingProvider('unknown'),
     (error) => error.code === 'UNSUPPORTED_SHIPPING_PROVIDER' && error.status === 503
+  );
+});
+
+test('every selectable shipping provider declares Philippine carrier support', () => {
+  for (const provider of [bigsellerProvider, mockProvider]) {
+    const status = provider.getConfigurationStatus();
+    assert.ok(status.markets.includes('PH'));
+    assert.ok(status.carriers.includes('jtexpress-ph'));
+  }
+  assert.throws(
+    () => getShippingProvider('payrecon'),
+    (error) => error.code === 'UNSUPPORTED_SHIPPING_PROVIDER'
   );
 });
