@@ -124,9 +124,9 @@ const ResetPassword = () => {
   // Loading state while checking token
   if (tokenChecking) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-12">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-sm p-8 text-center">
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
             <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
               <Lock size={24} className="text-red-500" />
             </div>
@@ -140,7 +140,7 @@ const ResetPassword = () => {
   // Invalid or expired token
   if (tokenValid === false) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-12">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <Link to="/" className="inline-flex">
@@ -149,12 +149,12 @@ const ResetPassword = () => {
               </div>
             </Link>
           </div>
-          <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-sm p-8 text-center">
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
               <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Clock size={32} className="text-red-500" />
               </div>
-              <h2 className="font-display font-semibold text-xl text-white mb-2">Link Expired or Invalid</h2>
-              <p className="text-sm text-gray-400 mb-2">{error || 'This password reset link is invalid or has expired.'}</p>
+              <h1 className="font-display font-semibold text-xl text-slate-950 mb-2">Link expired or invalid</h1>
+              <p className="text-sm text-slate-600 mb-2">{error || 'This password reset link is invalid or has expired.'}</p>
               <p className="text-xs text-gray-400 mb-6">Reset links expire after 1 hour for your security (RA 10173 Â§20).</p>
             <Link to="/forgot-password" className="inline-flex items-center gap-2 px-6 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">
               Request New Link
@@ -169,7 +169,7 @@ const ResetPassword = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-12">
+    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex">
@@ -179,14 +179,14 @@ const ResetPassword = () => {
           </Link>
         </div>
 
-        <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-sm p-8">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_18px_50px_rgba(15,23,42,0.09)]">
           {success ? (
             <div className="text-center animate-fade-in">
               <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle size={32} className="text-green-500" />
               </div>
-              <h2 className="font-display font-semibold text-xl text-white mb-2">Password Reset!</h2>
-              <p className="text-sm text-gray-400 mb-1">Your password has been successfully reset.</p>
+              <h1 className="font-display font-semibold text-xl text-slate-950 mb-2">Password reset</h1>
+              <p className="text-sm text-slate-600 mb-1">Your password has been successfully reset.</p>
               <p className="text-xs text-gray-400 mb-6">All other active sessions have been terminated for your security.</p>
               <Link to="/login" className="inline-flex items-center gap-2 px-6 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">
                 Sign In with New Password
@@ -198,8 +198,8 @@ const ResetPassword = () => {
                 <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Lock size={24} className="text-red-500" />
                 </div>
-                <h2 className="font-display font-semibold text-xl text-white mb-1">Reset Password</h2>
-                <p className="text-sm text-gray-400">Create a strong, unique password for your account.</p>
+                <h1 className="font-display font-semibold text-xl text-slate-950 mb-1">Reset password</h1>
+                <p className="text-sm text-slate-600">Create a strong, unique password for your account.</p>
                 {tokenInfo?.email && (
                   <p className="mt-2 text-xs text-gray-400">Resetting password for <span className="font-medium text-gray-300">{tokenInfo.email}</span></p>
                 )}
@@ -318,7 +318,7 @@ const ResetPassword = () => {
           Protected under RA 10173 (Data Privacy Act of 2012). Your personal data is processed securely.
         </p>
       </div>
-    </div>
+    </main>
   );
 };
 

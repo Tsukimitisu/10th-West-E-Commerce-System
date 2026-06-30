@@ -6,6 +6,7 @@ import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
 import { useSocket } from '../context/SocketContext';
 import CartDrawer from './CartDrawer';
+import BrandMark from './ui/BrandMark';
 
 const Navbar = ({ user, onLogout }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -424,7 +425,7 @@ const Navbar = ({ user, onLogout }) => {
   return (
     <>
       {/* Main navbar */}
-      <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'bg-zinc-950/85 backdrop-blur-md border-b border-zinc-800/80 shadow-lg shadow-black/20' : 'bg-transparent shadow-none'}`}>
+      <header className={`sticky top-0 z-50 border-b border-white/10 bg-[#080d19]/95 backdrop-blur-xl transition-shadow duration-300 ${scrolled ? 'shadow-lg shadow-black/15' : 'shadow-none'}`}>
         <div className="max-w-7xl mx-auto px-4 lg:px-6">
           <div className="flex items-center justify-between h-16">
             {/* Mobile menu button */}
@@ -433,15 +434,7 @@ const Navbar = ({ user, onLogout }) => {
             </button>
 
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity">
-              <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center shadow-md">
-                <span className="text-white font-bold text-sm font-display">10</span>
-              </div>
-              <div className="hidden sm:block">
-                <span className="font-display font-bold text-white text-lg leading-none">10TH WEST</span>
-                <span className="block text-[9px] font-bold tracking-[0.3em] text-red-500 uppercase">Moto Parts</span>
-              </div>
-            </Link>
+            <BrandMark dark className="shrink-0 transition-opacity hover:opacity-90 [&>span:last-child]:hidden sm:[&>span:last-child]:block" />
 
             {/* Desktop navigation - Center */}
             <nav className="hidden lg:flex items-center gap-2 ml-8 flex-1">
@@ -714,7 +707,7 @@ const Navbar = ({ user, onLogout }) => {
 
       {/* Mobile search bar */}
       {shouldShowGlobalSearch && (
-        <div className={`lg:hidden sticky top-16 z-40 transition-all duration-300 ${scrolled ? 'backdrop-blur-xl' : 'backdrop-blur'} bg-transparent`}>
+        <div className="sticky top-16 z-40 border-b border-white/10 bg-[#080d19]/95 backdrop-blur-xl lg:hidden">
           <div className="max-w-7xl mx-auto px-4 py-2 flex justify-center">
             <form onSubmit={handleGlobalSearchSubmit} className="flex items-center gap-2 w-full" ref={mobileSearchDropdownRef}>
               <div className="relative flex-1">
@@ -783,12 +776,7 @@ const Navbar = ({ user, onLogout }) => {
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
           <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-zinc-900 border-r border-zinc-800 shadow-2xl animate-fade-in overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-              <Link to="/" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
-                <div className="w-8 h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center">
-                  <span className="text-white font-bold text-sm font-display">10</span>
-                </div>
-                <span className="font-display font-bold text-white">10TH WEST</span>
-              </Link>
+              <BrandMark dark onClick={() => setMobileOpen(false)} className="[&>span:first-child]:h-9 [&>span:first-child]:w-9" />
               <button onClick={() => setMobileOpen(false)} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"><X size={20} /></button>
             </div>
             {user && (

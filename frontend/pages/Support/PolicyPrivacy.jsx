@@ -31,11 +31,7 @@ const PrivacyPolicy = () => {
             <h2 className="font-display font-semibold text-lg text-white mt-8">1. Data Controller</h2>
             <div className="bg-gray-900 border border-gray-700 rounded-xl p-4 text-sm">
               <p><strong>Company:</strong> 10th West Moto Parts</p>
-              <p><strong>Address:</strong> Unit 10, West Avenue Commercial Center, Quezon City, Metro Manila 1104, Philippines</p>
-              <p><strong>DTI Registration No.:</strong> 3217456</p>
-              <p><strong>BIR TIN:</strong> 123-456-789-000</p>
-              <p><strong>Data Protection Officer (DPO):</strong> <a href="mailto:dpo@10thwestmoto.com" className="text-red-500">dpo@10thwestmoto.com</a></p>
-              <p><strong>NPC Registration No.:</strong> PIC-001-2025-0001</p>
+              <p>For privacy requests or questions about how your data is handled, use the <a href="#/contact" className="text-red-500">contact support page</a>.</p>
             </div>
 
             <h2 className="font-display font-semibold text-lg text-white mt-8">2. Personal Data We Collect</h2>

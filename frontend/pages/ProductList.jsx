@@ -1,11 +1,13 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Grid3X3, List, Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { getProducts, getCategories, getWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
-import ShoppableFeed from '../components/ShoppableFeed';
 import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
+import BrandButton from '../components/ui/BrandButton';
+import EmptyState from '../components/ui/EmptyState';
+import LoadingSkeleton from '../components/ui/LoadingSkeleton';
 
 const tokenizeSearchTerms = (value) => {
   const normalized = String(value || '')
@@ -295,64 +297,70 @@ const ProductList = () => {
     setSearchParams({});
   };
 
-  const pageBackgroundStyle = {
-    backgroundColor: '#f8fafc',
-    backgroundImage: `
-      radial-gradient(circle at 8% 14%, rgba(239, 68, 68, 0.10) 0%, transparent 34%),
-      radial-gradient(circle at 92% 6%, rgba(30, 41, 59, 0.08) 0%, transparent 28%),
-      linear-gradient(140deg, rgba(255, 255, 255, 0.95) 0%, rgba(241, 245, 249, 0.92) 42%, rgba(226, 232, 240, 0.85) 100%)
-    `,
-    backgroundAttachment: 'fixed',
-    backgroundSize: 'cover',
-    backgroundRepeat: 'no-repeat'
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen" style={pageBackgroundStyle}>
-        <div className="max-w-7xl mx-auto px-4 py-12">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <main className="min-h-screen bg-slate-50">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+          <LoadingSkeleton className="h-10 w-64" />
+          <LoadingSkeleton className="mt-4 h-5 w-80 max-w-full" />
+          <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-white/20 backdrop-blur-md rounded-xl border border-white/30 overflow-hidden">
-                <div className="aspect-square skeleton" />
-                <div className="p-4 space-y-3">
-                  <div className="h-3 skeleton rounded w-20" />
-                  <div className="h-4 skeleton rounded w-3/4" />
-                  <div className="h-5 skeleton rounded w-24" />
+              <div key={i} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <LoadingSkeleton className="aspect-square rounded-none" />
+                <div className="space-y-3 p-4">
+                  <LoadingSkeleton className="h-3 w-20" />
+                  <LoadingSkeleton className="h-4 w-3/4" />
+                  <LoadingSkeleton className="h-5 w-24" />
                 </div>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div 
-      className="min-h-screen" 
-      style={pageBackgroundStyle}
-    >
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="mb-4 bg-white/10 backdrop-blur-md border border-white/25 rounded-2xl px-4 py-3 shadow-lg">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+    <main className="min-h-screen bg-slate-50">
+      <div className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-600">10th West Moto catalog</p>
+          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">Motorcycle parts & accessories</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Search the live catalog, confirm stock, and filter by category, brand, model, or price.</p>
+          <div className="relative mt-6 max-w-2xl">
+            <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search products, brands, or part numbers"
+              aria-label="Search products"
+              className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm text-slate-950 shadow-sm placeholder:text-slate-500 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-gray-900">{filtered.length} products found</p>
-              <p className="text-xs text-gray-600">
-                {searchSettling ? 'Searching product names...' : 'Use filters to narrow down your parts fast'}
+              <p className="text-sm font-semibold text-slate-950" aria-live="polite">{filtered.length} {filtered.length === 1 ? 'product' : 'products'}</p>
+              <p className="text-xs text-slate-600">
+                {searchSettling ? 'Updating results…' : activeFilterCount ? `${activeFilterCount} active filters` : 'Showing the full catalog'}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setMobileFiltersOpen(true)}
-                className="lg:hidden h-10 px-3 rounded-xl border border-white/30 bg-white/10 backdrop-blur text-sm font-medium text-gray-900 hover:bg-white/20 inline-flex items-center gap-2"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 lg:hidden"
               >
                 <SlidersHorizontal size={16} />
                 Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
               </button>
               <button
                 onClick={() => setShowDesktopFilters(prev => !prev)}
-                className="hidden lg:inline-flex h-10 px-3 rounded-xl border border-white/30 bg-white/10 backdrop-blur text-sm font-medium text-gray-900 hover:bg-white/20 items-center gap-2"
+                className="hidden h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 lg:inline-flex"
               >
                 {showDesktopFilters ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
                 {showDesktopFilters ? 'Hide Filters' : 'Show Filters'}
@@ -360,7 +368,8 @@ const ProductList = () => {
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
-                className="h-10 px-3 bg-white/10 backdrop-blur border border-white/30 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-700/50"
+                aria-label="Sort products"
+                className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
               >
                 {searchQuery && <option value="relevance">Relevance</option>}
                 <option value="newest">Newest</option>
@@ -369,17 +378,16 @@ const ProductList = () => {
                 <option value="best-selling">Best Selling</option>
                 <option value="top-rated">Top Rated</option>
               </select>
+              <div className="hidden rounded-xl border border-slate-300 p-1 sm:flex" aria-label="Product view">
+                <button type="button" onClick={() => setView('grid')} aria-label="Grid view" aria-pressed={view === 'grid'} className={`grid h-8 w-8 place-items-center rounded-lg ${view === 'grid' ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'}`}><Grid3X3 size={15} /></button>
+                <button type="button" onClick={() => setView('list')} aria-label="List view" aria-pressed={view === 'list'} className={`grid h-8 w-8 place-items-center rounded-lg ${view === 'list' ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'}`}><List size={15} /></button>
+              </div>
             </div>
           </div>
         </div>
 
-        <ShoppableFeed
-          products={filtered.length > 0 ? filtered : products}
-          wishlistedIds={wishlistedIds}
-          onWishlistToggle={handleWishlistToggle}
-        />
-
-        <div className="mb-4 bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl px-4 py-3 shadow-lg">
+        <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+          <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Motorcycle fitment</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <select
               value={selectedBrand}
@@ -387,7 +395,8 @@ const ProductList = () => {
                 setSelectedBrand(event.target.value);
                 setSelectedModel('');
               }}
-              className="h-10 px-3 bg-white/80 border border-slate-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-700/30"
+              aria-label="Motorcycle brand"
+              className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
             >
               <option value="">Brand</option>
               {brands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
@@ -395,7 +404,8 @@ const ProductList = () => {
             <select
               value={selectedModel}
               onChange={(event) => setSelectedModel(event.target.value)}
-              className="h-10 px-3 bg-white/80 border border-slate-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-700/30"
+              aria-label="Motorcycle model"
+              className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
             >
               <option value="">Model</option>
               {models.map((model) => <option key={model} value={model}>{model}</option>)}
@@ -407,7 +417,8 @@ const ProductList = () => {
               placeholder="Year"
               min="1900"
               max="2100"
-              className="h-10 px-3 bg-white/80 border border-slate-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-700/30"
+              aria-label="Motorcycle year"
+              className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
             />
           </div>
         </div>
@@ -432,26 +443,22 @@ const ProductList = () => {
             resultCount={filtered.length}
           />
 
-          <div className="flex-1 min-w-0 bg-white/15 backdrop-blur-md border border-white/30 rounded-2xl p-3 sm:p-5 lg:p-6 shadow-lg">
+          <div className="min-w-0 flex-1">
             {searchSettling ? (
-              <div className="text-center py-16 bg-white/20 backdrop-blur-sm rounded-3xl border border-white/30">
-                <div className="w-10 h-10 border-2 border-red-500/30 border-t-red-600 rounded-full animate-spin mx-auto mb-4" />
-                <h3 className="font-semibold text-gray-900 mb-2">Searching products</h3>
-                <p className="text-sm text-gray-600">Results update as you type.</p>
+              <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center">
+                <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-red-200 border-t-red-600" />
+                <h2 className="font-semibold text-slate-950">Updating products</h2>
+                <p className="mt-1 text-sm text-slate-600">Results update as you type.</p>
               </div>
             ) : filtered.length === 0 ? (
-              <div className="text-center py-16 bg-white/20 backdrop-blur-sm rounded-3xl border border-white/30">
-                <div className="w-20 h-20 bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Search size={32} className="text-gray-300" />
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-2">No products found</h3>
-                <p className="text-sm text-gray-600 mb-4">Try another product name or adjust your filters.</p>
-                <button onClick={clearAllFilters} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg">
-                  Clear All Filters
-                </button>
-              </div>
+              <EmptyState
+                icon={Search}
+                title="No matching products"
+                description="Try a different product name or remove one or more filters."
+                action={<BrandButton onClick={clearAllFilters}>Clear filters</BrandButton>}
+              />
             ) : view === 'grid' ? (
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))] xl:grid-cols-4 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
                 {filtered.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} view="grid" />)}
               </div>
             ) : (
@@ -462,7 +469,7 @@ const ProductList = () => {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 };
 

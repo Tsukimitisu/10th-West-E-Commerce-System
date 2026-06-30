@@ -16,6 +16,7 @@ import {
 } from './services/authSession.js';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { Role } from './types.js';
+import AppErrorBoundary from './components/AppErrorBoundary';
 
 const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
 
@@ -48,10 +49,11 @@ const Messages = lazy(() => import('./pages/customer/Messages'));
 const AdminDashboard = lazy(() => import('./pages/owner/AdminDashboard'));
 const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
 const PosTerminal = lazy(() => import('./pages/staff/PosTerminal'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 const RouteFallback = () => (
-  <div className="min-h-[50vh] bg-zinc-950 flex items-center justify-center">
-    <div className="h-10 w-10 rounded-full border-2 border-zinc-700 border-t-red-500 animate-spin" />
+  <div className="flex min-h-[50vh] items-center justify-center bg-slate-50" role="status" aria-label="Loading page">
+    <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-red-600" />
   </div>
 );
 
@@ -81,7 +83,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-100">
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-950">
       {!hideChrome && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
       {!hideChrome && !isSuperAdmin && user && <EmailVerificationBanner user={user} />}
       <div className="flex-1">
@@ -92,9 +94,10 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
             animate={{ opacity: 1 }}
             exit={shouldReduceMotion || isAccountRoute ? { opacity: 1 } : { opacity: 0 }}
             transition={{ duration: shouldReduceMotion || isAccountRoute ? 0 : 0.2, ease: 'easeOut' }}
-            className="h-full bg-zinc-950"
+            className="h-full bg-slate-50"
           >
-            <Suspense fallback={<RouteFallback />}>
+            <AppErrorBoundary resetKey={`${location.pathname}${location.search}`}>
+              <Suspense fallback={<RouteFallback />}>
               <Routes location={location}>
                 <Route path="/" element={<Home />} />
                 <Route path="/shop" element={<ProductList />} />
@@ -147,9 +150,11 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                 <Route path="/messages" element={user ? <Messages /> : <Navigate to="/login?redirect=/messages" />} />
                 <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF || user?.role === Role.ADMIN ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
                 <Route path="/super-admin" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
-                <Route path="/pos" element={(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) ? <PosTerminal /> : <Navigate to="/login" replace />} />
+                <Route path="/pos" element={[Role.OWNER, Role.ADMIN, Role.STORE_STAFF, Role.CASHIER].includes(user?.role) ? <PosTerminal /> : <Navigate to="/login" replace />} />
+                <Route path="*" element={<NotFound />} />
               </Routes>
-            </Suspense>
+              </Suspense>
+            </AppErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </div>
@@ -162,70 +167,6 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
 const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return () => {};
-    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return () => {};
-
-    const root = document.documentElement;
-    const proximityThreshold = 72;
-    const hoverThreshold = 20;
-    let rafId = 0;
-    let currentProximity = false;
-    let currentHover = false;
-
-    const applyState = (clientX, clientY) => {
-      const nearRightEdge = (window.innerWidth - clientX) <= proximityThreshold;
-      const nearBottomEdge = (window.innerHeight - clientY) <= proximityThreshold;
-      const nearRightHover = (window.innerWidth - clientX) <= hoverThreshold;
-      const nearBottomHover = (window.innerHeight - clientY) <= hoverThreshold;
-
-      const nextProximity = nearRightEdge || nearBottomEdge;
-      const nextHover = nearRightHover || nearBottomHover;
-
-      if (nextProximity !== currentProximity) {
-        currentProximity = nextProximity;
-        root.classList.toggle('scrollbar-proximity-active', nextProximity);
-      }
-
-      if (nextHover !== currentHover) {
-        currentHover = nextHover;
-        root.classList.toggle('scrollbar-hover-active', nextHover);
-      }
-    };
-
-    const handleMouseMove = (event) => {
-      if (rafId) {
-        window.cancelAnimationFrame(rafId);
-      }
-
-      rafId = window.requestAnimationFrame(() => {
-        applyState(event.clientX, event.clientY);
-      });
-    };
-
-    const clearState = () => {
-      currentProximity = false;
-      currentHover = false;
-      root.classList.remove('scrollbar-proximity-active', 'scrollbar-hover-active');
-
-      if (rafId) {
-        window.cancelAnimationFrame(rafId);
-        rafId = 0;
-      }
-    };
-
-    window.addEventListener('mousemove', handleMouseMove, { passive: true });
-    window.addEventListener('blur', clearState);
-    document.addEventListener('mouseleave', clearState);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('blur', clearState);
-      document.removeEventListener('mouseleave', clearState);
-      clearState();
-    };
-  }, []);
 
   useEffect(() => {
     const disposeSecurity = initializeSecurityContext();
@@ -332,34 +273,6 @@ const App = () => {
         crossTabSyncTimer = null;
       }
       cleanup();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) return undefined;
-
-    let animationFrame = 0;
-    const updateScrollbarProximity = (event) => {
-      if (animationFrame) window.cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(() => {
-        const distanceFromRight = window.innerWidth - event.clientX;
-        document.documentElement.classList.toggle('scrollbar-near', distanceFromRight <= 44);
-      });
-    };
-
-    const clearScrollbarProximity = () => {
-      if (animationFrame) window.cancelAnimationFrame(animationFrame);
-      animationFrame = 0;
-      document.documentElement.classList.remove('scrollbar-near');
-    };
-
-    window.addEventListener('mousemove', updateScrollbarProximity, { passive: true });
-    window.addEventListener('mouseleave', clearScrollbarProximity);
-
-    return () => {
-      clearScrollbarProximity();
-      window.removeEventListener('mousemove', updateScrollbarProximity);
-      window.removeEventListener('mouseleave', clearScrollbarProximity);
     };
   }, []);
 

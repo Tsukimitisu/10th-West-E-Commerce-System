@@ -10,7 +10,7 @@ const defaultFAQs = [
   { category: 'Shipping', question: 'Do you offer free shipping?', answer: 'Yes! Orders over ₱2,500 qualify for free standard shipping.' },
   { category: 'Returns', question: 'What is your return policy?', answer: 'We accept returns within 15 days of delivery. Items must be unused and in original packaging. See our Returns page for details.' },
   { category: 'Returns', question: 'How do I request a return?', answer: 'Go to My Account â†’ Orders, select the order, and click "Request Return". Fill out the form and we\'ll provide a return label.' },
-  { category: 'Payment', question: 'What payment methods do you accept?', answer: 'We accept credit/debit cards (Visa, Mastercard), GCash, and Cash on Delivery (COD).' },
+  { category: 'Payment', question: 'What payment methods do you accept?', answer: 'Checkout supports Cash on Delivery and GCash when the method is available for your order.' },
   { category: 'Payment', question: 'Is my payment information secure?', answer: 'Yes, online payments are processed through PayMongo/GCash with signed webhook verification.' },
   { category: 'Products', question: 'How do I find parts for my motorcycle?', answer: 'Use the search bar to search by part name or browse categories. You can filter by brand and compatibility.' },
   { category: 'Products', question: 'Are your parts genuine/OEM?', answer: 'We carry both OEM and high-quality aftermarket parts. Each product listing clearly indicates the type.' },
