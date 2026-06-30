@@ -212,73 +212,102 @@ export const getStockAdjustments = async (req, res) => {
 
 // Create a stock adjustment (add/remove stock with reason)
 export const createStockAdjustment = async (req, res) => {
-  const { product_id, quantity_change, reason, note } = req.body;
-
-  if (!product_id || typeof quantity_change !== 'number') {
-    return res.status(400).json({ message: 'product_id and quantity_change are required' });
+  const { product_id, variant_id = null, quantity_change, reason, note } = req.body;
+  if (!product_id || !Number.isInteger(quantity_change) || quantity_change === 0) {
+    return res.status(400).json({ message: 'product_id and a non-zero integer quantity_change are required' });
   }
 
-  // Map frontend reasons to DB-valid values for legacy constraints
   const reasonMap = { restock: 'received', returned: 'correction', shrinkage: 'lost', other: 'correction', manual: 'correction' };
   const dbReason = reasonMap[reason] || reason || 'correction';
-
   const client = await pool.connect();
+
   try {
     await client.query('BEGIN');
-
-    // Get current stock
     const productResult = await client.query(
-      'SELECT id, name, stock_quantity, low_stock_threshold FROM products WHERE id = $1',
+      'SELECT id, name, stock_quantity, low_stock_threshold FROM products WHERE id = $1 FOR UPDATE',
       [product_id]
     );
-
     if (productResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Product not found' });
     }
 
     const product = productResult.rows[0];
-    const currentStock = parseInt(product.stock_quantity);
-    const newStock = currentStock + quantity_change;
+    let variant = null;
+    if (variant_id) {
+      const variantResult = await client.query(
+        `SELECT id, product_id, stock_quantity, sku
+         FROM product_variants WHERE id = $1 AND product_id = $2 FOR UPDATE`,
+        [variant_id, product_id]
+      );
+      if (variantResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'Product variant not found' });
+      }
+      variant = variantResult.rows[0];
+    }
 
+    const currentStock = parseInt(variant?.stock_quantity ?? product.stock_quantity, 10);
+    const newStock = currentStock + quantity_change;
     if (newStock < 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Stock cannot go below zero' });
     }
 
-    // Update product stock
-    await client.query(
-      'UPDATE products SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [newStock, product_id]
-    );
-
-    // Record adjustment
-    try {
+    if (variant) {
       await client.query(
-        `INSERT INTO stock_adjustments (product_id, quantity_change, reason, notes, adjusted_by, status)
-         VALUES ($1, $2, $3, $4, $5, 'approved')`,
-        [product_id, quantity_change, dbReason, note || '', req.user.id]
+        'UPDATE product_variants SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [newStock, variant.id]
       );
-    } catch (adjErr) {
-      // stock_adjustments table may not exist yet — continue without recording
-      console.warn('Could not record stock adjustment (table may not exist):', adjErr.message);
+    } else {
+      await client.query(
+        'UPDATE products SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [newStock, product_id]
+      );
     }
 
+    const adjustmentResult = await client.query(
+      `INSERT INTO stock_adjustments (product_id, quantity_change, reason, notes, adjusted_by, status)
+       VALUES ($1, $2, $3, $4, $5, 'approved') RETURNING *`,
+      [product_id, quantity_change, dbReason, note || '', req.user.id]
+    );
+    const adjustment = adjustmentResult.rows[0];
+    const movementResult = await client.query(
+      `INSERT INTO stock_movements (
+         product_id, variant_id, quantity_delta, stock_before, stock_after,
+         reason, reference_type, reference_id, created_by, metadata
+       ) VALUES ($1, $2, $3, $4, $5, 'manual_adjustment', 'stock_adjustment', $6, $7, $8::jsonb)
+       RETURNING *`,
+      [product_id, variant?.id || null, quantity_change, currentStock, newStock, adjustment.id, req.user.id,
+        JSON.stringify({ reason: dbReason, note: note || '', variant_sku: variant?.sku || null })]
+    );
+    await client.query(
+      `INSERT INTO audit_logs (
+         actor_user_id, action, entity_type, entity_id, ip_address, user_agent,
+         before_data, after_data, metadata
+       ) VALUES ($1, 'inventory.adjust', $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb)`,
+      [req.user.id, variant ? 'product_variant' : 'product', String(variant?.id || product_id),
+        req.clientIp, req.clientUa, JSON.stringify({ stock_quantity: currentStock }),
+        JSON.stringify({ stock_quantity: newStock }),
+        JSON.stringify({ product_id, variant_id: variant?.id || null, adjustment_id: adjustment.id, reason: dbReason, note: note || '' })]
+    );
     await client.query('COMMIT');
 
-    // Emit real-time updates
-    const stockData = { product_id, name: product.name, stock_quantity: newStock, previous_stock: currentStock, adjustment: quantity_change };
+    const stockData = { product_id, variant_id: variant?.id || null, name: product.name, stock_quantity: newStock, previous_stock: currentStock, adjustment: quantity_change };
     emitStockUpdate(stockData);
-
-    if (newStock <= parseInt(product.low_stock_threshold || 5)) {
-      emitLowStockAlert({ id: product_id, name: product.name, stock_quantity: newStock, low_stock_threshold: parseInt(product.low_stock_threshold || 5) });
+    if (!variant && newStock <= parseInt(product.low_stock_threshold || 5, 10)) {
+      emitLowStockAlert({ id: product_id, name: product.name, stock_quantity: newStock, low_stock_threshold: parseInt(product.low_stock_threshold || 5, 10) });
     }
-
-    res.json({ message: 'Stock adjusted successfully', product: { id: product_id, name: product.name, stock_quantity: newStock, previous_stock: currentStock, adjustment: quantity_change } });
+    return res.json({
+      message: 'Stock adjusted successfully',
+      product: stockData,
+      adjustment,
+      movement: movementResult.rows[0],
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Create stock adjustment error:', error);
-    res.status(500).json({ message: 'Failed to adjust stock' });
+    return res.status(500).json({ message: 'Failed to adjust stock' });
   } finally {
     client.release();
   }
