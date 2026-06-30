@@ -118,13 +118,12 @@ const seedData = async () => {
           
           <h3>Shipping Methods</h3>
           <ul>
-            <li><strong>Standard Shipping:</strong> 3-5 business days</li>
-            <li><strong>Expedited Shipping:</strong> 2-3 business days</li>
-            <li><strong>Overnight Shipping:</strong> Next business day</li>
+            <li><strong>Standard Shipping:</strong> 3-7 business days depending on destination</li>
+            <li><strong>Store Pickup:</strong> Available only when enabled for the order</li>
           </ul>
           
           <h3>Shipping Costs</h3>
-          <p>Shipping costs are calculated at checkout based on the weight, size, and destination of your order. Free standard shipping is available on orders over $100.</p>
+          <p>Shipping costs are calculated at checkout in Philippine pesos using the active store shipping rates and delivery address.</p>
           
           <h3>Processing Time</h3>
           <p>Orders are typically processed within 1-2 business days. Orders placed on weekends or holidays will be processed the next business day.</p>
@@ -132,8 +131,8 @@ const seedData = async () => {
           <h3>Tracking</h3>
           <p>Once your order ships, you will receive a confirmation email with tracking information. You can also track your order through your account dashboard.</p>
           
-          <h3>International Shipping</h3>
-          <p>We currently only ship within the United States. International shipping options are coming soon.</p>
+          <h3>Service Area</h3>
+          <p>Online checkout is limited to validated Philippine addresses.</p>
           
           <h3>Delivery Issues</h3>
           <p>If your package is lost or damaged during shipping, please contact us immediately. We will work with the carrier to resolve the issue and ensure you receive your order.</p>

@@ -53,7 +53,7 @@ const run = async () => {
   console.log('\nNext steps:');
   console.log('- If DNS lookup failed, try flushing DNS: "ipconfig /flushdns" and retry.');
   console.log('- If HTTPS fails, check firewall/proxy/VPN or try from another network.');
-  console.log('- You can also run migrations from a machine with access, or run SQL in the Supabase SQL editor.');
+  console.log('- Run tracked migrations with: "npm run migrate" (in backend/) once DB access is available.');
 };
 
 run().catch((err) => {

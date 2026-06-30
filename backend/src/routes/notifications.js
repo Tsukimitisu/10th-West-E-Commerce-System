@@ -1,6 +1,6 @@
 import express from 'express';
 import pool from '../config/database.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -56,18 +56,31 @@ router.put('/read-all', authenticateToken, async (req, res) => {
   }
 });
 
-// Create notification (internal use)
-router.post('/', authenticateToken, async (req, res) => {
+router.get('/deliveries', authenticateToken, requireRole('admin', 'super_admin', 'owner'), requirePermission('notifications.manage'), async (req, res) => {
   try {
-    const { user_id, type, title, message, reference_id, reference_type } = req.body;
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
     const result = await pool.query(
-      'INSERT INTO notifications (user_id, type, title, message, reference_id, reference_type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [user_id, type, title, message, reference_id, reference_type]
+      `SELECT nd.*, n.type, n.title, n.reference_id, n.reference_type
+       FROM notification_deliveries nd LEFT JOIN notifications n ON n.id = nd.notification_id
+       ORDER BY nd.created_at DESC LIMIT $1`,
+      [limit]
     );
-    res.status(201).json(result.rows[0]);
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
+});
+
+router.post('/deliveries/:id/retry', authenticateToken, requireRole('admin', 'super_admin', 'owner'), requirePermission('notifications.manage'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE notification_deliveries SET status='queued', next_attempt_at=NOW(), last_error=NULL, updated_at=NOW()
+       WHERE id=$1 AND status='failed' RETURNING *`,
+      [req.params.id]
+    );
+    if (!result.rowCount) return res.status(404).json({ message: 'Failed delivery not found.' });
+    return res.json(result.rows[0]);
+  } catch (error) { return res.status(500).json({ message: 'Delivery could not be queued.' }); }
 });
 
 // Delete notification

@@ -94,7 +94,7 @@ export const deletePolicy = async (req, res) => {
     }
 
     res.json({ message: 'Policy deleted successfully' });
-  } catch (error) {
+  } catch (error) { 
     console.error('Delete policy error:', error);
     res.status(500).json({ message: 'Failed to delete policy' });
   }

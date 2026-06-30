@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
 import { Download, Calendar, DollarSign, ShoppingBag, TrendingUp, Package, Users, CreditCard } from 'lucide-react';
 
@@ -16,10 +16,10 @@ const ReportsView = ({ stats }) => {
   };
 
   const KPICard = ({ title, value, subtext, icon: Icon, color }) => (
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-start justify-between">
+      <div className="bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700 flex items-start justify-between">
           <div>
-              <p className="text-sm font-medium text-gray-500">{title}</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">{value}</h3>
+              <p className="text-sm font-medium text-gray-400">{title}</p>
+              <h3 className="text-2xl font-bold text-white mt-1">{value}</h3>
               {subtext && <p className={`text-xs mt-1 ${subtext.includes('+') ? 'text-green-600' : 'text-gray-400'}`}>{subtext}</p>}
           </div>
           <div className={`p-3 rounded-lg ${color}`}>
@@ -31,7 +31,7 @@ const ReportsView = ({ stats }) => {
   return (
     <div className="space-y-6">
         {/* Controls */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-lg shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-800 p-4 rounded-lg shadow-sm">
             <div className="flex space-x-2 overflow-x-auto pb-2 sm:pb-0 w-full sm:w-auto">
                 {['overview', 'sales', 'inventory', 'financial', 'customers'].map(tab => (
                     <button
@@ -47,7 +47,7 @@ const ReportsView = ({ stats }) => {
             </div>
             <div className="flex items-center space-x-2 w-full sm:w-auto">
                 <select 
-                    className="border-gray-300 border rounded-lg text-sm p-2 focus:ring-orange-500 focus:border-orange-500"
+                    className="border-gray-300 border rounded-lg text-sm p-2 focus:ring-orange-500 focus:border-red-500"
                     value={dateRange}
                     onChange={(e) => setDateRange(e.target.value)}
                 >
@@ -56,7 +56,7 @@ const ReportsView = ({ stats }) => {
                     <option value="90days">Last Quarter</option>
                     <option value="year">This Year</option>
                 </select>
-                <button onClick={handleExport} className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 text-gray-700">
+                <button onClick={handleExport} className="flex items-center px-4 py-2 bg-gray-800 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-900 text-gray-700">
                     <Download className="w-4 h-4 mr-2" /> Export
                 </button>
                 {exportMsg && (
@@ -72,12 +72,12 @@ const ReportsView = ({ stats }) => {
                     <KPICard title="Total Revenue" value={`$${stats.totalSales.toLocaleString()}`} subtext="+12.5% vs last period" icon={DollarSign} color="bg-green-500" />
                     <KPICard title="Total Orders" value={stats.totalOrders} subtext="+5% new customers" icon={ShoppingBag} color="bg-blue-500" />
                     <KPICard title="Net Profit" value={`$${stats.totalProfit.toLocaleString()}`} subtext="32% margin" icon={TrendingUp} color="bg-indigo-500" />
-                    <KPICard title="Low Stock Items" value={stats.lowStockCount} subtext="Requires attention" icon={Package} color="bg-orange-500" />
+                    <KPICard title="Low Stock Items" value={stats.lowStockCount} subtext="Requires attention" icon={Package} color="bg-red-500/100" />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <h3 className="font-bold text-gray-900 mb-6">Revenue Trend</h3>
+                    <div className="lg:col-span-2 bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700">
+                        <h3 className="font-bold text-white mb-6">Revenue Trend</h3>
                         <div className="h-80">
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={stats.salesTrend}>
@@ -96,8 +96,8 @@ const ReportsView = ({ stats }) => {
                             </ResponsiveContainer>
                         </div>
                     </div>
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <h3 className="font-bold text-gray-900 mb-6">Sales by Channel</h3>
+                    <div className="bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700">
+                        <h3 className="font-bold text-white mb-6">Sales by Channel</h3>
                         <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
@@ -128,8 +128,8 @@ const ReportsView = ({ stats }) => {
         {activeTab === 'sales' && (
             <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <h3 className="font-bold text-gray-900 mb-6">Sales by Category</h3>
+                    <div className="bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700">
+                        <h3 className="font-bold text-white mb-6">Sales by Category</h3>
                         <div className="h-80">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={stats.salesByCategory} layout="vertical">
@@ -142,11 +142,11 @@ const ReportsView = ({ stats }) => {
                             </ResponsiveContainer>
                         </div>
                     </div>
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <h3 className="font-bold text-gray-900 mb-6">Top Selling Products</h3>
+                    <div className="bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700">
+                        <h3 className="font-bold text-white mb-6">Top Selling Products</h3>
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-sm">
-                                <thead className="bg-gray-50 text-gray-500">
+                                <thead className="bg-gray-900 text-gray-400">
                                     <tr>
                                         <th className="px-4 py-2 text-left">Product</th>
                                         <th className="px-4 py-2 text-right">Sold</th>
@@ -156,9 +156,9 @@ const ReportsView = ({ stats }) => {
                                 <tbody className="divide-y divide-gray-100">
                                     {stats.topProducts.map((p, i) => (
                                         <tr key={i}>
-                                            <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
+                                            <td className="px-4 py-3 font-medium text-white">{p.name}</td>
                                             <td className="px-4 py-3 text-right text-gray-600">{p.quantity}</td>
-                                            <td className="px-4 py-3 text-right font-bold text-gray-900">${p.revenue.toLocaleString()}</td>
+                                            <td className="px-4 py-3 text-right font-bold text-white">${p.revenue.toLocaleString()}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -172,8 +172,8 @@ const ReportsView = ({ stats }) => {
         {/* INVENTORY TAB */}
         {activeTab === 'inventory' && (
             <div className="space-y-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-6">Inventory Valuation by Category</h3>
+                <div className="bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700">
+                    <h3 className="font-bold text-white mb-6">Inventory Valuation by Category</h3>
                     <div className="h-96">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={stats.inventoryValuation}>
@@ -190,9 +190,9 @@ const ReportsView = ({ stats }) => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {stats.inventoryValuation.slice(0, 3).map((cat, i) => (
-                        <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                            <h4 className="text-gray-500 text-sm font-medium">{cat.category}</h4>
-                            <p className="text-2xl font-bold text-gray-900 mt-2">${cat.value.toLocaleString()}</p>
+                        <div key={i} className="bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700">
+                            <h4 className="text-gray-400 text-sm font-medium">{cat.category}</h4>
+                            <p className="text-2xl font-bold text-white mt-2">${cat.value.toLocaleString()}</p>
                             <p className="text-sm text-gray-400 mt-1">{cat.count} units in stock</p>
                         </div>
                     ))}
@@ -204,8 +204,8 @@ const ReportsView = ({ stats }) => {
         {activeTab === 'financial' && (
             <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <h3 className="font-bold text-gray-900 mb-6">Payment Methods</h3>
+                    <div className="bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700">
+                        <h3 className="font-bold text-white mb-6">Payment Methods</h3>
                         <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
@@ -234,8 +234,8 @@ const ReportsView = ({ stats }) => {
                             </ResponsiveContainer>
                         </div>
                     </div>
-                    <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <h3 className="font-bold text-gray-900 mb-6">Profit Analysis</h3>
+                    <div className="lg:col-span-2 bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700">
+                        <h3 className="font-bold text-white mb-6">Profit Analysis</h3>
                         <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={stats.salesTrend}>
@@ -257,8 +257,8 @@ const ReportsView = ({ stats }) => {
         {/* CUSTOMERS TAB */}
         {activeTab === 'customers' && (
             <div className="space-y-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-gray-900 mb-6">New Customer Acquisition</h3>
+                <div className="bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700">
+                    <h3 className="font-bold text-white mb-6">New Customer Acquisition</h3>
                     <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={stats.customerGrowth}>
@@ -282,3 +282,5 @@ const ReportsView = ({ stats }) => {
 };
 
 export default ReportsView;
+
+

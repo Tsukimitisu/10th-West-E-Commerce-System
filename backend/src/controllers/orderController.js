@@ -1,13 +1,348 @@
 import pool from '../config/database.js';
-import Stripe from 'stripe';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
+import { ORDER_STATUSES, STAFF_ROLE_SET } from '../constants/schemaEnums.js';
+import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
+import { buildOrderStatusMessage, createNotification as createUserNotification, ensureNotificationColumns } from '../utils/notifications.js';
+import { validatePhilippineAddress } from '../services/psgc.js';
+import { ensurePaymentOrderColumns } from './paymentController.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+const STAFF_ROLES = STAFF_ROLE_SET;
+const VALID_ORDER_STATUSES = ORDER_STATUSES;
+const ORDER_STATUS_SQL_LIST = ORDER_STATUSES.map((status) => `'${status}'`).join(', ');
+const VAT_RATE = 0.12;
+const FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
+const STANDARD_SHIPPING_FEE = 150;
+const EXPRESS_SHIPPING_FEE = 300;
+const STAFF_STATUS_TRANSITIONS = {
+  pending: new Set(['processing', 'cancelled']),
+  payment_pending: new Set(['paid', 'failed', 'cancelled']),
+  paid: new Set(['processing', 'refund_processing']),
+  processing: new Set(['packed', 'cancelled', 'refund_processing']),
+  packed: new Set(['ready_for_pickup', 'cancelled', 'refund_processing']),
+  ready_for_pickup: new Set(['shipped', 'cancelled', 'refund_processing']),
+  shipped: new Set(['out_for_delivery']),
+  out_for_delivery: new Set([]),
+  delivered: new Set([]),
+  cancelled: new Set([]),
+  failed: new Set([]),
+};
+const DEFAULT_ORDER_LIMIT = 20;
+const MAX_ORDER_LIMIT = 100;
+const memoryOrderStore = {
+  nextOrderId: -1001,
+  nextItemId: -1,
+  orders: [],
+  items: [],
+};
+
+const ORDER_NOTIFICATION_DETAIL_QUERY = `
+  SELECT o.id, o.user_id, o.status, o.order_number, o.tracking_number,
+         oi.product_id, COALESCE(oi.product_name, p.name) as product_name,
+         p.image as product_image
+  FROM orders o
+  LEFT JOIN order_items oi ON oi.order_id = o.id
+  LEFT JOIN products p ON p.id = oi.product_id
+  WHERE o.id = $1
+  ORDER BY oi.id ASC
+  LIMIT 1
+`;
+
+const ensureOrderWorkflowColumns = async () => {
+  // Schema is managed exclusively by Knex migrations.
+  return;
+  await pool.query(`
+    ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS shipping_address_snapshot JSONB,
+      ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS rider_confirmed_delivery_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS rider_confirmed_by INTEGER REFERENCES users(id),
+      ADD COLUMN IF NOT EXISTS customer_confirmed_receipt_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS courier VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS waybill_number VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS waybill_status VARCHAR(30) NOT NULL DEFAULT 'not_requested',
+      ADD COLUMN IF NOT EXISTS waybill_generated_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS waybill_label_payload JSONB,
+      ADD COLUMN IF NOT EXISTS courier_metadata JSONB;
+  `).catch((error) => {
+    console.error('Failed to ensure order support columns:', error);
+  });
+  await ensurePaymentOrderColumns(pool).catch((error) => {
+    console.error('Failed to ensure payment order columns:', error);
+  });
+
+  await pool.query(`
+    ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+    ALTER TABLE orders ADD CONSTRAINT orders_status_check
+      CHECK (status IN (${ORDER_STATUS_SQL_LIST}));
+  `).catch((error) => {
+    console.error('Failed to ensure order status constraint:', error);
+  });
+
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_payment_intent_unique
+     ON orders(payment_intent_id)
+     WHERE payment_intent_id IS NOT NULL`
+  ).catch((error) => {
+    console.error('Failed to ensure payment_intent_id uniqueness index:', error);
+  });
+};
+ensureOrderWorkflowColumns();
+ensureNotificationColumns();
+
+const canStaffTransitionStatus = (currentStatus, nextStatus) => {
+  const allowed = STAFF_STATUS_TRANSITIONS[currentStatus] || new Set();
+  return allowed.has(nextStatus);
+};
+
+const parsePagination = (query = {}) => {
+  const parsedPage = Number.parseInt(String(query.page || ''), 10);
+  const parsedLimit = Number.parseInt(String(query.limit || ''), 10);
+
+  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const limit = Number.isInteger(parsedLimit) && parsedLimit > 0
+    ? Math.min(parsedLimit, MAX_ORDER_LIMIT)
+    : DEFAULT_ORDER_LIMIT;
+
+  return {
+    page,
+    limit,
+    offset: (page - 1) * limit,
+    paginated: query.page !== undefined || query.limit !== undefined,
+  };
+};
+
+const normalizeText = (value) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+};
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const roundMoney = (value) => {
+  const parsed = toFiniteNumber(value, 0);
+  return Math.round(parsed * 100) / 100;
+};
+
+const resolveShippingMethod = (value) => {
+  const normalized = String(value || 'standard').trim().toLowerCase();
+  if (normalized === 'express' || normalized === 'pickup' || normalized === 'standard') {
+    return normalized;
+  }
+  return 'standard';
+};
+
+const computeShippingCost = (subtotalAmount, shippingMethod) => {
+  if (shippingMethod === 'pickup') return 0;
+  if (shippingMethod === 'express') return EXPRESS_SHIPPING_FEE;
+  return subtotalAmount >= FREE_STANDARD_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING_FEE;
+};
+
+const buildShippingAddressSnapshot = (snapshotInput = {}, shippingAddress) => {
+  const snapshot = {
+    recipient_name: normalizeText(snapshotInput.recipient_name),
+    phone: normalizeText(snapshotInput.phone),
+    street: normalizeText(snapshotInput.street),
+    barangay: normalizeText(snapshotInput.barangay),
+    city: normalizeText(snapshotInput.city),
+    state: normalizeText(snapshotInput.state),
+    postal_code: normalizeText(snapshotInput.postal_code),
+    province_code: normalizeText(snapshotInput.province_code ?? snapshotInput.provinceCode),
+    city_code: normalizeText(snapshotInput.city_code ?? snapshotInput.cityCode),
+    barangay_code: normalizeText(snapshotInput.barangay_code ?? snapshotInput.barangayCode),
+    country: normalizeText(snapshotInput.country) || 'Philippines',
+    address_string: normalizeText(snapshotInput.address_string) || normalizeText(shippingAddress),
+  };
+
+  return snapshot;
+};
+
+const parseShippingAddressSnapshot = (order) => {
+  const snapshot = order.shipping_address_snapshot && typeof order.shipping_address_snapshot === 'object'
+    ? order.shipping_address_snapshot
+    : null;
+
+  return buildShippingAddressSnapshot(snapshot || {}, order.shipping_address);
+};
+
+const mapOrderRecord = (order) => ({
+  ...order,
+  total_amount: roundMoney(order.total_amount),
+  discount_amount: roundMoney(order.discount_amount || 0),
+  tax_amount: roundMoney(order.tax_amount || 0),
+  shipping_method: resolveShippingMethod(order.shipping_method),
+  shipping_address_snapshot: parseShippingAddressSnapshot(order),
+  courier: normalizeText(order.courier),
+  waybill_number: normalizeText(order.waybill_number),
+  waybill_status: normalizeWaybillStatus(order.waybill_status),
+  waybill_generated_at: order.waybill_generated_at || null,
+  waybill_label_payload: order.waybill_label_payload || null,
+  courier_metadata: order.courier_metadata || null,
+  payment_provider: normalizeText(order.payment_provider),
+  payment_status: normalizeText(order.payment_status) || (['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered'].includes(String(order.status || '').toLowerCase()) ? 'paid' : 'pending'),
+  payment_reference: normalizeText(order.payment_reference),
+  payment_checkout_url: normalizeText(order.payment_checkout_url),
+  payment_metadata: order.payment_metadata || null,
+  paid_at: order.paid_at || null,
+});
+
+const getMemoryOrderBundle = (id) => {
+  const order = memoryOrderStore.orders.find((item) => Number(item.id) === Number(id));
+  if (!order) return null;
+  const items = memoryOrderStore.items
+    .filter((item) => Number(item.order_id) === Number(order.id))
+    .sort((a, b) => Number(a.id) - Number(b.id));
+  return { order, items };
+};
+
+const normalizeWaybillStatus = (value) => {
+  const status = String(value || 'not_requested').trim().toLowerCase();
+  return ['not_requested', 'pending', 'generated', 'failed'].includes(status) ? status : 'not_requested';
+};
+
+const mapMemoryOrderBundle = ({ order, items }) => ({
+  ...mapOrderRecord(order),
+  return_eligible: false,
+  return_eligibility_message: '',
+  return_request: null,
+  items: items.map((item) => ({
+    ...item,
+    product_price: roundMoney(item.product_price),
+    price: roundMoney(item.product_price),
+  })),
+});
+
+const createMemoryOrder = (req) => {
+  const body = req.body || {};
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+  const normalizedItems = rawItems.map((item) => ({
+    product_id: Number(item.product_id ?? item.productId),
+    quantity: Math.max(1, Math.trunc(toFiniteNumber(item.quantity, 1))),
+    product_name: normalizeText(item.product_name ?? item.name ?? item.product?.name) || `Product #${item.product_id ?? item.productId}`,
+    product_price: roundMoney(item.product_price ?? item.price ?? item.product?.price ?? 0),
+  })).filter((item) => Number.isInteger(item.product_id) && item.product_id > 0);
+
+  if (normalizedItems.length === 0) {
+    return { status: 400, body: { message: 'Order must contain at least one item' } };
+  }
+
+  if (!normalizeText(body.shipping_address)) {
+    return { status: 400, body: { message: 'Shipping address is required' } };
+  }
+
+  const paymentMethod = normalizeText(body.payment_method) || 'cod';
+  const timestamp = new Date().toISOString();
+  const order = {
+    id: memoryOrderStore.nextOrderId--,
+    order_number: null,
+    user_id: req.user?.id || null,
+    guest_name: body.guest_info?.name || null,
+    guest_email: body.guest_info?.email || null,
+    total_amount: roundMoney(body.total_amount || 0),
+    shipping_address: normalizeText(body.shipping_address),
+    shipping_lat: body.shipping_lat ?? null,
+    shipping_lng: body.shipping_lng ?? null,
+    payment_intent_id: normalizeText(body.payment_intent_id),
+    status: paymentMethod === 'cod' ? 'pending' : 'paid',
+    discount_amount: roundMoney(body.discount_amount || 0),
+    tax_amount: roundMoney(body.tax_amount || 0),
+    shipping_method: resolveShippingMethod(body.shipping_method),
+    promo_code_used: normalizeText(body.promo_code_used),
+    payment_method: paymentMethod,
+    source: normalizeText(body.source) || 'online',
+    shipping_address_snapshot: buildShippingAddressSnapshot(body.shipping_address_snapshot || {}, body.shipping_address),
+    courier: null,
+    waybill_status: 'not_requested',
+    payment_provider: paymentMethod === 'gcash' ? 'paymongo' : 'cod',
+    payment_status: paymentMethod === 'cod' ? 'pending' : 'paid',
+    payment_reference: paymentMethod === 'cod' ? `COD-${Date.now()}` : null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  memoryOrderStore.orders.unshift(order);
+  for (const item of normalizedItems) {
+    memoryOrderStore.items.push({
+      id: memoryOrderStore.nextItemId--,
+      order_id: order.id,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      product_price: item.product_price,
+      price: item.product_price,
+      quantity: item.quantity,
+    });
+  }
+
+  const fullOrder = mapMemoryOrderBundle(getMemoryOrderBundle(order.id));
+  emitNewOrder(fullOrder);
+  return {
+    status: 201,
+    body: {
+      message: 'Order created successfully',
+      order: fullOrder,
+    },
+  };
+};
+
+const buildOrderReturnInfo = async (db, order, userId, isStaff) => {
+  const [settings, latestReturnResult] = await Promise.all([
+    getReturnSettings(db),
+    db.query(
+      `SELECT id, status, created_at, updated_at
+       FROM returns
+       WHERE order_id = $1
+         ${isStaff ? '' : 'AND user_id = $2'}
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      isStaff ? [order.id] : [order.id, userId]
+    ),
+  ]);
+
+  const latestReturn = latestReturnResult.rows[0] || null;
+  const eligibility = buildReturnEligibility({
+    order,
+    latestReturn,
+    returnWindowDays: settings.returnWindowDays,
+  });
+
+  return {
+    return_eligible: eligibility.eligible,
+    return_eligibility_message: eligibility.message,
+    return_window_days: eligibility.returnWindowDays,
+    return_deadline_at: eligibility.deadlineAt ? eligibility.deadlineAt.toISOString() : null,
+    delivered_at: eligibility.deliveredAt ? eligibility.deliveredAt.toISOString() : (order.delivered_at || null),
+    return_request: latestReturn ? {
+      id: latestReturn.id,
+      status: latestReturn.status,
+      created_at: latestReturn.created_at,
+      updated_at: latestReturn.updated_at,
+    } : null,
+  };
+};
 
 // Get all orders (admin)
 export const getAllOrders = async (req, res) => {
   try {
-    const result = await pool.query(`
+    const { page, limit, offset, paginated } = parsePagination(req.query || {});
+    if (shouldUseDatabaseReadFallback()) {
+      const orders = await getOrdersFallback({ page, limit, paginated });
+      if (paginated) {
+        return res.json({
+          orders,
+          page,
+          limit,
+          total: orders.length,
+          totalPages: Math.max(1, Math.ceil(orders.length / limit)),
+        });
+      }
+      return res.json(orders);
+    }
+
+    const query = `
       SELECT o.*, 
              u.name as customer_name, u.email as customer_email,
              COUNT(oi.id) as item_count
@@ -16,16 +351,49 @@ export const getAllOrders = async (req, res) => {
       LEFT JOIN order_items oi ON o.id = oi.order_id
       GROUP BY o.id, u.name, u.email
       ORDER BY o.created_at DESC
-    `);
+      ${paginated ? 'LIMIT $1 OFFSET $2' : ''}
+    `;
 
-    res.json(result.rows.map(order => ({
-      ...order,
-      total_amount: parseFloat(order.total_amount),
-      discount_amount: parseFloat(order.discount_amount || 0),
+    const result = paginated
+      ? await pool.query(query, [limit, offset])
+      : await pool.query(query);
+
+    const total = paginated
+      ? Number((await pool.query('SELECT COUNT(*)::int AS total FROM orders')).rows[0]?.total || 0)
+      : result.rows.length;
+
+    const orders = result.rows.map(order => ({
+      ...mapOrderRecord(order),
       item_count: parseInt(order.item_count)
-    })));
+    }));
+
+    if (paginated) {
+      return res.json({
+        orders,
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      });
+    }
+
+    res.json(orders);
   } catch (error) {
     console.error('Get all orders error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      const { page, limit, paginated } = parsePagination(req.query || {});
+      const orders = await getOrdersFallback({ page, limit, paginated });
+      if (paginated) {
+        return res.json({
+          orders,
+          page,
+          limit,
+          total: orders.length,
+          totalPages: Math.max(1, Math.ceil(orders.length / limit)),
+        });
+      }
+      return res.json(orders);
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -34,25 +402,72 @@ export const getAllOrders = async (req, res) => {
 export const getUserOrders = async (req, res) => {
   try {
     const userId = req.user.id;
+    const { page, limit, offset, paginated } = parsePagination(req.query || {});
+    if (shouldUseDatabaseReadFallback()) {
+      const orders = await getOrdersFallback({ userId, page, limit, paginated });
+      if (paginated) {
+        return res.json({
+          orders,
+          page,
+          limit,
+          total: orders.length,
+          totalPages: Math.max(1, Math.ceil(orders.length / limit)),
+        });
+      }
+      return res.json(orders);
+    }
 
-    const result = await pool.query(
-      `SELECT o.*, COUNT(oi.id) as item_count
-       FROM orders o
-       LEFT JOIN order_items oi ON o.id = oi.order_id
-       WHERE o.user_id = $1
-       GROUP BY o.id
-       ORDER BY o.created_at DESC`,
-      [userId]
-    );
+    const query = `
+      SELECT o.*, COUNT(oi.id) as item_count
+      FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.user_id = $1
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+      ${paginated ? 'LIMIT $2 OFFSET $3' : ''}
+    `;
 
-    res.json(result.rows.map(order => ({
-      ...order,
-      total_amount: parseFloat(order.total_amount),
-      discount_amount: parseFloat(order.discount_amount || 0),
+    const result = paginated
+      ? await pool.query(query, [userId, limit, offset])
+      : await pool.query(query, [userId]);
+
+    const total = paginated
+      ? Number((await pool.query('SELECT COUNT(*)::int AS total FROM orders WHERE user_id = $1', [userId])).rows[0]?.total || 0)
+      : result.rows.length;
+
+    const orders = result.rows.map(order => ({
+      ...mapOrderRecord(order),
       item_count: parseInt(order.item_count)
-    })));
+    }));
+
+    if (paginated) {
+      return res.json({
+        orders,
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      });
+    }
+
+    res.json(orders);
   } catch (error) {
     console.error('Get user orders error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      const userId = req.user.id;
+      const { page, limit, paginated } = parsePagination(req.query || {});
+      const orders = await getOrdersFallback({ userId, page, limit, paginated });
+      if (paginated) {
+        return res.json({
+          orders,
+          page,
+          limit,
+          total: orders.length,
+          totalPages: Math.max(1, Math.ceil(orders.length / limit)),
+        });
+      }
+      return res.json(orders);
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -62,7 +477,66 @@ export const getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
-    const isStaff = req.user?.role === 'admin' || req.user?.role === 'cashier';
+    const isStaff = STAFF_ROLES.has(req.user?.role);
+    const memoryBundle = getMemoryOrderBundle(id);
+
+    if (memoryBundle) {
+      if (!isStaff && Number(memoryBundle.order.user_id) !== Number(userId)) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      return res.json(mapMemoryOrderBundle(memoryBundle));
+    }
+
+    if (shouldUseDatabaseReadFallback()) {
+      const rows = await supabaseRestFetch('orders', {
+        select: '*,customer:users!orders_user_id_fkey(name,email)',
+        id: `eq.${id}`,
+        limit: 1,
+      });
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(404).json({ message: 'Order not found' });
+      }
+
+      const order = {
+        ...rows[0],
+        customer_name: rows[0].customer?.name,
+        customer_email: rows[0].customer?.email,
+      };
+
+      if (!isStaff && Number(order.user_id) !== Number(userId)) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      const items = await supabaseRestFetch('order_items', {
+        select: '*,products(name,image,part_number,price,buying_price,box_number,category_id,stock_quantity,low_stock_threshold,sale_price,is_on_sale,sku,barcode)',
+        order_id: `eq.${id}`,
+        order: 'id.asc',
+      }).catch(() => []);
+
+      return res.json({
+        ...mapOrderRecord(order),
+        return_eligible: false,
+        return_eligibility_message: '',
+        return_request: null,
+        items: (Array.isArray(items) ? items : []).map((item) => ({
+          ...item,
+          product_name: item.product_name || item.products?.name,
+          product_image: item.products?.image,
+          product_part_number: item.products?.part_number,
+          product_price_current: item.products?.price,
+          product_buying_price: item.products?.buying_price,
+          product_box_number: item.products?.box_number,
+          product_category_id: item.products?.category_id,
+          product_stock_quantity: item.products?.stock_quantity,
+          product_low_stock_threshold: item.products?.low_stock_threshold,
+          product_sale_price: item.products?.sale_price,
+          product_is_on_sale: item.products?.is_on_sale,
+          product_sku: item.products?.sku,
+          product_barcode: item.products?.barcode,
+          product_price: roundMoney(item.product_price),
+        })),
+      });
+    }
 
     // Get order
     const orderResult = await pool.query(
@@ -85,7 +559,8 @@ export const getOrderById = async (req, res) => {
     const itemsResult = await pool.query(
       `SELECT 
          oi.*, 
-         p.name as product_name,
+         COALESCE(oi.product_name, p.name) as product_name,
+         p.name as product_name_current,
          p.image as product_image,
          p.part_number as product_part_number,
          p.price as product_price_current,
@@ -100,21 +575,27 @@ export const getOrderById = async (req, res) => {
          p.barcode as product_barcode
        FROM order_items oi
        LEFT JOIN products p ON oi.product_id = p.id
-       WHERE oi.order_id = $1`,
+      WHERE oi.order_id = $1`,
       [id]
     );
 
+    const returnInfo = await buildOrderReturnInfo(pool, order, userId, isStaff);
+
     res.json({
-      ...order,
-      total_amount: parseFloat(order.total_amount),
-      discount_amount: parseFloat(order.discount_amount || 0),
+      ...mapOrderRecord(order),
+      ...returnInfo,
       items: itemsResult.rows.map(item => ({
         ...item,
-        product_price: parseFloat(item.product_price)
+        product_price: roundMoney(item.product_price)
       }))
     });
   } catch (error) {
     console.error('Get order error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      const memoryBundle = getMemoryOrderBundle(req.params.id);
+      if (memoryBundle) return res.json(mapMemoryOrderBundle(memoryBundle));
+      return res.status(503).json({ message: 'Order details are temporarily unavailable. Please try again.' });
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -122,26 +603,86 @@ export const getOrderById = async (req, res) => {
 // Update order status (admin)
 export const updateOrderStatus = async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const status = String(req.body?.status || '').trim().toLowerCase();
+  const trackingNumber = normalizeText(req.body?.tracking_number ?? req.body?.trackingNumber);
 
-  const validStatuses = ['pending', 'paid', 'preparing', 'shipped', 'completed', 'cancelled'];
-
-  if (!validStatuses.includes(status)) {
+  if (!VALID_ORDER_STATUSES.includes(status)) {
     return res.status(400).json({ message: 'Invalid status' });
   }
 
+  if (status === 'delivered') {
+    return res.status(400).json({
+      message: 'Use rider delivery confirmation to mark this order as delivered.',
+    });
+  }
+
   try {
+    const orderDetailResult = await pool.query(ORDER_NOTIFICATION_DETAIL_QUERY, [id]);
+
+    if (orderDetailResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const orderDetail = orderDetailResult.rows[0];
+    const currentStatus = String(orderDetail.status || '').toLowerCase();
+
+    if (status === currentStatus) {
+      const currentOrderResult = await pool.query('SELECT * FROM orders WHERE id = $1', [id]);
+      return res.json({
+        message: 'Order status unchanged',
+        order: currentOrderResult.rows[0],
+      });
+    }
+
+    if (!canStaffTransitionStatus(currentStatus, status)) {
+      return res.status(400).json({
+        message: `Invalid status transition from ${currentStatus} to ${status}`,
+      });
+    }
+
     const result = await pool.query(
-      'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      [status, id]
+      `UPDATE orders
+       SET status = $1,
+           tracking_number = CASE
+             WHEN $1 = 'shipped' THEN COALESCE($3, tracking_number)
+             ELSE tracking_number
+           END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+         AND status = $4
+       RETURNING *`,
+      [status, id, trackingNumber, currentStatus]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Order not found' });
+      return res.status(409).json({
+        message: 'Order status changed by another request. Please refresh and try again.',
+      });
     }
 
     const updatedOrder = result.rows[0];
     emitOrderStatusUpdate(updatedOrder);
+
+    if (orderDetail.user_id) {
+      await createUserNotification(pool, {
+        user_id: orderDetail.user_id,
+        type: 'order.status',
+        title: `Order #${String(orderDetail.order_number || updatedOrder.id).padStart(4, '0')} ${status}`,
+        message: orderDetail.product_name
+          ? `${buildOrderStatusMessage(status)} Item: ${orderDetail.product_name}.`
+          : buildOrderStatusMessage(status),
+        reference_id: updatedOrder.id,
+        reference_type: 'order',
+        thumbnail_url: orderDetail.product_image || null,
+        metadata: {
+          status,
+          order_id: updatedOrder.id,
+          order_number: orderDetail.order_number || updatedOrder.id,
+          product_id: orderDetail.product_id || null,
+          product_name: orderDetail.product_name || null,
+        },
+      });
+    }
 
     res.json({
       message: 'Order status updated',
@@ -153,33 +694,192 @@ export const updateOrderStatus = async (req, res) => {
   }
 };
 
-// Cancel order (customer - only if not yet shipped/preparing)
+export const confirmOrderDelivery = async (req, res) => {
+  const { id } = req.params;
+  const riderId = req.user?.id;
+
+  try {
+    const orderDetailResult = await pool.query(ORDER_NOTIFICATION_DETAIL_QUERY, [id]);
+    if (orderDetailResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const orderDetail = orderDetailResult.rows[0];
+    const currentStatus = String(orderDetail.status || '').toLowerCase();
+    if (!['shipped', 'out_for_delivery'].includes(currentStatus)) {
+      return res.status(400).json({
+        message: 'Only shipped or out-for-delivery orders can be confirmed as delivered by a rider.',
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE orders
+       SET status = 'delivered',
+           delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
+           rider_confirmed_delivery_at = COALESCE(rider_confirmed_delivery_at, CURRENT_TIMESTAMP),
+           rider_confirmed_by = COALESCE(rider_confirmed_by, $2),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND status IN ('shipped', 'out_for_delivery')
+       RETURNING *`,
+      [id, riderId || null]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(409).json({
+        message: 'Order status changed by another request. Please refresh and try again.',
+      });
+    }
+
+    const updatedOrder = result.rows[0];
+    await pool.query(
+      `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note)
+       VALUES ($1, $2, 'delivered', 'staff', $3, 'Delivery confirmed by rider')`,
+      [updatedOrder.id, currentStatus, riderId || null]
+    );
+    emitOrderStatusUpdate(updatedOrder);
+
+    if (orderDetail.user_id) {
+      await createUserNotification(pool, {
+        user_id: orderDetail.user_id,
+        type: 'order.status',
+        title: `Order #${String(orderDetail.order_number || updatedOrder.id).padStart(4, '0')} delivered`,
+        message: orderDetail.product_name
+          ? `${buildOrderStatusMessage('delivered')} Item: ${orderDetail.product_name}.`
+          : buildOrderStatusMessage('delivered'),
+        reference_id: updatedOrder.id,
+        reference_type: 'order',
+        thumbnail_url: orderDetail.product_image || null,
+        metadata: {
+          status: 'delivered',
+          order_id: updatedOrder.id,
+          order_number: orderDetail.order_number || updatedOrder.id,
+          rider_confirmed_by: riderId || null,
+          product_id: orderDetail.product_id || null,
+          product_name: orderDetail.product_name || null,
+        },
+      });
+    }
+
+    res.json({
+      message: 'Delivery confirmed by rider',
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error('Confirm delivery error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const confirmOrderReceipt = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  try {
+    const orderDetailResult = await pool.query(ORDER_NOTIFICATION_DETAIL_QUERY, [id]);
+    if (orderDetailResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const orderDetail = orderDetailResult.rows[0];
+    if (orderDetail.user_id !== userId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const currentStatus = String(orderDetail.status || '').toLowerCase();
+    if (currentStatus !== 'delivered') {
+      return res.status(400).json({
+        message: 'Receipt can only be confirmed after rider delivery confirmation.',
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE orders
+       SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
+           customer_confirmed_receipt_at = COALESCE(customer_confirmed_receipt_at, CURRENT_TIMESTAMP),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND user_id = $2
+         AND status = 'delivered'
+       RETURNING *`,
+      [id, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(409).json({
+        message: 'Order is no longer eligible for receipt confirmation. Please refresh order details.',
+      });
+    }
+
+    const updatedOrder = result.rows[0];
+    await pool.query(
+      `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note)
+       VALUES ($1, 'delivered', 'delivered', 'customer', $2, 'Customer confirmed receipt')`,
+      [updatedOrder.id, userId]
+    );
+    emitOrderStatusUpdate(updatedOrder);
+
+    await createUserNotification(pool, {
+      user_id: userId,
+      type: 'order.status',
+      title: `Order #${String(orderDetail.order_number || updatedOrder.id).padStart(4, '0')} receipt confirmed`,
+      message: orderDetail.product_name
+        ? `Thank you for confirming receipt. Item: ${orderDetail.product_name}.`
+        : 'Thank you for confirming receipt.',
+      reference_id: updatedOrder.id,
+      reference_type: 'order',
+      thumbnail_url: orderDetail.product_image || null,
+      metadata: {
+        status: 'delivered',
+        order_id: updatedOrder.id,
+        order_number: orderDetail.order_number || updatedOrder.id,
+        customer_confirmed_receipt_at: updatedOrder.customer_confirmed_receipt_at,
+        product_id: orderDetail.product_id || null,
+        product_name: orderDetail.product_name || null,
+      },
+    });
+
+    res.json({
+      message: 'Order receipt confirmed.',
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error('Confirm receipt error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Cancel order (customer - only while cancellation is still allowed)
 export const cancelOrder = async (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
 
   try {
-    const orderResult = await pool.query('SELECT * FROM orders WHERE id = $1', [id]);
-    if (orderResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
-
-    const order = orderResult.rows[0];
-
-    // Customers can only cancel their own orders
-    if (order.user_id !== userId) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    // Only allow cancellation if not yet shipped
-    if (order.status !== 'pending' && order.status !== 'paid') {
-      return res.status(400).json({ message: 'Order cannot be cancelled once it is being prepared or shipped' });
-    }
-
     const result = await pool.query(
-      'UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      ['cancelled', id]
+      `UPDATE orders
+       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND user_id = $2
+         AND status IN ('pending', 'paid')
+       RETURNING *`,
+      [id, userId]
     );
+
+    if (result.rows.length === 0) {
+      const existingOrder = await pool.query('SELECT user_id, status FROM orders WHERE id = $1', [id]);
+      if (existingOrder.rows.length === 0) {
+        return res.status(404).json({ message: 'Order not found' });
+      }
+
+      const order = existingOrder.rows[0];
+      if (order.user_id !== userId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      return res.status(400).json({
+        message: 'Order cannot be cancelled once it is being prepared or shipped',
+      });
+    }
 
     const updatedOrder = result.rows[0];
     emitOrderStatusUpdate(updatedOrder);
@@ -194,103 +894,355 @@ export const cancelOrder = async (req, res) => {
   }
 };
 
+const getOrdersFallback = async ({ userId = null, page, limit, paginated } = {}) => {
+  const params = {
+    select: '*,customer:users!orders_user_id_fkey(name,email)',
+    order: 'created_at.desc',
+    limit: paginated ? limit : 5000,
+  };
+  if (userId) {
+    params.user_id = `eq.${userId}`;
+  }
+
+  const orders = await supabaseRestFetch('orders', params).catch(() => []);
+  const rows = Array.isArray(orders) ? orders : [];
+  const ids = rows.map((order) => Number(order.id)).filter(Boolean);
+  let itemCounts = new Map();
+
+  if (ids.length > 0) {
+    const items = await supabaseRestFetch('order_items', {
+      select: 'order_id',
+      order_id: `in.(${ids.join(',')})`,
+      limit: 10000,
+    }).catch(() => []);
+    itemCounts = (Array.isArray(items) ? items : []).reduce((map, item) => {
+      const orderId = Number(item.order_id);
+      map.set(orderId, (map.get(orderId) || 0) + 1);
+      return map;
+    }, new Map());
+  }
+
+  const restOrders = rows.map((order) => ({
+    ...mapOrderRecord({
+      ...order,
+      customer_name: order.customer?.name || order.customer_name,
+      customer_email: order.customer?.email || order.customer_email,
+    }),
+    item_count: itemCounts.get(Number(order.id)) || 0,
+  }));
+
+  const memoryOrders = memoryOrderStore.orders
+    .filter((order) => !userId || Number(order.user_id) === Number(userId))
+    .map((order) => ({
+      ...mapOrderRecord(order),
+      item_count: memoryOrderStore.items.filter((item) => Number(item.order_id) === Number(order.id)).length,
+    }));
+
+  return [...memoryOrders, ...restOrders]
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+};
+
 // Create order (after payment)
 export const createOrder = async (req, res) => {
   const {
     items,
     shipping_address,
+    shipping_lat,
+    shipping_lng,
     payment_intent_id,
     total_amount,
     discount_amount = 0,
     promo_code_used,
     source = 'online',
     payment_method,
+    shipping_method,
+    shipping_address_snapshot,
     amount_tendered,
     change_due,
     cashier_id
   } = req.body;
 
-  const client = await pool.connect();
+  let client;
 
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     const userId = source === 'pos' ? null : req.user?.id;
     const guestInfo = req.body.guest_info;
+    const normalizedPaymentIntentId = normalizeText(payment_intent_id);
     const normalizedItems = (items || []).map(item => ({
       product_id: item.product_id ?? item.productId,
-      quantity: item.quantity
+      quantity: Number(item.quantity)
     }));
+    const resolvedShippingMethod = resolveShippingMethod(shipping_method);
 
-    if (normalizedItems.some(item => !item.product_id)) {
+    if (normalizedItems.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Order must contain at least one item' });
+    }
+
+    if (source !== 'pos' && !normalizeText(shipping_address)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Shipping address is required' });
+    }
+
+    const initialAddressSnapshot = buildShippingAddressSnapshot(shipping_address_snapshot, shipping_address);
+    if (source !== 'pos' && resolvedShippingMethod !== 'pickup') {
+      const postalCode = normalizeText(initialAddressSnapshot.postal_code);
+      if (!postalCode || !/^\d{4}$/.test(postalCode)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: 'Please correct the highlighted address fields.',
+          fieldErrors: { postal_code: 'ZIP code must contain exactly 4 digits.' },
+        });
+      }
+
+      const addressValidation = await validatePhilippineAddress({
+        state: initialAddressSnapshot.state,
+        city: initialAddressSnapshot.city,
+        barangay: initialAddressSnapshot.barangay,
+        province_code: initialAddressSnapshot.province_code,
+        city_code: initialAddressSnapshot.city_code,
+        barangay_code: initialAddressSnapshot.barangay_code,
+      });
+
+      if (!addressValidation.valid) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: 'Please select a valid Philippine shipping address.',
+          fieldErrors: addressValidation.fieldErrors,
+        });
+      }
+
+      Object.assign(initialAddressSnapshot, addressValidation.normalized);
+      initialAddressSnapshot.address_string = [
+        initialAddressSnapshot.recipient_name,
+        initialAddressSnapshot.street,
+        initialAddressSnapshot.barangay,
+        initialAddressSnapshot.city,
+        `${initialAddressSnapshot.state} ${initialAddressSnapshot.postal_code || ''}`.trim(),
+        'Philippines',
+      ].filter(Boolean).join(', ');
+    }
+
+    if (source !== 'pos' && normalizedPaymentIntentId) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`order:payment-intent:${normalizedPaymentIntentId}`]);
+
+      const existingOrderResult = await client.query(
+        'SELECT id FROM orders WHERE payment_intent_id = $1 LIMIT 1',
+        [normalizedPaymentIntentId]
+      );
+
+      if (existingOrderResult.rows.length > 0) {
+        await client.query('COMMIT');
+        return res.status(200).json({
+          message: 'Order already processed for this payment intent',
+          idempotent: true,
+          order_id: existingOrderResult.rows[0].id,
+        });
+      }
+    }
+
+    if (normalizedItems.some(item => !item.product_id || !Number.isInteger(item.quantity) || item.quantity <= 0)) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Invalid items payload' });
     }
 
-    // Check stock levels first
-    for (const item of normalizedItems) {
-      const stockCheck = await client.query(
-        'SELECT name, stock_quantity FROM products WHERE id = $1 FOR UPDATE',
-        [item.product_id]
-      );
+    const uniqueProductIds = [...new Set(normalizedItems.map(item => Number(item.product_id)))];
 
-      const product = stockCheck.rows[0];
-      if (!product || product.stock_quantity < item.quantity) {
+    const bundleComponentsResult = await client.query(
+      `SELECT bc.bundle_product_id, bc.component_product_id, bc.quantity, bc.display_order
+       FROM product_bundle_components bc
+       WHERE bc.bundle_product_id = ANY($1::int[])`,
+      [uniqueProductIds]
+    );
+
+    const componentIds = bundleComponentsResult.rows.map((row) => Number(row.component_product_id));
+    const lockedProductIds = [...new Set([...uniqueProductIds, ...componentIds])];
+
+    // Lock purchased products and any bundle components in one transaction so stock checks and decrements stay consistent.
+    const productSnapshotResult = await client.query(
+      `SELECT id, name, price, stock_quantity, product_type, status
+       FROM products
+       WHERE id = ANY($1::int[])
+       FOR UPDATE`,
+      [lockedProductIds]
+    );
+
+    const productMap = new Map(productSnapshotResult.rows.map(product => [Number(product.id), product]));
+    const bundleComponentsByBundle = new Map();
+    for (const component of bundleComponentsResult.rows) {
+      const bundleId = Number(component.bundle_product_id);
+      if (!bundleComponentsByBundle.has(bundleId)) bundleComponentsByBundle.set(bundleId, []);
+      bundleComponentsByBundle.get(bundleId).push({
+        component_product_id: Number(component.component_product_id),
+        quantity: Number(component.quantity),
+      });
+    }
+
+    let subtotalAmount = 0;
+    const stockDeductionMap = new Map();
+
+    for (const item of normalizedItems) {
+      const product = productMap.get(Number(item.product_id));
+
+      if (!product) {
         await client.query('ROLLBACK');
         return res.status(400).json({
-          message: `Insufficient stock for ${product?.name || 'Product #' + item.product_id}`
+          message: `Product #${item.product_id} is no longer available.`
         });
       }
+
+      if (String(product.status || '').toLowerCase() !== 'active') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `${product.name}: This product is not currently purchasable.`
+        });
+      }
+
+      const productPrice = toFiniteNumber(product.price, NaN);
+      if (!Number.isFinite(productPrice) || productPrice < 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `${product.name}: Invalid product price. Please contact support.`
+        });
+      }
+
+      subtotalAmount += roundMoney(productPrice * item.quantity);
+
+      if (String(product.product_type || 'single') === 'bundle') {
+        const components = bundleComponentsByBundle.get(Number(product.id)) || [];
+        if (components.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            message: `${product.name}: Bundle has no configured components.`
+          });
+        }
+
+        for (const component of components) {
+          const componentProduct = productMap.get(component.component_product_id);
+          const requiredQuantity = component.quantity * item.quantity;
+
+          if (!componentProduct) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              message: `${product.name}: A bundle component is no longer available.`
+            });
+          }
+
+          const nextRequired = (stockDeductionMap.get(component.component_product_id) || 0) + requiredQuantity;
+          if (Number(componentProduct.stock_quantity) < nextRequired) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              message: `${product.name}: Maximum available bundle quantity is limited by ${componentProduct.name}.`
+            });
+          }
+
+          stockDeductionMap.set(component.component_product_id, nextRequired);
+        }
+      } else {
+        const nextRequired = (stockDeductionMap.get(Number(product.id)) || 0) + item.quantity;
+        if (Number(product.stock_quantity) < nextRequired) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            message: `${product.name}: Maximum available quantity is ${product.stock_quantity}.`
+          });
+        }
+        stockDeductionMap.set(Number(product.id), nextRequired);
+      }
+    }
+
+    const normalizedDiscountAmount = Math.min(
+      roundMoney(Math.max(0, toFiniteNumber(discount_amount, 0))),
+      roundMoney(subtotalAmount)
+    );
+    const shippingCost = roundMoney(computeShippingCost(roundMoney(subtotalAmount), resolvedShippingMethod));
+    const taxableAmount = roundMoney(Math.max(0, roundMoney(subtotalAmount) - normalizedDiscountAmount + shippingCost));
+    const vatAmount = roundMoney(taxableAmount * VAT_RATE);
+    const computedTotalAmount = roundMoney(taxableAmount + vatAmount);
+
+    const clientTotalAmount = toFiniteNumber(total_amount, NaN);
+    if (!Number.isFinite(clientTotalAmount) || clientTotalAmount <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Invalid total amount' });
     }
 
     // Respect the payment method from the frontend for online orders
     const resolvedPaymentMethod = source === 'pos'
       ? (payment_method || 'cash')
-      : (payment_method || 'stripe');
+      : (payment_method || 'gcash');
+    const isCashOnDelivery = source !== 'pos' && String(resolvedPaymentMethod || '').toLowerCase() === 'cod';
     const resolvedCashierId = source === 'pos' ? (cashier_id || req.user?.id || null) : null;
+    const resolvedAddressSnapshot = initialAddressSnapshot;
 
     // Create order
     const orderResult = await client.query(
       `INSERT INTO orders (
         user_id, guest_name, guest_email, total_amount, 
-        shipping_address, payment_intent_id, status, 
-        discount_amount, promo_code_used, payment_method, source,
+        shipping_address, shipping_lat, shipping_lng, payment_intent_id, status, 
+        discount_amount, tax_amount, shipping_method, promo_code_used, payment_method, source,
+        shipping_address_snapshot,
         amount_tendered, change_due, cashier_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19) 
       RETURNING *`,
       [
         userId,
         guestInfo?.name || null,
         guestInfo?.email || null,
-        total_amount,
+        computedTotalAmount,
         shipping_address,
-        payment_intent_id,
-        'paid',
-        discount_amount,
+        shipping_lat ?? null,
+        shipping_lng ?? null,
+        normalizedPaymentIntentId,
+        isCashOnDelivery ? 'pending' : 'paid',
+        normalizedDiscountAmount,
+        vatAmount,
+        resolvedShippingMethod,
         promo_code_used || null,
         resolvedPaymentMethod,
         source,
+        JSON.stringify(resolvedAddressSnapshot),
         source === 'pos' ? amount_tendered || null : null,
         source === 'pos' ? change_due || null : null,
         resolvedCashierId
       ]
     );
 
-    const order = orderResult.rows[0];
+    let order = orderResult.rows[0];
 
-    // Add order items and update stock
+    // Add order items for purchased products. Stock is deducted from singles or bundle components below.
+    const stockUpdates = [];
     for (const item of normalizedItems) {
-      // Add order item
+      const product = productMap.get(Number(item.product_id));
+
+      // Persist product snapshot into order_items so order history stays readable even if product changes later.
       await client.query(
         `INSERT INTO order_items (order_id, product_id, product_name, product_price, quantity)
-         SELECT $1, $2, name, price, $3 FROM products WHERE id = $2`,
-        [order.id, item.product_id, item.quantity]
+         VALUES ($1, $2, $3, $4, $5)`,
+        [order.id, item.product_id, product.name, roundMoney(product.price), item.quantity]
       );
 
-      // Update product stock
-      await client.query(
-        'UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2',
-        [item.quantity, item.product_id]
+    }
+
+    for (const [deductProductId, quantityToDeduct] of stockDeductionMap.entries()) {
+      const deductionProduct = productMap.get(Number(deductProductId));
+      const stockUpdateResult = await client.query(
+        `UPDATE products
+         SET stock_quantity = stock_quantity - $1
+         WHERE id = $2 AND stock_quantity >= $1
+         RETURNING id, name, stock_quantity`,
+        [quantityToDeduct, deductProductId]
       );
+
+      if (stockUpdateResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `${deductionProduct?.name || `Product #${deductProductId}`}: Unable to update stock. Please try checkout again.`
+        });
+      }
+
+      stockUpdates.push(stockUpdateResult.rows[0]);
     }
 
     // Clear user's cart if logged in
@@ -302,8 +1254,8 @@ export const createOrder = async (req, res) => {
 
       if (cartResult.rows.length > 0) {
         await client.query(
-          'DELETE FROM cart_items WHERE cart_id = $1',
-          [cartResult.rows[0].id]
+          'DELETE FROM cart_items WHERE cart_id = $1 AND product_id = ANY($2::int[])',
+          [cartResult.rows[0].id, uniqueProductIds]
         );
       }
     }
@@ -313,7 +1265,8 @@ export const createOrder = async (req, res) => {
     const itemsResult = await client.query(
       `SELECT 
          oi.*, 
-         p.name as product_name,
+         COALESCE(oi.product_name, p.name) as product_name,
+         p.name as product_name_current,
          p.image as product_image,
          p.part_number as product_part_number,
          p.price as product_price_current,
@@ -333,23 +1286,21 @@ export const createOrder = async (req, res) => {
     );
 
     const fullOrder = {
-      ...order,
-      total_amount: parseFloat(order.total_amount),
-      discount_amount: parseFloat(order.discount_amount || 0),
+      ...mapOrderRecord(order),
       items: itemsResult.rows.map(item => ({
         ...item,
-        product_price: parseFloat(item.product_price)
+        product_price: roundMoney(item.product_price)
       }))
     };
 
     // Emit real-time events
     emitNewOrder(fullOrder);
     // Emit stock updates for each item
-    for (const item of itemsResult.rows) {
+    for (const stockUpdate of stockUpdates) {
       emitStockUpdate({
-        product_id: item.product_id,
-        stock_quantity: parseInt(item.product_stock_quantity),
-        name: item.product_name
+        product_id: stockUpdate.id,
+        stock_quantity: parseInt(stockUpdate.stock_quantity),
+        name: stockUpdate.name
       });
     }
 
@@ -358,11 +1309,38 @@ export const createOrder = async (req, res) => {
       order: fullOrder
     });
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (client) {
+      await client.query('ROLLBACK').catch(() => {});
+    }
+
+    if (error?.code === '23505') {
+      const duplicatePaymentIntent = normalizeText(req.body?.payment_intent_id);
+      if (duplicatePaymentIntent) {
+        const duplicateResult = await pool.query(
+          'SELECT id FROM orders WHERE payment_intent_id = $1 LIMIT 1',
+          [duplicatePaymentIntent]
+        );
+
+        if (duplicateResult.rows.length > 0) {
+          return res.status(200).json({
+            message: 'Order already processed for this payment intent',
+            idempotent: true,
+            order_id: duplicateResult.rows[0].id,
+          });
+        }
+      }
+    }
+
     console.error('Create order error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      const fallback = createMemoryOrder(req);
+      return res.status(fallback.status).json(fallback.body);
+    }
     res.status(500).json({ message: 'Failed to create order' });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 // Generate invoice HTML for an order
@@ -370,7 +1348,7 @@ export const getOrderInvoice = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
-    const isStaff = req.user?.role === 'admin' || req.user?.role === 'cashier';
+    const isStaff = STAFF_ROLES.has(req.user?.role);
 
     // Get order
     const orderResult = await pool.query(
@@ -391,7 +1369,7 @@ export const getOrderInvoice = async (req, res) => {
 
     // Get order items
     const itemsResult = await pool.query(
-      `SELECT oi.*, p.name as product_name, p.part_number
+      `SELECT oi.*, COALESCE(oi.product_name, p.name) as product_name, p.part_number
        FROM order_items oi
        LEFT JOIN products p ON oi.product_id = p.id
        WHERE oi.order_id = $1`,
@@ -401,12 +1379,15 @@ export const getOrderInvoice = async (req, res) => {
     const items = itemsResult.rows;
 
     // Generate invoice HTML (BIR RR 18-2012 compliant)
-    const subtotal = items.reduce((sum, item) => sum + parseFloat(item.product_price) * item.quantity, 0);
-    const discount = parseFloat(order.discount_amount || 0);
-    const totalAmount = parseFloat(order.total_amount);
-    const vatRate = 0.12;
-    const vatableSales = totalAmount / (1 + vatRate);
-    const vatAmount = totalAmount - vatableSales;
+    const subtotal = roundMoney(items.reduce((sum, item) => {
+      const linePrice = roundMoney(item.product_price);
+      const quantity = toFiniteNumber(item.quantity, 0);
+      return sum + (linePrice * quantity);
+    }, 0));
+    const discount = roundMoney(order.discount_amount || 0);
+    const totalAmount = roundMoney(order.total_amount);
+    const vatAmount = roundMoney(toFiniteNumber(order.tax_amount, totalAmount - roundMoney(totalAmount / (1 + VAT_RATE))));
+    const vatableSales = roundMoney(totalAmount - vatAmount);
 
     const invoiceHTML = `
       <!DOCTYPE html>
@@ -493,9 +1474,9 @@ export const getOrderInvoice = async (req, res) => {
               <tr>
                 <td class="item-description">${item.product_name || 'Product'}</td>
                 <td>${item.part_number || '-'}</td>
-                <td class="text-right">₱${parseFloat(item.product_price).toFixed(2)}</td>
-                <td class="text-right">${item.quantity}</td>
-                <td class="text-right">₱${(parseFloat(item.product_price) * item.quantity).toFixed(2)}</td>
+                <td class="text-right">₱${roundMoney(item.product_price).toFixed(2)}</td>
+                <td class="text-right">${toFiniteNumber(item.quantity, 0)}</td>
+                <td class="text-right">₱${roundMoney(roundMoney(item.product_price) * toFiniteNumber(item.quantity, 0)).toFixed(2)}</td>
               </tr>
             `).join('')}
           </tbody>
