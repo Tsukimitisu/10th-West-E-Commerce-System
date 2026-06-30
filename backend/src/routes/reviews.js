@@ -14,14 +14,14 @@ router.post('/', authenticateToken, createReview);
 router.get(
   '/moderation',
   authenticateToken,
-  requireRole('owner', 'admin', 'super_admin'),
+  requireRole('owner', 'admin', 'super_admin', 'store_staff'),
   requirePermission('reviews.moderate'),
   getModerationReviews,
 );
 router.patch(
   '/:id/moderate',
   authenticateToken,
-  requireRole('owner', 'admin', 'super_admin'),
+  requireRole('owner', 'admin', 'super_admin', 'store_staff'),
   requirePermission('reviews.moderate'),
   moderateReview,
 );

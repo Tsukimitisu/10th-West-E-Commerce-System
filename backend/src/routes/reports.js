@@ -13,7 +13,7 @@ import { authenticateToken, requirePermission, requireRole } from '../middleware
 const router = express.Router();
 
 // All report routes require admin, super_admin, or owner authentication
-router.use(authenticateToken, requireRole('admin', 'super_admin', 'owner'), requirePermission('reports.view'));
+router.use(authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('reports.view'));
 router.get('/sales', getSalesReport);
 router.get('/sales-by-channel', getSalesByChannel);
 router.get('/stock-levels', getStockLevelsReport);

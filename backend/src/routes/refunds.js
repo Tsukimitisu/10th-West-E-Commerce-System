@@ -3,5 +3,5 @@ import { authenticateToken, requirePermission, requireRole } from '../middleware
 import { processRefundSecure } from '../controllers/returnWorkflowController.js';
 
 const router = express.Router();
-router.post('/:returnId/process', authenticateToken, requireRole('admin','super_admin','owner'), requirePermission('payments.refund'), processRefundSecure);
+router.post('/:returnId/process', authenticateToken, requireRole('admin','super_admin','owner','store_staff'), requirePermission('refunds.process'), processRefundSecure);
 export default router;

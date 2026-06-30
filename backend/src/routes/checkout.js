@@ -16,7 +16,7 @@ router.post(
   '/cleanup-expired',
   authenticateToken,
   requireRole('admin', 'super_admin', 'owner', 'store_staff'),
-  requirePermission('inventory.manage'),
+  requirePermission('inventory.adjust'),
   cleanupExpiredReservations,
 );
 router.get('/:checkoutId', authenticateToken, getCheckout);
