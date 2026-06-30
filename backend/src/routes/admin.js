@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import pool from '../config/database.js';
 import { USER_ROLES } from '../constants/schemaEnums.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import { getJntConfigurationStatus } from '../services/jntShipments.js';
@@ -56,7 +56,7 @@ const validateSettings = (category, settings) => {
 };
 
 // Public settings reads are used by storefront pages.
-router.get('/settings', authenticateToken, requireRole('super_admin'), async (req, res) => {
+router.get('/settings', authenticateToken, requireRole('super_admin', 'owner', 'admin'), requirePermission('settings.manage'), async (req, res) => {
   try {
     const { category } = req.query;
     if (shouldUseDatabaseReadFallback()) {
@@ -88,7 +88,7 @@ router.get('/settings', authenticateToken, requireRole('super_admin'), async (re
   }
 });
 
-router.get('/settings/:category', authenticateToken, requireRole('super_admin'), async (req, res) => {
+router.get('/settings/:category', authenticateToken, requireRole('super_admin', 'owner', 'admin'), requirePermission('settings.manage'), async (req, res) => {
   try {
     if (shouldUseDatabaseReadFallback()) {
       const settings = await supabaseRestFetch('system_settings', {
@@ -111,7 +111,14 @@ router.get('/settings/:category', authenticateToken, requireRole('super_admin'),
 });
 
 // All admin/system routes require super_admin only
-router.use(authenticateToken, requireRole('super_admin'));
+router.use(authenticateToken, (req, res, next) => {
+  if (req.path === '/settings' || req.path.startsWith('/settings/') || req.path.startsWith('/security/settings')) {
+    return requireRole('super_admin', 'owner', 'admin')(req, res, () => (
+      requirePermission('settings.manage')(req, res, next)
+    ));
+  }
+  return requireRole('super_admin')(req, res, next);
+});
 
 router.get('/readiness', async (_req, res) => {
   try {
