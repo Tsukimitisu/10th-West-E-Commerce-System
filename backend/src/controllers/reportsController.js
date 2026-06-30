@@ -254,6 +254,7 @@ export const getSalesReport = async (req, res) => {
         COALESCE(SUM(CASE WHEN o.source = 'pos' THEN o.total_amount ELSE 0 END), 0) as pos_revenue
       FROM orders o
       WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
+        AND COALESCE(o.integrity_status, 'valid') = 'valid'
         AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = o.id)
       ${dateFilter.sql}
     `, dateFilter.params);
@@ -305,6 +306,7 @@ export const getSalesByChannel = async (req, res) => {
         COALESCE(AVG(total_amount), 0) as avg_order_value
       FROM orders
       WHERE status IN (${REVENUE_ORDER_STATUS_SQL})
+        AND COALESCE(integrity_status, 'valid') = 'valid'
         AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = orders.id)
       ${dateFilter.sql}
       GROUP BY source
@@ -418,6 +420,7 @@ export const getTopProducts = async (req, res) => {
       LEFT JOIN categories c ON p.category_id = c.id
       JOIN orders o ON oi.order_id = o.id
       WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
+        AND COALESCE(o.integrity_status, 'valid') = 'valid'
       ${dateFilter.sql}
       GROUP BY p.id, p.name, p.part_number, p.image, p.price, p.stock_quantity, c.name
       ORDER BY total_sold DESC
@@ -460,6 +463,7 @@ export const getDailySalesTrend = async (req, res) => {
         COUNT(CASE WHEN source = 'pos' THEN 1 END) as pos_orders
       FROM orders
       WHERE status IN (${REVENUE_ORDER_STATUS_SQL})
+        AND COALESCE(integrity_status, 'valid') = 'valid'
         AND (created_at AT TIME ZONE $1) >= (NOW() AT TIME ZONE $1) - ($2::int * INTERVAL '1 day')
         AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = orders.id)
       GROUP BY (created_at AT TIME ZONE $1)::date
@@ -498,6 +502,7 @@ export const getProfitReport = async (req, res) => {
         SELECT o.id, o.total_amount, o.discount_amount
         FROM orders o
         WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
+          AND COALESCE(o.integrity_status, 'valid') = 'valid'
           AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = o.id)
           ${dateFilter.sql}
       ), item_costs AS (

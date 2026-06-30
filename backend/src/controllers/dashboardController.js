@@ -19,11 +19,13 @@ export const getOperationsDashboard = async (req, res) => {
           COUNT(*)::int AS total_orders,
           COALESCE(SUM(total_amount) FILTER (
             WHERE status::text NOT IN ('cancelled', 'failed', 'refunded')
+              AND COALESCE(integrity_status, 'valid') = 'valid'
               AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id)
           ), 0) AS total_sales,
           COALESCE(SUM(total_amount) FILTER (
             WHERE (created_at AT TIME ZONE $1)::date = (NOW() AT TIME ZONE $1)::date
               AND status::text NOT IN ('cancelled', 'failed', 'refunded')
+              AND COALESCE(integrity_status, 'valid') = 'valid'
               AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id)
           ), 0) AS today_sales,
           COUNT(*) FILTER (WHERE status::text IN ('pending', 'payment_pending'))::int AS pending_orders,
@@ -61,6 +63,7 @@ export const getOperationsDashboard = async (req, res) => {
         FROM orders
         WHERE created_at >= (NOW() AT TIME ZONE $1)::date - INTERVAL '6 days'
           AND status::text NOT IN ('cancelled', 'failed', 'refunded')
+          AND COALESCE(integrity_status, 'valid') = 'valid'
           AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id)
         GROUP BY 1
         ORDER BY 1
@@ -80,6 +83,7 @@ export const getOperationsDashboard = async (req, res) => {
         JOIN orders o ON o.id = oi.order_id
         LEFT JOIN products p ON p.id = oi.product_id
         WHERE o.status::text NOT IN ('cancelled', 'failed', 'refunded')
+          AND COALESCE(o.integrity_status, 'valid') = 'valid'
         GROUP BY p.id, p.name, p.sku
         ORDER BY quantity_sold DESC
         LIMIT 5

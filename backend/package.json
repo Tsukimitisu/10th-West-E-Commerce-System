@@ -14,6 +14,7 @@
     "migrate:make": "knex migrate:make --knexfile knexfile.cjs",
     "migrate:legacy": "node src/database/migrate.js",
     "migrate:auth:legacy": "node src/database/migrate-auth.js",
+    "audit:integrity": "node scripts/integrity-audit.js",
     "lint": "eslint ."
   },
   "keywords": [
