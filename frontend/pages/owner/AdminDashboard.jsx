@@ -14,6 +14,7 @@ import BannersView from './BannersView';
 import PromotionsView from './PromotionsView';
 import ContentView from './ContentView';
 import ChatView from './ChatView';
+import StaffDashboardView from '../staff/StaffDashboardView';
 
 const AdminDashboard = ({ user, onLogout }) => {
   const canAccessAdmin = user?.role === 'owner' || user?.role === 'store_staff' || user?.role === 'admin';
@@ -23,11 +24,13 @@ const AdminDashboard = ({ user, onLogout }) => {
   }
 
   const isStaff = user?.role === 'store_staff';
-  const [activeView, setActiveView] = useState(isStaff ? 'orders' : 'dashboard');
+  const [activeView, setActiveView] = useState('dashboard');
 
   const renderView = () => {
     switch (activeView) {
-      case 'dashboard': return <DashboardView />;
+      case 'dashboard': return isStaff
+        ? <StaffDashboardView user={user} onNavigate={setActiveView} />
+        : <DashboardView onNavigate={setActiveView} />;
       case 'products': return <ProductsView />;
       case 'inventory': return <InventoryView />;
       case 'orders': return <OrdersView />;
