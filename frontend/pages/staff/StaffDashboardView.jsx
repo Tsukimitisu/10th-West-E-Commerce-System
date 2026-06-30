@@ -83,7 +83,7 @@ const StaffDashboardView = ({ user, onNavigate }) => {
       icon: RotateCcw,
       onClick: () => onNavigate('returns'),
     },
-    {
+    can('chat.view') && {
       label: 'Customer conversations',
       description: unreadChats ? `${unreadChats} unread conversation${unreadChats === 1 ? '' : 's'}` : 'No unread conversations',
       icon: MessageCircle,
@@ -123,7 +123,7 @@ const StaffDashboardView = ({ user, onNavigate }) => {
         <MetricCard icon={ShoppingCart} label="Active orders" value={activeOrders.length} detail="Assigned or available to process" tone="info" onClick={can('orders.view') ? () => onNavigate('orders') : undefined} />
         <MetricCard icon={PackageCheck} label="Ready to pack" value={toPack.length} detail="Paid and processing orders" tone="brand" onClick={can('orders.view') ? () => onNavigate('orders') : undefined} />
         <MetricCard icon={AlertTriangle} label="Low-stock items" value={lowStock.length} detail="At or below reorder threshold" tone={lowStock.length ? 'warning' : 'success'} onClick={can('inventory.view') ? () => onNavigate('inventory') : undefined} />
-        <MetricCard icon={MessageCircle} label="Unread chats" value={unreadChats} detail="Customer conversations" tone={unreadChats ? 'brand' : 'neutral'} onClick={() => onNavigate('chat')} />
+        {can('chat.view') && <MetricCard icon={MessageCircle} label="Unread chats" value={unreadChats} detail="Customer conversations" tone={unreadChats ? 'brand' : 'neutral'} onClick={() => onNavigate('chat')} />}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,.65fr)]">
@@ -152,6 +152,7 @@ const StaffDashboardView = ({ user, onNavigate }) => {
               ['Inventory', can('inventory.view')],
               ['Returns', can('returns.view')],
               ['Point of sale', can('pos.access')],
+              ['Chat', can('chat.view')],
             ].map(([label, enabled]) => (
               <div key={label} className="flex items-center justify-between gap-3">
                 <dt className="text-sm text-slate-600">{label}</dt>

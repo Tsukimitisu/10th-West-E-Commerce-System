@@ -38,7 +38,7 @@ const createNavItems = (badges = {}) => [
   { id: 'inventory', label: 'Inventory', icon: Boxes, badge: badges.lowStock, group: 'Catalog', permission: 'inventory.view' },
   { id: 'promotions', label: 'Promotions', icon: Tag, group: 'Catalog', permission: 'promotions.manage' },
   { id: 'customers', label: 'Customers', icon: Users, group: 'Customers', permission: 'customers.view' },
-  { id: 'chat', label: 'Conversations', icon: MessageCircle, group: 'Customers' },
+  { id: 'chat', label: 'Conversations', icon: MessageCircle, group: 'Customers', permission: 'chat.view' },
   { id: 'reviews', label: 'Reviews', icon: Star, group: 'Customers', permission: 'reviews.moderate' },
   { id: 'returns', label: 'Returns & refunds', icon: RotateCcw, badge: badges.pendingReturns, group: 'Operations', permission: 'returns.view' },
   { id: 'staff', label: 'Staff & roles', icon: UserCog, group: 'Operations', permission: 'staff.view' },
@@ -47,7 +47,7 @@ const createNavItems = (badges = {}) => [
   { id: 'content', label: 'Content', icon: Newspaper, group: 'Storefront' },
 ];
 
-const STAFF_NAV = ['dashboard', 'orders', 'pos', 'inventory', 'returns', 'chat'];
+const STAFF_NAV = ['dashboard', 'orders', 'pos', 'products', 'inventory', 'returns', 'chat'];
 const ADMIN_NAV = [
   'dashboard', 'orders', 'pos', 'products', 'inventory', 'promotions',
   'customers', 'chat', 'reviews', 'returns', 'staff', 'reports', 'banners', 'content',

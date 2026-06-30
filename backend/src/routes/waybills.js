@@ -3,8 +3,8 @@ import { authenticateToken, requirePermission, requireRole } from '../middleware
 import { generateWaybill, getWaybill, printWaybill } from '../controllers/shipmentController.js';
 
 const router = express.Router();
-router.use(authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('waybills.manage'));
-router.get('/:orderId', getWaybill);
-router.post('/:orderId/generate', generateWaybill);
-router.get('/:orderId/print', printWaybill);
+router.use(authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'));
+router.get('/:orderId', requirePermission('waybills.view'), getWaybill);
+router.post('/:orderId/generate', requirePermission('waybills.generate'), generateWaybill);
+router.get('/:orderId/print', requirePermission('waybills.view'), printWaybill);
 export default router;

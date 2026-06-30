@@ -297,6 +297,15 @@ export const requirePermission = (permissionName) => {
   };
 };
 
+export const requirePermissionForRoles = (permissionName, ...roles) => {
+  const permissionMiddleware = requirePermission(permissionName);
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+    if (!roles.includes(req.user.role)) return next();
+    return permissionMiddleware(req, res, next);
+  };
+};
+
 
 export const optionalAuth = async (req, res, next) => authenticateOptional(req, res, next);
 

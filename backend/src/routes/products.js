@@ -12,7 +12,7 @@ import {
   uploadProductVideo
 } from '../controllers/productController.js';
 import { getProductReviews } from '../controllers/reviewController.js';
-import { authenticateToken, optionalAuth, requireRole } from '../middleware/auth.js';
+import { authenticateToken, optionalAuth, requirePermission, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
 import {
   sanitizeHttpUrlOrPath,
@@ -257,14 +257,16 @@ router.get('/top-sellers', optionalAuth, topSellersValidation, validate, getTopS
 router.post(
   '/upload-image',
   authenticateToken,
-  requireRole('admin', 'super_admin', 'owner'),
+  requireRole('admin', 'super_admin', 'owner', 'store_staff'),
+  requirePermission('products.manage'),
   express.raw({ type: 'image/*', limit: '5mb' }),
   uploadProductImage
 );
 router.post(
   '/upload-video',
   authenticateToken,
-  requireRole('admin', 'super_admin', 'owner'),
+  requireRole('admin', 'super_admin', 'owner', 'store_staff'),
+  requirePermission('products.manage'),
   express.raw({ type: 'video/*', limit: '20mb' }),
   uploadProductVideo
 );
@@ -276,7 +278,8 @@ router.get('/:id', optionalAuth, productIdValidation, validate, getProductById);
 router.post(
   '/',
   authenticateToken,
-  requireRole('admin', 'super_admin', 'owner'),
+  requireRole('admin', 'super_admin', 'owner', 'store_staff'),
+  requirePermission('products.manage'),
   productValidation,
   validate,
   createProduct
@@ -285,7 +288,8 @@ router.post(
 router.put(
   '/:id',
   authenticateToken,
-  requireRole('admin', 'super_admin', 'owner'),
+  requireRole('admin', 'super_admin', 'owner', 'store_staff'),
+  requirePermission('products.manage'),
   productIdValidation,
   productUpdateValidation,
   validate,
@@ -295,7 +299,8 @@ router.put(
 router.delete(
   '/:id',
   authenticateToken,
-  requireRole('admin', 'super_admin', 'owner'),
+  requireRole('admin', 'super_admin', 'owner', 'store_staff'),
+  requirePermission('products.manage'),
   productIdValidation,
   validate,
   deleteProduct
