@@ -5144,6 +5144,13 @@ export const getProfitReport = async (range = '30d', startDate, endDate) => {
   return await authenticatedFetch(`${API_URL}/reports/profit?${params}`);
 };
 
+export const getPosSalesReport = async (range = '30d', startDate, endDate) => {
+  const params = new URLSearchParams({ range });
+  if (startDate) params.append('start_date', startDate);
+  if (endDate) params.append('end_date', endDate);
+  return authenticatedFetch(`${API_URL}/reports/pos?${params}`);
+};
+
 // ==================== SUPER ADMIN ====================
 
 // User Management

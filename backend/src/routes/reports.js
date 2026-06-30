@@ -5,7 +5,8 @@ import {
   getStockLevelsReport,
   getTopProducts,
   getDailySalesTrend,
-  getProfitReport
+  getProfitReport,
+  getPosSalesReport
 } from '../controllers/reportsController.js';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 
@@ -19,5 +20,6 @@ router.get('/stock-levels', getStockLevelsReport);
 router.get('/top-products', getTopProducts);
 router.get('/daily-trend', getDailySalesTrend);
 router.get('/profit', getProfitReport);
+router.get('/pos', getPosSalesReport);
 
 export default router;

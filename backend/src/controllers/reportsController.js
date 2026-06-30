@@ -544,3 +544,41 @@ export const getProfitReport = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+export const getPosSalesReport = async (req, res) => {
+  const { range = '30d', start_date, end_date } = req.query;
+  try {
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date });
+    const result = await pool.query(`
+      SELECT o.id, o.receipt_number, o.status, o.payment_status, o.payment_method,
+             o.total_amount, o.voided_at, o.created_at,
+             COUNT(oi.id)::int AS item_lines,
+             COALESCE(SUM(oi.quantity), 0)::int AS units
+      FROM orders o
+      LEFT JOIN order_items oi ON oi.order_id = o.id
+      WHERE o.source = 'pos'
+        AND COALESCE(o.integrity_status, 'valid') = 'valid'
+        ${dateFilter.sql}
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+    `, dateFilter.params);
+    const sales = result.rows.map((row) => ({
+      ...row,
+      total_amount: toNumber(row.total_amount),
+      item_lines: toNumber(row.item_lines),
+      units: toNumber(row.units),
+    }));
+    const completed = sales.filter((sale) => !sale.voided_at && sale.status !== 'cancelled' && sale.payment_status === 'paid');
+    const voided = sales.filter((sale) => sale.voided_at || sale.status === 'cancelled');
+    return res.json({
+      range,
+      total_sales: completed.length,
+      total_revenue: completed.reduce((sum, sale) => sum + sale.total_amount, 0),
+      voided_sales: voided.length,
+      sales,
+    });
+  } catch (error) {
+    console.error('POS sales report error:', error);
+    return res.status(500).json({ message: 'POS sales report could not be loaded.' });
+  }
+};
