@@ -25,6 +25,12 @@ for (const account of accounts) {
       await page.reload();
       await expect(page).toHaveURL(new RegExp(account.route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
       await expect(page.getByRole('heading', { name: account.heading })).toBeVisible();
+      const profileMenu = page.getByRole('button', { name: /open profile menu/i });
+      if (!await profileMenu.isVisible().catch(() => false)) {
+        await page.getByRole('button', { name: /open navigation/i }).click();
+      }
+      await profileMenu.click();
+      await expect(page.getByRole('button', { name: /account & security/i })).toBeVisible();
     });
   });
 }
