@@ -19,6 +19,7 @@ export const PRODUCT_PUBLISHER_ROLES = Object.freeze([
   'admin',
   'super_admin',
   'owner',
+  'store_staff',
 ]);
 
 export const PRODUCT_STATUSES = Object.freeze([

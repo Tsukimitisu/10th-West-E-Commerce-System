@@ -1620,6 +1620,11 @@ export const createProduct = async (req, res) => {
         },
       });
       const newProduct = Array.isArray(rows) ? rows[0] : rows;
+      await req.logActivity?.('product.create', 'product', newProduct?.id, {
+        name: newProduct?.name,
+        sku: newProduct?.sku,
+        status: newProduct?.status,
+      });
       emitProductCreated(newProduct);
 
       return res.status(201).json({
@@ -1635,7 +1640,7 @@ export const createProduct = async (req, res) => {
         image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions,
         box_number, low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing,
         product_type, reserved_stock, damaged_stock, color
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 'standard'), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb), COALESCE($23, 'single'), COALESCE($24, 0), COALESCE($25, 0), $26)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::product_shipping_option_enum, 'standard'::product_shipping_option_enum), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb), COALESCE($23, 'single'), COALESCE($24, 0), COALESCE($25, 0), $26)
       RETURNING *`,
       [
         cleanPartNumber, cleanName, cleanDescription, parsedPrice, buyingPriceField.value,
@@ -1651,6 +1656,11 @@ export const createProduct = async (req, res) => {
     await saveProductRelations(pool, newProduct.id, {
       fitments: fitmentsPayload,
       bundleComponents: bundleComponentsPayload,
+    });
+    await req.logActivity?.('product.create', 'product', newProduct.id, {
+      name: newProduct.name,
+      sku: newProduct.sku,
+      status: newProduct.status,
     });
     emitProductCreated(newProduct);
 
