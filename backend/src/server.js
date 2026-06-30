@@ -57,7 +57,8 @@ import { generateCsrfToken, validateCsrf } from './middleware/csrf.js';
 import pool from './config/database.js';
 import { startExpiredReservationCleanup } from './controllers/secureCheckoutController.js';
 import { getPaymongoConfigurationStatus } from './services/paymongo.js';
-import { getJntConfigurationStatus } from './services/jntShipments.js';
+import { getShippingConfigurationStatus } from './services/shipping/providers/index.js';
+import { getTrackingConfigurationStatus } from './services/tracking/providers/index.js';
 import { startMaintenanceWorkers } from './services/maintenance.js';
 
 // Get directory name for ES modules
@@ -91,21 +92,17 @@ if (process.env.NODE_ENV === 'production') {
     'PAYMONGO_WEBHOOK_SECRET',
     'CLOUDINARY_CLOUD_NAME',
     'CLOUDINARY_API_KEY',
-    'CLOUDINARY_API_SECRET',
-    'JNT_API_BASE_URL',
-    'JNT_TRACKING_API_BASE_URL',
-    'JNT_USERNAME',
-    'JNT_API_KEY',
-    'JNT_CUSTOMER_CODE',
-    'JNT_SECRET_KEY',
-    'JNT_WEBHOOK_SECRET',
-    'JNT_SENDER_PHONE',
-    'JNT_SENDER_ADDRESS'
+    'CLOUDINARY_API_SECRET'
   );
 }
 
-if (process.env.NODE_ENV === 'production' && String(process.env.JNT_MOCK_MODE || '').toLowerCase() === 'true') {
-  console.error('❌ JNT_MOCK_MODE cannot be true in production.');
+if (process.env.NODE_ENV === 'production' && String(process.env.SHIPPING_PROVIDER || '').toLowerCase() === 'mock') {
+  console.error('The mock shipping provider cannot be selected in production.');
+  process.exit(1);
+}
+
+if (process.env.NODE_ENV === 'production' && String(process.env.TRACKING_PROVIDER || '').toLowerCase() === 'mock') {
+  console.error('The mock tracking provider cannot be selected in production.');
   process.exit(1);
 }
 
@@ -126,7 +123,8 @@ if (missingUploadVars.length > 0) {
 // Log configuration on startup (no sensitive values)
 console.log('\n🔐 Configuration loaded:');
 console.log('   PayMongo:', getPaymongoConfigurationStatus().configured ? 'configured' : 'not configured');
-console.log('   J&T:', getJntConfigurationStatus().mock ? 'mock' : (getJntConfigurationStatus().configured ? 'configured' : 'not configured'));
+console.log('   Shipping:', getShippingConfigurationStatus().status);
+console.log('   Tracking:', getTrackingConfigurationStatus().status);
 console.log('   Email User:', process.env.EMAIL_USER ? '✅ SET' : '❌ NOT SET');
 console.log('   Email Password:', process.env.EMAIL_PASSWORD ? '✅ SET' : '❌ NOT SET');
 console.log('   Cloudinary:', (
@@ -340,9 +338,16 @@ app.get('/api/health', (req, res) => {
 app.get('/api/ready', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
+    const shipping = getShippingConfigurationStatus();
+    const tracking = getTrackingConfigurationStatus();
     res.json({
       status: 'ready',
       database: 'ok',
+      shipping_provider: shipping.provider,
+      shipping_provider_configured: shipping.ready,
+      tracking_provider: tracking.provider,
+      tracking_provider_configured: tracking.ready,
+      mock_shipping_blocked_in_production: process.env.NODE_ENV === 'production' && shipping.mock,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

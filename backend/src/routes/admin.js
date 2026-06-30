@@ -5,7 +5,8 @@ import { USER_ROLES } from '../constants/schemaEnums.js';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
-import { getJntConfigurationStatus } from '../services/jntShipments.js';
+import { getShippingConfigurationStatus } from '../services/shipping/providers/index.js';
+import { getTrackingConfigurationStatus } from '../services/tracking/providers/index.js';
 
 const router = express.Router();
 const booleanRule = (value) => ['true', 'false'].includes(String(value).toLowerCase());
@@ -124,19 +125,47 @@ router.get('/readiness', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
     const paymongo = getPaymongoConfigurationStatus();
-    const jnt = getJntConfigurationStatus();
+    const shipping = getShippingConfigurationStatus();
+    const tracking = getTrackingConfigurationStatus();
+    const activity = await pool.query(
+      `SELECT
+         MAX(booked_at) FILTER (WHERE provider_shipment_id IS NOT NULL) AS last_successful_booking,
+         MAX(last_tracking_refresh_at) AS last_tracking_refresh,
+         MAX(webhook_received_at) AS last_webhook_received
+       FROM shipments`
+    );
+    const recentErrors = await pool.query(
+      `SELECT order_id, booking_error AS message, updated_at
+       FROM shipments
+       WHERE booking_error IS NOT NULL
+       ORDER BY updated_at DESC
+       LIMIT 5`
+    );
     return res.json({
       status: 'ready',
       database: 'ok',
       integrations: {
         paymongo: paymongo.configured ? 'configured' : 'blocked_by_credentials',
-        jnt: jnt.mock ? 'mock_dev_mode' : (jnt.configured ? 'configured' : 'blocked_by_credentials'),
+        shipping: { provider: shipping.provider, status: shipping.status, ready: shipping.ready },
+        tracking: { provider: tracking.provider, status: tracking.status, ready: tracking.ready },
         gmail: process.env.EMAIL_USER && process.env.EMAIL_PASSWORD ? 'configured' : 'blocked_by_credentials',
         facebook: process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET ? 'configured' : 'blocked_by_credentials',
       },
       runtime: {
         session_store: process.env.SESSION_STORE === 'postgres' ? 'postgres' : 'memory_dev_mode',
         environment: process.env.NODE_ENV || 'development',
+      },
+      shipping_activity: {
+        webhook_url: '/api/shipments/webhook',
+        sender_configured: [
+          process.env.SHIPPER_NAME,
+          process.env.SHIPPER_PHONE,
+          process.env.SHIPPER_ADDRESS_LINE1,
+          process.env.SHIPPER_CITY,
+          process.env.SHIPPER_POSTAL_CODE,
+        ].every(Boolean),
+        ...activity.rows[0],
+        recent_provider_errors: recentErrors.rows,
       },
       timestamp: new Date().toISOString(),
     });
