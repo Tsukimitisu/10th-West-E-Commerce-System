@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getOrders, getOrderById, updateOrderStatus, confirmOrderDelivery, processRefund, generateJntWaybill, getOrderWaybillUrl, cancelOrder } from '../../services/api';
+import { getOrders, getOrderById, getShipmentTracking, refreshShipmentTracking, updateOrderStatus, confirmOrderDelivery, processRefund, bookShipment, generateWaybill, printWaybill, cancelOrder } from '../../services/api';
 import { OrderStatus } from '../../types.js';
 import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock, Filter, ChevronDown, ChevronUp, ArrowLeft, Printer, DollarSign, MapPin, User, Calendar, CreditCard, AlertCircle, Undo } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
@@ -54,6 +54,7 @@ const OrdersView = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [refundError, setRefundError] = useState('');
   const [detailOrder, setDetailOrder] = useState(null);
+  const [shipmentData, setShipmentData] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState(null);
@@ -80,9 +81,14 @@ const OrdersView = () => {
   useSocketEvent('order:updated', fetchOrders);
 
   const openDetail = async (order) => {
+    setShipmentData(null);
     try {
-      const full = await getOrderById(order.id);
+      const [full, shipment] = await Promise.all([
+        getOrderById(order.id),
+        getShipmentTracking(order.id).catch(() => null),
+      ]);
       setDetailOrder(full);
+      setShipmentData(shipment);
     } catch { setDetailOrder(order); }
     setDetailOpen(true);
   };
@@ -153,14 +159,42 @@ const OrdersView = () => {
     setStatusError('');
     setWaybillBusy(true);
     try {
-      const updated = await generateJntWaybill(detailOrder.id);
-      const full = await getOrderById(detailOrder.id).catch(() => updated);
+      await bookShipment(detailOrder.id);
+      await generateWaybill(detailOrder.id);
+      const full = await getOrderById(detailOrder.id);
       setDetailOrder(full);
+      setShipmentData(await getShipmentTracking(detailOrder.id).catch(() => null));
       fetchOrders();
     } catch (e) {
-      setStatusError(e.message || 'Failed to generate J&T waybill.');
+      setStatusError(e.message || 'Shipping provider could not generate the waybill.');
     } finally {
       setWaybillBusy(false);
+    }
+  };
+
+  const handleRefreshTracking = async () => {
+    if (!detailOrder) return;
+    setStatusError('');
+    try {
+      await refreshShipmentTracking(detailOrder.id);
+      setShipmentData(await getShipmentTracking(detailOrder.id));
+    } catch (e) {
+      setStatusError(e.message || 'Tracking updates are not available yet.');
+    }
+  };
+
+  const handlePrintWaybill = async () => {
+    if (!detailOrder) return;
+    setStatusError('');
+    try {
+      const waybill = await printWaybill(detailOrder.id);
+      if (waybill.label_url) {
+        window.open(waybill.label_url, '_blank', 'noopener,noreferrer');
+      } else {
+        setStatusError('The shipping provider did not supply a printable label URL.');
+      }
+    } catch (e) {
+      setStatusError(e.message || 'Waybill could not be loaded.');
     }
   };
 
@@ -303,15 +337,21 @@ const OrdersView = () => {
             </div>
 
             {/* Shipping Method, Tracking & Staff */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="p-3 bg-gray-900 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><Truck size={12} /> Shipping Method</div>
                 <p className="text-sm font-medium text-white capitalize">{detailOrder.shipping_method || '-'}</p>
               </div>
               <div className="p-3 bg-gray-900 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><Package size={12} /> Tracking Number</div>
-                <p className="text-sm font-medium text-white">{detailOrder.tracking_number || '-'}</p>
+                <p className="text-sm font-medium text-white">{shipmentData?.shipment?.tracking_number || detailOrder.tracking_number || '-'}</p>
                 <p className="text-[10px] text-gray-400 mt-1">Waybill: {detailOrder.waybill_status || 'not requested'}</p>
+              </div>
+              <div className="p-3 bg-gray-900 rounded-lg">
+                <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><Truck size={12} /> Provider Status</div>
+                <p className="text-sm font-medium text-white capitalize">{shipmentData?.shipment?.shipping_provider || detailOrder.courier || 'Not booked'}</p>
+                <p className="text-[10px] text-gray-400 mt-1 capitalize">{String(shipmentData?.shipment?.status || 'unavailable').replaceAll('_', ' ')}</p>
+                {shipmentData?.shipment?.booking_error && <p className="mt-1 text-[10px] text-red-400">{shipmentData.shipment.booking_error}</p>}
               </div>
               <div className="p-3 bg-gray-900 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><User size={12} /> Assigned Staff</div>
@@ -378,10 +418,10 @@ const OrdersView = () => {
               {detailOrder.shipping_method !== 'pickup' && detailOrder.source !== 'pos' && ['paid', 'processing', 'packed', 'ready_for_pickup'].includes(detailOrder.status) && (
                 detailOrder.waybill_number ? (
                   <button
-                    onClick={() => window.open(getOrderWaybillUrl(detailOrder.id), '_blank')}
+                    onClick={handlePrintWaybill}
                     className="flex-1 min-w-[140px] px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
                   >
-                    <Printer size={14} /> Print J&amp;T Waybill
+                    <Printer size={14} /> Print Waybill
                   </button>
                 ) : (
                   <button
@@ -389,9 +429,17 @@ const OrdersView = () => {
                     disabled={waybillBusy}
                     className="flex-1 min-w-[140px] px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-500 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
                   >
-                    <Truck size={14} /> {waybillBusy ? 'Generating...' : 'Generate J&T Waybill'}
+                    <Truck size={14} /> {waybillBusy ? 'Preparing...' : 'Book & Generate Waybill'}
                   </button>
                 )
+              )}
+              {shipmentData?.shipment?.tracking_number && (
+                <button
+                  onClick={handleRefreshTracking}
+                  className="flex-1 min-w-[140px] px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <RotateCcw size={14} /> Refresh Tracking
+                </button>
               )}
               {!isStaff && (['delivered', 'refunded', 'partially_refunded', 'cancelled'].includes(detailOrder.status)) && (
                 <button onClick={() => { setRefundOrder(detailOrder); setRefundAmount(detailOrder.total_amount); setShowRefundModal(true); }}

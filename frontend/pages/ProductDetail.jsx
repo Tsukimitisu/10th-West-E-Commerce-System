@@ -1217,8 +1217,8 @@ const ProductDetail = () => {
               <div className="flex items-start gap-3">
                 <Truck size={18} className="mt-0.5 text-red-600" />
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">J&T delivery only</p>
-                  <p className="text-xs text-slate-600">Paid online orders are prepared for J&T waybill and tracking.</p>
+                  <p className="text-sm font-semibold text-slate-900">Standard delivery</p>
+                  <p className="text-xs text-slate-600">Paid online orders can be prepared for provider waybill and tracking.</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">

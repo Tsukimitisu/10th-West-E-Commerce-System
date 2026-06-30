@@ -78,7 +78,7 @@ const PrivacyPolicy = () => {
             <p>We only share your data with the following parties when necessary:</p>
             <ul className="list-disc pl-6 space-y-1">
               <li><strong>Payment processors</strong> (PayMongo/GCash) - to process payments</li>
-              <li><strong>Shipping couriers</strong> (J&T, LBC, Grab) - to deliver your orders</li>
+              <li><strong>Shipping and tracking providers</strong> - to deliver and track your orders</li>
               <li><strong>Cloud infrastructure</strong> (Supabase/AWS) - to host and secure data</li>
             </ul>
             <p className="font-medium text-white">We never sell, rent, or trade your personal data to any third party for marketing purposes.</p>

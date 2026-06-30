@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Package, ArrowLeft, Truck, MapPin, CreditCard, Clock, CheckCircle2, XCircle, Download, RotateCcw, Calendar, Mail, DollarSign, Printer, AlertTriangle } from 'lucide-react';
-import { getOrderById, cancelOrder, confirmOrderReceipt } from '../../services/api';
+import { getOrderById, getShipmentTracking, cancelOrder, confirmOrderReceipt } from '../../services/api';
 
 const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Delivered', 'Completed'];
 const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, delivered: 4, completed: 5, cancelled: -1 };
@@ -33,9 +33,22 @@ const OrderDetail = () => {
   const [cancelReasonError, setCancelReasonError] = useState('');
   const [confirmingReceipt, setConfirmingReceipt] = useState(false);
   const [receiptError, setReceiptError] = useState('');
+  const [tracking, setTracking] = useState(null);
+  const [trackingUnavailable, setTrackingUnavailable] = useState(false);
 
   const loadOrder = async () => {
-    try { const data = await getOrderById(Number(id)); setOrder(data); } catch {}
+    try {
+      const data = await getOrderById(Number(id));
+      setOrder(data);
+      try {
+        const trackingData = await getShipmentTracking(Number(id));
+        setTracking(trackingData);
+        setTrackingUnavailable(false);
+      } catch {
+        setTracking(null);
+        setTrackingUnavailable(true);
+      }
+    } catch {}
     setLoading(false);
   };
 
@@ -308,6 +321,41 @@ const OrderDetail = () => {
           </div>
           {order.cancellation_reason && (
             <p className="text-sm text-orange-600 mt-2 ml-8">Reason: {order.cancellation_reason}</p>
+          )}
+        </div>
+      )}
+
+      {order.shipping_method !== 'pickup' && (
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-6">
+          <div className="flex items-center gap-2">
+            <Truck size={18} className="text-red-500" />
+            <h3 className="font-semibold text-white text-sm">Shipment tracking</h3>
+          </div>
+          {tracking?.shipment ? (
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-3 text-sm sm:grid-cols-3">
+                <div><p className="text-xs text-gray-400">Provider</p><p className="font-medium text-white capitalize">{tracking.shipment.shipping_provider || 'Shipping provider'}</p></div>
+                <div><p className="text-xs text-gray-400">Tracking number</p><p className="font-medium text-white">{tracking.shipment.tracking_number || 'Pending'}</p></div>
+                <div><p className="text-xs text-gray-400">Status</p><p className="font-medium text-white capitalize">{String(tracking.shipment.status || 'pending').replaceAll('_', ' ')}</p></div>
+              </div>
+              {tracking.events?.length > 0 && (
+                <ol className="space-y-3 border-l border-gray-600 pl-4">
+                  {tracking.events.map((event, index) => (
+                    <li key={`${event.occurred_at}-${index}`}>
+                      <p className="text-sm font-medium text-white capitalize">{String(event.status || 'update').replaceAll('_', ' ')}</p>
+                      {event.description && <p className="text-xs text-gray-300">{event.description}</p>}
+                      <p className="text-xs text-gray-500">
+                        {[event.location, event.occurred_at && new Date(event.occurred_at).toLocaleString('en-PH')].filter(Boolean).join(' · ')}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-gray-300">
+              {trackingUnavailable ? 'Tracking updates are not available yet.' : 'Shipment tracking is pending.'}
+            </p>
           )}
         </div>
       )}

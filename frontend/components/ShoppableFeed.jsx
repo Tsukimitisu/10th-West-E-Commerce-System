@@ -125,7 +125,7 @@ const ShoppableFeed = ({ products = [], wishlistedIds = [], onWishlistToggle }) 
               <Play size={13} /> Shop Feed
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1 text-xs font-semibold">
-              <Truck size={13} /> J&T Delivery
+              <Truck size={13} /> Standard Delivery
             </span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 p-5 lg:p-8">

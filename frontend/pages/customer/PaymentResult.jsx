@@ -8,7 +8,7 @@ const getCopy = (paymentStatus, queryStatus) => {
     return {
       icon: <CheckCircle2 size={42} className="text-green-600" />,
       title: 'Payment received',
-      body: 'Your order is now paid. J&T waybill generation will start automatically.',
+      body: 'Your order is now paid and can be prepared for shipment.',
     };
   }
 
@@ -87,7 +87,7 @@ const PaymentResult = () => {
           </div>
           {order?.waybill_status && (
             <div className="mt-2 flex justify-between gap-4">
-              <span className="text-gray-500">J&T Waybill</span>
+              <span className="text-gray-500">Waybill</span>
               <span className="font-semibold capitalize">{order.waybill_status}</span>
             </div>
           )}
@@ -116,4 +116,3 @@ const PaymentResult = () => {
 };
 
 export default PaymentResult;
-

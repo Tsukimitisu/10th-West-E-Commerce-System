@@ -3,7 +3,7 @@ import {
   Settings, Store, CreditCard, Truck, Mail,
   Save, Loader2, CheckCircle2, Percent, RotateCcw
 } from 'lucide-react';
-import { getSystemSettings, updateSystemSettings } from '../../services/api';
+import { getSystemHealth, getSystemSettings, updateSystemSettings } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
 
 const SystemConfigView = () => {
@@ -11,6 +11,7 @@ const SystemConfigView = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [providerHealth, setProviderHealth] = useState(null);
 
   const [store, setStore] = useState({
     name: '10th West Moto', tagline: '', email: '', phone: '',
@@ -41,7 +42,11 @@ const SystemConfigView = () => {
   useEffect(() => {
     (async () => {
       try {
-        const allSettings = await getSystemSettings();
+        const [allSettings, health] = await Promise.all([
+          getSystemSettings(),
+          getSystemHealth().catch(() => null),
+        ]);
+        setProviderHealth(health);
         const parsed = { store: {}, tax: {}, shipping: {}, payment: {}, email: {}, returns: {} };
         (Array.isArray(allSettings) ? allSettings : []).forEach((setting) => {
           if (parsed[setting.category]) parsed[setting.category][setting.key] = setting.value;
@@ -191,8 +196,22 @@ const SystemConfigView = () => {
       )}
 
       {tab === 'shipping' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 shadow-sm">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 shadow-sm space-y-6">
           <h3 className="text-sm font-semibold text-white mb-5 flex items-center gap-2"><Truck size={16} className="text-gray-400" /> Shipping Configuration</h3>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {[
+              ['Shipping provider', providerHealth?.shipping?.provider, providerHealth?.shipping?.status],
+              ['Tracking provider', providerHealth?.tracking?.provider, providerHealth?.tracking?.status],
+              ['Webhook URL', providerHealth?.shipping_activity?.webhook_url, 'Configure this URL with the provider'],
+              ['Sender details', providerHealth?.shipping_activity?.sender_configured ? 'Configured' : 'Not configured', 'Credentials remain server-side'],
+            ].map(([label, value, detail]) => (
+              <div key={label} className="rounded-lg border border-gray-700 bg-gray-900 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
+                <p className="mt-1 text-sm font-semibold text-white">{value || 'Unavailable'}</p>
+                <p className="mt-1 text-xs text-gray-400">{detail || 'Not configured'}</p>
+              </div>
+            ))}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <Input label="Free Shipping Threshold (₱)" value={shipping.free_threshold} onChange={(e) => setShipping({ ...shipping, free_threshold: e.target.value })} placeholder="3000" type="number" hint="Orders above this amount get free shipping" />
             <Input label="Standard Flat Rate (₱)" value={shipping.flat_rate} onChange={(e) => setShipping({ ...shipping, flat_rate: e.target.value })} placeholder="150" type="number" />

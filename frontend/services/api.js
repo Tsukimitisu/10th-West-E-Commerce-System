@@ -2760,7 +2760,8 @@ export const getSystemHealth = async () => {
   return {
     ...data,
     paymongo: data.integrations?.paymongo,
-    jnt: data.integrations?.jnt,
+    shipping: data.integrations?.shipping,
+    tracking: data.integrations?.tracking,
     gmail: data.integrations?.gmail,
     facebook: data.integrations?.facebook,
   };
@@ -2994,14 +2995,29 @@ export const confirmOrderDelivery = async (id) => {
   return mapOrderFromApi(data.order ?? data);
 };
 
-export const generateJntWaybill = async (id) => {
-  const data = await authenticatedFetch(`${API_URL}/orders/${id}/jnt-waybill`, {
+export const bookShipment = async (orderId, idempotencyKey = `order-${orderId}-shipment-v1`) => {
+  return authenticatedFetch(`${API_URL}/shipments/book`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ order_id: orderId }),
   });
-  return mapOrderFromApi(data.order ?? data);
 };
 
-export const getOrderWaybillUrl = (id) => `${API_URL}/orders/${id}/waybill`;
+export const generateWaybill = async (id) => {
+  return authenticatedFetch(`${API_URL}/waybills/${id}/generate`, {
+    method: 'POST',
+  });
+};
+
+export const printWaybill = async (id) => authenticatedFetch(`${API_URL}/waybills/${id}/print`);
+
+export const getShipmentTracking = async (orderId) => (
+  authenticatedFetch(`${API_URL}/shipments/${orderId}/tracking`)
+);
+
+export const refreshShipmentTracking = async (orderId) => (
+  authenticatedFetch(`${API_URL}/shipments/${orderId}/tracking/refresh`, { method: 'POST' })
+);
 
 export const confirmOrderReceipt = async (id) => {
   if (USE_MOCK_DATA) {

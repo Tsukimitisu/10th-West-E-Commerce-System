@@ -3296,7 +3296,7 @@ const ProductsView = () => {
                   </InputField>
 
                   <p className="text-xs text-gray-500">
-                    Courier-ready payload: shipping option, weight in kg, and optional dimensions in cm for APIs like J&T.
+                    Provider-ready payload: shipping option, weight in kg, and optional dimensions in cm.
                   </p>
                 </div>
               )}

@@ -111,7 +111,8 @@ const SuperAdminOverview = ({ onNavigate }) => {
   const healthRows = [
     ['Database', data.health?.database === 'ok', data.health?.database === 'ok' ? 'Connected' : 'Unavailable'],
     ['PayMongo', data.health?.paymongo === 'configured', data.health?.paymongo === 'configured' ? 'Configured' : 'Blocked by credentials'],
-    ['J&T courier', data.health?.jnt === 'configured', data.health?.jnt === 'configured' ? 'Configured' : data.health?.jnt === 'mock_dev_mode' ? 'Development mock' : 'Blocked by credentials'],
+    ['Shipping provider', data.health?.shipping?.ready === true, `${data.health?.shipping?.provider || 'unknown'}: ${data.health?.shipping?.status || 'unavailable'}`],
+    ['Tracking provider', data.health?.tracking?.ready === true, `${data.health?.tracking?.provider || 'unknown'}: ${data.health?.tracking?.status || 'unavailable'}`],
     ['Application errors', data.errors.length === 0, data.errors.length ? `${data.errors.length} logged` : 'No errors'],
   ];
   const lastBackup = data.backups[0];

@@ -208,7 +208,7 @@ const Checkout = () => {
   const [promoError, setPromoError] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
-  const [shippingMethod] = useState('jnt');
+  const [shippingMethod] = useState('standard');
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [agreeTerms, setAgreeTerms] = useState(() => {
     try {
@@ -777,8 +777,8 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                     <div className="flex items-center gap-3">
                       <Truck size={18} className="text-red-600" />
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">J&T Express Delivery</p>
-                        <p className="text-xs text-gray-600">All online orders ship through J&T with waybill and tracking updates.</p>
+                        <p className="text-sm font-semibold text-gray-900">Standard Delivery</p>
+                        <p className="text-xs text-gray-600">Eligible orders receive a provider waybill and tracking updates after booking.</p>
                       </div>
                     </div>
                     <span className={`text-sm font-semibold ${shippingCost === 0 ? 'text-green-600' : 'text-gray-900'}`}>
@@ -798,7 +798,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                     <Wallet size={18} className={paymentMethod === 'cod' ? 'text-red-600' : 'text-slate-500'} />
                     <span>
                       <span className="block text-sm font-semibold text-gray-900">Cash on Delivery</span>
-                      <span className="block text-xs text-gray-600">Pay the rider when your J&T delivery arrives.</span>
+                      <span className="block text-xs text-gray-600">Pay the courier when your delivery arrives.</span>
                     </span>
                   </button>
                   <button
