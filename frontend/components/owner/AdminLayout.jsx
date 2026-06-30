@@ -1,476 +1,263 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Package, Boxes, ShoppingCart, Monitor,
-  RotateCcw, UserCog, BarChart3, Users, Star,
-  LogOut, Bell, Menu, X,
-  ChevronLeft, ExternalLink, Wifi, WifiOff, Image, Tag, Newspaper,
+  AlertTriangle,
+  BarChart3,
+  Bell,
+  Boxes,
+  Image,
+  LayoutDashboard,
   MessageCircle,
-  AlertTriangle, CheckCircle
+  Monitor,
+  Newspaper,
+  Package,
+  RotateCcw,
+  ShoppingCart,
+  Star,
+  Tag,
+  UserCog,
+  Users,
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
-import { getMyPermissions, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, logoutApi } from '../../services/api';
+import {
+  getMyPermissions,
+  getNotifications,
+  getUnreadNotificationCount,
+  logoutApi,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from '../../services/api';
 import { clearCurrentAuthUser } from '../../services/authSession';
-import BrandMark from '../ui/BrandMark';
+import OperationsShell from '../operations/OperationsShell';
 
 const createNavItems = (badges = {}) => [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Dashboard' },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' },
   { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: badges.pendingOrders, group: 'Sales', permission: 'orders.view' },
-  { id: 'pos', label: 'POS Terminal', icon: Monitor, route: '/pos', group: 'Sales', permission: 'pos.access' },
-  { id: 'products', label: 'Products', icon: Package, group: 'Products', permission: 'products.view' },
-  { id: 'promotions', label: 'Promotions', icon: Tag, group: 'Products', permission: 'promotions.manage' },
-  { id: 'inventory', label: 'Inventory', icon: Boxes, badge: badges.lowStock, group: 'Inventory', permission: 'inventory.view' },
+  { id: 'pos', label: 'Point of sale', icon: Monitor, route: '/pos', group: 'Sales', permission: 'pos.access' },
+  { id: 'products', label: 'Products', icon: Package, group: 'Catalog', permission: 'products.view' },
+  { id: 'inventory', label: 'Inventory', icon: Boxes, badge: badges.lowStock, group: 'Catalog', permission: 'inventory.view' },
+  { id: 'promotions', label: 'Promotions', icon: Tag, group: 'Catalog', permission: 'promotions.manage' },
   { id: 'customers', label: 'Customers', icon: Users, group: 'Customers', permission: 'customers.view' },
-  { id: 'chat', label: 'Chats', icon: MessageCircle, group: 'Customers' },
+  { id: 'chat', label: 'Conversations', icon: MessageCircle, group: 'Customers' },
   { id: 'reviews', label: 'Reviews', icon: Star, group: 'Customers', permission: 'reviews.moderate' },
-  { id: 'returns', label: 'Returns', icon: RotateCcw, badge: badges.pendingReturns, group: 'Operations', permission: 'returns.view' },
-  { id: 'staff', label: 'Staff & Roles', icon: UserCog, group: 'Operations', permission: 'staff.view' },
-  { id: 'reports', label: 'Reports', icon: BarChart3, group: 'Reports', permission: 'reports.view' },
-  { id: 'banners', label: 'Banners', icon: Image, group: 'System' },
-  { id: 'content', label: 'Content', icon: Newspaper, group: 'System' },
+  { id: 'returns', label: 'Returns & refunds', icon: RotateCcw, badge: badges.pendingReturns, group: 'Operations', permission: 'returns.view' },
+  { id: 'staff', label: 'Staff & roles', icon: UserCog, group: 'Operations', permission: 'staff.view' },
+  { id: 'reports', label: 'Reports', icon: BarChart3, group: 'Insights', permission: 'reports.view' },
+  { id: 'banners', label: 'Banners', icon: Image, group: 'Storefront' },
+  { id: 'content', label: 'Content', icon: Newspaper, group: 'Storefront' },
 ];
 
-// Nav items store_staff can see
-const STORE_STAFF_NAV = ['inventory', 'orders', 'chat', 'pos', 'returns'];
-
-// Nav items owner/admin can see (business management only)
-const OWNER_NAV = [
-  'dashboard', 'products', 'inventory', 'orders', 'customers',
-  'chat',
-  'returns',
-  'staff', 'reviews', 'reports',
-  'promotions', 'banners', 'content'
+const STAFF_NAV = ['dashboard', 'orders', 'pos', 'inventory', 'returns', 'chat'];
+const ADMIN_NAV = [
+  'dashboard', 'orders', 'pos', 'products', 'inventory', 'promotions',
+  'customers', 'chat', 'reviews', 'returns', 'staff', 'reports', 'banners', 'content',
 ];
 
-// Only owner/store_staff should render admin navigation here.
+const parseNotification = (notification) => {
+  let metadata = notification?.metadata || null;
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata); } catch { metadata = null; }
+  }
+  return {
+    ...notification,
+    metadata,
+    thumbnail_url: notification?.thumbnail_url || metadata?.thumbnail_url || metadata?.product_image || null,
+  };
+};
+
+const notificationTitle = (notification) => {
+  if (notification.title) return notification.title;
+  if (notification.reference_type === 'order' || notification.type?.includes('order')) {
+    const number = notification.metadata?.order_number || notification.reference_id;
+    return number ? `Order #${String(number).padStart(4, '0')} update` : 'Order update';
+  }
+  if (notification.type?.includes('return')) return 'Return request update';
+  return 'Operations update';
+};
 
 const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = {}, user, children }) => {
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [effectivePermissions, setEffectivePermissions] = useState(null);
   const { connected, on, off } = useSocket();
-
-  // Notification state
+  const [permissions, setPermissions] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const notifRef = useRef(null);
-
-  const formatNotificationTime = (notification) => (
-    notification.created_at
-      ? new Date(notification.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-      : ''
-  );
-
-  const normalizeIncomingNotification = (notification) => {
-    const metadata = notification?.metadata && typeof notification.metadata === 'string'
-      ? (() => {
-          try { return JSON.parse(notification.metadata); } catch { return null; }
-        })()
-      : (notification?.metadata ?? null);
-
-    return {
-      ...notification,
-      metadata,
-      thumbnail_url: notification?.thumbnail_url ?? metadata?.thumbnail_url ?? metadata?.product_image ?? null,
-    };
-  };
-
-  const toSentenceCase = (value) => {
-    if (!value) return '';
-    const normalized = String(value).replace(/[_-]+/g, ' ').trim();
-    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-  };
-
-  const getNotificationTitle = (notification) => {
-    const normalized = normalizeIncomingNotification(notification);
-
-    if (normalized.title) return normalized.title;
-    if (normalized.reference_type === 'order' || normalized.type === 'order.status') {
-      const orderNumber = normalized.metadata?.order_number || normalized.reference_id;
-      return orderNumber ? `Order #${String(orderNumber).padStart(4, '0')} update` : 'Order update';
-    }
-    if (normalized.type === 'return.status') {
-      const returnId = normalized.metadata?.return_id;
-      return returnId ? `Return Request #${returnId} update` : 'Return request update';
-    }
-    return 'Notification';
-  };
-
-  const getNotificationSummary = (notification) => {
-    const normalized = normalizeIncomingNotification(notification);
-
-    if (normalized.message) return normalized.message;
-    if (normalized.metadata?.status && normalized.reference_type === 'order') {
-      const statusLabel = toSentenceCase(normalized.metadata.status);
-      const productName = normalized.metadata?.product_name;
-      return productName
-        ? `${statusLabel} for ${productName}.`
-        : `Order status: ${statusLabel}.`;
-    }
-    if (normalized.metadata?.status && normalized.type === 'return.status') {
-      const statusLabel = toSentenceCase(normalized.metadata.status);
-      const productName = normalized.metadata?.product_name;
-      return productName
-        ? `${statusLabel} for ${productName}.`
-        : `Return request ${statusLabel.toLowerCase()}.`;
-    }
-    return '';
-  };
-
-  const getNotificationTypeLabel = (notification) => {
-    const normalized = normalizeIncomingNotification(notification);
-    if (normalized.reference_type === 'order' || normalized.type === 'order.status') return 'Order';
-    if (normalized.type === 'return.status') return 'Return';
-    return 'Update';
-  };
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationRef = useRef(null);
 
   const refreshNotifications = useCallback(async () => {
-    try {
-      const [count, list] = await Promise.all([
-        getUnreadNotificationCount().catch(() => 0),
-        getNotifications().catch(() => []),
-      ]);
-      setUnreadCount(count || 0);
-      setNotifications(list || []);
-    } catch {}
+    const [count, list] = await Promise.all([
+      getUnreadNotificationCount().catch(() => 0),
+      getNotifications().catch(() => []),
+    ]);
+    setUnreadCount(Number(count || 0));
+    setNotifications((Array.isArray(list) ? list : []).map(parseNotification));
   }, []);
 
-  // Poll notifications
-  useEffect(() => {
-    if (!user) return;
-    refreshNotifications();
-    const interval = setInterval(refreshNotifications, 30000);
-    return () => clearInterval(interval);
-  }, [user, refreshNotifications]);
-
-  // Socket listeners for real-time
-  useEffect(() => {
-    if (!user || !connected) return;
-    const handleRefresh = () => refreshNotifications();
-    const handleNotification = (notification) => {
-      if (notification?.user_id && notification.user_id !== user.id) return;
-      handleRefresh();
-    };
-    on('notification', handleNotification);
-    on('order:new', handleRefresh);
-    on('order:updated', handleRefresh);
-    on('inventory:low-stock', handleRefresh);
-    return () => {
-      off('notification', handleNotification);
-      off('order:new', handleRefresh);
-      off('order:updated', handleRefresh);
-      off('inventory:low-stock', handleRefresh);
-    };
-  }, [user, connected, on, off, refreshNotifications]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e) => {
-      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const handleMarkAllRead = async () => {
-    try {
-      await markAllNotificationsRead();
-      setUnreadCount(0);
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-    } catch (e) { console.error(e); }
-  };
-
-  const handleMarkRead = async (id) => {
-    try {
-      await markNotificationRead(id);
-      setUnreadCount(prev => Math.max(0, prev - 1));
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    } catch (e) { console.error(e); }
-  };
-
-  const handleNotificationClick = async (notification) => {
-    await handleMarkRead(notification.id);
-    setNotifOpen(false);
-
-    const refType = notification.reference_type || notification.type;
-    if (refType === 'order') onNavigate('orders');
-    else if (refType === 'product' || refType === 'inventory') onNavigate('inventory');
-    else if (refType === 'return') onNavigate('returns');
-  };
-
-  const getNotifIcon = (type) => {
-    if (type?.includes('order')) return <ShoppingCart size={14} />;
-    if (type?.includes('stock') || type?.includes('inventory')) return <AlertTriangle size={14} />;
-    if (type?.includes('return')) return <RotateCcw size={14} />;
-    return <Bell size={14} />;
-  };
-
-  const getNotifColor = (type) => {
-    if (type?.includes('low_stock')) return 'bg-red-50 text-red-500';
-    if (type?.includes('order')) return 'bg-blue-50 text-blue-500';
-    if (type?.includes('return')) return 'bg-yellow-50 text-yellow-500';
-    return 'bg-red-500/10 text-red-500';
-  };
   useEffect(() => {
     let active = true;
     getMyPermissions()
-      .then((permissions) => {
-        if (active) setEffectivePermissions(new Set(permissions));
-      })
-      .catch(() => {
-        if (active) setEffectivePermissions(new Set());
-      });
+      .then((items) => { if (active) setPermissions(new Set(items)); })
+      .catch(() => { if (active) setPermissions(new Set()); });
     return () => { active = false; };
   }, [user?.id]);
 
-  const allNavItems = createNavItems(badges);
-  const isPrivileged = user?.role === 'owner' || user?.role === 'admin';
-  const allowedIds = user?.role === 'store_staff' ? STORE_STAFF_NAV : isPrivileged ? OWNER_NAV : [];
-  const navItems = allNavItems.filter((item) => {
-    if (!allowedIds.includes(item.id)) return false;
-    if (!item.permission || isPrivileged) return true;
-    return effectivePermissions?.has(item.permission);
-  });
+  useEffect(() => {
+    if (!user) return undefined;
+    refreshNotifications();
+    const interval = window.setInterval(refreshNotifications, 30000);
+    return () => window.clearInterval(interval);
+  }, [refreshNotifications, user]);
 
   useEffect(() => {
-    if (!effectivePermissions || navItems.length === 0) return;
-    if (!navItems.some((item) => item.id === activeView)) {
-      onNavigate(navItems[0].id);
-    }
-  }, [activeView, effectivePermissions, navItems, onNavigate]);
+    if (!user || !connected) return undefined;
+    const refresh = () => refreshNotifications();
+    on('notification', refresh);
+    on('order:new', refresh);
+    on('order:updated', refresh);
+    on('inventory:low-stock', refresh);
+    return () => {
+      off('notification', refresh);
+      off('order:new', refresh);
+      off('order:updated', refresh);
+      off('inventory:low-stock', refresh);
+    };
+  }, [connected, off, on, refreshNotifications, user]);
 
-  const handleNav = (item) => {
-    if (item.route) { navigate(item.route); }
-    else { onNavigate(item.id); }
-    setMobileOpen(false);
+  useEffect(() => {
+    const close = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+
+  const privileged = ['owner', 'admin'].includes(user?.role);
+  const allowedIds = privileged ? ADMIN_NAV : STAFF_NAV;
+  const navItems = createNavItems(badges).filter((item) => (
+    allowedIds.includes(item.id)
+    && (!item.permission || privileged || permissions?.has(item.permission))
+  ));
+
+  useEffect(() => {
+    if (!permissions || navItems.length === 0) return;
+    if (!navItems.some((item) => item.id === activeView)) onNavigate(navItems[0].id);
+  }, [activeView, navItems, onNavigate, permissions]);
+
+  const handleNavigate = (item) => {
+    if (item.route) navigate(item.route);
+    else onNavigate(item.id);
   };
 
-  const handleLogout = () => {
-    setShowLogoutConfirm(true);
-  };
-
-  const confirmLogout = async () => {
-    try {
-      await logoutApi();
-    } catch (e) {
-      // Ignore logout API errors
-    }
+  const handleLogout = async () => {
+    await logoutApi().catch(() => {});
     clearCurrentAuthUser();
-    setShowLogoutConfirm(false);
-    // Call parent logout handler to clear React user state
-    if (parentLogout) {
-      parentLogout();
-    }
+    parentLogout?.();
     navigate('/login');
   };
 
-  const SidebarContent = ({ mobile = false }) => (
-    <div className="h-full flex flex-col rounded-2xl border border-white/5 bg-gradient-to-b from-[#1a1d23] to-[#111318] shadow-[0_18px_45px_rgba(0,0,0,0.5)] overflow-hidden">
-      {/* Logo */}
-      <div className="h-16 flex items-center justify-between px-4 flex-shrink-0">
-        <BrandMark dark compact={collapsed && !mobile} link={false} className="[&>span:first-child]:h-9 [&>span:first-child]:w-9" />
-        {mobile && <button onClick={() => setMobileOpen(false)} className="text-gray-400 hover:text-white transition-colors"><X size={20} /></button>}
-      </div>
+  const markAllRead = async () => {
+    await markAllNotificationsRead().catch(() => {});
+    setUnreadCount(0);
+    setNotifications((items) => items.map((item) => ({ ...item, is_read: true })));
+  };
 
-      {/* Nav */}
-      <nav className="flex-1 py-2 px-2 space-y-1 overflow-y-auto">
-        {navItems.map((item, idx) => {
-          const Icon = item.icon;
-          const isActive = activeView === item.id;
-          const showGroup = idx === 0 || navItems[idx - 1]?.group !== item.group;
-          return (
-            <React.Fragment key={item.id}>
-              {showGroup && (!collapsed || mobile) && (
-                <p className={`${idx > 0 ? 'mt-4' : 'mt-1'} px-3 pb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500`}>
-                  {item.group}
-                </p>
-              )}
-              <button
-                onClick={() => handleNav(item)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all
-                  ${isActive ? 'bg-gradient-to-r from-[#2a2f3a] to-[#252b36] text-[#ff5f3c] border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]' : 'text-gray-200 hover:bg-[#202430] hover:text-white'}
-                  ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
-                title={collapsed && !mobile ? item.label : undefined}
-              >
-                <Icon size={17} className={`flex-shrink-0 ${isActive ? 'text-[#ff5f3c]' : 'text-gray-400'}`} />
-                {(!collapsed || mobile) && (
-                  <>
-                    <span className="flex-1 text-left">{item.label}</span>
-                    {item.badge ? <span className="min-w-[20px] h-5 bg-[#ff5f3c] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">{item.badge}</span> : null}
-                    {item.route && <ExternalLink size={12} className="text-gray-400" />}
-                  </>
-                )}
-              </button>
-            </React.Fragment>
-          );
-        })}
-      </nav>
+  const openNotification = async (notification) => {
+    if (!notification.is_read) {
+      await markNotificationRead(notification.id).catch(() => {});
+      setUnreadCount((count) => Math.max(0, count - 1));
+      setNotifications((items) => items.map((item) => (
+        item.id === notification.id ? { ...item, is_read: true } : item
+      )));
+    }
+    setNotificationsOpen(false);
+    const type = `${notification.reference_type || ''} ${notification.type || ''}`;
+    if (type.includes('order')) onNavigate('orders');
+    else if (type.includes('return')) onNavigate('returns');
+    else if (type.includes('product') || type.includes('inventory')) onNavigate('inventory');
+  };
 
-      {/* User */}
-      <div className="p-3 border-t border-white/10 flex-shrink-0">
-        <div className={`flex items-center gap-3 ${collapsed && !mobile ? 'justify-center' : ''}`}>
-          <div className="w-8 h-8 bg-[#ff5f3c]/20 text-[#ff6b47] rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-            {user?.name?.charAt(0)?.toUpperCase() || 'A'}
-          </div>
-          {(!collapsed || mobile) && (
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{user?.name || 'Admin'}</p>
-              <p className="text-[10px] text-gray-400 capitalize">{user?.role}</p>
+  const currentTitle = navItems.find((item) => item.id === activeView)?.label || 'Operations';
+  const isStaff = user?.role === 'store_staff';
+
+  const notificationActions = (
+    <div className="relative" ref={notificationRef}>
+      <button
+        type="button"
+        onClick={() => setNotificationsOpen((open) => !open)}
+        className="relative grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+        aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
+      >
+        <Bell size={18} />
+        {unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {notificationsOpen && (
+        <div className="absolute right-0 top-11 z-50 w-[min(92vw,400px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-950">Notifications</p>
+              <p className="text-[11px] text-slate-500">{unreadCount ? `${unreadCount} unread` : 'You are up to date'}</p>
             </div>
-          )}
-          <button onClick={handleLogout} className="text-gray-300 hover:text-[#ff6b47] transition-colors flex-shrink-0" title="Sign out">
-            <LogOut size={16} />
-          </button>
+            {unreadCount > 0 && <button type="button" onClick={markAllRead} className="text-xs font-semibold text-orange-700 hover:text-orange-800">Mark all read</button>}
+          </div>
+          <div className="max-h-[420px] overflow-y-auto">
+            {notifications.length === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <Bell size={24} className="mx-auto text-slate-300" />
+                <p className="mt-3 text-sm font-medium text-slate-700">No notifications</p>
+                <p className="mt-1 text-xs text-slate-500">Operational updates will appear here.</p>
+              </div>
+            ) : notifications.map((notification) => (
+              <button
+                key={notification.id}
+                type="button"
+                onClick={() => openNotification(notification)}
+                className={`flex w-full gap-3 border-b border-slate-100 px-4 py-3.5 text-left hover:bg-slate-50 ${notification.is_read ? '' : 'bg-orange-50/50'}`}
+              >
+                {notification.thumbnail_url ? (
+                  <img src={notification.thumbnail_url} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 object-cover" />
+                ) : (
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
+                    {notification.type?.includes('stock') ? <AlertTriangle size={16} /> : <Bell size={16} />}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-slate-900">{notificationTitle(notification)}</span>
+                  {notification.message && <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-slate-500">{notification.message}</span>}
+                  <span className="mt-1 block text-[10px] text-slate-400">
+                    {notification.created_at ? new Date(notification.created_at).toLocaleString() : ''}
+                  </span>
+                </span>
+                {!notification.is_read && <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-orange-500" />}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      {/* Desktop Sidebar */}
-      <aside className={`${collapsed ? 'w-[92px]' : 'w-[272px]'} bg-[#0b0d11] p-3 flex-col transition-all duration-200 hidden lg:flex`}>
-        <SidebarContent />
-      </aside>
-
-      {/* Mobile Sidebar */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="fixed inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <aside className="fixed left-0 top-0 bottom-0 w-72 bg-[#0b0d11] p-3 shadow-2xl z-50 flex flex-col">
-            <SidebarContent mobile />
-          </aside>
-        </div>
-      )}
-
-      {/* Main */}  
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 lg:px-6">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setCollapsed(!collapsed)} className="hidden h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 lg:flex">
-              <ChevronLeft size={18} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
-            </button>
-            <button onClick={() => setMobileOpen(true)} className="text-slate-500 hover:text-slate-800 lg:hidden">
-              <Menu size={20} />
-            </button>
-            <h2 className="font-display text-sm font-semibold capitalize text-slate-950">{activeView === 'pos' ? 'POS Terminal' : activeView}</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium ${connected ? 'bg-green-50 text-green-600' : 'bg-red-500/10 text-red-500'}`} title={connected ? 'Real-time connected' : 'Reconnecting...'}>
-              {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
-              <span className="hidden sm:inline">{connected ? 'Live' : 'Offline'}</span>
-            </div>
-            <button className="relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800" onClick={() => setNotifOpen(!notifOpen)} aria-label="Admin notifications">
-              <Bell size={18} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-red-500/100 text-white text-[9px] font-bold rounded-full w-[18px] h-[18px] flex items-center justify-center">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </button>
-            {/* Notification dropdown */}
-            {notifOpen && (
-              <div ref={notifRef} className="absolute right-4 top-12 w-96 bg-gray-800 rounded-xl shadow-2xl border border-gray-700 z-50">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-                  <h3 className="font-semibold text-white text-sm">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <button onClick={handleMarkAllRead} className="text-xs text-red-500 hover:text-orange-600 font-medium">Mark all read</button>
-                  )}
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <div className="p-8 text-center text-gray-400 text-sm">
-                      <Bell size={24} className="mx-auto mb-2 opacity-30" />
-                      No notifications yet
-                    </div>
-                  ) : (
-                    notifications.map((notification) => {
-                      const n = normalizeIncomingNotification(notification);
-                      const title = getNotificationTitle(n);
-                      const summary = getNotificationSummary(n);
-                      const typeLabel = getNotificationTypeLabel(n);
-
-                      return (
-                      <button
-                        key={n.id}
-                        onClick={() => handleNotificationClick(n)}
-                        className={`w-full text-left px-4 py-3.5 hover:bg-gray-900 transition-colors border-b border-gray-700 ${!n.is_read ? 'bg-red-500/10' : ''}`}
-                      >
-                        <div className="flex items-start gap-3.5">
-                          {n.thumbnail_url ? (
-                            <img src={n.thumbnail_url} alt="" className="mt-0.5 shrink-0 w-12 h-12 rounded-xl object-cover bg-gray-900 border border-gray-700 shadow-sm" />
-                          ) : (
-                            <div className={`mt-0.5 shrink-0 w-10 h-10 rounded-xl border border-gray-700 flex items-center justify-center ${getNotifColor(n.type)}`}>
-                              {getNotifIcon(n.type)}
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start gap-2">
-                              <div className="min-w-0 flex-1">
-                                <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-white' : 'font-medium text-gray-100'}`}>{title}</p>
-                                {summary && <p className="mt-1 text-xs leading-5 text-gray-300 line-clamp-2">{summary}</p>}
-                                <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
-                                  <span className="rounded-full border border-gray-600 bg-zinc-900 px-2 py-0.5 font-medium text-gray-300">{typeLabel}</span>
-                                  <span>{formatNotificationTime(n)}</span>
-                                </div>
-                              </div>
-                              {!n.is_read && <div className="mt-1.5 w-2.5 h-2.5 bg-red-500 rounded-full shrink-0" />}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    )})
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </header>
-        <main className="flex-1 overflow-y-auto bg-slate-50 p-4 lg:p-6">{children}</main>
-      </div>
-
-      {/* Logout Confirmation Modal */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-96 border border-gray-700 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="bg-red-500/10 p-3 rounded-2xl">
-                <LogOut className="w-8 h-8 text-red-500" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-black text-white">Sign Out?</h3>
-                <p className="text-gray-400 font-medium text-sm mt-1">Confirm to logout</p>
-              </div>
-            </div>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to sign out of your admin account?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowLogoutConfirm(false)}
-                className="flex-1 py-3 text-gray-600 hover:bg-gray-100 rounded-2xl font-bold transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmLogout}
-                className="flex-1 py-3 bg-red-500/100 text-white rounded-2xl hover:bg-red-600 font-bold shadow-lg hover:shadow-xl transition-all"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    <OperationsShell
+      activeId={activeView}
+      navItems={navItems}
+      onNavigate={handleNavigate}
+      onLogout={handleLogout}
+      user={user}
+      connected={connected}
+      title={currentTitle}
+      contextLabel={isStaff ? 'Store operations workspace' : 'Commerce management workspace'}
+      headerActions={notificationActions}
+    >
+      {children}
+    </OperationsShell>
   );
 };
 
 export default AdminLayout;
-
-
-
-

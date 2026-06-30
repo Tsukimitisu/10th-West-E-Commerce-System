@@ -230,3 +230,134 @@ input[type="password"]::-ms-clear {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Operations workspace normalization
+   Legacy management views still use older utility combinations. These scoped
+   rules keep them on the same light, restrained system while they are migrated
+   to the shared operations components. */
+.operations-shell {
+  --ops-bg: #f8fafc;
+  --ops-surface: #ffffff;
+  --ops-surface-muted: #f1f5f9;
+  --ops-sidebar: #0f172a;
+  --ops-text: #0f172a;
+  --ops-muted: #64748b;
+  --ops-border: #e2e8f0;
+  --ops-accent: #ea580c;
+}
+
+.operations-content {
+  color: var(--ops-text);
+  font-size: 14px;
+}
+
+.operations-content h1 {
+  color: var(--ops-text);
+  letter-spacing: -0.02em;
+}
+
+.operations-content :is(.bg-gray-800, .bg-gray-900) {
+  background-color: var(--ops-surface) !important;
+}
+
+.operations-content [class*="from-[#1a1d23]"],
+.operations-content [class*="from-[#111a31]"] {
+  background: var(--ops-surface) !important;
+}
+
+.operations-content :is(.border-gray-700, .border-gray-600) {
+  border-color: var(--ops-border) !important;
+}
+
+.operations-content :is(.divide-gray-50, .divide-gray-700) > :not([hidden]) ~ :not([hidden]) {
+  border-color: #f1f5f9 !important;
+}
+
+.operations-content .text-white {
+  color: var(--ops-text) !important;
+}
+
+.operations-content :is(.text-gray-100, .text-gray-200, .text-gray-300) {
+  color: #475569 !important;
+}
+
+.operations-content .text-gray-400 {
+  color: var(--ops-muted) !important;
+}
+
+.operations-content :is(
+  [class*="bg-red-"],
+  [class*="bg-orange-"],
+  [class*="bg-blue-"],
+  [class*="bg-green-"],
+  [class*="bg-emerald-"],
+  [class*="bg-indigo-"],
+  [class*="bg-purple-"],
+  [class*="bg-slate-9"],
+  [class*="from-red-"],
+  [class*="from-orange-"]
+).text-white {
+  color: #ffffff !important;
+}
+
+.operations-content input:not([type="checkbox"]):not([type="radio"]),
+.operations-content select,
+.operations-content textarea {
+  border-color: #cbd5e1 !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.operations-content input::placeholder,
+.operations-content textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.operations-content table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 680px;
+}
+
+.operations-content thead {
+  background: #f8fafc !important;
+}
+
+.operations-content th {
+  color: #475569 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em;
+}
+
+.operations-content td {
+  color: #475569;
+  vertical-align: middle;
+}
+
+.operations-content tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.operations-content tbody tr:hover {
+  background: rgba(248, 250, 252, 0.9) !important;
+}
+
+.operations-content [class*="overflow-hidden"]:has(> table) {
+  overflow-x: auto !important;
+}
+
+.operations-content button,
+.operations-content a {
+  transition-duration: 160ms;
+}
+
+.operations-content :is(.shadow-xl, .shadow-2xl) {
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.1) !important;
+}
+
+@media (max-width: 640px) {
+  .operations-content table {
+    min-width: 620px;
+  }
+}
