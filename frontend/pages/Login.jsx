@@ -59,10 +59,10 @@ const Login = ({ onLogin }) => {
       const paramString = additionalParams.toString();
       if (paramString) redirect += `?${paramString}`;
 
-      if (role === 'super_admin') redirect = '/super-admin';
-      else if (role === 'owner') redirect = '/admin';
-      else if (role === 'admin') redirect = '/admin';
-      else if (role === 'store_staff') redirect = '/admin';
+      if (role === 'super_admin') redirect = '/superadmin/dashboard';
+      else if (role === 'owner') redirect = '/admin/dashboard';
+      else if (role === 'admin') redirect = '/admin/dashboard';
+      else if (role === 'store_staff') redirect = '/staff/dashboard';
       else if (role === 'cashier') redirect = '/pos';
       else if (defaultRedirect === '/') redirect = '/';
       navigate(redirect);

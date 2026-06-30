@@ -66,7 +66,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   }, [location.pathname, location.search]);
 
   const isSuperAdmin = user?.role === Role.SUPER_ADMIN;
-  const hideChrome = location.pathname === '/pos' || location.pathname === '/admin' || location.pathname === '/super-admin';
+  const hideChrome = location.pathname === '/pos' || ['/admin', '/staff', '/superadmin', '/super-admin'].some((path) => location.pathname.startsWith(path));
   const isAccountRoute = (
     location.pathname === '/profile' ||
     location.pathname === '/orders' ||
@@ -78,8 +78,8 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   );
 
   // Super Admin can ONLY access /super-admin — redirect everything else
-  if (isSuperAdmin && location.pathname !== '/super-admin' && location.pathname !== '/login') {
-    return <Navigate to="/super-admin" replace />;
+  if (isSuperAdmin && !location.pathname.startsWith('/superadmin') && !location.pathname.startsWith('/super-admin') && location.pathname !== '/login') {
+    return <Navigate to="/superadmin/dashboard" replace />;
   }
 
   return (
@@ -148,8 +148,10 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                 <Route path="/addresses" element={user ? <AddressBook /> : <Navigate to="/login" />} />
                 <Route path="/wishlist" element={user ? <Wishlist /> : <Navigate to="/login" />} />
                 <Route path="/messages" element={user ? <Messages /> : <Navigate to="/login?redirect=/messages" />} />
-                <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF || user?.role === Role.ADMIN ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
-                <Route path="/super-admin" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/admin/*" element={user?.role === Role.OWNER || user?.role === Role.ADMIN ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
+                <Route path="/staff/*" element={user?.role === Role.STORE_STAFF ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
+                <Route path="/superadmin/*" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/super-admin/*" element={<Navigate to="/superadmin/dashboard" replace />} />
                 <Route path="/pos" element={[Role.OWNER, Role.ADMIN, Role.STORE_STAFF, Role.CASHIER].includes(user?.role) ? <PosTerminal /> : <Navigate to="/login" replace />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
