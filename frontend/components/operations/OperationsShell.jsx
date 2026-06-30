@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft,
   LogOut,
@@ -32,6 +33,8 @@ const OperationsShell = ({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [confirmingLogout, setConfirmingLogout] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const navigate = useNavigate();
 
   const groups = useMemo(() => navItems.reduce((result, item) => {
     const group = item.group || 'Workspace';
@@ -112,7 +115,8 @@ const OperationsShell = ({
       </nav>
 
       <div className="shrink-0 border-t border-white/10 p-3">
-        <div className={`flex items-center gap-3 rounded-xl p-2 ${collapsed && !mobile ? 'justify-center' : ''}`}>
+        <div className={`relative flex items-center gap-3 rounded-xl p-2 ${collapsed && !mobile ? 'justify-center' : ''}`}>
+          <button type="button" onClick={() => setProfileOpen((open) => !open)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label="Open profile menu">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-xs font-bold text-orange-300">
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
           </span>
@@ -122,6 +126,7 @@ const OperationsShell = ({
               <p className="truncate text-[11px] text-slate-400">{roleName(user?.role)}</p>
             </div>
           )}
+          </button>
           <button
             type="button"
             onClick={() => setConfirmingLogout(true)}
@@ -131,6 +136,13 @@ const OperationsShell = ({
           >
             <LogOut size={16} />
           </button>
+          {profileOpen && (!collapsed || mobile) && (
+            <div className="absolute bottom-14 left-0 right-0 z-20 rounded-lg border border-white/10 bg-slate-900 p-1 shadow-xl">
+              <button type="button" onClick={() => { setProfileOpen(false); navigate('/profile'); }} className="block w-full rounded-md px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/10">Profile</button>
+              <button type="button" onClick={() => { setProfileOpen(false); navigate('/profile?tab=security'); }} className="block w-full rounded-md px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/10">Account & security</button>
+              <button type="button" onClick={() => { setProfileOpen(false); setConfirmingLogout(true); }} className="block w-full rounded-md px-3 py-2 text-left text-xs text-red-300 hover:bg-red-500/10">Sign out</button>
+            </div>
+          )}
         </div>
       </div>
     </div>
