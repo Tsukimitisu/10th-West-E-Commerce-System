@@ -23,6 +23,13 @@ import {
 
 const router = express.Router();
 
+router.get('/providers', (_req, res) => {
+  res.json({
+    google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && passport._strategy('google')),
+    facebook: Boolean(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET && passport._strategy('facebook')),
+  });
+});
+
 const getFrontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173';
 
 const redirectToOAuthError = (res, errorCode) => {
