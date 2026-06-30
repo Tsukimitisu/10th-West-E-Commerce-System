@@ -345,6 +345,8 @@ app.get('/api/ready', async (_req, res) => {
       database: 'ok',
       shipping_provider: shipping.provider,
       shipping_provider_configured: shipping.ready,
+      shipping_country: String(process.env.SHIPPING_COUNTRY || 'PH').toUpperCase(),
+      shipping_carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
       tracking_provider: tracking.provider,
       tracking_provider_configured: tracking.ready,
       mock_shipping_blocked_in_production: process.env.NODE_ENV === 'production' && shipping.mock,

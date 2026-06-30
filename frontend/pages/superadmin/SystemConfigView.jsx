@@ -202,6 +202,7 @@ const SystemConfigView = () => {
             {[
               ['Shipping provider', providerHealth?.shipping?.provider, providerHealth?.shipping?.status],
               ['Tracking provider', providerHealth?.tracking?.provider, providerHealth?.tracking?.status],
+              ['Carrier', providerHealth?.shipping?.carrier === 'jtexpress-ph' ? 'J&T Express Philippines' : providerHealth?.shipping?.carrier, 'Via the configured aggregator; selected-city coverage applies'],
               ['Webhook URL', providerHealth?.shipping_activity?.webhook_url, 'Configure this URL with the provider'],
               ['Sender details', providerHealth?.shipping_activity?.sender_configured ? 'Configured' : 'Not configured', 'Credentials remain server-side'],
             ].map(([label, value, detail]) => (

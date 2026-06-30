@@ -146,8 +146,20 @@ router.get('/readiness', async (_req, res) => {
       database: 'ok',
       integrations: {
         paymongo: paymongo.configured ? 'configured' : 'blocked_by_credentials',
-        shipping: { provider: shipping.provider, status: shipping.status, ready: shipping.ready },
-        tracking: { provider: tracking.provider, status: tracking.status, ready: tracking.ready },
+        shipping: {
+          provider: shipping.provider,
+          status: shipping.status,
+          ready: shipping.ready,
+          country: String(process.env.SHIPPING_COUNTRY || 'PH').toUpperCase(),
+          carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
+          coverage: 'selected_cities',
+        },
+        tracking: {
+          provider: tracking.provider,
+          status: tracking.status,
+          ready: tracking.ready,
+          carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
+        },
         gmail: process.env.EMAIL_USER && process.env.EMAIL_PASSWORD ? 'configured' : 'blocked_by_credentials',
         facebook: process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET ? 'configured' : 'blocked_by_credentials',
       },

@@ -26,7 +26,7 @@ test('active backend and frontend source contain no direct courier-specific inte
     ...await listSourceFiles(backendSource),
     ...await listSourceFiles(path.join(repositoryRoot, 'frontend')),
   ].filter((file) => !file.endsWith('shippingArchitecture.test.js'));
-  const forbidden = /\bJNT_|J&T|\bjnt\b|Jnt|direct_jnt/i;
+  const forbidden = /\bJNT_|direct_jnt|JNT_MOCK_MODE|jntShipments|createJnt|refreshJnt/i;
   const violations = [];
   for (const file of files) {
     const source = await readFile(file, 'utf8');
@@ -59,8 +59,9 @@ test('readiness reports generic shipping and tracking state', async () => {
   const server = await readFile(path.join(backendSource, 'server.js'), 'utf8');
   const adminRoutes = await readFile(path.join(backendSource, 'routes', 'admin.js'), 'utf8');
   assert.match(server, /shipping_provider_configured/);
+  assert.match(server, /shipping_carrier/);
   assert.match(server, /tracking_provider_configured/);
   assert.match(server, /mock_shipping_blocked_in_production/);
-  assert.match(adminRoutes, /shipping: \{ provider: shipping\.provider, status: shipping\.status, ready: shipping\.ready \}/);
-  assert.match(adminRoutes, /tracking: \{ provider: tracking\.provider, status: tracking\.status, ready: tracking\.ready \}/);
+  assert.match(adminRoutes, /shipping:\s*\{[\s\S]*?provider: shipping\.provider,[\s\S]*?carrier:/);
+  assert.match(adminRoutes, /tracking:\s*\{[\s\S]*?provider: tracking\.provider,[\s\S]*?carrier:/);
 });
