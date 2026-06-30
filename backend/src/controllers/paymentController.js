@@ -1,12 +1,11 @@
 import pool from '../config/database.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
-import { createJntWaybillForOrder } from '../services/jntShipments.js';
 import { createPaymongoGcashCheckout, verifyPaymongoWebhookSignature } from '../services/paymongo.js';
 import { validatePhilippineAddress } from '../services/psgc.js';
 
 const VAT_RATE = 0.12;
-const JNT_SHIPPING_FEE = Number.parseFloat(process.env.JNT_STANDARD_SHIPPING_FEE || '150');
-const FREE_JNT_SHIPPING_THRESHOLD = Number.parseFloat(process.env.JNT_FREE_SHIPPING_THRESHOLD || '2500');
+const STANDARD_SHIPPING_FEE = Number.parseFloat(process.env.DEFAULT_SHIPPING_FEE || '150');
+const FREE_SHIPPING_THRESHOLD = Number.parseFloat(process.env.FREE_SHIPPING_THRESHOLD || '2500');
 const PAYMENT_STATUSES = new Set(['pending', 'paid', 'failed', 'expired', 'refunded']);
 
 const normalizeText = (value) => {
@@ -45,27 +44,13 @@ const buildShippingAddressSnapshot = (snapshotInput = {}, shippingAddress) => ({
 });
 
 const computeShippingCost = (subtotal) => (
-  subtotal >= FREE_JNT_SHIPPING_THRESHOLD ? 0 : roundMoney(JNT_SHIPPING_FEE)
+  subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : roundMoney(STANDARD_SHIPPING_FEE)
 );
 
 export const ensurePaymentOrderColumns = async (db = pool) => {
   // Schema is managed exclusively by Knex migrations.
   return;
   await db.query(`
-    DO $$
-    BEGIN
-      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_shipping_method_enum')
-         AND NOT EXISTS (
-           SELECT 1
-           FROM pg_enum e
-           JOIN pg_type t ON t.oid = e.enumtypid
-           WHERE t.typname = 'order_shipping_method_enum'
-             AND e.enumlabel = 'jnt'
-         ) THEN
-        ALTER TYPE order_shipping_method_enum ADD VALUE 'jnt';
-      END IF;
-    END $$;
-
     ALTER TABLE orders
       ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(50),
       ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) NOT NULL DEFAULT 'pending',
@@ -233,8 +218,8 @@ const createPendingGcashOrder = async ({ req, client, normalizedItems, orderItem
     ) VALUES (
       $1, $2, $3, $4,
       $5, $6, $7, NULL, 'pending',
-      $8, $9, 'jnt', $10, 'gcash', 'online',
-      $11::jsonb, 'jnt', 'not_requested',
+      $8, $9, 'standard', $10, 'gcash', 'online',
+      $11::jsonb, NULL, 'not_requested',
       'paymongo', 'pending', $12, $13::jsonb, NOW() + INTERVAL '30 minutes'
     )
     RETURNING *`,
@@ -367,12 +352,6 @@ const markOrderPaid = async ({ orderId, event, checkoutId }) => {
       reserved_stock: Number(stockUpdate.reserved_stock || 0),
       name: stockUpdate.name,
     });
-  }
-
-  try {
-    paidOrder = await createJntWaybillForOrder(pool, paidOrder.id, { generatedBy: null });
-  } catch (waybillError) {
-    console.error('Auto J&T waybill generation after PayMongo payment failed:', waybillError.message);
   }
 
   emitOrderStatusUpdate(paidOrder.id, 'paid');

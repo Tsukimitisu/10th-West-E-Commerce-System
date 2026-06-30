@@ -118,7 +118,7 @@ const seedData = async () => {
           
           <h3>Shipping Methods</h3>
           <ul>
-            <li><strong>Standard J&T Shipping:</strong> 3-7 business days depending on destination</li>
+            <li><strong>Standard Shipping:</strong> 3-7 business days depending on destination</li>
             <li><strong>Store Pickup:</strong> Available only when enabled for the order</li>
           </ul>
           

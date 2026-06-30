@@ -4,13 +4,6 @@ import { ORDER_STATUSES, STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
 import { buildOrderStatusMessage, createNotification as createUserNotification, ensureNotificationColumns } from '../utils/notifications.js';
 import { validatePhilippineAddress } from '../services/psgc.js';
-import {
-  createJntWaybillForOrder,
-  ensureJntOrderColumns,
-  getJntWaybill,
-  normalizeWaybillStatus,
-  refreshJntTrackingForOrder,
-} from '../services/jntShipments.js';
 import { ensurePaymentOrderColumns } from './paymentController.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
@@ -73,9 +66,6 @@ const ensureOrderWorkflowColumns = async () => {
       ADD COLUMN IF NOT EXISTS courier_metadata JSONB;
   `).catch((error) => {
     console.error('Failed to ensure order support columns:', error);
-  });
-  await ensureJntOrderColumns(pool).catch((error) => {
-    console.error('Failed to ensure J&T order columns:', error);
   });
   await ensurePaymentOrderColumns(pool).catch((error) => {
     console.error('Failed to ensure payment order columns:', error);
@@ -209,6 +199,11 @@ const getMemoryOrderBundle = (id) => {
   return { order, items };
 };
 
+const normalizeWaybillStatus = (value) => {
+  const status = String(value || 'not_requested').trim().toLowerCase();
+  return ['not_requested', 'pending', 'generated', 'failed'].includes(status) ? status : 'not_requested';
+};
+
 const mapMemoryOrderBundle = ({ order, items }) => ({
   ...mapOrderRecord(order),
   return_eligible: false,
@@ -260,7 +255,7 @@ const createMemoryOrder = (req) => {
     payment_method: paymentMethod,
     source: normalizeText(body.source) || 'online',
     shipping_address_snapshot: buildShippingAddressSnapshot(body.shipping_address_snapshot || {}, body.shipping_address),
-    courier: paymentMethod === 'cod' ? 'jnt' : null,
+    courier: null,
     waybill_status: 'not_requested',
     payment_provider: paymentMethod === 'gcash' ? 'paymongo' : 'cod',
     payment_status: paymentMethod === 'cod' ? 'pending' : 'paid',
@@ -947,127 +942,6 @@ const getOrdersFallback = async ({ userId = null, page, limit, paginated } = {})
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 };
 
-const escapeHtml = (value) => String(value ?? '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;');
-
-export const createJntWaybill = async (req, res) => {
-  try {
-    const order = await createJntWaybillForOrder(pool, req.params.id, { generatedBy: req.user?.id || null });
-    res.json({
-      message: order.waybill_status === 'generated' ? 'J&T waybill ready' : 'J&T waybill request updated',
-      order: mapOrderRecord(order),
-    });
-  } catch (error) {
-    console.error('Create J&T waybill error:', error);
-    res.status(error.status || (error.code === 'JNT_NOT_CONFIGURED' ? 503 : 500)).json({
-      message: error.message || 'Failed to create J&T waybill',
-      code: error.code || 'JNT_WAYBILL_ERROR',
-    });
-  }
-};
-
-export const getOrderWaybill = async (req, res) => {
-  try {
-    const waybill = await getJntWaybill(pool, req.params.id);
-    if (!waybill) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
-    if (!waybill.waybill_number || waybill.waybill_status !== 'generated') {
-      return res.status(400).json({ message: 'Waybill has not been generated for this order.' });
-    }
-
-    const label = waybill.waybill_label_payload || {};
-    const recipient = label.recipient || {};
-    const sender = label.sender || {};
-    const pkg = label.package || {};
-    const waybillNumber = waybill.waybill_number;
-    const qrDataUrl = label.qr_data_url || '';
-
-    const html = `<!doctype html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>J&T Waybill ${escapeHtml(waybillNumber)}</title>
-        <style>
-          * { box-sizing: border-box; }
-          body { margin: 0; padding: 24px; font-family: Arial, sans-serif; color: #111827; background: #f3f4f6; }
-          .label { width: 420px; margin: 0 auto; background: #fff; border: 2px solid #111827; }
-          .header { display: flex; justify-content: space-between; align-items: center; padding: 14px; border-bottom: 2px solid #111827; }
-          .brand { font-size: 24px; font-weight: 800; color: #dc2626; }
-          .service { font-size: 12px; font-weight: 700; text-transform: uppercase; }
-          .awb { padding: 14px; text-align: center; border-bottom: 2px solid #111827; }
-          .awb-value { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
-          .qr { width: 150px; height: 150px; margin: 10px auto 0; display: block; }
-          .section { padding: 12px 14px; border-bottom: 1px solid #111827; }
-          .section h2 { margin: 0 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #4b5563; }
-          .section p { margin: 3px 0; font-size: 13px; line-height: 1.35; }
-          .footer { display: grid; grid-template-columns: 1fr 1fr 1fr; font-size: 11px; }
-          .footer div { padding: 10px; border-right: 1px solid #111827; min-height: 48px; }
-          .footer div:last-child { border-right: 0; }
-          @media print {
-            body { padding: 0; background: #fff; }
-            .label { margin: 0; width: 100%; border-width: 1px; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="label">
-          <div class="header">
-            <div class="brand">J&amp;T Express</div>
-            <div class="service">Waybill</div>
-          </div>
-          <div class="awb">
-            <div class="awb-value">${escapeHtml(waybillNumber)}</div>
-            ${qrDataUrl ? `<img class="qr" src="${escapeHtml(qrDataUrl)}" alt="Waybill QR">` : ''}
-          </div>
-          <div class="section">
-            <h2>Receiver</h2>
-            <p><strong>${escapeHtml(recipient.name || 'Customer')}</strong></p>
-            <p>${escapeHtml(recipient.phone || '')}</p>
-            <p>${escapeHtml(recipient.address || '')}</p>
-          </div>
-          <div class="section">
-            <h2>Sender</h2>
-            <p><strong>${escapeHtml(sender.name || '10th West Moto')}</strong></p>
-            <p>${escapeHtml(sender.phone || '')}</p>
-            <p>${escapeHtml(sender.address || '')}</p>
-          </div>
-          <div class="footer">
-            <div><strong>Order</strong><br>${escapeHtml(label.order_number || label.order_id || waybill.id)}</div>
-            <div><strong>Weight</strong><br>${escapeHtml(pkg.weight_kg || '')} kg</div>
-            <div><strong>Qty</strong><br>${escapeHtml(pkg.qty || '')}</div>
-          </div>
-        </div>
-        <script>window.addEventListener('load', () => window.print());</script>
-      </body>
-      </html>`;
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(html);
-  } catch (error) {
-    console.error('Get waybill error:', error);
-    res.status(500).json({ message: 'Failed to render waybill' });
-  }
-};
-
-export const refreshJntTracking = async (req, res) => {
-  try {
-    const tracking = await refreshJntTrackingForOrder(pool, req.params.id, { requestedBy: req.user?.id || null });
-    emitOrderStatusUpdate(req.params.id, tracking.order_status);
-    res.json(tracking);
-  } catch (error) {
-    console.error('Refresh J&T tracking error:', error);
-    res.status(error.status || (error.code === 'JNT_TRACKING_NOT_CONFIGURED' ? 503 : 500)).json({
-      message: error.message || 'Failed to refresh J&T tracking',
-      code: error.code || 'JNT_TRACKING_ERROR',
-    });
-  }
-};
-
 // Create order (after payment)
 export const createOrder = async (req, res) => {
   const {
@@ -1387,16 +1261,6 @@ export const createOrder = async (req, res) => {
     }
 
     await client.query('COMMIT');
-
-    if (order.source !== 'pos' && order.shipping_method !== 'pickup' && order.status === 'paid') {
-      try {
-        order = await createJntWaybillForOrder(pool, order.id, { generatedBy: req.user?.id || null });
-      } catch (waybillError) {
-        console.error('Auto J&T waybill generation failed:', waybillError.message);
-        const latestOrderResult = await pool.query('SELECT * FROM orders WHERE id = $1', [order.id]);
-        order = latestOrderResult.rows[0] || order;
-      }
-    }
 
     const itemsResult = await client.query(
       `SELECT 

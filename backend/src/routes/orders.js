@@ -8,10 +8,7 @@ import {
   confirmOrderReceipt,
   createOrder,
   getOrderInvoice,
-  cancelOrder,
-  createJntWaybill,
-  getOrderWaybill,
-  refreshJntTracking
+  cancelOrder
 } from '../controllers/orderController.js';
 import { authenticateToken, requirePermission, requirePermissionForRoles, requireRole } from '../middleware/auth.js';
 import { createCheckout } from '../controllers/secureCheckoutController.js';
@@ -40,8 +37,4 @@ router.get('/', authenticateToken, requireRole(...operationsRoles), requirePermi
 router.patch('/:id/status', authenticateToken, requireRole(...operationsRoles), requirePermission('orders.update'), updateOrderStatusSecure);
 router.put('/:id/status', authenticateToken, requireRole(...operationsRoles), requirePermission('orders.update'), updateOrderStatusSecure);
 router.put('/:id/confirm-delivery', authenticateToken, requireRole(...operationsRoles), requirePermission('orders.update'), confirmOrderDelivery);
-router.post('/:id/jnt-waybill', authenticateToken, requireRole(...operationsRoles), requirePermission('waybills.generate'), createJntWaybill);
-router.get('/:id/waybill', authenticateToken, requireRole(...operationsRoles), requirePermission('waybills.view'), getOrderWaybill);
-router.get('/:id/jnt-tracking', authenticateToken, requireRole(...operationsRoles), requirePermission('shipments.view'), refreshJntTracking);
-
 export default router;

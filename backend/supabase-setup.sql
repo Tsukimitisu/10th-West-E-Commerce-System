@@ -1501,7 +1501,7 @@ FROM (VALUES
   ('standard', 'Standard Shipping', 150.00, 3000.00, '3-5 business days', FALSE),
   ('express',  'Express Shipping',  350.00, NULL,     '1-2 business days', FALSE),
   ('pickup',   'Store Pickup',      0.00,   NULL,     'Same day',          FALSE),
-  ('jnt',      'J&T Express',       150.00, 2500.00,  '3-5 business days', TRUE)
+  ('standard', 'Standard Delivery', 150.00, 2500.00,  '3-5 business days', TRUE)
 ) AS v(method, label, base_fee, min_purchase_free, estimated_days, is_active)
 WHERE NOT EXISTS (SELECT 1 FROM shipping_rates sr WHERE sr.method = v.method);
 
