@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { DollarSign, ShoppingCart, TrendingUp, AlertTriangle, Package, Clock, ArrowUpRight, RotateCcw, MessageSquare } from 'lucide-react';
+import { DollarSign, ShoppingCart, TrendingUp, AlertTriangle, Package, Clock, RotateCcw } from 'lucide-react';
 import { getDashboardStats, getOrders, getProducts } from '../../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend, ScatterChart, Scatter } from 'recharts';
 import StatCard from '../../components/owner/StatCard';
@@ -41,7 +41,9 @@ const DashboardView = () => {
     </div>
   );
 
-  const pendingOrders = orders.filter(o => o.status === 'pending').length;
+  const pendingOrders = orders.filter(o => ['pending', 'payment_pending'].includes(o.status)).length;
+  const ordersToPack = orders.filter(o => ['paid', 'processing'].includes(o.status)).length;
+  const ordersToShip = orders.filter(o => ['packed', 'ready_for_pickup'].includes(o.status)).length;
   const lowStock = products.filter(p => p.stock_quantity <= p.low_stock_threshold);
   const recentOrders = [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 8);
   const topProducts = [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 5);
@@ -72,7 +74,8 @@ const DashboardView = () => {
     const d = new Date(o.created_at);
     const t = new Date();
     return d.toDateString() === t.toDateString();
-  }).reduce((s, o) => s + o.total_amount, 0);
+  }).filter(o => !['pending', 'payment_pending', 'cancelled', 'failed', 'refunded'].includes(o.status))
+    .reduce((s, o) => s + Number(o.total_amount || 0), 0);
 
   // Calculate sales by day of week and hour of day
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -137,13 +140,13 @@ const DashboardView = () => {
       {/* Date range selector */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display font-bold text-xl text-white">Dashboard</h1>
-          <p className="text-sm text-gray-400">Welcome back! Here's what's happening.</p>
+          <h1 className="font-display text-xl font-bold text-slate-950">Operations dashboard</h1>
+          <p className="text-sm text-slate-600">Live orders, sales, inventory, and customer work.</p>
         </div>
-        <div className="flex bg-gray-800 rounded-lg p-0.5">
+        <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
           {(['7d', '30d', '90d']).map(r => (
             <button key={r} onClick={() => setRange(r)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${range === r ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}>
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${range === r ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}>
               {r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}
             </button>
           ))}
@@ -152,29 +155,29 @@ const DashboardView = () => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={<DollarSign size={20} />} label="Today's Sales" value={`₱${todaySales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} change={12} changeLabel="vs yesterday" color="bg-green-500/20 text-green-400" className="bg-gray-800 border-gray-700 shadow-xl shadow-green-900/5" />
-        <StatCard icon={<TrendingUp size={20} />} label="Total Revenue" value={`₱${(stats?.totalSales || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} change={8} changeLabel="this month" color="bg-blue-500/20 text-blue-400" className="bg-gray-800 border-gray-700 shadow-xl shadow-blue-900/5" />
-        <StatCard icon={<ShoppingCart size={20} />} label="Total Orders" value={stats?.totalOrders || orders.length} change={5} changeLabel="this month" color="bg-purple-500/20 text-purple-400" className="bg-gray-800 border-gray-700 shadow-xl shadow-purple-900/5" />
-        <StatCard icon={<AlertTriangle size={20} />} label="Low Stock Items" value={lowStock.length} color="bg-amber-500/20 text-amber-400" className="bg-gray-800 border-gray-700 shadow-xl shadow-amber-900/5" />
+        <StatCard icon={<DollarSign size={20} />} label="Today's Sales" value={`₱${todaySales.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} color="bg-emerald-50 text-emerald-700" />
+        <StatCard icon={<TrendingUp size={20} />} label="Total Revenue" value={`₱${Number(stats?.totalSales || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} color="bg-blue-50 text-blue-700" />
+        <StatCard icon={<ShoppingCart size={20} />} label="Total Orders" value={stats?.totalOrders || orders.length} color="bg-violet-50 text-violet-700" />
+        <StatCard icon={<AlertTriangle size={20} />} label="Low Stock Items" value={lowStock.length} color="bg-amber-50 text-amber-700" />
       </div>
 
       {/* Secondary KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5 bg-gradient-to-b p-4 shadow-[0_18px_45px_rgba(0,0,0,0.5)]">
-          <div className="flex items-center gap-2 text-gray-300 text-xs mb-1"><Clock size={14} /> Pending Orders</div>
-          <p className="text-lg font-bold text-white">{pendingOrders}</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-1 flex items-center gap-2 text-xs text-slate-600"><Clock size={14} /> Pending orders</div>
+          <p className="text-lg font-bold text-slate-950">{pendingOrders}</p>
         </div>
-        <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5 bg-gradient-to-b p-4 shadow-[0_18px_45px_rgba(0,0,0,0.5)]">
-          <div className="flex items-center gap-2 text-gray-300 text-xs mb-1"><DollarSign size={14} /> Avg. Order</div>
-          <p className="text-lg font-bold text-white">₱{(stats?.avgOrderValue || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-1 flex items-center gap-2 text-xs text-slate-600"><Package size={14} /> Orders to pack</div>
+          <p className="text-lg font-bold text-slate-950">{ordersToPack}</p>
         </div>
-        <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5 bg-gradient-to-b p-4 shadow-[0_18px_45px_rgba(0,0,0,0.5)]">
-          <div className="flex items-center gap-2 text-gray-300 text-xs mb-1"><RotateCcw size={14} /> Pending Returns</div>
-          <p className="text-lg font-bold text-white">{stats?.pendingReturns || 0}</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-1 flex items-center gap-2 text-xs text-slate-600"><ShoppingCart size={14} /> Orders to ship</div>
+          <p className="text-lg font-bold text-slate-950">{ordersToShip}</p>
         </div>
-        <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5 bg-gradient-to-b p-4 shadow-[0_18px_45px_rgba(0,0,0,0.5)]">
-          <div className="flex items-center gap-2 text-gray-300 text-xs mb-1"><MessageSquare size={14} /> Open Tickets</div>
-          <p className="text-lg font-bold text-white">{stats?.openTickets || 0}</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-1 flex items-center gap-2 text-xs text-slate-600"><RotateCcw size={14} /> Return requests</div>
+          <p className="text-lg font-bold text-slate-950">{stats?.pendingReturns || 0}</p>
         </div>
       </div>
 
@@ -414,7 +417,6 @@ const DashboardView = () => {
         <div className="lg:col-span-2 bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
             <h3 className="font-display font-semibold text-sm text-white">Recent Orders</h3>
-            <button className="text-xs text-red-500 hover:text-red-400 font-medium flex items-center gap-1">View All <ArrowUpRight size={12} /></button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -448,7 +450,7 @@ const DashboardView = () => {
         <div className="space-y-4">
           <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5">
             <div className="px-5 py-4 border-b border-gray-700">
-              <h3 className="font-display font-semibold text-sm text-white">Top Products</h3>
+              <h3 className="font-display font-semibold text-sm text-white">Highest rated products</h3>
             </div>
             <div className="divide-y divide-gray-700">
               {topProducts.map((p, i) => (

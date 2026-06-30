@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import {
   adminGetAllUsers, getActivityLogs, getLoginAttempts,
-  getSuspiciousActivity, getBackupHistory, getSecuritySettings, getErrorLogs
+  getSuspiciousActivity, getBackupHistory, getSecuritySettings, getErrorLogs, getSystemHealth
 } from '../../services/api';
 
 const SuperAdminOverview = ({ onNavigate }) => {
@@ -16,19 +16,21 @@ const SuperAdminOverview = ({ onNavigate }) => {
     suspiciousCount: 0, lastBackup: null,
     errorLogs: 0, recentActivity: [],
     usersByRole: {},
+    health: null,
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [usersData, activityData, loginData, suspiciousData, backupData, errorData] = await Promise.all([
+        const [usersData, activityData, loginData, suspiciousData, backupData, errorData, healthData] = await Promise.all([
           adminGetAllUsers().catch(() => ({ users: [], total: 0 })),
           getActivityLogs().catch(() => []),
           getLoginAttempts().catch(() => ({ attempts: [], stats: { today_total: 0, today_failed: 0, locked_accounts: 0 } })),
           getSuspiciousActivity().catch(() => ({ failed_login_clusters: [], locked_accounts: [], bulk_operations: [] })),
           getBackupHistory().catch(() => []),
           getErrorLogs().catch(() => []),
+          getSystemHealth().catch(() => null),
         ]);
 
         const users = usersData?.users || [];
@@ -46,6 +48,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
           errorLogs: Array.isArray(errorData) ? errorData.length : 0,
           recentActivity: Array.isArray(activityData) ? activityData.slice(0, 10) : [],
           usersByRole: roleCount,
+          health: healthData,
         });
       } catch (e) { console.error(e); }
       setLoading(false);
@@ -84,8 +87,8 @@ const SuperAdminOverview = ({ onNavigate }) => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-white flex items-center gap-2"><KeyRound size={22} className="text-red-500" /> System Overview</h1>
-        <p className="text-sm text-gray-400 mt-1">Monitor system health, security, and user activity</p>
+        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-950"><KeyRound size={22} className="text-red-500" /> System overview</h1>
+        <p className="mt-1 text-sm text-slate-600">Live system health, access activity, and security signals.</p>
       </div>
 
       {/* KPI Cards */}
@@ -108,14 +111,14 @@ const SuperAdminOverview = ({ onNavigate }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Users by Role */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><UserCog size={16} className="text-gray-400" /> Users by Role</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-950"><UserCog size={16} className="text-slate-400" /> Users by role</h3>
           <div className="space-y-3">
             {Object.entries(stats.usersByRole).sort((a, b) => b[1] - a[1]).map(([role, count]) => (
               <div key={role} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${roleColors[role]?.replace('text-', 'bg-') || 'bg-gray-400'}`} />
-                  <span className="text-xs text-gray-400">{roleLabels[role] || role}</span>
+                  <span className="text-xs text-slate-600">{roleLabels[role] || role}</span>
                 </div>
                 <span className={`text-sm font-bold ${roleColors[role] || 'text-gray-400'}`}>{count}</span>
               </div>
@@ -125,12 +128,22 @@ const SuperAdminOverview = ({ onNavigate }) => {
         </div>
 
         {/* System Health */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Server size={16} className="text-gray-400" /> System Health</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-950"><Server size={16} className="text-slate-400" /> System health</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">Database</span>
-              <span className="flex items-center gap-1 text-xs text-green-500"><CheckCircle2 size={12} /> Connected</span>
+              <span className="text-xs text-slate-600">Database</span>
+              <span className={`flex items-center gap-1 text-xs font-medium ${stats.health?.database === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
+                {stats.health?.database === 'ok' ? <><CheckCircle2 size={12} /> Connected</> : <><XCircle size={12} /> Unavailable</>}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-600">PayMongo</span>
+              <span className={`text-xs font-medium ${stats.health?.paymongo === 'configured' ? 'text-emerald-600' : 'text-amber-700'}`}>{stats.health?.paymongo === 'configured' ? 'Configured' : 'Not configured'}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-600">Courier</span>
+              <span className={`text-xs font-medium ${stats.health?.jnt === 'configured' ? 'text-emerald-600' : 'text-amber-700'}`}>{stats.health?.jnt === 'configured' ? 'Configured' : stats.health?.jnt === 'mock' ? 'Development mock' : 'Not configured'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-400">Error Logs</span>
@@ -154,8 +167,8 @@ const SuperAdminOverview = ({ onNavigate }) => {
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Settings size={16} className="text-gray-400" /> Quick Actions</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-950"><Settings size={16} className="text-slate-400" /> Quick actions</h3>
           <div className="space-y-1">
             {[
               { label: 'Manage Users', icon: Users, view: 'users' },
@@ -167,7 +180,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
               const Icon = action.icon;
               return (
                 <button key={action.view} onClick={() => onNavigate(action.view)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-gray-400 hover:bg-red-500/10 hover:text-orange-600 transition-all">
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-medium text-slate-600 transition-all hover:bg-red-50 hover:text-red-700">
                   <Icon size={14} className="text-gray-400" />
                   <span className="flex-1 text-left">{action.label}</span>
                   <ArrowUpRight size={12} className="opacity-40" />
@@ -179,10 +192,10 @@ const SuperAdminOverview = ({ onNavigate }) => {
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Activity size={16} className="text-gray-400" /> Recent System Activity</h3>
-          <button onClick={() => onNavigate('logs')} className="text-xs text-red-500 hover:text-orange-600 font-medium">View All â†’</button>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-950"><Activity size={16} className="text-slate-400" /> Recent system activity</h3>
+          <button onClick={() => onNavigate('logs')} className="text-xs font-medium text-red-600 hover:text-red-700">View all →</button>
         </div>
         {stats.recentActivity.length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-8">No recent activity</p>

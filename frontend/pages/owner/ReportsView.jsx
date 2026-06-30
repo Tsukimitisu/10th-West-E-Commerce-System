@@ -198,16 +198,18 @@ const ReportsView = () => {
                   </ChartCard>
                 </div>
                 <ChartCard title="Sales by Channel">
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                      <Pie data={channelData.length > 0 ? channelData : [{ name: 'Online', value: 65 }, { name: 'POS', value: 35 }]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3}>
-                        {(channelData.length > 0 ? channelData : [{ name: 'Online', value: 65 }, { name: 'POS', value: 35 }]).map((_, i) => (
-                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip /> <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  {channelData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3}>
+                          {channelData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip /> <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="grid h-[280px] place-items-center text-sm text-slate-500">No completed sales in this period.</div>
+                  )}
                 </ChartCard>
               </div>
             </div>

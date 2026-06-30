@@ -2732,6 +2732,107 @@ export const createOrder = async (order) => {
   return mapped;
 };
 
+// ==================== POINT OF SALE ====================
+
+export const getPosProducts = async ({ search = '', categoryId = '', limit = 60 } = {}) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (search.trim()) params.set('search', search.trim());
+  if (categoryId) params.set('category_id', String(categoryId));
+  const data = await authenticatedFetch(`${API_URL}/pos/products?${params}`);
+  return data.products || [];
+};
+
+export const getPosCapabilities = async () => {
+  return authenticatedFetch(`${API_URL}/pos/capabilities`);
+};
+
+export const getMyPermissions = async () => {
+  const data = await authenticatedFetch(`${API_URL}/auth/permissions`);
+  return data.permissions || [];
+};
+
+export const getSystemHealth = async () => {
+  const response = await fetch(`${API_ORIGIN}/api/health`, {
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  });
+  const data = await response.json().catch(() => ({ status: 'not_ready' }));
+  if (!response.ok) {
+    const error = new Error('System health is currently unavailable.');
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+};
+
+export const validatePosCart = async (items, promotionCode = '') => {
+  return authenticatedFetch(`${API_URL}/pos/validate-cart`, {
+    method: 'POST',
+    body: JSON.stringify({
+      items: items.map((item) => ({
+        product_id: item.product_id ?? item.productId,
+        variant_id: item.variant_id ?? item.variantId ?? null,
+        quantity: item.quantity,
+      })),
+      promotion_code: promotionCode || undefined,
+    }),
+  });
+};
+
+export const createPosOrder = async ({
+  items,
+  paymentMethod,
+  amountTendered,
+  paymentReference,
+  promotionCode,
+  idempotencyKey,
+}) => {
+  return authenticatedFetch(`${API_URL}/pos/orders`, {
+    method: 'POST',
+    timeoutMs: 30000,
+    headers: { 'Idempotency-Key': idempotencyKey || crypto.randomUUID() },
+    body: JSON.stringify({
+      items: items.map((item) => ({
+        product_id: item.product_id ?? item.productId,
+        variant_id: item.variant_id ?? item.variantId ?? null,
+        quantity: item.quantity,
+      })),
+      payment_method: paymentMethod,
+      amount_tendered: amountTendered,
+      payment_reference: paymentReference || undefined,
+      promotion_code: promotionCode || undefined,
+    }),
+  });
+};
+
+export const getPosOrders = async ({ page = 1, limit = 25, search = '' } = {}) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (search.trim()) params.set('search', search.trim());
+  return authenticatedFetch(`${API_URL}/pos/orders?${params}`);
+};
+
+export const getPosOrder = async (id) => {
+  const data = await authenticatedFetch(`${API_URL}/pos/orders/${id}`);
+  return data.order;
+};
+
+export const getPosReceipt = async (id) => {
+  const data = await authenticatedFetch(`${API_URL}/pos/orders/${id}/receipt`);
+  return data.receipt;
+};
+
+export const voidPosOrder = async (id, reason) => {
+  const data = await authenticatedFetch(`${API_URL}/pos/orders/${id}/void`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+  return data.order;
+};
+
+export const getPosDailySummary = async () => {
+  return authenticatedFetch(`${API_URL}/pos/daily-summary`);
+};
+
 export const updateOrderStatus = async (id, status, trackingNumber = '') => {
   const normalizedStatus = String(status || '').trim().toLowerCase();
   const normalizedTrackingNumber = String(trackingNumber || '').trim();

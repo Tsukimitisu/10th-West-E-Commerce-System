@@ -3,34 +3,31 @@ import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Boxes, ShoppingCart, Monitor,
   RotateCcw, UserCog, BarChart3, Users, Star,
-  LogOut, Bell, Search, Menu, X,
+  LogOut, Bell, Menu, X,
   ChevronLeft, ExternalLink, Wifi, WifiOff, Image, Tag, Newspaper,
-  Settings, CircleHelp, House, MessageCircle,
+  MessageCircle,
   AlertTriangle, CheckCircle
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
-import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, logoutApi } from '../../services/api';
+import { getMyPermissions, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, logoutApi } from '../../services/api';
 import { clearCurrentAuthUser } from '../../services/authSession';
+import BrandMark from '../ui/BrandMark';
 
 const createNavItems = (badges = {}) => [
-  // Core
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'products', label: 'Products', icon: Package },
-  { id: 'inventory', label: 'Inventory', icon: Boxes, badge: badges.lowStock },
-  { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: badges.pendingOrders },
-  { id: 'chat', label: 'Chats', icon: MessageCircle },
-  { id: 'customers', label: 'Customers', icon: Users },
-  // Staff-only
-  { id: 'pos', label: 'POS Terminal', icon: Monitor, external: '#/pos' },
-  { id: 'returns', label: 'Returns', icon: RotateCcw, badge: badges.pendingReturns },
-  // Owner: Staff & Reports
-  { id: 'staff', label: 'Staff', icon: UserCog, divider: true },
-  { id: 'reviews', label: 'Reviews', icon: Star },
-  { id: 'reports', label: 'Reports', icon: BarChart3 },
-  // Owner: Marketing & Content
-  { id: 'promotions', label: 'Promotions', icon: Tag, divider: true },
-  { id: 'banners', label: 'Banners', icon: Image },
-  { id: 'content', label: 'Content', icon: Newspaper },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Dashboard' },
+  { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: badges.pendingOrders, group: 'Sales', permission: 'orders.view' },
+  { id: 'pos', label: 'POS Terminal', icon: Monitor, route: '/pos', group: 'Sales', permission: 'pos.access' },
+  { id: 'products', label: 'Products', icon: Package, group: 'Products', permission: 'products.view' },
+  { id: 'promotions', label: 'Promotions', icon: Tag, group: 'Products', permission: 'promotions.manage' },
+  { id: 'inventory', label: 'Inventory', icon: Boxes, badge: badges.lowStock, group: 'Inventory', permission: 'inventory.view' },
+  { id: 'customers', label: 'Customers', icon: Users, group: 'Customers', permission: 'customers.view' },
+  { id: 'chat', label: 'Chats', icon: MessageCircle, group: 'Customers' },
+  { id: 'reviews', label: 'Reviews', icon: Star, group: 'Customers', permission: 'reviews.moderate' },
+  { id: 'returns', label: 'Returns', icon: RotateCcw, badge: badges.pendingReturns, group: 'Operations', permission: 'returns.view' },
+  { id: 'staff', label: 'Staff & Roles', icon: UserCog, group: 'Operations', permission: 'staff.view' },
+  { id: 'reports', label: 'Reports', icon: BarChart3, group: 'Reports', permission: 'reports.view' },
+  { id: 'banners', label: 'Banners', icon: Image, group: 'System' },
+  { id: 'content', label: 'Content', icon: Newspaper, group: 'System' },
 ];
 
 // Nav items store_staff can see
@@ -52,6 +49,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [effectivePermissions, setEffectivePermissions] = useState(null);
   const { connected, on, off } = useSocket();
 
   // Notification state
@@ -216,15 +214,36 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
     if (type?.includes('return')) return 'bg-yellow-50 text-yellow-500';
     return 'bg-red-500/10 text-red-500';
   };
+  useEffect(() => {
+    let active = true;
+    getMyPermissions()
+      .then((permissions) => {
+        if (active) setEffectivePermissions(new Set(permissions));
+      })
+      .catch(() => {
+        if (active) setEffectivePermissions(new Set());
+      });
+    return () => { active = false; };
+  }, [user?.id]);
+
   const allNavItems = createNavItems(badges);
-  const navItems = user?.role === 'store_staff'
-    ? allNavItems.filter(item => STORE_STAFF_NAV.includes(item.id))
-    : user?.role === 'owner' || user?.role === 'admin'
-      ? allNavItems.filter(item => OWNER_NAV.includes(item.id))
-      : [];
+  const isPrivileged = user?.role === 'owner' || user?.role === 'admin';
+  const allowedIds = user?.role === 'store_staff' ? STORE_STAFF_NAV : isPrivileged ? OWNER_NAV : [];
+  const navItems = allNavItems.filter((item) => {
+    if (!allowedIds.includes(item.id)) return false;
+    if (!item.permission || isPrivileged) return true;
+    return effectivePermissions?.has(item.permission);
+  });
+
+  useEffect(() => {
+    if (!effectivePermissions || navItems.length === 0) return;
+    if (!navItems.some((item) => item.id === activeView)) {
+      onNavigate(navItems[0].id);
+    }
+  }, [activeView, effectivePermissions, navItems, onNavigate]);
 
   const handleNav = (item) => {
-    if (item.external) { window.open(item.external, '_blank'); }
+    if (item.route) { navigate(item.route); }
     else { onNavigate(item.id); }
     setMobileOpen(false);
   };
@@ -252,17 +271,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
     <div className="h-full flex flex-col rounded-2xl border border-white/5 bg-gradient-to-b from-[#1a1d23] to-[#111318] shadow-[0_18px_45px_rgba(0,0,0,0.5)] overflow-hidden">
       {/* Logo */}
       <div className="h-16 flex items-center justify-between px-4 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#ff5f3c] flex items-center justify-center flex-shrink-0 shadow-[0_8px_16px_rgba(255,95,60,0.35)]">
-            <House size={14} className="text-white" />
-          </div>
-          {(!collapsed || mobile) && (
-            <div>
-              <h1 className="font-display font-bold text-sm text-white leading-none">10TH WEST</h1>
-              <p className="text-[10px] text-gray-400 font-medium tracking-wide">Metric Flow</p>
-            </div>
-          )}
-        </div>
+        <BrandMark dark compact={collapsed && !mobile} link={false} className="[&>span:first-child]:h-9 [&>span:first-child]:w-9" />
         {mobile && <button onClick={() => setMobileOpen(false)} className="text-gray-400 hover:text-white transition-colors"><X size={20} /></button>}
       </div>
 
@@ -271,9 +280,14 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
         {navItems.map((item, idx) => {
           const Icon = item.icon;
           const isActive = activeView === item.id;
+          const showGroup = idx === 0 || navItems[idx - 1]?.group !== item.group;
           return (
             <React.Fragment key={item.id}>
-              {item.divider && idx > 0 && <div className="my-2 border-t border-white/8" />}
+              {showGroup && (!collapsed || mobile) && (
+                <p className={`${idx > 0 ? 'mt-4' : 'mt-1'} px-3 pb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500`}>
+                  {item.group}
+                </p>
+              )}
               <button
                 onClick={() => handleNav(item)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all
@@ -286,7 +300,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
                   <>
                     <span className="flex-1 text-left">{item.label}</span>
                     {item.badge ? <span className="min-w-[20px] h-5 bg-[#ff5f3c] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">{item.badge}</span> : null}
-                    {item.external && <ExternalLink size={12} className="text-gray-400" />}
+                    {item.route && <ExternalLink size={12} className="text-gray-400" />}
                   </>
                 )}
               </button>
@@ -294,24 +308,6 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
           );
         })}
       </nav>
-
-      {/* Bottom utility */}
-      <div className="px-2 pb-2 space-y-1 flex-shrink-0">
-        <button
-          type="button"
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all text-gray-200 hover:bg-[#202430] hover:text-white ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
-        >
-          <Settings size={17} className="flex-shrink-0 text-gray-400" />
-          {(!collapsed || mobile) && <span className="flex-1 text-left">Settings</span>}
-        </button>
-        <button
-          type="button"
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all text-gray-200 hover:bg-[#202430] hover:text-white ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
-        >
-          <CircleHelp size={17} className="flex-shrink-0 text-gray-400" />
-          {(!collapsed || mobile) && <span className="flex-1 text-left">Help Center</span>}
-        </button>
-      </div>
 
       {/* User */}
       <div className="p-3 border-t border-white/10 flex-shrink-0">
@@ -334,7 +330,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   );
 
   return (
-    <div className="h-screen flex bg-[#0b0d11] overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* Desktop Sidebar */}
       <aside className={`${collapsed ? 'w-[92px]' : 'w-[272px]'} bg-[#0b0d11] p-3 flex-col transition-all duration-200 hidden lg:flex`}>
         <SidebarContent />
@@ -352,26 +348,22 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
 
       {/* Main */}  
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14  border-b border-gray-700 flex items-center justify-between px-4 lg:px-6 flex-shrink-0">
+        <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 lg:px-6">
           <div className="flex items-center gap-3">
-            <button onClick={() => setCollapsed(!collapsed)} className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+            <button onClick={() => setCollapsed(!collapsed)} className="hidden h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 lg:flex">
               <ChevronLeft size={18} className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
             </button>
-            <button onClick={() => setMobileOpen(true)} className="lg:hidden text-gray-400 hover:text-gray-600">
+            <button onClick={() => setMobileOpen(true)} className="text-slate-500 hover:text-slate-800 lg:hidden">
               <Menu size={20} />
             </button>
-            <h2 className="font-display font-semibold text-white text-sm capitalize">{activeView === 'pos' ? 'POS Terminal' : activeView}</h2>
+            <h2 className="font-display text-sm font-semibold capitalize text-slate-950">{activeView === 'pos' ? 'POS Terminal' : activeView}</h2>
           </div>
           <div className="flex items-center gap-2">
             <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium ${connected ? 'bg-green-50 text-green-600' : 'bg-red-500/10 text-red-500'}`} title={connected ? 'Real-time connected' : 'Reconnecting...'}>
               {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
               <span className="hidden sm:inline">{connected ? 'Live' : 'Offline'}</span>
             </div>
-            <div className="relative hidden sm:block">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" placeholder="Search..." className="pl-8 pr-3 py-1.5 border border-gray-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-red-300 w-44" />
-            </div>
-            <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors" onClick={() => setNotifOpen(!notifOpen)}>
+            <button className="relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800" onClick={() => setNotifOpen(!notifOpen)} aria-label="Admin notifications">
               <Bell size={18} />
               {unreadCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 bg-red-500/100 text-white text-[9px] font-bold rounded-full w-[18px] h-[18px] flex items-center justify-center">
@@ -437,7 +429,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
             )}
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-slate-50 p-4 lg:p-6">{children}</main>
       </div>
 
       {/* Logout Confirmation Modal */}
