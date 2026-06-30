@@ -1,6 +1,6 @@
 import express from 'express';
 import pool from '../config/database.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 const router = express.Router();
@@ -463,7 +463,7 @@ router.get('/product/:productId', async (req, res) => {
 });
 
 // Replace full product variant matrix
-router.put('/product/:productId', authenticateToken, requireRole('admin', 'super_admin', 'owner'), async (req, res) => {
+router.put('/product/:productId', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('products.manage'), async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -561,6 +561,7 @@ router.put('/product/:productId', authenticateToken, requireRole('admin', 'super
 
     const optionOrder = options.map((option) => option.name);
     const variants = insertedRows.map((row) => mapDbRowToVariant(row, optionOrder, Number(product.price)));
+    await req.logActivity?.('variant.replace_matrix', 'product', productId, { options, variant_count: variants.length });
 
     res.json({
       message: 'Product variants saved successfully',
@@ -580,7 +581,7 @@ router.put('/product/:productId', authenticateToken, requireRole('admin', 'super
 });
 
 // Add variant
-router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner'), async (req, res) => {
+router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('products.manage'), async (req, res) => {
   try {
     await ensureVariantSchemaReady;
 
@@ -666,6 +667,7 @@ router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner')
         normalizeWhitespace(sku) || null,
       ]
     );
+    await req.logActivity?.('variant.create', 'product_variant', result.rows[0].id, { after: result.rows[0] });
 
     res.status(201).json({
       variant: mapDbRowToVariant(result.rows[0], normalizedOrder, basePrice),
@@ -676,7 +678,7 @@ router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner')
 });
 
 // Update variant
-router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner'), async (req, res) => {
+router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('products.manage'), async (req, res) => {
   try {
     await ensureVariantSchemaReady;
 
@@ -686,7 +688,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
     }
 
     const existingResult = await pool.query(
-      'SELECT id, product_id FROM product_variants WHERE id = $1',
+      'SELECT * FROM product_variants WHERE id = $1',
       [variantId]
     );
 
@@ -770,6 +772,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
         variantId,
       ]
     );
+    await req.logActivity?.('variant.update', 'product_variant', variantId, { before: existingResult.rows[0], after: result.rows[0] });
 
     res.json({
       variant: mapDbRowToVariant(result.rows[0], optionOrder, basePrice),
@@ -780,9 +783,11 @@ router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
 });
 
 // Delete variant
-router.delete('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner'), async (req, res) => {
+router.delete('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('products.manage'), async (req, res) => {
   try {
-    await pool.query('DELETE FROM product_variants WHERE id = $1', [req.params.id]);
+    const deleted = await pool.query('DELETE FROM product_variants WHERE id = $1 RETURNING *', [req.params.id]);
+    if (!deleted.rows.length) return res.status(404).json({ message: 'Variant not found' });
+    await req.logActivity?.('variant.delete', 'product_variant', Number(req.params.id), { before: deleted.rows[0] });
     res.json({ message: 'Deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });

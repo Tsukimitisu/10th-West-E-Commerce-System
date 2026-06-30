@@ -1947,6 +1947,7 @@ export const updateProduct = async (req, res) => {
         body: patch,
       });
       const updatedProduct = Array.isArray(rows) ? rows[0] : rows;
+      await req.logActivity?.('product.update', 'product', Number(id), { before: existingProduct, after: updatedProduct });
       emitProductUpdated(updatedProduct);
 
       return res.json({
@@ -2035,6 +2036,7 @@ export const updateProduct = async (req, res) => {
       fitments: fitmentsPayload,
       bundleComponents: bundleComponentsPayload,
     });
+    await req.logActivity?.('product.update', 'product', Number(id), { before: existingProduct, after: updatedProduct });
     emitProductUpdated(updatedProduct);
 
     res.json({
@@ -2157,6 +2159,7 @@ export const deleteProduct = async (req, res) => {
       }
 
       emitProductDeleted(id);
+      await req.logActivity?.('product.archive', 'product', Number(id), { status: 'archived', is_deleted: true });
       return res.json({
         message: 'Product deleted successfully',
         degraded: true,
@@ -2176,6 +2179,7 @@ export const deleteProduct = async (req, res) => {
     }
 
     emitProductDeleted(id);
+    await req.logActivity?.('product.archive', 'product', Number(id), { status: 'archived', is_deleted: true });
 
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {

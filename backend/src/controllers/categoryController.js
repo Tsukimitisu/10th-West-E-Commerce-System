@@ -40,6 +40,7 @@ export const createCategory = async (req, res) => {
       'INSERT INTO categories (name) VALUES ($1) RETURNING *',
       [name]
     );
+    await req.logActivity?.('category.create', 'category', result.rows[0].id, { after: result.rows[0] });
 
     res.status(201).json({
       message: 'Category created successfully',
@@ -60,6 +61,7 @@ export const updateCategory = async (req, res) => {
   const { name } = req.body;
 
   try {
+    const before = await pool.query('SELECT * FROM categories WHERE id = $1', [id]);
     const result = await pool.query(
       'UPDATE categories SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
       [name, id]
@@ -68,6 +70,7 @@ export const updateCategory = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Category not found' });
     }
+    await req.logActivity?.('category.update', 'category', Number(id), { before: before.rows[0], after: result.rows[0] });
 
     res.json({
       message: 'Category updated successfully',
@@ -85,13 +88,14 @@ export const deleteCategory = async (req, res) => {
 
   try {
     const result = await pool.query(
-      'DELETE FROM categories WHERE id = $1 RETURNING id',
+      'DELETE FROM categories WHERE id = $1 RETURNING *',
       [id]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Category not found' });
     }
+    await req.logActivity?.('category.delete', 'category', Number(id), { before: result.rows[0] });
 
     res.json({ message: 'Category deleted successfully' });
   } catch (error) {
