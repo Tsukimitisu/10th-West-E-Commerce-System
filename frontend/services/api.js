@@ -2756,17 +2756,14 @@ export const getMyPermissions = async () => {
 };
 
 export const getSystemHealth = async () => {
-  const response = await fetch(`${API_ORIGIN}/api/health`, {
-    credentials: 'include',
-    headers: { Accept: 'application/json' },
-  });
-  const data = await response.json().catch(() => ({ status: 'not_ready' }));
-  if (!response.ok) {
-    const error = new Error('System health is currently unavailable.');
-    error.status = response.status;
-    throw error;
-  }
-  return data;
+  const data = await authenticatedFetch(`${API_URL}/admin/readiness`);
+  return {
+    ...data,
+    paymongo: data.integrations?.paymongo,
+    jnt: data.integrations?.jnt,
+    gmail: data.integrations?.gmail,
+    facebook: data.integrations?.facebook,
+  };
 };
 
 export const validatePosCart = async (items, promotionCode = '') => {

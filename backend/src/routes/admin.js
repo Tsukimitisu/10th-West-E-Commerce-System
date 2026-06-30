@@ -4,6 +4,8 @@ import pool from '../config/database.js';
 import { USER_ROLES } from '../constants/schemaEnums.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
+import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
+import { getJntConfigurationStatus } from '../services/jntShipments.js';
 
 const router = express.Router();
 const booleanRule = (value) => ['true', 'false'].includes(String(value).toLowerCase());
@@ -110,6 +112,31 @@ router.get('/settings/:category', authenticateToken, requireRole('super_admin'),
 
 // All admin/system routes require super_admin only
 router.use(authenticateToken, requireRole('super_admin'));
+
+router.get('/readiness', async (_req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    const paymongo = getPaymongoConfigurationStatus();
+    const jnt = getJntConfigurationStatus();
+    return res.json({
+      status: 'ready',
+      database: 'ok',
+      integrations: {
+        paymongo: paymongo.configured ? 'configured' : 'blocked_by_credentials',
+        jnt: jnt.mock ? 'mock_dev_mode' : (jnt.configured ? 'configured' : 'blocked_by_credentials'),
+        gmail: process.env.EMAIL_USER && process.env.EMAIL_PASSWORD ? 'configured' : 'blocked_by_credentials',
+        facebook: process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET ? 'configured' : 'blocked_by_credentials',
+      },
+      runtime: {
+        session_store: process.env.SESSION_STORE === 'postgres' ? 'postgres' : 'memory_dev_mode',
+        environment: process.env.NODE_ENV || 'development',
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch {
+    return res.status(503).json({ status: 'not_ready', database: 'unavailable', timestamp: new Date().toISOString() });
+  }
+});
 
 // ==================== USER MANAGEMENT ====================
 

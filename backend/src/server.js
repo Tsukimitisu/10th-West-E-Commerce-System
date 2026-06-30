@@ -343,13 +343,6 @@ app.get('/api/ready', async (_req, res) => {
     res.json({
       status: 'ready',
       database: 'ok',
-      paymongo: getPaymongoConfigurationStatus().configured ? 'configured' : 'not_configured',
-      paymongo_missing: getPaymongoConfigurationStatus().configured ? [] : getPaymongoConfigurationStatus().missing,
-      jnt: getJntConfigurationStatus().mock ? 'mock' : (getJntConfigurationStatus().configured ? 'configured' : 'not_configured'),
-      jnt_missing: getJntConfigurationStatus().configured || getJntConfigurationStatus().mock ? [] : getJntConfigurationStatus().missing,
-      session_store: usePostgresSessionStore ? 'postgres' : 'memory',
-      cookie_secure: sessionCookieSecure,
-      cookie_same_site: sessionCookieSameSite,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
