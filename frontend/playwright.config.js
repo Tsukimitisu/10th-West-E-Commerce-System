@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
+const baseURL = process.env.E2E_BASE_URL || 'http://localhost:3000';
 const startLocalServer = !process.env.E2E_BASE_URL && process.env.E2E_START_SERVER !== 'false';
 
 export default defineConfig({
@@ -10,6 +10,7 @@ export default defineConfig({
     timeout: 8_000,
   },
   fullyParallel: true,
+  workers: Number(process.env.E2E_WORKERS || 1),
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
@@ -20,12 +21,20 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   webServer: startLocalServer
-    ? {
-        command: 'npm run dev:frontend -- --host 127.0.0.1',
-        url: baseURL,
-        reuseExistingServer: true,
-        timeout: 120_000,
-      }
+    ? [
+        {
+          command: 'npm --prefix ../backend start',
+          url: 'http://localhost:5000/api/health',
+          reuseExistingServer: true,
+          timeout: 120_000,
+        },
+        {
+          command: 'npm run dev:frontend -- --host localhost',
+          url: baseURL,
+          reuseExistingServer: true,
+          timeout: 120_000,
+        },
+      ]
     : undefined,
   projects: [
     {

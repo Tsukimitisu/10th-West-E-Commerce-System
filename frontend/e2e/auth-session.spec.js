@@ -8,6 +8,7 @@ test.describe('credential-gated auth session checks', () => {
   test.skip(!customerEmail || !customerPassword, 'Set E2E_CUSTOMER_EMAIL and E2E_CUSTOMER_PASSWORD to run live auth checks.');
 
   test('customer sign-in creates an HttpOnly backend session cookie', async ({ context, page }) => {
+    await page.addInitScript(() => localStorage.setItem('cookieConsent', 'all'));
     await page.goto('/#/login');
     await page.getByPlaceholder('name@example.com').fill(customerEmail);
     await page.getByPlaceholder('Enter your password').fill(customerPassword);
