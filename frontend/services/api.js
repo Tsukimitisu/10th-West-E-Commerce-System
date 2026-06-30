@@ -3149,58 +3149,7 @@ export const getPaymentOrderStatus = async (orderId) => authenticatedFetch(`${AP
 // ==================== DASHBOARD STATS ====================
 
 export const getDashboardStats = async () => {
-  if (USE_SUPABASE) {
-    // Get orders
-    const { data: orders } = await supabase
-      .from('orders')
-      .select('id, total_amount, status, created_at');
-
-    // Get products
-    const { data: products } = await supabase
-      .from('products')
-      .select('id, stock_quantity, low_stock_threshold');
-
-    const totalRevenue = (orders || []).reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
-    const totalOrders = orders?.length || 0;
-    const totalProducts = products?.length || 0;
-    const lowStockProducts = (products || []).filter(p => p.stock_quantity <= p.low_stock_threshold).length;
-
-    // Get recent orders with items
-    const { data: recentOrders } = await supabase
-      .from('orders')
-      .select('*, order_items(*, products(*))')
-      .order('created_at', { ascending: false })
-      .limit(5);
-
-    return {
-      totalRevenue,
-      totalOrders,
-      totalProducts,
-      lowStockProducts,
-      recentOrders: (recentOrders || []).map((order) => ({
-        ...mapOrderFromApi(order),
-        items: (order.order_items || []).map((item) => mapOrderItemToCartItem({
-          ...item,
-          product: item.products
-        })),
-      })),
-    };
-  }
-
-  await new Promise(resolve => setTimeout(resolve, 300));
-
-  const totalRevenue = MOCK_ORDERS.reduce((sum, order) => sum + order.total_amount, 0);
-  const totalOrders = MOCK_ORDERS.length;
-  const totalProducts = MOCK_PRODUCTS.length;
-  const lowStockProducts = MOCK_PRODUCTS.filter(p => p.stock_quantity <= p.low_stock_threshold).length;
-
-  return {
-    totalRevenue,
-    totalOrders,
-    totalProducts,
-    lowStockProducts,
-    recentOrders: MOCK_ORDERS.slice(-5).reverse(),
-  };
+  return authenticatedFetch(`${API_URL}/dashboard/stats`);
 };
 
 // ==================== ADDRESSES ====================

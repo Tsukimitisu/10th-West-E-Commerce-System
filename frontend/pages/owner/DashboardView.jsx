@@ -93,9 +93,10 @@ const DashboardView = ({ onNavigate }) => {
 
   const operational = useMemo(() => {
     const today = new Date().toDateString();
-    const todaySales = data.orders
+    const calculatedTodaySales = data.orders
       .filter((order) => new Date(order.created_at).toDateString() === today && validSaleStatuses.has(order.status))
       .reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+    const todaySales = data.stats?.todaySales ?? calculatedTodaySales;
     const pending = data.orders.filter((order) => ['pending', 'payment_pending'].includes(order.status));
     const toProcess = data.orders.filter((order) => ['paid', 'processing', 'packed', 'ready_for_pickup'].includes(order.status));
     const paymentIssues = data.orders.filter((order) => ['payment_pending', 'failed'].includes(order.status));

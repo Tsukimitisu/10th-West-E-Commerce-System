@@ -132,7 +132,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={Users} label="Total users" value={data.totalUsers} detail={`${data.users.filter((user) => user.is_active).length} active accounts`} tone="info" onClick={() => onNavigate('users')} />
         <MetricCard icon={UserCog} label="Active staff & admins" value={summary.activeStaff} detail="Enabled operational accounts" tone="brand" onClick={() => onNavigate('users')} />
-        <MetricCard icon={CircleDollarSign} label="Platform sales" value={currency(data.commerce?.totalSales)} detail="Revenue reported by commerce services" tone="success" />
+        <MetricCard icon={CircleDollarSign} label="Platform sales" value={currency(data.commerce?.totalSales)} detail={`${data.commerce?.totalProducts ?? 0} active catalog products`} tone="success" />
         <MetricCard icon={ShoppingCart} label="Orders" value={data.commerce?.totalOrders ?? data.orders.length} detail={`${summary.paymentIssues} payment issue${summary.paymentIssues === 1 ? '' : 's'}`} tone={summary.paymentIssues ? 'warning' : 'neutral'} />
       </div>
 
