@@ -8,7 +8,7 @@ import {
   oauthCallback, exchangeOAuthCode,
   getActiveSessions, revokeSession,
   getActivityLogs, sendRegistrationOtp,
-  deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData,
+  deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData, getMyPermissions,
 } from '../controllers/authController.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
@@ -214,6 +214,7 @@ router.get('/facebook/callback',
 // ─── Protected routes ──────────────────────────────────────────────
 router.post('/logout', authenticateToken, logout);
 router.get('/profile', authenticateToken, getProfile);
+router.get('/permissions', authenticateToken, getMyPermissions);
 router.put('/change-password',
   authenticateToken,
   body('currentPassword').notEmpty().withMessage('Current password is required'),

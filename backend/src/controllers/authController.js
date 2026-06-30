@@ -1012,6 +1012,35 @@ export const logout = async (req, res) => {
 };
 
 // ─── GET PROFILE ───────────────────────────────────────────────────
+export const getMyPermissions = async (req, res) => {
+  try {
+    if (['owner', 'super_admin', 'admin'].includes(req.user.role)) {
+      const result = await pool.query('SELECT name FROM permissions ORDER BY name');
+      return res.json({ permissions: result.rows.map((row) => row.name) });
+    }
+
+    const result = await pool.query(
+      `SELECT p.name
+       FROM permissions p
+       WHERE COALESCE(
+         (SELECT up.granted FROM user_permissions up
+          WHERE up.user_id = $1 AND up.permission_id = p.id),
+         EXISTS(
+           SELECT 1 FROM role_permissions rp
+           WHERE rp.role = $2 AND rp.permission_id = p.id
+         ),
+         false
+       )
+       ORDER BY p.name`,
+      [req.user.id, req.user.role],
+    );
+    return res.json({ permissions: result.rows.map((row) => row.name) });
+  } catch (error) {
+    console.error('Permission profile error:', error);
+    return res.status(500).json({ message: 'Permissions could not be loaded.', code: 'PERMISSIONS_LOAD_FAILED' });
+  }
+};
+
 export const getProfile = async (req, res) => {
   try {
     if (shouldUseDatabaseReadFallback()) {

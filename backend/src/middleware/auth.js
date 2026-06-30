@@ -249,7 +249,10 @@ export const requireRole = (...allowedRoles) => {
     }
 
     if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ message: 'Insufficient permissions' });
+      return res.status(403).json({
+        message: 'Your account does not have access to this area.',
+        code: 'ROLE_ACCESS_DENIED',
+      });
     }
 
     next();
@@ -280,7 +283,11 @@ export const requirePermission = (permissionName) => {
       );
 
       if (result.rows.length === 0 || !result.rows[0].has_permission) {
-        return res.status(403).json({ message: 'Permission denied' });
+        return res.status(403).json({
+          message: 'Your account does not have permission to perform this action.',
+          code: 'PERMISSION_DENIED',
+          permission: permissionName,
+        });
       }
       next();
     } catch (error) {
