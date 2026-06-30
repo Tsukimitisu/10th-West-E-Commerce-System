@@ -16,22 +16,28 @@ const ReportsView = () => {
   const [profitReport, setProfitReport] = useState(null);
   const [customerActivity, setCustomerActivity] = useState({ total: 0, newThisMonth: 0, mostActive: [] });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const fetchData = async () => {
     setLoading(true);
+    setError('');
     try {
       const [sales, channels, top, trend, stock, profit, orders] = await Promise.all([
         getSalesReport(dateRange).catch(() => null),
-        getSalesByChannel().catch(() => []),
-        getTopProducts(10).catch(() => []),
+        getSalesByChannel(dateRange).catch(() => []),
+        getTopProducts(10, dateRange).catch(() => []),
         getDailySalesTrend(dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90).catch(() => []),
         getStockLevelsReport().catch(() => []),
         getProfitReport(dateRange).catch(() => null),
         getOrders().catch(() => []),
       ]);
-      setSalesReport(sales); setChannelData(Array.isArray(channels) ? channels : []);
+      setSalesReport(sales); setChannelData(Array.isArray(channels) ? channels.map((row) => ({
+        name: row.channel || 'unknown',
+        value: Number(row.total_revenue || 0),
+        order_count: Number(row.order_count || 0),
+      })) : []);
       setTopProducts(Array.isArray(top) ? top : []); setSalesTrend(Array.isArray(trend) ? trend : []);
-      setStockLevels(Array.isArray(stock) ? stock : []); setProfitReport(profit);
+      setStockLevels(Array.isArray(stock?.by_category) ? stock.by_category : []); setProfitReport(profit);
 
       // Build customer activity from orders
       const allOrders = Array.isArray(orders) ? orders : [];
@@ -58,7 +64,7 @@ const ReportsView = () => {
       customers.forEach(c => { if (c.countedNew) newCount++; });
       const mostActive = [...customers].sort((a, b) => b.orders - a.orders).slice(0, 5);
       setCustomerActivity({ total: customers.length, newThisMonth: newCount, mostActive });
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); setError('Reports could not be loaded. Please try again.'); }
     setLoading(false);
   };
 
@@ -74,12 +80,17 @@ const ReportsView = () => {
     { id: 'customers', label: 'Customers', icon: Users },
   ];
 
+  const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+  const toCsv = (rows) => {
+    if (!rows?.length) return '';
+    const keys = Object.keys(rows[0]);
+    return [keys.map(csvCell).join(','), ...rows.map((row) => keys.map((key) => csvCell(row[key])).join(','))].join('\n');
+  };
+
   const handleExport = (type) => {
     const data = type === 'sales' ? salesTrend : type === 'products' ? topProducts : stockLevels;
     if (!data?.length) return;
-    const header = Object.keys(data[0]).join(',');
-    const rows = data.map((r) => Object.values(r).join(',')).join('\n');
-    const blob = new Blob([header + '\n' + rows], { type: 'text/csv' });
+    const blob = new Blob([toCsv(data)], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `${type}-report.csv`; a.click();
     URL.revokeObjectURL(url);
@@ -95,34 +106,32 @@ const ReportsView = () => {
     // Sales summary
     if (salesReport) {
       csvContent += 'SALES SUMMARY\n';
-      csvContent += 'Total Sales,Orders,Avg Order Value,Items Sold\n';
-      csvContent += `${salesReport.total_sales || 0},${salesReport.total_orders || 0},${salesReport.avg_order_value || 0},${salesReport.total_items || 0}\n\n`;
+      csvContent += 'Total Sales,Orders,Avg Order Value,POS Orders\n';
+      csvContent += `${salesReport.total_revenue || 0},${salesReport.total_orders || 0},${salesReport.average_order_value || 0},${salesReport.pos_orders || 0}\n\n`;
     }
     // Sales trend
     if (salesTrend.length > 0) {
       csvContent += 'SALES TREND\n';
-      csvContent += Object.keys(salesTrend[0]).join(',') + '\n';
-      salesTrend.forEach(row => { csvContent += Object.values(row).join(',') + '\n'; });
+      csvContent += `${toCsv(salesTrend)}\n`;
       csvContent += '\n';
     }
     // Top products
     if (topProducts.length > 0) {
       csvContent += 'TOP PRODUCTS\n';
-      csvContent += Object.keys(topProducts[0]).join(',') + '\n';
-      topProducts.forEach(row => { csvContent += Object.values(row).join(',') + '\n'; });
+      csvContent += `${toCsv(topProducts)}\n`;
       csvContent += '\n';
     }
     // Profit
     if (profitReport) {
       csvContent += 'PROFIT & LOSS\n';
       csvContent += 'Gross Revenue,Total Cost,Net Profit,Margin\n';
-      csvContent += `${profitReport.gross_revenue || 0},${profitReport.total_cost || 0},${profitReport.net_profit || 0},${profitReport.margin || 0}%\n\n`;
+      csvContent += `${profitReport.total_revenue || 0},${profitReport.total_cost || 0},${profitReport.net_profit || 0},${profitReport.profit_margin || 0}%\n\n`;
     }
     // Customer Activity
     if (customerActivity.mostActive.length > 0) {
       csvContent += 'CUSTOMER ACTIVITY\n';
       csvContent += 'Customer,Orders,Total Spent\n';
-      customerActivity.mostActive.forEach(c => { csvContent += `${c.name},${c.orders},${c.total}\n`; });
+      customerActivity.mostActive.forEach(c => { csvContent += `${csvCell(c.name)},${csvCell(c.orders)},${csvCell(c.total)}\n`; });
     }
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -141,7 +150,7 @@ const ReportsView = () => {
             <Printer size={13} /> Export PDF
           </button>
           <button onClick={handleExportExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/100 rounded-lg text-xs font-medium text-white hover:bg-red-600 transition-all">
-            <FileText size={13} /> Export Excel
+            <FileText size={13} /> Export CSV
           </button>
           <div className="flex bg-gray-800 rounded-lg border border-gray-700 p-0.5">
             {['7d', '30d', '90d'].map(r => (
@@ -162,6 +171,8 @@ const ReportsView = () => {
 
       {loading ? (
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
+      ) : error ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-700">{error}</div>
       ) : (
         <>
           {/* Sales Tab */}
@@ -170,10 +181,10 @@ const ReportsView = () => {
               {/* Sales KPIs */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'Total Sales', value: `₱${(salesReport?.total_sales || 0).toLocaleString()}`, color: 'bg-green-50 text-green-600' },
+                  { label: 'Total Sales', value: `₱${(salesReport?.total_revenue || 0).toLocaleString()}`, color: 'bg-green-50 text-green-600' },
                   { label: 'Orders', value: (salesReport?.total_orders || 0).toString(), color: 'bg-blue-50 text-blue-600' },
-                  { label: 'Avg Order', value: `₱${(salesReport?.avg_order_value || 0).toFixed(0)}`, color: 'bg-purple-50 text-purple-600' },
-                  { label: 'Items Sold', value: (salesReport?.total_items || 0).toString(), color: 'bg-amber-50 text-amber-600' },
+                  { label: 'Avg Order', value: `₱${(salesReport?.average_order_value || 0).toFixed(0)}`, color: 'bg-purple-50 text-purple-600' },
+                  { label: 'POS Orders', value: (salesReport?.pos_orders || 0).toString(), color: 'bg-amber-50 text-amber-600' },
                 ].map((kpi, i) => (
                   <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
                     <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
@@ -263,11 +274,11 @@ const ReportsView = () => {
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={stockLevels.slice(0, 20)}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                      <XAxis dataKey="name" tick={{ fontSize: 9 }} stroke="#9ca3af" angle={-45} textAnchor="end" height={80} />
+                      <XAxis dataKey="category" tick={{ fontSize: 9 }} stroke="#9ca3af" angle={-45} textAnchor="end" height={80} />
                       <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
                       <Tooltip />
-                      <Bar dataKey="stock_quantity" fill="#2563eb" radius={[4, 4, 0, 0]} name="Stock" />
-                      <Bar dataKey="low_stock_threshold" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Threshold" />
+                      <Bar dataKey="total_stock" fill="#2563eb" radius={[4, 4, 0, 0]} name="Stock" />
+                      <Bar dataKey="low_stock_items" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Low-stock items" />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -282,10 +293,10 @@ const ReportsView = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'Gross Revenue', value: `₱${(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}` },
+                  { label: 'Gross Revenue', value: `₱${(profitReport?.total_revenue || salesReport?.total_revenue || 0).toLocaleString()}` },
                   { label: 'Total Cost', value: `₱${(profitReport?.total_cost || 0).toLocaleString()}` },
                   { label: 'Net Profit', value: `₱${(profitReport?.net_profit || 0).toLocaleString()}` },
-                  { label: 'Margin', value: `${(profitReport?.margin || 0).toFixed(1)}%` },
+                  { label: 'Margin', value: `${(profitReport?.profit_margin || 0).toFixed(1)}%` },
                 ].map((kpi, i) => (
                   <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
                     <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
@@ -303,7 +314,7 @@ const ReportsView = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between py-2 border-b border-gray-700">
                     <span className="text-sm text-gray-600">Gross Revenue (Sales)</span>
-                    <span className="text-sm font-semibold text-white">₱{(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}</span>
+                    <span className="text-sm font-semibold text-white">₱{(profitReport?.total_revenue || salesReport?.total_revenue || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-gray-700">
                     <span className="text-sm text-gray-600">Cost of Goods Sold (Buying Price)</span>
@@ -311,7 +322,7 @@ const ReportsView = () => {
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-dashed border-gray-700">
                     <span className="text-sm font-medium text-gray-700">Gross Profit</span>
-                    <span className="text-sm font-bold text-white">₱{((profitReport?.gross_revenue || salesReport?.total_sales || 0) - (profitReport?.total_cost || 0)).toLocaleString()}</span>
+                    <span className="text-sm font-bold text-white">₱{(profitReport?.gross_profit || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between py-3 bg-red-500/10 rounded-lg px-3 -mx-1">
                     <span className="text-sm font-bold text-orange-700">Net Profit</span>
@@ -319,21 +330,19 @@ const ReportsView = () => {
                   </div>
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-gray-600">Profit Margin</span>
-                    <span className={`text-sm font-bold ${(profitReport?.margin || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{(profitReport?.margin || 0).toFixed(1)}%</span>
+                    <span className={`text-sm font-bold ${(profitReport?.profit_margin || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{(profitReport?.profit_margin || 0).toFixed(1)}%</span>
                   </div>
                 </div>
               </div>
 
-              <ChartCard title="Revenue vs Cost">
+              <ChartCard title="Daily revenue">
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={salesTrend.map(d => ({ ...d, cost: d.cost || (d.revenue || 0) * 0.6 }))}>
+                  <BarChart data={salesTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
-                    <Legend />
                     <Bar dataKey="revenue" fill="#f97316" name="Revenue" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="cost" fill="#9ca3af" name="Cost" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>

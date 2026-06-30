@@ -4995,7 +4995,7 @@ export const getSalesReport = async (range = 'daily', startDate, endDate) => {
   return await authenticatedFetch(`${API_URL}/reports/sales?${params}`);
 };
 
-export const getSalesByChannel = async (startDate, endDate) => {
+export const getSalesByChannel = async (range = '30d', startDate, endDate) => {
   if (USE_SUPABASE) {
     let query = supabase.from('orders').select('source, total_amount').in('status', ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered']);
     if (startDate && endDate) {
@@ -5015,7 +5015,7 @@ export const getSalesByChannel = async (startDate, endDate) => {
       avg_order_value: c.order_count ? c.total_revenue / c.order_count : 0,
     }));
   }
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({ range });
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
   return await authenticatedFetch(`${API_URL}/reports/sales-by-channel?${params}`);
@@ -5048,7 +5048,7 @@ export const getStockLevelsReport = async () => {
   return await authenticatedFetch(`${API_URL}/reports/stock-levels`);
 };
 
-export const getTopProducts = async (limit = 10, startDate, endDate) => {
+export const getTopProducts = async (limit = 10, range = '30d', startDate, endDate) => {
   if (USE_SUPABASE) {
     let query = supabase.from('orders').select('id, created_at, status, order_items(quantity, product_price, product_id, products(id, name, part_number, image, price, stock_quantity, categories(name)))').in('status', ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered']);
     if (startDate && endDate) {
@@ -5079,7 +5079,7 @@ export const getTopProducts = async (limit = 10, startDate, endDate) => {
       .sort((a, b) => b.total_sold - a.total_sold)
       .slice(0, limit);
   }
-  const params = new URLSearchParams({ limit: limit.toString() });
+  const params = new URLSearchParams({ limit: limit.toString(), range });
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
   return await authenticatedFetch(`${API_URL}/reports/top-products?${params}`);
@@ -5106,7 +5106,7 @@ export const getDailySalesTrend = async (days = 30) => {
   return await authenticatedFetch(`${API_URL}/reports/daily-trend?days=${days}`);
 };
 
-export const getProfitReport = async (startDate, endDate) => {
+export const getProfitReport = async (range = '30d', startDate, endDate) => {
   if (USE_SUPABASE) {
     let query = supabase.from('orders').select('total_amount, discount_amount, order_items(quantity, product_price, products(buying_price))').in('status', ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered']);
     if (startDate && endDate) {
@@ -5134,7 +5134,7 @@ export const getProfitReport = async (startDate, endDate) => {
       net_profit: profit - totalDiscounts,
     };
   }
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({ range });
   if (startDate) params.append('start_date', startDate);
   if (endDate) params.append('end_date', endDate);
   return await authenticatedFetch(`${API_URL}/reports/profit?${params}`);

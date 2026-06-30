@@ -4,6 +4,26 @@ import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRes
 const REVENUE_ORDER_STATUSES = ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered'];
 const REVENUE_ORDER_STATUS_SQL = REVENUE_ORDER_STATUSES.map((status) => `'${status}'`).join(', ');
 const PAID_REPORT_STATUSES = new Set(REVENUE_ORDER_STATUSES);
+const BUSINESS_TIME_ZONE = process.env.BUSINESS_TIME_ZONE || 'Asia/Manila';
+
+const buildDateFilter = ({ range = '30d', startDate, endDate, alias = 'o', startIndex = 1 } = {}) => {
+  const column = `${alias}.created_at`;
+  const normalizedRange = String(range || '30d').toLowerCase();
+  if (startDate && endDate) {
+    return {
+      sql: `AND (${column} AT TIME ZONE $${startIndex})::date BETWEEN $${startIndex + 1}::date AND $${startIndex + 2}::date`,
+      params: [BUSINESS_TIME_ZONE, startDate, endDate],
+    };
+  }
+  const rangeDays = { daily: 0, weekly: 7, '7d': 7, monthly: 30, '30d': 30, '90d': 90 };
+  const days = rangeDays[normalizedRange] ?? 30;
+  return {
+    sql: days === 0
+      ? `AND (${column} AT TIME ZONE $${startIndex})::date = (NOW() AT TIME ZONE $${startIndex})::date`
+      : `AND (${column} AT TIME ZONE $${startIndex}) >= (NOW() AT TIME ZONE $${startIndex}) - ($${startIndex + 1}::int * INTERVAL '1 day')`,
+    params: days === 0 ? [BUSINESS_TIME_ZONE] : [BUSINESS_TIME_ZONE, days],
+  };
+};
 
 const toNumber = (value) => {
   const parsed = Number(value);
@@ -220,21 +240,7 @@ export const getSalesReport = async (req, res) => {
       return res.json(await salesReportFallback({ range, start_date, end_date }));
     }
 
-    let dateFilter = '';
-    const today = new Date();
-    
-    if (range === 'daily') {
-      const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-      dateFilter = `AND o.created_at >= '${startOfDay.toISOString()}'`;
-    } else if (range === 'weekly') {
-      const startOfWeek = new Date(today.setDate(today.getDate() - 7));
-      dateFilter = `AND o.created_at >= '${startOfWeek.toISOString()}'`;
-    } else if (range === 'monthly') {
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      dateFilter = `AND o.created_at >= '${startOfMonth.toISOString()}'`;
-    } else if (start_date && end_date) {
-      dateFilter = `AND o.created_at BETWEEN '${start_date}' AND '${end_date}'`;
-    }
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date });
 
     const result = await pool.query(`
       SELECT 
@@ -248,8 +254,9 @@ export const getSalesReport = async (req, res) => {
         COALESCE(SUM(CASE WHEN o.source = 'pos' THEN o.total_amount ELSE 0 END), 0) as pos_revenue
       FROM orders o
       WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
-      ${dateFilter}
-    `);
+        AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = o.id)
+      ${dateFilter.sql}
+    `, dateFilter.params);
 
     const stats = result.rows[0];
 
@@ -277,7 +284,7 @@ export const getSalesReport = async (req, res) => {
 
 // Get sales by channel
 export const getSalesByChannel = async (req, res) => {
-  const { start_date, end_date } = req.query;
+  const { range = '30d', start_date, end_date } = req.query;
 
   try {
     if (shouldUseDatabaseReadFallback()) {
@@ -288,10 +295,7 @@ export const getSalesByChannel = async (req, res) => {
       ].filter((row) => row.order_count > 0));
     }
 
-    let dateFilter = '';
-    if (start_date && end_date) {
-      dateFilter = `AND created_at BETWEEN '${start_date}' AND '${end_date}'`;
-    }
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date, alias: 'orders' });
 
     const result = await pool.query(`
       SELECT 
@@ -301,10 +305,11 @@ export const getSalesByChannel = async (req, res) => {
         COALESCE(AVG(total_amount), 0) as avg_order_value
       FROM orders
       WHERE status IN (${REVENUE_ORDER_STATUS_SQL})
-      ${dateFilter}
+        AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = orders.id)
+      ${dateFilter.sql}
       GROUP BY source
       ORDER BY total_revenue DESC
-    `);
+    `, dateFilter.params);
 
     res.json(result.rows.map(row => ({
       channel: row.channel,
@@ -387,17 +392,14 @@ export const getStockLevelsReport = async (req, res) => {
 
 // Get top selling products
 export const getTopProducts = async (req, res) => {
-  const { limit = 10, start_date, end_date } = req.query;
+  const { limit = 10, range = '30d', start_date, end_date } = req.query;
 
   try {
     if (shouldUseDatabaseReadFallback()) {
       return res.json(await topProductsFallback({ limit, start_date, end_date }));
     }
 
-    let dateFilter = '';
-    if (start_date && end_date) {
-      dateFilter = `AND o.created_at BETWEEN '${start_date}' AND '${end_date}'`;
-    }
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date, startIndex: 2 });
 
     const result = await pool.query(`
       SELECT 
@@ -416,11 +418,11 @@ export const getTopProducts = async (req, res) => {
       LEFT JOIN categories c ON p.category_id = c.id
       JOIN orders o ON oi.order_id = o.id
       WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
-      ${dateFilter}
+      ${dateFilter.sql}
       GROUP BY p.id, p.name, p.part_number, p.image, p.price, p.stock_quantity, c.name
       ORDER BY total_sold DESC
       LIMIT $1
-    `, [limit]);
+    `, [limit, ...dateFilter.params]);
 
     res.json(result.rows.map(row => ({
       ...row,
@@ -448,19 +450,21 @@ export const getDailySalesTrend = async (req, res) => {
       return res.json(await dailyTrendFallback({ days }));
     }
 
+    const parsedDays = Math.min(365, Math.max(1, Number.parseInt(days, 10) || 30));
     const result = await pool.query(`
       SELECT 
-        DATE(created_at) as date,
+        (created_at AT TIME ZONE $1)::date as date,
         COUNT(*) as order_count,
         COALESCE(SUM(total_amount), 0) as revenue,
         COUNT(CASE WHEN source = 'online' THEN 1 END) as online_orders,
         COUNT(CASE WHEN source = 'pos' THEN 1 END) as pos_orders
       FROM orders
       WHERE status IN (${REVENUE_ORDER_STATUS_SQL})
-        AND created_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
-      GROUP BY DATE(created_at)
+        AND (created_at AT TIME ZONE $1) >= (NOW() AT TIME ZONE $1) - ($2::int * INTERVAL '1 day')
+        AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = orders.id)
+      GROUP BY (created_at AT TIME ZONE $1)::date
       ORDER BY date ASC
-    `);
+    `, [BUSINESS_TIME_ZONE, parsedDays]);
 
     res.json(result.rows.map(row => ({
       date: row.date,
@@ -480,31 +484,37 @@ export const getDailySalesTrend = async (req, res) => {
 
 // Get profit report (considering buying price)
 export const getProfitReport = async (req, res) => {
-  const { start_date, end_date } = req.query;
+  const { range = '30d', start_date, end_date } = req.query;
 
   try {
     if (shouldUseDatabaseReadFallback()) {
       return res.json(await profitReportFallback({ start_date, end_date }));
     }
 
-    let dateFilter = '';
-    if (start_date && end_date) {
-      dateFilter = `AND o.created_at BETWEEN '${start_date}' AND '${end_date}'`;
-    }
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date });
 
     const result = await pool.query(`
-      SELECT 
-        COUNT(DISTINCT o.id) as total_orders,
-        COALESCE(SUM(o.total_amount), 0) as total_revenue,
-        COALESCE(SUM(oi.quantity * p.buying_price), 0) as total_cost,
-        COALESCE(SUM(o.total_amount) - SUM(oi.quantity * p.buying_price), 0) as gross_profit,
-        COALESCE(SUM(o.discount_amount), 0) as total_discounts
-      FROM orders o
-      JOIN order_items oi ON o.id = oi.order_id
-      JOIN products p ON oi.product_id = p.id
-      WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
-      ${dateFilter}
-    `);
+      WITH valid_orders AS (
+        SELECT o.id, o.total_amount, o.discount_amount
+        FROM orders o
+        WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
+          AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = o.id)
+          ${dateFilter.sql}
+      ), item_costs AS (
+        SELECT oi.order_id, COALESCE(SUM(oi.quantity * p.buying_price), 0) AS order_cost
+        FROM order_items oi
+        JOIN products p ON p.id = oi.product_id
+        WHERE oi.order_id IN (SELECT id FROM valid_orders)
+        GROUP BY oi.order_id
+      )
+      SELECT COUNT(*) AS total_orders,
+             COALESCE(SUM(vo.total_amount), 0) AS total_revenue,
+             COALESCE(SUM(ic.order_cost), 0) AS total_cost,
+             COALESCE(SUM(vo.total_amount) - SUM(ic.order_cost), 0) AS gross_profit,
+             COALESCE(SUM(vo.discount_amount), 0) AS total_discounts
+      FROM valid_orders vo
+      LEFT JOIN item_costs ic ON ic.order_id = vo.id
+    `, dateFilter.params);
 
     const stats = result.rows[0];
     const revenue = parseFloat(stats.total_revenue);
