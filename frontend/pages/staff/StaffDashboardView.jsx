@@ -34,14 +34,15 @@ const StaffDashboardView = ({ user, onNavigate }) => {
   const [unreadChats, setUnreadChats] = useState(0);
 
   const loadData = useCallback(async () => {
-    const [permissionList, orderList, productList, returnList, unread] = await Promise.all([
-      getMyPermissions().catch(() => []),
-      getOrders().catch(() => []),
-      getProducts().catch(() => []),
-      getReturns().catch(() => []),
-      getSellerChatUnreadCount().catch(() => 0),
+    const permissionList = await getMyPermissions().catch(() => []);
+    const allowed = new Set(permissionList);
+    setPermissions(allowed);
+    const [orderList, productList, returnList, unread] = await Promise.all([
+      allowed.has('orders.view') ? getOrders().catch(() => []) : [],
+      allowed.has('inventory.view') || allowed.has('products.view') ? getProducts().catch(() => []) : [],
+      allowed.has('returns.view') ? getReturns().catch(() => []) : [],
+      allowed.has('chat.view') ? getSellerChatUnreadCount().catch(() => 0) : 0,
     ]);
-    setPermissions(new Set(permissionList));
     setOrders(Array.isArray(orderList) ? orderList : []);
     setProducts(Array.isArray(productList) ? productList : []);
     setReturns(Array.isArray(returnList) ? returnList : returnList?.returns || []);
@@ -120,9 +121,9 @@ const StaffDashboardView = ({ user, onNavigate }) => {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={ShoppingCart} label="Active orders" value={activeOrders.length} detail="Assigned or available to process" tone="info" onClick={can('orders.view') ? () => onNavigate('orders') : undefined} />
-        <MetricCard icon={PackageCheck} label="Ready to pack" value={toPack.length} detail="Paid and processing orders" tone="brand" onClick={can('orders.view') ? () => onNavigate('orders') : undefined} />
-        <MetricCard icon={AlertTriangle} label="Low-stock items" value={lowStock.length} detail="At or below reorder threshold" tone={lowStock.length ? 'warning' : 'success'} onClick={can('inventory.view') ? () => onNavigate('inventory') : undefined} />
+        {can('orders.view') && <MetricCard icon={ShoppingCart} label="Active orders" value={activeOrders.length} detail="Assigned or available to process" tone="info" onClick={() => onNavigate('orders')} />}
+        {can('orders.view') && <MetricCard icon={PackageCheck} label="Ready to pack" value={toPack.length} detail="Paid and processing orders" tone="brand" onClick={() => onNavigate('orders')} />}
+        {can('inventory.view') && <MetricCard icon={AlertTriangle} label="Low-stock items" value={lowStock.length} detail="At or below reorder threshold" tone={lowStock.length ? 'warning' : 'success'} onClick={() => onNavigate('inventory')} />}
         {can('chat.view') && <MetricCard icon={MessageCircle} label="Unread chats" value={unreadChats} detail="Customer conversations" tone={unreadChats ? 'brand' : 'neutral'} onClick={() => onNavigate('chat')} />}
       </div>
 

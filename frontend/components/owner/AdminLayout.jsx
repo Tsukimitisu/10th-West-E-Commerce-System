@@ -47,7 +47,6 @@ const createNavItems = (badges = {}) => [
   { id: 'content', label: 'Content', icon: Newspaper, group: 'Storefront' },
 ];
 
-const STAFF_NAV = ['dashboard', 'orders', 'pos', 'products', 'inventory', 'returns', 'chat'];
 const ADMIN_NAV = [
   'dashboard', 'orders', 'pos', 'products', 'inventory', 'promotions',
   'customers', 'chat', 'reviews', 'returns', 'staff', 'reports', 'banners', 'content',
@@ -134,9 +133,8 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   }, []);
 
   const privileged = ['owner', 'admin'].includes(user?.role);
-  const allowedIds = privileged ? ADMIN_NAV : STAFF_NAV;
   const navItems = createNavItems(badges).filter((item) => (
-    allowedIds.includes(item.id)
+    (privileged ? ADMIN_NAV.includes(item.id) : (item.id === 'dashboard' || Boolean(item.permission)))
     && (!item.permission || privileged || permissions?.has(item.permission))
   ));
 
