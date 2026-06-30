@@ -5,6 +5,7 @@ import {
   FileText, Calendar, User, Archive
 } from 'lucide-react';
 import { createBackup, getBackupHistory } from '../../services/api';
+import PageHeader from '../../components/operations/PageHeader';
 
 const BackupRecoveryView = () => {
   const [backups, setBackups] = useState([]);
@@ -42,18 +43,16 @@ const BackupRecoveryView = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2"><Database size={22} className="text-red-500" /> Backup & Recovery</h1>
-          <p className="text-sm text-gray-400 mt-1">Manage database backups and system recovery</p>
-        </div>
-        <button onClick={handleCreateBackup} disabled={creating}
-          className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
+      <PageHeader
+        eyebrow="Platform continuity"
+        title="Backup & recovery"
+        description="Create and review database backups and operational recovery readiness."
+        actions={<button onClick={handleCreateBackup} disabled={creating}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 disabled:bg-slate-200 disabled:text-slate-500">
           {creating ? <Loader2 size={14} className="animate-spin" /> : <Database size={16} />}
-          {creating ? 'Creating Backup...' : 'Create Backup Now'}
-        </button>
-      </div>
+          {creating ? 'Creating backup…' : 'Create backup'}
+        </button>}
+      />
 
       {/* Toast */}
       {message.text && (
@@ -164,7 +163,7 @@ const BackupRecoveryView = () => {
           <p className="text-xs text-gray-400">For full database restoration, access the Supabase Dashboard directly:</p>
           <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
             <li>Visit your Supabase project dashboard</li>
-            <li>Navigate to <span className="text-gray-700 font-medium">Database â†’ Backups</span></li>
+            <li>Navigate to <span className="text-gray-700 font-medium">Database → Backups</span></li>
             <li>Select the desired backup point to restore</li>
             <li>Supabase automatically manages Point-in-Time Recovery (PITR)</li>
           </ol>

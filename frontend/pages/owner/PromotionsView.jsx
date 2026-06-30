@@ -190,7 +190,7 @@ const PromotionsView = () => {
                       </td>
                       <td className="px-4 py-3 text-center hidden sm:table-cell">
                         <span className="text-xs text-gray-600">
-                          {d.used_count || 0} / {d.max_uses === 0 || !d.max_uses ? 'âˆž' : d.max_uses}
+                          {d.used_count || 0} / {d.max_uses === 0 || !d.max_uses ? '∞' : d.max_uses}
                         </span>
                       </td>
                       <td className="px-4 py-3">

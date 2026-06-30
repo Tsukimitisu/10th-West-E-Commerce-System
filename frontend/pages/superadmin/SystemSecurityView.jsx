@@ -8,6 +8,7 @@ import {
   getSecuritySettings, updateSecuritySettings,
   getLoginAttempts, getSuspiciousActivity
 } from '../../services/api';
+import PageHeader from '../../components/operations/PageHeader';
 
 const SystemSecurityView = () => {
   const [tab, setTab] = useState('lockout');
@@ -93,20 +94,18 @@ const SystemSecurityView = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2"><Shield size={22} className="text-red-500" /> System Security</h1>
-          <p className="text-sm text-gray-400 mt-1">Configure lockout policies, password rules, and 2FA settings</p>
-        </div>
-        {(tab === 'lockout' || tab === 'password' || tab === '2fa') && (
+      <PageHeader
+        eyebrow="Access control"
+        title="Security controls"
+        description="Configure account lockout, password policy, two-factor enforcement, and authentication monitoring."
+        actions={(tab === 'lockout' || tab === 'password' || tab === '2fa') && (
           <button onClick={handleSave} disabled={saving}
-            className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 disabled:bg-slate-200 disabled:text-slate-500">
             {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
-            {saved ? 'Saved!' : 'Save Settings'}
+            {saved ? 'Saved' : 'Save settings'}
           </button>
         )}
-      </div>
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-800 border border-gray-700 p-1 rounded-xl overflow-x-auto shadow-sm">

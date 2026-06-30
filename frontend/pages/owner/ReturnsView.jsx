@@ -4,6 +4,7 @@ import { RotateCcw, Search, Eye, CheckCircle2, XCircle, Clock, AlertCircle } fro
 import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 import { getCurrentAuthUser } from '../../services/authSession';
+import PageHeader from '../../components/operations/PageHeader';
 
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -74,12 +75,7 @@ const ReturnsView = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display font-bold text-xl text-white">Returns</h1>
-          <p className="text-sm text-gray-400">{returns.length} total return requests</p>
-        </div>
-      </div>
+      <PageHeader eyebrow="Customer operations" title="Returns & refunds" description={`${returns.length} requests · Review eligibility, approval status, and refund progress.`} />
 
       {error && (
         <div className="p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex items-center gap-2">

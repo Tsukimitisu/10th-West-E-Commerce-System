@@ -266,7 +266,7 @@ const SecurityView = () => {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-white">
                               <span className="font-medium">{log.user_name || `User #${log.user_id || '?'}`}</span>
-                              <span className="text-gray-400"> â€” {action}</span>
+                              <span className="text-gray-400"> — {action}</span>
                             </p>
                             {log.details && <p className="text-xs text-gray-400 mt-0.5 truncate">{formatLogDetails(log.details)}</p>}
                             <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-400">

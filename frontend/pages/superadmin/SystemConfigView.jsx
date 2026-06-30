@@ -4,6 +4,7 @@ import {
   Save, Loader2, CheckCircle2, Percent, RotateCcw
 } from 'lucide-react';
 import { getSystemSettings, updateSystemSettings } from '../../services/api';
+import PageHeader from '../../components/operations/PageHeader';
 
 const SystemConfigView = () => {
   const [tab, setTab] = useState('store');
@@ -81,25 +82,25 @@ const SystemConfigView = () => {
   ];
 
   const Toggle = ({ value, onChange, label }) => (
-    <label className="flex items-center gap-3 cursor-pointer group">
-      <div className={`w-10 h-5 rounded-full transition-colors relative ${value === 'true' ? 'bg-red-500/100' : 'bg-gray-300'}`} onClick={onChange}>
-        <div className={`absolute top-0.5 w-4 h-4 bg-gray-800 rounded-full transition-all shadow-sm ${value === 'true' ? 'left-5' : 'left-0.5'}`} />
-      </div>
-      <span className="text-sm text-gray-600 group-hover:text-white">{label}</span>
-    </label>
+    <button type="button" role="switch" aria-checked={value === 'true'} onClick={onChange} className="group flex items-center gap-3 text-left">
+      <span className={`relative h-6 w-11 rounded-full transition-colors ${value === 'true' ? 'bg-orange-600' : 'bg-slate-300'}`}>
+        <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${value === 'true' ? 'translate-x-6' : 'translate-x-1'}`} />
+      </span>
+      <span className="text-sm text-slate-700 group-hover:text-slate-950">{label}</span>
+    </button>
   );
 
   const Input = ({ label, value, onChange, placeholder, type = 'text', hint }) => (
     <div>
-      <label className="text-xs text-gray-400 mb-1.5 block">{label}</label>
+      <label className="mb-1.5 block text-[13px] font-medium text-slate-700">{label}</label>
       <input
         type={type}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-red-400"
+        className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder-slate-400 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
       />
-      {hint && <p className="text-[10px] text-gray-400 mt-1">{hint}</p>}
+      {hint && <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p>}
     </div>
   );
 
@@ -107,20 +108,19 @@ const SystemConfigView = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2"><Settings size={22} className="text-red-500" /> System Configuration</h1>
-          <p className="text-sm text-gray-400 mt-1">Configure tax rates, currency, payment gateways, email services, and returns.</p>
-        </div>
-        <button
+      <PageHeader
+        eyebrow="Platform"
+        title="System configuration"
+        description="Manage store identity, tax, payments, shipping, email delivery, and return policy."
+        actions={<button
           onClick={handleSave}
           disabled={saving}
-          className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 disabled:bg-slate-200 disabled:text-slate-500"
         >
           {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
-          {saved ? 'Saved!' : 'Save Changes'}
-        </button>
-      </div>
+          {saved ? 'Saved' : 'Save changes'}
+        </button>}
+      />
 
       <div className="flex gap-1 bg-gray-800 border border-gray-700 p-1 rounded-xl overflow-x-auto shadow-sm">
         {tabs.map((tabOption) => {

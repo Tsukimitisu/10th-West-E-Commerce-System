@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, Search, Package, Eye, EyeOff, Copy, Download, Upl
 import Modal from '../../components/owner/Modal';
 import VariantsModal from '../../components/owner/VariantsModal';
 import { useSocketEvent } from '../../context/SocketContext';
+import PageHeader from '../../components/operations/PageHeader';
 
 const PRODUCT_FORM_STEPS = [
   { key: 'media', label: 'Media Upload', hint: 'Add product photos and optional video' },
@@ -2121,16 +2122,12 @@ const ProductsView = () => {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display font-bold text-xl text-white">Products</h1>
-          <p className="text-sm text-gray-400">{products.length} total products</p>
-        </div>
-        <button onClick={openAdd} className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
-          <Plus size={16} /> Add Product
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Catalog"
+        title="Product management"
+        description={`${products.length} products · Maintain product information, pricing, media, variants, and availability.`}
+        actions={<button onClick={openAdd} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700"><Plus size={16} /> Add product</button>}
+      />
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-2">
@@ -2206,7 +2203,7 @@ const ProductsView = () => {
                         </div>
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">
-                        <p className="text-xs font-mono text-gray-500">{p.sku || 'â€”'}</p>
+                        <p className="text-xs font-mono text-gray-500">{p.sku || '—'}</p>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs text-gray-300 block">{cat?.name || '—'}</span>

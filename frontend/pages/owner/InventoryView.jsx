@@ -4,6 +4,7 @@ import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, 
 import Modal from '../../components/owner/Modal';
 import ReceiveStock from '../../components/owner/ReceiveStock';
 import { useSocketEvent } from '../../context/SocketContext';
+import PageHeader from '../../components/operations/PageHeader';
 
 const InventoryView = () => {
   const [products, setProducts] = useState([]);
@@ -83,12 +84,7 @@ const InventoryView = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display font-bold text-xl text-white">Inventory & Stock Control</h1>
-          <p className="text-sm text-gray-400">Manage product stock levels and adjustments</p>
-        </div>
-      </div>
+      <PageHeader eyebrow="Catalog operations" title="Inventory management" description="Monitor available, reserved, and damaged stock; receive deliveries and record accountable adjustments." />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 ">
@@ -250,7 +246,7 @@ const InventoryView = () => {
                     </div>
                     <div>
                       <p className="font-medium text-white text-sm">{p.name}</p>
-                      <p className="text-xs text-gray-400">Threshold: {p.low_stock_threshold} â€¢ Current: <span className={`font-bold ${p.stock_quantity === 0 ? 'text-red-500' : 'text-amber-600'}`}>{p.stock_quantity}</span></p>
+                      <p className="text-xs text-gray-400">Threshold: {p.low_stock_threshold} · Current: <span className={`font-bold ${p.stock_quantity === 0 ? 'text-red-500' : 'text-amber-600'}`}>{p.stock_quantity}</span></p>
                     </div>
                   </div>
                   <button onClick={() => openAdjust(p)} className="px-3 py-1.5 bg-red-500/100 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1">
@@ -309,7 +305,7 @@ const InventoryView = () => {
 
           {adjForm.quantity && (
             <div className={`p-3 rounded-lg text-sm font-medium ${adjForm.type === 'add' ? 'bg-green-50 text-green-700' : 'bg-red-500/10 text-orange-600'}`}>
-              New stock: {selectedProduct?.stock_quantity || 0} â†’ <span className="font-bold">
+              New stock: {selectedProduct?.stock_quantity || 0} → <span className="font-bold">
                 {adjForm.type === 'add' ? (selectedProduct?.stock_quantity || 0) + parseInt(adjForm.quantity || '0') : Math.max(0, (selectedProduct?.stock_quantity || 0) - parseInt(adjForm.quantity || '0'))}
               </span>
             </div>

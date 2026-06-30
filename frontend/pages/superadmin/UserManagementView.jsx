@@ -10,6 +10,8 @@ import {
   addStaff, editStaff, adminDeleteUser
 } from '../../services/api';
 import { getCurrentAuthUser } from '../../services/authSession';
+import PageHeader from '../../components/operations/PageHeader';
+import ActionDropdown from '../../components/operations/ActionDropdown';
 
 const ROLES = [
   { value: 'super_admin', label: 'Super Admin', color: 'bg-red-50 text-red-600 border-red-200' },
@@ -179,17 +181,12 @@ const UserManagementView = () => {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2"><Users size={22} className="text-red-500" /> User Management</h1>
-          <p className="text-sm text-gray-400 mt-1">Create, edit, and manage all user accounts</p>
-        </div>
-        <button onClick={() => { setForm({ name: '', email: '', phone: '', role: 'store_staff', password: '' }); setShowModal('add'); }}
-          className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
-          <Plus size={16} /> Add User
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Access control"
+        title="Users & roles"
+        description="Create and maintain accounts, role assignments, security state, and access recovery."
+        actions={<button onClick={() => { setForm({ name: '', email: '', phone: '', role: 'store_staff', password: '' }); setShowModal('add'); }} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700"><Plus size={16} /> Add user</button>}
+      />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
@@ -272,25 +269,19 @@ const UserManagementView = () => {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openView(user)} title="View" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"><Eye size={14} /></button>
-                        <button onClick={() => openEdit(user)} title="Edit" className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Edit3 size={14} /></button>
-                        <button onClick={() => openResetPw(user)} title="Reset Password" className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"><Key size={14} /></button>
-                        {isLocked(user) ? (
-                          <button onClick={() => handleUnlock(user)} title="Unlock" disabled={actionLoading === `unlock-${user.id}`}
-                            className="p-1.5 text-red-400 hover:text-green-500 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50">
-                            {actionLoading === `unlock-${user.id}` ? <Loader2 size={14} className="animate-spin" /> : <Unlock size={14} />}
-                          </button>
-                        ) : (
-                          <button onClick={() => handleLock(user)} title="Lock" disabled={user.id === currentUser.id || actionLoading === `lock-${user.id}`}
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30">
-                            {actionLoading === `lock-${user.id}` ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
-                          </button>
-                        )}
-                        <button onClick={() => handleDeleteUser(user)} title="Delete" disabled={user.id === currentUser.id || actionLoading === `del-${user.id}`}
-                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30">
-                          {actionLoading === `del-${user.id}` ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                        </button>
+                      <div className="flex justify-end">
+                        <ActionDropdown
+                          label={`Actions for ${user.name}`}
+                          items={[
+                            { label: 'View account', icon: Eye, onClick: () => openView(user) },
+                            { label: 'Edit user', icon: Edit3, onClick: () => openEdit(user) },
+                            { label: 'Reset password', icon: Key, onClick: () => openResetPw(user) },
+                            isLocked(user)
+                              ? { label: 'Unlock account', icon: Unlock, onClick: () => handleUnlock(user), disabled: actionLoading === `unlock-${user.id}` }
+                              : { label: 'Lock account', icon: Lock, onClick: () => handleLock(user), disabled: user.id === currentUser.id || actionLoading === `lock-${user.id}` },
+                            { label: 'Delete user', icon: Trash2, onClick: () => handleDeleteUser(user), disabled: user.id === currentUser.id || actionLoading === `del-${user.id}`, destructive: true },
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>

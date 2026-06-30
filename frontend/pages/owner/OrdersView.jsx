@@ -5,6 +5,7 @@ import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock
 import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 import { getCurrentAuthUser } from '../../services/authSession';
+import PageHeader from '../../components/operations/PageHeader';
 
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -179,12 +180,7 @@ const OrdersView = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display font-bold text-xl text-white">Orders</h1>
-          <p className="text-sm text-gray-400">{orders.length} total orders</p>
-        </div>
-      </div>
+      <PageHeader eyebrow="Sales operations" title="Order management" description={`${orders.length} orders · Review payment, fulfillment, courier, delivery, and refund state.`} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -488,7 +484,7 @@ const OrdersView = () => {
         </div>
       </Modal>
 
-      {/* Refund Modal â€” owner only */}
+      {/* Refund modal — owner only */}
       {!isStaff && showRefundModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl">

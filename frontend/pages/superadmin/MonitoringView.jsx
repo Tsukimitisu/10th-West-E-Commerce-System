@@ -7,6 +7,7 @@ import {
 import {
   getActivityLogs, getErrorLogs, getTransactionLogs, getSuspiciousActivity
 } from '../../services/api';
+import PageHeader from '../../components/operations/PageHeader';
 
 const MonitoringView = () => {
   const [tab, setTab] = useState('activity');
@@ -90,16 +91,12 @@ const MonitoringView = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2"><Activity size={22} className="text-red-500" /> Monitoring & Logs</h1>
-          <p className="text-sm text-gray-400 mt-1">View system activity, error logs, and transaction history</p>
-        </div>
-        <button onClick={loadData} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
-          <RefreshCw size={14} /> Refresh
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Audit"
+        title="Monitoring & logs"
+        description="Review platform activity, application errors, and auditable transaction history."
+        actions={<button onClick={loadData} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"><RefreshCw size={14} /> Refresh</button>}
+      />
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

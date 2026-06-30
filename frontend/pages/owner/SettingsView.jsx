@@ -184,7 +184,7 @@ const SettingsView = () => {
 
       {saveError && (
         <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
-          <span>âš </span> {saveError}
+          <span>⚠</span> {saveError}
         </div>
       )}
 

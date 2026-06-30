@@ -171,7 +171,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
         </div>
         {cart.length > 0 && (
           <div className="bg-red-500/10 text-orange-600 px-3 py-1.5 rounded-full text-sm font-medium">
-            {cart.length} product{cart.length !== 1 ? 's' : ''} â€¢ {totalItems} unit{totalItems !== 1 ? 's' : ''}
+            {cart.length} product{cart.length !== 1 ? 's' : ''} · {totalItems} unit{totalItems !== 1 ? 's' : ''}
           </div>
         )}
       </div>
@@ -306,7 +306,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
           <div className="px-4 py-3 border-t border-gray-700 bg-gray-50/80">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600">
-                <span className="font-medium text-white">{cart.length}</span> product{cart.length !== 1 ? 's' : ''} â€¢{' '}
+                <span className="font-medium text-white">{cart.length}</span> product{cart.length !== 1 ? 's' : ''} ·{' '}
                 <span className="font-medium text-white">{totalItems}</span> total unit{totalItems !== 1 ? 's' : ''} to receive
               </div>
               <button

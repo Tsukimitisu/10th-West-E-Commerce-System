@@ -3,6 +3,7 @@ import { getSalesReport, getSalesByChannel, getTopProducts, getDailySalesTrend, 
 import { BarChart3, Download, Calendar, TrendingUp, Package, DollarSign, ShoppingBag, Boxes, FileText, Printer, Users } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
 import ChartCard from '../../components/owner/ChartCard';
+import PageHeader from '../../components/operations/PageHeader';
 
 const ReportsView = () => {
   const [tab, setTab] = useState('sales');
@@ -131,12 +132,11 @@ const ReportsView = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display font-bold text-xl text-white">Reports & Analytics</h1>
-          <p className="text-sm text-gray-400">Business intelligence and performance reports</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        eyebrow="Insights"
+        title="Reports & analytics"
+        description="Real sales, product, inventory, customer, and profitability reporting."
+        actions={<>
           <button onClick={handleExportPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs font-medium text-gray-600 hover:bg-red-500/10 hover:text-orange-600 hover:border-red-200 transition-all">
             <Printer size={13} /> Export PDF
           </button>
@@ -148,8 +148,8 @@ const ReportsView = () => {
               <button key={r} onClick={() => setDateRange(r)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${dateRange === r ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>{r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}</button>
             ))}
           </div>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-800 rounded-lg border border-gray-700 p-1 w-fit">
@@ -244,7 +244,7 @@ const ReportsView = () => {
                             <td className="px-4 py-3 font-bold text-gray-400">{i + 1}</td>
                             <td className="px-4 py-3 font-medium text-white">{p.name}</td>
                             <td className="px-4 py-3 text-right text-white">₱{(p.price || 0).toLocaleString()}</td>
-                            <td className="px-4 py-3 text-right text-amber-600">â˜… {(p.rating || 0).toFixed(1)}</td>
+                            <td className="px-4 py-3 text-right text-amber-600">★ {(p.rating || 0).toFixed(1)}</td>
                           </tr>
                         ))}
                       </tbody>
