@@ -811,6 +811,10 @@ export const getActivityLogs = async (params = {}) => {
   if (params.limit) qs.set('limit', String(params.limit));
   if (params.userId) qs.set('userId', String(params.userId));
   if (params.action) qs.set('action', String(params.action));
+  if (params.entityType) qs.set('entityType', String(params.entityType));
+  if (params.startDate) qs.set('startDate', String(params.startDate));
+  if (params.endDate) qs.set('endDate', String(params.endDate));
+  if (params.search) qs.set('search', String(params.search));
   return authenticatedFetch(`${API_URL}/auth/activity-logs?${qs.toString()}`);
 };
 

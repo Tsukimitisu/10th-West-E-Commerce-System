@@ -1496,30 +1496,57 @@ export const revokeSession = async (req, res) => {
 
 // ─── ACTIVITY LOGS (admin) ─────────────────────────────────────────
 export const getActivityLogs = async (req, res) => {
-  const { page = 1, limit = 50, userId, action } = req.query;
+  const { userId, action, entityType, startDate, endDate, search } = req.query;
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
   const offset = (page - 1) * limit;
 
   try {
-    let query = `SELECT al.*, u.name as user_name, u.email as user_email FROM activity_logs al LEFT JOIN users u ON al.user_id = u.id WHERE 1=1`;
+    const unifiedCte = `
+      WITH unified_logs AS (
+        SELECT CONCAT('activity:', al.id)::text AS unified_id, 'activity'::text AS source,
+               al.user_id AS actor_user_id, al.action, al.entity_type, al.entity_id::text AS entity_id,
+               al.ip_address, al.user_agent, NULL::jsonb AS before_data, NULL::jsonb AS after_data,
+               al.details AS metadata, al.created_at AT TIME ZONE 'UTC' AS created_at
+        FROM activity_logs al
+        UNION ALL
+        SELECT CONCAT('audit:', au.id)::text, 'audit'::text, au.actor_user_id, au.action,
+               au.entity_type, au.entity_id, au.ip_address, au.user_agent, au.before_data,
+               au.after_data, au.metadata, au.created_at
+        FROM audit_logs au
+      )`;
+    const filters = ['1=1'];
     const params = [];
-    let idx = 1;
-
-    if (userId) { query += ` AND al.user_id = $${idx++}`; params.push(userId); }
-    if (action) { query += ` AND al.action = $${idx++}`; params.push(action); }
-
-    query += ` ORDER BY al.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
-    params.push(limit, offset);
-
-    const result = await pool.query(query, params);
-
-    let countQuery = 'SELECT COUNT(*) FROM activity_logs WHERE 1=1';
-    const cp = [];
-    let ci = 1;
-    if (userId) { countQuery += ` AND user_id = $${ci++}`; cp.push(userId); }
-    if (action) { countQuery += ` AND action = $${ci++}`; cp.push(action); }
-    const countResult = await pool.query(countQuery, cp);
-
-    res.json({ logs: result.rows, total: parseInt(countResult.rows[0].count), page: parseInt(page), totalPages: Math.ceil(parseInt(countResult.rows[0].count) / limit) });
+    if (userId) { params.push(userId); filters.push(`ul.actor_user_id = $${params.length}`); }
+    if (action) { params.push(`%${action}%`); filters.push(`ul.action ILIKE $${params.length}`); }
+    if (entityType) { params.push(entityType); filters.push(`ul.entity_type = $${params.length}`); }
+    if (startDate) { params.push(startDate); filters.push(`ul.created_at >= $${params.length}::timestamptz`); }
+    if (endDate) { params.push(endDate); filters.push(`ul.created_at < ($${params.length}::date + INTERVAL '1 day')`); }
+    if (search) {
+      params.push(`%${search}%`);
+      filters.push(`(ul.action ILIKE $${params.length} OR ul.entity_type ILIKE $${params.length} OR ul.entity_id ILIKE $${params.length})`);
+    }
+    const where = filters.join(' AND ');
+    const dataParams = [...params, limit, offset];
+    const result = await pool.query(
+      `${unifiedCte}
+       SELECT ul.unified_id AS id, ul.source, ul.actor_user_id AS user_id, ul.action,
+              ul.entity_type, ul.entity_id, ul.ip_address, ul.user_agent, ul.before_data,
+              ul.after_data, ul.metadata AS details, ul.created_at,
+              u.name AS user_name, u.email AS user_email
+       FROM unified_logs ul
+       LEFT JOIN users u ON u.id = ul.actor_user_id
+       WHERE ${where}
+       ORDER BY ul.created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      dataParams
+    );
+    const countResult = await pool.query(
+      `${unifiedCte} SELECT COUNT(*) FROM unified_logs ul WHERE ${where}`,
+      params
+    );
+    const total = Number.parseInt(countResult.rows[0].count, 10);
+    res.json({ logs: result.rows, total, page, totalPages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('Get activity logs error:', error);
     res.status(500).json({ message: 'Server error' });
