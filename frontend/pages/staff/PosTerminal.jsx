@@ -489,7 +489,7 @@ const PosTerminal = () => {
               <div className="flex items-end justify-between border-t border-slate-200 pt-3"><dt className="font-display text-base font-bold">Total</dt><dd className="font-display text-2xl font-black">{formatCurrency(displayTotal)}</dd></div>
             </dl>
             {cartError && <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{cartError}</div>}
-            <button onClick={openPayment} disabled={!cart.length || !quote?.valid || quoteLoading || Boolean(cartError)} className="mt-4 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-orange-500 px-5 text-base font-black text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-40">
+            <button onClick={openPayment} disabled={!cart.length || !quote?.valid || quoteLoading || Boolean(cartError)} className="mt-4 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 text-base font-bold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">
               <ReceiptText size={19} /> Pay {formatCurrency(displayTotal)}
             </button>
           </div>

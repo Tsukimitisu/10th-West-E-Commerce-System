@@ -119,7 +119,7 @@ const PaymentModal = ({ total, processing = false, error = '', onComplete, onCan
 
         <div className="flex gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
           <button type="button" onClick={onCancel} disabled={processing} className="min-h-12 flex-1 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-          <button type="submit" disabled={!canSubmit || processing} className="inline-flex min-h-12 flex-[1.4] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-orange-500 px-5 text-sm font-bold text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-45">
+          <button type="submit" disabled={!canSubmit || processing} className="inline-flex min-h-12 flex-[1.4] items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 text-sm font-bold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-45">
             {processing && <Loader2 size={17} className="animate-spin" />}
             {processing ? 'Completing sale…' : `Charge ${formatCurrency(total)}`}
           </button>
