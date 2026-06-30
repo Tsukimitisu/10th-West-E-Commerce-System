@@ -356,8 +356,19 @@ app.get('/api/csrf-token', generateCsrfToken, (req, res) => {
 });
 
 // API Routes
-// C6: Apply stricter rate limiting to auth endpoints (20 req / 15 min)
-app.use('/api/auth', authLimiter, authRoutes);
+// Apply the strict credential rate limit only to authentication mutations.
+// Session/profile/permission reads have the general API limit so normal
+// dashboard refreshes cannot exhaust the sign-in budget.
+const credentialAuthPaths = new Set([
+  '/login', '/register', '/send-otp', '/verify-otp', '/forgot-password',
+  '/reset-password', '/resend-verification', '/verify-email',
+]);
+app.use('/api/auth', (req, res, next) => {
+  if (req.method === 'POST' && credentialAuthPaths.has(req.path)) {
+    return authLimiter(req, res, next);
+  }
+  return next();
+}, authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/cart', cartRoutes);
