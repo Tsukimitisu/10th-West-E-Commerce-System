@@ -582,3 +582,39 @@ export const getPosSalesReport = async (req, res) => {
     return res.status(500).json({ message: 'POS sales report could not be loaded.' });
   }
 };
+
+export const getReturnRefundReport = async (req, res) => {
+  const { range = '30d', start_date, end_date } = req.query;
+  try {
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date, alias: 'r' });
+    const result = await pool.query(`
+      SELECT r.id, r.order_id, r.status, r.return_type, r.reason, r.refund_amount,
+             r.created_at, rf.status AS refund_status, rf.amount AS processed_refund,
+             rf.method AS refund_method, rf.processed_at
+      FROM returns r
+      LEFT JOIN refunds rf ON rf.return_id = r.id
+      WHERE 1=1 ${dateFilter.sql}
+      ORDER BY r.created_at DESC
+    `, dateFilter.params);
+    const rows = result.rows.map((row) => ({
+      ...row,
+      refund_amount: toNumber(row.refund_amount),
+      processed_refund: toNumber(row.processed_refund),
+    }));
+    return res.json({
+      range,
+      total_returns: rows.length,
+      pending_returns: rows.filter((row) => ['pending', 'requested'].includes(row.status)).length,
+      approved_returns: rows.filter((row) => row.status === 'approved').length,
+      rejected_returns: rows.filter((row) => row.status === 'rejected').length,
+      processed_refunds: rows.filter((row) => ['completed', 'paid', 'succeeded'].includes(row.refund_status)).length,
+      refunded_amount: rows
+        .filter((row) => ['completed', 'paid', 'succeeded'].includes(row.refund_status))
+        .reduce((sum, row) => sum + row.processed_refund, 0),
+      returns: rows,
+    });
+  } catch (error) {
+    console.error('Return/refund report error:', error);
+    return res.status(500).json({ message: 'Return and refund report could not be loaded.' });
+  }
+};

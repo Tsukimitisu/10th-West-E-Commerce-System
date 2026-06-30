@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getSalesReport, getSalesByChannel, getTopProducts, getDailySalesTrend, getStockLevelsReport, getProfitReport, getOrders } from '../../services/api';
+import { getSalesReport, getSalesByChannel, getTopProducts, getDailySalesTrend, getStockLevelsReport, getProfitReport, getPosSalesReport, getReturnRefundReport, getOrders } from '../../services/api';
 import { BarChart3, Download, Calendar, TrendingUp, Package, DollarSign, ShoppingBag, Boxes, FileText, Printer, Users } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
 import ChartCard from '../../components/owner/ChartCard';
@@ -14,6 +14,8 @@ const ReportsView = () => {
   const [salesTrend, setSalesTrend] = useState([]);
   const [stockLevels, setStockLevels] = useState([]);
   const [profitReport, setProfitReport] = useState(null);
+  const [posReport, setPosReport] = useState(null);
+  const [returnReport, setReturnReport] = useState(null);
   const [customerActivity, setCustomerActivity] = useState({ total: 0, newThisMonth: 0, mostActive: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -22,13 +24,15 @@ const ReportsView = () => {
     setLoading(true);
     setError('');
     try {
-      const [sales, channels, top, trend, stock, profit, orders] = await Promise.all([
+      const [sales, channels, top, trend, stock, profit, pos, returnsAndRefunds, orders] = await Promise.all([
         getSalesReport(dateRange).catch(() => null),
         getSalesByChannel(dateRange).catch(() => []),
         getTopProducts(10, dateRange).catch(() => []),
         getDailySalesTrend(dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90).catch(() => []),
         getStockLevelsReport().catch(() => []),
         getProfitReport(dateRange).catch(() => null),
+        getPosSalesReport(dateRange).catch(() => null),
+        getReturnRefundReport(dateRange).catch(() => null),
         getOrders().catch(() => []),
       ]);
       setSalesReport(sales); setChannelData(Array.isArray(channels) ? channels.map((row) => ({
@@ -38,6 +42,7 @@ const ReportsView = () => {
       })) : []);
       setTopProducts(Array.isArray(top) ? top : []); setSalesTrend(Array.isArray(trend) ? trend : []);
       setStockLevels(Array.isArray(stock?.by_category) ? stock.by_category : []); setProfitReport(profit);
+      setPosReport(pos); setReturnReport(returnsAndRefunds);
 
       // Build customer activity from orders
       const allOrders = Array.isArray(orders) ? orders : [];
@@ -77,6 +82,8 @@ const ReportsView = () => {
     { id: 'products', label: 'Products', icon: Package },
     { id: 'inventory', label: 'Inventory', icon: Boxes },
     { id: 'financial', label: 'Financial', icon: DollarSign },
+    { id: 'pos', label: 'POS', icon: ShoppingBag },
+    { id: 'returns', label: 'Returns', icon: Calendar },
     { id: 'customers', label: 'Customers', icon: Users },
   ];
 
@@ -345,6 +352,43 @@ const ReportsView = () => {
                     <Bar dataKey="revenue" fill="#f97316" name="Revenue" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+              </ChartCard>
+            </div>
+          )}
+
+          {tab === 'pos' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  ['Completed sales', posReport?.total_sales || 0],
+                  ['POS revenue', `₱${Number(posReport?.total_revenue || 0).toLocaleString()}`],
+                  ['Voided sales', posReport?.voided_sales || 0],
+                ].map(([label, value]) => <div key={label} className="rounded-xl border border-gray-700 bg-gray-800 p-4"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p></div>)}
+              </div>
+              <ChartCard title="POS transactions">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b border-gray-700 text-left text-xs text-gray-400"><th className="p-3">Receipt</th><th className="p-3">Status</th><th className="p-3">Payment</th><th className="p-3">Date</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{(posReport?.sales || []).map((sale) => <tr key={sale.id} className="border-b border-gray-700/60"><td className="p-3 text-white">{sale.receipt_number}</td><td className="p-3 text-gray-300">{sale.voided_at ? 'voided' : sale.status}</td><td className="p-3 text-gray-300">{sale.payment_status}</td><td className="p-3 text-gray-300">{new Date(sale.created_at).toLocaleDateString()}</td><td className="p-3 text-right font-semibold text-white">₱{Number(sale.total_amount).toLocaleString()}</td></tr>)}</tbody></table>
+                  {!posReport?.sales?.length && <p className="p-8 text-center text-sm text-gray-400">No valid POS transactions in this period.</p>}
+                </div>
+              </ChartCard>
+            </div>
+          )}
+
+          {tab === 'returns' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {[
+                  ['Returns', returnReport?.total_returns || 0],
+                  ['Pending', returnReport?.pending_returns || 0],
+                  ['Refunds processed', returnReport?.processed_refunds || 0],
+                  ['Refunded amount', `₱${Number(returnReport?.refunded_amount || 0).toLocaleString()}`],
+                ].map(([label, value]) => <div key={label} className="rounded-xl border border-gray-700 bg-gray-800 p-4"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p></div>)}
+              </div>
+              <ChartCard title="Return and refund activity">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b border-gray-700 text-left text-xs text-gray-400"><th className="p-3">Return</th><th className="p-3">Order</th><th className="p-3">Return status</th><th className="p-3">Refund status</th><th className="p-3 text-right">Amount</th></tr></thead><tbody>{(returnReport?.returns || []).map((item) => <tr key={item.id} className="border-b border-gray-700/60"><td className="p-3 text-white">#{item.id}</td><td className="p-3 text-gray-300">#{item.order_id}</td><td className="p-3 text-gray-300">{item.status}</td><td className="p-3 text-gray-300">{item.refund_status || 'Not processed'}</td><td className="p-3 text-right font-semibold text-white">₱{Number(item.processed_refund || item.refund_amount || 0).toLocaleString()}</td></tr>)}</tbody></table>
+                  {!returnReport?.returns?.length && <p className="p-8 text-center text-sm text-gray-400">No return or refund activity in this period.</p>}
+                </div>
               </ChartCard>
             </div>
           )}
