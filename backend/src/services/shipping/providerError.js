@@ -29,8 +29,22 @@ export const upstreamFailure = (provider, operation, status = 502) => new Provid
   { code: 'PROVIDER_UPSTREAM_ERROR', status, provider }
 );
 
-export const publicProviderError = (error) => ({
-  message: error?.message || 'Shipping provider request failed.',
-  code: error?.code || 'PROVIDER_ERROR',
-  provider: error?.provider || undefined,
-});
+export const providerHttpStatus = (error) => (
+  error instanceof ProviderError && Number.isInteger(error.status) ? error.status : 500
+);
+
+export const publicProviderError = (error) => {
+  if (!(error instanceof ProviderError)) {
+    return {
+      success: false,
+      code: 'SHIPPING_PROVIDER_ERROR',
+      message: 'Shipping provider is unavailable or not configured.',
+    };
+  }
+  return {
+    success: false,
+    code: error.code,
+    message: error.message,
+    provider: error.provider || undefined,
+  };
+};

@@ -6,7 +6,7 @@ import {
   createShipment,
   generateWaybill as generateProviderWaybill,
 } from '../services/shipping/shippingService.js';
-import { publicProviderError } from '../services/shipping/providerError.js';
+import { providerHttpStatus, publicProviderError } from '../services/shipping/providerError.js';
 import {
   getSelectedShippingProviderName,
 } from '../services/shipping/providers/index.js';
@@ -36,10 +36,11 @@ const validOrderId = (value) => {
 };
 
 const providerFailure = (res, error, fallback) => {
-  const status = Number(error?.status) || 500;
+  const status = providerHttpStatus(error);
+  const publicError = publicProviderError(error);
   return res.status(status).json({
-    ...publicProviderError(error),
-    message: error?.message || fallback,
+    ...publicError,
+    message: publicError.message || fallback,
   });
 };
 
