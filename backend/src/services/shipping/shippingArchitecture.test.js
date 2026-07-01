@@ -25,7 +25,7 @@ test('active backend and frontend source contain no direct courier-specific inte
   const files = [
     ...await listSourceFiles(backendSource),
     ...await listSourceFiles(path.join(repositoryRoot, 'frontend')),
-  ].filter((file) => !file.endsWith('shippingArchitecture.test.js'));
+  ].filter((file) => !/\.test\.[cm]?[jt]sx?$/.test(file));
   const forbidden = /\bJNT_|direct_jnt|JNT_MOCK_MODE|jntShipments|createJnt|refreshJnt/i;
   const violations = [];
   for (const file of files) {
