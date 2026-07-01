@@ -6,6 +6,7 @@ import { authenticateToken, requirePermission, requireRole } from '../middleware
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import { getShippingConfigurationStatus } from '../services/shipping/providers/index.js';
+import { getShippingOperationalReadiness } from '../services/shipping/shippingReadiness.js';
 import { getTrackingConfigurationStatus } from '../services/tracking/providers/index.js';
 
 const router = express.Router();
@@ -127,20 +128,7 @@ router.get('/readiness', async (_req, res) => {
     const paymongo = getPaymongoConfigurationStatus();
     const shipping = getShippingConfigurationStatus();
     const tracking = getTrackingConfigurationStatus();
-    const activity = await pool.query(
-      `SELECT
-         MAX(booked_at) FILTER (WHERE provider_shipment_id IS NOT NULL) AS last_successful_booking,
-         MAX(last_tracking_refresh_at) AS last_tracking_refresh,
-         MAX(webhook_received_at) AS last_webhook_received
-       FROM shipments`
-    );
-    const recentErrors = await pool.query(
-      `SELECT order_id, booking_error AS message, updated_at
-       FROM shipments
-       WHERE booking_error IS NOT NULL
-       ORDER BY updated_at DESC
-       LIMIT 5`
-    );
+    const activity = await getShippingOperationalReadiness(pool);
     return res.json({
       status: 'ready',
       database: 'ok',
@@ -176,8 +164,7 @@ router.get('/readiness', async (_req, res) => {
           process.env.SHIPPER_CITY,
           process.env.SHIPPER_POSTAL_CODE,
         ].every(Boolean),
-        ...activity.rows[0],
-        recent_provider_errors: recentErrors.rows,
+        ...activity,
       },
       timestamp: new Date().toISOString(),
     });
