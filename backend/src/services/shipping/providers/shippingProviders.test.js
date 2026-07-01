@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import bigsellerProvider from './bigsellerProvider.js';
+import bigsellerProvider, { BIGSELLER_CONTRACT_REQUIREMENTS } from './bigsellerProvider.js';
 import mockProvider from './mockShippingProvider.js';
 import { getShippingProvider } from './index.js';
 
@@ -90,6 +90,24 @@ test('BigSeller configuration rejects routes outside its verified Philippine car
     assert.equal(status.configured, false);
     assert.equal(status.status, 'unsupported_market_or_carrier');
   });
+});
+
+test('BigSeller publishes contract requirements without inventing provider operations', () => {
+  assert.deepEqual(BIGSELLER_CONTRACT_REQUIREMENTS, [
+    'api_base_url',
+    'app_key',
+    'app_secret',
+    'access_token',
+    'warehouse_id',
+    'jtexpress_ph_logistics_channel_code',
+    'create_shipment_or_fulfillment_endpoint',
+    'waybill_or_label_endpoint',
+    'tracking_endpoint_if_supported',
+    'webhook_signature_method',
+  ]);
+  const status = bigsellerProvider.getConfigurationStatus();
+  assert.equal(status.implemented, false);
+  assert.equal(status.implementationNeeded, true);
 });
 
 test('development mock returns explicitly simulated records', async () => {

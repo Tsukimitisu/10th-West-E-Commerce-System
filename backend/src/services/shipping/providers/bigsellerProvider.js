@@ -3,7 +3,20 @@ import { configuration, envValue } from './providerUtils.js';
 
 const PROVIDER = 'bigseller';
 // BigSeller Open API access and its private contract must be approved before the
-// shell below can safely make booking or fulfillment requests.
+// shell below can safely make booking or fulfillment requests. Do not implement
+// requests by inferring portal behavior or copying undocumented endpoints.
+export const BIGSELLER_CONTRACT_REQUIREMENTS = [
+  'api_base_url',
+  'app_key',
+  'app_secret',
+  'access_token',
+  'warehouse_id',
+  'jtexpress_ph_logistics_channel_code',
+  'create_shipment_or_fulfillment_endpoint',
+  'waybill_or_label_endpoint',
+  'tracking_endpoint_if_supported',
+  'webhook_signature_method',
+];
 const REQUIRED = [
   'BIGSELLER_API_BASE_URL',
   'BIGSELLER_APP_KEY',
@@ -33,6 +46,8 @@ export const getConfigurationStatus = () => {
     configured: status.configured && supportedRoute,
     ready: status.ready && supportedRoute,
     supportedRoute,
+    implementationNeeded: !status.implemented,
+    contractRequirements: BIGSELLER_CONTRACT_REQUIREMENTS,
     status: supportedRoute ? status.status : 'unsupported_market_or_carrier',
   };
 };
