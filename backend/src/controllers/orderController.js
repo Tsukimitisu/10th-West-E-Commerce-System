@@ -180,8 +180,6 @@ const mapOrderRecord = (order) => ({
   waybill_number: normalizeText(order.waybill_number),
   waybill_status: normalizeWaybillStatus(order.waybill_status),
   waybill_generated_at: order.waybill_generated_at || null,
-  waybill_label_payload: order.waybill_label_payload || null,
-  courier_metadata: order.courier_metadata || null,
   payment_provider: normalizeText(order.payment_provider),
   payment_status: normalizeText(order.payment_status) || (['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered'].includes(String(order.status || '').toLowerCase()) ? 'paid' : 'pending'),
   payment_reference: normalizeText(order.payment_reference),
