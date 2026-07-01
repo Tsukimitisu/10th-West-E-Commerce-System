@@ -395,13 +395,37 @@ export const shipmentWebhook = async (req, res) => {
        LIMIT 1`,
       [trackingNumber || null, providerTrackingId || null]
     );
-    if (!shipmentResult.rowCount) return res.status(404).json({ message: 'Shipment not found.' });
+    if (!shipmentResult.rowCount) {
+      await writeAudit(pool, req, 'shipment.webhook_unmatched', 'shipping_webhook', providerTrackingId || trackingNumber, {
+        provider: tracking.provider || getSelectedTrackingProviderName(),
+        event_type: String(req.body?.event_type || req.body?.event || 'tracking_update').slice(0, 100),
+        tracking_number: trackingNumber || null,
+        normalized_status: tracking.normalizedStatus || null,
+        signature_verified: true,
+      }).catch(() => {});
+      return res.status(404).json({ message: 'Shipment not found.' });
+    }
     await applyTrackingResult(shipmentResult.rows[0], {
       ...tracking,
       events: result.events || tracking.events || [],
     }, { webhook: true });
+    await writeAudit(pool, req, 'shipment.webhook', 'shipment', shipmentResult.rows[0].id, {
+      provider: tracking.provider || getSelectedTrackingProviderName(),
+      event_type: String(req.body?.event_type || req.body?.event || 'tracking_update').slice(0, 100),
+      order_id: shipmentResult.rows[0].order_id,
+      tracking_number: trackingNumber || shipmentResult.rows[0].tracking_number || null,
+      normalized_status: tracking.normalizedStatus || null,
+      signature_verified: true,
+    });
     return res.json({ message: 'SUCCESS' });
   } catch (error) {
+    if (error?.code === 'INVALID_WEBHOOK_SIGNATURE') {
+      await writeAudit(pool, req, 'shipment.webhook_rejected', 'shipping_webhook', getSelectedTrackingProviderName(), {
+        provider: getSelectedTrackingProviderName(),
+        signature_verified: false,
+        code: 'INVALID_WEBHOOK_SIGNATURE',
+      }).catch(() => {});
+    }
     console.error('Tracking webhook failed:', error.code || error.message);
     return providerFailure(res, error, 'Tracking webhook could not be processed.');
   }
