@@ -35,8 +35,17 @@ export const configuration = (
   };
 };
 
-export const normalizeStatus = (value) => {
+export const normalizeStatus = (value, detail = '') => {
   const status = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const statusDetail = String(detail || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const combined = `${status}_${statusDetail}`;
+  if (
+    /return(ed)?_to_(sender|origin)|return_to_(sender|origin)|exception_011/.test(combined)
+    || ['returned', 'returning', 'return_to_sender', 'return_to_origin', 'rts'].includes(status)
+  ) {
+    return 'returned';
+  }
+  if (['cancelled', 'canceled', 'cancel'].includes(status)) return 'cancelled';
   const aliases = {
     info_received: 'pending',
     created: 'pending',
