@@ -27,7 +27,11 @@ export const getShippingOperationalReadiness = async (db) => {
     return {
       ...emptyActivity(),
       ...activity.rows[0],
-      recent_provider_errors: recentErrors.rows,
+      recent_provider_errors: recentErrors.rows.map((row) => ({
+        order_id: row.order_id,
+        message: 'Shipping provider operation failed.',
+        updated_at: row.updated_at,
+      })),
     };
   } catch (error) {
     if (SCHEMA_ERROR_CODES.has(error?.code)) {

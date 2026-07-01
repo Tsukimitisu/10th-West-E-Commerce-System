@@ -6,6 +6,10 @@ import {
 import { getSystemHealth, getSystemSettings, updateSystemSettings } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
 
+const formatOperationalTimestamp = (value) => (
+  value ? new Date(value).toLocaleString('en-PH') : 'No activity recorded'
+);
+
 const SystemConfigView = () => {
   const [tab, setTab] = useState('store');
   const [saving, setSaving] = useState(false);
@@ -212,6 +216,35 @@ const SystemConfigView = () => {
                 <p className="mt-1 text-xs text-gray-400">{detail || 'Not configured'}</p>
               </div>
             ))}
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {[
+              ['Last successful booking', providerHealth?.shipping_activity?.last_successful_booking],
+              ['Last tracking refresh', providerHealth?.shipping_activity?.last_tracking_refresh],
+              ['Last webhook received', providerHealth?.shipping_activity?.last_webhook_received],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-gray-700 bg-gray-900 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
+                <p className="mt-1 text-sm font-semibold text-white">{formatOperationalTimestamp(value)}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg border border-gray-700 bg-gray-900 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Recent provider errors</p>
+            {providerHealth?.shipping_activity?.recent_provider_errors?.length ? (
+              <div className="mt-3 space-y-2">
+                {providerHealth.shipping_activity.recent_provider_errors.map((error, index) => (
+                  <div key={`${error.order_id || 'provider'}-${error.updated_at || index}`} className="rounded-md border border-red-900/40 bg-red-950/20 p-3">
+                    <p className="text-sm font-medium text-red-200">{error.message || 'Shipping provider operation failed.'}</p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      {error.order_id ? `Order #${error.order_id} · ` : ''}{formatOperationalTimestamp(error.updated_at)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-gray-400">No provider errors recorded.</p>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <Input label="Free Shipping Threshold (₱)" value={shipping.free_threshold} onChange={(e) => setShipping({ ...shipping, free_threshold: e.target.value })} placeholder="3000" type="number" hint="Orders above this amount get free shipping" />

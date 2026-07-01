@@ -29,4 +29,5 @@ test('shipping readiness returns sanitized operational activity', async () => {
   assert.equal(result.schema_status, 'ready');
   assert.equal(result.last_successful_booking, '2026-07-01');
   assert.equal(result.recent_provider_errors.length, 1);
+  assert.equal(result.recent_provider_errors[0].message, 'Shipping provider operation failed.');
 });
