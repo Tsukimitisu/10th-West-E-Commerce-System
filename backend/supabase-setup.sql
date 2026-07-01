@@ -1495,13 +1495,14 @@ INSERT INTO system_settings (category, key, value) VALUES
 ON CONFLICT (category, key) DO NOTHING;
 
 -- Shipping Rates
+-- Provider selection is configured at runtime with SHIPPING_PROVIDER,
+-- TRACKING_PROVIDER, and SHIPPING_CARRIER. No direct courier credentials live here.
 INSERT INTO shipping_rates (method, label, base_fee, min_purchase_free, estimated_days, is_active)
 SELECT v.method, v.label, v.base_fee, v.min_purchase_free, v.estimated_days, v.is_active
 FROM (VALUES
-  ('standard', 'Standard Shipping', 150.00, 3000.00, '3-5 business days', FALSE),
+  ('standard', 'Standard Provider Delivery', 150.00, 2500.00, '3-5 business days', TRUE),
   ('express',  'Express Shipping',  350.00, NULL,     '1-2 business days', FALSE),
-  ('pickup',   'Store Pickup',      0.00,   NULL,     'Same day',          FALSE),
-  ('standard', 'Standard Delivery', 150.00, 2500.00,  '3-5 business days', TRUE)
+  ('pickup',   'Store Pickup',      0.00,   NULL,     'Same day',          FALSE)
 ) AS v(method, label, base_fee, min_purchase_free, estimated_days, is_active)
 WHERE NOT EXISTS (SELECT 1 FROM shipping_rates sr WHERE sr.method = v.method);
 
