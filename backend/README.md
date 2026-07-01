@@ -55,9 +55,15 @@ npm run migrate:down
 
 5. Optional: run seed scripts:
 ```bash
+set ALLOW_DEVELOPMENT_SEED=true
+# Set all SEED_*_PASSWORD values to unique passwords of at least 12 characters.
 node src/database/seed.js
 node src/database/seed-sprint6.js
 ```
+
+Seed accounts are refused outside development/test. To disable and rotate any
+legacy seeded accounts, run `npm run security:disable-seeded-accounts` with
+`CONFIRM_SECURE_SEEDED_ACCOUNTS=true`.
 
 ## Running the Server
 
@@ -93,23 +99,10 @@ The API will run on `http://localhost:5000`
 - `PUT /api/categories/:id` - Update category (admin only)
 - `DELETE /api/categories/:id` - Delete category (admin only)
 
-## Default Users (After Seeding)
+## Development Seed Users
 
-**Super Admin:**
-- Email: superadmin@10thwest.com
-- Password: Admin@123
-
-**Store Owner:**
-- Email: owner@10thwest.com
-- Password: Admin@123
-
-**Store Staff:**
-- Email: staff@10thwest.com
-- Password: Staff@123
-
-**Customer:**
-- Email: customer@10thwest.com
-- Password: Customer@123
+Development seed users use only the explicit `SEED_*_PASSWORD` values supplied
+by the developer. No default passwords are stored in this repository.
 
 ## Project Structure
 

@@ -15,6 +15,7 @@
     "migrate:legacy": "node src/database/migrate.js",
     "migrate:auth:legacy": "node src/database/migrate-auth.js",
     "audit:integrity": "node scripts/integrity-audit.js",
+    "security:disable-seeded-accounts": "node scripts/secure-seeded-accounts.js",
     "lint": "eslint ."
   },
   "keywords": [

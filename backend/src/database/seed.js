@@ -2,6 +2,23 @@ import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
 
 const seedData = async () => {
+  const environment = String(process.env.NODE_ENV || 'development').toLowerCase();
+  if (!['development', 'test'].includes(environment)) {
+    throw new Error('Seed accounts are disabled outside development and test environments.');
+  }
+  if (String(process.env.ALLOW_DEVELOPMENT_SEED || '').toLowerCase() !== 'true') {
+    throw new Error('Set ALLOW_DEVELOPMENT_SEED=true explicitly to create development seed accounts.');
+  }
+  const seedPasswords = {
+    superAdmin: process.env.SEED_SUPER_ADMIN_PASSWORD,
+    owner: process.env.SEED_OWNER_PASSWORD,
+    staff: process.env.SEED_STAFF_PASSWORD,
+    customer: process.env.SEED_CUSTOMER_PASSWORD,
+  };
+  if (Object.values(seedPasswords).some((password) => !password || password.length < 12)) {
+    throw new Error('All SEED_*_PASSWORD values must be explicitly set and contain at least 12 characters.');
+  }
+
   const client = await pool.connect();
   
   try {
@@ -23,10 +40,10 @@ const seedData = async () => {
     }
 
     // Seed Users (4 roles only)
-    const hashedSuperAdminPassword = await bcrypt.hash('Admin@123', 10);
-    const hashedOwnerPassword = await bcrypt.hash('Admin@123', 10);
-    const hashedStaffPassword = await bcrypt.hash('Staff@123', 10);
-    const hashedCustomerPassword = await bcrypt.hash('Customer@123', 10);
+    const hashedSuperAdminPassword = await bcrypt.hash(seedPasswords.superAdmin, 10);
+    const hashedOwnerPassword = await bcrypt.hash(seedPasswords.owner, 10);
+    const hashedStaffPassword = await bcrypt.hash(seedPasswords.staff, 10);
+    const hashedCustomerPassword = await bcrypt.hash(seedPasswords.customer, 10);
 
     await client.query(`
       INSERT INTO users (name, email, password_hash, role, phone) VALUES
