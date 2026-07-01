@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeStatus } from './providerUtils.js';
+import { normalizeStatus, toPublicProviderStatus } from './providerUtils.js';
 
 test('normalizes standard shipment statuses', () => {
   assert.equal(normalizeStatus('Delivered'), 'delivered');
@@ -18,4 +18,12 @@ test('normalizes returned-to-sender variants before generic exceptions', () => {
   assert.equal(normalizeStatus('Return to origin'), 'returned');
   assert.equal(normalizeStatus('returned'), 'returned');
   assert.equal(normalizeStatus('RTS'), 'returned');
+});
+
+test('maps internal readiness to public-safe provider statuses', () => {
+  assert.equal(toPublicProviderStatus({ ready: true }), 'configured');
+  assert.equal(toPublicProviderStatus({ status: 'blocked_by_credentials' }), 'blocked_by_credentials');
+  assert.equal(toPublicProviderStatus({ status: 'not_implemented' }), 'not_implemented');
+  assert.equal(toPublicProviderStatus({ mock: true, status: 'development_mock' }), 'mock_dev_only');
+  assert.equal(toPublicProviderStatus({ status: 'unsupported_provider' }), 'unavailable');
 });

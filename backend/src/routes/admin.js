@@ -6,6 +6,7 @@ import { authenticateToken, requirePermission, requireRole } from '../middleware
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import { getShippingConfigurationStatus } from '../services/shipping/providers/index.js';
+import { toPublicProviderStatus } from '../services/shipping/providers/providerUtils.js';
 import { getShippingOperationalReadiness } from '../services/shipping/shippingReadiness.js';
 import { getTrackingConfigurationStatus } from '../services/tracking/providers/index.js';
 
@@ -136,7 +137,7 @@ router.get('/readiness', async (_req, res) => {
         paymongo: paymongo.configured ? 'configured' : 'blocked_by_credentials',
         shipping: {
           provider: shipping.provider,
-          status: shipping.status,
+          status: toPublicProviderStatus(shipping),
           ready: shipping.ready,
           country: String(process.env.SHIPPING_COUNTRY || 'PH').toUpperCase(),
           carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
@@ -144,7 +145,7 @@ router.get('/readiness', async (_req, res) => {
         },
         tracking: {
           provider: tracking.provider,
-          status: tracking.status,
+          status: toPublicProviderStatus(tracking),
           ready: tracking.ready,
           carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
         },

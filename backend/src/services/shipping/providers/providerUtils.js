@@ -83,3 +83,11 @@ export const safeJson = async (response) => {
     return null;
   }
 };
+
+export const toPublicProviderStatus = (status = {}) => {
+  if (status.mock && status.status === 'development_mock') return 'mock_dev_only';
+  if (status.ready) return 'configured';
+  if (status.status === 'blocked_by_credentials') return 'blocked_by_credentials';
+  if (status.status === 'not_implemented') return 'not_implemented';
+  return 'unavailable';
+};

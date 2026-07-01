@@ -58,6 +58,7 @@ import pool from './config/database.js';
 import { startExpiredReservationCleanup } from './controllers/secureCheckoutController.js';
 import { getPaymongoConfigurationStatus } from './services/paymongo.js';
 import { getShippingConfigurationStatus } from './services/shipping/providers/index.js';
+import { toPublicProviderStatus } from './services/shipping/providers/providerUtils.js';
 import { getTrackingConfigurationStatus } from './services/tracking/providers/index.js';
 import { startMaintenanceWorkers } from './services/maintenance.js';
 
@@ -345,10 +346,12 @@ app.get('/api/ready', async (_req, res) => {
       database: 'ok',
       shipping_provider: shipping.provider,
       shipping_provider_configured: shipping.ready,
+      shipping_status: toPublicProviderStatus(shipping),
       shipping_country: String(process.env.SHIPPING_COUNTRY || 'PH').toUpperCase(),
       shipping_carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
       tracking_provider: tracking.provider,
       tracking_provider_configured: tracking.ready,
+      tracking_status: toPublicProviderStatus(tracking),
       mock_shipping_blocked_in_production: process.env.NODE_ENV === 'production' && shipping.mock,
       timestamp: new Date().toISOString(),
     });
