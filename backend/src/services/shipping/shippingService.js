@@ -1,8 +1,17 @@
 import { getShippingProvider } from './providers/index.js';
+import { notConfigured, notImplemented } from './providerError.js';
 
 const invoke = (operation, payload) => {
   const provider = getShippingProvider();
   return provider[operation](payload);
+};
+
+export const assertShippingOperationAvailable = (operation) => {
+  const provider = getShippingProvider();
+  const status = provider.validateConfig();
+  if (!status.configured) throw notConfigured(provider.name);
+  if (!status.implemented) throw notImplemented(provider.name, operation);
+  return provider;
 };
 
 export const calculateRates = (payload) => invoke('calculateRates', payload);

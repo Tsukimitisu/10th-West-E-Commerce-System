@@ -5,11 +5,13 @@ import {
   cancelShipment as cancelProviderShipment,
   createShipment,
   generateWaybill as generateProviderWaybill,
+  assertShippingOperationAvailable,
 } from '../services/shipping/shippingService.js';
 import { providerHttpStatus, publicProviderError } from '../services/shipping/providerError.js';
 import {
   getSelectedShippingProviderName,
 } from '../services/shipping/providers/index.js';
+import { assertShippingProviderSchema } from '../services/shipping/shippingSchema.js';
 import {
   getSelectedTrackingProviderName,
 } from '../services/tracking/providers/index.js';
@@ -255,6 +257,7 @@ export const bookShipment = async (req, res) => {
   let shipmentId = null;
   let providerBooked = false;
   try {
+    await assertShippingProviderSchema(pool);
     const existing = await pool.query('SELECT * FROM shipments WHERE order_id = $1', [orderId]);
     if (existing.rows[0] && existing.rows[0].booking_idempotency_key !== key) {
       return res.status(409).json({ message: 'This order already has a shipment booking attempt.' });
@@ -264,6 +267,10 @@ export const bookShipment = async (req, res) => {
     const payload = await loadOrderPayload(orderId);
     if (!payload) return res.status(404).json({ message: 'Order not found.' });
     assertBookable(payload.order);
+    await writeAudit(pool, req, 'shipment.book_attempt', 'order', orderId, {
+      shipping_provider: getSelectedShippingProviderName(),
+    });
+    assertShippingOperationAvailable('shipment booking');
 
     const shippingProvider = getSelectedShippingProviderName();
     const trackingProvider = getSelectedTrackingProviderName();
@@ -357,6 +364,10 @@ export const bookShipment = async (req, res) => {
       }
       await recordProviderError(shipmentId, 'booking', error);
     }
+    await writeAudit(pool, req, 'shipment.book_failed', 'order', orderId, {
+      code: publicProviderError(error).code,
+      shipment_id: shipmentId,
+    }).catch(() => {});
     if (error.status === 409) return res.status(409).json({ message: error.message });
     console.error('Shipment booking failed:', error.code || error.message);
     return providerFailure(res, error, 'Shipment booking failed.');
