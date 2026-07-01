@@ -2,6 +2,8 @@ import { notConfigured, notImplemented } from '../../shipping/providerError.js';
 import { configuration } from '../../shipping/providers/providerUtils.js';
 
 const PROVIDER = 'trackingmore';
+// Reserved adapter shell. It is intentionally not registered in providers/index.js
+// until the current API and webhook signature contract are implemented and tested.
 const REQUIRED = ['TRACKINGMORE_API_KEY', 'TRACKINGMORE_WEBHOOK_SECRET'];
 
 export const getConfigurationStatus = () => configuration(PROVIDER, REQUIRED, {

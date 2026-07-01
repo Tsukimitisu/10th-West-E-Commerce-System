@@ -1,14 +1,12 @@
 import aftershipProvider from './aftershipProvider.js';
 import mockProvider from './mockTrackingProvider.js';
 import shippingProvider from './shippingProviderTracking.js';
-import trackingMoreProvider from './trackingmoreProvider.js';
 import { ProviderError } from '../../shipping/providerError.js';
 
 const PROVIDERS = {
   aftership: aftershipProvider,
   mock: mockProvider,
   shipping_provider: shippingProvider,
-  trackingmore: trackingMoreProvider,
 };
 
 export const getSelectedTrackingProviderName = () => String(

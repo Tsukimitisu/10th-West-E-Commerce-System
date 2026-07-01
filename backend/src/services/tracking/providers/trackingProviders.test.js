@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import test from 'node:test';
 import aftershipProvider from './aftershipProvider.js';
 import trackingMoreProvider from './trackingmoreProvider.js';
+import { getTrackingProvider } from './index.js';
 
 const ENV_NAMES = [
   'AFTERSHIP_API_KEY',
@@ -92,10 +93,17 @@ test('TrackingMore remains a safe shell without credentials or an assumed contra
   });
 });
 
-test('selectable tracking providers declare Philippine carrier support', () => {
+test('tracking adapter shells declare Philippine carrier support', () => {
   for (const provider of [aftershipProvider, trackingMoreProvider]) {
     const status = provider.getConfigurationStatus();
     assert.ok(status.markets.includes('PH'));
     assert.ok(status.carriers.includes('jtexpress-ph'));
   }
+});
+
+test('TrackingMore cannot be selected until its contract is implemented', () => {
+  assert.throws(
+    () => getTrackingProvider('trackingmore'),
+    (error) => error.code === 'UNSUPPORTED_TRACKING_PROVIDER' && error.status === 503
+  );
 });
