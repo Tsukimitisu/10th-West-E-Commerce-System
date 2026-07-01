@@ -11,7 +11,7 @@ import { providerHttpStatus, publicProviderError } from '../services/shipping/pr
 import {
   getSelectedShippingProviderName,
 } from '../services/shipping/providers/index.js';
-import { assertShippingProviderSchema } from '../services/shipping/shippingSchema.js';
+import { assertShippingProviderSchema, assertWaybillProviderSchema } from '../services/shipping/shippingSchema.js';
 import {
   getSelectedTrackingProviderName,
 } from '../services/tracking/providers/index.js';
@@ -524,6 +524,12 @@ export const generateWaybill = async (req, res) => {
   const orderId = validOrderId(req.params.orderId);
   if (!orderId) return res.status(400).json({ message: 'Invalid order ID.' });
   try {
+    await assertShippingProviderSchema(pool);
+    await assertWaybillProviderSchema(pool);
+    await writeAudit(pool, req, 'waybill.generate_attempt', 'order', orderId, {
+      shipping_provider: getSelectedShippingProviderName(),
+    });
+    assertShippingOperationAvailable('waybill generation');
     const existing = await pool.query(
       `SELECT w.*, s.shipping_provider, s.tracking_number, s.provider_shipment_id,
               s.id AS linked_shipment_id, s.status AS shipment_status
@@ -600,6 +606,10 @@ export const generateWaybill = async (req, res) => {
       [orderId]
     ).catch(() => ({ rows: [] }));
     await recordProviderError(failedShipment.rows[0]?.id, 'waybill_generation', error);
+    await writeAudit(pool, req, 'waybill.generate_failed', 'order', orderId, {
+      code: publicProviderError(error).code,
+      shipment_id: failedShipment.rows[0]?.id || null,
+    }).catch(() => {});
     console.error('Waybill generation failed:', error.code || error.message);
     return providerFailure(res, error, 'Waybill could not be generated.');
   }

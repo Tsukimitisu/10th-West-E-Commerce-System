@@ -26,3 +26,22 @@ export const assertShippingProviderSchema = async (db) => {
     });
   }
 };
+
+export const assertWaybillProviderSchema = async (db) => {
+  const required = ['provider', 'label_url', 'last_reprinted_at'];
+  const result = await db.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'waybills'
+       AND column_name = ANY($1::text[])`,
+    [required]
+  );
+  const found = new Set(result.rows.map((row) => row.column_name));
+  if (required.some((column) => !found.has(column))) {
+    throw new ProviderError('Waybill storage is not ready. Apply pending database migrations.', {
+      code: 'WAYBILL_SCHEMA_NOT_READY',
+      status: 503,
+    });
+  }
+};

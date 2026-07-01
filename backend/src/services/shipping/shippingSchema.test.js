@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assertShippingProviderSchema } from './shippingSchema.js';
+import { assertShippingProviderSchema, assertWaybillProviderSchema } from './shippingSchema.js';
 
 const requiredRows = [
   'shipping_provider',
@@ -26,4 +26,19 @@ test('shipping schema guard returns a safe service error for incomplete schema',
       && !/column .* does not exist/i.test(error.message)
     )
   );
+});
+
+test('waybill schema guard rejects incomplete provider fields safely', async () => {
+  await assert.rejects(
+    () => assertWaybillProviderSchema({ query: async () => ({ rows: [{ column_name: 'provider' }] }) }),
+    (error) => error.code === 'WAYBILL_SCHEMA_NOT_READY' && error.status === 503
+  );
+});
+
+test('waybill schema guard accepts all provider fields', async () => {
+  await assert.doesNotReject(() => assertWaybillProviderSchema({
+    query: async () => ({
+      rows: ['provider', 'label_url', 'last_reprinted_at'].map((column_name) => ({ column_name })),
+    }),
+  }));
 });
