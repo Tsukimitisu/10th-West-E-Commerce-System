@@ -21,7 +21,9 @@ import {
   registerTracking,
 } from '../services/tracking/trackingService.js';
 
-const STAFF_ROLES = new Set(['admin', 'super_admin', 'owner', 'store_staff']);
+import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
+
+const STAFF_ROLES = STAFF_ROLE_SET;
 const SHIPMENT_TO_ORDER = {
   picked_up: 'shipped',
   in_transit: 'shipped',

@@ -9,13 +9,15 @@ import {
   refreshTracking,
   shipmentWebhook,
 } from '../controllers/shipmentController.js';
+import { STAFF_ROLES } from '../constants/schemaEnums.js';
 
 const router = express.Router();
+const staffRoles = [...STAFF_ROLES];
 router.post('/webhook', shipmentWebhook);
-router.post('/rates', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('shipments.manage'), calculateRates);
-router.post('/book', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('shipments.manage'), bookShipment);
-router.get('/:orderId/tracking', authenticateToken, requirePermissionForRoles('shipments.view', 'admin', 'super_admin', 'owner', 'store_staff'), getTracking);
-router.post('/:orderId/tracking/refresh', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('shipments.manage'), refreshTracking);
-router.get('/:orderId', authenticateToken, requirePermissionForRoles('shipments.view', 'admin', 'super_admin', 'owner', 'store_staff'), getShipmentDetail);
-router.post('/:orderId/cancel', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('shipments.manage'), cancelShipment);
+router.post('/rates', authenticateToken, requireRole(...staffRoles), requirePermission('shipments.manage'), calculateRates);
+router.post('/book', authenticateToken, requireRole(...staffRoles), requirePermission('shipments.manage'), bookShipment);
+router.get('/:orderId/tracking', authenticateToken, requirePermissionForRoles('shipments.view', ...staffRoles), getTracking);
+router.post('/:orderId/tracking/refresh', authenticateToken, requireRole(...staffRoles), requirePermission('tracking.refresh'), refreshTracking);
+router.get('/:orderId', authenticateToken, requirePermissionForRoles('shipments.view', ...staffRoles), getShipmentDetail);
+router.post('/:orderId/cancel', authenticateToken, requireRole(...staffRoles), requirePermission('shipments.manage'), cancelShipment);
 export default router;

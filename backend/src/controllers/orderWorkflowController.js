@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 
 const TRANSITIONS = {
@@ -73,7 +74,7 @@ const releaseReservations = async (client, orderId) => {
 export const getOrderTimeline = async (req, res) => {
   try {
     const orderId = Number(req.params.id);
-    const staff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user.role);
+    const staff = STAFF_ROLE_SET.has(req.user.role);
     const owner = await pool.query(`SELECT id FROM orders WHERE id = $1 AND ($2::boolean OR user_id = $3)`, [orderId, staff, req.user.id]);
     if (!owner.rowCount) return res.status(404).json({ message: 'Order not found.' });
     const result = await pool.query(
@@ -150,7 +151,7 @@ export const cancelOrderSecure = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Order not found.' });
     }
-    const staff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user.role);
+    const staff = STAFF_ROLE_SET.has(req.user.role);
     if (!staff && Number(order.user_id) !== Number(req.user.id)) {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Access denied.' });

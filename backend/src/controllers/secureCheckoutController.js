@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import pool from '../config/database.js';
 import { createPaymongoGcashCheckout, verifyPaymongoWebhookSignature } from '../services/paymongo.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
+import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
@@ -509,7 +510,7 @@ export const getPaymentStatus = async (req, res) => {
   try {
     const orderId = Number(req.params.orderId);
     if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: 'Invalid order ID.' });
-    const staff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user.role);
+    const staff = STAFF_ROLE_SET.has(req.user.role);
     const result = await pool.query(
       `SELECT o.id AS order_id, o.user_id, o.status AS order_status, p.status AS payment_status,
               p.provider, p.method, p.amount, p.currency, p.reference, p.expires_at, p.paid_at, p.updated_at
@@ -632,7 +633,7 @@ export const expirePaymentSession = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const staff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user.role);
+    const staff = STAFF_ROLE_SET.has(req.user.role);
     const result = await client.query(
       `SELECT * FROM orders WHERE id = $1 AND ($2::boolean OR user_id = $3) FOR UPDATE`,
       [orderId, staff, req.user.id]
@@ -662,7 +663,7 @@ export const getPaymentReconciliation = async (req, res) => {
   const orderId = Number(req.params.orderId);
   if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: 'Invalid order ID.' });
   try {
-    const staff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user.role);
+    const staff = STAFF_ROLE_SET.has(req.user.role);
     const paymentResult = await pool.query(
       `SELECT p.* FROM payments p JOIN orders o ON o.id = p.order_id
        WHERE p.order_id = $1 AND ($2::boolean OR o.user_id = $3)
@@ -712,7 +713,7 @@ const checkoutOrderWhere = (checkoutId, staff) => {
 };
 
 const loadCheckoutOrder = async (client, { checkoutId, user, forUpdate = false }) => {
-  const staff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(user.role);
+  const staff = STAFF_ROLE_SET.has(user.role);
   const where = checkoutOrderWhere(checkoutId, staff);
   const lock = forUpdate ? ' FOR UPDATE OF o' : '';
   const result = await client.query(

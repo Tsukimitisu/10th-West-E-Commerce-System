@@ -185,30 +185,46 @@ export const editStaff = async (req, res) => {
 
 // ─── TOGGLE ACTIVE STATUS ──────────────────────────────────────────
 export const toggleStaffStatus = async (req, res) => {
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
-      `UPDATE users SET is_active = NOT is_active, updated_at = NOW()
+    await client.query('BEGIN');
+    const existing = await client.query(
+      `SELECT id, name, email, role, is_active
+       FROM users
        WHERE id = $1 AND role::text = ANY($2::text[])
-       RETURNING id, name, email, role, is_active`,
+       FOR UPDATE`,
       [req.params.id, STAFF_ROLES]
     );
 
-    if (result.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
-    const staff = result.rows[0];
-    if (!canManageRole(req.user.role, staff.role)) {
-      await pool.query('UPDATE users SET is_active = NOT is_active WHERE id = $1', [staff.id]);
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Staff member not found' });
+    }
+
+    const target = existing.rows[0];
+    if (Number(target.id) === Number(req.user.id)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Cannot change your own account status' });
+    }
+    if (!canManageRole(req.user.role, target.role)) {
+      await client.query('ROLLBACK');
       return res.status(403).json({ message: 'You cannot modify this account.' });
     }
 
-    // Prevent toggling super_admin status from staff management
-    if (staff.role === 'super_admin') {
-      return res.status(403).json({ message: 'Cannot modify Super Admin from Staff Management' });
-    }
+    const result = await client.query(
+      `UPDATE users
+       SET is_active = NOT is_active, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, name, email, role, is_active`,
+      [target.id]
+    );
+    const staff = result.rows[0];
 
     // Invalidate sessions if deactivated
     if (!staff.is_active) {
-      await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [req.params.id]);
+      await client.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [target.id]);
     }
+    await client.query('COMMIT');
 
     await logActivity({
       userId: req.user.id,
@@ -222,8 +238,11 @@ export const toggleStaffStatus = async (req, res) => {
 
     res.json({ message: `Staff member ${staff.is_active ? 'activated' : 'deactivated'}`, staff });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Toggle staff status error:', error);
     res.status(500).json({ message: 'Server error' });
+  } finally {
+    client.release();
   }
 };
 
@@ -295,44 +314,86 @@ export const getStaffActivity = async (req, res) => {
 // ─── STAFF PERMISSIONS ─────────────────────────────────────────────
 export const updateStaffPermissions = async (req, res) => {
   const { permissions } = req.body; // Array of { permission_id, granted }
+  if (!Array.isArray(permissions) || permissions.length > 200) {
+    return res.status(400).json({ message: 'Permissions must be an array of at most 200 entries.' });
+  }
 
+  const normalized = [];
+  const seenPermissionIds = new Set();
+  for (const permission of permissions) {
+    const permissionId = Number(permission?.permission_id);
+    if (!Number.isInteger(permissionId) || permissionId <= 0 || typeof permission?.granted !== 'boolean') {
+      return res.status(400).json({ message: 'Every permission requires a valid permission_id and boolean granted value.' });
+    }
+    if (seenPermissionIds.has(permissionId)) {
+      return res.status(400).json({ message: 'Duplicate permission IDs are not allowed.' });
+    }
+    seenPermissionIds.add(permissionId);
+    normalized.push({ permission_id: permissionId, granted: permission.granted });
+  }
+
+  const client = await pool.connect();
   try {
-    const staffResult = await pool.query(
+    await client.query('BEGIN');
+    const staffResult = await client.query(
       `SELECT id, name, role
        FROM users
        WHERE id = $1 AND role::text = ANY($2::text[])`,
       [req.params.id, STAFF_ROLES]
     );
-    if (staffResult.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
+    if (staffResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Staff member not found' });
+    }
+    if (Number(req.params.id) === Number(req.user.id)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'You cannot change your own permissions.' });
+    }
     if (!canManageRole(req.user.role, staffResult.rows[0].role)) {
+      await client.query('ROLLBACK');
       return res.status(403).json({ message: 'You cannot change permissions for this account.' });
     }
 
+    if (normalized.length) {
+      const existingPermissions = await client.query(
+        'SELECT id FROM permissions WHERE id = ANY($1::int[])',
+        [normalized.map((permission) => permission.permission_id)]
+      );
+      if (existingPermissions.rowCount !== normalized.length) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'One or more permission IDs do not exist.' });
+      }
+    }
+
     // Clear old custom permissions
-    await pool.query('DELETE FROM user_permissions WHERE user_id = $1', [req.params.id]);
+    await client.query('DELETE FROM user_permissions WHERE user_id = $1', [req.params.id]);
 
     // Insert new
-    for (const perm of permissions) {
-      await pool.query(
+    for (const perm of normalized) {
+      await client.query(
         'INSERT INTO user_permissions (user_id, permission_id, granted) VALUES ($1, $2, $3)',
         [req.params.id, perm.permission_id, perm.granted]
       );
     }
+    await client.query('COMMIT');
 
     await logActivity({
       userId: req.user.id,
       action: 'staff_permissions_updated',
       entityType: 'user',
       entityId: parseInt(req.params.id),
-      details: { permissions },
+      details: { permissions: normalized },
       ipAddress: req.clientIp,
       userAgent: req.clientUa,
     });
 
     res.json({ message: 'Permissions updated' });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Update staff permissions error:', error);
     res.status(500).json({ message: 'Server error' });
+  } finally {
+    client.release();
   }
 };
 

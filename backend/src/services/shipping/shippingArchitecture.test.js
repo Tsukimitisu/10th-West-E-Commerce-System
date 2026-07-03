@@ -38,8 +38,10 @@ test('active backend and frontend source contain no direct courier-specific inte
 test('shipment and waybill mutation routes require staff roles and granular permissions', async () => {
   const shipmentRoutes = await readFile(path.join(backendSource, 'routes', 'shipments.js'), 'utf8');
   const waybillRoutes = await readFile(path.join(backendSource, 'routes', 'waybills.js'), 'utf8');
-  assert.match(shipmentRoutes, /router\.post\('\/book', authenticateToken, requireRole\([^)]*store_staff[^)]*\), requirePermission\('shipments\.manage'\)/);
+  assert.match(shipmentRoutes, /const staffRoles = \[\.\.\.STAFF_ROLES\]/);
+  assert.match(shipmentRoutes, /router\.post\('\/book', authenticateToken, requireRole\(\.\.\.staffRoles\), requirePermission\('shipments\.manage'\)/);
   assert.match(shipmentRoutes, /requirePermissionForRoles\('shipments\.view'/);
+  assert.match(shipmentRoutes, /requirePermission\('tracking\.refresh'\)/);
   assert.match(waybillRoutes, /requirePermission\('waybills\.generate'\), generateWaybill/);
   assert.match(waybillRoutes, /requirePermission\('waybills\.generate'\), reprintWaybill/);
 });

@@ -2,7 +2,7 @@ import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from './config/database.js';
-import { PRODUCT_PUBLISHER_ROLE_SET, STAFF_ROLE_SET } from './constants/schemaEnums.js';
+import { PRODUCT_PUBLISHER_ROLE_SET } from './constants/schemaEnums.js';
 
 let io = null;
 
@@ -21,7 +21,7 @@ const canAccessConversation = async (conversationId, user) => {
          OR $3 = true
        )
      LIMIT 1`,
-    [conversationId, user.id, STAFF_ROLE_SET.has(user.role)]
+    [conversationId, user.id, user.can_view_chat === true]
   );
   return result.rows[0] || null;
 };
@@ -29,7 +29,7 @@ const canAccessConversation = async (conversationId, user) => {
 const emitToConversationTargets = (thread, event, payload) => {
   if (!io || !thread?.id) return;
 
-  const rooms = new Set([chatRoomName(thread.id), 'staff']);
+  const rooms = new Set([chatRoomName(thread.id), 'staff:chat']);
   if (thread.customer_id) rooms.add(`user:${thread.customer_id}`);
   if (thread.seller_id) rooms.add(`user:${thread.seller_id}`);
   if (thread.assigned_staff_id) rooms.add(`user:${thread.assigned_staff_id}`);
@@ -48,18 +48,54 @@ const hydrateSocketUserFromSession = async (sessionAuth) => {
 
   const result = await pool.query(
     `SELECT u.id, u.name, u.email, u.role, u.is_active, u.is_deleted, u.email_verified,
-            EXISTS (
+            (u.role::text = ANY(ARRAY['admin', 'super_admin', 'owner']) OR EXISTS (
               SELECT 1 FROM permissions p
               LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
               LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
               WHERE p.name = 'pos.access' AND COALESCE(up.granted, rp.id IS NOT NULL)
-            ) AS can_access_pos,
-            EXISTS (
+            )) AS can_access_pos,
+            (u.role::text = ANY(ARRAY['admin', 'super_admin', 'owner']) OR EXISTS (
               SELECT 1 FROM permissions p
               LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
               LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
               WHERE p.name = 'orders.view' AND COALESCE(up.granted, rp.id IS NOT NULL)
-            ) AS can_view_orders
+            )) AS can_view_orders,
+            (u.role::text = ANY(ARRAY['admin', 'super_admin', 'owner']) OR EXISTS (
+              SELECT 1 FROM permissions p
+              LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
+              LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
+              WHERE p.name = 'chat.view' AND COALESCE(up.granted, rp.id IS NOT NULL)
+            )) AS can_view_chat,
+            (u.role::text = ANY(ARRAY['admin', 'super_admin', 'owner']) OR EXISTS (
+              SELECT 1 FROM permissions p
+              LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
+              LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
+              WHERE p.name = 'chat.reply' AND COALESCE(up.granted, rp.id IS NOT NULL)
+            )) AS can_reply_chat,
+            (u.role::text = ANY(ARRAY['admin', 'super_admin', 'owner']) OR EXISTS (
+              SELECT 1 FROM permissions p
+              LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
+              LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
+              WHERE p.name = 'inventory.view' AND COALESCE(up.granted, rp.id IS NOT NULL)
+            )) AS can_view_inventory,
+            (u.role::text = ANY(ARRAY['admin', 'super_admin', 'owner']) OR EXISTS (
+              SELECT 1 FROM permissions p
+              LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
+              LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
+              WHERE p.name = 'returns.view' AND COALESCE(up.granted, rp.id IS NOT NULL)
+            )) AS can_view_returns,
+            (u.role::text = ANY(ARRAY['admin', 'super_admin', 'owner']) OR EXISTS (
+              SELECT 1 FROM permissions p
+              LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
+              LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
+              WHERE p.name = 'payments.view' AND COALESCE(up.granted, rp.id IS NOT NULL)
+            )) AS can_view_payments,
+            (u.role::text = ANY(ARRAY['admin', 'super_admin', 'owner']) OR EXISTS (
+              SELECT 1 FROM permissions p
+              LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
+              LEFT JOIN user_permissions up ON up.permission_id = p.id AND up.user_id = u.id
+              WHERE p.name = 'shipments.view' AND COALESCE(up.granted, rp.id IS NOT NULL)
+            )) AS can_view_shipments
      FROM users u
      JOIN sessions s ON s.user_id = u.id
      WHERE u.id = $1
@@ -129,7 +165,6 @@ export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = 
   io.on('connection', (socket) => {
     const user = socket.data.user;
     console.log(`🔌 Socket connected: ${socket.id}`);
-    socket.broadcast.emit('user:online', { user_id: user.id });
 
     // Join rooms based on user role
     socket.on('join', (data = {}) => {
@@ -140,9 +175,29 @@ export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = 
       }
       const joinedRooms = [];
 
-      if (STAFF_ROLE_SET.has(user.role) && user.can_view_orders) {
-        socket.join('staff');
-        joinedRooms.push('staff');
+      if (user.can_view_orders) {
+        socket.join('staff:orders');
+        joinedRooms.push('staff:orders');
+      }
+      if (user.can_view_chat) {
+        socket.join('staff:chat');
+        joinedRooms.push('staff:chat');
+      }
+      if (user.can_view_inventory) {
+        socket.join('staff:inventory');
+        joinedRooms.push('staff:inventory');
+      }
+      if (user.can_view_returns) {
+        socket.join('staff:returns');
+        joinedRooms.push('staff:returns');
+      }
+      if (user.can_view_payments) {
+        socket.join('staff:payments');
+        joinedRooms.push('staff:payments');
+      }
+      if (user.can_view_shipments) {
+        socket.join('staff:shipping');
+        joinedRooms.push('staff:shipping');
         console.log(`   ↳ ${socket.id} joined [staff] room`);
       }
       if (PRODUCT_PUBLISHER_ROLE_SET.has(user.role)) {
@@ -184,12 +239,12 @@ export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = 
           `SELECT customer_id, assigned_staff_id
            FROM chat_threads
            WHERE id = $1 AND ($2 = customer_id OR $3 = true)`,
-          [threadId, user.id, STAFF_ROLE_SET.has(user.role)]
+          [threadId, user.id, user.can_reply_chat === true]
         );
         const thread = result.rows[0];
         if (!thread) return;
         const safePayload = { thread_id: threadId, user_id: user.id };
-        socket.to('staff').emit('chat:typing', safePayload);
+        socket.to('staff:chat').emit('chat:typing', safePayload);
         if (thread.customer_id) socket.to(`user:${thread.customer_id}`).emit('chat:typing', safePayload);
         if (thread.assigned_staff_id) socket.to(`user:${thread.assigned_staff_id}`).emit('chat:typing', safePayload);
       } catch {}
@@ -213,6 +268,7 @@ export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = 
     });
 
     const relayTyping = async (eventName, payload = {}) => {
+      if (user.can_view_chat && !user.can_reply_chat) return;
       const conversationId = Number(payload.conversation_id || payload.conversationId || payload.thread_id || payload.threadId);
       if (!conversationId) return;
       try {
@@ -226,7 +282,7 @@ export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = 
         };
         socket.to(chatRoomName(conversationId)).emit(eventName, safePayload);
         socket.to(chatRoomName(conversationId)).emit('chat:typing', safePayload);
-        socket.to('staff').emit(eventName, safePayload);
+        socket.to('staff:chat').emit(eventName, safePayload);
         if (thread.customer_id) socket.to(`user:${thread.customer_id}`).emit(eventName, safePayload);
         if (thread.seller_id) socket.to(`user:${thread.seller_id}`).emit(eventName, safePayload);
         if (thread.assigned_staff_id) socket.to(`user:${thread.assigned_staff_id}`).emit(eventName, safePayload);
@@ -243,7 +299,6 @@ export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = 
 
     socket.on('disconnect', (reason) => {
       console.log(`🔌 Socket disconnected: ${socket.id} (${reason})`);
-      socket.broadcast.emit('user:offline', { user_id: user.id });
     });
   });
 
@@ -263,7 +318,7 @@ export function getIO() {
 // Orders
 export function emitNewOrder(order) {
   if (!io) return;
-  io.to('staff').emit('order:new', order);
+  io.to('staff:orders').emit('order:new', order);
   if (order.user_id) {
     io.to(`user:${order.user_id}`).emit('order:new', order);
   }
@@ -290,7 +345,7 @@ const emitOrderPayload = (order, extra = {}) => {
   if (!io || !order) return;
   const payload = normalizeOrderUpdatePayload(order, extra);
   if (!payload) return;
-  io.to('staff').emit('order:updated', payload);
+  io.to('staff:orders').emit('order:updated', payload);
   if (payload.user_id) {
     io.to(`user:${payload.user_id}`).emit('order:updated', payload);
   }
@@ -340,20 +395,20 @@ export function emitProductDeleted(productId) {
 // Inventory / Stock
 export function emitStockUpdate(data) {
   if (!io) return;
-  io.to('staff').emit('inventory:updated', data);
+  io.to('staff:inventory').emit('inventory:updated', data);
   // Also broadcast to POS so product grid refreshes
   io.to('pos').emit('inventory:updated', data);
 }
 
 export function emitLowStockAlert(product) {
   if (!io) return;
-  io.to('staff').emit('inventory:low-stock', product);
+  io.to('staff:inventory').emit('inventory:low-stock', product);
 }
 
 // Returns
 export function emitReturnCreated(returnReq) {
   if (!io) return;
-  io.to('staff').emit('return:new', returnReq);
+  io.to('staff:returns').emit('return:new', returnReq);
   if (returnReq.user_id) {
     io.to(`user:${returnReq.user_id}`).emit('return:new', returnReq);
   }
@@ -361,7 +416,7 @@ export function emitReturnCreated(returnReq) {
 
 export function emitReturnUpdated(returnReq) {
   if (!io) return;
-  io.to('staff').emit('return:updated', returnReq);
+  io.to('staff:returns').emit('return:updated', returnReq);
   if (returnReq.user_id) {
     io.to(`user:${returnReq.user_id}`).emit('return:updated', returnReq);
   }
@@ -373,7 +428,7 @@ export function emitNotification(target, notification) {
   if (target === 'all') {
     io.emit('notification', notification);
   } else if (target === 'staff') {
-    io.to('staff').emit('notification', notification);
+    io.to('staff:orders').emit('notification', notification);
   } else {
     io.to(`user:${target}`).emit('notification', notification);
   }

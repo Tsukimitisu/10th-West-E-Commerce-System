@@ -29,7 +29,7 @@ test('staff without granular shipping permissions is denied', async () => {
   const originalQuery = pool.query;
   pool.query = async () => ({ rows: [] });
   try {
-    for (const permission of ['shipments.manage', 'waybills.generate', 'shipments.view']) {
+    for (const permission of ['shipments.manage', 'waybills.generate', 'shipments.view', 'tracking.refresh']) {
       const req = { user: { id: 99, role: 'store_staff' } };
       const res = makeResponse();
       let nextCalled = false;
@@ -66,7 +66,7 @@ test('shipment mutation routes use the required granular permissions', async () 
   const waybillRoutes = await readFile(path.resolve(directory, '..', 'routes', 'waybills.js'), 'utf8');
   assert.match(shipmentRoutes, /'\/book'.*requirePermission\('shipments\.manage'\)/);
   assert.match(shipmentRoutes, /'\/:orderId\/cancel'.*requirePermission\('shipments\.manage'\)/);
-  assert.match(shipmentRoutes, /'\/:orderId\/tracking\/refresh'.*requirePermission\('shipments\.manage'\)/);
+  assert.match(shipmentRoutes, /'\/:orderId\/tracking\/refresh'.*requirePermission\('tracking\.refresh'\)/);
   assert.match(waybillRoutes, /generate'.*requirePermission\('waybills\.generate'\)/);
   assert.match(waybillRoutes, /reprint'.*requirePermission\('waybills\.generate'\)/);
 });

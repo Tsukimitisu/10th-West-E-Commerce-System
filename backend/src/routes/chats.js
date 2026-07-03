@@ -6,16 +6,19 @@ import {
   sendConversationMessage,
   startProductConversation,
 } from '../controllers/productChatController.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, requirePermissionForRoles } from '../middleware/auth.js';
+import { STAFF_ROLES } from '../constants/schemaEnums.js';
 
 const router = express.Router();
 
 router.use(authenticateToken);
 
-router.post('/product/start', startProductConversation);
-router.get('/my-conversations', getMyConversations);
-router.get('/:conversationId/messages', getConversationMessages);
-router.post('/:conversationId/messages', sendConversationMessage);
-router.patch('/:conversationId/read', markConversationRead);
+const staffPermission = (permission) => requirePermissionForRoles(permission, ...STAFF_ROLES);
+
+router.post('/product/start', staffPermission('chat.reply'), startProductConversation);
+router.get('/my-conversations', staffPermission('chat.view'), getMyConversations);
+router.get('/:conversationId/messages', staffPermission('chat.view'), getConversationMessages);
+router.post('/:conversationId/messages', staffPermission('chat.reply'), sendConversationMessage);
+router.patch('/:conversationId/read', staffPermission('chat.reply'), markConversationRead);
 
 export default router;

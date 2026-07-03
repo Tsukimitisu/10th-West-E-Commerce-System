@@ -13,12 +13,13 @@ import {
 import { authenticateToken, requirePermission, requirePermissionForRoles, requireRole } from '../middleware/auth.js';
 import { createCheckout } from '../controllers/secureCheckoutController.js';
 import { cancelOrderSecure, getOrderTimeline, updateOrderStatusSecure } from '../controllers/orderWorkflowController.js';
+import { STAFF_ROLES } from '../constants/schemaEnums.js';
 
 const router = express.Router();
 
 // Customer routes
 router.get('/my-orders', authenticateToken, getUserOrders);
-const operationsRoles = ['admin', 'super_admin', 'owner', 'store_staff'];
+const operationsRoles = [...STAFF_ROLES];
 const operationsPermission = (permission) => requirePermissionForRoles(permission, ...operationsRoles);
 
 router.get('/:id/timeline', authenticateToken, operationsPermission('orders.view'), getOrderTimeline);
