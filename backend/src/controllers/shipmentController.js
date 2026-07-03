@@ -33,6 +33,19 @@ const SHIPMENT_TO_ORDER = {
   failed_delivery: 'failed',
   returned: 'returned',
 };
+const TRACKING_ORDER_TRANSITIONS = {
+  paid: new Set(['shipped', 'failed']),
+  processing: new Set(['shipped', 'failed']),
+  packed: new Set(['shipped', 'failed']),
+  ready_for_pickup: new Set(['shipped', 'failed']),
+  shipped: new Set(['out_for_delivery', 'delivered', 'failed', 'returned']),
+  out_for_delivery: new Set(['delivered', 'failed', 'returned']),
+  failed: new Set(['shipped', 'out_for_delivery', 'returned']),
+};
+
+const isAllowedTrackingOrderTransition = (fromStatus, toStatus) => (
+  fromStatus === toStatus || TRACKING_ORDER_TRANSITIONS[fromStatus]?.has(toStatus) === true
+);
 
 const validOrderId = (value) => {
   const orderId = Number(value);
@@ -191,10 +204,15 @@ const applyTrackingResult = async (shipment, tracking, { webhook = false } = {})
 
     const nextOrderStatus = SHIPMENT_TO_ORDER[normalizedStatus];
     let previousOrderStatus = null;
+    let orderStatusChanged = false;
     if (nextOrderStatus) {
       const order = await client.query('SELECT status FROM orders WHERE id = $1 FOR UPDATE', [shipment.order_id]);
       previousOrderStatus = order.rows[0]?.status || null;
-      if (previousOrderStatus && previousOrderStatus !== nextOrderStatus) {
+      if (
+        previousOrderStatus
+        && previousOrderStatus !== nextOrderStatus
+        && isAllowedTrackingOrderTransition(previousOrderStatus, nextOrderStatus)
+      ) {
         await client.query(
           `UPDATE orders
            SET status = $2,
@@ -215,10 +233,26 @@ const applyTrackingResult = async (shipment, tracking, { webhook = false } = {})
             JSON.stringify({ tracking_provider: tracking.provider || shipment.tracking_provider }),
           ]
         );
+        orderStatusChanged = true;
+      } else if (previousOrderStatus && previousOrderStatus !== nextOrderStatus) {
+        await client.query(
+          `INSERT INTO audit_logs
+            (actor_user_id, action, entity_type, entity_id, metadata)
+           VALUES (NULL, 'shipment.tracking_transition_rejected', 'order', $1, $2::jsonb)`,
+          [
+            String(shipment.order_id),
+            JSON.stringify({
+              from_status: previousOrderStatus,
+              rejected_status: nextOrderStatus,
+              shipment_status: normalizedStatus,
+              tracking_provider: tracking.provider || shipment.tracking_provider,
+            }),
+          ]
+        );
       }
     }
     await client.query('COMMIT');
-    if (nextOrderStatus && previousOrderStatus !== nextOrderStatus) {
+    if (orderStatusChanged) {
       emitOrderStatusUpdate(shipment.order_id, nextOrderStatus, {
         previous_status: previousOrderStatus,
         shipment_status: normalizedStatus,
@@ -460,6 +494,10 @@ export const getTracking = async (req, res) => {
 };
 
 export const getShipmentDetail = getTracking;
+
+export const __testing = {
+  isAllowedTrackingOrderTransition,
+};
 
 export const refreshTracking = async (req, res) => {
   const orderId = validOrderId(req.params.orderId);
