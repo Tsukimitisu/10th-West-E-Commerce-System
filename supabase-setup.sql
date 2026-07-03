@@ -1,3 +1,12 @@
+-- DEPRECATED AND INTENTIONALLY NON-EXECUTABLE.
+-- The Knex migrations in backend/migrations are the only schema authority.
+-- This historical snapshot contains obsolete grants and must never be applied.
+DO $deprecated$
+BEGIN
+  RAISE EXCEPTION 'supabase-setup.sql is deprecated; run npm run migrate';
+END
+$deprecated$;
+
 -- =============================================================================
 -- 10th West Moto - COMPLETE Supabase Setup SQL
 -- LEGACY FILE: kept only for historical reference.

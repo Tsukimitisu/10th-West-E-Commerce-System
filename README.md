@@ -31,15 +31,13 @@ Update `backend/.env` with real values. Minimum required to start backend:
 
 - `DATABASE_URL` (or `SUPABASE_DB_URL`)
 - `JWT_SECRET`
-- `STRIPE_SECRET_KEY`
-- `STRIPE_PUBLISHABLE_KEY`
-- `EMAIL_HOST`
-- `EMAIL_USER`
-- `EMAIL_PASSWORD`
-- `EMAIL_FROM`
-- `FRONTEND_URL=http://localhost:5173`
+- `SESSION_SECRET`
+- `CSRF_SECRET`
+- `FRONTEND_ORIGIN=http://localhost:5173`
 
-Note: placeholder values are fine for local development as long as they are non-empty.
+Payment, shipping, tracking, email, OAuth, and media integrations are optional
+at startup. Their features remain blocked until their real credentials are
+configured; placeholders do not make an integration operational.
 
 ### Frontend
 
@@ -52,7 +50,8 @@ Use backend mode by default:
 - `VITE_USE_SUPABASE=false`
 - `VITE_API_URL=http://localhost:5000/api`
 
-If you want direct Supabase mode, set `VITE_USE_SUPABASE=true` and fill Supabase keys.
+Direct browser access to application tables is disabled. Keep
+`VITE_USE_SUPABASE=false`; all storefront data must pass through the backend.
 
 ## 4. Database Setup
 
@@ -73,6 +72,10 @@ Optional migration status check:
 ```bash
 npm run migrate:status
 ```
+
+Knex migrations are the only schema authority. The historical
+`supabase-setup.sql` files are intentionally non-executable. See
+`docs/DATABASE_MIGRATIONS.md`.
 
 ## 5. Run Locally
 
@@ -102,4 +105,3 @@ npm run build
   - One or more required env vars in `backend/.env` are missing/empty.
 - API requests fail:
   - Ensure backend is running on port `5000` and frontend `VITE_API_URL` is correct.
-

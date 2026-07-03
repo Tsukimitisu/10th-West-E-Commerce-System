@@ -7,7 +7,7 @@ Backend REST API for the 10th West Moto E-Commerce System.
 - **Runtime:** Node.js
 - **Framework:** Express.js
 - **Database:** PostgreSQL
-- **Authentication:** JWT (JSON Web Tokens)
+- **Authentication:** HttpOnly server-side sessions
 - **Validation:** Express-validator
 - **Password Hashing:** bcryptjs
 - **Media Storage:** Cloudinary (all uploads: product images/videos, avatars, review media)
@@ -47,6 +47,10 @@ CLOUDINARY_UPLOAD_ROOT=10th-west-moto
 ```bash
 npm run migrate
 ```
+
+Do not run either `supabase-setup.sql` file or the legacy scripts under
+`src/database/migrate*.js`. Knex migrations are the only schema authority; see
+`../docs/DATABASE_MIGRATIONS.md`.
 
 4. Roll back the latest migration batch (down):
 ```bash
