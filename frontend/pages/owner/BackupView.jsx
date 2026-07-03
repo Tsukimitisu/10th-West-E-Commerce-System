@@ -3,6 +3,7 @@ import { Database, Download, RefreshCw, Clock, CheckCircle2, AlertCircle, HardDr
 import { createBackup, getBackupHistory } from '../../services/api';
 
 const BackupView = () => {
+  const backupProviderConfigured = false;
   const [backups, setBackups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -40,12 +41,13 @@ const BackupView = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-white flex items-center gap-2"><Database size={22} /> Backup & Recovery</h1>
-          <p className="text-sm text-gray-400 mt-1">Manage database backups and system recovery</p>
+          <p className="text-sm text-gray-400 mt-1">Legacy metadata only; recoverable backups are not configured</p>
         </div>
-        <button onClick={handleCreateBackup} disabled={creating}
+        <button onClick={handleCreateBackup} disabled={creating || !backupProviderConfigured}
+          title="Real backup provider is not configured"
           className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
           {creating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <RefreshCw size={16} />}
-          {creating ? 'Creating Backup...' : 'Create Backup Now'}
+          {creating ? 'Creating Backup...' : 'Backup Not Configured'}
         </button>
       </div>
 
@@ -65,7 +67,7 @@ const BackupView = () => {
               <HardDrive size={18} className="text-red-500" />
             </div>
             <div>
-              <p className="text-xs text-gray-400">Total Backups</p>
+              <p className="text-xs text-gray-400">Legacy Metadata Records</p>
               <p className="text-lg font-bold text-white">{backups.length}</p>
             </div>
           </div>
@@ -94,7 +96,7 @@ const BackupView = () => {
               <p className="text-xs text-gray-400">Status</p>
               {lastBackup ? (
                 <p className="text-sm font-semibold text-green-600 flex items-center gap-1">
-                  <CheckCircle2 size={14} /> Healthy
+                  <AlertCircle size={14} /> Not configured
                 </p>
               ) : (
                 <p className="text-sm font-semibold text-gray-400 flex items-center gap-1">
@@ -189,7 +191,7 @@ const BackupView = () => {
         <div className="mt-4 p-3 bg-red-500/10 border border-red-100 rounded-lg">
           <p className="text-xs text-orange-700 flex items-center gap-1.5">
             <Shield size={14} className="flex-shrink-0" />
-            Backups are stored securely and can be used to restore the system to a previous state.
+            These entries are metadata only. No recoverable in-app backup file or restore workflow is configured.
           </p>
         </div>
       </div>

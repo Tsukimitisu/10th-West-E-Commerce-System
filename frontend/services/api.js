@@ -5376,14 +5376,6 @@ export const getSuspiciousActivity = async () => {
 
 // Backup & Recovery
 export const createBackup = async () => {
-  if (USE_SUPABASE) {
-    const { data, error } = await supabase.from('backup_history')
-      .insert({ backup_type: 'manual', status: 'completed', file_name: `backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json` })
-      .select().single();
-    if (error) throw new Error(error.message);
-    await logSupabaseActivity('backup.create', 'backup', data.id);
-    return { message: 'Backup created', backup: data };
-  }
   return authenticatedFetch(`${API_URL}/admin/backup`, { method: 'POST' });
 };
 

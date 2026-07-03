@@ -8,6 +8,7 @@ import { createBackup, getBackupHistory } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
 
 const BackupRecoveryView = () => {
+  const backupProviderConfigured = false;
   const [backups, setBackups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -46,11 +47,12 @@ const BackupRecoveryView = () => {
       <PageHeader
         eyebrow="Platform continuity"
         title="Backup & recovery"
-        description="Create and review database backups and operational recovery readiness."
-        actions={<button onClick={handleCreateBackup} disabled={creating}
+        description="Review legacy backup metadata. Recoverable in-app backups are not configured."
+        actions={<button onClick={handleCreateBackup} disabled={creating || !backupProviderConfigured}
+          title="Real backup provider is not configured"
           className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 disabled:bg-slate-200 disabled:text-slate-500">
           {creating ? <Loader2 size={14} className="animate-spin" /> : <Database size={16} />}
-          {creating ? 'Creating backup…' : 'Create backup'}
+          {creating ? 'Creating backup…' : 'Backup not configured'}
         </button>}
       />
 
@@ -71,7 +73,7 @@ const BackupRecoveryView = () => {
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 bg-blue-50 rounded-lg"><Archive size={18} className="text-blue-500" /></div>
-            <span className="text-xs text-gray-400">Total Backups</span>
+            <span className="text-xs text-gray-400">Legacy metadata records</span>
           </div>
           <p className="text-2xl font-bold text-white">{backups.length}</p>
         </div>
@@ -92,10 +94,10 @@ const BackupRecoveryView = () => {
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 bg-purple-50 rounded-lg"><Server size={18} className="text-purple-500" /></div>
-            <span className="text-xs text-gray-400">Backup Status</span>
+            <span className="text-xs text-gray-400">Backup provider</span>
           </div>
-          <p className={`text-lg font-bold ${!lastBackup ? 'text-red-500' : lastBackupAge > 168 ? 'text-red-500' : 'text-green-500'}`}>
-            {!lastBackup ? 'No Backups' : lastBackupAge > 168 ? 'Overdue' : 'Up to Date'}
+          <p className="text-lg font-bold text-red-500">
+            Not configured
           </p>
         </div>
       </div>
@@ -167,7 +169,7 @@ const BackupRecoveryView = () => {
             <li>Select the desired backup point to restore</li>
             <li>Supabase automatically manages Point-in-Time Recovery (PITR)</li>
           </ol>
-          <p className="text-[10px] text-gray-400 mt-2">Note: In-app backups record table snapshots. Full database recovery is handled by Supabase infrastructure.</p>
+          <p className="text-[10px] text-red-400 mt-2">The records above are metadata only and are not recoverable backup files. Verify Supabase backup/PITR availability directly before production.</p>
         </div>
       </div>
     </div>

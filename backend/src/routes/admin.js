@@ -560,31 +560,28 @@ router.get('/logs/suspicious', async (req, res) => {
 
 // ==================== BACKUP & RECOVERY ====================
 
-// Create backup (exports tables as JSON)
+// A real encrypted backup provider has not been implemented. This endpoint is
+// deliberately fail-closed so the UI cannot report a recoverable backup.
 router.post('/backup', async (req, res) => {
   try {
-    const backupResult = await pool.query(
-      `INSERT INTO backup_history (backup_type, status, initiated_by, created_at)
-       VALUES ('manual', 'completed', $1, NOW()) RETURNING *`, [req.user.id]
-    );
-    // Get row counts for all tables as metadata
-    const tables = ['users', 'products', 'orders', 'order_items', 'categories', 'returns', 'activity_logs'];
-    const counts = {};
-    for (const table of tables) {
-      const r = await pool.query(`SELECT COUNT(*) FROM ${table}`);
-      counts[table] = parseInt(r.rows[0].count);
-    }
     await pool.query(
-      'UPDATE backup_history SET file_name = $1 WHERE id = $2',
-      [`backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`, backupResult.rows[0].id]
+      `INSERT INTO audit_logs
+        (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, metadata)
+       VALUES ($1, 'backup.request_blocked', 'backup', 'provider', $2, $3, $4::jsonb)`,
+      [
+        req.user.id,
+        req.ip,
+        req.get('user-agent'),
+        JSON.stringify({ reason: 'BACKUP_PROVIDER_NOT_CONFIGURED' }),
+      ]
     );
-    await pool.query(
-      'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'create_backup', JSON.stringify({ table_counts: counts }), req.ip]
-    );
-    res.json({ message: 'Backup created successfully', backup: backupResult.rows[0], table_counts: counts });
+    return res.status(503).json({
+      message: 'Real backup provider is not configured.',
+      code: 'BACKUP_PROVIDER_NOT_CONFIGURED',
+      configured: false,
+    });
   } catch (err) {
-    console.error('Create backup error:', err);
+    console.error('Record blocked backup request error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
