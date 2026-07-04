@@ -9,6 +9,7 @@ import QRCode from 'qrcode';
 import { logActivity } from '../middleware/activityLogger.js';
 import { mergeGuestCartIntoUserCart, rotateGuestSession } from './cartController.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch, supabaseRestRequest } from '../services/supabaseRest.js';
+import { decryptTwoFactorSecret, encryptTwoFactorSecret, generateRecoveryCodes, hashRecoveryCode } from '../services/twoFactorCrypto.js';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
@@ -182,7 +183,7 @@ const loginWithSupabaseRestFallback = async (req, res) => {
     }
 
     const validTotp = Boolean(user.two_factor_secret) && speakeasy.totp.verify({
-      secret: user.two_factor_secret,
+      secret: decryptTwoFactorSecret(user.two_factor_secret),
       encoding: 'base32',
       token: String(totpCode),
       window: 1,
@@ -857,7 +858,7 @@ export const register = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  const { email, password, totp_code: totpCode } = req.validatedData || req.body;
+  const { email, password, totp_code: totpCode, recovery_code: recoveryCode } = req.validatedData || req.body;
   const ipAddress = req.clientIp;
   const userAgent = req.clientUa;
   const guestCartSessionId = req.session?.cartSessionId || null;
@@ -908,7 +909,7 @@ export const login = async (req, res) => {
     }
 
     if (user.two_factor_enabled) {
-      if (!totpCode) {
+      if (!totpCode && !recoveryCode) {
         return res.json({
           requires_2fa: true,
           code: 'TWO_FACTOR_REQUIRED',
@@ -916,14 +917,15 @@ export const login = async (req, res) => {
         });
       }
 
-      const validTotp = Boolean(user.two_factor_secret) && speakeasy.totp.verify({
-        secret: user.two_factor_secret,
-        encoding: 'base32',
-        token: String(totpCode),
-        window: 1,
+      const validTotp = Boolean(totpCode && user.two_factor_secret) && speakeasy.totp.verify({
+        secret: decryptTwoFactorSecret(user.two_factor_secret), encoding: 'base32', token: String(totpCode), window: 1,
       });
+      const recoveryHashes = Array.isArray(user.two_factor_recovery_hashes) ? user.two_factor_recovery_hashes : [];
+      const recoveryHash = recoveryCode ? hashRecoveryCode(recoveryCode) : null;
+      const recoveryIndex = recoveryHash ? recoveryHashes.indexOf(recoveryHash) : -1;
+      const validRecovery = recoveryIndex >= 0;
 
-      if (!validTotp) {
+      if (!validTotp && !validRecovery) {
         await recordLoginAttempt(email, ipAddress, false);
         await logActivity({ userId: user.id, action: 'login_2fa_failed', ipAddress, userAgent });
         return res.status(401).json({
@@ -931,6 +933,10 @@ export const login = async (req, res) => {
           code: 'TWO_FACTOR_INVALID',
           requires_2fa: true,
         });
+      }
+      if (validRecovery) {
+        recoveryHashes.splice(recoveryIndex, 1);
+        await pool.query('UPDATE users SET two_factor_recovery_hashes=$2::jsonb WHERE id=$1', [user.id, JSON.stringify(recoveryHashes)]);
       }
     }
 
@@ -1297,7 +1303,10 @@ export const setup2FA = async (req, res) => {
       issuer: '10th West Moto',
     });
 
-    await pool.query('UPDATE users SET two_factor_secret = $1 WHERE id = $2', [secret.base32, req.user.id]);
+    await pool.query(
+      `UPDATE users SET two_factor_secret=$1,two_factor_enabled=false,two_factor_recovery_hashes='[]'::jsonb WHERE id=$2`,
+      [encryptTwoFactorSecret(secret.base32), req.user.id]
+    );
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
 
     // Security: Only return QR code, never expose the raw secret to the frontend
@@ -1316,16 +1325,21 @@ export const verify2FA = async (req, res) => {
     const result = await pool.query('SELECT two_factor_secret FROM users WHERE id = $1', [req.user.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
 
-    const secret = result.rows[0].two_factor_secret;
-    if (!secret) return res.status(400).json({ message: 'No 2FA setup in progress' });
+    const encryptedSecret = result.rows[0].two_factor_secret;
+    if (!encryptedSecret) return res.status(400).json({ message: 'No 2FA setup in progress' });
+    const secret = decryptTwoFactorSecret(encryptedSecret);
 
     const verified = speakeasy.totp.verify({ secret, encoding: 'base32', token: totp_code, window: 1 });
     if (!verified) return res.status(400).json({ message: 'Invalid code. Try again.' });
 
-    await pool.query('UPDATE users SET two_factor_enabled = true WHERE id = $1', [req.user.id]);
+    const recoveryCodes = generateRecoveryCodes();
+    await pool.query(
+      `UPDATE users SET two_factor_enabled=true,two_factor_recovery_hashes=$2::jsonb WHERE id=$1`,
+      [req.user.id, JSON.stringify(recoveryCodes.map(hashRecoveryCode))]
+    );
     await logActivity({ userId: req.user.id, action: '2fa_enabled', ipAddress: req.clientIp, userAgent: req.clientUa });
 
-    res.json({ message: 'Two-factor authentication enabled successfully!' });
+    res.json({ message: 'Two-factor authentication enabled successfully!', recovery_codes: recoveryCodes });
   } catch (error) {
     console.error('2FA verify error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -1345,7 +1359,7 @@ export const disable2FA = async (req, res) => {
       if (!isValid) return res.status(401).json({ message: 'Invalid password' });
     }
 
-    await pool.query('UPDATE users SET two_factor_enabled = false, two_factor_secret = NULL WHERE id = $1', [req.user.id]);
+    await pool.query(`UPDATE users SET two_factor_enabled=false,two_factor_secret=NULL,two_factor_recovery_hashes='[]'::jsonb WHERE id=$1`, [req.user.id]);
     await logActivity({ userId: req.user.id, action: '2fa_disabled', ipAddress: req.clientIp, userAgent: req.clientUa });
 
     res.json({ message: 'Two-factor authentication disabled' });

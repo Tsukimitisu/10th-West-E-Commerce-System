@@ -27,6 +27,7 @@ const Profile = () => {
   const [twoFASetup, setTwoFASetup] = useState(null);
   const [totpCode, setTotpCode] = useState('');
   const [twoFAEnabled, setTwoFAEnabled] = useState(user?.two_factor_enabled || false);
+  const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletePassword, setDeletePassword] = useState('');
@@ -302,7 +303,8 @@ const Profile = () => {
 
   const handle2FAVerify = async () => {
     try {
-      await verify2FA(totpCode);
+      const result = await verify2FA(totpCode);
+      setRecoveryCodes(Array.isArray(result?.recovery_codes) ? result.recovery_codes : []);
       setTwoFAEnabled(true);
       setTwoFASetup(null);
       setTotpCode('');
@@ -551,6 +553,15 @@ const Profile = () => {
 
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <h2 className="font-display font-semibold text-lg text-gray-900 mb-4 flex items-center gap-2"><Shield size={20} className="text-red-500" /> Two-Factor Authentication</h2>
+          {recoveryCodes.length > 0 && (
+            <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
+              <p className="font-semibold text-amber-900">Save these recovery codes now. They will not be shown again.</p>
+              <div className="mt-2 grid grid-cols-2 gap-1 font-mono text-sm text-amber-950">
+                {recoveryCodes.map((code) => <span key={code}>{code}</span>)}
+              </div>
+              <button type="button" onClick={() => setRecoveryCodes([])} className="mt-3 text-sm underline">I saved them</button>
+            </div>
+          )}
           {twoFAEnabled ? (
             <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
               <div className="flex items-center gap-3">

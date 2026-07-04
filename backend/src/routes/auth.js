@@ -157,6 +157,11 @@ const loginValidation = [
     .trim()
     .matches(/^\d{6}$/)
     .withMessage('Two-factor code must contain exactly 6 digits'),
+  body('recovery_code')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .matches(/^[a-f0-9]{8}-[a-f0-9]{8}$/i)
+    .withMessage('Recovery code format is invalid'),
 ];
 
 // ─── Public routes ─────────────────────────────────────────────────
