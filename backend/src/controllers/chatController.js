@@ -406,11 +406,8 @@ export const getThreads = async (req, res) => {
       unread_count: Number(thread.unread_count || 0),
     })));
   } catch (error) {
-    if (isDatabaseConnectivityError(error)) {
-      return res.json(getMemoryThreads(req));
-    }
     console.error('Get chat threads error:', error);
-    res.status(500).json({ message: 'Failed to load chats' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Persistent chat storage is unavailable.' });
   }
 };
 
@@ -432,13 +429,8 @@ export const getThread = async (req, res) => {
 
     res.json({ thread, messages: messages.rows });
   } catch (error) {
-    if (isDatabaseConnectivityError(error)) {
-      const found = getMemoryThread(req.params.id, req.user);
-      if (!found) return res.status(404).json({ message: 'Chat not found' });
-      return res.json(found);
-    }
     console.error('Get chat thread error:', error);
-    res.status(500).json({ message: 'Failed to load chat' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Persistent chat storage is unavailable.' });
   }
 };
 
@@ -506,11 +498,7 @@ export const createThread = async (req, res) => {
       await client.query('ROLLBACK').catch(() => {});
     }
     console.error('Create chat thread error:', error);
-    if (isDatabaseConnectivityError(error)) {
-      const fallback = createMemoryThread(req);
-      return res.status(fallback.status).json(fallback.body);
-    }
-    res.status(500).json({ message: 'Failed to create chat' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Chat was not saved because persistent storage is unavailable.' });
   } finally {
     if (client) {
       client.release();
@@ -559,16 +547,8 @@ export const sendMessage = async (req, res) => {
     emitChatMessage(updatedThread, message);
     res.status(201).json({ message });
   } catch (error) {
-    if (isDatabaseConnectivityError(error)) {
-      const fallback = sendMemoryMessage(req, threadId, body, mediaUrls, messageType);
-      if (fallback.body.message && fallback.status === 201) {
-        const found = getMemoryThread(threadId, req.user);
-        emitChatMessage(found?.thread, fallback.body.message);
-      }
-      return res.status(fallback.status).json(fallback.body);
-    }
     console.error('Send chat message error:', error);
-    res.status(500).json({ message: 'Failed to send message' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Message was not saved because persistent storage is unavailable.' });
   }
 };
 
@@ -595,14 +575,8 @@ export const markThreadRead = async (req, res) => {
     emitChatSeen(thread, { thread_id: thread.id, user_id: req.user.id, seen_at: new Date().toISOString() });
     res.json({ message: 'Chat marked as read' });
   } catch (error) {
-    if (isDatabaseConnectivityError(error)) {
-      const found = getMemoryThread(req.params.id, req.user);
-      if (!found) return res.status(404).json({ message: 'Chat not found' });
-      emitChatSeen(found.thread, { thread_id: found.thread.id, user_id: req.user.id, seen_at: nowIso() });
-      return res.json({ message: 'Chat marked as read' });
-    }
     console.error('Mark chat read error:', error);
-    res.status(500).json({ message: 'Failed to mark chat read' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Chat read state was not saved.' });
   }
 };
 
@@ -626,25 +600,8 @@ export const assignThread = async (req, res) => {
     emitChatAssigned(thread);
     res.json({ thread });
   } catch (error) {
-    if (isDatabaseConnectivityError(error)) {
-      try {
-        const patched = await supabaseRestRequest('chat_threads', {
-          method: 'PATCH',
-          queryParams: { id: `eq.${Number(req.params.id)}` },
-          prefer: 'return=representation',
-          body: { assigned_staff_id: assignedStaffId, updated_at: nowIso() },
-        });
-        const thread = mapRestThread(patched?.[0] || {});
-        if (!thread.id) return res.status(404).json({ message: 'Chat not found' });
-        await ensureRestParticipant(req.params.id, { id: assignedStaffId, role: 'store_staff' });
-        emitChatAssigned(thread);
-        return res.json({ thread });
-      } catch (restError) {
-        console.error('Assign chat REST fallback error:', restError);
-      }
-    }
     console.error('Assign chat error:', error);
-    res.status(500).json({ message: 'Failed to assign chat' });
+    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Chat assignment was not saved.' });
   }
 };
 
