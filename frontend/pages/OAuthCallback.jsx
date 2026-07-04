@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { exchangeOAuthCode } from '../services/api';
+import { exchangeOAuthCode, getProfile } from '../services/api';
 
 const OAUTH_ERROR_MESSAGES = {
   access_denied: 'Google sign in was cancelled.',
@@ -44,12 +44,13 @@ const OAuthCallback = ({ onLogin }) => {
       clearOAuthCallbackQuery();
 
       exchangeOAuthCode(code)
-        .then((data) => {
+        .then(() => getProfile())
+        .then((user) => {
           if (cancelled) return;
-          if (!data?.user || !data?.token) {
+          if (!user?.id) {
             throw new Error('Authentication failed. Please try again.');
           }
-          onLogin(data.user, data.token);
+          onLogin(user);
           navigate('/', { replace: true });
         })
         .catch((err) => {
