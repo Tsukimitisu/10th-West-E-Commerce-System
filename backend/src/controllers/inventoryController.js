@@ -1,5 +1,6 @@
 import pool from '../config/database.js';
 import { emitStockUpdate, emitLowStockAlert } from '../socket.js';
+import { mutateInventory } from '../services/inventory.js';
 
 // Get all inventory with low stock alerts
 export const getInventory = async (req, res) => {
@@ -70,8 +71,8 @@ export const updateStock = async (req, res) => {
   const { productId } = req.params;
   const { quantity, adjustment_type, reason } = req.body;
 
-  if (typeof quantity !== 'number') {
-    return res.status(400).json({ message: 'Quantity must be a number' });
+  if (!Number.isInteger(quantity) || quantity < 0 || !['set', 'add', 'subtract'].includes(adjustment_type)) {
+    return res.status(400).json({ message: 'quantity must be a non-negative integer and adjustment_type must be set, add, or subtract' });
   }
 
   const client = await pool.connect();
@@ -124,6 +125,15 @@ export const updateStock = async (req, res) => {
       `INSERT INTO stock_movements (product_id, quantity_delta, stock_before, stock_after, reason, reference_type, created_by, metadata)
        VALUES ($1,$2,$3,$4,'adjustment','manual',$5,$6::jsonb)`,
       [productId, newStock - currentStock, currentStock, newStock, req.user.id, JSON.stringify({ adjustment_type, reason: reason || null })]
+    );
+    await client.query(
+      `INSERT INTO audit_logs (
+         actor_user_id, action, entity_type, entity_id, ip_address, user_agent, before_data, after_data, metadata
+       ) VALUES ($1,'inventory.adjust','product',$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb)`,
+      [req.user.id, String(productId), req.clientIp, req.clientUa,
+        JSON.stringify({ stock_quantity: currentStock }),
+        JSON.stringify({ stock_quantity: newStock }),
+        JSON.stringify({ adjustment_type, reason: reason || null })]
     );
 
     await client.query('COMMIT');
@@ -224,7 +234,7 @@ export const createStockAdjustment = async (req, res) => {
   try {
     await client.query('BEGIN');
     const productResult = await client.query(
-      'SELECT id, name, stock_quantity, low_stock_threshold FROM products WHERE id = $1 FOR UPDATE',
+      'SELECT id, name, stock_quantity, reserved_stock, low_stock_threshold FROM products WHERE id = $1 FOR UPDATE',
       [product_id]
     );
     if (productResult.rows.length === 0) {
@@ -236,7 +246,7 @@ export const createStockAdjustment = async (req, res) => {
     let variant = null;
     if (variant_id) {
       const variantResult = await client.query(
-        `SELECT id, product_id, stock_quantity, sku
+        `SELECT id, product_id, stock_quantity, reserved_stock, sku
          FROM product_variants WHERE id = $1 AND product_id = $2 FOR UPDATE`,
         [variant_id, product_id]
       );
@@ -252,6 +262,10 @@ export const createStockAdjustment = async (req, res) => {
     if (newStock < 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Stock cannot go below zero' });
+    }
+    if (newStock < Number(variant?.reserved_stock ?? product.reserved_stock ?? 0)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Stock cannot be reduced below reserved stock.' });
     }
 
     if (variant) {
@@ -315,11 +329,12 @@ export const createStockAdjustment = async (req, res) => {
 
 // Bulk stock update
 export const bulkUpdateStock = async (req, res) => {
-  const { updates } = req.body; // Array of { product_id, quantity, adjustment_type }
+  const { updates } = req.body;
 
   if (!Array.isArray(updates) || updates.length === 0) {
     return res.status(400).json({ message: 'Updates array is required' });
   }
+  if (updates.length > 500) return res.status(400).json({ message: 'A maximum of 500 updates is allowed.' });
 
   const client = await pool.connect();
   const results = [];
@@ -327,40 +342,22 @@ export const bulkUpdateStock = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    for (const update of updates) {
-      const { product_id, quantity, adjustment_type } = update;
-
-      const productResult = await client.query(
-        'SELECT stock_quantity FROM products WHERE id = $1',
-        [product_id]
-      );
-
-      if (productResult.rows.length === 0) {
-        continue; // Skip if product not found
-      }
-
-      const currentStock = parseInt(productResult.rows[0].stock_quantity);
-      let newStock;
-
-      if (adjustment_type === 'set') {
-        newStock = quantity;
-      } else if (adjustment_type === 'add') {
-        newStock = currentStock + quantity;
-      } else if (adjustment_type === 'subtract') {
-        newStock = currentStock - quantity;
-      } else {
-        newStock = quantity;
-      }
-
-      if (newStock >= 0) {
-        await client.query(
-          'UPDATE products SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-          [newStock, product_id]
-        );
-        results.push({ product_id, success: true, new_stock: newStock });
-      } else {
-        results.push({ product_id, success: false, error: 'Stock cannot be negative' });
-      }
+    const orderedUpdates = [...updates].sort((a, b) =>
+      Number(a.product_id) - Number(b.product_id) || Number(a.variant_id || 0) - Number(b.variant_id || 0));
+    for (const update of orderedUpdates) {
+      const result = await mutateInventory(client, {
+        productId: Number(update.product_id),
+        variantId: update.variant_id == null ? null : Number(update.variant_id),
+        quantity: Number(update.quantity),
+        adjustmentType: update.adjustment_type,
+        reason: 'bulk_adjustment',
+        referenceType: 'bulk_update',
+        actorId: req.user.id,
+        ipAddress: req.clientIp,
+        userAgent: req.clientUa,
+        metadata: { notes: String(update.reason || '').slice(0, 500) },
+      });
+      results.push({ ...result, success: true });
     }
 
     await client.query('COMMIT');
@@ -370,16 +367,16 @@ export const bulkUpdateStock = async (req, res) => {
       emitStockUpdate({ product_id: r.product_id, stock_quantity: r.new_stock });
     }
 
-    res.json({
+    return res.json({
       message: 'Bulk update completed',
       results,
-      success_count: results.filter(r => r.success).length,
-      failed_count: results.filter(r => !r.success).length
+      success_count: results.length,
+      failed_count: 0
     });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Bulk update stock error:', error);
-    res.status(500).json({ message: 'Failed to update stock' });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : 'Failed to update stock' });
   } finally {
     client.release();
   }
@@ -387,14 +384,19 @@ export const bulkUpdateStock = async (req, res) => {
 
 // Batch receive stock (barcode scanning workflow)
 export const batchReceiveStock = async (req, res) => {
-  const { items, notes } = req.body; // items: [{ product_id, quantity }]
+  const { items, notes } = req.body;
+  const idempotencyKey = String(req.get('Idempotency-Key') || '').trim();
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ message: 'Items array is required and cannot be empty' });
   }
+  if (!/^[A-Za-z0-9._:-]{8,255}$/.test(idempotencyKey)) {
+    return res.status(400).json({ message: 'A valid Idempotency-Key header is required.' });
+  }
+  if (items.length > 500) return res.status(400).json({ message: 'A maximum of 500 items is allowed.' });
 
   for (const item of items) {
-    if (!item.product_id || !item.quantity || item.quantity < 1) {
+    if (!Number.isInteger(Number(item.product_id)) || !Number.isInteger(Number(item.quantity)) || Number(item.quantity) < 1) {
       return res.status(400).json({ message: 'Each item must have a valid product_id and quantity >= 1' });
     }
   }
@@ -404,73 +406,67 @@ export const batchReceiveStock = async (req, res) => {
 
   try {
     await client.query('BEGIN');
-
-    for (const item of items) {
-      const { product_id, quantity } = item;
-
-      const productResult = await client.query(
-        'SELECT id, name, stock_quantity, low_stock_threshold FROM products WHERE id = $1',
-        [product_id]
-      );
-
-      if (productResult.rows.length === 0) {
-        results.push({ product_id, success: false, error: 'Product not found' });
-        continue;
-      }
-
-      const product = productResult.rows[0];
-      const currentStock = parseInt(product.stock_quantity);
-      const newStock = currentStock + quantity;
-
-      await client.query(
-        'UPDATE products SET stock_quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [newStock, product_id]
-      );
-
-      try {
-        await client.query(
-          `INSERT INTO stock_adjustments (product_id, quantity_change, reason, notes, adjusted_by, status)
-           VALUES ($1, $2, 'received', $3, $4, 'approved')`,
-          [product_id, quantity, notes || 'Batch receive via barcode scan', req.user.id]
-        );
-      } catch (adjErr) {
-        console.warn('Could not record stock adjustment:', adjErr.message);
-      }
-
-      results.push({
-        product_id,
-        name: product.name,
-        success: true,
-        previous_stock: currentStock,
-        new_stock: newStock,
-        quantity_added: quantity
-      });
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`inventory-receive:${idempotencyKey}`]);
+    const prior = await client.query(
+      `SELECT metadata->'result' AS result FROM audit_logs
+       WHERE action='inventory.batch_receive' AND metadata->>'idempotency_key'=$1
+       ORDER BY id DESC LIMIT 1`,
+      [idempotencyKey]
+    );
+    if (prior.rows[0]?.result) {
+      await client.query('COMMIT');
+      return res.json({ ...prior.rows[0].result, idempotent_replay: true });
     }
 
+    const orderedItems = [...items].sort((a, b) =>
+      Number(a.product_id) - Number(b.product_id) || Number(a.variant_id || 0) - Number(b.variant_id || 0));
+    for (const item of orderedItems) {
+      const result = await mutateInventory(client, {
+        productId: Number(item.product_id),
+        variantId: item.variant_id == null ? null : Number(item.variant_id),
+        quantity: Number(item.quantity),
+        adjustmentType: 'add',
+        reason: 'received',
+        referenceType: 'batch_receive',
+        actorId: req.user.id,
+        ipAddress: req.clientIp,
+        userAgent: req.clientUa,
+        metadata: { notes: String(notes || 'Batch receive').slice(0, 1000), idempotency_key: idempotencyKey },
+        recordAdjustment: true,
+      });
+      results.push({ ...result, success: true, quantity_added: Number(item.quantity) });
+    }
+
+    const response = {
+      message: 'Stock received successfully',
+      results,
+      total_items: items.length,
+      success_count: results.length,
+      failed_count: 0
+    };
+    await client.query(
+      `INSERT INTO audit_logs (actor_user_id,action,entity_type,entity_id,ip_address,user_agent,metadata)
+       VALUES ($1,'inventory.batch_receive','inventory_batch',$2,$3,$4,$5::jsonb)`,
+      [req.user.id, idempotencyKey, req.clientIp, req.clientUa,
+        JSON.stringify({ idempotency_key: idempotencyKey, result: response })]
+    );
     await client.query('COMMIT');
 
     // Emit real-time updates
     for (const r of results.filter(r => r.success)) {
       emitStockUpdate({ product_id: r.product_id, name: r.name, stock_quantity: r.new_stock, previous_stock: r.previous_stock, adjustment: r.quantity_added });
 
-      const productCheck = await pool.query('SELECT low_stock_threshold FROM products WHERE id = $1', [r.product_id]);
-      const threshold = parseInt(productCheck.rows[0]?.low_stock_threshold || 5);
+      const threshold = r.low_stock_threshold;
       if (r.new_stock <= threshold) {
         emitLowStockAlert({ id: r.product_id, name: r.name, stock_quantity: r.new_stock, low_stock_threshold: threshold });
       }
     }
 
-    res.json({
-      message: 'Stock received successfully',
-      results,
-      total_items: items.length,
-      success_count: results.filter(r => r.success).length,
-      failed_count: results.filter(r => !r.success).length
-    });
+    return res.json(response);
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Batch receive stock error:', error);
-    res.status(500).json({ message: 'Failed to receive stock' });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : 'Failed to receive stock' });
   } finally {
     client.release();
   }
