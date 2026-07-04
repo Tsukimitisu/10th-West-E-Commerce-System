@@ -58,7 +58,6 @@ import pool from './config/database.js';
 import { startExpiredReservationCleanup } from './controllers/secureCheckoutController.js';
 import { getPaymongoConfigurationStatus } from './services/paymongo.js';
 import { getShippingConfigurationStatus } from './services/shipping/providers/index.js';
-import { toPublicProviderStatus } from './services/shipping/providers/providerUtils.js';
 import { getTrackingConfigurationStatus } from './services/tracking/providers/index.js';
 import { startMaintenanceWorkers } from './services/maintenance.js';
 
@@ -73,11 +72,7 @@ dotenv.config({ path: envPath });
 
 // Validate required environment variables
 const requiredEnvVars = [
-  'JWT_SECRET',
-  'EMAIL_USER',
-  'EMAIL_PASSWORD',
-  'EMAIL_HOST',
-  'EMAIL_FROM'
+  'JWT_SECRET'
 ];
 
 if (process.env.NODE_ENV === 'production') {
@@ -88,12 +83,7 @@ if (process.env.NODE_ENV === 'production') {
     'COOKIE_SECURE',
     'COOKIE_SAME_SITE',
     'CSRF_SECRET',
-    'PAYMONGO_SECRET_KEY',
-    'PAYMONGO_PUBLIC_KEY',
-    'PAYMONGO_WEBHOOK_SECRET',
-    'CLOUDINARY_CLOUD_NAME',
-    'CLOUDINARY_API_KEY',
-    'CLOUDINARY_API_SECRET'
+    'TWO_FACTOR_ENCRYPTION_KEY'
   );
 }
 
@@ -341,22 +331,17 @@ app.get('/api/ready', async (_req, res) => {
     await pool.query('SELECT 1');
     const shipping = getShippingConfigurationStatus();
     const tracking = getTrackingConfigurationStatus();
+    const paymongo = getPaymongoConfigurationStatus();
+    const integrationsReady = shipping.ready && tracking.ready && paymongo.configured;
     res.json({
-      status: 'ready',
-      database: 'ok',
-      shipping_provider: shipping.provider,
-      shipping_provider_configured: shipping.ready,
-      shipping_status: toPublicProviderStatus(shipping),
-      shipping_country: String(process.env.SHIPPING_COUNTRY || 'PH').toUpperCase(),
-      shipping_carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
-      tracking_provider: tracking.provider,
-      tracking_provider_configured: tracking.ready,
-      tracking_status: toPublicProviderStatus(tracking),
-      mock_shipping_blocked_in_production: process.env.NODE_ENV === 'production' && shipping.mock,
+      status: 'available',
+      core_ready: true,
+      commerce_ready: true,
+      integrations_ready: integrationsReady,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    res.status(503).json({ status: 'not_ready', database: 'unavailable', timestamp: new Date().toISOString() });
+    res.status(503).json({ status: 'unavailable', core_ready: false, commerce_ready: false, integrations_ready: false, timestamp: new Date().toISOString() });
   }
 });
 

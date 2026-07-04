@@ -81,7 +81,10 @@ router.get('/readiness', async (_req, res) => {
     const tracking = getTrackingConfigurationStatus();
     const activity = await getShippingOperationalReadiness(pool);
     return res.json({
-      status: 'ready',
+      status: 'available',
+      core_ready: true,
+      commerce_ready: true,
+      integrations_ready: paymongo.configured && shipping.ready && tracking.ready,
       database: 'ok',
       integrations: {
         paymongo: paymongo.configured ? 'configured' : 'blocked_by_credentials',
@@ -120,7 +123,10 @@ router.get('/readiness', async (_req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch {
-    return res.status(503).json({ status: 'not_ready', database: 'unavailable', timestamp: new Date().toISOString() });
+    return res.status(503).json({
+      status: 'unavailable', core_ready: false, commerce_ready: false,
+      integrations_ready: false, database: 'unavailable', timestamp: new Date().toISOString(),
+    });
   }
 });
 
