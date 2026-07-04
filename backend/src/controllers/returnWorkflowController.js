@@ -1,6 +1,6 @@
 import pool from '../config/database.js';
 import { createPaymongoRefund } from '../services/paymongo.js';
-import { emitOrderStatusUpdate, emitReturnCreated, emitReturnUpdated, emitStockUpdate } from '../socket.js';
+import { emitNotification, emitOrderStatusUpdate, emitReturnCreated, emitReturnUpdated, emitStockUpdate } from '../socket.js';
 
 const cleanEvidence = (input) => Array.isArray(input)
   ? [...new Set(input.map((value) => String(value || '').trim()).filter((value) => /^https:\/\//i.test(value)).slice(0, 8))]
@@ -164,7 +164,8 @@ export const processRefundSecure = async (req, res) => {
       return res.status(existing.rows[0].status === 'succeeded' ? 200 : 202).json(existing.rows[0]);
     }
     const returned = await client.query(
-      `SELECT r.*, o.payment_method, p.id AS payment_row_id, p.provider, p.external_payment_id
+      `SELECT r.*, o.payment_method, o.status AS order_status, o.payment_status AS order_payment_status,
+              p.id AS payment_row_id, p.provider, p.external_payment_id, p.status AS provider_payment_status
        FROM returns r JOIN orders o ON o.id=r.order_id LEFT JOIN payments p ON p.order_id=o.id
        WHERE r.id=$1 ORDER BY p.created_at DESC LIMIT 1 FOR UPDATE OF r`,
       [returnId]
@@ -185,7 +186,17 @@ export const processRefundSecure = async (req, res) => {
       [returnId, data.refund_amount, method, provider, key]
     );
     refund = { ...created.rows[0], external_payment_id: data.external_payment_id, order_id: data.order_id };
-    await client.query(`INSERT INTO refund_attempts (refund_id,idempotency_key) VALUES ($1,$2)`, [refund.id, key]);
+    await client.query(
+      `INSERT INTO refund_attempts (refund_id,idempotency_key,provider_response)
+       VALUES ($1,$2,$3::jsonb)`,
+      [refund.id, key, JSON.stringify({
+        recovery: {
+          order_status: data.order_status,
+          order_payment_status: data.order_payment_status,
+          provider_payment_status: data.provider_payment_status,
+        },
+      })]
+    );
     await client.query(`UPDATE returns SET status='refund_processing',updated_at=NOW() WHERE id=$1`, [returnId]);
     await client.query(`UPDATE orders SET status='refund_processing',payment_status='processing',updated_at=NOW() WHERE id=$1`, [data.order_id]);
     await client.query('COMMIT');
@@ -210,10 +221,113 @@ export const processRefundSecure = async (req, res) => {
     const completed = await finalizeRefund({ refundId: refund.id, providerReference: reference, providerResponse, actorId: req.user.id });
     return res.json(completed);
   } catch (error) {
-    await pool.query(`UPDATE refunds SET status='failed',updated_at=NOW() WHERE id=$1 AND status='processing'`, [refund.id]).catch(() => {});
-    await pool.query(`UPDATE refund_attempts SET status='failed',error_message=$2,completed_at=NOW() WHERE refund_id=$1 AND status='started'`, [refund.id, error.message]).catch(() => {});
-    await pool.query(`UPDATE returns SET status='approved',updated_at=NOW() WHERE id=$1 AND status='refund_processing'`, [returnId]).catch(() => {});
+    const recovery = await compensateFailedRefund({
+      refundId: refund.id,
+      actorId: req.user.id,
+      errorMessage: error.message,
+      ipAddress: req.clientIp,
+      userAgent: req.clientUa,
+    }).catch((compensationError) => {
+      console.error('Refund compensation failed:', compensationError);
+      return null;
+    });
+    if (recovery?.notification) emitNotification(recovery.user_id, recovery.notification);
+    if (recovery?.order_id) emitOrderStatusUpdate(recovery.order_id, recovery.order_status);
+    if (recovery?.return_id) emitReturnUpdated({ id: recovery.return_id, status: 'manual_review' });
     console.error('Refund provider/finalization failed:', error);
-    return res.status(502).json({ message: 'Refund failed and can be retried with a new idempotency key.' });
+    return res.status(502).json({
+      message: recovery
+        ? 'Refund failed. The original payment state was restored and this return requires manual review.'
+        : 'Refund failed and automatic recovery could not be confirmed. Immediate administrator review is required.',
+      status: 'manual_review',
+    });
+  }
+};
+
+export const compensateFailedRefund = async ({
+  refundId,
+  actorId,
+  errorMessage,
+  ipAddress = null,
+  userAgent = null,
+}) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const locked = await client.query(
+      `SELECT f.id, f.status, f.return_id, r.order_id, r.user_id,
+              ra.provider_response->'recovery' AS recovery
+       FROM refunds f
+       JOIN returns r ON r.id=f.return_id
+       LEFT JOIN LATERAL (
+         SELECT provider_response FROM refund_attempts
+         WHERE refund_id=f.id ORDER BY id DESC LIMIT 1
+       ) ra ON true
+       WHERE f.id=$1 FOR UPDATE OF f,r`,
+      [refundId]
+    );
+    const row = locked.rows[0];
+    if (!row) throw new Error('Refund record not found during compensation.');
+    if (row.status === 'succeeded') {
+      await client.query('COMMIT');
+      return null;
+    }
+    const recovery = row.recovery || {};
+    const orderStatus = String(recovery.order_status || 'return_approved');
+    const orderPaymentStatus = String(recovery.order_payment_status || 'paid');
+    const providerPaymentStatus = String(recovery.provider_payment_status || 'paid');
+    const safeError = String(errorMessage || 'Refund provider failure').slice(0, 2000);
+
+    await client.query(
+      `UPDATE refunds SET status='failed',updated_at=NOW()
+       WHERE id=$1 AND status IN ('pending','processing','manual_review','failed')`,
+      [refundId]
+    );
+    await client.query(
+      `UPDATE refund_attempts
+       SET status='failed',error_message=$2,completed_at=NOW()
+       WHERE refund_id=$1 AND status='started'`,
+      [refundId, safeError]
+    );
+    await client.query(`UPDATE returns SET status='manual_review',updated_at=NOW() WHERE id=$1`, [row.return_id]);
+    await client.query(
+      `UPDATE orders SET status=$2,payment_status=$3,updated_at=NOW() WHERE id=$1`,
+      [row.order_id, orderStatus, orderPaymentStatus]
+    );
+    await client.query(
+      `UPDATE payments SET status=$2,updated_at=NOW()
+       WHERE order_id=$1 AND status='processing'`,
+      [row.order_id, providerPaymentStatus]
+    );
+    await client.query(
+      `INSERT INTO audit_logs (
+         actor_user_id,action,entity_type,entity_id,ip_address,user_agent,before_data,after_data,metadata
+       ) VALUES ($1,'refund.failed_compensated','refund',$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb)`,
+      [actorId, String(refundId), ipAddress, userAgent,
+        JSON.stringify({ refund_status: row.status, return_status: 'refund_processing' }),
+        JSON.stringify({ refund_status: 'failed', return_status: 'manual_review', order_status: orderStatus, payment_status: orderPaymentStatus }),
+        JSON.stringify({ error: safeError, admin_action_required: true })]
+    );
+    const notification = await client.query(
+      `INSERT INTO notifications (
+         user_id,type,title,message,reference_id,reference_type,metadata
+       ) VALUES ($1,'refund_failed','Refund requires review',$2,$3,'return',$4::jsonb)
+       RETURNING *`,
+      [row.user_id,
+        'We could not complete your refund automatically. Our team must review it; no additional refund was issued.',
+        row.return_id,
+        JSON.stringify({ return_id: row.return_id, order_id: row.order_id, status: 'manual_review' })]
+    );
+    await client.query('COMMIT');
+    return {
+      ...row,
+      order_status: orderStatus,
+      notification: notification.rows[0],
+    };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
   }
 };
