@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import pool from '../config/database.js';
 import { USER_ROLES } from '../constants/schemaEnums.js';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
-import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
+import { listSettings } from '../services/settings.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import { getShippingConfigurationStatus } from '../services/shipping/providers/index.js';
 import { toPublicProviderStatus } from '../services/shipping/providers/providerUtils.js';
@@ -57,61 +57,6 @@ const validateSettings = (category, settings) => {
   if (!Object.keys(normalized).length) return { error: 'At least one setting is required.' };
   return { normalized };
 };
-
-// Public settings reads are used by storefront pages.
-router.get('/settings', authenticateToken, requireRole('super_admin', 'owner', 'admin'), requirePermission('settings.manage'), async (req, res) => {
-  try {
-    const { category } = req.query;
-    if (shouldUseDatabaseReadFallback()) {
-      const params = {
-        select: '*',
-        order: 'category.asc,key.asc',
-      };
-      if (category) {
-        params.category = `eq.${category}`;
-        params.order = 'key.asc';
-      }
-      const settings = await supabaseRestFetch('system_settings', params);
-      return res.json(Array.isArray(settings) ? settings : []);
-    }
-
-    let result;
-    if (category) {
-      result = await pool.query('SELECT * FROM system_settings WHERE category = $1 ORDER BY key', [category]);
-    } else {
-      result = await pool.query('SELECT * FROM system_settings ORDER BY category, key');
-    }
-    res.json(maskSettingRows(result.rows));
-  } catch (err) {
-    console.error('Get settings error:', err);
-    if (isDatabaseConnectivityError(err)) {
-      return res.json([]);
-    }
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-router.get('/settings/:category', authenticateToken, requireRole('super_admin', 'owner', 'admin'), requirePermission('settings.manage'), async (req, res) => {
-  try {
-    if (shouldUseDatabaseReadFallback()) {
-      const settings = await supabaseRestFetch('system_settings', {
-        select: '*',
-        category: `eq.${req.params.category}`,
-        order: 'key.asc',
-      });
-      return res.json(Array.isArray(settings) ? settings : []);
-    }
-
-    const result = await pool.query('SELECT * FROM system_settings WHERE category = $1 ORDER BY key', [req.params.category]);
-    res.json(maskSettingRows(result.rows));
-  } catch (err) {
-    console.error('Get settings by category error:', err);
-    if (isDatabaseConnectivityError(err)) {
-      return res.json([]);
-    }
-    res.status(500).json({ message: 'Server error' });
-  }
-});
 
 // All admin/system routes require super_admin only
 router.use(authenticateToken, (req, res, next) => {
@@ -334,14 +279,7 @@ router.delete('/users/:id', async (req, res) => {
 // Get all settings or by category
 router.get('/settings', async (req, res) => {
   try {
-    const { category } = req.query;
-    let result;
-    if (category) {
-      result = await pool.query('SELECT * FROM system_settings WHERE category = $1 ORDER BY key', [category]);
-    } else {
-      result = await pool.query('SELECT * FROM system_settings ORDER BY category, key');
-    }
-    res.json(maskSettingRows(result.rows));
+    res.json(maskSettingRows(await listSettings(pool, req.query.category || null)));
   } catch (err) {
     console.error('Get settings error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -351,8 +289,7 @@ router.get('/settings', async (req, res) => {
 // Get settings by category (route param)
 router.get('/settings/:category', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM system_settings WHERE category = $1 ORDER BY key', [req.params.category]);
-    res.json(maskSettingRows(result.rows));
+    res.json(maskSettingRows(await listSettings(pool, req.params.category)));
   } catch (err) {
     console.error('Get settings by category error:', err);
     res.status(500).json({ message: 'Server error' });

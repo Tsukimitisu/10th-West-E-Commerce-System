@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import pool from '../config/database.js';
 import { createPaymongoGcashCheckout, verifyPaymongoWebhookSignature } from '../services/paymongo.js';
 import { releaseDiscountUsage } from '../services/discountUsage.js';
+import { getRuntimeSettings } from '../services/settings.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 
@@ -213,6 +214,9 @@ export const createCheckout = async (req, res) => {
     requestHash = hashRequest(requestIdentity);
     client = await pool.connect();
     await client.query('BEGIN');
+    const paymentSettings = await getRuntimeSettings(client, 'payment', { cash_enabled: true, gcash_enabled: false });
+    if (paymentMethod === 'cod' && !paymentSettings.cash_enabled) throw fail(503, 'Cash on delivery is currently disabled.');
+    if (paymentMethod === 'gcash' && !paymentSettings.gcash_enabled) throw fail(503, 'GCash checkout is currently disabled.');
 
     const existing = await client.query(
       `SELECT * FROM idempotency_keys WHERE user_id = $1 AND scope = 'checkout' AND key = $2 FOR UPDATE`,
@@ -241,7 +245,8 @@ export const createCheckout = async (req, res) => {
     const { snapshots, subtotal } = await loadAndReserveItems(client, items, expiresAt);
     const { promotion, discount } = await calculateDiscount(client, req.user.id, req.body?.discount_code, subtotal);
     const shippingFee = await calculateShipping(client, subtotal);
-    const taxRate = Math.max(0, Number(process.env.CHECKOUT_TAX_RATE || 0));
+    const taxSettings = await getRuntimeSettings(client, 'tax', { enabled: false, rate: 0 });
+    const taxRate = taxSettings.enabled ? Math.max(0, taxSettings.rate / 100) : 0;
     const taxAmount = roundMoney(Math.max(0, subtotal - discount + shippingFee) * taxRate);
     const total = roundMoney(subtotal - discount + shippingFee + taxAmount);
     const snapshot = addressSnapshot(address);

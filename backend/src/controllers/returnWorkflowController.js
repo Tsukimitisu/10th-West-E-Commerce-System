@@ -1,6 +1,7 @@
 import pool from '../config/database.js';
 import { createPaymongoRefund } from '../services/paymongo.js';
 import { emitNotification, emitOrderStatusUpdate, emitReturnCreated, emitReturnUpdated, emitStockUpdate } from '../socket.js';
+import { getRuntimeSettings } from '../services/settings.js';
 
 const cleanEvidence = (input) => Array.isArray(input)
   ? [...new Set(input.map((value) => String(value || '').trim()).filter((value) => /^https:\/\//i.test(value)).slice(0, 8))]
@@ -32,7 +33,8 @@ export const createReturnSecure = async (req, res) => {
     const order = orderResult.rows[0];
     if (!order) { await client.query('ROLLBACK'); return res.status(404).json({ message: 'Delivered order not found.' }); }
     if (order.status !== 'delivered') { await client.query('ROLLBACK'); return res.status(409).json({ message: 'Only delivered orders are eligible for return.' }); }
-    const returnDays = Math.max(1, Number(process.env.RETURN_WINDOW_DAYS || 30));
+    const returnSettings = await getRuntimeSettings(client, 'returns', { return_window_days: 15 });
+    const returnDays = Math.max(0, returnSettings.return_window_days);
     const deliveredAt = new Date(order.delivered_at || order.updated_at);
     if (Date.now() > deliveredAt.getTime() + returnDays * 86400000) {
       await client.query('ROLLBACK');
