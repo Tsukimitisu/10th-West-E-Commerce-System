@@ -6,6 +6,7 @@ import { buildOrderStatusMessage, createNotification as createUserNotification, 
 import { validatePhilippineAddress } from '../services/psgc.js';
 import { ensurePaymentOrderColumns } from './paymentController.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
+import { getRuntimeSettings } from '../services/settings.js';
 
 const STAFF_ROLES = STAFF_ROLE_SET;
 const VALID_ORDER_STATUSES = ORDER_STATUSES;
@@ -1341,6 +1342,13 @@ export const createOrder = async (req, res) => {
     }
   }
 };
+export const escapeInvoiceHtml = (value) => String(value ?? '')
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;');
+
 // Generate invoice HTML for an order
 export const getOrderInvoice = async (req, res) => {
   try {
@@ -1375,6 +1383,16 @@ export const getOrderInvoice = async (req, res) => {
     );
 
     const items = itemsResult.rows;
+    const [storeSettings, legalSettings, taxSettings] = await Promise.all([
+      getRuntimeSettings(pool, 'store', { name: '10th West Moto', address: '', email: '', phone: '' }),
+      getRuntimeSettings(pool, 'legal', { tax_id: '', business_registration: '', vat_registered: false }),
+      getRuntimeSettings(pool, 'tax', { enabled: false, name: 'Tax', rate: 0 }),
+    ]);
+    const legalLines = [
+      legalSettings.tax_id ? `Tax ID: ${escapeInvoiceHtml(legalSettings.tax_id)}` : '',
+      legalSettings.business_registration ? `Business registration: ${escapeInvoiceHtml(legalSettings.business_registration)}` : '',
+      legalSettings.vat_registered ? 'VAT registered' : '',
+    ].filter(Boolean);
 
     // Generate invoice HTML (BIR RR 18-2012 compliant)
     const subtotal = roundMoney(items.reduce((sum, item) => {
@@ -1392,7 +1410,7 @@ export const getOrderInvoice = async (req, res) => {
       <html>
       <head>
         <meta charset="utf-8">
-        <title>Invoice #${order.id}</title>
+        <title>Invoice #${escapeInvoiceHtml(order.id)}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
@@ -1426,33 +1444,31 @@ export const getOrderInvoice = async (req, res) => {
       </head>
       <body>
         <div class="invoice-header">
-          <div class="company-name">10TH WEST MOTO</div>
+          <div class="company-name">${escapeInvoiceHtml(storeSettings.name)}</div>
           <div class="company-info">
             Motorcycle Parts &amp; Accessories<br>
-            Unit 10, West Avenue Commercial Center, Quezon City, Metro Manila 1104, Philippines<br>
-            DTI Reg. No.: 3217456 &nbsp;|&nbsp; BIR TIN: 123-456-789-000 (VAT Registered)
+            ${escapeInvoiceHtml(storeSettings.address)}
+            ${legalLines.length ? `<br>${legalLines.join(' &nbsp;|&nbsp; ')}` : ''}
           </div>
-          <div class="invoice-title">OFFICIAL RECEIPT / INVOICE</div>
-          <div class="or-number">OR No.: OR-${String(order.id).padStart(8, '0')}</div>
+          <div class="invoice-title">INVOICE</div>
         </div>
 
         <div class="info-section">
           <div class="info-block">
             <h3>SOLD TO:</h3>
             <p>
-              <strong>${order.customer_name || 'Customer'}</strong><br>
-              ${order.customer_email || ''}<br>
-              ${order.shipping_address ? order.shipping_address.replace(/\n/g, '<br>') : ''}
+              <strong>${escapeInvoiceHtml(order.customer_name || 'Customer')}</strong><br>
+              ${escapeInvoiceHtml(order.customer_email || '')}<br>
+              ${escapeInvoiceHtml(order.shipping_address || '').replace(/\r?\n/g, '<br>')}
             </p>
           </div>
           <div class="info-block">
             <h3>INVOICE DETAILS:</h3>
             <p>
-              <strong>Invoice #:</strong> ${order.id}<br>
-              <strong>OR No.:</strong> OR-${String(order.id).padStart(8, '0')}<br>
+              <strong>Invoice #:</strong> ${escapeInvoiceHtml(order.id)}<br>
               <strong>Date:</strong> ${new Date(order.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
-              <strong>Payment Method:</strong> ${order.payment_method || 'N/A'}<br>
-              <strong>Status:</strong> ${order.status.toUpperCase()}
+              <strong>Payment Method:</strong> ${escapeInvoiceHtml(order.payment_method || 'N/A')}<br>
+              <strong>Status:</strong> ${escapeInvoiceHtml(String(order.status || '').toUpperCase())}
             </p>
           </div>
         </div>
@@ -1470,8 +1486,8 @@ export const getOrderInvoice = async (req, res) => {
           <tbody>
             ${items.map(item => `
               <tr>
-                <td class="item-description">${item.product_name || 'Product'}</td>
-                <td>${item.part_number || '-'}</td>
+                <td class="item-description">${escapeInvoiceHtml(item.product_name || 'Product')}</td>
+                <td>${escapeInvoiceHtml(item.part_number || '-')}</td>
                 <td class="text-right">₱${roundMoney(item.product_price).toFixed(2)}</td>
                 <td class="text-right">${toFiniteNumber(item.quantity, 0)}</td>
                 <td class="text-right">₱${roundMoney(roundMoney(item.product_price) * toFiniteNumber(item.quantity, 0)).toFixed(2)}</td>
@@ -1483,11 +1499,11 @@ export const getOrderInvoice = async (req, res) => {
         <div class="totals">
           <table>
             <tr class="vat-section">
-              <td>VATable Sales:</td>
+              <td>${taxSettings.enabled ? `${escapeInvoiceHtml(taxSettings.name)}able Sales:` : 'Subtotal:'}</td>
               <td class="text-right">₱${vatableSales.toFixed(2)}</td>
             </tr>
             <tr class="vat-section">
-              <td>VAT (12%):</td>
+              <td>${escapeInvoiceHtml(taxSettings.name)} (${Number(taxSettings.rate)}%):</td>
               <td class="text-right">₱${vatAmount.toFixed(2)}</td>
             </tr>
             ${discount > 0 ? `
@@ -1504,17 +1520,11 @@ export const getOrderInvoice = async (req, res) => {
         </div>
 
         <div class="footer">
-          <p><strong>10th West Moto Parts</strong></p>
-          <p>Unit 10, West Avenue Commercial Center, Quezon City, Metro Manila 1104</p>
-          <p>BIR TIN: 123-456-789-000 &nbsp;|&nbsp; DTI Reg. No.: 3217456</p>
-          <p>Phone: (02) 8888-1234 &nbsp;|&nbsp; Email: support@10thwestmoto.com</p>
+          <p><strong>${escapeInvoiceHtml(storeSettings.name)}</strong></p>
+          ${storeSettings.address ? `<p>${escapeInvoiceHtml(storeSettings.address)}</p>` : ''}
+          ${legalLines.length ? `<p>${legalLines.join(' &nbsp;|&nbsp; ')}</p>` : ''}
+          ${(storeSettings.phone || storeSettings.email) ? `<p>${escapeInvoiceHtml(storeSettings.phone)} ${storeSettings.phone && storeSettings.email ? '&nbsp;|&nbsp;' : ''} ${escapeInvoiceHtml(storeSettings.email)}</p>` : ''}
           <p>Thank you for your business!</p>
-        </div>
-
-        <div class="legal-note">
-          <p>This document serves as an Official Receipt per BIR Revenue Regulations No. 18-2012.</p>
-          <p>For returns, you may return products within 7 days of delivery per DTI DAO 21-01.</p>
-          <p>For questions, contact returns@10thwestmoto.com or call (02) 8888-1234.</p>
         </div>
       </body>
       </html>

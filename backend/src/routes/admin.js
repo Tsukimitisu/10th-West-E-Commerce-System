@@ -20,6 +20,11 @@ const SETTING_RULES = {
   shipping: { enable_pickup: booleanRule, express_rate: numberRule(0, 100000), flat_rate: numberRule(0, 100000), free_threshold: numberRule(0, 1000000) },
   returns: { return_window_days: numberRule(0, 365) },
   tax: { enabled: booleanRule, inclusive: booleanRule, name: textRule(40), rate: numberRule(0, 100) },
+  legal: {
+    tax_id: (v) => /^[A-Za-z0-9 -]{3,40}$/.test(v),
+    business_registration: (v) => /^[A-Za-z0-9 -]{3,80}$/.test(v),
+    vat_registered: booleanRule,
+  },
   email: { from_email: textRule(254), from_name: textRule(120), order_confirmation: booleanRule, promotions: booleanRule, return_approval: booleanRule, shipping_update: booleanRule },
   home: { announcements_enabled: booleanRule },
   security: {
