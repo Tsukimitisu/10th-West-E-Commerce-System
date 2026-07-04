@@ -5,6 +5,10 @@ const REVENUE_ORDER_STATUSES = ['paid', 'processing', 'packed', 'ready_for_picku
 const REVENUE_ORDER_STATUS_SQL = REVENUE_ORDER_STATUSES.map((status) => `'${status}'`).join(', ');
 const PAID_REPORT_STATUSES = new Set(REVENUE_ORDER_STATUSES);
 const BUSINESS_TIME_ZONE = process.env.BUSINESS_TIME_ZONE || 'Asia/Manila';
+const recognizedSaleSql = (alias) => `${alias}.status IN (${REVENUE_ORDER_STATUS_SQL})
+  AND ${alias}.payment_status IN ('paid', 'partially_refunded')
+  AND COALESCE(${alias}.integrity_status, 'valid') = 'valid'
+  AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = ${alias}.id)`;
 
 const buildDateFilter = ({ range = '30d', startDate, endDate, alias = 'o', startIndex = 1 } = {}) => {
   const column = `${alias}.created_at`;
@@ -70,7 +74,7 @@ const inWindow = (createdAt, window) => {
 
 const getReportOrdersFallback = async (filters = {}) => {
   const orders = await supabaseRestFetch('orders', {
-    select: 'id,total_amount,discount_amount,source,status,created_at',
+    select: 'id,total_amount,discount_amount,source,status,payment_status,integrity_status,user_id,created_at',
     status: `in.(${REVENUE_ORDER_STATUSES.join(',')})`,
     order: 'created_at.desc',
     limit: 5000,
@@ -81,7 +85,9 @@ const getReportOrdersFallback = async (filters = {}) => {
 
   const window = resolveDateWindow(filters);
   return (Array.isArray(orders) ? orders : [])
-    .filter((order) => PAID_REPORT_STATUSES.has(String(order.status || '').toLowerCase()))
+    .filter((order) => PAID_REPORT_STATUSES.has(String(order.status || '').toLowerCase())
+      && ['paid', 'partially_refunded'].includes(String(order.payment_status || '').toLowerCase())
+      && String(order.integrity_status || 'valid') === 'valid')
     .filter((order) => inWindow(order.created_at, window));
 };
 
@@ -100,7 +106,7 @@ const getProductsFallback = async () => {
 const getOrderItemsFallback = async (orderIds) => {
   if (!orderIds.length) return [];
   const items = await supabaseRestFetch('order_items', {
-    select: 'id,order_id,product_id,quantity,product_price',
+    select: 'id,order_id,product_id,product_name,sku_snapshot,quantity,product_price,unit_cost_snapshot',
     order_id: `in.(${orderIds.join(',')})`,
     limit: 10000,
   }).catch((error) => {
@@ -171,17 +177,21 @@ const topProductsFallback = async ({ limit = 10, start_date, end_date } = {}) =>
   items.forEach((item) => {
     const productId = Number(item.product_id);
     const product = productMap.get(productId);
-    if (!product) return;
     const current = totals.get(productId) || {
-      ...product,
-      category_name: product.categories?.name || product.category_name,
+      ...(product || {}),
+      id: productId,
+      name: product?.name || item.product_name || `Archived product #${productId}`,
+      part_number: product?.part_number || item.sku_snapshot || null,
+      category_name: product?.categories?.name || product?.category_name || 'Archived',
       order_count: 0,
       total_sold: 0,
+      quantity_sold: 0,
       total_revenue: 0,
     };
     current.order_count += 1;
     current.total_sold += toNumber(item.quantity);
-    current.total_revenue += toNumber(item.product_price || product.price) * toNumber(item.quantity);
+    current.quantity_sold += toNumber(item.quantity);
+    current.total_revenue += toNumber(item.product_price || product?.price) * toNumber(item.quantity);
     totals.set(productId, current);
   });
 
@@ -210,24 +220,25 @@ const dailyTrendFallback = async ({ days = 30 } = {}) => {
 const profitReportFallback = async ({ start_date, end_date } = {}) => {
   const orders = await getReportOrdersFallback({ range: 'custom', start_date, end_date });
   const orderIds = orders.map((order) => Number(order.id)).filter(Boolean);
-  const [items, products] = await Promise.all([getOrderItemsFallback(orderIds), getProductsFallback()]);
-  const productMap = new Map(products.map((product) => [Number(product.id), product]));
+  const items = await getOrderItemsFallback(orderIds);
   const totalRevenue = orders.reduce((sum, order) => sum + toNumber(order.total_amount), 0);
-  const totalCost = items.reduce((sum, item) => {
-    const product = productMap.get(Number(item.product_id));
-    return sum + (toNumber(item.quantity) * toNumber(product?.buying_price));
-  }, 0);
+  const missingCostLines = items.filter((item) => item.unit_cost_snapshot === null || item.unit_cost_snapshot === undefined).length;
+  const totalCost = items.reduce((sum, item) => sum + (toNumber(item.quantity) * toNumber(item.unit_cost_snapshot)), 0);
   const totalDiscounts = orders.reduce((sum, order) => sum + toNumber(order.discount_amount), 0);
-  const grossProfit = totalRevenue - totalCost;
+  const profitExact = missingCostLines === 0;
+  const grossProfit = profitExact ? totalRevenue - totalCost : null;
 
   return {
     total_orders: orders.length,
     total_revenue: totalRevenue,
-    total_cost: totalCost,
+    total_cost: profitExact ? totalCost : null,
     gross_profit: grossProfit,
-    profit_margin: totalRevenue > 0 ? Number(((grossProfit / totalRevenue) * 100).toFixed(2)) : 0,
+    profit_margin: profitExact && totalRevenue > 0 ? Number(((grossProfit / totalRevenue) * 100).toFixed(2)) : null,
     total_discounts: totalDiscounts,
-    net_profit: grossProfit - totalDiscounts,
+    net_profit: grossProfit,
+    profit_exact: profitExact,
+    missing_cost_lines: missingCostLines,
+    business_time_zone: BUSINESS_TIME_ZONE,
   };
 };
 
@@ -253,9 +264,7 @@ export const getSalesReport = async (req, res) => {
         COALESCE(SUM(CASE WHEN o.source = 'online' THEN o.total_amount ELSE 0 END), 0) as online_revenue,
         COALESCE(SUM(CASE WHEN o.source = 'pos' THEN o.total_amount ELSE 0 END), 0) as pos_revenue
       FROM orders o
-      WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
-        AND COALESCE(o.integrity_status, 'valid') = 'valid'
-        AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = o.id)
+      WHERE ${recognizedSaleSql('o')}
       ${dateFilter.sql}
     `, dateFilter.params);
 
@@ -305,9 +314,7 @@ export const getSalesByChannel = async (req, res) => {
         COALESCE(SUM(total_amount), 0) as total_revenue,
         COALESCE(AVG(total_amount), 0) as avg_order_value
       FROM orders
-      WHERE status IN (${REVENUE_ORDER_STATUS_SQL})
-        AND COALESCE(integrity_status, 'valid') = 'valid'
-        AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = orders.id)
+      WHERE ${recognizedSaleSql('orders')}
       ${dateFilter.sql}
       GROUP BY source
       ORDER BY total_revenue DESC
@@ -405,10 +412,10 @@ export const getTopProducts = async (req, res) => {
 
     const result = await pool.query(`
       SELECT 
-        p.id,
-        p.name,
-        p.part_number,
-        p.image,
+        oi.product_id AS id,
+        COALESCE(p.name, MAX(oi.product_name)) AS name,
+        COALESCE(p.part_number, MAX(oi.sku_snapshot)) AS part_number,
+        MAX(p.image) AS image,
         p.price,
         p.stock_quantity,
         c.name as category_name,
@@ -416,23 +423,23 @@ export const getTopProducts = async (req, res) => {
         SUM(oi.quantity) as total_sold,
         SUM(oi.product_price * oi.quantity) as total_revenue
       FROM order_items oi
-      JOIN products p ON oi.product_id = p.id
+      LEFT JOIN products p ON oi.product_id = p.id
       LEFT JOIN categories c ON p.category_id = c.id
       JOIN orders o ON oi.order_id = o.id
-      WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
-        AND COALESCE(o.integrity_status, 'valid') = 'valid'
+      WHERE ${recognizedSaleSql('o')}
       ${dateFilter.sql}
-      GROUP BY p.id, p.name, p.part_number, p.image, p.price, p.stock_quantity, c.name
+      GROUP BY oi.product_id, p.name, p.part_number, p.price, p.stock_quantity, c.name
       ORDER BY total_sold DESC
       LIMIT $1
     `, [limit, ...dateFilter.params]);
 
     res.json(result.rows.map(row => ({
       ...row,
-      stock_quantity: parseInt(row.stock_quantity),
-      price: parseFloat(row.price),
+      stock_quantity: toNumber(row.stock_quantity),
+      price: toNumber(row.price),
       order_count: parseInt(row.order_count),
       total_sold: parseInt(row.total_sold),
+      quantity_sold: parseInt(row.total_sold),
       total_revenue: parseFloat(row.total_revenue)
     })));
   } catch (error) {
@@ -462,8 +469,7 @@ export const getDailySalesTrend = async (req, res) => {
         COUNT(CASE WHEN source = 'online' THEN 1 END) as online_orders,
         COUNT(CASE WHEN source = 'pos' THEN 1 END) as pos_orders
       FROM orders
-      WHERE status IN (${REVENUE_ORDER_STATUS_SQL})
-        AND COALESCE(integrity_status, 'valid') = 'valid'
+      WHERE ${recognizedSaleSql('orders')}
         AND (created_at AT TIME ZONE $1) >= (NOW() AT TIME ZONE $1) - ($2::int * INTERVAL '1 day')
         AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = orders.id)
       GROUP BY (created_at AT TIME ZONE $1)::date
@@ -501,21 +507,20 @@ export const getProfitReport = async (req, res) => {
       WITH valid_orders AS (
         SELECT o.id, o.total_amount, o.discount_amount
         FROM orders o
-        WHERE o.status IN (${REVENUE_ORDER_STATUS_SQL})
-          AND COALESCE(o.integrity_status, 'valid') = 'valid'
-          AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = o.id)
+        WHERE ${recognizedSaleSql('o')}
           ${dateFilter.sql}
       ), item_costs AS (
-        SELECT oi.order_id, COALESCE(SUM(oi.quantity * p.buying_price), 0) AS order_cost
+        SELECT oi.order_id,
+               SUM(oi.quantity * oi.unit_cost_snapshot) AS order_cost,
+               COUNT(*) FILTER (WHERE oi.unit_cost_snapshot IS NULL)::int AS missing_cost_lines
         FROM order_items oi
-        JOIN products p ON p.id = oi.product_id
         WHERE oi.order_id IN (SELECT id FROM valid_orders)
         GROUP BY oi.order_id
       )
       SELECT COUNT(*) AS total_orders,
              COALESCE(SUM(vo.total_amount), 0) AS total_revenue,
-             COALESCE(SUM(ic.order_cost), 0) AS total_cost,
-             COALESCE(SUM(vo.total_amount) - SUM(ic.order_cost), 0) AS gross_profit,
+             COALESCE(SUM(ic.order_cost), 0) AS known_total_cost,
+             COALESCE(SUM(ic.missing_cost_lines), 0)::int AS missing_cost_lines,
              COALESCE(SUM(vo.discount_amount), 0) AS total_discounts
       FROM valid_orders vo
       LEFT JOIN item_costs ic ON ic.order_id = vo.id
@@ -523,18 +528,23 @@ export const getProfitReport = async (req, res) => {
 
     const stats = result.rows[0];
     const revenue = parseFloat(stats.total_revenue);
-    const cost = parseFloat(stats.total_cost);
-    const profit = parseFloat(stats.gross_profit);
-    const margin = revenue > 0 ? ((profit / revenue) * 100) : 0;
+    const missingCostLines = parseInt(stats.missing_cost_lines);
+    const profitExact = missingCostLines === 0;
+    const cost = profitExact ? parseFloat(stats.known_total_cost) : null;
+    const profit = profitExact ? revenue - cost : null;
+    const margin = profitExact && revenue > 0 ? ((profit / revenue) * 100) : null;
 
     res.json({
       total_orders: parseInt(stats.total_orders),
       total_revenue: revenue,
       total_cost: cost,
       gross_profit: profit,
-      profit_margin: parseFloat(margin.toFixed(2)),
+      profit_margin: margin === null ? null : parseFloat(margin.toFixed(2)),
       total_discounts: parseFloat(stats.total_discounts),
-      net_profit: profit - parseFloat(stats.total_discounts)
+      net_profit: profit,
+      profit_exact: profitExact,
+      missing_cost_lines: missingCostLines,
+      business_time_zone: BUSINESS_TIME_ZONE,
     });
   } catch (error) {
     console.error('Profit report error:', error);
@@ -616,5 +626,53 @@ export const getReturnRefundReport = async (req, res) => {
   } catch (error) {
     console.error('Return/refund report error:', error);
     return res.status(500).json({ message: 'Return and refund report could not be loaded.' });
+  }
+};
+
+export const getCustomerAnalytics = async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      WITH customer_sales AS (
+        SELECT o.user_id,
+               MIN(o.created_at) AS first_order_at,
+               COUNT(*)::int AS order_count,
+               COALESCE(SUM(o.total_amount), 0) AS recognized_revenue
+        FROM orders o
+        WHERE o.user_id IS NOT NULL
+          AND ${recognizedSaleSql('o')}
+        GROUP BY o.user_id
+      ), ranked AS (
+        SELECT cs.*, u.name, u.email,
+               COUNT(*) OVER()::int AS total_customers,
+               COUNT(*) FILTER (
+                 WHERE (cs.first_order_at AT TIME ZONE $1) >= date_trunc('month', NOW() AT TIME ZONE $1)
+               ) OVER()::int AS new_this_month,
+               AVG(cs.order_count) OVER() AS average_order_count
+        FROM customer_sales cs
+        JOIN users u ON u.id=cs.user_id
+        WHERE COALESCE(u.is_deleted,false)=false
+      )
+      SELECT * FROM ranked
+      ORDER BY order_count DESC, recognized_revenue DESC
+      LIMIT 5
+    `, [BUSINESS_TIME_ZONE]);
+    const first = result.rows[0];
+    return res.json({
+      total: toNumber(first?.total_customers),
+      new_this_month: toNumber(first?.new_this_month),
+      average_order_count: toNumber(first?.average_order_count),
+      business_time_zone: BUSINESS_TIME_ZONE,
+      most_active: result.rows.map((row) => ({
+        id: row.user_id,
+        name: row.name || row.email || `Customer #${row.user_id}`,
+        orders: toNumber(row.order_count),
+        total: toNumber(row.recognized_revenue),
+        first_order_at: row.first_order_at,
+      })),
+      pos_unknown_customers_excluded: true,
+    });
+  } catch (error) {
+    console.error('Customer analytics error:', error);
+    return res.status(500).json({ message: 'Customer analytics could not be loaded.' });
   }
 };

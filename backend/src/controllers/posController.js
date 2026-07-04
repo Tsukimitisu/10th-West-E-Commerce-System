@@ -105,7 +105,7 @@ const validateCart = async (client, rawItems, { lock = false, deduct = false } =
 
   for (const item of items) {
     const productResult = await client.query(
-      `SELECT p.id, p.name, p.price, p.sale_price, p.is_on_sale, p.sku, p.barcode,
+      `SELECT p.id, p.name, p.price, p.buying_price, p.sale_price, p.is_on_sale, p.sku, p.barcode,
               p.image, p.stock_quantity, p.reserved_stock, p.variant_options
        FROM products p
        WHERE p.id = $1 AND p.status = 'active' AND COALESCE(p.is_deleted, false) = false
@@ -170,6 +170,7 @@ const validateCart = async (client, rawItems, { lock = false, deduct = false } =
       barcode: product.barcode || null,
       variant_name: variant ? `${variant.variant_type}: ${variant.variant_value}` : null,
       unit_price: money(unitPrice),
+      unit_cost_snapshot: product.buying_price == null ? null : money(product.buying_price),
       line_total: lineTotal,
       image: variant?.image_url || product.image || PRODUCT_IMAGE_FALLBACK,
       available_stock: available,
@@ -438,11 +439,11 @@ export const createPosOrder = async (req, res) => {
       await client.query(
         `INSERT INTO order_items (
            order_id, product_id, variant_id, product_name, product_price, price, quantity,
-           sku_snapshot, variant_name_snapshot, image_snapshot
-         ) VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,$9)`,
+           sku_snapshot, variant_name_snapshot, image_snapshot, unit_cost_snapshot
+         ) VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,$10)`,
         [
           order.id, item.product_id, item.variant_id, item.product_name, item.unit_price,
-          item.quantity, item.sku, item.variant_name, item.image,
+          item.quantity, item.sku, item.variant_name, item.image, item.unit_cost_snapshot,
         ],
       );
       await client.query(

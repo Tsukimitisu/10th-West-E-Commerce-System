@@ -18,13 +18,15 @@ export const getOperationsDashboard = async (req, res) => {
         SELECT
           COUNT(*)::int AS total_orders,
           COALESCE(SUM(total_amount) FILTER (
-            WHERE status::text NOT IN ('cancelled', 'failed', 'refunded')
+            WHERE status::text IN ('paid','processing','packed','ready_for_pickup','shipped','out_for_delivery','delivered','partially_refunded')
+              AND payment_status::text IN ('paid','partially_refunded')
               AND COALESCE(integrity_status, 'valid') = 'valid'
               AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id)
           ), 0) AS total_sales,
           COALESCE(SUM(total_amount) FILTER (
             WHERE (created_at AT TIME ZONE $1)::date = (NOW() AT TIME ZONE $1)::date
-              AND status::text NOT IN ('cancelled', 'failed', 'refunded')
+              AND status::text IN ('paid','processing','packed','ready_for_pickup','shipped','out_for_delivery','delivered','partially_refunded')
+              AND payment_status::text IN ('paid','partially_refunded')
               AND COALESCE(integrity_status, 'valid') = 'valid'
               AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id)
           ), 0) AS today_sales,
@@ -62,7 +64,8 @@ export const getOperationsDashboard = async (req, res) => {
           COALESCE(SUM(total_amount), 0) AS amount
         FROM orders
         WHERE created_at >= (NOW() AT TIME ZONE $1)::date - INTERVAL '6 days'
-          AND status::text NOT IN ('cancelled', 'failed', 'refunded')
+          AND status::text IN ('paid','processing','packed','ready_for_pickup','shipped','out_for_delivery','delivered','partially_refunded')
+          AND payment_status::text IN ('paid','partially_refunded')
           AND COALESCE(integrity_status, 'valid') = 'valid'
           AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id)
         GROUP BY 1
@@ -77,14 +80,16 @@ export const getOperationsDashboard = async (req, res) => {
         LIMIT 8
       `),
       pool.query(`
-        SELECT p.id, p.name, p.sku, COALESCE(SUM(oi.quantity), 0)::int AS quantity_sold,
+        SELECT oi.product_id AS id, COALESCE(p.name, MAX(oi.product_name)) AS name,
+               COALESCE(p.sku, MAX(oi.sku_snapshot)) AS sku, COALESCE(SUM(oi.quantity), 0)::int AS quantity_sold,
                COALESCE(SUM(oi.quantity * oi.product_price), 0) AS revenue
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
         LEFT JOIN products p ON p.id = oi.product_id
-        WHERE o.status::text NOT IN ('cancelled', 'failed', 'refunded')
+        WHERE o.status::text IN ('paid','processing','packed','ready_for_pickup','shipped','out_for_delivery','delivered','partially_refunded')
+          AND o.payment_status::text IN ('paid','partially_refunded')
           AND COALESCE(o.integrity_status, 'valid') = 'valid'
-        GROUP BY p.id, p.name, p.sku
+        GROUP BY oi.product_id, p.name, p.sku
         ORDER BY quantity_sold DESC
         LIMIT 5
       `),

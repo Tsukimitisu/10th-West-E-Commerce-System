@@ -7,7 +7,8 @@ import {
   getDailySalesTrend,
   getProfitReport,
   getPosSalesReport,
-  getReturnRefundReport
+  getReturnRefundReport,
+  getCustomerAnalytics
 } from '../controllers/reportsController.js';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 
@@ -23,5 +24,6 @@ router.get('/daily-trend', getDailySalesTrend);
 router.get('/profit', getProfitReport);
 router.get('/pos', getPosSalesReport);
 router.get('/returns-refunds', getReturnRefundReport);
+router.get('/customers', getCustomerAnalytics);
 
 export default router;

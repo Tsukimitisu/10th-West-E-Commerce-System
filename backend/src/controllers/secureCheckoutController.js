@@ -132,6 +132,7 @@ const loadAndReserveItems = async (client, items, expiresAt) => {
       ...item,
       product_name: product.name,
       product_price: unitPrice,
+      unit_cost_snapshot: product.buying_price == null ? null : money(product.buying_price),
       sku_snapshot: variant?.sku || product.sku || product.part_number,
       variant_name_snapshot: variant ? `${variant.variant_type}: ${variant.variant_value}` : null,
       image_snapshot: variant?.image_url || product.image || (Array.isArray(product.image_urls) ? product.image_urls[0] : null),
@@ -259,10 +260,12 @@ export const createCheckout = async (req, res) => {
     const order = orderResult.rows[0];
     for (const item of snapshots) {
       await client.query(
-        `INSERT INTO order_items (order_id, product_id, variant_id, product_name, product_price, price, quantity, sku_snapshot, variant_name_snapshot, image_snapshot)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        `INSERT INTO order_items (
+           order_id, product_id, variant_id, product_name, product_price, price, quantity,
+           sku_snapshot, variant_name_snapshot, image_snapshot, unit_cost_snapshot
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
         [order.id, item.product_id, item.variant_id, item.product_name, item.product_price, item.product_price, item.quantity,
-          item.sku_snapshot, item.variant_name_snapshot, item.image_snapshot]
+          item.sku_snapshot, item.variant_name_snapshot, item.image_snapshot, item.unit_cost_snapshot]
       );
       await client.query(
         `INSERT INTO stock_reservations (order_id, product_id, variant_id, quantity, expires_at) VALUES ($1,$2,$3,$4,$5)`,

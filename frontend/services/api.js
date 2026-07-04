@@ -5171,6 +5171,10 @@ export const getReturnRefundReport = async (range = '30d', startDate, endDate) =
   return authenticatedFetch(`${API_URL}/reports/returns-refunds?${params}`);
 };
 
+export const getCustomerAnalytics = async () => {
+  return authenticatedFetch(`${API_URL}/reports/customers`);
+};
+
 // ==================== SUPER ADMIN ====================
 
 // User Management

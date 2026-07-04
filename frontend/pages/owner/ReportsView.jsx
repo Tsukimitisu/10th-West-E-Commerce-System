@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getSalesReport, getSalesByChannel, getTopProducts, getDailySalesTrend, getStockLevelsReport, getProfitReport, getPosSalesReport, getReturnRefundReport, getOrders } from '../../services/api';
+import { getSalesReport, getSalesByChannel, getTopProducts, getDailySalesTrend, getStockLevelsReport, getProfitReport, getPosSalesReport, getReturnRefundReport, getCustomerAnalytics } from '../../services/api';
 import { BarChart3, Download, Calendar, TrendingUp, Package, DollarSign, ShoppingBag, Boxes, FileText, Printer, Users } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
 import ChartCard from '../../components/owner/ChartCard';
@@ -24,7 +24,7 @@ const ReportsView = () => {
     setLoading(true);
     setError('');
     try {
-      const [sales, channels, top, trend, stock, profit, pos, returnsAndRefunds, orders] = await Promise.all([
+      const [sales, channels, top, trend, stock, profit, pos, returnsAndRefunds, customers] = await Promise.all([
         getSalesReport(dateRange).catch(() => null),
         getSalesByChannel(dateRange).catch(() => []),
         getTopProducts(10, dateRange).catch(() => []),
@@ -33,7 +33,7 @@ const ReportsView = () => {
         getProfitReport(dateRange).catch(() => null),
         getPosSalesReport(dateRange).catch(() => null),
         getReturnRefundReport(dateRange).catch(() => null),
-        getOrders().catch(() => []),
+        getCustomerAnalytics().catch(() => ({ total: 0, new_this_month: 0, average_order_count: 0, most_active: [] })),
       ]);
       setSalesReport(sales); setChannelData(Array.isArray(channels) ? channels.map((row) => ({
         name: row.channel || 'unknown',
@@ -44,31 +44,12 @@ const ReportsView = () => {
       setStockLevels(Array.isArray(stock?.by_category) ? stock.by_category : []); setProfitReport(profit);
       setPosReport(pos); setReturnReport(returnsAndRefunds);
 
-      // Build customer activity from orders
-      const allOrders = Array.isArray(orders) ? orders : [];
-      const customerMap = {};
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      let newCount = 0;
-      allOrders.forEach(order => {
-        const custId = order.user_id || order.customer_id || order.customer_email || 'unknown';
-        const custName = order.customer_name || order.user_name || order.customer_email || `Customer #${custId}`;
-        if (!customerMap[custId]) {
-          customerMap[custId] = { id: custId, name: custName, orders: 0, total: 0, firstOrder: order.created_at };
-        }
-        customerMap[custId].orders += 1;
-        customerMap[custId].total += Number(order.total || order.total_amount || 0);
-        if (order.created_at && new Date(order.created_at) >= monthStart && !customerMap[custId].countedNew) {
-          // Check if first order is this month
-          if (new Date(customerMap[custId].firstOrder) >= monthStart) {
-            customerMap[custId].countedNew = true;
-          }
-        }
+      setCustomerActivity({
+        total: Number(customers?.total || 0),
+        newThisMonth: Number(customers?.new_this_month || 0),
+        averageOrderCount: Number(customers?.average_order_count || 0),
+        mostActive: Array.isArray(customers?.most_active) ? customers.most_active : [],
       });
-      const customers = Object.values(customerMap);
-      customers.forEach(c => { if (c.countedNew) newCount++; });
-      const mostActive = [...customers].sort((a, b) => b.orders - a.orders).slice(0, 5);
-      setCustomerActivity({ total: customers.length, newThisMonth: newCount, mostActive });
     } catch (e) { console.error(e); setError('Reports could not be loaded. Please try again.'); }
     setLoading(false);
   };
@@ -132,7 +113,7 @@ const ReportsView = () => {
     if (profitReport) {
       csvContent += 'PROFIT & LOSS\n';
       csvContent += 'Gross Revenue,Total Cost,Net Profit,Margin\n';
-      csvContent += `${profitReport.total_revenue || 0},${profitReport.total_cost || 0},${profitReport.net_profit || 0},${profitReport.profit_margin || 0}%\n\n`;
+      csvContent += `${profitReport.total_revenue || 0},${profitReport.profit_exact ? profitReport.total_cost : ''},${profitReport.profit_exact ? profitReport.net_profit : ''},${profitReport.profit_exact ? `${profitReport.profit_margin}%` : 'Historical COGS missing'}\n\n`;
     }
     // Customer Activity
     if (customerActivity.mostActive.length > 0) {
@@ -301,9 +282,9 @@ const ReportsView = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                   { label: 'Gross Revenue', value: `₱${(profitReport?.total_revenue || salesReport?.total_revenue || 0).toLocaleString()}` },
-                  { label: 'Total Cost', value: `₱${(profitReport?.total_cost || 0).toLocaleString()}` },
-                  { label: 'Net Profit', value: `₱${(profitReport?.net_profit || 0).toLocaleString()}` },
-                  { label: 'Margin', value: `${(profitReport?.profit_margin || 0).toFixed(1)}%` },
+                  { label: profitReport?.profit_exact ? 'Total Cost' : 'Total Cost (incomplete)', value: profitReport?.profit_exact ? `₱${Number(profitReport.total_cost).toLocaleString()}` : 'Not computable' },
+                  { label: profitReport?.profit_exact ? 'Net Profit' : 'Net Profit (incomplete)', value: profitReport?.profit_exact ? `₱${Number(profitReport.net_profit).toLocaleString()}` : 'Not computable' },
+                  { label: 'Margin', value: profitReport?.profit_exact ? `${Number(profitReport.profit_margin).toFixed(1)}%` : 'Not computable' },
                 ].map((kpi, i) => (
                   <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
                     <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
@@ -325,19 +306,19 @@ const ReportsView = () => {
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-gray-700">
                     <span className="text-sm text-gray-600">Cost of Goods Sold (Buying Price)</span>
-                    <span className="text-sm font-semibold text-red-500">- ₱{(profitReport?.total_cost || 0).toLocaleString()}</span>
+                    <span className="text-sm font-semibold text-red-500">{profitReport?.profit_exact ? `- ₱${Number(profitReport.total_cost).toLocaleString()}` : 'Historical COGS missing'}</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-dashed border-gray-700">
                     <span className="text-sm font-medium text-gray-700">Gross Profit</span>
-                    <span className="text-sm font-bold text-white">₱{(profitReport?.gross_profit || 0).toLocaleString()}</span>
+                    <span className="text-sm font-bold text-white">{profitReport?.profit_exact ? `₱${Number(profitReport.gross_profit).toLocaleString()}` : 'Not computable'}</span>
                   </div>
                   <div className="flex items-center justify-between py-3 bg-red-500/10 rounded-lg px-3 -mx-1">
                     <span className="text-sm font-bold text-orange-700">Net Profit</span>
-                    <span className="text-lg font-bold text-orange-600">₱{(profitReport?.net_profit || 0).toLocaleString()}</span>
+                    <span className="text-lg font-bold text-orange-600">{profitReport?.profit_exact ? `₱${Number(profitReport.net_profit).toLocaleString()}` : 'Not computable'}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-gray-600">Profit Margin</span>
-                    <span className={`text-sm font-bold ${(profitReport?.profit_margin || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{(profitReport?.profit_margin || 0).toFixed(1)}%</span>
+                    <span className={`text-sm font-bold ${Number(profitReport?.profit_margin || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{profitReport?.profit_exact ? `${Number(profitReport.profit_margin).toFixed(1)}%` : 'Not computable'}</span>
                   </div>
                 </div>
               </div>
@@ -423,7 +404,7 @@ const ReportsView = () => {
                     </div>
                     <span className="text-xs text-gray-400">Avg Orders per Customer</span>
                   </div>
-                  <p className="text-2xl font-bold text-white">{customerActivity.total > 0 ? (customerActivity.mostActive.reduce((sum, c) => sum + c.orders, 0) / Math.min(customerActivity.total, customerActivity.mostActive.length) || 0).toFixed(1) : '0'}</p>
+                  <p className="text-2xl font-bold text-white">{Number(customerActivity.averageOrderCount || 0).toFixed(1)}</p>
                 </div>
               </div>
 
