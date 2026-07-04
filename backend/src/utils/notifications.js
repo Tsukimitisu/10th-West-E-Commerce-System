@@ -74,3 +74,21 @@ export const buildOrderStatusMessage = (status) => {
       return `Your order status is now ${status}.`;
   }
 };
+
+export const createOrderWorkflowNotification = (db, {
+  userId,
+  orderId,
+  type = 'order_status',
+  status,
+  title = 'Order update',
+  message,
+  extra = {},
+}) => createNotification(db, {
+  user_id: userId,
+  type,
+  title,
+  message: message || buildOrderStatusMessage(status),
+  reference_id: orderId,
+  reference_type: 'order',
+  metadata: { order_id: orderId, status, link: `/orders/${orderId}`, ...extra },
+});

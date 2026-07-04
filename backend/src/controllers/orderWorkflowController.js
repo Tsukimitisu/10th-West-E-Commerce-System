@@ -2,6 +2,7 @@ import pool from '../config/database.js';
 import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { releaseDiscountUsage } from '../services/discountUsage.js';
+import { createOrderWorkflowNotification } from '../utils/notifications.js';
 
 const TRANSITIONS = {
   pending: ['processing', 'cancelled'],
@@ -125,6 +126,10 @@ export const updateOrderStatusSecure = async (req, res) => {
        VALUES ($1,'order.status.update','order',$2,$3,$4,$5::jsonb,$6::jsonb)`,
       [req.user.id, String(orderId), req.ip, req.get('user-agent'), JSON.stringify({ status: order.status }), JSON.stringify({ status: nextStatus })]
     );
+    await createOrderWorkflowNotification(client, {
+      userId: order.user_id, orderId, status: nextStatus,
+      title: nextStatus === 'delivered' ? 'Order delivered' : 'Order status updated',
+    });
     await client.query('COMMIT');
     stockUpdates.forEach(emitStockUpdate);
     emitOrderStatusUpdate(orderId, nextStatus, {

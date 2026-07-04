@@ -1,5 +1,6 @@
 import pool from '../config/database.js';
 import { emitOrderStatusUpdate } from '../socket.js';
+import { createOrderWorkflowNotification } from '../utils/notifications.js';
 import {
   calculateRates as calculateProviderRates,
   cancelShipment as cancelProviderShipment,
@@ -206,7 +207,7 @@ const applyTrackingResult = async (shipment, tracking, { webhook = false } = {})
     let previousOrderStatus = null;
     let orderStatusChanged = false;
     if (nextOrderStatus) {
-      const order = await client.query('SELECT status FROM orders WHERE id = $1 FOR UPDATE', [shipment.order_id]);
+      const order = await client.query('SELECT status,user_id FROM orders WHERE id = $1 FOR UPDATE', [shipment.order_id]);
       previousOrderStatus = order.rows[0]?.status || null;
       if (
         previousOrderStatus
@@ -221,6 +222,14 @@ const applyTrackingResult = async (shipment, tracking, { webhook = false } = {})
            WHERE id = $1`,
           [shipment.order_id, nextOrderStatus]
         );
+        await createOrderWorkflowNotification(client, {
+          userId: order.rows[0].user_id,
+          orderId: shipment.order_id,
+          type: 'shipment_update',
+          status: nextOrderStatus,
+          title: nextOrderStatus === 'delivered' ? 'Order delivered' : 'Shipment update',
+          extra: { shipment_id: shipment.id },
+        });
         await client.query(
           `INSERT INTO order_status_history
             (order_id, from_status, to_status, source, note, metadata)

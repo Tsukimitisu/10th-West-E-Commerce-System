@@ -5,6 +5,7 @@ import { releaseDiscountUsage } from '../services/discountUsage.js';
 import { getRuntimeSettings } from '../services/settings.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
+import { createOrderWorkflowNotification } from '../utils/notifications.js';
 
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
@@ -374,6 +375,10 @@ export const createCheckout = async (req, res) => {
        WHERE user_id = $1 AND scope = 'checkout' AND key = $2 AND request_hash = $3`,
       [req.user.id, idempotencyKey, requestHash, JSON.stringify(response)]
     );
+    await createOrderWorkflowNotification(pool, {
+      userId: req.user.id, orderId: order.id, type: 'order_placed', status: orderStatus,
+      title: 'Order placed', message: `Order #${order.id} was placed successfully.`,
+    });
     emitNewOrder({ ...order, ...response });
     return res.status(201).json(response);
   } catch (error) {
@@ -507,6 +512,13 @@ export const handlePaymongoWebhook = async (req, res) => {
       : ['payment.failed', 'checkout_session.payment.failed', 'checkout_session.expired'].includes(event.eventType)
         ? 'failed'
         : 'payment_pending';
+    await createOrderWorkflowNotification(pool, {
+      userId: payment.order_user_id,
+      orderId: payment.order_id,
+      type: emittedStatus === 'paid' ? 'payment_success' : emittedStatus === 'failed' ? 'payment_failed' : 'payment_update',
+      status: emittedStatus,
+      title: emittedStatus === 'paid' ? 'Payment received' : emittedStatus === 'failed' ? 'Payment failed' : 'Payment update',
+    });
     emitOrderStatusUpdate(payment.order_id, emittedStatus, {
       payment_status: emittedStatus === 'paid' ? 'paid' : emittedStatus,
       timeline_event: { source: 'payment', event_id: event.eventId, event_type: event.eventType },
