@@ -1,6 +1,7 @@
 import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { getMissingCloudinaryVars, isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
+import { assertValidFileSignature } from '../services/fileSignature.js';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import dns from 'dns/promises';
@@ -494,6 +495,7 @@ export const uploadProfileAvatar = async (req, res) => {
     if (req.body.length > MAX_AVATAR_BYTES) {
       return res.status(400).json({ message: 'Image must be 2 MB or smaller.' });
     }
+    assertValidFileSignature(req.body, contentType);
 
     const ext = MIME_EXTENSION_MAP[contentType] || 'bin';
     const cloudinaryPublicId = `avatar-${req.user.id}-${Date.now()}-${crypto.randomBytes(8).toString('hex')}-${ext}`;
@@ -526,7 +528,7 @@ export const uploadProfileAvatar = async (req, res) => {
     });
   } catch (error) {
     console.error('Upload profile avatar error:', error);
-    res.status(500).json({ message: 'Failed to upload profile picture.' });
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Failed to upload profile picture.' });
   }
 };
 

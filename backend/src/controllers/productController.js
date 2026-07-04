@@ -8,6 +8,7 @@ import {
   PRODUCT_TYPE_SET,
 } from '../constants/schemaEnums.js';
 import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
+import { assertValidFileSignature } from '../services/fileSignature.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch, supabaseRestRequest } from '../services/supabaseRest.js';
 import {
   sanitizeHttpUrlOrPath,
@@ -2073,6 +2074,7 @@ export const uploadProductImage = async (req, res) => {
     if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
       return res.status(400).json({ message: 'Image file is required' });
     }
+    assertValidFileSignature(req.body, contentType);
 
     const ext = MIME_EXTENSION_MAP[contentType] || 'bin';
     const { url: imageUrl } = await uploadBufferToCloudinary({
@@ -2089,7 +2091,7 @@ export const uploadProductImage = async (req, res) => {
     });
   } catch (error) {
     console.error('Upload product image error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Server error' });
   }
 };
 
@@ -2115,6 +2117,7 @@ export const uploadProductVideo = async (req, res) => {
     if (req.body.length > PRODUCT_VIDEO_MAX_BYTES) {
       return res.status(400).json({ message: 'Video must be 20MB or smaller.' });
     }
+    assertValidFileSignature(req.body, contentType);
 
     const ext = MIME_EXTENSION_MAP[contentType] || 'bin';
     const { url: videoUrl } = await uploadBufferToCloudinary({
@@ -2131,7 +2134,7 @@ export const uploadProductVideo = async (req, res) => {
     });
   } catch (error) {
     console.error('Upload product video error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Server error' });
   }
 };
 
@@ -2187,6 +2190,6 @@ export const deleteProduct = async (req, res) => {
     if (error?.status === 404) {
       return res.status(404).json({ message: 'Product not found' });
     }
-    res.status(500).json({ message: 'Server error' });
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Server error' });
   }
 };

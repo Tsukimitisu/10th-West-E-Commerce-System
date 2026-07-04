@@ -1,5 +1,6 @@
 import pool from '../config/database.js';
 import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
+import { assertValidFileSignature } from '../services/fileSignature.js';
 
 const REVIEW_STATUS = {
   PENDING: 'pending',
@@ -466,6 +467,11 @@ export const uploadReviewMedia = async (req, res) => {
 
   if (req.body.length > REVIEW_MEDIA_MAX_BYTES) {
     return res.status(400).json({ message: 'Media file must be 25 MB or smaller.' });
+  }
+  try {
+    assertValidFileSignature(req.body, contentType);
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
   }
 
   const kind = contentType.startsWith('video/') ? 'video' : 'image';
