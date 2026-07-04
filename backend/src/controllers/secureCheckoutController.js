@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import pool from '../config/database.js';
 import { createPaymongoGcashCheckout, verifyPaymongoWebhookSignature } from '../services/paymongo.js';
+import { releaseDiscountUsage } from '../services/discountUsage.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 
@@ -145,7 +146,8 @@ const calculateDiscount = async (client, userId, code, subtotal) => {
   if (!code) return { discount: 0, promotion: null };
   const normalized = String(code).trim().toUpperCase();
   const result = await client.query(
-    `SELECT d.*, (SELECT COUNT(*) FROM discount_usages du WHERE du.discount_id = d.id AND du.user_id = $2) AS user_uses
+    `SELECT d.*, (SELECT COUNT(*) FROM discount_usages du
+       WHERE du.discount_id = d.id AND du.user_id = $2 AND du.status = 'consumed') AS user_uses
      FROM discounts d WHERE UPPER(d.code) = $1 FOR UPDATE`,
     [normalized, userId]
   );
@@ -191,6 +193,9 @@ const releaseOrderReservations = async (client, orderId, nextStatus, reason) => 
       `INSERT INTO order_status_history (order_id, from_status, to_status, source, note) VALUES ($1, $2, $3, 'payment', $4)`,
       [orderId, fromStatus, nextStatus, reason]
     );
+  }
+  if (['failed', 'cancelled'].includes(nextStatus)) {
+    await releaseDiscountUsage(client, { orderId, reason });
   }
 };
 

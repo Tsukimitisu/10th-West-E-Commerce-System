@@ -1,6 +1,7 @@
 import pool from '../config/database.js';
 import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
+import { releaseDiscountUsage } from '../services/discountUsage.js';
 
 const TRANSITIONS = {
   pending: ['processing', 'cancelled'],
@@ -171,6 +172,7 @@ export const cancelOrderSecure = async (req, res) => {
     if (!isCaptured) {
       await releaseReservations(client, orderId);
       await client.query(`UPDATE payments SET status = 'cancelled', updated_at = NOW() WHERE order_id = $1 AND status <> 'paid'`, [orderId]);
+      await releaseDiscountUsage(client, { orderId, reason });
     }
     const nextStatus = isCaptured ? 'refund_processing' : 'cancelled';
     await client.query(
