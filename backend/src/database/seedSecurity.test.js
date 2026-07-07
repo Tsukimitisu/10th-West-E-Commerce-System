@@ -20,3 +20,16 @@ test('seeded account security script requires explicit confirmation', async () =
   assert.match(source, /is_active = false/);
   assert.match(source, /UPDATE sessions SET is_active = false/);
 });
+
+test('test fixture accounts are explicit opt-in and production disabled', async () => {
+  const source = await readFile(path.resolve(directory, '..', '..', 'scripts', 'seed-test-fixtures.js'), 'utf8');
+  assert.match(source, /NODE_ENV/);
+  assert.match(source, /production/);
+  assert.match(source, /Test fixture accounts are disabled in production/);
+  assert.match(source, /ENABLE_TEST_FIXTURES/);
+  assert.match(source, /TEST_FIXTURE_PASSWORD/);
+  assert.match(source, /\.test-credentials\.local/);
+  assert.match(source, /customer@test\.local/);
+  assert.match(source, /superadmin@test\.local/);
+  assert.doesNotMatch(source, /LocalTestPass123!|Admin@123|Staff@123|Customer@123/);
+});
