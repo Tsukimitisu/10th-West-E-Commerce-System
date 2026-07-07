@@ -120,6 +120,7 @@ let csrfTokenCache = {
   token: '',
   expiresAt: 0,
 };
+let csrfTokenRequest = null;
 
 const CSRF_META_NAME = 'csrf-token';
 
@@ -158,6 +159,38 @@ const getCookieValue = (name) => {
   return match ? decodeURIComponent(match[1]) : '';
 };
 
+const cacheCsrfToken = (token, ttlMs) => {
+  const normalized = String(token || '').trim();
+  if (!normalized) return '';
+  csrfTokenCache = {
+    token: normalized,
+    expiresAt: Date.now() + ttlMs,
+  };
+  setCsrfMetaToken(normalized);
+  return normalized;
+};
+
+const fetchCsrfToken = async () => {
+  const csrfRes = await fetch(`${API_URL}/csrf-token`, {
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  });
+
+  if (!csrfRes.ok) {
+    const error = new Error('Unable to initialize a secure login session. Please refresh and try again.');
+    error.status = csrfRes.status;
+    throw error;
+  }
+
+  const body = await csrfRes.json().catch(() => ({}));
+  const csrfToken = String(body?.csrfToken || '').trim() || getCookieValue('csrf-token');
+  if (!csrfToken) {
+    throw new Error('Unable to initialize a secure login session. Please refresh and try again.');
+  }
+
+  return cacheCsrfToken(csrfToken, 55 * 60 * 1000);
+};
+
 const getCsrfToken = async ({ forceRefresh = false } = {}) => {
   const now = Date.now();
   if (!forceRefresh && csrfTokenCache.token && csrfTokenCache.expiresAt > now) {
@@ -167,44 +200,24 @@ const getCsrfToken = async ({ forceRefresh = false } = {}) => {
   if (!forceRefresh) {
     const metaToken = getCsrfMetaToken();
     if (metaToken) {
-      csrfTokenCache = {
-        token: metaToken,
-        expiresAt: Date.now() + (15 * 60 * 1000),
-      };
-      return metaToken;
+      return cacheCsrfToken(metaToken, 15 * 60 * 1000);
     }
   }
 
   try {
-    const csrfRes = await fetch(`${API_URL}/csrf-token`, {
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    });
-
-    if (csrfRes.ok) {
-      const body = await csrfRes.json().catch(() => ({}));
-      const csrfToken = String(body?.csrfToken || '').trim() || getCookieValue('csrf-token');
-      if (csrfToken) {
-        csrfTokenCache = {
-          token: csrfToken,
-          expiresAt: Date.now() + (55 * 60 * 1000),
-        };
-        setCsrfMetaToken(csrfToken);
-        return csrfToken;
-      }
+    if (!csrfTokenRequest) {
+      csrfTokenRequest = fetchCsrfToken().finally(() => {
+        csrfTokenRequest = null;
+      });
     }
+    return await csrfTokenRequest;
   } catch (error) {
     console.warn('Failed to refresh CSRF token:', error);
   }
 
   const cookieToken = getCookieValue('csrf-token');
   if (cookieToken) {
-    csrfTokenCache = {
-      token: cookieToken,
-      expiresAt: Date.now() + (15 * 60 * 1000),
-    };
-    setCsrfMetaToken(cookieToken);
-    return cookieToken;
+    return cacheCsrfToken(cookieToken, 15 * 60 * 1000);
   }
 
   return '';
@@ -389,6 +402,10 @@ const authenticatedFetch = async (url, options = {}) => {
     const csrfToken = await getCsrfToken();
     if (csrfToken) {
       headers['x-csrf-token'] = csrfToken;
+    } else {
+      const csrfError = new Error('Unable to initialize a secure request. Please refresh and try again.');
+      csrfError.code = 'CSRF_TOKEN_UNAVAILABLE';
+      throw csrfError;
     }
   }
 
@@ -543,6 +560,8 @@ export const login = async (email, password, totp_code) => {
       token,
     };
   }
+
+  await getCsrfToken({ forceRefresh: true });
 
   const data = await authenticatedFetch(`${API_URL}/auth/login`, {
     method: 'POST',
