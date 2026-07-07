@@ -16,7 +16,7 @@ export const getOperationsDashboard = async (req, res) => {
     ] = await Promise.all([
       pool.query(`
         SELECT
-          COUNT(*)::int AS total_orders,
+          COUNT(*) FILTER (WHERE COALESCE(integrity_status, 'valid') = 'valid')::int AS total_orders,
           COALESCE(SUM(total_amount) FILTER (
             WHERE status::text IN ('paid','processing','packed','ready_for_pickup','shipped','out_for_delivery','delivered','partially_refunded')
               AND payment_status::text IN ('paid','partially_refunded')
@@ -30,10 +30,10 @@ export const getOperationsDashboard = async (req, res) => {
               AND COALESCE(integrity_status, 'valid') = 'valid'
               AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id)
           ), 0) AS today_sales,
-          COUNT(*) FILTER (WHERE status::text IN ('pending', 'payment_pending'))::int AS pending_orders,
-          COUNT(*) FILTER (WHERE status::text IN ('paid', 'processing'))::int AS orders_to_process,
-          COUNT(*) FILTER (WHERE status::text = 'packed')::int AS orders_to_pack,
-          COUNT(*) FILTER (WHERE status::text IN ('ready_for_pickup', 'shipped', 'out_for_delivery'))::int AS orders_to_ship
+          COUNT(*) FILTER (WHERE status::text IN ('pending', 'payment_pending') AND COALESCE(integrity_status, 'valid') = 'valid')::int AS pending_orders,
+          COUNT(*) FILTER (WHERE status::text IN ('paid', 'processing') AND COALESCE(integrity_status, 'valid') = 'valid')::int AS orders_to_process,
+          COUNT(*) FILTER (WHERE status::text = 'packed' AND COALESCE(integrity_status, 'valid') = 'valid')::int AS orders_to_pack,
+          COUNT(*) FILTER (WHERE status::text IN ('ready_for_pickup', 'shipped', 'out_for_delivery') AND COALESCE(integrity_status, 'valid') = 'valid')::int AS orders_to_ship
         FROM orders
       `, [BUSINESS_TIME_ZONE]),
       pool.query(`
@@ -76,6 +76,7 @@ export const getOperationsDashboard = async (req, res) => {
                COALESCE(u.name, o.guest_name, 'Guest') AS customer_name
         FROM orders o
         LEFT JOIN users u ON u.id = o.user_id
+        WHERE COALESCE(o.integrity_status, 'valid') = 'valid'
         ORDER BY o.created_at DESC
         LIMIT 8
       `),

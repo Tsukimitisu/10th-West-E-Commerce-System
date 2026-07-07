@@ -652,10 +652,11 @@ export const getPosDailySummary = async (req, res) => {
          COALESCE(SUM(total_amount) FILTER (WHERE status = 'paid' AND payment_method = 'cash'), 0) AS cash_sales,
          COALESCE(SUM(total_amount) FILTER (WHERE status = 'paid' AND payment_method = 'gcash'), 0) AS gcash_sales,
          COUNT(*) FILTER (WHERE status = 'cancelled')::int AS void_count
-       FROM orders
-       WHERE source = 'pos'
-         AND created_at >= CURRENT_DATE
-         AND created_at < CURRENT_DATE + INTERVAL '1 day'`,
+      FROM orders
+      WHERE source = 'pos'
+        AND COALESCE(integrity_status, 'valid') = 'valid'
+        AND created_at >= CURRENT_DATE
+        AND created_at < CURRENT_DATE + INTERVAL '1 day'`,
     );
     const summary = result.rows[0];
     return res.json({

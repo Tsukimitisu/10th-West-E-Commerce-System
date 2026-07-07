@@ -19,3 +19,30 @@ test('order integrity migration quarantines evidence gaps without fabricating da
   assert.match(migration, /Valid order % must contain a payment record/);
   assert.doesNotMatch(migration, /SET receipt_number = 'POS-LEGACY-/);
 });
+
+test('expanded integrity migration supports granular historical quarantine statuses', async () => {
+  const migration = await readFile(
+    path.resolve(directory, '../../migrations/202607070002_expand_order_integrity_statuses.cjs'),
+    'utf8'
+  );
+
+  assert.match(migration, /missing_items/);
+  assert.match(migration, /payment_missing/);
+  assert.match(migration, /receipt_missing/);
+  assert.match(migration, /missing_timeline/);
+  assert.match(migration, /missing_audit/);
+  assert.doesNotMatch(migration, /SET receipt_number = 'POS-LEGACY-/);
+});
+
+test('quarantine script records audit evidence and only creates labeled stock baselines', async () => {
+  const source = await readFile(
+    path.resolve(directory, '../../scripts/quarantine-order-integrity.js'),
+    'utf8'
+  );
+
+  assert.match(source, /data\.integrity_quarantine/);
+  assert.match(source, /order_integrity/);
+  assert.match(source, /legacy_baseline/);
+  assert.match(source, /Baseline movement from current stock_quantity/);
+  assert.doesNotMatch(source, /POS-LEGACY-/);
+});

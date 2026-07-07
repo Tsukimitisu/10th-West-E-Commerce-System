@@ -9,6 +9,8 @@ test('revenue reports require settled payment and valid order integrity', () => 
   assert.match(reports, /payment_status IN \('paid', 'partially_refunded'\)/);
   assert.match(reports, /integrity_status, 'valid'/);
   assert.match(dashboard, /payment_status::text IN \('paid','partially_refunded'\)/);
+  assert.match(dashboard, /COUNT\(\*\) FILTER \(WHERE COALESCE\(integrity_status, 'valid'\) = 'valid'\)::int AS total_orders/);
+  assert.match(dashboard, /WHERE COALESCE\(o\.integrity_status, 'valid'\) = 'valid'/);
 });
 
 test('profit uses immutable sale-time cost and never subtracts discounts twice', () => {
