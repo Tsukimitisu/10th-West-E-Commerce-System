@@ -14,6 +14,7 @@
     "migrate:make": "knex migrate:make --knexfile knexfile.cjs",
     "migrations:verify": "node scripts/verify-migration-source.js",
     "audit:integrity": "node scripts/integrity-audit.js",
+    "seed:test-fixtures": "node scripts/seed-test-fixtures.js",
     "data:quarantine-orders": "node scripts/quarantine-order-integrity.js",
     "security:disable-seeded-accounts": "node scripts/secure-seeded-accounts.js",
     "security:verify-rls": "node scripts/verify-rls.js",

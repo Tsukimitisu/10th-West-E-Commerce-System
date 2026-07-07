@@ -69,6 +69,31 @@ Seed accounts are refused outside development/test. To disable and rotate any
 legacy seeded accounts, run `npm run security:disable-seeded-accounts` with
 `CONFIRM_SECURE_SEEDED_ACCOUNTS=true`.
 
+### Development/test login fixtures
+
+Use the fixture script only for local QA and automated E2E login checks. It is
+blocked in `NODE_ENV=production`, requires `ENABLE_TEST_FIXTURES=true`, and
+only upserts the `@test.local` accounts below.
+
+```bash
+ENABLE_TEST_FIXTURES=true TEST_FIXTURE_PASSWORD='LocalTestPass123!' npm run seed:test-fixtures
+```
+
+Accounts created or reset by the script:
+
+```text
+customer@test.local      customer
+cashier@test.local       cashier
+staff-noperms@test.local store_staff with explicit permission denials
+staff@test.local         store_staff with role permissions
+owner@test.local         owner
+superadmin@test.local    super_admin
+```
+
+If `TEST_FIXTURE_PASSWORD` is omitted, the script generates a strong local
+password and writes it to `backend/.test-credentials.local`, which is ignored by
+git and must not be copied into production.
+
 ## Running the Server
 
 Development mode (with auto-restart):
