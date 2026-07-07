@@ -1393,31 +1393,36 @@ export const recordProductView = async (req, res) => {
       .update(`${process.env.VIEW_TRACKING_SALT || process.env.JWT_SECRET || '10th-west-moto'}:${visitorSource}`)
       .digest('hex');
 
-    const inserted = await pool.query(
-      `INSERT INTO product_views (product_id, user_id, visitor_hash)
-       SELECT $1, $2, $3
-       WHERE NOT EXISTS (
-         SELECT 1
-         FROM product_views
-         WHERE product_id = $1
-           AND created_at > NOW() - INTERVAL '30 minutes'
-           AND (
-             ($2::int IS NOT NULL AND user_id = $2)
-             OR ($2::int IS NULL AND visitor_hash = $3)
-           )
-       )
-       RETURNING id`,
-      [productId, userId, visitorHash]
-    );
-
-    if (inserted.rowCount) {
-      await pool.query(
-        `UPDATE products SET view_count = COALESCE(view_count, 0) + 1, updated_at = NOW() WHERE id = $1`,
-        [productId]
+    try {
+      const inserted = await pool.query(
+        `INSERT INTO product_views (product_id, user_id, visitor_hash)
+         SELECT $1::int, $2::int, $3::varchar(128)
+         WHERE NOT EXISTS (
+           SELECT 1
+           FROM product_views
+           WHERE product_id = $1::int
+             AND created_at > NOW() - INTERVAL '30 minutes'
+             AND (
+               ($2::int IS NOT NULL AND user_id = $2::int)
+               OR ($2::int IS NULL AND visitor_hash = $3::varchar(128))
+             )
+         )
+         RETURNING id`,
+        [productId, userId, visitorHash]
       );
-    }
 
-    return res.status(202).json({ recorded: inserted.rowCount > 0 });
+      if (inserted.rowCount) {
+        await pool.query(
+          `UPDATE products SET view_count = COALESCE(view_count, 0) + 1, updated_at = NOW() WHERE id = $1::int`,
+          [productId]
+        );
+      }
+
+      return res.status(202).json({ recorded: inserted.rowCount > 0 });
+    } catch (analyticsError) {
+      console.error('Record product view analytics write error:', analyticsError);
+      return res.status(202).json({ recorded: false, skipped: true });
+    }
   } catch (error) {
     console.error('Record product view error:', error);
     return res.status(500).json({ message: 'Product view could not be recorded.' });
