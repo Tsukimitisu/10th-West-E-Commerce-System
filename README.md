@@ -35,6 +35,15 @@ Update `backend/.env` with real values. Minimum required to start backend:
 - `CSRF_SECRET`
 - `FRONTEND_ORIGIN=http://localhost:5173`
 
+Production startup also requires:
+
+- `SESSION_STORE=postgres`
+- `COOKIE_SECURE=true`
+- `COOKIE_SAME_SITE=lax`
+- `TWO_FACTOR_ENCRYPTION_KEY`
+
+See `docs/PRODUCTION_ENVIRONMENT.md` for the full production checklist.
+
 Payment, shipping, tracking, email, OAuth, and media integrations are optional
 at startup. Their features remain blocked until their real credentials are
 configured; placeholders do not make an integration operational.

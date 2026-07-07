@@ -70,35 +70,45 @@ const envPath = path.join(__dirname, '..', '.env');
 console.log('📍 Loading .env from:', envPath);
 dotenv.config({ path: envPath });
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Validate required environment variables
 const requiredEnvVars = [
-  'JWT_SECRET'
+  'JWT_SECRET',
 ];
 
-if (process.env.NODE_ENV === 'production') {
-  requiredEnvVars.push(
-    'SESSION_SECRET',
-    'SESSION_STORE',
-    'FRONTEND_ORIGIN',
-    'COOKIE_SECURE',
-    'COOKIE_SAME_SITE',
-    'CSRF_SECRET',
-    'TWO_FACTOR_ENCRYPTION_KEY'
-  );
+const productionRequiredEnvVars = [
+  'SESSION_SECRET',
+  'SESSION_STORE',
+  'FRONTEND_ORIGIN',
+  'COOKIE_SECURE',
+  'COOKIE_SAME_SITE',
+  'CSRF_SECRET',
+  'TWO_FACTOR_ENCRYPTION_KEY',
+];
+
+if (isProduction) {
+  requiredEnvVars.push(...productionRequiredEnvVars);
 }
 
-if (process.env.NODE_ENV === 'production' && String(process.env.SHIPPING_PROVIDER || '').toLowerCase() === 'mock') {
+if (isProduction && String(process.env.SHIPPING_PROVIDER || '').toLowerCase() === 'mock') {
   console.error('The mock shipping provider cannot be selected in production.');
   process.exit(1);
 }
 
-if (process.env.NODE_ENV === 'production' && String(process.env.TRACKING_PROVIDER || '').toLowerCase() === 'mock') {
+if (isProduction && String(process.env.TRACKING_PROVIDER || '').toLowerCase() === 'mock') {
   console.error('The mock tracking provider cannot be selected in production.');
   process.exit(1);
 }
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingVars.length > 0) {
+  const environmentLabel = isProduction ? 'production' : (process.env.NODE_ENV || 'development');
+  console.error(`Missing required core environment variables for ${environmentLabel}: ${missingVars.join(', ')}`);
+  if (isProduction) {
+    console.error(`Required production core variables: ${productionRequiredEnvVars.join(', ')}`);
+  }
+  console.error('Optional integrations are not required for core startup; leave them empty until real credentials are available.');
   console.error('❌ Missing required environment variables:', missingVars.join(', '));
   console.error('Please copy backend/.env.example to backend/.env and fill in the values');
   process.exit(1);
@@ -113,6 +123,7 @@ if (missingUploadVars.length > 0) {
 
 // Log configuration on startup (no sensitive values)
 console.log('\n🔐 Configuration loaded:');
+console.log('   Required core env:', isProduction ? 'production checks passed' : 'development checks passed');
 console.log('   PayMongo:', getPaymongoConfigurationStatus().configured ? 'configured' : 'not configured');
 console.log('   Shipping:', getShippingConfigurationStatus().status);
 console.log('   Tracking:', getTrackingConfigurationStatus().status);

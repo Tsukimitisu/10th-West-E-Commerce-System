@@ -36,12 +36,13 @@ DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/
 SUPABASE_URL=https://[PROJECT-REF].supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 JWT_SECRET=your-super-secret-jwt-key
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_api_secret
-# Optional: prefix uploads by app/environment for scale and isolation
-CLOUDINARY_UPLOAD_ROOT=10th-west-moto
 ```
+
+Production additionally requires `SESSION_SECRET`, `SESSION_STORE`,
+`FRONTEND_ORIGIN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`, `CSRF_SECRET`, and
+`TWO_FACTOR_ENCRYPTION_KEY`. Optional payment, shipping, tracking, email, OAuth,
+and Cloudinary values should stay empty until real provider credentials are
+configured. See `../docs/PRODUCTION_ENVIRONMENT.md`.
 
 3. Run database migrations (up):
 ```bash
