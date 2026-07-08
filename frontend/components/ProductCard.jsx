@@ -6,8 +6,7 @@ import { getCurrentAuthUser } from '../services/authSession.js';
 import { useCart } from '../context/CartContext';
 import PriceDisplay from './ui/PriceDisplay';
 import StatusBadge from './ui/StatusBadge';
-
-const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
+import { handleProductImageError, resolveProductImageUrl } from '../utils/productImages.js';
 
 const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }) => {
   const navigate = useNavigate();
@@ -51,7 +50,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
   const discount = onSale ? Math.round((1 - Number(product.sale_price) / Number(product.price)) * 100) : 0;
   const hasVariants = Array.isArray(product.variants) && product.variants.length > 0;
   const productUrl = `/products/${product.id}`;
-  const image = product.image || product.image_url || PRODUCT_IMAGE_FALLBACK;
+  const image = resolveProductImageUrl(product.image || product.image_url);
 
   const handleWishlist = async () => {
     const userId = getCurrentAuthUser()?.id;
@@ -95,7 +94,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
             src={image}
             alt={product.name}
             loading="lazy"
-            onError={(event) => { event.currentTarget.src = PRODUCT_IMAGE_FALLBACK; }}
+            onError={handleProductImageError}
             className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
           />
           {onSale && <span className="absolute left-2 top-2 rounded-lg bg-red-600 px-2 py-1 text-[11px] font-bold text-white">Save {discount}%</span>}
@@ -150,7 +149,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
             src={image}
             alt={product.name}
             loading="lazy"
-            onError={(event) => { event.currentTarget.src = PRODUCT_IMAGE_FALLBACK; }}
+            onError={handleProductImageError}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.035]"
           />
         </Link>

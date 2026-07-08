@@ -3,8 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft, LogIn, X } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { getCurrentAuthUser } from '../../services/authSession.js';
-
-const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const CART_VAT_RATE = 0.12;
 const CART_FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
@@ -215,7 +214,7 @@ const Cart = () => {
                             className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-400 cursor-pointer flex-shrink-0"
                           />
                           <Link to={`/products/${item.productId}`} className="w-20 h-20 md:w-24 md:h-24 bg-white rounded-xl overflow-hidden flex-shrink-0 border border-slate-200">
-                            <img src={item.product.image || PRODUCT_IMAGE_FALLBACK} alt={item.product.name} className="w-full h-full object-cover" />
+                            <img src={resolveProductImageUrl(item.product.image)} alt={item.product.name} onError={handleProductImageError} className="w-full h-full object-cover" />
                           </Link>
                           <div className="min-w-0">
                             <Link to={`/products/${item.productId}`} className="font-semibold text-slate-900 hover:text-red-600 transition-colors text-sm line-clamp-2">{item.product.name}</Link>

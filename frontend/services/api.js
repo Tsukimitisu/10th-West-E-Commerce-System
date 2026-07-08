@@ -2192,7 +2192,7 @@ let MOCK_PRODUCTS = [
     description: 'Original Yamaha Battery Cover for NMAX V1.',
     price: 150.00,
     buyingPrice: 104.00,
-    image: 'https://images.unsplash.com/photo-1558564175-99645903c7bb?auto=format&fit=crop&q=80&w=400',
+    image: '/images/product-fallback.svg',
     category_id: 1,
     category_name: 'NMAX V1',
     stock_quantity: 2,

@@ -37,8 +37,8 @@ import BrandMark from '../../components/ui/BrandMark';
 import EmptyState from '../../components/ui/EmptyState';
 import PaymentModal from './PaymentModal';
 import ReceiptModal from './ReceiptModal';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
-const FALLBACK_IMAGE = '/images/product-fallback.svg';
 const formatCurrency = (value) => new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
@@ -336,7 +336,7 @@ const PosTerminal = () => {
         className="group flex min-h-[245px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-red-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-55"
       >
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
-          <img src={product.image || FALLBACK_IMAGE} alt="" onError={(event) => { event.currentTarget.src = FALLBACK_IMAGE; }} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.025]" />
+          <img src={resolveProductImageUrl(product.image)} alt="" onError={handleProductImageError} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.025]" />
           {product.variants?.length > 0 && <span className="absolute left-2 top-2 rounded-lg bg-slate-950/88 px-2 py-1 text-[10px] font-bold text-white">{product.variants.length} variants</span>}
           {available <= 0 && <span className="absolute inset-0 grid place-items-center bg-white/75 text-xs font-black text-red-700">OUT OF STOCK</span>}
         </div>
@@ -450,7 +450,7 @@ const PosTerminal = () => {
                 {cart.map((item) => (
                   <div key={item.key} className="rounded-xl border border-slate-200 p-3">
                     <div className="flex gap-3">
-                      <img src={item.variant?.image_url || item.product.image || FALLBACK_IMAGE} alt="" className="h-12 w-12 rounded-lg bg-slate-100 object-cover" />
+                      <img src={resolveProductImageUrl(item.variant?.image_url || item.product.image)} alt="" onError={handleProductImageError} className="h-12 w-12 rounded-lg bg-slate-100 object-cover" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold">{item.product.name}</p>
                         {item.variant && <p className="truncate text-xs text-slate-500">{item.variant.variant_type}: {item.variant.variant_value}</p>}

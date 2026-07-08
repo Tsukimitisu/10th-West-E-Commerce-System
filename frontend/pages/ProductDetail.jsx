@@ -8,9 +8,9 @@ import ProductCard from '../components/ProductCard';
 import StarRating from '../components/StarRating';
 import ReviewCard from '../components/ReviewCard';
 import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
+import { handleProductImageError, PRODUCT_IMAGE_FALLBACK, resolveProductImageUrl } from '../utils/productImages.js';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
-const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
 const DEFAULT_SHARE_METADATA = {
   title: '10th West Moto Parts',
   description: 'Shop motorcycle parts, accessories, and riding essentials from 10th West Moto.',
@@ -85,7 +85,7 @@ const extractProductImages = (product) => {
 
   const unique = new Set();
   candidates.forEach((value) => {
-    parseImageList(value).forEach((url) => unique.add(url));
+    parseImageList(value).forEach((url) => unique.add(resolveProductImageUrl(url)));
   });
 
   const images = Array.from(unique);
@@ -935,7 +935,7 @@ const ProductDetail = () => {
                   controls
                 />
               ) : (
-                <img src={selectedMedia?.src || PRODUCT_IMAGE_FALLBACK} alt={product.name} className="w-full h-full object-cover" />
+                <img src={selectedMedia?.src || PRODUCT_IMAGE_FALLBACK} alt={product.name} onError={handleProductImageError} className="w-full h-full object-cover" />
               )}
               {hasDiscount && (
                 <span className="absolute top-4 left-4 bg-red-600 text-white text-sm font-bold px-3 py-1.5 rounded-full shadow-sm">
@@ -954,13 +954,13 @@ const ProductDetail = () => {
                   <button key={i} onClick={() => setSelectedImage(i)} className={`w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition-colors ${i === selectedImage ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 hover:border-red-200'}`}>
                     {media.type === 'video' ? (
                       <span className="relative block h-full w-full bg-slate-950">
-                        <img src={media.poster || PRODUCT_IMAGE_FALLBACK} alt="" className="h-full w-full object-cover opacity-70" />
+                        <img src={media.poster || PRODUCT_IMAGE_FALLBACK} alt="" onError={handleProductImageError} className="h-full w-full object-cover opacity-70" />
                         <span className="absolute inset-0 grid place-items-center text-white">
                           <Play size={18} className="fill-white" />
                         </span>
                       </span>
                     ) : (
-                      <img src={media.src} alt="" className="w-full h-full object-cover" />
+                      <img src={media.src} alt="" onError={handleProductImageError} className="w-full h-full object-cover" />
                     )}
                   </button>
                 ))}

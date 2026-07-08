@@ -7,8 +7,7 @@ import AddressDropdowns from '../../components/AddressDropdowns';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
 import { getCurrentAuthUser } from '../../services/authSession.js';
-
-const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 const CHECKOUT_TERMS_SESSION_KEY = 'checkoutTermsAccepted';
@@ -830,7 +829,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                   {items.map((item) => (
                     <div key={item.productId} className="flex gap-3">
                       <div className="w-14 h-14 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0 border border-slate-200">
-                        <img src={item.product.image || PRODUCT_IMAGE_FALLBACK} alt="" className="w-full h-full object-cover" />
+                        <img src={resolveProductImageUrl(item.product.image)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-900 line-clamp-1">{item.product.name}</p>
