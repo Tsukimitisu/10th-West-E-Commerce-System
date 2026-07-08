@@ -10,7 +10,7 @@ import {
   getActivityLogs, sendRegistrationOtp,
   deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData, getMyPermissions,
 } from '../controllers/authController.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateOptional, authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
 import {
   resendVerificationLimiter,
@@ -225,6 +225,10 @@ router.get('/facebook/callback',
 
 // ─── Protected routes ──────────────────────────────────────────────
 router.post('/logout', authenticateToken, logout);
+router.get('/profile/optional', authenticateOptional, (req, res) => {
+  if (!req.user) return res.status(204).end();
+  return getProfile(req, res);
+});
 router.get('/profile', authenticateToken, getProfile);
 router.get('/permissions', authenticateToken, getMyPermissions);
 router.put('/change-password',

@@ -437,7 +437,9 @@ const authenticatedFetch = async (url, options = {}) => {
         credentials: 'include',
         signal,
       });
-      const responseBody = await response.json().catch(() => ({ message: 'Request failed' }));
+      const responseBody = response.status === 204
+        ? null
+        : await response.json().catch(() => ({ message: 'Request failed' }));
       return { response, responseBody };
     } catch (error) {
       if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
@@ -633,7 +635,7 @@ export const logoutApi = async () => {
 };
 
 // Get authenticated user profile (used by OAuth callback to avoid PII in URL)
-export const getProfile = async () => {
+export const getProfile = async ({ optional = false } = {}) => {
   if (USE_SUPABASE) {
     const cachedUser = getCurrentAuthUser();
     if (!cachedUser?.id) throw new Error('Not authenticated');
@@ -645,7 +647,7 @@ export const getProfile = async () => {
       is_active: data.is_active, last_login: data.last_login, email_verified: data.email_verified,
     };
   }
-  return await authenticatedFetch(`${API_URL}/auth/profile`);
+  return await authenticatedFetch(`${API_URL}/auth/profile${optional ? '/optional' : ''}`);
 };
 
 // Delete account - Right to be Forgotten (RA 10173 Â§18)

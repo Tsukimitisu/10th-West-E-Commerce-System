@@ -201,7 +201,7 @@ const App = () => {
 
     const syncUserWithProfileRefresh = async () => {
       try {
-        const profile = await getProfile();
+        const profile = await getProfile({ optional: true });
         applyProfile(profile);
       } catch {
         clearSession();
