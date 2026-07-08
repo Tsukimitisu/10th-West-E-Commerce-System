@@ -6,9 +6,12 @@ import { authenticateToken, requirePermission, requireRole } from '../middleware
 import { listSettings } from '../services/settings.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import { getShippingConfigurationStatus } from '../services/shipping/providers/index.js';
-import { toPublicProviderStatus } from '../services/shipping/providers/providerUtils.js';
 import { getShippingOperationalReadiness } from '../services/shipping/shippingReadiness.js';
 import { getTrackingConfigurationStatus } from '../services/tracking/providers/index.js';
+import {
+  buildAdminIntegrationReadiness,
+  selectedIntegrationsReady,
+} from '../services/integrationReadiness.js';
 
 const router = express.Router();
 const booleanRule = (value) => ['true', 'false'].includes(String(value).toLowerCase());
@@ -80,31 +83,14 @@ router.get('/readiness', async (_req, res) => {
     const shipping = getShippingConfigurationStatus();
     const tracking = getTrackingConfigurationStatus();
     const activity = await getShippingOperationalReadiness(pool);
+    const integrations = buildAdminIntegrationReadiness({ paymongo, shipping, tracking });
     return res.json({
       status: 'available',
       core_ready: true,
       commerce_ready: true,
-      integrations_ready: paymongo.configured && shipping.ready && tracking.ready,
+      integrations_ready: selectedIntegrationsReady(integrations),
       database: 'ok',
-      integrations: {
-        paymongo: paymongo.configured ? 'configured' : 'blocked_by_credentials',
-        shipping: {
-          provider: shipping.provider,
-          status: toPublicProviderStatus(shipping),
-          ready: shipping.ready,
-          country: String(process.env.SHIPPING_COUNTRY || 'PH').toUpperCase(),
-          carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
-          coverage: 'selected_cities',
-        },
-        tracking: {
-          provider: tracking.provider,
-          status: toPublicProviderStatus(tracking),
-          ready: tracking.ready,
-          carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
-        },
-        gmail: process.env.EMAIL_USER && process.env.EMAIL_PASSWORD ? 'configured' : 'blocked_by_credentials',
-        facebook: process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET ? 'configured' : 'blocked_by_credentials',
-      },
+      integrations,
       runtime: {
         session_store: process.env.SESSION_STORE === 'postgres' ? 'postgres' : 'memory_dev_mode',
         environment: process.env.NODE_ENV || 'development',

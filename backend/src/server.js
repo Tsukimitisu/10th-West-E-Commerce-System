@@ -60,6 +60,12 @@ import { getPaymongoConfigurationStatus } from './services/paymongo.js';
 import { getShippingConfigurationStatus } from './services/shipping/providers/index.js';
 import { getTrackingConfigurationStatus } from './services/tracking/providers/index.js';
 import { startMaintenanceWorkers } from './services/maintenance.js';
+import {
+  buildPublicIntegrationReadiness,
+  getEmailConfigurationStatus,
+  getMediaConfigurationStatus,
+  selectedIntegrationsReady,
+} from './services/integrationReadiness.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -124,16 +130,11 @@ if (missingUploadVars.length > 0) {
 // Log configuration on startup (no sensitive values)
 console.log('\n🔐 Configuration loaded:');
 console.log('   Required core env:', isProduction ? 'production checks passed' : 'development checks passed');
-console.log('   PayMongo:', getPaymongoConfigurationStatus().configured ? 'configured' : 'not configured');
+console.log('   PayMongo:', getPaymongoConfigurationStatus().configured ? 'configured' : 'blocked_by_credentials');
 console.log('   Shipping:', getShippingConfigurationStatus().status);
 console.log('   Tracking:', getTrackingConfigurationStatus().status);
-console.log('   Email User:', process.env.EMAIL_USER ? '✅ SET' : '❌ NOT SET');
-console.log('   Email Password:', process.env.EMAIL_PASSWORD ? '✅ SET' : '❌ NOT SET');
-console.log('   Cloudinary:', (
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET
-) ? '✅ SET' : '❌ NOT SET');
+console.log('   Email:', getEmailConfigurationStatus().status);
+console.log('   Media:', getMediaConfigurationStatus().status);
 console.log('');
 
 const app = express();
@@ -343,12 +344,14 @@ app.get('/api/ready', async (_req, res) => {
     const shipping = getShippingConfigurationStatus();
     const tracking = getTrackingConfigurationStatus();
     const paymongo = getPaymongoConfigurationStatus();
-    const integrationsReady = shipping.ready && tracking.ready && paymongo.configured;
+    const integrations = buildPublicIntegrationReadiness({ paymongo, shipping, tracking });
+    const integrationsReady = selectedIntegrationsReady(integrations);
     res.json({
       status: 'available',
       core_ready: true,
       commerce_ready: true,
       integrations_ready: integrationsReady,
+      integrations,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

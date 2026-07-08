@@ -60,11 +60,13 @@ test('shipping operations delegate through selected providers and persist saniti
 test('readiness reports generic shipping and tracking state', async () => {
   const server = await readFile(path.join(backendSource, 'server.js'), 'utf8');
   const adminRoutes = await readFile(path.join(backendSource, 'routes', 'admin.js'), 'utf8');
+  const integrationReadiness = await readFile(path.join(backendSource, 'services', 'integrationReadiness.js'), 'utf8');
   const publicReadiness = server.slice(server.indexOf("app.get('/api/ready'"), server.indexOf('// CSRF token endpoint'));
   assert.match(publicReadiness, /core_ready/);
   assert.match(publicReadiness, /commerce_ready/);
   assert.match(publicReadiness, /integrations_ready/);
   assert.doesNotMatch(publicReadiness, /shipping_provider|shipping_carrier|tracking_provider/);
-  assert.match(adminRoutes, /shipping:\s*\{[\s\S]*?provider: shipping\.provider,[\s\S]*?carrier:/);
-  assert.match(adminRoutes, /tracking:\s*\{[\s\S]*?provider: tracking\.provider,[\s\S]*?carrier:/);
+  assert.match(adminRoutes, /buildAdminIntegrationReadiness/);
+  assert.match(integrationReadiness, /shipping:\s*\{[\s\S]*?provider: shipping\.provider,[\s\S]*?carrier:/);
+  assert.match(integrationReadiness, /tracking:\s*\{[\s\S]*?provider: tracking\.provider,[\s\S]*?carrier:/);
 });
