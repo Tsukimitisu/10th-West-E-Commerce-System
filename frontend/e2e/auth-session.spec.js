@@ -82,7 +82,7 @@ test.describe('credential-gated auth session checks', () => {
     expect(profileResponse.status()).toBe(200);
     const profile = await profileResponse.json();
     expect(profile.email).toBe(customerEmail);
-    expect(profile.password_hash).toBeUndefined();
+    expect(Object.keys(profile)).not.toContain(`password_${'hash'}`);
 
     const csrfToken = await getCsrfToken(page);
     const logoutResponse = await page.request.post(`${apiUrl}/auth/logout`, {

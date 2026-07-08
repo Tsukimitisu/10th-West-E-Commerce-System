@@ -352,7 +352,7 @@ const isSessionAuthFailure = (status, responseBody = {}) => {
   return false;
 };
 
-// Helper: get current user info from token (for Supabase custom auth)
+// Helper: get the current in-memory session user.
 const getCurrentUserFromToken = () => {
   return getCurrentAuthUser();
 };
@@ -490,77 +490,11 @@ const authenticatedFetch = async (url, options = {}) => {
   return responseBody;
 };
 
-// ==================== SUPABASE HELPERS ====================
-
-const mapUserFromSupabase = (supabaseUser, profile) => ({
-  id: profile?.id || parseInt(supabaseUser.id.replace(/-/g, '').substring(0, 8), 16),
-  name: profile?.name || supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
-  email: supabaseUser.email || '',
-  role: (profile?.role) || Role.CUSTOMER,
-  phone: profile?.phone,
-  avatar: profile?.avatar,
-  store_credit: profile?.store_credit || 0,
-  is_active: profile?.is_active ?? true,
-  two_factor_enabled: profile?.two_factor_enabled || false,
-  oauth_provider: supabaseUser.app_metadata?.provider || null,
-  last_login: supabaseUser.last_sign_in_at,
-  email_verified: supabaseUser.email_confirmed_at != null,
-});
-
 // ==================== AUTHENTICATION ====================
 
 export const login = async (email, password, totp_code) => {
   if (USE_MOCK_DATA) {
     return loginMock(email, password);
-  }
-
-  if (USE_SUPABASE) {
-    // Query the users table directly (custom auth, not Supabase Auth)
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single();
-
-    if (error || !user) throw new Error('Invalid credentials');
-
-    // Securely compare password using bcrypt
-    const isValidPassword = await bcrypt.compare(password, user.password_hash || '');
-
-    if (!isValidPassword) throw new Error('Invalid credentials');
-
-    if (!user.email_verified) {
-      const err = new Error('Your account is not verified. Please check your email.');
-      err.requiresVerification = true;
-      err.email = user.email;
-      err.code = 'EMAIL_NOT_VERIFIED';
-      throw err;
-    }
-
-    // Update last login
-    await supabase
-      .from('users')
-      .update({ last_login: new Date().toISOString() })
-      .eq('id', user.id);
-
-    // Generate a simple token for localStorage
-    const token = 'sb-token-' + btoa(JSON.stringify({ id: user.id, email: user.email, role: user.role }));
-
-    return {
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        phone: user.phone,
-        avatar: user.avatar,
-        store_credit: user.store_credit,
-        is_active: user.is_active,
-        last_login: user.last_login,
-        email_verified: user.email_verified,
-      },
-      token,
-    };
   }
 
   await getCsrfToken({ forceRefresh: true });
@@ -616,7 +550,7 @@ const getAddressZipError = (value) => {
 };
 
 export const sendRegistrationOtp = async (email, name) => {
-  if (USE_MOCK_DATA || USE_SUPABASE) {
+  if (USE_MOCK_DATA) {
     // For mock, just return success
     return { message: 'OTP sent (mock)' };
   }
@@ -627,55 +561,16 @@ export const sendRegistrationOtp = async (email, name) => {
 };
 
 export const logoutApi = async () => {
-  if (USE_SUPABASE) {
-    clearCurrentAuthUser();
-    return;
-  }
   await authenticatedFetch(`${API_URL}/auth/logout`, { method: 'POST' });
 };
 
 // Get authenticated user profile (used by OAuth callback to avoid PII in URL)
 export const getProfile = async ({ optional = false } = {}) => {
-  if (USE_SUPABASE) {
-    const cachedUser = getCurrentAuthUser();
-    if (!cachedUser?.id) throw new Error('Not authenticated');
-    const { data, error } = await supabase.from('users').select('*').eq('id', cachedUser.id).single();
-    if (error || !data) throw new Error('User not found');
-    return {
-      id: data.id, name: data.name, email: data.email, role: data.role,
-      phone: data.phone, avatar: data.avatar, store_credit: data.store_credit,
-      is_active: data.is_active, last_login: data.last_login, email_verified: data.email_verified,
-    };
-  }
   return await authenticatedFetch(`${API_URL}/auth/profile${optional ? '/optional' : ''}`);
 };
 
 // Delete account - Right to be Forgotten (RA 10173 Â§18)
 export const deleteAccount = async (password) => {
-  if (USE_SUPABASE) {
-    const user = getCurrentAuthUser() || {};
-    if (!user.id) throw new Error('Not authenticated');
-
-    // Require password confirmation for password-based accounts.
-    const { data: dbUser, error: userErr } = await supabase
-      .from('users')
-      .select('password_hash')
-      .eq('id', user.id)
-      .single();
-    if (userErr) throw new Error(userErr.message);
-    if (dbUser?.password_hash) {
-      if (!password) throw new Error('Password is required to delete your account');
-      const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
-      if (!isValidPassword) throw new Error('Incorrect password');
-    }
-
-    const { error } = await supabase
-      .from('users')
-      .update({ is_active: false, name: 'Deleted User', email: `deleted_${user.id}@removed.local`, phone: null })
-      .eq('id', user.id);
-    if (error) throw new Error(error.message);
-    return { message: 'Account deleted successfully' };
-  }
   return await authenticatedFetch(`${API_URL}/auth/account`, {
     method: 'DELETE',
     body: JSON.stringify({ password }),
@@ -684,22 +579,11 @@ export const deleteAccount = async (password) => {
 
 // Data export / portability - RA 10173 Â§18
 export const exportMyData = async () => {
-  if (USE_SUPABASE) {
-    const user = getCurrentAuthUser() || {};
-    if (!user.id) throw new Error('Not authenticated');
-    const { data: userData } = await supabase.from('users').select('id, name, email, phone, role, created_at, last_login').eq('id', user.id).single();
-    const { data: orders } = await supabase.from('orders').select('id, status, total_amount, created_at').eq('user_id', user.id);
-    const { data: addresses } = await supabase.from('addresses').select('*').eq('user_id', user.id);
-    return { exported_at: new Date().toISOString(), legal_basis: 'RA 10173 Â§18', personal_information: userData, orders: orders || [], addresses: addresses || [] };
-  }
   return await authenticatedFetch(`${API_URL}/auth/export-data`);
 };
 
 // Resend email verification
 export const resendVerification = async (email) => {
-  if (USE_SUPABASE) {
-    return { message: 'Verification email sent' };
-  }
   return await authenticatedFetch(`${API_URL}/auth/resend-verification`, {
     method: 'POST',
     body: JSON.stringify({ email }),
@@ -739,32 +623,6 @@ export const changePassword = async (currentPassword, newPassword) => {
     throw new Error('Password must be at least 8 characters and include uppercase, lowercase, number, and special character.');
   }
 
-  if (USE_SUPABASE) {
-    const currentUser = getCurrentUserFromToken();
-    if (!currentUser) throw new Error('Not authenticated');
-
-    const { data: dbUser, error: fetchErr } = await supabase
-      .from('users')
-      .select('password_hash')
-      .eq('id', currentUser.id)
-      .single();
-    if (fetchErr) throw new Error(fetchErr.message);
-
-    if (!dbUser?.password_hash) {
-      throw new Error('This account does not have a password to change. Please use account recovery or set a password from your login provider settings.');
-    }
-
-    const isValidPassword = await bcrypt.compare(currentPassword, dbUser.password_hash);
-    if (!isValidPassword) throw new Error('Current password is incorrect');
-
-    const isSamePassword = await bcrypt.compare(newPassword, dbUser.password_hash);
-    if (isSamePassword) throw new Error('New password must be different from your current password.');
-
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
-    const { error } = await supabase.from('users').update({ password_hash: hashedPassword }).eq('id', currentUser.id);
-    if (error) throw new Error(error.message);
-    return { message: 'Password changed successfully' };
-  }
   return authenticatedFetch(`${API_URL}/auth/change-password`, {
     method: 'PUT',
     body: JSON.stringify({ currentPassword, newPassword }),
@@ -792,14 +650,10 @@ export const disable2FA = async (password) => {
 };
 
 export const exchangeOAuthCode = async (code) => {
-  const data = await authenticatedFetch(`${API_URL}/auth/exchange-code`, {
+  return authenticatedFetch(`${API_URL}/auth/exchange-code`, {
     method: "POST",
     body: JSON.stringify({ code }),
   });
-  if (USE_SUPABASE && data && data.user) {
-    return { user: data.user, token: '' };
-  }
-  return data;
 };
 
 // Sessions
@@ -873,18 +727,6 @@ export const getStaffById = async (id) => {
 };
 
 export const addStaff = async (data) => {
-  if (USE_SUPABASE) {
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-    const { data: existing } = await supabase.from('users').select('id').eq('email', data.email).single();
-    if (existing) throw new Error('Email already exists');
-    const { data: created, error } = await supabase.from('users').insert({
-      name: data.name, email: data.email, password_hash: hashedPassword,
-      role: data.role || 'store_staff', phone: data.phone || null, is_active: true, email_verified: true,
-    }).select().single();
-    if (error) throw new Error(error.message);
-    await logSupabaseActivity('staff.add', 'user', created.id, { name: data.name, email: data.email, role: data.role });
-    return created;
-  }
   return authenticatedFetch(`${API_URL}/staff`, {
     method: 'POST',
     body: JSON.stringify(data),
@@ -2226,8 +2068,7 @@ const loginMock = async (email, password) => {
     (email === 'cashier@10thwest.com' && password === 'cashier123') ||
     (email === 'customer@10thwest.com' && password === 'customer123')
   ) {
-    const token = 'mock-jwt-token-' + Math.random();
-    return { user, token };
+    return { user, token: '' };
   }
 
   throw new Error('Invalid credentials');
@@ -2244,9 +2085,8 @@ const registerMock = async (name, email, password) => {
   };
 
   MOCK_USERS.push(newUser);
-  const token = 'mock-jwt-token-' + Math.random();
 
-  return { user: newUser, token };
+  return { user: newUser, token: '' };
 };
 
 // Mock product functions
@@ -5246,13 +5086,6 @@ export const adminUnlockUser = async (id) => {
 };
 
 export const adminResetUserPassword = async (id, newPassword) => {
-  if (USE_SUPABASE) {
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    const { error } = await supabase.from('users').update({ password: hashedPassword }).eq('id', id);
-    if (error) throw new Error(error.message);
-    await logSupabaseActivity('admin.reset_password', 'user', id);
-    return { message: 'Password reset successfully' };
-  }
   return authenticatedFetch(`${API_URL}/admin/users/${id}/reset-password`, {
     method: 'POST', body: JSON.stringify({ newPassword }),
   });
@@ -5453,10 +5286,6 @@ export const verifyEmailToken = async (token) => {
     throw error;
   }
 
-  if (USE_SUPABASE && data && data.user) {
-    const sbToken = 'sb-token-' + btoa(JSON.stringify({ id: data.user.id, email: data.user.email, role: data.user.role }));
-    return { ...data, token: sbToken };
-  }
   return data;
 };
 
