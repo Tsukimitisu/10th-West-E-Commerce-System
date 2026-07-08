@@ -146,6 +146,8 @@ const Register = () => {
       setConfirmPassword('');
     } catch (err) {
       const nextFieldErrors = err.fieldErrors || {};
+      const firstFieldError = Object.values(nextFieldErrors).find(Boolean);
+      const backendMessage = err.message || firstFieldError || 'Registration failed.';
       setFieldErrors(nextFieldErrors);
 
       if (err.requiresVerification || err.code === 'VERIFICATION_EMAIL_FAILED') {
@@ -173,13 +175,13 @@ const Register = () => {
       }
 
       if (Object.keys(nextFieldErrors).length > 0) {
-        setError('Please correct the highlighted fields.');
+        setError(backendMessage);
         if (nextFieldErrors.email) focusEmailField();
         else scrollToErrorBanner();
         return;
       }
 
-      setError(err.message || 'Registration failed.');
+      setError(backendMessage);
       scrollToErrorBanner();
     } finally {
       setLoading(false);

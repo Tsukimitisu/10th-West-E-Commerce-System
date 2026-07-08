@@ -384,7 +384,7 @@ const assertEmailDomainCanReceiveMail = async (email) => {
   const timeout = new Promise((_, reject) => {
     setTimeout(() => {
       const error = new Error('Email validation timed out. Please try again.');
-      error.status = 503;
+      error.code = 'EMAIL_DNS_TIMEOUT';
       reject(error);
     }, EMAIL_DNS_TIMEOUT_MS);
   });
@@ -394,7 +394,10 @@ const assertEmailDomainCanReceiveMail = async (email) => {
     const canReceiveMail = Array.isArray(records) && records.some((record) => String(record.exchange || '').trim());
     if (canReceiveMail) return;
   } catch (error) {
-    if (error?.status === 503) throw error;
+    if (error?.code === 'EMAIL_DNS_TIMEOUT') {
+      console.warn(`Email domain MX validation timed out for ${domain}; continuing with verification email send.`);
+      return;
+    }
   }
 
   const error = new Error('Use a real email address that can receive verification emails.');

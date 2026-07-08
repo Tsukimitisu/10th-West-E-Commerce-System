@@ -12,8 +12,10 @@ export const validate = (req, res, next) => {
       return acc;
     }, {});
 
+    const firstMessage = rawErrors.find((error) => typeof error.msg === 'string' && error.msg.trim())?.msg;
+
     return res.status(400).json({ 
-      message: 'Validation failed', 
+      message: firstMessage || 'Validation failed', 
       errors: rawErrors,
       fieldErrors,
     });
