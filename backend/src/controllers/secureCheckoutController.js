@@ -10,7 +10,7 @@ import { createOrderWorkflowNotification } from '../utils/notifications.js';
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
 const money = (value) => Number.parseFloat(value || 0);
-const fail = (status, message, fieldErrors) => Object.assign(new Error(message), { status, fieldErrors });
+const fail = (status, message, fieldErrors, code) => Object.assign(new Error(message), { status, fieldErrors, code });
 
 const normalizeItems = (input) => {
   if (!Array.isArray(input) || input.length === 0 || input.length > 100) throw fail(400, 'Checkout requires 1 to 100 items.');
@@ -38,6 +38,33 @@ const validateIdempotencyKey = (req) => {
   const key = String(req.get('Idempotency-Key') || '').trim();
   if (!/^[A-Za-z0-9._:-]{8,255}$/.test(key)) throw fail(400, 'A valid Idempotency-Key header is required.');
   return key;
+};
+
+const claimCheckoutIdempotencyKey = async (client, { userId, key, requestHash }) => {
+  const inserted = await client.query(
+    `INSERT INTO idempotency_keys (user_id, scope, key, request_hash, expires_at)
+     VALUES ($1, 'checkout', $2, $3, NOW() + INTERVAL '24 hours')
+     ON CONFLICT (user_id, scope, key) DO NOTHING
+     RETURNING *`,
+    [userId, key, requestHash]
+  );
+
+  if (inserted.rows[0]) return { claimed: true, row: inserted.rows[0] };
+
+  const existing = await client.query(
+    `SELECT * FROM idempotency_keys
+     WHERE user_id = $1 AND scope = 'checkout' AND key = $2
+     FOR UPDATE`,
+    [userId, key]
+  );
+  const saved = existing.rows[0];
+  if (!saved) {
+    throw fail(409, 'This checkout is already being processed.', undefined, 'CHECKOUT_IN_PROGRESS');
+  }
+  if (saved.request_hash !== requestHash) {
+    throw fail(409, 'This idempotency key was used for a different checkout.', undefined, 'IDEMPOTENCY_KEY_CONFLICT');
+  }
+  return { claimed: false, row: saved };
 };
 
 const loadAddress = async (client, userId, addressId) => {
@@ -219,12 +246,13 @@ export const createCheckout = async (req, res) => {
     if (paymentMethod === 'cod' && !paymentSettings.cash_enabled) throw fail(503, 'Cash on delivery is currently disabled.');
     if (paymentMethod === 'gcash' && !paymentSettings.gcash_enabled) throw fail(503, 'GCash checkout is currently disabled.');
 
-    const existing = await client.query(
-      `SELECT * FROM idempotency_keys WHERE user_id = $1 AND scope = 'checkout' AND key = $2 FOR UPDATE`,
-      [req.user.id, idempotencyKey]
-    );
-    if (existing.rows[0]) {
-      const saved = existing.rows[0];
+    const idempotency = await claimCheckoutIdempotencyKey(client, {
+      userId: req.user.id,
+      key: idempotencyKey,
+      requestHash,
+    });
+    if (!idempotency.claimed) {
+      const saved = idempotency.row;
       if (saved.request_hash !== requestHash) throw fail(409, 'This idempotency key was used for a different checkout.');
       if (saved.status === 'completed') {
         await client.query('COMMIT');
@@ -234,12 +262,8 @@ export const createCheckout = async (req, res) => {
         await client.query('COMMIT');
         return res.status(saved.response_status || 502).json(saved.response_body || { message: 'Previous checkout attempt failed. Please retry with a new idempotency key.' });
       }
-      throw fail(409, 'This checkout is already being processed.');
+      throw fail(409, 'This checkout is already being processed.', undefined, 'CHECKOUT_IN_PROGRESS');
     }
-    await client.query(
-      `INSERT INTO idempotency_keys (user_id, scope, key, request_hash, expires_at) VALUES ($1, 'checkout', $2, $3, NOW() + INTERVAL '24 hours')`,
-      [req.user.id, idempotencyKey, requestHash]
-    );
 
     const address = await loadAddress(client, req.user.id, req.body?.address_id);
     const expiresAt = paymentMethod === 'gcash' ? new Date(Date.now() + 30 * 60 * 1000) : null;
@@ -386,6 +410,7 @@ export const createCheckout = async (req, res) => {
     console.error('Secure checkout error:', error);
     return res.status(error.status || (error.code === 'PAYMONGO_NOT_CONFIGURED' ? 503 : 500)).json({
       message: error.status ? error.message : 'Checkout could not be completed.',
+      ...(error.code ? { code: error.code } : {}),
       ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {}),
     });
   } finally {
