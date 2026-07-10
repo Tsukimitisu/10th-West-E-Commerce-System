@@ -6,6 +6,7 @@ import { getRuntimeSettings } from '../services/settings.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { createOrderWorkflowNotification } from '../utils/notifications.js';
+import { writeAuditLog } from '../utils/audit.js';
 
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
@@ -311,6 +312,45 @@ export const createCheckout = async (req, res) => {
        VALUES ($1,$2,$3,$4,'pending',$5,'PHP',$6) RETURNING *`,
       [order.id, req.user.id, paymentMethod === 'gcash' ? 'paymongo' : 'cod', paymentMethod, total, expiresAt]
     );
+    const payment = paymentResult.rows[0];
+    const checkoutAuditMetadata = {
+      actor_role: req.user.role,
+      source: 'customer_checkout',
+      order_id: order.id,
+      payment_id: payment.id,
+      payment_method: paymentMethod,
+      payment_provider: payment.provider,
+      idempotency_key: idempotencyKey,
+      item_count: snapshots.length,
+      promo_code: promotion?.code || null,
+    };
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'order.create',
+      entityType: 'order',
+      entityId: order.id,
+      afterData: {
+        status: order.status,
+        payment_status: order.payment_status,
+        total_amount: total,
+        currency: 'PHP',
+      },
+      metadata: checkoutAuditMetadata,
+    });
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'payment.create',
+      entityType: 'payment',
+      entityId: payment.id,
+      afterData: {
+        status: payment.status,
+        amount: total,
+        currency: 'PHP',
+      },
+      metadata: checkoutAuditMetadata,
+    });
     if (promotion) {
       await client.query(`UPDATE discounts SET used_count = used_count + 1, updated_at = NOW() WHERE id = $1`, [promotion.id]);
       await client.query(
@@ -322,7 +362,7 @@ export const createCheckout = async (req, res) => {
 
     let response = {
       order_id: order.id,
-      payment_id: paymentResult.rows[0].id,
+      payment_id: payment.id,
       payment_status: 'pending',
       status: orderStatus,
       currency: 'PHP',
@@ -336,16 +376,16 @@ export const createCheckout = async (req, res) => {
            VALUES ($1, $2, 'started')
            ON CONFLICT (idempotency_key) DO UPDATE SET status = 'started', error_message = NULL
            RETURNING id`,
-          [paymentResult.rows[0].id, `${idempotencyKey}:paymongo-checkout`]
+          [payment.id, `${idempotencyKey}:paymongo-checkout`]
         );
         attemptId = attempt.rows[0]?.id || null;
         const checkout = await createPaymongoGcashCheckout({
-          order: { ...order, payment_id: paymentResult.rows[0].id },
+          order: { ...order, payment_id: payment.id },
           items: snapshots,
         });
         await pool.query(
           `UPDATE payments SET external_checkout_id = $2, reference = $2, metadata = $3::jsonb, updated_at = NOW() WHERE id = $1`,
-          [paymentResult.rows[0].id, checkout.id, JSON.stringify({ checkout_url: checkout.checkout_url })]
+          [payment.id, checkout.id, JSON.stringify({ checkout_url: checkout.checkout_url })]
         );
         await pool.query(
           `UPDATE orders SET payment_intent_id = $2, payment_reference = $2, payment_checkout_url = $3, updated_at = NOW() WHERE id = $1`,
@@ -359,6 +399,22 @@ export const createCheckout = async (req, res) => {
             [attemptId, JSON.stringify({ checkout_id: checkout.id })]
           );
         }
+        await writeAuditLog(pool, {
+          req,
+          actorUserId: req.user.id,
+          action: 'payment.checkout_session.create',
+          entityType: 'payment',
+          entityId: payment.id,
+          afterData: {
+            status: 'pending',
+            external_checkout_id: checkout.id,
+          },
+          metadata: {
+            ...checkoutAuditMetadata,
+            provider: 'paymongo',
+            external_checkout_id: checkout.id,
+          },
+        });
         response = { ...response, checkout_url: checkout.checkout_url, payment_reference: checkout.id };
       } catch (providerError) {
         if (attemptId) {
@@ -373,7 +429,27 @@ export const createCheckout = async (req, res) => {
         try {
           await releaseClient.query('BEGIN');
           await releaseOrderReservations(releaseClient, order.id, 'failed', 'Payment checkout creation failed');
-          await releaseClient.query(`UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1`, [paymentResult.rows[0].id]);
+          await releaseClient.query(`UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1`, [payment.id]);
+          await writeAuditLog(releaseClient, {
+            req,
+            actorUserId: req.user.id,
+            action: 'payment.checkout_session.failed',
+            entityType: 'order',
+            entityId: order.id,
+            beforeData: {
+              status: order.status,
+              payment_status: 'pending',
+            },
+            afterData: {
+              status: 'failed',
+              payment_status: 'failed',
+            },
+            metadata: {
+              ...checkoutAuditMetadata,
+              provider: 'paymongo',
+              error_code: providerError.code || null,
+            },
+          });
           await releaseClient.query('COMMIT');
         } catch (releaseError) {
           await releaseClient.query('ROLLBACK').catch(() => {});
@@ -478,6 +554,27 @@ const finalizePaidOrder = async (client, payment, event) => {
     `INSERT INTO order_status_history (order_id, from_status, to_status, source, note, metadata) VALUES ($1,$2,'paid','payment','PayMongo payment verified',$3::jsonb)`,
     [payment.order_id, order.rows[0].status, JSON.stringify({ event_id: event.eventId })]
   );
+  await writeAuditLog(client, {
+    action: 'payment.webhook.paid',
+    entityType: 'order',
+    entityId: payment.order_id,
+    beforeData: {
+      status: order.rows[0].status,
+      payment_status: payment.status,
+    },
+    afterData: {
+      status: 'paid',
+      payment_status: 'paid',
+    },
+    metadata: {
+      source: 'payment_webhook',
+      provider: 'paymongo',
+      order_id: payment.order_id,
+      payment_id: payment.id,
+      event_id: event.eventId,
+      event_type: event.eventType,
+    },
+  });
 };
 
 export const handlePaymongoWebhook = async (req, res) => {
@@ -500,8 +597,17 @@ export const handlePaymongoWebhook = async (req, res) => {
     }
     const paymentId = Number(event.metadata.payment_id);
     const paymentResult = paymentId
-      ? await client.query(`SELECT p.*, o.user_id AS order_user_id FROM payments p JOIN orders o ON o.id = p.order_id WHERE p.id = $1 FOR UPDATE OF p, o`, [paymentId])
-      : await client.query(`SELECT p.*, o.user_id AS order_user_id FROM payments p JOIN orders o ON o.id = p.order_id WHERE p.provider = 'paymongo' AND p.external_checkout_id = $1 FOR UPDATE OF p, o`, [event.checkoutId]);
+      ? await client.query(
+        `SELECT p.*, o.user_id AS order_user_id, o.status AS order_status, o.payment_status AS order_payment_status
+         FROM payments p JOIN orders o ON o.id = p.order_id WHERE p.id = $1 FOR UPDATE OF p, o`,
+        [paymentId]
+      )
+      : await client.query(
+        `SELECT p.*, o.user_id AS order_user_id, o.status AS order_status, o.payment_status AS order_payment_status
+         FROM payments p JOIN orders o ON o.id = p.order_id
+         WHERE p.provider = 'paymongo' AND p.external_checkout_id = $1 FOR UPDATE OF p, o`,
+        [event.checkoutId]
+      );
     const payment = paymentResult.rows[0];
     if (!payment || payment.provider !== 'paymongo') throw fail(400, 'Webhook payment does not match a local payment.');
     if (event.checkoutId && payment.external_checkout_id !== event.checkoutId) throw fail(400, 'Checkout session mismatch.');
@@ -525,6 +631,27 @@ export const handlePaymongoWebhook = async (req, res) => {
       if (payment.status !== 'paid') {
         await releaseOrderReservations(client, payment.order_id, 'failed', `PayMongo ${terminalStatus}`);
         await client.query(`UPDATE payments SET status = $2, updated_at = NOW() WHERE id = $1`, [payment.id, terminalStatus]);
+        await writeAuditLog(client, {
+          action: `payment.webhook.${terminalStatus}`,
+          entityType: 'order',
+          entityId: payment.order_id,
+          beforeData: {
+            status: payment.order_status,
+            payment_status: payment.order_payment_status,
+          },
+          afterData: {
+            status: 'failed',
+            payment_status: terminalStatus,
+          },
+          metadata: {
+            source: 'payment_webhook',
+            provider: 'paymongo',
+            order_id: payment.order_id,
+            payment_id: payment.id,
+            event_id: event.eventId,
+            event_type: event.eventType,
+          },
+        });
       }
     }
     await client.query(
@@ -664,6 +791,26 @@ export const retryPayment = async (req, res) => {
        WHERE id = $1`,
       [attempt.rows[0].id, JSON.stringify({ checkout_id: checkout.id })]
     );
+    await writeAuditLog(pool, {
+      req,
+      actorUserId: req.user.id,
+      action: 'payment.retry_checkout_session.create',
+      entityType: 'payment',
+      entityId: payment.id,
+      afterData: {
+        status: 'pending',
+        external_checkout_id: checkout.id,
+      },
+      metadata: {
+        actor_role: req.user.role,
+        source: 'customer_checkout_retry',
+        provider: 'paymongo',
+        order_id: orderId,
+        payment_id: payment.id,
+        payment_attempt_id: attempt.rows[0].id,
+        idempotency_key: key,
+      },
+    });
     emitOrderStatusUpdate(orderId, 'payment_pending', { payment_status: 'pending' });
     return res.json({ order_id: orderId, checkout_url: checkout.checkout_url, payment_reference: checkout.id, payment_status: 'pending' });
   } catch (error) {
@@ -672,6 +819,21 @@ export const retryPayment = async (req, res) => {
       `UPDATE payment_attempts SET status = 'failed', error_message = $2, completed_at = NOW() WHERE idempotency_key = $1`,
       [key, String(error.message || 'Payment retry failed').slice(0, 1000)]
     ).catch(() => {});
+    await writeAuditLog(pool, {
+      req,
+      actorUserId: req.user?.id || null,
+      action: 'payment.retry_checkout_session.failed',
+      entityType: 'order',
+      entityId: orderId,
+      metadata: {
+        actor_role: req.user?.role || null,
+        source: 'customer_checkout_retry',
+        provider: 'paymongo',
+        order_id: orderId,
+        idempotency_key: key,
+        error_code: error.code || null,
+      },
+    }).catch(() => {});
     console.error('Retry payment failed:', error);
     return res.status(error.status || (error.code === 'PAYMONGO_NOT_CONFIGURED' ? 503 : 500)).json({ message: error.message || 'Payment retry failed.' });
   } finally { client.release(); }
@@ -699,6 +861,26 @@ export const expirePaymentSession = async (req, res) => {
     }
     await releaseOrderReservations(client, orderId, 'failed', 'Payment session expired');
     await client.query(`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE order_id = $1 AND status <> 'paid'`, [orderId]);
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'payment.expire',
+      entityType: 'order',
+      entityId: orderId,
+      beforeData: {
+        status: order.status,
+        payment_status: order.payment_status,
+      },
+      afterData: {
+        status: 'failed',
+        payment_status: 'expired',
+      },
+      metadata: {
+        actor_role: req.user.role,
+        source: 'payment_expiration',
+        order_id: orderId,
+      },
+    });
     await client.query('COMMIT');
     emitOrderStatusUpdate(orderId, 'failed', { payment_status: 'expired' });
     return res.json({ message: 'Payment session expired.', order_id: orderId, status: 'failed', payment_status: 'expired' });
@@ -858,6 +1040,27 @@ export const confirmCheckout = async (req, res) => {
     if (currentPayment?.expires_at && new Date(currentPayment.expires_at) <= new Date() && currentPayment.status !== 'paid') {
       await releaseOrderReservations(client, order.id, 'failed', 'Payment reservation expired during checkout confirmation');
       await client.query(`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE id = $1`, [currentPayment.id]);
+      await writeAuditLog(client, {
+        req,
+        actorUserId: req.user.id,
+        action: 'payment.expire',
+        entityType: 'order',
+        entityId: order.id,
+        beforeData: {
+          status: order.status,
+          payment_status: order.payment_status,
+        },
+        afterData: {
+          status: 'failed',
+          payment_status: 'expired',
+        },
+        metadata: {
+          actor_role: req.user.role,
+          source: 'checkout_confirmation',
+          order_id: order.id,
+          payment_id: currentPayment.id,
+        },
+      });
       await client.query('COMMIT');
       emitOrderStatusUpdate(order.id, 'failed');
       return res.status(409).json({ message: 'Checkout payment session has expired.', status: 'failed', payment_status: 'expired' });
@@ -895,6 +1098,26 @@ export const cancelCheckout = async (req, res) => {
     }
     await releaseOrderReservations(client, order.id, 'cancelled', 'Checkout cancelled by user');
     await client.query(`UPDATE payments SET status = 'cancelled', updated_at = NOW() WHERE order_id = $1 AND status <> 'paid'`, [order.id]);
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'checkout.cancel',
+      entityType: 'order',
+      entityId: order.id,
+      beforeData: {
+        status: order.status,
+        payment_status: order.payment_status,
+      },
+      afterData: {
+        status: 'cancelled',
+        payment_status: 'cancelled',
+      },
+      metadata: {
+        actor_role: req.user.role,
+        source: 'customer_checkout',
+        order_id: order.id,
+      },
+    });
     await client.query('COMMIT');
     emitOrderStatusUpdate(order.id, 'cancelled');
     return res.json({ message: 'Checkout cancelled.', order_id: order.id, status: 'cancelled', payment_status: 'cancelled' });

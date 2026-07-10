@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import pool from '../config/database.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
+import { writeAuditLog } from '../utils/audit.js';
 
 const MAX_ITEMS = 100;
 const PAGE_SIZE = 25;
@@ -492,20 +493,76 @@ export const createPosOrder = async (req, res) => {
       });
     }
 
-    await client.query(
+    const paymentResult = await client.query(
       `INSERT INTO payments (
          order_id, user_id, provider, method, status, amount, currency, reference, metadata, paid_at
-       ) VALUES ($1,$2,$3,$4,'paid',$5,'PHP',$6,$7::jsonb,NOW())`,
+       ) VALUES ($1,$2,$3,$4,'paid',$5,'PHP',$6,$7::jsonb,NOW())
+       RETURNING *`,
       [
         order.id, req.user.id, paymentMethod === 'cash' ? 'cash' : 'manual', paymentMethod,
         total, paymentReference || null, JSON.stringify({ source: 'pos', receipt_number: receiptNumber }),
       ],
     );
+    const payment = paymentResult.rows[0];
     await client.query(
       `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note)
        VALUES ($1, NULL, 'paid', 'pos', $2, 'In-store sale completed')`,
       [order.id, req.user.id],
     );
+    const posAuditMetadata = {
+      actor_role: req.user.role,
+      source: 'pos',
+      order_id: order.id,
+      payment_id: payment.id,
+      receipt_number: receiptNumber,
+      payment_method: paymentMethod,
+      payment_provider: payment.provider,
+      idempotency_key: idempotencyKey,
+      item_count: cart.items.length,
+      promo_code: promotion?.code || null,
+    };
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'order.create',
+      entityType: 'order',
+      entityId: order.id,
+      afterData: {
+        status: 'paid',
+        payment_status: 'paid',
+        receipt_number: receiptNumber,
+        total_amount: total,
+        currency: 'PHP',
+      },
+      metadata: posAuditMetadata,
+    });
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'payment.create',
+      entityType: 'payment',
+      entityId: payment.id,
+      afterData: {
+        status: 'paid',
+        amount: total,
+        currency: 'PHP',
+      },
+      metadata: posAuditMetadata,
+    });
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'receipt.create',
+      entityType: 'receipt',
+      entityId: receiptNumber,
+      afterData: {
+        receipt_number: receiptNumber,
+        order_id: order.id,
+        total_amount: total,
+        currency: 'PHP',
+      },
+      metadata: posAuditMetadata,
+    });
     if (promotion) {
       await client.query('UPDATE discounts SET used_count = used_count + 1, updated_at = NOW() WHERE id = $1', [promotion.id]);
     }
@@ -658,6 +715,28 @@ export const voidPosOrder = async (req, res) => {
       );
     }
     await logActivity(client, req, 'pos.void', orderId, { reason, receipt_number: order.receipt_number });
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'pos.void',
+      entityType: 'order',
+      entityId: orderId,
+      beforeData: {
+        status: order.status,
+        payment_status: order.payment_status,
+      },
+      afterData: {
+        status: 'cancelled',
+        payment_status: 'refunded',
+        void_reason: reason,
+      },
+      metadata: {
+        actor_role: req.user.role,
+        source: 'pos',
+        order_id: orderId,
+        receipt_number: order.receipt_number,
+      },
+    });
     const receipt = await buildReceipt(client, orderId);
     await client.query('COMMIT');
     stockUpdates.forEach(emitStockUpdate);
