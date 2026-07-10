@@ -12,6 +12,33 @@ const money = (value) => round(Number(value || 0));
 const fail = (status, message, code) => Object.assign(new Error(message), { status, code });
 const normalizeCode = (value) => String(value || '').trim().toUpperCase();
 
+const claimPosIdempotencyKey = async (client, { userId, key, requestHash }) => {
+  const inserted = await client.query(
+    `INSERT INTO idempotency_keys (user_id, scope, key, request_hash, expires_at)
+     VALUES ($1, 'pos', $2, $3, NOW() + INTERVAL '24 hours')
+     ON CONFLICT (user_id, scope, key) DO NOTHING
+     RETURNING *`,
+    [userId, key, requestHash],
+  );
+
+  if (inserted.rows[0]) return { claimed: true, row: inserted.rows[0] };
+
+  const previous = await client.query(
+    `SELECT * FROM idempotency_keys
+     WHERE user_id = $1 AND scope = 'pos' AND key = $2
+     FOR UPDATE`,
+    [userId, key],
+  );
+  const saved = previous.rows[0];
+  if (!saved) {
+    throw fail(409, 'This sale is already processing.', 'POS_REQUEST_IN_PROGRESS');
+  }
+  if (saved.request_hash !== requestHash) {
+    throw fail(409, 'This idempotency key was used for a different sale.', 'IDEMPOTENCY_KEY_CONFLICT');
+  }
+  return { claimed: false, row: saved };
+};
+
 const normalizeCartItems = (rawItems) => {
   if (!Array.isArray(rawItems) || rawItems.length === 0 || rawItems.length > MAX_ITEMS) {
     throw fail(400, `A POS cart must contain between 1 and ${MAX_ITEMS} items.`, 'POS_CART_INVALID');
@@ -383,25 +410,27 @@ export const createPosOrder = async (req, res) => {
 
   try {
     await client.query('BEGIN');
-    const previous = await client.query(
-      `SELECT * FROM idempotency_keys
-       WHERE user_id = $1 AND scope = 'pos' AND key = $2
-       FOR UPDATE`,
-      [req.user.id, idempotencyKey],
-    );
-    if (previous.rows[0]) {
-      if (previous.rows[0].request_hash !== requestHash) throw fail(409, 'This idempotency key was used for a different sale.', 'POS_IDEMPOTENCY_MISMATCH');
-      if (previous.rows[0].status === 'completed') {
+    const idempotency = await claimPosIdempotencyKey(client, {
+      userId: req.user.id,
+      key: idempotencyKey,
+      requestHash,
+    });
+    if (!idempotency.claimed) {
+      const saved = idempotency.row;
+      if (saved.request_hash !== requestHash) throw fail(409, 'This idempotency key was used for a different sale.', 'IDEMPOTENCY_KEY_CONFLICT');
+      if (saved.status === 'completed') {
         await client.query('COMMIT');
-        return res.status(previous.rows[0].response_status || 201).json(previous.rows[0].response_body);
+        return res.status(saved.response_status || 201).json(saved.response_body);
       }
-      throw fail(409, 'This sale is already processing.', 'POS_ORDER_PROCESSING');
+      if (saved.status === 'failed') {
+        await client.query('COMMIT');
+        return res.status(saved.response_status || 502).json(saved.response_body || {
+          message: 'Previous POS sale attempt failed. Please retry with a new idempotency key.',
+          code: 'POS_PREVIOUS_ATTEMPT_FAILED',
+        });
+      }
+      throw fail(409, 'This sale is already processing.', 'POS_REQUEST_IN_PROGRESS');
     }
-    await client.query(
-      `INSERT INTO idempotency_keys (user_id, scope, key, request_hash, expires_at)
-       VALUES ($1, 'pos', $2, $3, NOW() + INTERVAL '24 hours')`,
-      [req.user.id, idempotencyKey, requestHash],
-    );
 
     const cart = await validateCart(client, normalizedItems, { lock: true, deduct: true });
     const promotion = await resolvePromotion(client, canonicalRequest.promotion_code, cart.subtotal, req.user);
@@ -505,7 +534,7 @@ export const createPosOrder = async (req, res) => {
     console.error('POS order failed:', error);
     return res.status(error.status || 500).json({
       message: error.status ? error.message : 'POS order could not be completed.',
-      code: error.code || 'POS_ORDER_FAILED',
+      code: error.status ? (error.code || 'POS_ORDER_FAILED') : 'POS_ORDER_FAILED',
       ...(process.env.NODE_ENV !== 'production' && !error.status ? { diagnostic: error.message } : {}),
     });
   } finally {
