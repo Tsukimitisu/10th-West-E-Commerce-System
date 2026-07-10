@@ -11,10 +11,7 @@ export const isBlockedProductImageUrl = (value) => {
   if (!raw) return false;
 
   try {
-    const baseUrl = typeof window !== 'undefined' && window.location?.origin
-      ? window.location.origin
-      : 'http://localhost';
-    const parsed = new URL(raw, baseUrl);
+    const parsed = new URL(raw, 'http://localhost');
     return BLOCKED_PRODUCT_IMAGE_HOSTS.has(parsed.hostname.toLowerCase());
   } catch {
     return false;
@@ -27,9 +24,8 @@ export const resolveProductImageUrl = (value, fallback = PRODUCT_IMAGE_FALLBACK)
   return isBlockedProductImageUrl(raw) ? fallback : raw;
 };
 
-export const handleProductImageError = (event, fallback = PRODUCT_IMAGE_FALLBACK) => {
-  const image = event.currentTarget;
-  if (!image || image.dataset.fallbackApplied === 'true') return;
-  image.dataset.fallbackApplied = 'true';
-  image.src = fallback;
+export const normalizeProductImageUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  return resolveProductImageUrl(raw);
 };

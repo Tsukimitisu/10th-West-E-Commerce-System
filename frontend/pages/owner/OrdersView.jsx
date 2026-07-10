@@ -6,6 +6,7 @@ import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 import { getCurrentAuthUser } from '../../services/authSession';
 import PageHeader from '../../components/operations/PageHeader';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -375,7 +376,7 @@ const OrdersView = () => {
                   <div key={i} className="flex items-center justify-between p-3 hover:bg-gray-50/50">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700">
-                        {item.image ? <img src={item.image} alt="" className="w-full h-full object-cover" /> : <Package size={14} className="m-auto text-gray-400 mt-2.5" />}
+                        {item.image ? <img src={resolveProductImageUrl(item.image)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" /> : <Package size={14} className="m-auto text-gray-400 mt-2.5" />}
                       </div>
                       <div>
                         <p className="text-sm font-medium text-white">{item.name || item.product_name}</p>

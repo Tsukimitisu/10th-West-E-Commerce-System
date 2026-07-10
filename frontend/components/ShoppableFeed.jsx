@@ -4,6 +4,7 @@ import { Heart, MessageCircle, Package, Play, ShoppingBag, Star, Truck } from 'l
 import { useCart } from '../context/CartContext';
 import { addToWishlist, createChatThread, removeFromWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
 import { getCurrentAuthUser } from '../services/authSession.js';
+import { handleProductImageError, PRODUCT_IMAGE_FALLBACK, resolveProductImageUrl } from '../utils/productImages.js';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 
@@ -11,9 +12,9 @@ const formatPrice = (value) => `PHP ${Number(value || 0).toLocaleString('en-PH',
 
 const getPrimaryMedia = (product) => {
   if (product?.video_url) return { type: 'video', src: product.video_url };
-  if (product?.image) return { type: 'image', src: product.image };
-  if (Array.isArray(product?.image_urls) && product.image_urls[0]) return { type: 'image', src: product.image_urls[0] };
-  return { type: 'image', src: '/images/product-fallback.svg' };
+  if (product?.image) return { type: 'image', src: resolveProductImageUrl(product.image) };
+  if (Array.isArray(product?.image_urls) && product.image_urls[0]) return { type: 'image', src: resolveProductImageUrl(product.image_urls[0]) };
+  return { type: 'image', src: PRODUCT_IMAGE_FALLBACK };
 };
 
 const ShoppableFeed = ({ products = [], wishlistedIds = [], onWishlistToggle }) => {
@@ -117,7 +118,7 @@ const ShoppableFeed = ({ products = [], wishlistedIds = [], onWishlistToggle }) 
               controls={false}
             />
           ) : (
-            <img src={media.src} alt={product.name} className="h-full min-h-[560px] w-full object-cover" />
+            <img src={media.src} alt={product.name} onError={handleProductImageError} className="h-full min-h-[560px] w-full object-cover" />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent" />
           <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
@@ -170,7 +171,7 @@ const ShoppableFeed = ({ products = [], wishlistedIds = [], onWishlistToggle }) 
                   className={`mb-2 flex w-full gap-3 rounded-2xl p-2 text-left transition ${index === activeIndex ? 'bg-white/15' : 'hover:bg-white/10'}`}
                 >
                   <div className="h-16 w-16 overflow-hidden rounded-xl bg-zinc-800">
-                    <img src={itemMedia.src} alt="" className="h-full w-full object-cover" />
+                    <img src={itemMedia.src} alt="" onError={handleProductImageError} className="h-full w-full object-cover" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm font-semibold">{item.name}</p>

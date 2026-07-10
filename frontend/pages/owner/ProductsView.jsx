@@ -5,6 +5,7 @@ import Modal from '../../components/owner/Modal';
 import VariantsModal from '../../components/owner/VariantsModal';
 import { useSocketEvent } from '../../context/SocketContext';
 import PageHeader from '../../components/operations/PageHeader';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const PRODUCT_FORM_STEPS = [
   { key: 'media', label: 'Media Upload', hint: 'Add product photos and optional video' },
@@ -573,9 +574,9 @@ const buildDefaultVariantRows = ({ options, basePrice }) => {
 
 const resolveExistingProductMediaItems = (product) => {
   const collected = [
-    ...normalizeProductMediaUrls(product?.image_urls),
-    ...normalizeProductMediaUrls(product?.gallery_images),
-    ...normalizeProductMediaUrls(product?.image),
+    ...normalizeProductMediaUrls(product?.image_urls).map((url) => resolveProductImageUrl(url)),
+    ...normalizeProductMediaUrls(product?.gallery_images).map((url) => resolveProductImageUrl(url)),
+    ...normalizeProductMediaUrls(product?.image).map((url) => resolveProductImageUrl(url)),
   ];
 
   const deduped = Array.from(new Set(collected.map((item) => String(item || '').trim()).filter(Boolean))).slice(0, PRODUCT_MEDIA_MAX_FILES);
@@ -2193,7 +2194,7 @@ const ProductsView = () => {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-[#202430] rounded-lg overflow-hidden flex-shrink-0 border border-white/10">
-                            {p.image ? <img src={p.image} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={16} className="m-auto text-gray-400 mt-2.5" />}
+                            {p.image ? <img src={resolveProductImageUrl(p.image)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" /> : <ImageIcon size={16} className="m-auto text-gray-400 mt-2.5" />}
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-white text-sm truncate max-w-[200px]">{p.name}</p>
@@ -2430,7 +2431,7 @@ const ProductsView = () => {
                               : 'border-white/10 hover:border-white/25'
                           }`}
                         >
-                          <img src={item.previewUrl} alt={`Media ${index + 1}`} className="w-full aspect-square object-cover" />
+                          <img src={resolveProductImageUrl(item.previewUrl)} alt={`Media ${index + 1}`} onError={handleProductImageError} className="w-full aspect-square object-cover" />
                           <div className="absolute top-1.5 left-1.5 w-7 h-7 rounded-full bg-black/70 text-white/90 flex items-center justify-center cursor-grab active:cursor-grabbing" title="Drag to reorder">
                             <GripVertical size={13} />
                           </div>

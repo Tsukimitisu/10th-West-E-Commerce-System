@@ -2,11 +2,11 @@ import crypto from 'crypto';
 import pool from '../config/database.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { writeAuditLog } from '../utils/audit.js';
+import { normalizeProductImageUrl, PRODUCT_IMAGE_FALLBACK } from '../utils/productImages.js';
 
 const MAX_ITEMS = 100;
 const PAGE_SIZE = 25;
 const ALLOWED_PAYMENT_METHODS = new Set(['cash', 'gcash']);
-const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
 
 const round = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const money = (value) => round(Number(value || 0));
@@ -200,7 +200,7 @@ const validateCart = async (client, rawItems, { lock = false, deduct = false } =
       unit_price: money(unitPrice),
       unit_cost_snapshot: product.buying_price == null ? null : money(product.buying_price),
       line_total: lineTotal,
-      image: variant?.image_url || product.image || PRODUCT_IMAGE_FALLBACK,
+      image: normalizeProductImageUrl(variant?.image_url || product.image) || PRODUCT_IMAGE_FALLBACK,
       available_stock: available,
       stock_before: stockBefore,
       stock_after: stockAfter,
@@ -319,7 +319,7 @@ export const getPosProducts = async (req, res) => {
         sale_price: product.sale_price == null ? null : money(product.sale_price),
         stock_quantity: Number(product.stock_quantity || 0),
         available_stock: Math.max(0, Number(product.stock_quantity || 0) - Number(product.reserved_stock || 0)),
-        image: product.image || PRODUCT_IMAGE_FALLBACK,
+        image: normalizeProductImageUrl(product.image) || PRODUCT_IMAGE_FALLBACK,
         variants: variants.get(product.id) || [],
       })),
     });

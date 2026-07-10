@@ -1,6 +1,7 @@
 import { Role, OrderStatus, ReturnStatus } from '../types.js';
 import { supabase } from './supabase.js';
 import { clearCurrentAuthUser, getCurrentAuthUser } from './authSession.js';
+import { resolveProductImageUrl } from '../utils/productImages.js';
 
 // Configuration
 const API_URL = import.meta.env.VITE_API_URL || (() => {
@@ -119,6 +120,25 @@ const sanitizeClientUrlArray = (value, maxItems = 9) => {
 let csrfTokenCache = {
   token: '',
   expiresAt: 0,
+};
+
+const sanitizeClientProductImageUrl = (value, maxLength = 500) => {
+  const safeUrl = sanitizeClientHttpUrlOrPath(value, maxLength);
+  return safeUrl ? resolveProductImageUrl(safeUrl).slice(0, maxLength) : null;
+};
+
+const sanitizeClientProductImageUrlArray = (value, maxItems = 9) => {
+  const deduped = new Set();
+  const cleaned = [];
+
+  sanitizeClientUrlArray(value, maxItems).forEach((item) => {
+    const safeUrl = sanitizeClientProductImageUrl(item, 500);
+    if (!safeUrl || deduped.has(safeUrl)) return;
+    deduped.add(safeUrl);
+    cleaned.push(safeUrl);
+  });
+
+  return cleaned.slice(0, maxItems);
 };
 let csrfTokenRequest = null;
 
@@ -984,7 +1004,7 @@ const mapProductToSupabase = (product) => ({
   description: sanitizeClientRichText(product.description, 10000),
   price: product.price,
   buying_price: product.buyingPrice,
-  image: sanitizeClientHttpUrlOrPath(product.image, 500),
+  image: sanitizeClientProductImageUrl(product.image, 500),
   ...(Object.prototype.hasOwnProperty.call(product, 'video_url')
     ? { video_url: sanitizeClientHttpUrlOrPath(product.video_url, 500) }
     : {}),
@@ -1006,7 +1026,7 @@ const mapProductToSupabase = (product) => ({
   sale_price: product.sale_price,
   is_on_sale: product.is_on_sale,
   status: normalizeProductPublicationStatus(product.status),
-  image_urls: sanitizeClientUrlArray(normalizeProductImageUrls(product.image_urls), 9),
+  image_urls: sanitizeClientProductImageUrlArray(normalizeProductImageUrls(product.image_urls), 9),
   bulk_pricing: normalizeBulkPricing(product.bulk_pricing),
 });
 
@@ -1643,7 +1663,7 @@ export const addProduct = async (product) => {
     description: sanitizeClientRichText(product.description, 10000),
     price: product.price,
     buying_price: product.buyingPrice,
-    image: sanitizeClientHttpUrlOrPath(product.image, 500),
+    image: sanitizeClientProductImageUrl(product.image, 500),
     video_url: product.video_url === undefined ? undefined : sanitizeClientHttpUrlOrPath(product.video_url, 500),
     category_id: product.category_id,
     stock_quantity: product.stock_quantity,
@@ -1670,7 +1690,7 @@ export const addProduct = async (product) => {
     sale_price: product.sale_price,
     is_on_sale: product.is_on_sale,
     status: normalizeProductPublicationStatus(product.status),
-    image_urls: sanitizeClientUrlArray(normalizeProductImageUrls(product.image_urls), 9),
+    image_urls: sanitizeClientProductImageUrlArray(normalizeProductImageUrls(product.image_urls), 9),
     bulk_pricing: normalizeBulkPricing(product.bulk_pricing),
     ...(Object.prototype.hasOwnProperty.call(product, 'auto_generate_sku')
       ? { auto_generate_sku: product.auto_generate_sku === true }
@@ -1718,7 +1738,7 @@ export const updateProduct = async (id, product) => {
     description: sanitizeClientRichText(product.description, 10000),
     price: product.price,
     buying_price: product.buyingPrice,
-    image: sanitizeClientHttpUrlOrPath(product.image, 500),
+    image: sanitizeClientProductImageUrl(product.image, 500),
     video_url: product.video_url === undefined ? undefined : sanitizeClientHttpUrlOrPath(product.video_url, 500),
     category_id: product.category_id,
     stock_quantity: product.stock_quantity,
@@ -1745,7 +1765,7 @@ export const updateProduct = async (id, product) => {
     sale_price: product.sale_price,
     is_on_sale: product.is_on_sale,
     status: normalizeProductPublicationStatus(product.status),
-    image_urls: sanitizeClientUrlArray(normalizeProductImageUrls(product.image_urls), 9),
+    image_urls: sanitizeClientProductImageUrlArray(normalizeProductImageUrls(product.image_urls), 9),
     bulk_pricing: normalizeBulkPricing(product.bulk_pricing),
     ...(Object.prototype.hasOwnProperty.call(product, 'auto_generate_sku')
       ? { auto_generate_sku: product.auto_generate_sku === true }

@@ -2,6 +2,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { Package, ArrowLeft, Truck, MapPin, CreditCard, Clock, CheckCircle2, XCircle, Download, RotateCcw, Calendar, Mail, DollarSign, Printer, AlertTriangle } from 'lucide-react';
 import { getOrderById, getShipmentTracking, cancelOrder, confirmOrderReceipt } from '../../services/api';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Delivered', 'Completed'];
 const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, delivered: 4, completed: 5, cancelled: -1 };
@@ -377,12 +378,12 @@ const OrderDetail = () => {
                 <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-4 p-4">
                   {productId ? (
                     <Link to={`/products/${productId}`} className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-red-500/40 transition-all" title="View product">
-                      {itemImage ? <img src={itemImage} alt={itemTitle} className="w-full h-full object-cover" /> :
+                      {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" /> :
                         <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
                     </Link>
                   ) : (
                     <div className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0">
-                      {itemImage ? <img src={itemImage} alt={itemTitle} className="w-full h-full object-cover" /> :
+                      {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" /> :
                         <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
                     </div>
                   )}

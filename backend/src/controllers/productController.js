@@ -17,6 +17,7 @@ import {
   sanitizeUrlArray,
 } from '../utils/inputSanitizer.js';
 import { writeAuditLog } from '../utils/audit.js';
+import { normalizeProductImageUrl } from '../utils/productImages.js';
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
@@ -397,6 +398,20 @@ const normalizeProductImageUrls = (value) => {
       .map((item) => String(item || '').trim())
       .filter(Boolean)
   )).slice(0, 9);
+};
+
+const sanitizeProductImageUrls = (value) => {
+  const deduped = new Set();
+  const cleaned = [];
+
+  for (const item of sanitizeUrlArray(value, { maxItems: 9 })) {
+    const normalized = normalizeProductImageUrl(item);
+    if (!normalized || deduped.has(normalized)) continue;
+    deduped.add(normalized);
+    cleaned.push(normalized);
+  }
+
+  return cleaned;
 };
 
 const tokenizeSearchTerms = (value) => {
@@ -1545,7 +1560,8 @@ export const createProduct = async (req, res) => {
     const requestedAutoSku = toNullableBoolean(auto_generate_sku) === true;
     const cleanSku = sanitizePlainText(sku, { maxLength: 100 });
     const cleanBarcode = sanitizePlainText(barcode, { maxLength: 100 });
-    const cleanImage = sanitizeHttpUrlOrPath(image);
+    const sanitizedImage = sanitizeHttpUrlOrPath(image);
+    const cleanImage = sanitizedImage ? normalizeProductImageUrl(sanitizedImage) : sanitizedImage;
     const cleanVideoUrl = sanitizeHttpUrlOrPath(video_url);
     const cleanBrand = sanitizePlainText(brand, { maxLength: 100 });
     const cleanBoxNumber = sanitizePlainText(box_number, { maxLength: 100 });
@@ -1559,16 +1575,16 @@ export const createProduct = async (req, res) => {
     const cleanShippingOption = shipping_option === undefined
       ? 'standard'
       : toNullableShippingOption(shipping_option);
-    const cleanImageUrls = Array.isArray(image_urls)
-      ? sanitizeUrlArray(image_urls, { maxItems: 9 })
-      : normalizeProductImageUrls(image_urls);
+    const cleanImageUrls = sanitizeProductImageUrls(
+      Array.isArray(image_urls) ? image_urls : normalizeProductImageUrls(image_urls)
+    );
     const cleanBulkPricing = bulkPricingValidation.value ?? [];
     const cleanShippingDimensions = shippingDimensionsField.value;
     const cleanColor = sanitizePlainText(color, { maxLength: 100 });
     const fitmentsPayload = normalizeFitmentsPayload(fitments);
     const bundleComponentsPayload = normalizeBundleComponentsPayload(bundle_components);
 
-    if (image !== undefined && image !== null && image !== '' && !cleanImage) {
+    if (image !== undefined && image !== null && image !== '' && !sanitizedImage) {
       return res.status(400).json({ message: 'Image URL is invalid' });
     }
 
@@ -1820,7 +1836,8 @@ export const updateProduct = async (req, res) => {
     const requestedAutoSku = toNullableBoolean(auto_generate_sku) === true;
     const cleanSku = sanitizePlainText(sku, { maxLength: 100 });
     const cleanBarcode = sanitizePlainText(barcode, { maxLength: 100 });
-    const cleanImage = sanitizeHttpUrlOrPath(image);
+    const sanitizedImage = sanitizeHttpUrlOrPath(image);
+    const cleanImage = sanitizedImage ? normalizeProductImageUrl(sanitizedImage) : sanitizedImage;
     const cleanVideoUrl = sanitizeHttpUrlOrPath(video_url);
     const cleanBrand = sanitizePlainText(brand, { maxLength: 100 });
     const cleanBoxNumber = sanitizePlainText(box_number, { maxLength: 100 });
@@ -1832,9 +1849,9 @@ export const updateProduct = async (req, res) => {
     const reservedStockField = parseOptionalIntegerField(reserved_stock);
     const damagedStockField = parseOptionalIntegerField(damaged_stock);
     const cleanShippingOption = hasShippingOptionPayload ? toNullableShippingOption(shipping_option) : null;
-    const cleanImageUrls = Array.isArray(image_urls)
-      ? sanitizeUrlArray(image_urls, { maxItems: 9 })
-      : normalizeProductImageUrls(image_urls);
+    const cleanImageUrls = sanitizeProductImageUrls(
+      Array.isArray(image_urls) ? image_urls : normalizeProductImageUrls(image_urls)
+    );
     const hasVideoUrlPayload = hasBodyField(req.body, 'video_url');
     const imageUrlsPayload = hasImageUrlsPayload ? JSON.stringify(cleanImageUrls) : null;
     const shippingDimensionsPayload = hasShippingDimensionsPayload
@@ -1844,7 +1861,7 @@ export const updateProduct = async (req, res) => {
     const fitmentsPayload = normalizeFitmentsPayload(fitments);
     const bundleComponentsPayload = normalizeBundleComponentsPayload(bundle_components);
 
-    if (hasBodyField(req.body, 'image') && image !== null && image !== '' && !cleanImage) {
+    if (hasBodyField(req.body, 'image') && image !== null && image !== '' && !sanitizedImage) {
       return res.status(400).json({ message: 'Image URL is invalid' });
     }
 

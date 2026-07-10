@@ -17,6 +17,7 @@ import {
 } from '../../services/api';
 import { useSocket } from '../../context/SocketContext';
 import { getCurrentAuthUser } from '../../services/authSession';
+import { handleProductImageError, PRODUCT_IMAGE_FALLBACK, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const formatTime = (value) => {
   if (!value) return '';
@@ -38,6 +39,13 @@ const resolveImageUrl = (url) => {
   return url;
 };
 
+const resolveProductSnapshotImageUrl = (url) => {
+  if (!url) return null;
+  const resolved = resolveProductImageUrl(url);
+  if (resolved === PRODUCT_IMAGE_FALLBACK) return resolved;
+  return resolveImageUrl(resolved);
+};
+
 const mergeConversation = (items, next) => {
   if (!next?.id && !next?.conversation_id) return items;
   const id = Number(next.id || next.conversation_id);
@@ -52,7 +60,7 @@ const mergeConversation = (items, next) => {
 
 const ConversationListItem = ({ conversation, active, onSelect }) => {
   const product = conversation.product_snapshot || conversation.product || {};
-  const image = resolveImageUrl(product.image_url);
+  const image = resolveProductSnapshotImageUrl(product.image_url);
 
   return (
     <button
@@ -65,7 +73,7 @@ const ConversationListItem = ({ conversation, active, onSelect }) => {
       <div className="flex gap-3">
         <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
           {image ? (
-            <img src={image} alt={product.name || 'Product'} className="h-full w-full object-cover" />
+            <img src={image} alt={product.name || 'Product'} onError={handleProductImageError} className="h-full w-full object-cover" />
           ) : (
             <Package size={18} className="text-slate-400" />
           )}
@@ -92,7 +100,7 @@ const ConversationListItem = ({ conversation, active, onSelect }) => {
 
 const ProductContext = ({ conversation }) => {
   const product = conversation?.product_snapshot || conversation?.product || {};
-  const image = resolveImageUrl(product.image_url);
+  const image = resolveProductSnapshotImageUrl(product.image_url);
   const variant = product.variant;
 
   if (!conversation) return null;
@@ -102,7 +110,7 @@ const ProductContext = ({ conversation }) => {
       <div className="flex items-center gap-3">
         <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
           {image ? (
-            <img src={image} alt={product.name || 'Product'} className="h-full w-full object-cover" />
+            <img src={image} alt={product.name || 'Product'} onError={handleProductImageError} className="h-full w-full object-cover" />
           ) : (
             <Package size={20} className="text-slate-400" />
           )}

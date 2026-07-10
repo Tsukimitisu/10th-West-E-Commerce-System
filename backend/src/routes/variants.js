@@ -2,6 +2,8 @@ import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
+import { sanitizeHttpUrlOrPath } from '../utils/inputSanitizer.js';
+import { normalizeProductImageUrl } from '../utils/productImages.js';
 
 const router = express.Router();
 
@@ -10,6 +12,11 @@ const MAX_OPTION_VALUES = 30;
 const MAX_VARIANT_ROWS = 300;
 
 const normalizeWhitespace = (value) => String(value || '').trim().replace(/\s+/g, ' ');
+
+const normalizeVariantImageUrl = (value) => {
+  const sanitized = sanitizeHttpUrlOrPath(normalizeWhitespace(value));
+  return sanitized ? normalizeProductImageUrl(sanitized) : null;
+};
 
 const normalizeToken = (value, fallback = 'x') => {
   const normalized = normalizeWhitespace(value)
@@ -206,7 +213,7 @@ const normalizeVariantRows = ({ variants, options, basePrice }) => {
       return { error: `Variant row ${variantIndex + 1}: stock must be an integer 0 or higher.` };
     }
 
-    const imageUrl = normalizeWhitespace(variant.image_url ?? variant.imageUrl);
+    const imageUrl = normalizeVariantImageUrl(variant.image_url ?? variant.imageUrl);
     const sku = normalizeWhitespace(variant.sku);
 
     variantByKey.set(combinationKey, {
@@ -217,7 +224,7 @@ const normalizeVariantRows = ({ variants, options, basePrice }) => {
       price,
       price_adjustment: Number.isFinite(Number(basePrice)) ? Number(price - Number(basePrice)).toFixed(2) : null,
       stock_quantity: stockQuantity,
-      image_url: imageUrl || null,
+      image_url: imageUrl,
       sku: sku || null,
     });
   }
@@ -327,7 +334,7 @@ const mapDbRowToVariant = (row, optionOrder, basePrice) => {
     label: formatCombinationLabel(normalizedCombination, normalizedOptionOrder),
     price: Number.isFinite(resolvedPrice) ? resolvedPrice : Number(basePrice),
     stock_quantity: Number.isFinite(Number(row.stock_quantity)) ? Number(row.stock_quantity) : 0,
-    image_url: normalizeWhitespace(row.image_url) || null,
+    image_url: normalizeVariantImageUrl(row.image_url),
     sku: normalizeWhitespace(row.sku) || null,
   };
 };
@@ -662,7 +669,7 @@ router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner',
         resolvedPrice,
         JSON.stringify(normalizedOptionCombination),
         combinationKey,
-        normalizeWhitespace(image_url) || null,
+        normalizeVariantImageUrl(image_url),
         resolvedStock,
         normalizeWhitespace(sku) || null,
       ]
@@ -766,7 +773,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
         combinationKey,
         Number((resolvedPrice - basePrice).toFixed(2)),
         resolvedPrice,
-        normalizeWhitespace(image_url) || null,
+        normalizeVariantImageUrl(image_url),
         resolvedStock,
         normalizeWhitespace(sku) || null,
         variantId,

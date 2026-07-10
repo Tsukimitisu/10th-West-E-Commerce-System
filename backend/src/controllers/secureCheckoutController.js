@@ -7,6 +7,7 @@ import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.
 import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { createOrderWorkflowNotification } from '../utils/notifications.js';
 import { writeAuditLog } from '../utils/audit.js';
+import { normalizeProductImageUrl } from '../utils/productImages.js';
 
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
@@ -165,7 +166,7 @@ const loadAndReserveItems = async (client, items, expiresAt) => {
       unit_cost_snapshot: product.buying_price == null ? null : money(product.buying_price),
       sku_snapshot: variant?.sku || product.sku || product.part_number,
       variant_name_snapshot: variant ? `${variant.variant_type}: ${variant.variant_value}` : null,
-      image_snapshot: variant?.image_url || product.image || (Array.isArray(product.image_urls) ? product.image_urls[0] : null),
+      image_snapshot: normalizeProductImageUrl(variant?.image_url || product.image || (Array.isArray(product.image_urls) ? product.image_urls[0] : null)),
       stock_before: stockBefore,
       reservation_expires_at: expiresAt,
     });

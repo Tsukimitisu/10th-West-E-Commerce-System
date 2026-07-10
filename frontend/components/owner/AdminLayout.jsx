@@ -29,6 +29,7 @@ import {
 } from '../../services/api';
 import { clearCurrentAuthUser } from '../../services/authSession';
 import OperationsShell from '../operations/OperationsShell';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const createNavItems = (badges = {}) => [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' },
@@ -219,7 +220,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
                 className={`flex w-full gap-3 border-b border-slate-100 px-4 py-3.5 text-left hover:bg-slate-50 ${notification.is_read ? '' : 'bg-orange-50/50'}`}
               >
                 {notification.thumbnail_url ? (
-                  <img src={notification.thumbnail_url} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 object-cover" />
+                  <img src={resolveProductImageUrl(notification.thumbnail_url)} alt="" onError={handleProductImageError} className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 object-cover" />
                 ) : (
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
                     {notification.type?.includes('stock') ? <AlertTriangle size={16} /> : <Bell size={16} />}

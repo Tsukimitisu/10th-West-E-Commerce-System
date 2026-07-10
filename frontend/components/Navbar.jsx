@@ -7,6 +7,7 @@ import { useCart } from '../context/CartContext';
 import { useSocket } from '../context/SocketContext';
 import CartDrawer from './CartDrawer';
 import BrandMark from './ui/BrandMark';
+import { handleProductImageError, resolveProductImageUrl } from '../utils/productImages.js';
 
 const Navbar = ({ user, onLogout }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -500,7 +501,7 @@ const Navbar = ({ user, onLogout }) => {
                                 className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors border-b border-gray-700/50"
                               >
                                 {product.image_url ? (
-                                  <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-md object-cover bg-gray-900" />
+                                  <img src={resolveProductImageUrl(product.image_url)} alt={product.name} onError={handleProductImageError} className="w-10 h-10 rounded-md object-cover bg-gray-900" />
                                 ) : (
                                   <div className="w-10 h-10 rounded-md bg-gray-900 flex items-center justify-center shrink-0"><Package size={16} className="text-gray-500" /></div>
                                 )}
@@ -576,7 +577,7 @@ const Navbar = ({ user, onLogout }) => {
                                 <div className="flex items-start gap-3.5">
                                   <div className="mt-0.5 shrink-0">
                                     {n.thumbnail_url ? (
-                                      <img src={n.thumbnail_url} alt="" className="h-11 w-11 rounded-xl object-cover bg-[#0b111a] border border-white/10 shadow-sm" />
+                                      <img src={resolveProductImageUrl(n.thumbnail_url)} alt="" onError={handleProductImageError} className="h-11 w-11 rounded-xl object-cover bg-[#0b111a] border border-white/10 shadow-sm" />
                                     ) : n.type === 'announcement' ? (
                                       <div className="h-10 w-10 rounded-xl bg-blue-500/15 text-blue-300 border border-blue-400/30 flex items-center justify-center">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
@@ -743,7 +744,7 @@ const Navbar = ({ user, onLogout }) => {
                               className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition-colors border-b border-gray-700/50"
                             >
                               {product.image_url ? (
-                                <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-md object-cover bg-zinc-900" />
+                                <img src={resolveProductImageUrl(product.image_url)} alt={product.name} onError={handleProductImageError} className="w-10 h-10 rounded-md object-cover bg-zinc-900" />
                               ) : (
                                 <div className="w-10 h-10 rounded-md bg-zinc-900 flex items-center justify-center shrink-0"><Package size={16} className="text-gray-500" /></div>
                               )}

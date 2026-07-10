@@ -1,6 +1,7 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
 import { ScanBarcode, Search, X, Plus, Minus, Trash2, Package, CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { batchReceiveStock } from '../../services/api';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const ReceiveStock = ({ products, onComplete, onBack }) => {
   const [scanInput, setScanInput] = useState('');
@@ -232,7 +233,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-700">
                         {item.product.image ? (
-                          <img src={item.product.image} alt="" className="w-full h-full object-cover" />
+                          <img src={resolveProductImageUrl(item.product.image)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" />
                         ) : (
                           <Package size={14} className="m-auto text-gray-400 mt-1.5" />
                         )}

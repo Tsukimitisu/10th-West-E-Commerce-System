@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { RotateCcw, Package, Clock, CheckCircle2, XCircle, Calendar } from 'lucide-react';
 import AccountLayout from '../../components/customer/AccountLayout';
 import { getMyReturns } from '../../services/api';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const statusConfig = {
   pending: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' },
@@ -82,7 +83,7 @@ const MyReturns = () => {
                       {ret.items.map((item, i) => (
                         <div key={i} className="w-10 h-10 rounded-lg bg-gray-100 border border-slate-200 overflow-hidden">
                           {item.image_url ? (
-                            <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+                            <img src={resolveProductImageUrl(item.image_url)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
                               <Package size={12} className="text-gray-400" />

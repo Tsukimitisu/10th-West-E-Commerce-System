@@ -5,6 +5,7 @@ import { getWishlist, removeFromWishlist, WISHLIST_SYNC_EVENT } from '../../serv
 import { useCart } from '../../context/CartContext';
 import AccountLayout from '../../components/customer/AccountLayout';
 import { getCurrentAuthUser, subscribeAuthChanges } from '../../services/authSession';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const Wishlist = () => {
   const [items, setItems] = useState([]);
@@ -130,7 +131,7 @@ const Wishlist = () => {
                 <div key={productId} className="bg-white rounded-xl border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
                   <div className="relative aspect-square bg-gray-100 overflow-hidden">
                     {imageUrl ? (
-                      <img src={imageUrl} alt={name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <img src={resolveProductImageUrl(imageUrl)} alt={name} onError={handleProductImageError} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center"><Package size={40} className="text-gray-300" /></div>
                     )}

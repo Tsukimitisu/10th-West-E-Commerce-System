@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, RotateCcw, Package, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { createReturn, getOrderById } from '../../services/api';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const RequestReturn = () => {
   const { id } = useParams();
@@ -180,7 +181,7 @@ const RequestReturn = () => {
                   />
                   <div className="w-12 h-12 bg-gray-900 rounded-lg overflow-hidden border border-gray-700 flex-shrink-0">
                     {(item.image_url || item.product?.image) ? (
-                      <img src={item.image_url || item.product?.image} alt="" className="w-full h-full object-cover" />
+                      <img src={resolveProductImageUrl(item.image_url || item.product?.image)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package size={16} className="text-gray-300" />

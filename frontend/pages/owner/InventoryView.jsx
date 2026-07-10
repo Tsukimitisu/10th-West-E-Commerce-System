@@ -5,6 +5,7 @@ import Modal from '../../components/owner/Modal';
 import ReceiveStock from '../../components/owner/ReceiveStock';
 import { useSocketEvent } from '../../context/SocketContext';
 import PageHeader from '../../components/operations/PageHeader';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const InventoryView = () => {
   const [products, setProducts] = useState([]);
@@ -155,7 +156,7 @@ const InventoryView = () => {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-700">
-                            {p.image ? <img src={p.image} alt="" className="w-full h-full object-cover" /> : <Package size={14} className="m-auto text-gray-400 mt-1.5" />}
+                            {p.image ? <img src={resolveProductImageUrl(p.image)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" /> : <Package size={14} className="m-auto text-gray-400 mt-1.5" />}
                           </div>
                           <div><p className="font-medium text-white text-sm">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.sku || p.partNumber || '-'}</p></div>
                         </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Check, Search, Star, X } from 'lucide-react';
 import { getReviewModerationQueue, moderateReview } from '../../services/api';
 import StarRating from '../../components/StarRating';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const FILTERS = ['pending', 'approved', 'rejected', 'all'];
 
@@ -126,7 +127,7 @@ const ReviewsView = () => {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex gap-4">
                   {review.product_image ? (
-                    <img src={review.product_image} alt={review.product_name} className="h-16 w-16 rounded-xl object-cover border border-gray-800" />
+                    <img src={resolveProductImageUrl(review.product_image)} alt={review.product_name} onError={handleProductImageError} className="h-16 w-16 rounded-xl object-cover border border-gray-800" />
                   ) : (
                     <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-gray-800 bg-gray-900 text-gray-500">
                       <Star size={18} />

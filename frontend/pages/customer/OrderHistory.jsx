@@ -4,6 +4,7 @@ import { Package, ChevronRight, Search, Calendar, Truck, CheckCircle2, Clock, XC
 import { getUserOrders } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
 import { getCurrentAuthUser } from '../../services/authSession';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const statusConfig = {
   pending: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' },
@@ -145,7 +146,7 @@ const OrderHistory = () => {
                         <div className="flex items-center gap-2 mt-2">
                           {order.items.slice(0, 4).map((item, i) => (
                             <div key={i} className="w-10 h-10 rounded-lg bg-gray-100 border border-slate-200 overflow-hidden flex-shrink-0">
-                              {(item.image_url || item.product?.image) ? <img src={item.image_url || item.product?.image} alt="" className="w-full h-full object-cover" /> :
+                              {(item.image_url || item.product?.image) ? <img src={resolveProductImageUrl(item.image_url || item.product?.image)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" /> :
                                 <div className="w-full h-full flex items-center justify-center"><Package size={14} className="text-gray-400" /></div>}
                             </div>
                           ))}

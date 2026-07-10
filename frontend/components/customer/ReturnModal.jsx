@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, RotateCcw, AlertTriangle, Package, CreditCard, Wallet } from 'lucide-react';
 import { createReturn } from '../../services/api';
 import { getCurrentAuthUser } from '../../services/authSession.js';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const RETURN_REASONS = [
   { value: 'wrong_size', label: 'Wrong Size / Fitment' },
@@ -147,7 +148,7 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
                       {isSelected && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                     </div>
                     <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                      <img src={item.product.image} alt="" className="w-full h-full object-cover" />
+                      <img src={resolveProductImageUrl(item.product.image)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-white truncate">{item.product.name}</p>

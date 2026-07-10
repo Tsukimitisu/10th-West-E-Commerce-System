@@ -2,6 +2,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { CheckCircle2, Package, Truck, Calendar, ArrowRight, Home, ShoppingBag, Printer } from 'lucide-react';
 import { getOrderById } from '../../services/api';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const API = window.__API_URL__ || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -91,12 +92,12 @@ const OrderConfirmation = () => {
                   <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-3">
                     {productId ? (
                       <Link to={`/products/${productId}`} className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700 hover:ring-2 hover:ring-red-500/40 transition-all" title="View product">
-                        {itemImage ? <img src={itemImage} alt={itemTitle} className="w-full h-full object-cover" />
+                        {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" />
                           : <div className="w-full h-full flex items-center justify-center"><Package size={16} className="text-gray-400" /></div>}
                       </Link>
                     ) : (
                       <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700">
-                        {itemImage ? <img src={itemImage} alt={itemTitle} className="w-full h-full object-cover" />
+                        {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" />
                           : <div className="w-full h-full flex items-center justify-center"><Package size={16} className="text-gray-400" /></div>}
                       </div>
                     )}
