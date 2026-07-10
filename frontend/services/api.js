@@ -170,6 +170,15 @@ const cacheCsrfToken = (token, ttlMs) => {
   return normalized;
 };
 
+const clearCsrfTokenCache = () => {
+  csrfTokenCache = { token: '', expiresAt: 0 };
+  csrfTokenRequest = null;
+
+  if (typeof document === 'undefined') return;
+  const tag = document.querySelector(`meta[name="${CSRF_META_NAME}"]`);
+  if (tag) tag.setAttribute('content', '');
+};
+
 const fetchCsrfToken = async () => {
   const csrfRes = await fetch(`${API_URL}/csrf-token`, {
     credentials: 'include',
@@ -224,6 +233,17 @@ const getCsrfToken = async ({ forceRefresh = false } = {}) => {
 };
 
 export const ensureCsrfToken = async ({ forceRefresh = false } = {}) => getCsrfToken({ forceRefresh });
+
+export const refreshCsrfAfterSessionRotation = async () => {
+  clearCsrfTokenCache();
+  const token = await getCsrfToken({ forceRefresh: true });
+  if (!token) {
+    const error = new Error('Unable to refresh the secure request token for this session. Please reload and try again.');
+    error.code = 'CSRF_TOKEN_UNAVAILABLE';
+    throw error;
+  }
+  return token;
+};
 
 export const initializeSecurityContext = ({
   csrfRefreshMs = 15 * 60 * 1000,
@@ -314,6 +334,7 @@ export const initializeSecurityContext = ({
 
 const clearAuthSession = () => {
   clearCurrentAuthUser();
+  clearCsrfTokenCache();
 };
 
 const AUTH_FAILURE_CODES = new Set([
@@ -508,6 +529,8 @@ export const login = async (email, password, totp_code) => {
     return { user: {}, token: '', requires_2fa: true };
   }
 
+  await refreshCsrfAfterSessionRotation();
+
   return { user: data.user, token: '' };
 };
 
@@ -562,6 +585,7 @@ export const sendRegistrationOtp = async (email, name) => {
 
 export const logoutApi = async () => {
   await authenticatedFetch(`${API_URL}/auth/logout`, { method: 'POST' });
+  clearCsrfTokenCache();
 };
 
 // Get authenticated user profile (used by OAuth callback to avoid PII in URL)
@@ -650,10 +674,12 @@ export const disable2FA = async (password) => {
 };
 
 export const exchangeOAuthCode = async (code) => {
-  return authenticatedFetch(`${API_URL}/auth/exchange-code`, {
+  const data = await authenticatedFetch(`${API_URL}/auth/exchange-code`, {
     method: "POST",
     body: JSON.stringify({ code }),
   });
+  await refreshCsrfAfterSessionRotation();
+  return data;
 };
 
 // Sessions
@@ -5284,6 +5310,10 @@ export const verifyEmailToken = async (token) => {
     }
 
     throw error;
+  }
+
+  if (data?.authenticated || data?.autoLogin) {
+    await refreshCsrfAfterSessionRotation();
   }
 
   return data;
