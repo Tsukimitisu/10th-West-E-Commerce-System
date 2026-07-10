@@ -127,10 +127,24 @@ const CLASSIFY_ORDERS_SQL = `
 
 const BASELINE_STOCK_SQL = `
   WITH candidates AS (
-    SELECT p.id, p.stock_quantity
+    SELECT
+      p.id,
+      p.stock_quantity,
+      CONCAT_WS(' ', p.name, p.sku, p.part_number, p.barcode) ~* '(^|[^a-z0-9])(qa|test|fixture|concurrency|idempotency)([^a-z0-9]|$)' AS is_qa_fixture
     FROM products p
     WHERE COALESCE(p.stock_quantity, 0) > 0
       AND NOT EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.product_id = p.id)
+  ), classified AS (
+    SELECT
+      id,
+      stock_quantity,
+      CASE WHEN is_qa_fixture THEN 'qa_fixture' ELSE 'legacy_baseline' END AS reason,
+      CASE WHEN is_qa_fixture THEN 'test_fixture' ELSE 'quarantine-order-integrity' END AS source,
+      CASE
+        WHEN is_qa_fixture THEN 'QA fixture baseline from current stock_quantity; direct fixture setup omitted movement history'
+        ELSE 'Baseline movement from current stock_quantity; prior movement history unavailable'
+      END AS note
+    FROM candidates
   ), inserted AS (
     INSERT INTO stock_movements (
       product_id, quantity_delta, stock_before, stock_after, reason, reference_type, metadata
@@ -140,14 +154,15 @@ const BASELINE_STOCK_SQL = `
       stock_quantity,
       0,
       stock_quantity,
-      'legacy_baseline',
+      reason,
       'data_integrity',
       jsonb_build_object(
-        'source', 'quarantine-order-integrity',
-        'note', 'Baseline movement from current stock_quantity; prior movement history unavailable'
+        'source', source,
+        'script', 'quarantine-order-integrity',
+        'note', note
       )
-    FROM candidates
-    RETURNING product_id, stock_after
+    FROM classified
+    RETURNING product_id, stock_after, reason, metadata
   )
   INSERT INTO audit_logs (
     action, entity_type, entity_id, before_data, after_data, metadata
@@ -158,10 +173,7 @@ const BASELINE_STOCK_SQL = `
     product_id::text,
     jsonb_build_object('stock_quantity', NULL),
     jsonb_build_object('stock_quantity', stock_after),
-    jsonb_build_object(
-      'script', 'quarantine-order-integrity',
-      'note', 'Baseline stock movement created from current product stock; prior movement history unavailable'
-    )
+    metadata || jsonb_build_object('reason', reason)
   FROM inserted
   RETURNING entity_id
 `;
@@ -185,7 +197,7 @@ try {
   if (!apply) {
     console.log(JSON.stringify({
       mode: 'dry_run',
-      message: 'No records changed. Pass --apply to classify order integrity gaps and create safe stock baselines.',
+      message: 'No records changed. Pass --apply to classify order integrity gaps and create safe stock baselines; QA fixture products are labeled qa_fixture/test_fixture.',
       before,
     }, null, 2));
   } else {

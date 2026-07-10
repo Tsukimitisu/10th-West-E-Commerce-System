@@ -43,6 +43,8 @@ test('quarantine script records audit evidence and only creates labeled stock ba
   assert.match(source, /data\.integrity_quarantine/);
   assert.match(source, /order_integrity/);
   assert.match(source, /legacy_baseline/);
+  assert.match(source, /qa_fixture/);
+  assert.match(source, /test_fixture/);
   assert.match(source, /Baseline movement from current stock_quantity/);
   assert.doesNotMatch(source, /POS-LEGACY-/);
 });

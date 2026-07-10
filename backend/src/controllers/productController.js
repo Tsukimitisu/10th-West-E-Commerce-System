@@ -16,6 +16,7 @@ import {
   sanitizeRichText,
   sanitizeUrlArray,
 } from '../utils/inputSanitizer.js';
+import { writeAuditLog } from '../utils/audit.js';
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
@@ -625,6 +626,36 @@ const saveProductRelations = async (db, productId, { fitments, bundleComponents 
       );
     }
   }
+};
+
+const recordInitialStockBaseline = async (db, req, product) => {
+  const initialStock = Number(product?.stock_quantity || 0);
+  if (!Number.isInteger(initialStock) || initialStock <= 0) return;
+
+  const metadata = {
+    source: 'product_create',
+    reason: 'initial_stock',
+    product_id: Number(product.id),
+    sku: product.sku || null,
+    part_number: product.part_number || null,
+  };
+  await db.query(
+    `INSERT INTO stock_movements (
+       product_id, quantity_delta, stock_before, stock_after,
+       reason, reference_type, reference_id, created_by, metadata
+     ) VALUES ($1,$2,0,$2,'initial_stock','product_create',$1,$3,$4::jsonb)`,
+    [product.id, initialStock, req.user?.id || null, JSON.stringify(metadata)]
+  );
+  await writeAuditLog(db, {
+    req,
+    actorUserId: req.user?.id || null,
+    action: 'inventory.baseline_import',
+    entityType: 'product',
+    entityId: product.id,
+    beforeData: { stock_quantity: null },
+    afterData: { stock_quantity: initialStock },
+    metadata,
+  });
 };
 
 const loadProductRelations = async (productIds = []) => {
@@ -1593,76 +1624,48 @@ export const createProduct = async (req, res) => {
     const resolvedIsOnSale = cleanIsOnSale ?? cleanSalePrice !== null;
 
     if (shouldUseDatabaseReadFallback()) {
-      const rows = await supabaseRestRequest('products', {
-        method: 'POST',
-        prefer: 'return=representation',
-        body: {
-          part_number: cleanPartNumber,
-          name: cleanName,
-          description: cleanDescription,
-          price: parsedPrice,
-          buying_price: buyingPriceField.value,
-          image: cleanImage,
-          video_url: cleanVideoUrl,
-          category_id: cleanCategoryId,
-          stock_quantity: parsedStockQuantity,
-          shipping_option: cleanShippingOption || 'standard',
-          shipping_weight_kg: parsedShippingWeightKg,
-          shipping_dimensions: cleanShippingDimensions,
-          box_number: cleanBoxNumber,
-          low_stock_threshold: cleanLowStockThreshold ?? 5,
-          brand: cleanBrand,
-          sku: resolvedSku,
-          barcode: cleanBarcode,
-          sale_price: cleanSalePrice,
-          is_on_sale: resolvedIsOnSale,
-          status: cleanStatus || 'draft',
-          image_urls: cleanImageUrls,
-          bulk_pricing: cleanBulkPricing,
-          product_type: cleanProductType || 'single',
-          reserved_stock: reservedStockField.value ?? 0,
-          damaged_stock: damagedStockField.value ?? 0,
-          color: cleanColor,
-        },
-      });
-      const newProduct = Array.isArray(rows) ? rows[0] : rows;
-      await req.logActivity?.('product.create', 'product', newProduct?.id, {
-        name: newProduct?.name,
-        sku: newProduct?.sku,
-        status: newProduct?.status,
-      });
-      emitProductCreated(newProduct);
-
-      return res.status(201).json({
-        message: 'Product created successfully',
-        product: newProduct,
-        degraded: true,
+      return res.status(503).json({
+        message: 'Product creation requires primary database connectivity for atomic stock baseline and audit records.',
+        code: 'PRODUCT_CREATE_DB_REQUIRED',
       });
     }
 
-    const result = await pool.query(
-      `INSERT INTO products (
-        part_number, name, description, price, buying_price, 
-        image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions,
-        box_number, low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing,
-        product_type, reserved_stock, damaged_stock, color
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::product_shipping_option_enum, 'standard'::product_shipping_option_enum), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb), COALESCE($23, 'single'), COALESCE($24, 0), COALESCE($25, 0), $26)
-      RETURNING *`,
-      [
-        cleanPartNumber, cleanName, cleanDescription, parsedPrice, buyingPriceField.value,
-        cleanImage, cleanVideoUrl, cleanCategoryId, parsedStockQuantity, cleanShippingOption, parsedShippingWeightKg,
-        cleanShippingDimensions ? JSON.stringify(cleanShippingDimensions) : null,
-        cleanBoxNumber, cleanLowStockThreshold ?? 5, cleanBrand, resolvedSku, cleanBarcode, cleanSalePrice,
-        resolvedIsOnSale, cleanStatus, JSON.stringify(cleanImageUrls), JSON.stringify(cleanBulkPricing),
-        cleanProductType, reservedStockField.value, damagedStockField.value, cleanColor
-      ]
-    );
+    const client = await pool.connect();
+    let newProduct;
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `INSERT INTO products (
+          part_number, name, description, price, buying_price,
+          image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions,
+          box_number, low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing,
+          product_type, reserved_stock, damaged_stock, color
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::product_shipping_option_enum, 'standard'::product_shipping_option_enum), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb), COALESCE($23, 'single'), COALESCE($24, 0), COALESCE($25, 0), $26)
+        RETURNING *`,
+        [
+          cleanPartNumber, cleanName, cleanDescription, parsedPrice, buyingPriceField.value,
+          cleanImage, cleanVideoUrl, cleanCategoryId, parsedStockQuantity, cleanShippingOption, parsedShippingWeightKg,
+          cleanShippingDimensions ? JSON.stringify(cleanShippingDimensions) : null,
+          cleanBoxNumber, cleanLowStockThreshold ?? 5, cleanBrand, resolvedSku, cleanBarcode, cleanSalePrice,
+          resolvedIsOnSale, cleanStatus, JSON.stringify(cleanImageUrls), JSON.stringify(cleanBulkPricing),
+          cleanProductType, reservedStockField.value, damagedStockField.value, cleanColor
+        ]
+      );
 
-    const newProduct = result.rows[0];
-    await saveProductRelations(pool, newProduct.id, {
-      fitments: fitmentsPayload,
-      bundleComponents: bundleComponentsPayload,
-    });
+      newProduct = result.rows[0];
+      await saveProductRelations(client, newProduct.id, {
+        fitments: fitmentsPayload,
+        bundleComponents: bundleComponentsPayload,
+      });
+      await recordInitialStockBaseline(client, req, newProduct);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+
     await req.logActivity?.('product.create', 'product', newProduct.id, {
       name: newProduct.name,
       sku: newProduct.sku,
