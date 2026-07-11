@@ -1224,3 +1224,10 @@ export const startExpiredReservationCleanup = ({ intervalMs = Number(process.env
   reservationCleanupTimer.unref?.();
   return reservationCleanupTimer;
 };
+
+export const __testing = {
+  claimCheckoutIdempotencyKey,
+  hashRequest,
+  normalizeItems,
+  safeErrorCode,
+};

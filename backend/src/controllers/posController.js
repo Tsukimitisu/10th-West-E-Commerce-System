@@ -782,6 +782,7 @@ export const getPosDailySummary = async (req, res) => {
 };
 
 export const __testing = {
+  claimPosIdempotencyKey,
   normalizeCartItems,
   round,
 };
