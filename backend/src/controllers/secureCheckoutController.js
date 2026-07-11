@@ -13,6 +13,12 @@ const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
 const money = (value) => Number.parseFloat(value || 0);
 const fail = (status, message, fieldErrors, code) => Object.assign(new Error(message), { status, fieldErrors, code });
+const isConfiguredProviderError = (error) => error?.code === 'PAYMONGO_NOT_CONFIGURED';
+const safeErrorCode = (error) => {
+  if (!error?.code) return undefined;
+  if (error.status || isConfiguredProviderError(error)) return error.code;
+  return undefined;
+};
 
 const normalizeItems = (input) => {
   if (!Array.isArray(input) || input.length === 0 || input.length > 100) throw fail(400, 'Checkout requires 1 to 100 items.');
@@ -255,7 +261,7 @@ export const createCheckout = async (req, res) => {
     });
     if (!idempotency.claimed) {
       const saved = idempotency.row;
-      if (saved.request_hash !== requestHash) throw fail(409, 'This idempotency key was used for a different checkout.');
+      if (saved.request_hash !== requestHash) throw fail(409, 'This idempotency key was used for a different checkout.', undefined, 'IDEMPOTENCY_KEY_CONFLICT');
       if (saved.status === 'completed') {
         await client.query('COMMIT');
         return res.status(saved.response_status || 200).json(saved.response_body);
@@ -476,18 +482,28 @@ export const createCheckout = async (req, res) => {
        WHERE user_id = $1 AND scope = 'checkout' AND key = $2 AND request_hash = $3`,
       [req.user.id, idempotencyKey, requestHash, JSON.stringify(response)]
     );
-    await createOrderWorkflowNotification(pool, {
-      userId: req.user.id, orderId: order.id, type: 'order_placed', status: orderStatus,
-      title: 'Order placed', message: `Order #${order.id} was placed successfully.`,
-    });
+    try {
+      await createOrderWorkflowNotification(pool, {
+        userId: req.user.id, orderId: order.id, type: 'order_placed', status: orderStatus,
+        title: 'Order placed', message: `Order #${order.id} was placed successfully.`,
+      });
+    } catch (notificationError) {
+      console.error('Checkout notification failed after order creation:', {
+        orderId: order.id,
+        error: notificationError.message,
+      });
+    }
     emitNewOrder({ ...order, ...response });
     return res.status(201).json(response);
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('Secure checkout error:', error);
-    return res.status(error.status || (error.code === 'PAYMONGO_NOT_CONFIGURED' ? 503 : 500)).json({
-      message: error.status ? error.message : 'Checkout could not be completed.',
-      ...(error.code ? { code: error.code } : {}),
+    const blockedByCredentials = isConfiguredProviderError(error);
+    return res.status(error.status || (blockedByCredentials ? 503 : 500)).json({
+      message: blockedByCredentials
+        ? 'Blocked by credentials/configuration.'
+        : error.status ? error.message : 'Checkout could not be completed.',
+      ...(safeErrorCode(error) ? { code: safeErrorCode(error) } : {}),
       ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {}),
     });
   } finally {
