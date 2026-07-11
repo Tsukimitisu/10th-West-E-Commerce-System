@@ -592,7 +592,6 @@ export const createPosOrder = async (req, res) => {
     return res.status(error.status || 500).json({
       message: error.status ? error.message : 'POS order could not be completed.',
       code: error.status ? (error.code || 'POS_ORDER_FAILED') : 'POS_ORDER_FAILED',
-      ...(process.env.NODE_ENV !== 'production' && !error.status ? { diagnostic: error.message } : {}),
     });
   } finally {
     client.release();
