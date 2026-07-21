@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
+    "start:e2e": "node scripts/start-e2e.js",
     "dev": "nodemon src/server.js",
     "test": "node scripts/run-tests.cjs",
     "migrate": "knex migrate:latest --knexfile knexfile.cjs",

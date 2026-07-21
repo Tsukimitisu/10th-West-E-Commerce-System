@@ -1,7 +1,82 @@
 import { defineConfig, devices } from '@playwright/test';
+import { loadFixtureEnvironment } from './e2e/fixtureEnvironment.js';
 
-const baseURL = process.env.E2E_BASE_URL || 'http://localhost:3000';
-const startLocalServer = !process.env.E2E_BASE_URL && process.env.E2E_START_SERVER !== 'false';
+loadFixtureEnvironment();
+
+const localHost = 'localhost';
+const configuredBaseURL = process.env.E2E_BASE_URL;
+const parseHttpURL = (name, value) => {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${name} must be a valid HTTP(S) URL.`);
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error(`${name} must be an HTTP(S) URL without credentials, query parameters, or a fragment.`);
+  }
+  return url;
+};
+
+const base = parseHttpURL('E2E_BASE_URL', configuredBaseURL || `http://${localHost}:3000`);
+const api = parseHttpURL(
+  'E2E_API_URL',
+  process.env.E2E_API_URL || (configuredBaseURL ? new URL('/api', base).toString() : `http://${localHost}:5000/api`)
+);
+const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1']);
+if (loopbackHosts.has(base.hostname) || loopbackHosts.has(api.hostname)) {
+  if (base.hostname !== localHost || api.hostname !== localHost) {
+    throw new Error('Local E2E URLs must consistently use localhost for both the frontend and API.');
+  }
+}
+if (!api.pathname.replace(/\/+$/, '').endsWith('/api')) {
+  throw new Error('E2E_API_URL must end with /api.');
+}
+
+const baseURL = base.toString().replace(/\/$/, '');
+const apiURL = api.toString().replace(/\/$/, '');
+const startLocalServer = !configuredBaseURL && process.env.E2E_START_SERVER !== 'false';
+const reuseExistingServer = String(process.env.E2E_REUSE_SERVER || '').trim().toLowerCase() === 'true';
+process.env.E2E_API_URL = apiURL;
+
+const backendEnvironment = { ...process.env };
+const inheritedDatabaseKeys = [
+  'DATABASE_URL',
+  'SUPABASE_DB_URL',
+  'TEST_DATABASE_URL',
+  'PGHOST',
+  'PGPORT',
+  'PGUSER',
+  'PGPASSWORD',
+  'PGDATABASE',
+  'POSTGRES_URL',
+  'POSTGRES_PRISMA_URL',
+  'POSTGRES_URL_NON_POOLING',
+  'DB_HOST',
+  'DB_PORT',
+  'DB_USER',
+  'DB_PASSWORD',
+  'DB_NAME',
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+];
+for (const key of inheritedDatabaseKeys) delete backendEnvironment[key];
+
+backendEnvironment.NODE_ENV = process.env.E2E_NODE_ENV || 'development';
+if (process.env.E2E_DATABASE_URL) backendEnvironment.DATABASE_URL = process.env.E2E_DATABASE_URL;
+if (process.env.E2E_SUPABASE_URL) backendEnvironment.SUPABASE_URL = process.env.E2E_SUPABASE_URL;
+if (process.env.E2E_SUPABASE_ANON_KEY) backendEnvironment.SUPABASE_ANON_KEY = process.env.E2E_SUPABASE_ANON_KEY;
+if (process.env.E2E_SUPABASE_SERVICE_ROLE_KEY) {
+  backendEnvironment.SUPABASE_SERVICE_ROLE_KEY = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY;
+}
+for (const key of Object.keys(backendEnvironment)) {
+  if (/^E2E_.*(?:PASSWORD|TOTP|DATABASE_URL|SUPABASE_.*KEY)$/.test(key)) {
+    delete backendEnvironment[key];
+  }
+}
+delete backendEnvironment.TEST_FIXTURE_PASSWORD;
 
 export default defineConfig({
   testDir: './e2e',
@@ -23,16 +98,25 @@ export default defineConfig({
   webServer: startLocalServer
     ? [
         {
-          command: 'npm --prefix ../backend start',
-          url: 'http://localhost:5000/api/health',
-          reuseExistingServer: true,
+          command: 'npm --prefix ../backend run start:e2e',
+          url: `${apiURL}/ready`,
+          reuseExistingServer,
           timeout: 120_000,
+          env: {
+            ...backendEnvironment,
+            FRONTEND_ORIGIN: base.origin,
+            FRONTEND_URL: base.origin,
+          },
         },
         {
           command: 'npm run dev:frontend -- --host localhost',
           url: baseURL,
-          reuseExistingServer: true,
+          reuseExistingServer,
           timeout: 120_000,
+          env: {
+            ...process.env,
+            VITE_API_URL: apiURL,
+          },
         },
       ]
     : undefined,
