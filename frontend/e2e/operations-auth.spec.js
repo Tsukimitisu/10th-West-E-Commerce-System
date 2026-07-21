@@ -28,8 +28,13 @@ const login = async (page, account) => {
   await page.goto('/#/login');
   await page.getByPlaceholder('name@example.com').fill(account.email);
   await page.getByPlaceholder('Enter your password').fill(account.password);
+  const loginResponsePromise = page.waitForResponse((response) => (
+    response.url().includes('/api/auth/login') && response.request().method() === 'POST'
+  ), { timeout: 20_000 });
   await page.getByRole('button', { name: /sign in/i }).click();
-  await expect(page).not.toHaveURL(/#\/login/);
+  const loginResponse = await loginResponsePromise;
+  expect(loginResponse.status()).toBe(200);
+  await expect(page).not.toHaveURL(/#\/login/, { timeout: 10_000 });
 };
 
 for (const account of accounts) {

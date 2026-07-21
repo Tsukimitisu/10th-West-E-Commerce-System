@@ -5,6 +5,18 @@ loadFixtureEnvironment();
 
 const localHost = 'localhost';
 const configuredBaseURL = process.env.E2E_BASE_URL;
+const parsePort = (name, value, fallback) => {
+  const text = String(value || '').trim();
+  if (!text) return fallback;
+  if (!/^\d+$/.test(text)) throw new Error(`${name} must be an integer port.`);
+  const port = Number(text);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${name} must be between 1 and 65535.`);
+  }
+  return port;
+};
+const frontendPort = parsePort('E2E_FRONTEND_PORT', process.env.E2E_FRONTEND_PORT, 3000);
+const backendPort = parsePort('E2E_BACKEND_PORT', process.env.E2E_BACKEND_PORT, 5000);
 const parseHttpURL = (name, value) => {
   let url;
   try {
@@ -19,10 +31,10 @@ const parseHttpURL = (name, value) => {
   return url;
 };
 
-const base = parseHttpURL('E2E_BASE_URL', configuredBaseURL || `http://${localHost}:3000`);
+const base = parseHttpURL('E2E_BASE_URL', configuredBaseURL || `http://${localHost}:${frontendPort}`);
 const api = parseHttpURL(
   'E2E_API_URL',
-  process.env.E2E_API_URL || (configuredBaseURL ? new URL('/api', base).toString() : `http://${localHost}:5000/api`)
+  process.env.E2E_API_URL || (configuredBaseURL ? new URL('/api', base).toString() : `http://${localHost}:${backendPort}/api`)
 );
 const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1']);
 if (loopbackHosts.has(base.hostname) || loopbackHosts.has(api.hostname)) {
@@ -104,12 +116,13 @@ export default defineConfig({
           timeout: 120_000,
           env: {
             ...backendEnvironment,
+            PORT: api.port || (api.protocol === 'https:' ? '443' : '80'),
             FRONTEND_ORIGIN: base.origin,
             FRONTEND_URL: base.origin,
           },
         },
         {
-          command: 'npm run dev:frontend -- --host localhost',
+          command: `npm run dev:frontend -- --host localhost --port ${base.port || (base.protocol === 'https:' ? 443 : 80)} --strictPort`,
           url: baseURL,
           reuseExistingServer,
           timeout: 120_000,
