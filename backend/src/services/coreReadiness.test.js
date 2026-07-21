@@ -14,7 +14,10 @@ test('core readiness checks connectivity, required relations, and the PostgreSQL
   assert.deepEqual(await checkCoreDatabaseReadiness(database), { ready: true });
   assert.equal(queries.length, 3);
   assert.deepEqual(queries[1].params[0], requiredCoreRelations());
-  assert.match(queries[2].sql, /FROM http_sessions/);
+  assert.match(queries[2].sql, /SELECT sid, sess, expire FROM http_sessions/);
+  for (const relation of ['stock_reservations', 'refunds', 'reviews', 'chat_messages']) {
+    assert.ok(requiredCoreRelations().includes(relation));
+  }
 });
 
 test('core readiness fails closed when an essential relation is missing', async () => {
@@ -29,4 +32,3 @@ test('core readiness fails closed when an essential relation is missing', async 
     missingRelations: ['http_sessions'],
   });
 });
-

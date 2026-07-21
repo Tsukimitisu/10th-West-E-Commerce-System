@@ -6,12 +6,28 @@ const REQUIRED_CORE_RELATIONS = Object.freeze([
   'permissions',
   'role_permissions',
   'products',
+  'product_variants',
+  'addresses',
+  'carts',
+  'cart_items',
+  'wishlists',
   'orders',
   'order_items',
+  'order_status_history',
   'payments',
+  'stock_reservations',
   'stock_movements',
   'audit_logs',
   'idempotency_keys',
+  'returns',
+  'return_items',
+  'refunds',
+  'refund_attempts',
+  'store_credits',
+  'reviews',
+  'chat_threads',
+  'chat_participants',
+  'chat_messages',
 ]);
 
 export class CoreSchemaError extends Error {
@@ -34,9 +50,8 @@ export const checkCoreDatabaseReadiness = async (database) => {
   );
   const missingRelations = result.rows.map((row) => row.name);
   if (missingRelations.length > 0) throw new CoreSchemaError(missingRelations);
-  await database.query('SELECT sid, expire FROM http_sessions LIMIT 1');
+  await database.query('SELECT sid, sess, expire FROM http_sessions LIMIT 1');
   return { ready: true };
 };
 
 export const requiredCoreRelations = () => [...REQUIRED_CORE_RELATIONS];
-

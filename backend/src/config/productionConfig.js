@@ -39,15 +39,14 @@ const validateSecret = (environment, name) => {
   return value;
 };
 
-const validateFrontendOrigin = (environment) => {
-  const value = requireValue(environment, 'FRONTEND_ORIGIN');
+const validateHttpsOrigin = (value, { code, label }) => {
   let url;
   try {
     url = new URL(value);
   } catch {
     throw new ProductionConfigurationError(
-      'PRODUCTION_FRONTEND_ORIGIN_INVALID',
-      'FRONTEND_ORIGIN must be an absolute HTTPS origin.'
+      code,
+      `${label} must contain absolute HTTPS origins.`
     );
   }
   if (
@@ -59,11 +58,27 @@ const validateFrontendOrigin = (environment) => {
     || (url.pathname !== '/' && url.pathname !== '')
   ) {
     throw new ProductionConfigurationError(
-      'PRODUCTION_FRONTEND_ORIGIN_INVALID',
-      'FRONTEND_ORIGIN must be an absolute HTTPS origin without credentials, a path, query, or fragment.'
+      code,
+      `${label} must contain HTTPS origins without credentials, paths, queries, or fragments.`
     );
   }
   return url.origin;
+};
+
+const validateFrontendOrigin = (environment) => validateHttpsOrigin(
+  requireValue(environment, 'FRONTEND_ORIGIN'),
+  { code: 'PRODUCTION_FRONTEND_ORIGIN_INVALID', label: 'FRONTEND_ORIGIN' },
+);
+
+const validateCorsAllowedOrigins = (environment) => {
+  const values = String(environment.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return [...new Set(values.map((value) => validateHttpsOrigin(value, {
+    code: 'PRODUCTION_CORS_ORIGINS_INVALID',
+    label: 'CORS_ALLOWED_ORIGINS',
+  })))];
 };
 
 export const validateCoreEnvironment = (environment = process.env) => {
@@ -121,7 +136,7 @@ export const validateCoreEnvironment = (environment = process.env) => {
     isProduction: true,
     nodeEnvironment,
     frontendOrigin: validateFrontendOrigin(environment),
+    corsAllowedOrigins: validateCorsAllowedOrigins(environment),
     cookieSameSite: sameSite,
   };
 };
-

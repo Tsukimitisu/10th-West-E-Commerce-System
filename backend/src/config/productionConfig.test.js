@@ -18,9 +18,13 @@ const productionEnvironment = (overrides = {}) => ({
 });
 
 test('production core validation accepts strong distinct secrets and secure cookie settings', () => {
-  const result = validateCoreEnvironment(productionEnvironment({ NODE_ENV: 'Production' }));
+  const result = validateCoreEnvironment(productionEnvironment({
+    NODE_ENV: 'Production',
+    CORS_ALLOWED_ORIGINS: 'https://admin.example.test, https://support.example.test',
+  }));
   assert.equal(result.isProduction, true);
   assert.equal(result.frontendOrigin, 'https://store.example.test');
+  assert.deepEqual(result.corsAllowedOrigins, ['https://admin.example.test', 'https://support.example.test']);
 });
 
 test('production core validation rejects placeholders, reused secrets, and insecure settings', () => {
@@ -47,6 +51,10 @@ test('production core validation rejects placeholders, reused secrets, and insec
     { code: 'PRODUCTION_FRONTEND_ORIGIN_INVALID' }
   );
   assert.throws(
+    () => validateCoreEnvironment(productionEnvironment({ CORS_ALLOWED_ORIGINS: 'https://admin.example.test/path' })),
+    { code: 'PRODUCTION_CORS_ORIGINS_INVALID' }
+  );
+  assert.throws(
     () => validateCoreEnvironment(productionEnvironment({ SHIPPING_PROVIDER: 'mock' })),
     { code: 'PRODUCTION_MOCK_PROVIDER_BLOCKED' }
   );
@@ -59,4 +67,3 @@ test('development still requires JWT but does not require production-only settin
   });
   assert.throws(() => validateCoreEnvironment({ NODE_ENV: 'development' }), { code: 'CORE_ENV_MISSING' });
 });
-

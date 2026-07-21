@@ -12,6 +12,7 @@
     "migrate": "knex migrate:latest --knexfile knexfile.cjs",
     "migrate:down": "knex migrate:rollback --knexfile knexfile.cjs",
     "migrate:status": "knex migrate:status --knexfile knexfile.cjs",
+    "migrate:check": "node scripts/migration-check.js",
     "migrate:make": "knex migrate:make --knexfile knexfile.cjs",
     "migrations:verify": "node scripts/verify-migration-source.js",
     "db:check": "node scripts/database-check.js",

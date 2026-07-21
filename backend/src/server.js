@@ -231,11 +231,12 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
-// C9: HTTPS redirect in production
+// Reject insecure production requests without reflecting an untrusted Host
+// header into a redirect target. The trusted ingress terminates TLS.
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {
-    if (req.headers['x-forwarded-proto'] !== 'https') {
-      return res.redirect(301, `https://${req.headers.host}${req.url}`);
+    if (!req.secure) {
+      return res.status(400).json({ message: 'HTTPS is required.' });
     }
     next();
   });
