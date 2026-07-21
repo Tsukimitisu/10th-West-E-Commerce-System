@@ -7,6 +7,7 @@ import { validatePhilippineAddress } from '../services/psgc.js';
 import { ensurePaymentOrderColumns } from './paymentController.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 import { getRuntimeSettings } from '../services/settings.js';
+import { writeAuditLog } from '../utils/audit.js';
 
 const STAFF_ROLES = STAFF_ROLE_SET;
 const VALID_ORDER_STATUSES = ORDER_STATUSES;
@@ -696,24 +697,52 @@ export const updateOrderStatus = async (req, res) => {
 export const confirmOrderDelivery = async (req, res) => {
   const { id } = req.params;
   const riderId = req.user?.id;
+  const client = await pool.connect();
 
   try {
-    const orderDetailResult = await pool.query(ORDER_NOTIFICATION_DETAIL_QUERY, [id]);
-    if (orderDetailResult.rows.length === 0) {
+    await client.query('BEGIN');
+    const lockedOrderResult = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [id]);
+    if (lockedOrderResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    const orderDetail = orderDetailResult.rows[0];
-    const currentStatus = String(orderDetail.status || '').toLowerCase();
+    const lockedOrder = lockedOrderResult.rows[0];
+    const currentStatus = String(lockedOrder.status || '').toLowerCase();
     if (!['shipped', 'out_for_delivery'].includes(currentStatus)) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         message: 'Only shipped or out-for-delivery orders can be confirmed as delivered by a rider.',
       });
     }
 
-    const result = await pool.query(
+    const orderDetailResult = await client.query(ORDER_NOTIFICATION_DETAIL_QUERY, [id]);
+    if (orderDetailResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const orderDetail = orderDetailResult.rows[0];
+    let codPayment = null;
+    if (String(lockedOrder.payment_method || '').toLowerCase() === 'cod') {
+      const paymentResult = await client.query(
+        `UPDATE payments
+         SET status = 'paid', paid_at = COALESCE(paid_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
+         WHERE order_id = $1 AND method = 'cod'
+         RETURNING id, status, paid_at`,
+        [id]
+      );
+      if (paymentResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: 'COD payment record is missing.' });
+      }
+      codPayment = paymentResult.rows[0];
+    }
+
+    const result = await client.query(
       `UPDATE orders
        SET status = 'delivered',
+           payment_status = CASE WHEN payment_method = 'cod' THEN 'paid' ELSE payment_status END,
            delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
            rider_confirmed_delivery_at = COALESCE(rider_confirmed_delivery_at, CURRENT_TIMESTAMP),
            rider_confirmed_by = COALESCE(rider_confirmed_by, $2),
@@ -725,17 +754,33 @@ export const confirmOrderDelivery = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({
         message: 'Order status changed by another request. Please refresh and try again.',
       });
     }
 
     const updatedOrder = result.rows[0];
-    await pool.query(
+    await client.query(
       `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note)
        VALUES ($1, $2, 'delivered', 'staff', $3, 'Delivery confirmed by rider')`,
       [updatedOrder.id, currentStatus, riderId || null]
     );
+    await writeAuditLog(client, {
+      req,
+      actorUserId: riderId || null,
+      action: 'order.delivery.confirm',
+      entityType: 'order',
+      entityId: updatedOrder.id,
+      beforeData: { status: currentStatus, payment_status: lockedOrder.payment_status },
+      afterData: { status: 'delivered', payment_status: updatedOrder.payment_status },
+      metadata: {
+        payment_method: updatedOrder.payment_method,
+        payment_id: codPayment?.id || null,
+        cod_captured: Boolean(codPayment),
+      },
+    });
+    await client.query('COMMIT');
     emitOrderStatusUpdate(updatedOrder);
 
     if (orderDetail.user_id) {
@@ -765,8 +810,11 @@ export const confirmOrderDelivery = async (req, res) => {
       order: updatedOrder,
     });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Confirm delivery error:', error);
     res.status(500).json({ message: 'Server error' });
+  } finally {
+    client.release();
   }
 };
 

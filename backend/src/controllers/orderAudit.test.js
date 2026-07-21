@@ -84,3 +84,16 @@ test('audit metadata snippets do not include secret-shaped provider fields', asy
   assert.doesNotMatch(combined, /password|secret|api_key|authorization|rawBody|signatureHeader/i);
   assert.doesNotMatch(combined, /provider_response|providerResponse|raw:/i);
 });
+
+test('COD delivery atomically captures the payment and records delivery audit evidence', async () => {
+  const source = await readController('orderController.js');
+  const start = source.indexOf('export const confirmOrderDelivery');
+  const end = source.indexOf('export const confirmOrderReceipt', start);
+  const handler = source.slice(start, end);
+
+  assert.match(handler, /SELECT \* FROM orders WHERE id = \$1 FOR UPDATE/);
+  assert.match(handler, /SET status = 'paid', paid_at = COALESCE/);
+  assert.match(handler, /payment_status = CASE WHEN payment_method = 'cod' THEN 'paid'/);
+  assert.match(handler, /action:\s*'order\.delivery\.confirm'/);
+  assert.ok(handler.indexOf("await client.query('COMMIT')") > handler.indexOf("action: 'order.delivery.confirm'"));
+});

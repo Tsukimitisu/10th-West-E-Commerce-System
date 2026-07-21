@@ -2,6 +2,7 @@ import pool from '../config/database.js';
 import { createPaymongoRefund } from '../services/paymongo.js';
 import { emitNotification, emitOrderStatusUpdate, emitReturnCreated, emitReturnUpdated, emitStockUpdate } from '../socket.js';
 import { getRuntimeSettings } from '../services/settings.js';
+import { writeAuditLog } from '../utils/audit.js';
 
 const cleanEvidence = (input) => Array.isArray(input)
   ? [...new Set(input.map((value) => String(value || '').trim()).filter((value) => /^https:\/\//i.test(value)).slice(0, 8))]
@@ -76,6 +77,20 @@ export const createReturnSecure = async (req, res) => {
        VALUES ($1,'delivered','return_requested','return',$2,$3,$4::jsonb)`,
       [orderId, req.user.id, reason, JSON.stringify({ return_id: created.rows[0].id })]
     );
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'return.create',
+      entityType: 'return',
+      entityId: created.rows[0].id,
+      afterData: {
+        order_id: orderId,
+        status: 'pending',
+        refund_method: refundMethod,
+        refund_amount: refundAmount,
+      },
+      metadata: { order_id: orderId, item_count: normalized.length },
+    });
     await client.query('COMMIT');
     emitReturnCreated(created.rows[0]);
     emitOrderStatusUpdate(orderId, 'return_requested');
@@ -139,6 +154,20 @@ const finalizeRefund = async ({ refundId, providerReference, providerResponse, a
        VALUES ($1,$2,$3,'refund',$4,'Refund completed',$5::jsonb)`,
       [refund.order_id, refund.order_status, finalStatus, actorId, JSON.stringify({ refund_id: refund.id, provider_reference: providerReference })]
     );
+    await writeAuditLog(client, {
+      actorUserId: actorId,
+      action: 'refund.complete',
+      entityType: 'refund',
+      entityId: refund.id,
+      beforeData: { status: refund.status, return_status: refund.return_status },
+      afterData: { status: 'succeeded', return_status: 'refunded', order_status: finalStatus },
+      metadata: {
+        return_id: refund.return_id,
+        order_id: refund.order_id,
+        provider: refund.provider,
+        refund_method: refund.refund_method,
+      },
+    });
     await client.query('COMMIT');
     stockUpdates.forEach(emitStockUpdate);
     emitReturnUpdated({ id: refund.return_id, status: 'refunded' });
@@ -162,6 +191,13 @@ export const processRefundSecure = async (req, res) => {
     await client.query('BEGIN');
     const existing = await client.query(`SELECT * FROM refunds WHERE idempotency_key=$1 FOR UPDATE`, [key]);
     if (existing.rows[0]) {
+      if (Number(existing.rows[0].return_id) !== returnId) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: 'This idempotency key was used for a different return.',
+          code: 'IDEMPOTENCY_KEY_CONFLICT',
+        });
+      }
       await client.query('COMMIT');
       return res.status(existing.rows[0].status === 'succeeded' ? 200 : 202).json(existing.rows[0]);
     }
@@ -201,6 +237,16 @@ export const processRefundSecure = async (req, res) => {
     );
     await client.query(`UPDATE returns SET status='refund_processing',updated_at=NOW() WHERE id=$1`, [returnId]);
     await client.query(`UPDATE orders SET status='refund_processing',payment_status='processing',updated_at=NOW() WHERE id=$1`, [data.order_id]);
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'refund.prepare',
+      entityType: 'refund',
+      entityId: refund.id,
+      beforeData: { return_status: data.status, order_status: data.order_status },
+      afterData: { refund_status: 'processing', return_status: 'refund_processing' },
+      metadata: { return_id: returnId, order_id: data.order_id, refund_method: method, provider },
+    });
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});

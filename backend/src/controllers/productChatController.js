@@ -600,6 +600,17 @@ export const sendConversationMessage = async (req, res) => {
     client = await pool.connect();
     await client.query('BEGIN');
 
+    // Serialize message creation per conversation so an older transaction
+    // cannot overwrite last_message_id after a newer message commits.
+    const lockedThread = await client.query(
+      'SELECT id FROM chat_threads WHERE id = $1 FOR UPDATE',
+      [conversationId]
+    );
+    if (!lockedThread.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
     const conversation = await getConversationById(client, conversationId, req.user.id);
     if (!conversation) {
       await client.query('ROLLBACK');

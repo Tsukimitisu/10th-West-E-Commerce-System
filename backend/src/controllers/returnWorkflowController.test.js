@@ -21,3 +21,11 @@ test('successful refunds remain protected from compensation and duplicate stock 
   assert.match(source, /if \(!refund \|\| refund\.status === 'succeeded'\)/);
   assert.match(source, /Return stock was already restored/);
 });
+
+test('return and refund workflow records audit events and scopes idempotency keys to a return', () => {
+  assert.match(source, /action:\s*'return\.create'/);
+  assert.match(source, /action:\s*'refund\.prepare'/);
+  assert.match(source, /action:\s*'refund\.complete'/);
+  assert.match(source, /Number\(existing\.rows\[0\]\.return_id\) !== returnId/);
+  assert.match(source, /IDEMPOTENCY_KEY_CONFLICT/);
+});

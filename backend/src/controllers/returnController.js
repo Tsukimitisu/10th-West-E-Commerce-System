@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { writeAuditLog } from '../utils/audit.js';
 import { emitReturnCreated, emitReturnUpdated, emitStockUpdate } from '../socket.js';
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
 import { createNotification as createUserNotification } from '../utils/notifications.js';
@@ -338,6 +339,16 @@ export const approveReturn = async (req, res) => {
        SELECT $1, 'return_requested', 'return_approved', 'return', $2, $3, $4::jsonb FROM orders WHERE id = $1`,
       [existingResult.rows[0].order_id, req.user.id, String(req.body?.note || '').slice(0, 1000) || 'Return approved', JSON.stringify({ return_id: Number(id) })]
     );
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'return.approve',
+      entityType: 'return',
+      entityId: id,
+      beforeData: { status: existingResult.rows[0].status },
+      afterData: { status: 'approved' },
+      metadata: { order_id: existingResult.rows[0].order_id },
+    });
 
     await client.query('COMMIT');
 
@@ -419,6 +430,16 @@ export const rejectReturn = async (req, res) => {
        SELECT $1, 'return_requested', 'return_rejected', 'return', $2, $3, $4::jsonb FROM orders WHERE id = $1`,
       [existingResult.rows[0].order_id, req.user.id, String(req.body?.note || '').slice(0, 1000) || 'Return rejected', JSON.stringify({ return_id: Number(id) })]
     );
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'return.reject',
+      entityType: 'return',
+      entityId: id,
+      beforeData: { status: existingResult.rows[0].status },
+      afterData: { status: 'rejected' },
+      metadata: { order_id: existingResult.rows[0].order_id },
+    });
 
     await client.query('COMMIT');
 
