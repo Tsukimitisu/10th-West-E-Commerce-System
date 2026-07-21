@@ -22,6 +22,7 @@ const STAFF_PERMISSIONS = Object.freeze([
 
 const TEST_ACCOUNTS = Object.freeze([
   { envName: 'CUSTOMER', email: 'customer@test.local', name: 'Test Customer', role: 'customer', phone: '09170000001' },
+  { envName: 'CUSTOMER_ALT', email: 'customer-alt@test.local', name: 'Test Customer Alternate', role: 'customer', phone: '09170000008' },
   { envName: 'CASHIER', email: 'cashier@test.local', name: 'Test Cashier', role: 'cashier', phone: '09170000002' },
   { envName: 'STAFF_NO_PERMS', email: 'staff-noperms@test.local', name: 'Test Staff No Permissions', role: 'store_staff', phone: '09170000003', permissions: [] },
   { envName: 'STAFF', email: 'staff@test.local', name: 'Test Store Staff', role: 'store_staff', phone: '09170000004', permissions: STAFF_PERMISSIONS },

@@ -7,6 +7,7 @@ const credentialFile = path.resolve(directory, '..', '..', 'backend', '.test-cre
 const credentialNamePattern = /^(?:TEST_FIXTURE_PASSWORD|E2E_[A-Z0-9_]+_(?:EMAIL|PASSWORD|TOTP))$/;
 const fixtureRoles = Object.freeze([
   'CUSTOMER',
+  'CUSTOMER_ALT',
   'CASHIER',
   'STAFF_NO_PERMS',
   'STAFF',
@@ -74,4 +75,3 @@ export const loadFixtureEnvironment = () => {
     }
   }
 };
-

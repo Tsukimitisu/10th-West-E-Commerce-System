@@ -16,6 +16,7 @@
     "migrations:verify": "node scripts/verify-migration-source.js",
     "db:check": "node scripts/database-check.js",
     "audit:integrity": "node scripts/integrity-audit.js",
+    "test:live-concurrency": "node scripts/verify-live-concurrency.js",
     "seed:test-fixtures": "node scripts/seed-test-fixtures.js",
     "data:quarantine-orders": "node scripts/quarantine-order-integrity.js",
     "security:disable-seeded-accounts": "node scripts/secure-seeded-accounts.js",
@@ -56,6 +57,7 @@
   "devDependencies": {
     "eslint": "^9.39.2",
     "knex": "^3.1.0",
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "socket.io-client": "^4.8.3"
   }
 }
