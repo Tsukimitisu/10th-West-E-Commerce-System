@@ -1,210 +1,186 @@
-# 10th West Moto - Backend API
+# 10th West Moto Backend API
 
-Backend REST API for the 10th West Moto E-Commerce System.
-
-## Tech Stack
-
-- **Runtime:** Node.js
-- **Framework:** Express.js
-- **Database:** PostgreSQL
-- **Authentication:** HttpOnly server-side sessions
-- **Validation:** Express-validator
-- **Password Hashing:** bcryptjs
-- **Media Storage:** Cloudinary (all uploads: product images/videos, avatars, review media)
+Express REST API for the 10th West Moto commerce system. It uses PostgreSQL,
+HttpOnly server-side sessions, CSRF protection, validation, and role-based
+access control.
 
 ## Prerequisites
 
-- Node.js (v16 or higher)
-- Supabase project
-- npm or yarn
+- Node.js 20+
+- npm 10+
+- A PostgreSQL or Supabase project
 
-## Installation
+## Install and configure
 
-1. Install dependencies:
 ```bash
 npm install
-```
-
-2. Configure environment variables:
-```bash
 cp .env.example .env
 ```
 
-Edit `.env` and update with your Supabase credentials:
-```
-DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
-SUPABASE_URL=https://[PROJECT-REF].supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
-JWT_SECRET=your-super-secret-jwt-key
-```
+Edit `backend/.env` and provide `DATABASE_URL`, `JWT_SECRET`, and the other
+values needed by the selected environment. `backend/.env` is the backend's only
+file environment source, even when a command starts from the repository root.
+Already-set process environment variables take precedence.
 
-Production additionally requires `SESSION_SECRET`, `SESSION_STORE`,
-`FRONTEND_ORIGIN`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`, `CSRF_SECRET`, and
-`TWO_FACTOR_ENCRYPTION_KEY`. Optional payment, shipping, tracking, email, OAuth,
-and Cloudinary values should stay empty until real provider credentials are
-configured. See `../docs/PRODUCTION_ENVIRONMENT.md`.
+Copy the exact PostgreSQL URI from Supabase Dashboard **Connect** and prefer
+setting only `DATABASE_URL`. `SUPABASE_DB_URL` is a supported alias; if both are
+set, their values must match after surrounding whitespace is trimmed. Use the
+dashboard-provided host and username, percent-encode reserved password
+characters, and never commit a connection URL. Pooler usernames are normally
+project-qualified; direct connections normally use `postgres`.
 
-3. Run database migrations (up):
+Supabase connection modes are:
+
+- Direct connection on `5432`.
+- Session pooler on `5432`.
+- Transaction pooler on `6543`.
+
+Prefer direct or session mode for the persistent API and migrations. Supabase
+connections require TLS. Production defaults to certificate verification;
+never disable TLS for Supabase. Download the project CA from Supabase Dashboard
+**Database Settings > SSL Configuration** and inject its path with
+`NODE_EXTRA_CA_CERTS` before Node starts. Do not put that setting only in
+`backend/.env`, because Node initializes its trust store before dotenv loads.
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are optional server-only values
+for the REST read fallback. Keep `DB_READ_MODE=postgres` for PostgreSQL-only
+core operation. Never place a service-role key or database credential in a
+`VITE_*` variable.
+
+Direct database configuration is intentionally fail-closed: `NODE_ENV=test`
+requires an explicit `TEST_DATABASE_URL`. The `npm test` wrapper injects an
+unreachable local sentinel when none is provided, so unit tests cannot reuse a
+development or production URL.
+
+Production additionally requires an HTTPS `FRONTEND_ORIGIN`,
+`SESSION_STORE=postgres`, `COOKIE_SECURE=true`, an approved
+`COOKIE_SAME_SITE`, and strong, distinct values for `JWT_SECRET`,
+`SESSION_SECRET`, `CSRF_SECRET`, and `TWO_FACTOR_ENCRYPTION_KEY`. Optional
+payment, shipping, waybill, tracking, email, OAuth, and Cloudinary configuration
+stays empty until real credentials and verified contracts are available. Those
+provider-backed features are **Blocked by credentials/configuration.** See
+[Production Environment](../docs/PRODUCTION_ENVIRONMENT.md).
+
+## Database lifecycle
+
+Apply tracked migrations:
+
 ```bash
 npm run migrate
 ```
 
-Do not run either `supabase-setup.sql` file or the legacy scripts under
-`src/database/migrate*.js`. Knex migrations are the only schema authority; see
-`../docs/DATABASE_MIGRATIONS.md`.
+Roll back the latest migration batch:
 
-4. Roll back the latest migration batch (down):
 ```bash
 npm run migrate:down
 ```
 
-5. Optional: run seed scripts:
+Rollback may remove data. Use it only in a controlled local environment or an
+explicitly approved recovery procedure, never as a routine shared-database step.
+
+Do not run either `supabase-setup.sql` file, `alter.sql`, or the legacy scripts
+under `src/database/migrate*.js`. Knex migrations are the only schema authority;
+see [Database migrations](../docs/DATABASE_MIGRATIONS.md).
+
+Verify the intended database before deployment:
+
 ```bash
-set ALLOW_DEVELOPMENT_SEED=true
-# Set all SEED_*_PASSWORD values to unique passwords of at least 12 characters.
-node src/database/seed.js
-node src/database/seed-sprint6.js
+npm run db:check
+npm run migrations:verify
+npm run migrate:status
+npm run migrate:check
+npm run security:verify-rls
+npm run audit:integrity
 ```
 
-Seed accounts are refused outside development/test. To disable and rotate any
-legacy seeded accounts, run `npm run security:disable-seeded-accounts` with
-`CONFIRM_SECURE_SEEDED_ACCOUNTS=true`.
+`migrate:check` exits nonzero when migrations are pending; `migrate:status`
+alone only prints that condition. The RLS verifier also rejects unsafe policies,
+browser-role grants, and tables missing RLS. Stop the deployment if any command
+fails. Legacy seed and schema entry points are intentionally non-executable.
 
-### Development/test login fixtures
+## Development and test login fixtures
 
 Use the fixture script only for local QA and automated E2E login checks. It is
 blocked in `NODE_ENV=production`, requires `ENABLE_TEST_FIXTURES=true`, and
-only upserts the `@test.local` accounts below.
+mutates only the listed `@test.local` users and their permission overrides.
 
 ```bash
-ENABLE_TEST_FIXTURES=true TEST_FIXTURE_PASSWORD='LocalTestPass123!' npm run seed:test-fixtures
+ENABLE_TEST_FIXTURES=true npm run seed:test-fixtures
 ```
 
-Accounts created or reset by the script:
+The script creates or resets these accounts:
 
 ```text
 customer@test.local      customer
+customer-alt@test.local  customer
 cashier@test.local       cashier
 staff-noperms@test.local store_staff with explicit permission denials
 staff@test.local         store_staff with role permissions
 owner@test.local         owner
 superadmin@test.local    super_admin
+disabled@test.local      disabled customer used for access-denial checks
 ```
 
-If `TEST_FIXTURE_PASSWORD` is omitted, the script generates a strong local
-password and writes it to `backend/.test-credentials.local`, which is ignored by
-git and must not be copied into production.
+The script generates a strong local password and writes it to
+`backend/.test-credentials.local`, which is ignored by Git. Do not copy that
+file into production. A caller may instead inject `TEST_FIXTURE_PASSWORD` from
+its local process without recording it in the repository.
 
-## Running the Server
+## Run the server
 
-Development mode (with auto-restart):
+Development with automatic restart:
+
 ```bash
 npm run dev
 ```
 
-Production mode:
+Production:
+
 ```bash
 npm start
 ```
 
-The API will run on `http://localhost:5000`
+The API listens on `http://localhost:5000` by default. Local frontend requests
+originate from `http://localhost:3000`.
 
-## API Endpoints
+## Useful endpoints
 
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login user
-- `GET /api/auth/profile` - Get current user profile (protected)
+- `GET /api/health` is a process liveness check.
+- `GET /api/ready` checks database connectivity, required core relations, and
+  the PostgreSQL session table without disclosing secrets.
+- `POST /api/auth/register` registers a customer.
+- `POST /api/auth/login` creates a server-side session.
+- `GET /api/auth/profile` returns the authenticated profile.
+- `GET /api/products` and `GET /api/products/:id` return catalog data.
 
-### Products
-- `GET /api/products` - Get all products (with search & filter)
-- `GET /api/products/:id` - Get single product
-- `POST /api/products` - Create product (admin only)
-- `PUT /api/products/:id` - Update product (admin only)
-- `DELETE /api/products/:id` - Delete product (admin only)
+## Project structure
 
-### Categories
-- `GET /api/categories` - Get all categories
-- `POST /api/categories` - Create category (admin only)
-- `PUT /api/categories/:id` - Update category (admin only)
-- `DELETE /api/categories/:id` - Delete category (admin only)
-
-## Development Seed Users
-
-Development seed users use only the explicit `SEED_*_PASSWORD` values supplied
-by the developer. No default passwords are stored in this repository.
-
-## Project Structure
-
-```
+```text
 backend/
-├── src/
-│   ├── config/
-│   │   └── database.js          # Database connection
-│   ├── controllers/
-│   │   ├── authController.js    # Authentication logic
-│   │   ├── productController.js # Product CRUD
-│   │   └── categoryController.js# Category CRUD
-│   ├── middleware/
-│   │   ├── auth.js              # JWT verification
-│   │   └── validator.js         # Input validation
-│   ├── routes/
-│   │   ├── auth.js              # Auth routes
-│   │   ├── products.js          # Product routes
-│   │   └── categories.js        # Category routes
-│   ├── database/
-│   │   └── seed.js              # Seed data
-│   └── server.js                # Main server file
-├── migrations/                   # Knex up/down migrations
-├── knexfile.cjs                  # Knex migration config
-├── .env                          # Environment variables
-├── .env.example                  # Example env file
-├── package.json
-└── README.md
+|-- src/
+|   |-- config/                     environment and database configuration
+|   |-- controllers/                request handlers
+|   |-- middleware/                 sessions, CSRF, validation, and RBAC
+|   |-- routes/                     API routes
+|   `-- server.js                   main server
+|-- migrations/                     Knex up/down migrations
+|-- scripts/                        diagnostics and verification commands
+|-- knexfile.cjs                    Knex migration configuration
+|-- .env                            local backend environment (ignored)
+|-- .env.example                    redacted environment template
+`-- package.json
 ```
 
-## Database Schema
+## Security baseline
 
-### Users Table
-- id, name, email, password_hash, role, phone, avatar, store_credit
-- Roles: customer, admin, cashier
-
-### Products Table
-- id, part_number, name, description, price, buying_price, image
-- category_id, stock_quantity, box_number, low_stock_threshold
-- brand, sku, barcode, sale_price, is_on_sale
-
-### Categories Table
-- id, name
-
-### Orders Table
-- id, user_id, total_amount, status, shipping_address
-- source (online/pos), payment_method, cashier_id
-
-### Order Items Table
-- id, order_id, product_id, product_name, product_price, quantity
-
-### Addresses Table
-- id, user_id, recipient_name, phone, street, city, state, postal_code
-
-## Security Features
-
-- Password hashing with bcrypt
-- JWT token-based authentication
-- Role-based access control (RBAC)
-- Input validation and sanitization
-- SQL injection prevention (parameterized queries)
-- CORS configuration
-
-## Error Handling
-
-All endpoints return consistent JSON responses:
-```json
-{
-  "message": "Error description",
-  "errors": [] // Optional validation errors
-}
-```
+- bcrypt password hashing
+- HttpOnly PostgreSQL-backed server sessions
+- CSRF protection for authenticated mutations
+- granular role and permission checks
+- input validation and parameterized SQL
+- allowlisted CORS origins
+- sanitized database-outage responses on the hardened authentication and
+  notification paths
 
 ## License
 
