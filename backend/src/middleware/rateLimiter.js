@@ -1,31 +1,10 @@
 import pool from '../config/database.js';
-import { shouldUseDatabaseReadFallback } from '../services/supabaseRest.js';
+import databaseConfig from '../config/databaseConfig.cjs';
+
+const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
+const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
 
 const rateLimitMap = new Map();
-let hasWarnedDbLimiterFallback = false;
-let rateLimitTableInitPromise = null;
-
-const ensureRateLimitTable = async () => {
-  if (!rateLimitTableInitPromise) {
-    rateLimitTableInitPromise = pool.query(`
-      CREATE TABLE IF NOT EXISTS request_rate_limits (
-        key TEXT PRIMARY KEY,
-        request_count INTEGER NOT NULL DEFAULT 0,
-        reset_at TIMESTAMPTZ NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_request_rate_limits_reset
-      ON request_rate_limits(reset_at);
-    `).catch((error) => {
-      rateLimitTableInitPromise = null;
-      throw error;
-    });
-  }
-
-  return rateLimitTableInitPromise;
-};
 
 const maybeCleanupMemoryLimiter = (now) => {
   if (rateLimitMap.size === 0) return;
@@ -53,8 +32,6 @@ const getMemoryRateLimitRecord = (key, now, windowMs) => {
 };
 
 const getDbRateLimitRecord = async (key, windowMs) => {
-  await ensureRateLimitTable();
-
   const result = await pool.query(
     `INSERT INTO request_rate_limits (key, request_count, reset_at, updated_at)
      VALUES ($1, 1, NOW() + ($2::bigint * INTERVAL '1 millisecond'), NOW())
@@ -109,29 +86,23 @@ const rateLimit = (windowMs = 60000, maxRequests = 100, options = {}) => {
       let count = 1;
       let retryAfter = Math.ceil(windowMs / 1000);
 
-      if (storage === 'db' && !shouldUseDatabaseReadFallback()) {
+      if (storage === 'db') {
         try {
           const dbRecord = await getDbRateLimitRecord(key, windowMs);
           count = dbRecord.count;
           retryAfter = dbRecord.retryAfterSeconds;
         } catch (dbError) {
-          if (process.env.NODE_ENV === 'production') {
-            console.error('Rate limiter DB storage unavailable in production:', dbError.message || dbError);
+          console.error('Rate limiter DB storage unavailable:', sanitizeDatabaseError(dbError));
+          if (isDatabaseUnavailableError(dbError)) {
             return res.status(503).json({
-              message: 'Rate limiting service is temporarily unavailable. Please try again later.',
-              code: 'RATE_LIMIT_UNAVAILABLE',
+              message: DATABASE_UNAVAILABLE_MESSAGE,
+              code: 'DATABASE_UNAVAILABLE',
             });
           }
-
-          if (!hasWarnedDbLimiterFallback) {
-            hasWarnedDbLimiterFallback = true;
-            console.warn('Rate limiter DB storage unavailable, falling back to in-memory mode:', dbError.message || dbError);
-          }
-
-          maybeCleanupMemoryLimiter(now);
-          const record = getMemoryRateLimitRecord(key, now, windowMs);
-          count = record.count;
-          retryAfter = Math.ceil((record.resetTime - now) / 1000);
+          return res.status(503).json({
+            message: 'Rate limiting service is temporarily unavailable. Please try again later.',
+            code: 'RATE_LIMIT_UNAVAILABLE',
+          });
         }
       } else {
         maybeCleanupMemoryLimiter(now);
@@ -149,14 +120,13 @@ const rateLimit = (windowMs = 60000, maxRequests = 100, options = {}) => {
 
       return next();
     } catch (error) {
-      console.error('Rate limiter failure:', error);
+      console.error('Rate limiter failure:', sanitizeDatabaseError(error));
       return next();
     }
   };
 };
 
 export const cleanupRateLimitRecords = async () => {
-  await ensureRateLimitTable();
   const result = await pool.query(
     `DELETE FROM request_rate_limits
      WHERE reset_at < NOW() - INTERVAL '1 hour'`

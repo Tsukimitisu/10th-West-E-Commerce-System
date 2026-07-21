@@ -1,7 +1,19 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../config/database.js';
-import { isDatabaseConnectivityError } from '../services/supabaseRest.js';
+import databaseConfig from '../config/databaseConfig.cjs';
+
+const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
+const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
+
+const logAuthError = (label, error) => {
+  console.error(label, sanitizeDatabaseError(error));
+};
+
+const sendDatabaseUnavailable = (res) => res.status(503).json({
+  message: DATABASE_UNAVAILABLE_MESSAGE,
+  code: 'DATABASE_UNAVAILABLE',
+});
 
 const JWT_ISSUER = process.env.JWT_ISSUER || '10th-west-moto-api';
 const JWT_AUDIENCE = process.env.JWT_AUDIENCE || '10th-west-moto-web';
@@ -88,7 +100,10 @@ export const authenticateOptional = async (req, res, next) => {
         req.user = sessionUser;
       }
     } catch (error) {
-      console.error('Optional session authentication error:', error);
+      logAuthError('Optional session authentication error:', error);
+      if (isDatabaseUnavailableError(error)) {
+        return sendDatabaseUnavailable(res);
+      }
     }
     return next();
   }
@@ -116,8 +131,9 @@ export const authenticateOptional = async (req, res, next) => {
     }
     next();
   } catch (error) {
-    if (isDatabaseConnectivityError(error)) {
-      console.error('Optional token authentication skipped because the database is unavailable:', error.message || error);
+    if (isDatabaseUnavailableError(error)) {
+      logAuthError('Optional token authentication unavailable:', error);
+      return sendDatabaseUnavailable(res);
     }
     next(); // Invalid token, treat as guest
   }
@@ -139,7 +155,10 @@ export const authenticateToken = async (req, res, next) => {
         return next();
       }
     } catch (error) {
-      console.error('Session authentication error:', error);
+      logAuthError('Session authentication error:', error);
+      if (isDatabaseUnavailableError(error)) {
+        return sendDatabaseUnavailable(res);
+      }
       return res.status(500).json({
         message: 'Authentication check failed. Please try again.',
         code: 'AUTH_VALIDATION_FAILED',
@@ -164,7 +183,10 @@ export const authenticateToken = async (req, res, next) => {
         return next();
       }
     } catch (sessionError) {
-      console.error('Session authentication fallback error:', sessionError);
+      logAuthError('Session authentication fallback error:', sessionError);
+      if (isDatabaseUnavailableError(sessionError)) {
+        return sendDatabaseUnavailable(res);
+      }
       return res.status(500).json({
         message: 'Authentication check failed. Please try again.',
         code: 'AUTH_VALIDATION_FAILED',
@@ -234,10 +256,13 @@ export const authenticateToken = async (req, res, next) => {
     req.user = currentUser;
     next();
   } catch (error) {
-    console.error('Authentication middleware error:', error);
-    return res.status(503).json({
-      message: 'Authentication service is temporarily unavailable. Please try again.',
-      code: 'AUTH_SERVICE_UNAVAILABLE',
+    logAuthError('Authentication middleware error:', error);
+    if (isDatabaseUnavailableError(error)) {
+      return sendDatabaseUnavailable(res);
+    }
+    return res.status(500).json({
+      message: 'Authentication check failed. Please try again.',
+      code: 'AUTH_VALIDATION_FAILED',
     });
   }
 };
@@ -291,8 +316,11 @@ export const requirePermission = (permissionName) => {
       }
       next();
     } catch (error) {
-      console.error('Permission check error:', error);
-      res.status(500).json({ message: 'Server error' });
+      logAuthError('Permission check error:', error);
+      if (isDatabaseUnavailableError(error)) {
+        return sendDatabaseUnavailable(res);
+      }
+      return res.status(500).json({ message: 'Server error' });
     }
   };
 };

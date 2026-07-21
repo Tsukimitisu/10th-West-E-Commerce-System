@@ -1,3 +1,6 @@
+import databaseConfig from '../config/databaseConfig.cjs';
+
+const { isDatabaseUnavailableError } = databaseConfig;
 const SUPABASE_REST_TIMEOUT_MS = Number.parseInt(process.env.SUPABASE_REST_TIMEOUT_MS || '10000', 10);
 const DB_READ_FALLBACK_TTL_MS = Number.parseInt(process.env.DB_READ_FALLBACK_TTL_MS || '600000', 10);
 let bypassDatabaseReadsUntil = 0;
@@ -20,14 +23,7 @@ const getSupabaseRestConfig = () => {
 export const hasSupabaseRestConfig = () => Boolean(getSupabaseRestConfig());
 
 export const isDatabaseConnectivityError = (error) => {
-  const message = String(error?.message || '').toLowerCase();
-  const code = String(error?.code || '').toUpperCase();
-
-  const isConnectivityError = message.includes('connection timeout')
-    || message.includes('connection terminated')
-    || message.includes('timeout')
-    || message.includes('etimedout')
-    || ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', '57P01', '08006'].includes(code);
+  const isConnectivityError = isDatabaseUnavailableError(error);
 
   if (isConnectivityError) {
     markDatabaseReadFallback();

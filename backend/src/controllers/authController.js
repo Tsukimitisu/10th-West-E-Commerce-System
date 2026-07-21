@@ -10,6 +10,10 @@ import { logActivity } from '../middleware/activityLogger.js';
 import { mergeGuestCartIntoUserCart, rotateGuestSession } from './cartController.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch, supabaseRestRequest } from '../services/supabaseRest.js';
 import { decryptTwoFactorSecret, encryptTwoFactorSecret, generateRecoveryCodes, hashRecoveryCode } from '../services/twoFactorCrypto.js';
+import databaseConfig from '../config/databaseConfig.cjs';
+
+const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
+const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
@@ -124,93 +128,6 @@ const getSessionTtlMs = () => parseDurationMs(
 
 const getSessionExpiresAt = () => new Date(Date.now() + getSessionTtlMs());
 
-const persistSessionViaSupabaseRest = async (user, ipAddress, userAgent) => {
-  const token = signToken(user);
-  const tokenHash = hashToken(token);
-  const expiresAt = getSessionExpiresAt();
-
-  await supabaseRestRequest('sessions', {
-    method: 'POST',
-    prefer: 'return=minimal',
-    body: {
-      user_id: user.id,
-      token_hash: tokenHash,
-      ip_address: ipAddress,
-      user_agent: userAgent,
-      expires_at: expiresAt.toISOString(),
-      is_active: true,
-    },
-  });
-
-  return token;
-};
-
-const loginWithSupabaseRestFallback = async (req, res) => {
-  const { email, password, totp_code: totpCode } = req.validatedData || req.body;
-  const ipAddress = req.clientIp;
-  const userAgent = req.clientUa;
-  const user = await getUserFromSupabaseRestByEmail(email);
-
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid email or password' });
-  }
-
-  if (!user.is_active || user.is_deleted) {
-    return res.status(403).json({ message: 'Your account is currently unavailable. Please contact support.' });
-  }
-
-  const isValid = await bcrypt.compare(password, user.password_hash || '');
-  if (!isValid) {
-    return res.status(401).json({ message: 'Invalid email or password' });
-  }
-
-  if (!user.email_verified) {
-    return res.status(403).json({
-      message: 'Your account is not verified. Please check your email.',
-      requiresVerification: true,
-      email: user.email,
-      code: 'EMAIL_NOT_VERIFIED',
-    });
-  }
-
-  if (user.two_factor_enabled) {
-    if (!totpCode) {
-      return res.json({
-        requires_2fa: true,
-        code: 'TWO_FACTOR_REQUIRED',
-        message: 'Enter the code from your authenticator app.',
-      });
-    }
-
-    const validTotp = Boolean(user.two_factor_secret) && speakeasy.totp.verify({
-      secret: decryptTwoFactorSecret(user.two_factor_secret),
-      encoding: 'base32',
-      token: String(totpCode),
-      window: 1,
-    });
-
-    if (!validTotp) {
-      return res.status(401).json({
-        message: 'Invalid two-factor authentication code.',
-        code: 'TWO_FACTOR_INVALID',
-        requires_2fa: true,
-      });
-    }
-  }
-
-  const token = await persistSessionViaSupabaseRest(user, ipAddress, userAgent);
-  await prepareAuthenticatedSession(req, user, token);
-
-  void updateUserViaSupabaseRest(user.id, { last_login: new Date().toISOString() }).catch((error) => {
-    console.warn('Unable to update fallback login timestamp:', error.message || error);
-  });
-
-  return res.json({
-    user: sanitizeUser({ ...user, last_login: user.last_login || new Date(), email_verified: true }),
-    session_degraded: true,
-  });
-};
-
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 15;
@@ -251,7 +168,7 @@ const queuePostVerificationTasks = ({
   void Promise.allSettled(tasks).then((results) => {
     results.forEach((result) => {
       if (result.status === 'rejected') {
-        console.warn('Post-verification task failed:', result.reason?.message || result.reason);
+        console.warn('Post-verification task failed:', sanitizeDatabaseError(result.reason));
       }
     });
   });
@@ -324,13 +241,13 @@ const prepareAuthenticatedSession = async (req, user, token) => {
   try {
     await withTimeout(rotateGuestSession(req), SESSION_PERSIST_TIMEOUT_MS, 'rotateGuestSession');
   } catch (error) {
-    console.warn('Unable to rotate guest session before auth response:', error.message || error);
+    console.warn('Unable to rotate guest session before auth response:', sanitizeDatabaseError(error));
   }
 
   try {
     await withTimeout(bindAuthenticatedSession(req, user, token), SESSION_PERSIST_TIMEOUT_MS, 'bindAuthenticatedSession');
   } catch (error) {
-    console.warn('Unable to persist authenticated session before auth response:', error.message || error);
+    console.warn('Unable to persist authenticated session before auth response:', sanitizeDatabaseError(error));
   }
 };
 
@@ -476,69 +393,6 @@ const isAccountLocked = async (email) => {
   return parseInt(result.rows[0].cnt) >= MAX_LOGIN_ATTEMPTS;
 };
 
-// Ensure OTP table exists (Idempotent)
-const initOtpTable = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS registration_otps (
-      email VARCHAR(255) PRIMARY KEY,
-      otp_hash VARCHAR(255) NOT NULL,
-      expires_at TIMESTAMP NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
-    ALTER TABLE IF EXISTS registration_otps ENABLE ROW LEVEL SECURITY;
-
-    DROP POLICY IF EXISTS registration_otps_restricted_access ON registration_otps;
-    CREATE POLICY registration_otps_restricted_access
-      ON registration_otps
-      FOR ALL
-      USING (current_setting('role', true) = 'service_role')
-      WITH CHECK (current_setting('role', true) = 'service_role');
-  `).catch(err => console.error("Error creating OTP table:", err));
-};
-
-const ensureAuthSchema = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  await pool.query(`
-    ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS last_email_verification_token VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS last_email_verification_at TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS email_change_token VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMP;
-
-    CREATE INDEX IF NOT EXISTS idx_users_last_email_verification_token
-      ON users(last_email_verification_token);
-  `).catch((error) => {
-    console.error('Failed to ensure users verification columns:', error);
-  });
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS oauth_codes (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      code_hash VARCHAR(255) NOT NULL UNIQUE,
-      ip_address VARCHAR(45),
-      user_agent TEXT,
-      used BOOLEAN DEFAULT FALSE,
-      expires_at TIMESTAMP NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_oauth_codes_hash ON oauth_codes(code_hash);
-    CREATE INDEX IF NOT EXISTS idx_oauth_codes_user ON oauth_codes(user_id);
-    CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
-  `).catch((error) => {
-    console.error('Failed to ensure oauth_codes table:', error);
-  });
-};
-
-ensureAuthSchema();
-initOtpTable();
-
 // ─── SEND REGISTRATION OTP ─────────────────────────────────────────
 export const sendRegistrationOtp = async (req, res) => {
   const { email, name } = req.body;
@@ -602,7 +456,7 @@ export const sendRegistrationOtp = async (req, res) => {
 
     res.json({ message: 'Verification code sent to your email.' });
   } catch (error) {
-    console.error('Send OTP error:', error);
+    console.error('Send OTP error:', sanitizeDatabaseError(error));
     if (error?.status && error.fieldErrors) {
       return res.status(error.status).json({
         message: error.message || 'Please use a valid email address.',
@@ -664,7 +518,7 @@ export const register = async (req, res) => {
             token: verificationToken.token,
           });
         } catch (emailError) {
-          console.error('Registration resend email error:', emailError);
+          console.error('Registration resend email error:', sanitizeDatabaseError(emailError));
           return res.status(503).json({
             message: 'Your account is still pending verification, but we could not send a new verification email right now. Please try again shortly.',
             requiresVerification: true,
@@ -708,7 +562,7 @@ export const register = async (req, res) => {
           token: verificationToken.token,
         });
       } catch (emailError) {
-        console.error('Registration email error:', emailError);
+        console.error('Registration email error:', sanitizeDatabaseError(emailError));
         return res.status(503).json({
           message: 'Registration successful, but we could not send the verification email right now. Please use resend verification shortly.',
           requiresVerification: true,
@@ -765,7 +619,7 @@ export const register = async (req, res) => {
           token: verificationToken.token,
         });
       } catch (emailError) {
-        console.error('Registration resend email error:', emailError);
+        console.error('Registration resend email error:', sanitizeDatabaseError(emailError));
         return res.status(503).json({
           message: 'Your account is still pending verification, but we could not send a new verification email right now. Please try again shortly.',
           requiresVerification: true,
@@ -812,7 +666,7 @@ export const register = async (req, res) => {
         token: verificationToken.token,
       });
     } catch (emailError) {
-      console.error('Registration email error:', emailError);
+      console.error('Registration email error:', sanitizeDatabaseError(emailError));
       return res.status(503).json({
         message: 'Registration successful, but we could not send the verification email right now. Please use resend verification shortly.',
         requiresVerification: true,
@@ -833,7 +687,7 @@ export const register = async (req, res) => {
       } catch {}
     }
 
-    console.error('Registration error:', error);
+    console.error('Registration error:', sanitizeDatabaseError(error));
 
     if (error?.code === '23505') {
       return res.status(409).json({
@@ -867,10 +721,6 @@ export const login = async (req, res) => {
   const guestCartSessionId = req.session?.cartSessionId || null;
 
   try {
-    if (shouldUseDatabaseReadFallback()) {
-      return await loginWithSupabaseRestFallback(req, res);
-    }
-
     if (await isAccountLocked(email)) {
       return res.status(429).json({
         message: 'Too many failed login attempts. Please try again later.',
@@ -881,7 +731,10 @@ export const login = async (req, res) => {
 
     if (result.rows.length === 0) {
       await recordLoginAttempt(email, ipAddress, false);
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({
+        message: 'Invalid email or password',
+        code: 'INVALID_CREDENTIALS',
+      });
     }
 
     const user = result.rows[0];
@@ -899,7 +752,10 @@ export const login = async (req, res) => {
           message: 'Too many failed login attempts. Please try again later.',
         });
       }
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({
+        message: 'Invalid email or password',
+        code: 'INVALID_CREDENTIALS',
+      });
     }
 
     if (!user.email_verified) {
@@ -946,7 +802,7 @@ export const login = async (req, res) => {
     try {
       await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
     } catch (cartMergeError) {
-      console.warn('Unable to merge guest cart during login:', cartMergeError.message || cartMergeError);
+      console.warn('Unable to merge guest cart during login:', sanitizeDatabaseError(cartMergeError));
     }
 
     const token = await persistSession(pool, user, ipAddress, userAgent);
@@ -966,19 +822,18 @@ export const login = async (req, res) => {
         await recordLoginAttempt(email, ipAddress, true);
         await logActivity({ userId: user.id, action: 'login', ipAddress, userAgent });
       } catch (bookkeepingError) {
-        console.warn('Unable to complete login bookkeeping:', bookkeepingError.message || bookkeepingError);
+        console.warn('Unable to complete login bookkeeping:', sanitizeDatabaseError(bookkeepingError));
       }
     })();
 
     res.json({ user: sanitizeUser({ ...user, last_login: new Date(), email_verified: true }) });
   } catch (error) {
-    console.error('Login error:', error);
-    if (isDatabaseConnectivityError(error)) {
-      try {
-        return await loginWithSupabaseRestFallback(req, res);
-      } catch (fallbackError) {
-        console.error('Login Supabase REST fallback error:', fallbackError);
-      }
+    console.error('Login error:', sanitizeDatabaseError(error));
+    if (isDatabaseUnavailableError(error)) {
+      return res.status(503).json({
+        message: DATABASE_UNAVAILABLE_MESSAGE,
+        code: 'DATABASE_UNAVAILABLE',
+      });
     }
 
     res.status(500).json({
@@ -1015,7 +870,7 @@ export const logout = async (req, res) => {
     await logActivity({ userId: req.user?.id, action: 'logout', ipAddress: req.clientIp, userAgent: req.clientUa });
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error('Logout error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error during logout' });
   }
 };
@@ -1045,7 +900,7 @@ export const getMyPermissions = async (req, res) => {
     );
     return res.json({ permissions: result.rows.map((row) => row.name) });
   } catch (error) {
-    console.error('Permission profile error:', error);
+    console.error('Permission profile error:', sanitizeDatabaseError(error));
     return res.status(500).json({ message: 'Permissions could not be loaded.', code: 'PERMISSIONS_LOAD_FAILED' });
   }
 };
@@ -1067,14 +922,14 @@ export const getProfile = async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
     res.json(sanitizeUser(result.rows[0]));
   } catch (error) {
-    console.error('Get profile error:', error);
+    console.error('Get profile error:', sanitizeDatabaseError(error));
     if (isDatabaseConnectivityError(error)) {
       try {
         const user = await getUserFromSupabaseRestById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
         return res.json(sanitizeUser(user));
       } catch (fallbackError) {
-        console.error('Get profile Supabase REST fallback error:', fallbackError);
+        console.error('Get profile Supabase REST fallback error:', sanitizeDatabaseError(fallbackError));
       }
     }
     res.status(500).json({ message: 'Server error' });
@@ -1152,7 +1007,7 @@ export const forgotPassword = async (req, res) => {
     await logActivity({ userId: user.id, action: 'password_reset_requested', ipAddress: req.clientIp, userAgent: req.clientUa });
     res.json({ message: 'If that email exists, a password reset link has been sent.' });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('Forgot password error:', sanitizeDatabaseError(error));
     res.json({ message: 'If that email exists, a password reset link has been sent.' });
   }
 };
@@ -1188,7 +1043,7 @@ export const verifyResetToken = async (req, res) => {
     const maskedEmail = user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
     res.json({ valid: true, email: maskedEmail, expires_at: expiresAt.toISOString() });
   } catch (error) {
-    console.error('Verify reset token error:', error);
+    console.error('Verify reset token error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1235,7 +1090,7 @@ export const resetPassword = async (req, res) => {
 
     res.json({ message: 'Password reset successfully. All sessions terminated. You can now login with your new password.' });
   } catch (error) {
-    console.error('Reset password error:', error);
+    console.error('Reset password error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1290,7 +1145,7 @@ export const changePassword = async (req, res) => {
 
     res.json({ message: 'Password changed successfully. All other sessions have been terminated.' });
   } catch (error) {
-    console.error('Change password error:', error);
+    console.error('Change password error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1315,7 +1170,7 @@ export const setup2FA = async (req, res) => {
     // Security: Only return QR code, never expose the raw secret to the frontend
     res.json({ qrCode: qrCodeUrl, message: 'Scan the QR code with your authenticator app, then verify with a code.' });
   } catch (error) {
-    console.error('2FA setup error:', error);
+    console.error('2FA setup error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1344,7 +1199,7 @@ export const verify2FA = async (req, res) => {
 
     res.json({ message: 'Two-factor authentication enabled successfully!', recovery_codes: recoveryCodes });
   } catch (error) {
-    console.error('2FA verify error:', error);
+    console.error('2FA verify error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1367,7 +1222,7 @@ export const disable2FA = async (req, res) => {
 
     res.json({ message: 'Two-factor authentication disabled' });
   } catch (error) {
-    console.error('2FA disable error:', error);
+    console.error('2FA disable error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1430,7 +1285,7 @@ export const oauthCallback = async (req, res) => {
     // Only pass opaque code in URL; never expose JWT or PII in query params.
     res.redirect(`${frontendUrl}/#/oauth-callback?code=${oauthCode}`);
   } catch (error) {
-    console.error('OAuth callback error:', error);
+    console.error('OAuth callback error:', sanitizeDatabaseError(error));
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent('oauth_failed')}`);
   }
@@ -1482,7 +1337,7 @@ export const exchangeOAuthCode = async (req, res) => {
 
     res.json({ user: sanitizeUser(user) });
   } catch (error) {
-    console.error('Exchange OAuth code error:', error);
+    console.error('Exchange OAuth code error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1496,7 +1351,7 @@ export const getActiveSessions = async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    console.error('Get sessions error:', error);
+    console.error('Get sessions error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1506,7 +1361,7 @@ export const revokeSession = async (req, res) => {
     await pool.query('UPDATE sessions SET is_active = false WHERE id = $1 AND user_id = $2', [req.params.sessionId, req.user.id]);
     res.json({ message: 'Session revoked' });
   } catch (error) {
-    console.error('Revoke session error:', error);
+    console.error('Revoke session error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1565,7 +1420,7 @@ export const getActivityLogs = async (req, res) => {
     const total = Number.parseInt(countResult.rows[0].count, 10);
     res.json({ logs: result.rows, total, page, totalPages: Math.ceil(total / limit) });
   } catch (error) {
-    console.error('Get activity logs error:', error);
+    console.error('Get activity logs error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -1613,7 +1468,7 @@ export const deleteAccountHandler = async (req, res) => {
 
     res.json({ message: 'Account deleted and personal data anonymized per RA 10173' });
   } catch (error) {
-    console.error('Delete account error:', error);
+    console.error('Delete account error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Failed to delete account' });
   }
 };
@@ -1803,7 +1658,7 @@ export const verifyEmailToken = async (req, res) => {
       }
     } catch {}
 
-    console.error('Verify email error:', err);
+    console.error('Verify email error:', sanitizeDatabaseError(err));
 
     if (requestTimedOut || res.headersSent || res.writableEnded) {
       return;
@@ -1889,7 +1744,7 @@ export const exportUserData = async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="10thwest-data-export-${userId}-${Date.now()}.json"`);
     res.json(exportData);
   } catch (error) {
-    console.error('Data export error:', error);
+    console.error('Data export error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Failed to export data' });
   }
 };
@@ -1934,7 +1789,7 @@ export const resendVerification = async (req, res) => {
         token: verificationToken.token,
       });
     } catch (emailError) {
-      console.error('Resend verification email error:', emailError);
+      console.error('Resend verification email error:', sanitizeDatabaseError(emailError));
       return res.status(503).json({
         message: 'We could not send the verification email right now. Please try again shortly.',
       });
@@ -1945,7 +1800,7 @@ export const resendVerification = async (req, res) => {
       expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
     });
   } catch (err) {
-    console.error('Resend verification error:', err);
+    console.error('Resend verification error:', sanitizeDatabaseError(err));
     if (isDatabaseConnectivityError(err) || err?.status) {
       return res.json({ message: 'If an unverified account exists for this email, a verification email has been sent.' });
     }

@@ -12,10 +12,19 @@ const LOGIN_ERROR_MESSAGES = {
   oauth_missing_email: 'Google did not return a verified email address. Please use another Google account or sign in with email.',
   oauth_failed: 'Authentication failed. Please try again.',
 };
+const SERVICE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
 
 const getLoginErrorMessage = (error) => {
   const normalized = String(error || '').trim();
   return LOGIN_ERROR_MESSAGES[normalized] || normalized;
+};
+
+const getLoginSubmissionErrorMessage = (error) => {
+  const code = String(error?.code || '').toUpperCase();
+  if (code === 'DATABASE_UNAVAILABLE' || Number(error?.status) === 503) {
+    return SERVICE_UNAVAILABLE_MESSAGE;
+  }
+  return error?.message || 'Invalid email or password';
 };
 
 const Login = ({ onLogin }) => {
@@ -78,7 +87,7 @@ const Login = ({ onLogin }) => {
       else if (defaultRedirect === '/') redirect = '/';
       navigate(redirect);
     } catch (err) {
-      setError(err.message || 'Invalid email or password');
+      setError(getLoginSubmissionErrorMessage(err));
       if (err.requiresVerification || err.code === 'EMAIL_NOT_VERIFIED') {
         setNeedsVerification(true);
         setVerificationEmail(err.email || email);
