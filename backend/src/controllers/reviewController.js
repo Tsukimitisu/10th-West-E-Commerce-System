@@ -20,9 +20,6 @@ const REVIEW_MEDIA_CONTENT_TYPES = {
   'video/ogg': 'ogg',
 };
 
-let reviewSchemaEnsured = false;
-let reviewSchemaPromise = null;
-
 const normalizeReviewStatus = (review) => {
   if (!review) return REVIEW_STATUS.PENDING;
   if (review.review_status) return review.review_status;
@@ -115,103 +112,6 @@ const parsePositiveInt = (value, fallback, max = 100) => {
   return Math.min(parsed, max);
 };
 
-const ensureReviewSchema = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  if (reviewSchemaEnsured) return;
-  if (reviewSchemaPromise) {
-    await reviewSchemaPromise;
-    return;
-  }
-
-  reviewSchemaPromise = (async () => {
-    await pool.query(`
-      ALTER TABLE reviews
-      ADD COLUMN IF NOT EXISTS review_status VARCHAR(20),
-      ADD COLUMN IF NOT EXISTS moderated_by INTEGER REFERENCES users(id),
-      ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS moderation_note TEXT,
-      ADD COLUMN IF NOT EXISTS media_urls JSONB DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-    `);
-
-    await pool.query(`
-      DO $$
-      DECLARE
-        is_enum BOOLEAN;
-      BEGIN
-        SELECT udt_name = 'review_status_enum'
-        INTO is_enum
-        FROM information_schema.columns
-        WHERE table_name = 'reviews'
-          AND column_name = 'review_status';
-
-        IF is_enum THEN
-          UPDATE reviews
-          SET review_status = (
-            CASE
-              WHEN COALESCE(is_approved, false) = true THEN '${REVIEW_STATUS.APPROVED}'
-              ELSE '${REVIEW_STATUS.PENDING}'
-            END
-          )::review_status_enum
-          WHERE review_status IS NULL;
-          ALTER TABLE reviews ALTER COLUMN review_status SET DEFAULT '${REVIEW_STATUS.PENDING}'::review_status_enum;
-        ELSE
-          UPDATE reviews
-          SET review_status = CASE
-            WHEN COALESCE(is_approved, false) = true THEN '${REVIEW_STATUS.APPROVED}'
-            ELSE '${REVIEW_STATUS.PENDING}'
-          END
-          WHERE review_status IS NULL;
-          ALTER TABLE reviews ALTER COLUMN review_status SET DEFAULT '${REVIEW_STATUS.PENDING}';
-        END IF;
-      END $$;
-    `);
-
-    await pool.query(`
-      ALTER TABLE reviews
-      DROP CONSTRAINT IF EXISTS reviews_user_id_product_id_key;
-    `);
-
-    await pool.query(`
-      DO $$
-      DECLARE
-        review_unique_constraint TEXT;
-      BEGIN
-        SELECT c.conname
-        INTO review_unique_constraint
-        FROM pg_constraint c
-        JOIN pg_class t ON t.oid = c.conrelid
-        JOIN pg_namespace n ON n.oid = t.relnamespace
-        WHERE c.contype = 'u'
-          AND t.relname = 'reviews'
-          AND n.nspname = 'public'
-          AND (
-            SELECT array_agg(a.attname ORDER BY a.attname)
-            FROM unnest(c.conkey) AS colnum
-            JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = colnum
-          ) = ARRAY['product_id', 'user_id']::name[];
-
-        IF review_unique_constraint IS NOT NULL THEN
-          EXECUTE format('ALTER TABLE public.reviews DROP CONSTRAINT IF EXISTS %I', review_unique_constraint);
-        END IF;
-      END $$;
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(review_status);
-    `);
-
-    reviewSchemaEnsured = true;
-  })();
-
-  try {
-    await reviewSchemaPromise;
-  } finally {
-    reviewSchemaPromise = null;
-  }
-};
-
 const syncProductRating = async (productId) => {
   await pool.query(
     `
@@ -250,8 +150,6 @@ export const getProductReviews = async (req, res) => {
   }
 
   try {
-    await ensureReviewSchema();
-
     const page = parsePositiveInt(req.query.page, 1, 100000);
     const limit = parsePositiveInt(req.query.limit, 20, 50);
     const offset = (page - 1) * limit;
@@ -363,8 +261,6 @@ export const createReview = async (req, res) => {
   }
 
   try {
-    await ensureReviewSchema();
-
     const productResult = await pool.query(
       'SELECT id FROM products WHERE id = $1 LIMIT 1',
       [productId],
@@ -505,8 +401,6 @@ export const getModerationReviews = async (req, res) => {
     : REVIEW_STATUS.PENDING;
 
   try {
-    await ensureReviewSchema();
-
     const params = [];
     const whereClauses = [];
     if (statusFilter !== 'all') {
@@ -577,8 +471,6 @@ export const moderateReview = async (req, res) => {
   }
 
   try {
-    await ensureReviewSchema();
-
     const result = await pool.query(
       `
         UPDATE reviews
@@ -609,7 +501,3 @@ export const moderateReview = async (req, res) => {
     res.status(500).json({ message: 'Failed to update review status.' });
   }
 };
-
-ensureReviewSchema().catch((error) => {
-  console.error('Failed to ensure review schema:', error);
-});

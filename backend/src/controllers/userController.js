@@ -119,25 +119,6 @@ const sendEmailChangeVerificationEmail = async ({ email, currentName, token }) =
   });
 };
 
-const ensureUserProfileColumns = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  await pool.query(`
-    ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS email_change_token VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS email_change_expires TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP;
-  `).catch((error) => {
-    console.error('Failed to ensure user profile/email-change columns:', error.message || error);
-  });
-
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_users_email_change_token ON users(email_change_token)').catch(() => {});
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_users_pending_email ON users(pending_email)').catch(() => {});
-};
-ensureUserProfileColumns();
-
 // Get user profile
 export const getProfile = async (req, res) => {
   try {

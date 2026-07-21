@@ -2,16 +2,14 @@ import pool from '../config/database.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { ORDER_STATUSES, STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
-import { buildOrderStatusMessage, createNotification as createUserNotification, ensureNotificationColumns } from '../utils/notifications.js';
+import { buildOrderStatusMessage, createNotification as createUserNotification } from '../utils/notifications.js';
 import { validatePhilippineAddress } from '../services/psgc.js';
-import { ensurePaymentOrderColumns } from './paymentController.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 import { getRuntimeSettings } from '../services/settings.js';
 import { writeAuditLog } from '../utils/audit.js';
 
 const STAFF_ROLES = STAFF_ROLE_SET;
 const VALID_ORDER_STATUSES = ORDER_STATUSES;
-const ORDER_STATUS_SQL_LIST = ORDER_STATUSES.map((status) => `'${status}'`).join(', ');
 const VAT_RATE = 0.12;
 const FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
 const STANDARD_SHIPPING_FEE = 150;
@@ -49,48 +47,6 @@ const ORDER_NOTIFICATION_DETAIL_QUERY = `
   ORDER BY oi.id ASC
   LIMIT 1
 `;
-
-const ensureOrderWorkflowColumns = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  await pool.query(`
-    ALTER TABLE orders
-      ADD COLUMN IF NOT EXISTS shipping_address_snapshot JSONB,
-      ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS rider_confirmed_delivery_at TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS rider_confirmed_by INTEGER REFERENCES users(id),
-      ADD COLUMN IF NOT EXISTS customer_confirmed_receipt_at TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS courier VARCHAR(50),
-      ADD COLUMN IF NOT EXISTS waybill_number VARCHAR(100),
-      ADD COLUMN IF NOT EXISTS waybill_status VARCHAR(30) NOT NULL DEFAULT 'not_requested',
-      ADD COLUMN IF NOT EXISTS waybill_generated_at TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS waybill_label_payload JSONB,
-      ADD COLUMN IF NOT EXISTS courier_metadata JSONB;
-  `).catch((error) => {
-    console.error('Failed to ensure order support columns:', error);
-  });
-  await ensurePaymentOrderColumns(pool).catch((error) => {
-    console.error('Failed to ensure payment order columns:', error);
-  });
-
-  await pool.query(`
-    ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
-    ALTER TABLE orders ADD CONSTRAINT orders_status_check
-      CHECK (status IN (${ORDER_STATUS_SQL_LIST}));
-  `).catch((error) => {
-    console.error('Failed to ensure order status constraint:', error);
-  });
-
-  await pool.query(
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_payment_intent_unique
-     ON orders(payment_intent_id)
-     WHERE payment_intent_id IS NOT NULL`
-  ).catch((error) => {
-    console.error('Failed to ensure payment_intent_id uniqueness index:', error);
-  });
-};
-ensureOrderWorkflowColumns();
-ensureNotificationColumns();
 
 const canStaffTransitionStatus = (currentStatus, nextStatus) => {
   const allowed = STAFF_STATUS_TRANSITIONS[currentStatus] || new Set();

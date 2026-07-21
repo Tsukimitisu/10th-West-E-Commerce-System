@@ -47,34 +47,9 @@ const computeShippingCost = (subtotal) => (
   subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : roundMoney(STANDARD_SHIPPING_FEE)
 );
 
-export const ensurePaymentOrderColumns = async (db = pool) => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  await db.query(`
-    ALTER TABLE orders
-      ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(50),
-      ADD COLUMN IF NOT EXISTS payment_status VARCHAR(30) NOT NULL DEFAULT 'pending',
-      ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS payment_checkout_url TEXT,
-      ADD COLUMN IF NOT EXISTS payment_metadata JSONB,
-      ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS payment_expires_at TIMESTAMP;
+export const ensurePaymentOrderColumns = async () => {};
 
-    CREATE INDEX IF NOT EXISTS idx_orders_payment_reference ON orders(payment_reference);
-    CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
-    CREATE INDEX IF NOT EXISTS idx_orders_payment_provider ON orders(payment_provider);
-  `);
-
-  await db.query(`
-    ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_status_check;
-    ALTER TABLE orders ADD CONSTRAINT orders_payment_status_check
-      CHECK (payment_status IN ('pending', 'paid', 'failed', 'expired', 'refunded'));
-  `);
-};
-
-const paymentSchemaReady = ensurePaymentOrderColumns().catch((error) => {
-  console.error('Failed to ensure payment order columns:', error);
-});
+const paymentSchemaReady = ensurePaymentOrderColumns();
 
 const loadProductsForCheckout = async (client, normalizedItems) => {
   const uniqueProductIds = [...new Set(normalizedItems.map((item) => item.product_id))];

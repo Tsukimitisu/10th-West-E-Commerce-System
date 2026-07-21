@@ -36,20 +36,6 @@ const parseCoordinate = (value, min, max) => {
 const PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
 const ZIP_REGEX = /^\d{4}$/;
 
-const ensureAddressColumns = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  await pool.query(`
-    ALTER TABLE addresses
-      ADD COLUMN IF NOT EXISTS province_code VARCHAR(20),
-      ADD COLUMN IF NOT EXISTS city_code VARCHAR(20),
-      ADD COLUMN IF NOT EXISTS barangay_code VARCHAR(20);
-  `).catch((error) => {
-    console.error('Failed to ensure address PSGC columns:', error);
-  });
-};
-ensureAddressColumns();
-
 const buildAddressString = ({ street, barangay, city, state, postal_code }) => [
   street,
   barangay,

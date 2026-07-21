@@ -4,19 +4,6 @@ import { emitReturnCreated, emitReturnUpdated, emitStockUpdate } from '../socket
 import { buildReturnEligibility, getReturnSettings } from '../utils/returnPolicy.js';
 import { createNotification as createUserNotification } from '../utils/notifications.js';
 
-const ensureReturnReviewColumns = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  await pool.query(`
-    ALTER TABLE returns
-      ADD COLUMN IF NOT EXISTS reviewed_by INTEGER REFERENCES users(id),
-      ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP;
-  `).catch((error) => {
-    console.error('Failed to ensure return review columns:', error);
-  });
-};
-ensureReturnReviewColumns();
-
 const parseReturnItems = (value) => {
   if (Array.isArray(value)) return value;
 

@@ -849,130 +849,6 @@ const getSupabaseRestProductsFallback = async ({ queryInput = {}, includeInterna
   return products.map((product) => mapSupabaseRestProduct(product, { includeInternal }));
 };
 
-const ensureProductSchema = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  await pool.query(`
-    ALTER TABLE products
-      ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft',
-      ADD COLUMN IF NOT EXISTS image_urls JSONB DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS video_url VARCHAR(500),
-      ADD COLUMN IF NOT EXISTS bulk_pricing JSONB DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS variant_options JSONB DEFAULT '[]'::jsonb,
-      ADD COLUMN IF NOT EXISTS shipping_option VARCHAR(20) DEFAULT 'standard',
-      ADD COLUMN IF NOT EXISTS shipping_weight_kg DECIMAL(10, 3),
-      ADD COLUMN IF NOT EXISTS shipping_dimensions JSONB,
-      ADD COLUMN IF NOT EXISTS product_type VARCHAR(20) DEFAULT 'single',
-      ADD COLUMN IF NOT EXISTS reserved_stock INTEGER DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS damaged_stock INTEGER DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS rating DECIMAL(3, 1) DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS color VARCHAR(100);
-  `).catch((error) => {
-    console.error('Failed to ensure product media columns:', error);
-  });
-
-  await pool.query(`
-    DO $$
-    BEGIN
-      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'product_status_enum') THEN
-        ALTER TABLE products ALTER COLUMN status TYPE varchar(20) USING status::text;
-        DROP TYPE product_status_enum;
-      END IF;
-    END $$;
-
-    UPDATE products
-    SET status = 'draft'
-    WHERE status = 'hidden';
-
-    UPDATE products
-    SET status = 'active'
-    WHERE status IN ('published', 'available');
-
-    UPDATE products
-    SET status = 'out_of_stock'
-    WHERE status IN ('sold_out', 'out-of-stock');
-
-    UPDATE products
-    SET status = 'draft'
-    WHERE status IS NULL;
-
-    ALTER TABLE products
-    ALTER COLUMN status SET DEFAULT 'draft';
-
-    ALTER TABLE products
-    DROP CONSTRAINT IF EXISTS products_status_check;
-
-    ALTER TABLE products
-    ADD CONSTRAINT products_status_check
-      CHECK (status IN ('draft', 'active', 'out_of_stock', 'archived'));
-
-    UPDATE products SET product_type = 'single' WHERE product_type IS NULL OR product_type NOT IN ('single', 'bundle');
-    UPDATE products SET reserved_stock = 0 WHERE reserved_stock IS NULL OR reserved_stock < 0;
-    UPDATE products SET damaged_stock = 0 WHERE damaged_stock IS NULL OR damaged_stock < 0;
-
-    ALTER TABLE products
-    DROP CONSTRAINT IF EXISTS products_product_type_check;
-
-    ALTER TABLE products
-    ADD CONSTRAINT products_product_type_check
-      CHECK (product_type IN ('single', 'bundle'));
-
-    UPDATE products
-    SET shipping_option = 'standard'
-    WHERE shipping_option IS NULL;
-
-    UPDATE products
-    SET shipping_weight_kg = 0.10
-    WHERE shipping_weight_kg IS NULL;
-
-    ALTER TABLE products
-    ALTER COLUMN shipping_weight_kg SET DEFAULT 0.10;
-  `).catch((error) => {
-    console.error('Failed to ensure product shipping defaults:', error);
-  });
-
-  await pool.query(`
-    ALTER TABLE product_variants
-      ADD COLUMN IF NOT EXISTS price DECIMAL(10, 2),
-      ADD COLUMN IF NOT EXISTS option_combination JSONB DEFAULT '{}'::jsonb,
-      ADD COLUMN IF NOT EXISTS combination_key VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS image_url VARCHAR(500),
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-  `).catch((error) => {
-    console.error('Failed to ensure variant columns:', error);
-  });
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS product_fitments (
-      id SERIAL PRIMARY KEY,
-      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-      brand VARCHAR(100) NOT NULL,
-      model VARCHAR(100) NOT NULL,
-      start_year INTEGER,
-      end_year INTEGER,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS product_bundle_components (
-      id SERIAL PRIMARY KEY,
-      bundle_product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-      component_product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
-      quantity INTEGER NOT NULL DEFAULT 1,
-      display_order INTEGER NOT NULL DEFAULT 0,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (bundle_product_id, component_product_id)
-    );
-  `).catch((error) => {
-    console.error('Failed to ensure product fitment/bundle tables:', error);
-  });
-};
-
-const ensureProductSchemaReady = ensureProductSchema().catch((error) => {
-  console.error('Failed to ensure product schema:', error);
-});
-
 // Get all products
 export const getProducts = async (req, res) => {
   try {
@@ -1240,8 +1116,6 @@ export const getTopSellers = async (req, res) => {
 // Get single product by ID
 export const getProductById = async (req, res) => {
   try {
-    await ensureProductSchemaReady;
-
     const { id } = req.validatedData || req.params;
     const includeUnpublished = canViewUnpublishedProducts(req.user);
 

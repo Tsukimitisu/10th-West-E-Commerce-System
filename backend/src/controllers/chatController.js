@@ -16,59 +16,7 @@ const memoryChatStore = {
 
 const isStaffUser = (user) => STAFF_ROLES.has(String(user?.role || '').toLowerCase());
 
-const ensureChatSchema = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS chat_threads (
-      id SERIAL PRIMARY KEY,
-      customer_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      assigned_staff_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
-      product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
-      subject VARCHAR(255),
-      status VARCHAR(20) NOT NULL DEFAULT 'open',
-      last_message_at TIMESTAMP,
-      blocked_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      block_reason TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS chat_participants (
-      id SERIAL PRIMARY KEY,
-      thread_id INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      role VARCHAR(50) NOT NULL,
-      unread_count INTEGER NOT NULL DEFAULT 0,
-      last_read_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(thread_id, user_id)
-    );
-    CREATE TABLE IF NOT EXISTS chat_messages (
-      id SERIAL PRIMARY KEY,
-      thread_id INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
-      sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      body TEXT,
-      media_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
-      message_type VARCHAR(20) NOT NULL DEFAULT 'text',
-      order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
-      seen_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS chat_quick_replies (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(120) NOT NULL,
-      body TEXT NOT NULL,
-      is_active BOOLEAN NOT NULL DEFAULT true,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-  `).catch((error) => {
-    console.error('Failed to ensure chat schema:', error);
-  });
-};
+const ensureChatSchema = async () => {};
 const chatSchemaReady = ensureChatSchema();
 
 const getThreadById = async (db, threadId) => {

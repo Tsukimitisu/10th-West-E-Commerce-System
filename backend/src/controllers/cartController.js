@@ -10,26 +10,6 @@ const toPositiveInt = (value) => {
   return parsed;
 };
 
-const ensureCartSchema = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  await pool.query(
-    `ALTER TABLE carts
-     ADD COLUMN IF NOT EXISTS session_id VARCHAR(255)`
-  ).catch((error) => {
-    console.error('Failed to ensure carts.session_id column:', error.message || error);
-  });
-
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_carts_session_id ON carts(session_id)').catch((error) => {
-    console.error('Failed to ensure carts.session_id index:', error.message || error);
-  });
-
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_cart_items_cart_product ON cart_items(cart_id, product_id)').catch((error) => {
-    console.error('Failed to ensure cart_items cart/product index:', error.message || error);
-  });
-};
-ensureCartSchema();
-
 const saveSession = (req) =>
   new Promise((resolve, reject) => {
     if (!req.session) return resolve();

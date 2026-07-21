@@ -339,38 +339,9 @@ const mapDbRowToVariant = (row, optionOrder, basePrice) => {
   };
 };
 
-const ensureVariantSchema = async () => {
-  // Schema is managed exclusively by Knex migrations.
-  return;
-  await pool.query(`
-    ALTER TABLE products
-      ADD COLUMN IF NOT EXISTS variant_options JSONB DEFAULT '[]'::jsonb;
-  `);
+const ensureVariantSchema = async () => {};
 
-  await pool.query(`
-    ALTER TABLE product_variants
-      ADD COLUMN IF NOT EXISTS price DECIMAL(10, 2),
-      ADD COLUMN IF NOT EXISTS option_combination JSONB DEFAULT '{}'::jsonb,
-      ADD COLUMN IF NOT EXISTS combination_key VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS image_url VARCHAR(500),
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_product_variants_product_key
-      ON product_variants(product_id, combination_key);
-  `);
-
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS ux_product_variants_product_combination
-      ON product_variants(product_id, combination_key)
-      WHERE combination_key IS NOT NULL;
-  `);
-};
-
-const ensureVariantSchemaReady = ensureVariantSchema().catch((error) => {
-  console.error('Failed to ensure variant schema:', error.message);
-});
+const ensureVariantSchemaReady = ensureVariantSchema();
 
 const fetchProductVariantContext = async (productId) => {
   if (shouldUseDatabaseReadFallback()) {

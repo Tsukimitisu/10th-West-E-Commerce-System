@@ -112,7 +112,7 @@ test('order notifications derive their display number from the canonical order i
   const source = await readController('orderController.js');
   const query = source.slice(
     source.indexOf('const ORDER_NOTIFICATION_DETAIL_QUERY'),
-    source.indexOf('const ensureOrderWorkflowColumns'),
+    source.indexOf('const canStaffTransitionStatus'),
   );
 
   assert.match(query, /o\.id AS order_number/);
