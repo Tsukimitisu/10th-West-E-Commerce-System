@@ -25,5 +25,5 @@ This project uses Knex migrations for schema changes.
 
 ## Notes
 
-- Legacy scripts in src/database are kept for fallback only.
+- Legacy SQL, migration, and seed entry points are retired guard-only stubs. They are never a fallback.
 - New schema changes should be added under this folder.

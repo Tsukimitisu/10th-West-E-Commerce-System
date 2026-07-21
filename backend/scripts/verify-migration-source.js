@@ -28,16 +28,39 @@ for (const file of migrationFiles) {
   if (!/exports\.down\s*=/.test(source)) failures.push(`Missing exports.down: ${file}`);
 }
 
-for (const setupPath of [
+const retiredSqlPaths = [
   path.resolve(backendRoot, '..', 'supabase-setup.sql'),
   path.resolve(backendRoot, 'supabase-setup.sql'),
-]) {
+  path.resolve(backendRoot, '..', 'supabase-lint-fixes.sql'),
+  path.resolve(backendRoot, 'alter.sql'),
+];
+
+for (const setupPath of retiredSqlPaths) {
   const source = await readFile(setupPath, 'utf8');
   if (!source.startsWith('-- DEPRECATED AND INTENTIONALLY NON-EXECUTABLE.')) {
     failures.push(`Legacy setup is not fail-closed: ${setupPath}`);
   }
   if (!/RAISE EXCEPTION '.*deprecated/.test(source)) {
     failures.push(`Legacy setup lacks execution guard: ${setupPath}`);
+  }
+  if (source.length > 1000 || /\b(?:CREATE|ALTER|DROP|TRUNCATE|INSERT|UPDATE|DELETE|GRANT|REVOKE)\b/i.test(source)) {
+    failures.push(`Legacy SQL contains executable schema or data mutations: ${setupPath}`);
+  }
+}
+
+for (const retiredScriptPath of [
+  path.resolve(backendRoot, 'src/database/migrate.js'),
+  path.resolve(backendRoot, 'src/database/migrate-auth.js'),
+  path.resolve(backendRoot, 'src/database/seed.js'),
+  path.resolve(backendRoot, 'src/database/seed-categories.js'),
+  path.resolve(backendRoot, 'src/database/seed-sprint6.js'),
+]) {
+  const source = await readFile(retiredScriptPath, 'utf8');
+  if (!source.startsWith('throw new Error(') || source.length > 500) {
+    failures.push(`Legacy JavaScript entry point is not a guard-only stub: ${retiredScriptPath}`);
+  }
+  if (/\b(?:pool\.query|CREATE TABLE|ALTER TABLE|DROP TABLE|TRUNCATE|INSERT INTO|UPDATE\s+\w+|DELETE FROM)\b/i.test(source)) {
+    failures.push(`Legacy JavaScript entry point still contains database mutations: ${retiredScriptPath}`);
   }
 }
 

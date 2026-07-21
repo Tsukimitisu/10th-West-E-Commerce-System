@@ -6,12 +6,11 @@ import { fileURLToPath } from 'node:url';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 
-test('seed accounts require explicit development-only credentials', async () => {
+test('destructive legacy account seed is retired without executable database logic', async () => {
   const source = await readFile(path.join(directory, 'seed.js'), 'utf8');
-  assert.match(source, /\['development', 'test'\]/);
-  assert.match(source, /ALLOW_DEVELOPMENT_SEED/);
-  assert.match(source, /SEED_SUPER_ADMIN_PASSWORD/);
-  assert.doesNotMatch(source, /Admin@123|Staff@123|Customer@123/);
+  assert.equal(source.startsWith('throw new Error('), true);
+  assert.match(source, /seed:test-fixtures/);
+  assert.doesNotMatch(source, /pool\.query|TRUNCATE|INSERT INTO/);
 });
 
 test('seeded account security script requires explicit confirmation', async () => {
@@ -30,6 +29,7 @@ test('test fixture accounts are explicit opt-in and production disabled', async 
   assert.match(source, /TEST_FIXTURE_PASSWORD/);
   assert.match(source, /\.test-credentials\.local/);
   assert.match(source, /customer@test\.local/);
+  assert.match(source, /customer-alt@test\.local/);
   assert.match(source, /cashier@test\.local/);
   assert.match(source, /staff-noperms@test\.local/);
   assert.match(source, /staff@test\.local/);
