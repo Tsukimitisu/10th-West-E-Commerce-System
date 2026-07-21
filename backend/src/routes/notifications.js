@@ -1,6 +1,19 @@
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
+import databaseConfig from '../config/databaseConfig.cjs';
+
+const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
+const respondWithNotificationError = (res, error) => {
+  console.error('Notification database operation failed:', sanitizeDatabaseError(error));
+  if (isDatabaseUnavailableError(error)) {
+    return res.status(503).json({
+      message: 'The service is temporarily unavailable. Please try again later.',
+      code: 'DATABASE_UNAVAILABLE',
+    });
+  }
+  return res.status(500).json({ message: 'Notification operation failed.' });
+};
 
 const router = express.Router();
 
@@ -13,7 +26,7 @@ router.get('/', authenticateToken, async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return respondWithNotificationError(res, error);
   }
 });
 
@@ -26,7 +39,7 @@ router.get('/unread-count', authenticateToken, async (req, res) => {
     );
     res.json({ count: parseInt(result.rows[0].count) });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return respondWithNotificationError(res, error);
   }
 });
 
@@ -39,7 +52,7 @@ router.put('/:id/read', authenticateToken, async (req, res) => {
     );
     res.json({ message: 'Marked as read' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return respondWithNotificationError(res, error);
   }
 });
 
@@ -52,7 +65,7 @@ router.put('/read-all', authenticateToken, async (req, res) => {
     );
     res.json({ message: 'All marked as read' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return respondWithNotificationError(res, error);
   }
 });
 
@@ -67,7 +80,7 @@ router.get('/deliveries', authenticateToken, requireRole('admin', 'super_admin',
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return respondWithNotificationError(res, error);
   }
 });
 
@@ -80,7 +93,7 @@ router.post('/deliveries/:id/retry', authenticateToken, requireRole('admin', 'su
     );
     if (!result.rowCount) return res.status(404).json({ message: 'Failed delivery not found.' });
     return res.json(result.rows[0]);
-  } catch (error) { return res.status(500).json({ message: 'Delivery could not be queued.' }); }
+  } catch (error) { return respondWithNotificationError(res, error); }
 });
 
 // Delete notification
@@ -92,7 +105,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     );
     res.json({ message: 'Deleted' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return respondWithNotificationError(res, error);
   }
 });
 
