@@ -13,6 +13,7 @@
     "migrate:status": "knex migrate:status --knexfile knexfile.cjs",
     "migrate:make": "knex migrate:make --knexfile knexfile.cjs",
     "migrations:verify": "node scripts/verify-migration-source.js",
+    "db:check": "node scripts/database-check.js",
     "audit:integrity": "node scripts/integrity-audit.js",
     "seed:test-fixtures": "node scripts/seed-test-fixtures.js",
     "data:quarantine-orders": "node scripts/quarantine-order-integrity.js",
