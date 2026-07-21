@@ -1,259 +1,368 @@
-﻿import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Truck, Shield, Clock, Headphones, ChevronLeft, ChevronRight, Zap, Star } from 'lucide-react';
-import { getProducts, getCategories, getBanners, getAnnouncements } from '../services/api';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
+import {
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  Headphones,
+  PackageCheck,
+  ShieldCheck,
+  Sparkles,
+  Truck,
+  Wrench,
+} from 'lucide-react';
+import {
+  getBanners,
+  getCategories,
+  getProducts,
+  getTopSellers,
+  getWishlist,
+  WISHLIST_SYNC_EVENT,
+} from '../services/api';
+import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
 import ProductCard from '../components/ProductCard';
+import BrandButton from '../components/ui/BrandButton';
+import EmptyState from '../components/ui/EmptyState';
+import LoadingSkeleton from '../components/ui/LoadingSkeleton';
+
+const sectionMotion = {
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0 },
+};
+
+const ProductSection = ({ eyebrow, title, description, products, wishlistedIds, onWishlistToggle, light = true }) => {
+  if (!products.length) return null;
+  return (
+    <section className={`py-14 sm:py-20 ${light ? 'bg-white' : 'bg-slate-50'}`}>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="mb-8 flex items-end justify-between gap-6">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-600">{eyebrow}</p>
+            <h2 className="mt-2 font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h2>
+            {description && <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{description}</p>}
+          </div>
+          <Link to="/shop" className="hidden shrink-0 items-center gap-2 text-sm font-semibold text-slate-700 transition-colors hover:text-red-600 sm:flex">
+            Shop all <ArrowRight size={16} />
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
+          {products.slice(0, 8).map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              wishlistedIds={wishlistedIds}
+              onWishlistToggle={onWishlistToggle}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
 
 const Home = () => {
+  const reduceMotion = useReducedMotion();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [banners, setBanners] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
+  const [bestSellers, setBestSellers] = useState([]);
+  const [wishlistedIds, setWishlistedIds] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState(false);
   const [currentBanner, setCurrentBanner] = useState(0);
-  const navigate = useNavigate();
 
-  useEffect(() => {
-    getProducts().then(setProducts).catch(() => {});
-    getCategories().then(setCategories).catch(() => {});
-    getBanners().then(setBanners).catch(() => {});
-    getAnnouncements().then(setAnnouncements).catch(() => {});
+  const activeBanners = useMemo(
+    () => banners
+      .filter((banner) => banner?.is_active !== false)
+      .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)),
+    [banners],
+  );
 
-    const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-    if (viewed.length > 0) setRecentlyViewed(viewed.slice(0, 6));
+  const featured = useMemo(
+    () => products.filter((product) => product.is_on_sale || Number(product.rating) >= 4).slice(0, 8),
+    [products],
+  );
+
+  const newArrivals = useMemo(
+    () => [...products]
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+      .slice(0, 8),
+    [products],
+  );
+
+  const recentlyViewed = useMemo(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+      return Array.isArray(parsed) ? parsed.slice(0, 4) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const loadWishlist = useCallback(async () => {
+    const user = getCurrentAuthUser();
+    if (!user?.id) {
+      setWishlistedIds([]);
+      return;
+    }
+    try {
+      const rows = await getWishlist(user.id);
+      setWishlistedIds(rows.map((item) => Number(item.product_id ?? item.product?.id ?? item.id)).filter(Boolean));
+    } catch {
+      setWishlistedIds([]);
+    }
   }, []);
 
   useEffect(() => {
-    if (banners.length > 1) {
-      const timer = setInterval(() => setCurrentBanner(prev => (prev + 1) % banners.length), 5000);
-      return () => clearInterval(timer);
-    }
-  }, [banners.length]);
+    let active = true;
+    Promise.allSettled([getProducts(), getCategories(), getBanners(), getTopSellers('all')])
+      .then(([productResult, categoryResult, bannerResult, sellerResult]) => {
+        if (!active) return;
+        if (productResult.status === 'fulfilled') setProducts(productResult.value || []);
+        else setCatalogError(true);
+        if (categoryResult.status === 'fulfilled') setCategories(categoryResult.value || []);
+        if (bannerResult.status === 'fulfilled') setBanners(bannerResult.value || []);
+        if (sellerResult.status === 'fulfilled') setBestSellers(sellerResult.value || []);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
-  const featured = products.filter(p => p.is_on_sale || p.rating && p.rating >= 4).slice(0, 8);
-  const bestSellers = [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 8);
-  const newArrivals = [...products].sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()).slice(0, 4);
+    void loadWishlist();
+    window.addEventListener(WISHLIST_SYNC_EVENT, loadWishlist);
+    const unsubscribe = subscribeAuthChanges(loadWishlist);
+    return () => {
+      active = false;
+      window.removeEventListener(WISHLIST_SYNC_EVENT, loadWishlist);
+      unsubscribe();
+    };
+  }, [loadWishlist]);
+
+  useEffect(() => {
+    if (reduceMotion || activeBanners.length < 2) return undefined;
+    const timer = window.setInterval(
+      () => setCurrentBanner((index) => (index + 1) % activeBanners.length),
+      6500,
+    );
+    return () => window.clearInterval(timer);
+  }, [activeBanners.length, reduceMotion]);
+
+  useEffect(() => {
+    if (currentBanner >= activeBanners.length) setCurrentBanner(0);
+  }, [activeBanners.length, currentBanner]);
+
+  const toggleWishlist = (productId, selected) => {
+    setWishlistedIds((current) => (
+      selected
+        ? Array.from(new Set([...current, Number(productId)]))
+        : current.filter((id) => id !== Number(productId))
+    ));
+  };
+
+  const hero = activeBanners[currentBanner];
+  const heroLink = hero?.link_url || '/shop';
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Announcements Bar */}
-      {announcements.length > 0 && (
-        <div className="bg-orange-50 border-b border-orange-100">
-          <div className="max-w-7xl mx-auto px-4 py-2.5">
-            <div className="flex items-center justify-center gap-2">
-              <Zap size={14} className="text-orange-500 flex-shrink-0" />
-              <p className="text-sm text-orange-700 font-medium text-center">{announcements[0].title}: {announcements[0].content}</p>
+    <main className="min-h-screen bg-white text-slate-950">
+      <section className="relative isolate min-h-[560px] overflow-hidden bg-[#0b1020] sm:min-h-[620px]">
+        {hero?.image_url && (
+          <motion.img
+            key={hero.image_url}
+            src={hero.image_url}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            initial={reduceMotion ? false : { opacity: 0, scale: 1.03 }}
+            animate={{ opacity: 0.48, scale: 1 }}
+            transition={{ duration: 0.5 }}
+          />
+        )}
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,13,25,0.98)_0%,rgba(11,16,32,0.88)_45%,rgba(11,16,32,0.35)_100%)]" />
+        <div className="absolute -right-24 top-0 h-full w-2/5 -skew-x-12 bg-gradient-to-b from-red-600/15 to-orange-500/5" aria-hidden="true" />
+
+        <div className="relative mx-auto flex min-h-[560px] max-w-7xl items-center px-4 py-20 sm:min-h-[620px] sm:px-6">
+          <motion.div
+            className="max-w-3xl"
+            initial={reduceMotion ? false : 'hidden'}
+            animate="visible"
+            variants={sectionMotion}
+            transition={{ duration: 0.45 }}
+          >
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-semibold text-slate-200">
+              <Sparkles size={14} className="text-orange-400" />
+              Parts selected for Philippine riders
             </div>
-          </div>
+            <h1 className="font-display text-4xl font-black leading-[1.06] tracking-[-0.04em] text-white sm:text-6xl lg:text-7xl">
+              {hero?.title || <>Build a better ride. <span className="brand-gradient-text">Start here.</span></>}
+            </h1>
+            <p className="mt-6 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+              {hero?.subtitle || 'Shop dependable motorcycle parts, riding gear, and accessories with clear stock status and support from people who know motorcycles.'}
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <BrandButton to={heroLink} size="lg">
+                {hero?.button_text || 'Shop motorcycle parts'} <ArrowRight size={18} />
+              </BrandButton>
+              <BrandButton to="/shop?sort=newest" variant="dark" size="lg">
+                View new arrivals
+              </BrandButton>
+            </div>
+          </motion.div>
         </div>
-      )}
 
-      {/* Hero Banner */}
-      {banners.length > 0 ? (
-        <section className="relative bg-gray-900 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-900 via-gray-900/90 to-transparent z-10" />
-          <div className="absolute inset-0">
-            <img src={banners[currentBanner]?.image_url || 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1600&h=600&fit=crop'} alt="" className="w-full h-full object-cover opacity-40 transition-opacity duration-500" />
+        {activeBanners.length > 1 && (
+          <div className="absolute bottom-6 right-4 z-10 flex items-center gap-2 sm:right-8">
+            <button
+              type="button"
+              onClick={() => setCurrentBanner((currentBanner - 1 + activeBanners.length) % activeBanners.length)}
+              className="grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-black/20 text-white transition-colors hover:bg-white/12"
+              aria-label="Previous promotion"
+            >
+              <ChevronLeft size={19} />
+            </button>
+            <span className="px-2 text-xs font-semibold tabular-nums text-slate-300" aria-live="polite">
+              {currentBanner + 1} / {activeBanners.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentBanner((currentBanner + 1) % activeBanners.length)}
+              className="grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-black/20 text-white transition-colors hover:bg-white/12"
+              aria-label="Next promotion"
+            >
+              <ChevronRight size={19} />
+            </button>
           </div>
-          <div className="relative z-20 max-w-7xl mx-auto px-4 py-16 md:py-24 lg:py-32">
-            <div className="max-w-xl">
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-orange-500/20 border border-orange-500/30 rounded-full text-orange-400 text-xs font-semibold mb-4">
-                <Zap size={14} /> Premium Motorcycle Parts
+        )}
+      </section>
+
+      <section aria-label="Store benefits" className="border-b border-slate-200 bg-white">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-px bg-slate-200 sm:grid-cols-4">
+          {[
+            { icon: Truck, title: 'Fast delivery', copy: 'Tracked local shipping' },
+            { icon: ShieldCheck, title: 'Secure checkout', copy: 'Protected transactions' },
+            { icon: Wrench, title: 'Parts specialists', copy: 'Fitment guidance' },
+            { icon: CreditCard, title: 'Flexible payment', copy: 'COD and GCash' },
+          ].map(({ icon: Icon, title, copy }) => (
+            <div key={title} className="flex min-h-28 items-center gap-3 bg-white px-4 py-5 sm:px-6">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-50 text-orange-600">
+                <Icon size={20} aria-hidden="true" />
               </span>
-              <h1 className="font-display font-bold text-3xl md:text-5xl lg:text-6xl text-white mb-4 leading-tight">
-                {banners[currentBanner]?.title || <>Ride With <span className="text-orange-500">Confidence</span></>}
-              </h1>
-              <p className="text-gray-400 text-sm md:text-base mb-8 max-w-md leading-relaxed">
-                {banners[currentBanner]?.subtitle || 'Quality motorcycle parts, accessories, and gear from trusted brands. Free shipping on orders over \u20B12,500.'}
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Link to={banners[currentBanner]?.link_url || '/shop'} className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-all hover:shadow-lg hover:shadow-orange-500/20 flex items-center gap-2">
-                  Shop Now <ArrowRight size={18} />
-                </Link>
-                <Link to="/shop?sort=newest" className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg transition-colors border border-white/20">
-                  New Arrivals
-                </Link>
+              <div>
+                <p className="text-sm font-bold text-slate-900">{title}</p>
+                <p className="mt-0.5 text-xs leading-5 text-slate-600">{copy}</p>
               </div>
             </div>
-            {banners.length > 1 && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">
-                {banners.map((_, i) => (
-                  <button key={i} onClick={() => setCurrentBanner(i)} className={`w-2.5 h-2.5 rounded-full transition-all ${i === currentBanner ? 'bg-orange-500 w-6' : 'bg-white/40 hover:bg-white/60'}`} />
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      ) : (
-        <section className="relative bg-gray-900 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-gray-900 via-gray-900/90 to-transparent z-10" />
-          <div className="absolute inset-0">
-            <img src="https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1600&h=600&fit=crop" alt="" className="w-full h-full object-cover opacity-40" />
-          </div>
-          <div className="relative z-20 max-w-7xl mx-auto px-4 py-16 md:py-24 lg:py-32">
-            <div className="max-w-xl">
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-orange-500/20 border border-orange-500/30 rounded-full text-orange-400 text-xs font-semibold mb-4">
-                <Zap size={14} /> Premium Motorcycle Parts
-              </span>
-              <h1 className="font-display font-bold text-3xl md:text-5xl lg:text-6xl text-white mb-4 leading-tight">
-                Ride With <span className="text-orange-500">Confidence</span>
-              </h1>
-              <p className="text-gray-400 text-sm md:text-base mb-8 max-w-md leading-relaxed">
-                Quality motorcycle parts, accessories, and gear from trusted brands. Free shipping on orders over \u20B12,500.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Link to="/shop" className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-all hover:shadow-lg hover:shadow-orange-500/20 flex items-center gap-2">
-                  Shop Now <ArrowRight size={18} />
-                </Link>
-                <Link to="/shop?sort=newest" className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg transition-colors border border-white/20">
-                  New Arrivals
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
+          ))}
+        </div>
+      </section>
 
-      {/* Trust bar */}
-      <section className="border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { icon: Truck, label: 'Free Shipping', desc: 'Orders over â‚±2,500' },
-              { icon: Shield, label: 'Authentic Parts', desc: '100% genuine products' },
-              { icon: Clock, label: 'Fast Delivery', desc: '2-5 business days' },
-              { icon: Headphones, label: 'Expert Support', desc: 'Mon-Sat, 9am-6pm' },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2">
-                <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
-                  <item.icon size={20} className="text-orange-500" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{item.label}</p>
-                  <p className="text-xs text-gray-500">{item.desc}</p>
-                </div>
+      {loading ? (
+        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+          <LoadingSkeleton className="h-8 w-56" />
+          <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="rounded-2xl border border-slate-200 bg-white p-3">
+                <LoadingSkeleton className="aspect-square w-full" />
+                <LoadingSkeleton className="mt-4 h-4 w-2/3" />
+                <LoadingSkeleton className="mt-3 h-5 w-1/2" />
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Categories */}
-      {categories.length > 0 && (
-        <section className="py-12 md:py-16">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">Shop by Category</h2>
-                <p className="text-sm text-gray-500 mt-1">Find the perfect parts for your ride</p>
-              </div>
-              <Link to="/shop" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                View All <ArrowRight size={14} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-              {categories.slice(0, 8).map(cat => (
-                <Link key={cat.id} to={`/shop?category=${cat.id}`} className="group flex flex-col items-center gap-2 p-4 bg-gray-50 hover:bg-orange-50 rounded-xl transition-colors text-center">
-                  <div className="w-12 h-12 bg-white group-hover:bg-orange-100 rounded-lg flex items-center justify-center transition-colors shadow-sm">
-                    <span className="text-lg font-bold text-gray-400 group-hover:text-orange-500 transition-colors">{cat.name.charAt(0)}</span>
+        </section>
+      ) : catalogError ? (
+        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+          <EmptyState
+            icon={PackageCheck}
+            title="The catalog is temporarily unavailable"
+            description="Please refresh the page or try again in a moment."
+            action={<BrandButton onClick={() => window.location.reload()}>Try again</BrandButton>}
+          />
+        </section>
+      ) : (
+        <>
+          {categories.length > 0 && (
+            <section className="bg-slate-50 py-14 sm:py-20">
+              <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                <div className="mb-8 flex items-end justify-between gap-6">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-600">Browse faster</p>
+                    <h2 className="mt-2 font-display text-2xl font-extrabold text-slate-950 sm:text-3xl">Shop by category</h2>
                   </div>
-                  <span className="text-xs font-medium text-gray-700 group-hover:text-orange-500 transition-colors line-clamp-2">{cat.name}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Featured Products */}
-      {featured.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">Featured Products</h2>
-                <p className="text-sm text-gray-500 mt-1">Hand-picked deals and top-rated parts</p>
+                  <Link to="/shop" className="hidden items-center gap-2 text-sm font-semibold text-slate-700 hover:text-red-600 sm:flex">
+                    All categories <ArrowRight size={16} />
+                  </Link>
+                </div>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+                  {categories.slice(0, 6).map((category) => (
+                    <Link
+                      key={category.id}
+                      to={`/shop?category=${category.id}`}
+                      className="interactive-card group relative min-h-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-100 text-slate-600 transition-colors group-hover:bg-red-50 group-hover:text-red-600">
+                        <Wrench size={17} aria-hidden="true" />
+                      </span>
+                      <h3 className="mt-6 font-display text-sm font-bold leading-5 text-slate-950">{category.name}</h3>
+                      <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 group-hover:text-red-600">
+                        View parts <ChevronRight size={13} />
+                      </span>
+                    </Link>
+                  ))}
+                </div>
               </div>
-              <Link to="/shop" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                See All <ArrowRight size={14} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {featured.map(p => <ProductCard key={p.id} product={p} />)}
-            </div>
-          </div>
-        </section>
+            </section>
+          )}
+
+          <ProductSection
+            eyebrow="Recommended"
+            title="Featured products"
+            description="Popular, highly rated, and currently discounted items from the live catalog."
+            products={featured}
+            wishlistedIds={wishlistedIds}
+            onWishlistToggle={toggleWishlist}
+          />
+          <ProductSection
+            eyebrow="Proven choices"
+            title="Best sellers"
+            description="Products riders are buying most, based on completed order data."
+            products={bestSellers}
+            wishlistedIds={wishlistedIds}
+            onWishlistToggle={toggleWishlist}
+            light={false}
+          />
+          <ProductSection
+            eyebrow="Just added"
+            title="New arrivals"
+            products={newArrivals}
+            wishlistedIds={wishlistedIds}
+            onWishlistToggle={toggleWishlist}
+          />
+          <ProductSection
+            eyebrow="Pick up where you left off"
+            title="Recently viewed"
+            products={recentlyViewed}
+            wishlistedIds={wishlistedIds}
+            onWishlistToggle={toggleWishlist}
+            light={false}
+          />
+        </>
       )}
 
-      {/* Promo Banner */}
-      <section className="py-12 md:py-16">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
-            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=1200&h=400&fit=crop')] bg-cover bg-center opacity-10" />
-            <div className="relative z-10">
-              <span className="text-orange-400 text-sm font-semibold">Limited Time Offer</span>
-              <h3 className="font-display font-bold text-2xl md:text-3xl text-white mt-2">Up to 30% Off Riding Gear</h3>
-              <p className="text-gray-400 mt-2 text-sm">Helmets, jackets, gloves, and boots from top brands.</p>
+      <section className="bg-[#0b1020] py-14 text-white">
+        <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-4 sm:px-6 md:flex-row md:items-center">
+          <div className="flex items-start gap-4">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/10 text-orange-400">
+              <Headphones size={23} aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="font-display text-xl font-bold">Not sure which part fits?</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-300">Send us your motorcycle make, model, and year. Our support team will help you narrow it down.</p>
             </div>
-            <Link to="/shop?sale=true" className="relative z-10 px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors shrink-0 flex items-center gap-2">
-              Shop the Sale <ArrowRight size={18} />
-            </Link>
           </div>
+          <BrandButton to="/contact" variant="dark" className="shrink-0">Contact support</BrandButton>
         </div>
       </section>
-
-      {/* Best Sellers */}
-      {bestSellers.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">Best Sellers</h2>
-                <p className="text-sm text-gray-500 mt-1">Most popular products from our shop</p>
-              </div>
-              <Link to="/shop?sort=best-selling" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                View All <ArrowRight size={14} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {bestSellers.map(p => <ProductCard key={p.id} product={p} />)}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* New Arrivals Grid */}
-      {newArrivals.length > 0 && (
-        <section className="py-12 md:py-16">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="font-display font-bold text-2xl text-gray-900">New Arrivals</h2>
-                <p className="text-sm text-gray-500 mt-1">Fresh stock just landed</p>
-              </div>
-              <Link to="/shop?sort=newest" className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">
-                View All <ArrowRight size={14} />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {newArrivals.map(p => <ProductCard key={p.id} product={p} />)}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Recently Viewed */}
-      {recentlyViewed.length > 0 && (
-        <section className="py-12 md:py-16 bg-gray-50">
-          <div className="max-w-7xl mx-auto px-4">
-            <h2 className="font-display font-bold text-2xl text-gray-900 mb-8">Recently Viewed</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              {recentlyViewed.map(p => <ProductCard key={p.id} product={p} />)}
-            </div>
-          </div>
-        </section>
-      )}
-    </div>
+    </main>
   );
 };
 

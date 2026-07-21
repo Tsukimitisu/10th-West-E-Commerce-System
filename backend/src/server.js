@@ -1,7 +1,10 @@
+import './config/environment.cjs';
 import express from 'express';
+import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
+import crypto from 'crypto';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
@@ -16,6 +19,7 @@ import categoryRoutes from './routes/categories.js';
 import cartRoutes from './routes/cart.js';
 import orderRoutes from './routes/orders.js';
 import checkoutRoutes from './routes/checkout.js';
+import paymentRoutes from './routes/payments.js';
 import emailRoutes from './routes/email.js';
 import inventoryRoutes from './routes/inventory.js';
 import reportsRoutes from './routes/reports.js';
@@ -28,61 +32,145 @@ import policyRoutes from './routes/policies.js';
 import staffRoutes from './routes/staff.js';
 import notificationRoutes from './routes/notifications.js';
 import bannerRoutes from './routes/banners.js';
+import announcementRoutes from './routes/announcements.js';
 import supplierRoutes from './routes/suppliers.js';
 import variantRoutes from './routes/variants.js';
 import subcategoryRoutes from './routes/subcategories.js';
 import shippingRoutes from './routes/shipping.js';
 import adminRoutes from './routes/admin.js';
+import dashboardRoutes from './routes/dashboard.js';
+import wishlistRoutes from './routes/wishlist.js';
+import reviewRoutes from './routes/reviews.js';
+import chatRoutes from './routes/chat.js';
+import chatsRoutes from './routes/chats.js';
+import sellerChatRoutes from './routes/sellerChats.js';
+import shipmentRoutes from './routes/shipments.js';
+import waybillRoutes from './routes/waybills.js';
+import discountRoutes from './routes/discounts.js';
+import refundRoutes from './routes/refunds.js';
+import posRoutes from './routes/pos.js';
+
 import { apiLimiter, authLimiter } from './middleware/rateLimiter.js';
 import { errorLogger } from './middleware/errorLogger.js';
+import { errorHandler } from './middleware/errorHandler.js';
 import { generateCsrfToken, validateCsrf } from './middleware/csrf.js';
+import pool from './config/database.js';
+import { startExpiredReservationCleanup } from './controllers/secureCheckoutController.js';
+import { getPaymongoConfigurationStatus } from './services/paymongo.js';
+import { getShippingConfigurationStatus } from './services/shipping/providers/index.js';
+import { getTrackingConfigurationStatus } from './services/tracking/providers/index.js';
+import { startMaintenanceWorkers } from './services/maintenance.js';
+import {
+  buildPublicIntegrationReadiness,
+  getEmailConfigurationStatus,
+  getMediaConfigurationStatus,
+  selectedIntegrationsReady,
+} from './services/integrationReadiness.js';
+import { normalizeNodeEnvironment, validateCoreEnvironment } from './config/productionConfig.js';
+import { checkCoreDatabaseReadiness } from './services/coreReadiness.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables from backend/.env
-const envPath = path.join(__dirname, '..', '.env');
-console.log('📍 Loading .env from:', envPath);
-dotenv.config({ path: envPath });
+const normalizedNodeEnvironment = normalizeNodeEnvironment(process.env.NODE_ENV);
+if (normalizedNodeEnvironment === 'production') process.env.NODE_ENV = 'production';
+const coreEnvironment = validateCoreEnvironment(process.env);
+const isProduction = coreEnvironment.isProduction;
 
-// Validate required environment variables
-const requiredEnvVars = [
-  'STRIPE_SECRET_KEY',
-  'STRIPE_PUBLISHABLE_KEY',
-  'EMAIL_USER',
-  'EMAIL_PASSWORD',
-  'EMAIL_HOST',
-  'EMAIL_FROM'
-];
-
-const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-if (missingVars.length > 0) {
-  console.error('❌ Missing required environment variables:', missingVars.join(', '));
-  console.error('Please copy backend/.env.example to backend/.env and fill in the values');
-  process.exit(1);
+const optionalUploadVars = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
+const missingUploadVars = optionalUploadVars.filter((varName) => !process.env[varName]);
+if (missingUploadVars.length > 0) {
+  console.warn('⚠️ Cloudinary is not configured. Product, review, and avatar uploads will be unavailable.');
+  console.warn('⚠️ Missing Cloudinary env vars:', missingUploadVars.join(', '));
 }
 
 // Log configuration on startup (no sensitive values)
 console.log('\n🔐 Configuration loaded:');
-console.log('   Stripe Secret:', process.env.STRIPE_SECRET_KEY ? '✅ SET' : '❌ NOT SET');
-console.log('   Stripe Public:', process.env.STRIPE_PUBLISHABLE_KEY ? '✅ SET' : '❌ NOT SET');
-console.log('   Email User:', process.env.EMAIL_USER ? '✅ SET' : '❌ NOT SET');
-console.log('   Email Password:', process.env.EMAIL_PASSWORD ? '✅ SET' : '❌ NOT SET');
+console.log('   Required core env:', isProduction ? 'production checks passed' : 'development checks passed');
+console.log('   PayMongo:', getPaymongoConfigurationStatus().configured ? 'configured' : 'blocked_by_credentials');
+console.log('   Shipping:', getShippingConfigurationStatus().status);
+console.log('   Tracking:', getTrackingConfigurationStatus().status);
+console.log('   Email:', getEmailConfigurationStatus().status);
+console.log('   Media:', getMediaConfigurationStatus().status);
 console.log('');
 
 const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
-const uploadsDir = path.join(__dirname, '..', 'uploads');
+const FRONTEND_URL = process.env.FRONTEND_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000';
+const PgSessionStore = connectPgSimple(session);
+const parseDurationMs = (value, fallbackMs) => {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return fallbackMs;
+  const match = text.match(/^(\d+)(ms|s|m|h|d)?$/);
+  if (!match) return fallbackMs;
+  const amount = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(amount) || amount <= 0) return fallbackMs;
+  const unit = match[2] || 's';
+  const multipliers = {
+    ms: 1,
+    s: 1000,
+    m: 60 * 1000,
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000,
+  };
+  return amount * multipliers[unit];
+};
+const configuredSessionSameSite = String(process.env.COOKIE_SAME_SITE || process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
+const sessionCookieSameSite = ['lax', 'strict', 'none'].includes(configuredSessionSameSite)
+  ? configuredSessionSameSite
+  : 'lax';
+const configuredCookieSecure = String(process.env.COOKIE_SECURE || '').trim().toLowerCase();
+const sessionCookieSecure = ['true', '1', 'yes'].includes(configuredCookieSecure)
+  || (!['false', '0', 'no'].includes(configuredCookieSecure) && (sessionCookieSameSite === 'none' || process.env.NODE_ENV === 'production'));
+const sessionTtlMs = parseDurationMs(
+  process.env.SESSION_TTL || process.env.SESSION_TTL_SECONDS,
+  Number(process.env.SESSION_TTL_MS || 7 * 24 * 60 * 60 * 1000)
+);
+const configuredSessionStore = String(process.env.SESSION_STORE || '').trim().toLowerCase();
+const usePostgresSessionStore = configuredSessionStore === 'postgres' ||
+  (process.env.NODE_ENV === 'production' && configuredSessionStore !== 'memory');
+const sessionStore = usePostgresSessionStore
+  ? new PgSessionStore({
+      pool,
+      tableName: 'http_sessions',
+      createTableIfMissing: false,
+    })
+  : undefined;
 
-// Initialize Socket.IO
-const io = initSocket(httpServer, FRONTEND_URL);
+if (!usePostgresSessionStore) {
+  console.warn('Using in-memory sessions. Set SESSION_STORE=postgres to persist sessions in PostgreSQL.');
+}
+
+if (process.env.NODE_ENV === 'production' && configuredSessionStore !== 'postgres') {
+  console.error('❌ SESSION_STORE=postgres is required in production.');
+  process.exit(1);
+}
+
+const sessionSecret = process.env.SESSION_SECRET;
+if (process.env.NODE_ENV === 'production' && !sessionSecret) {
+  console.error('❌ SESSION_SECRET is required in production.');
+  process.exit(1);
+}
+
+if (!sessionSecret) {
+  console.warn('⚠️ SESSION_SECRET is not set. Using an ephemeral secret for development only.');
+}
+
+const effectiveSessionSecret = sessionSecret || crypto.randomBytes(48).toString('hex');
 
 // Build allowed origins for LAN access
 function getAllowedOrigins() {
   const origins = [FRONTEND_URL];
+  const extraOrigins = String(process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  origins.push(...extraOrigins);
+  if (process.env.NODE_ENV === 'production') {
+    return Array.from(new Set(origins));
+  }
   // Add all LAN IPs with the frontend port
   const port = new URL(FRONTEND_URL).port || '3000';
   const ifaces = os.networkInterfaces();
@@ -96,20 +184,41 @@ function getAllowedOrigins() {
   return origins;
 }
 const allowedOrigins = getAllowedOrigins();
+const sessionMiddleware = session({
+  ...(sessionStore ? { store: sessionStore } : {}),
+  name: 'twm.sid',
+  secret: effectiveSessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  rolling: true,
+  proxy: process.env.NODE_ENV === 'production',
+  cookie: {
+    secure: sessionCookieSecure,
+    httpOnly: true,
+    sameSite: sessionCookieSameSite,
+    path: '/',
+    maxAge: sessionTtlMs
+  }
+});
+
+// Initialize Socket.IO after session middleware is created so sockets can use
+// the same HttpOnly session cookie as HTTP requests.
+const io = initSocket(httpServer, allowedOrigins, { sessionMiddleware });
 
 // Middleware
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 0);
 
 // C8: Security headers via Helmet (CSP, X-Frame-Options, HSTS, etc.)
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://js.stripe.com"],
+      scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
-      connectSrc: ["'self'", ...allowedOrigins, "https://api.stripe.com"],
-      frameSrc: ["'self'", "https://js.stripe.com"],
+      connectSrc: ["'self'", ...allowedOrigins],
+      frameSrc: ["'self'"],
     },
   },
   // C9: HSTS — enforce HTTPS in production
@@ -119,13 +228,15 @@ app.use(helmet({
     preload: true,
   },
   crossOriginEmbedderPolicy: false, // allow loading external images
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
-// C9: HTTPS redirect in production
+// Reject insecure production requests without reflecting an untrusted Host
+// header into a redirect target. The trusted ingress terminates TLS.
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {
-    if (req.headers['x-forwarded-proto'] !== 'https') {
-      return res.redirect(301, `https://${req.headers.host}${req.url}`);
+    if (!req.secure) {
+      return res.status(400).json({ message: 'HTTPS is required.' });
     }
     next();
   });
@@ -140,9 +251,9 @@ app.use(cors({
     try {
       const url = new URL(origin);
       const host = url.hostname;
-      if (host === 'localhost' || host === '127.0.0.1' ||
+      if (process.env.NODE_ENV !== 'production' && (host === 'localhost' || host === '127.0.0.1' ||
           host.startsWith('192.168.') || host.startsWith('10.') ||
-          /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
+          /^172\.(1[6-9]|2\d|3[01])\./.test(host))) {
         return callback(null, true);
       }
     } catch {}
@@ -151,9 +262,20 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
+  fallthrough: true,
+  maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
+}));
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    if (String(req.originalUrl || '').startsWith('/api/payments/paymongo/webhook')
+      || String(req.originalUrl || '').startsWith('/api/shipments/webhook')) {
+      req.rawBody = Buffer.from(buf);
+    }
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(uploadsDir));
+app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(activityLogger);
 app.use('/api', apiLimiter);
@@ -175,19 +297,52 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/api/ready', async (_req, res) => {
+  try {
+    await checkCoreDatabaseReadiness(pool);
+    const shipping = getShippingConfigurationStatus();
+    const tracking = getTrackingConfigurationStatus();
+    const paymongo = getPaymongoConfigurationStatus();
+    const integrations = buildPublicIntegrationReadiness({ paymongo, shipping, tracking });
+    const integrationsReady = selectedIntegrationsReady(integrations);
+    res.json({
+      status: 'available',
+      core_ready: true,
+      commerce_ready: true,
+      integrations_ready: integrationsReady,
+      integrations,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(503).json({ status: 'unavailable', core_ready: false, commerce_ready: false, integrations_ready: false, timestamp: new Date().toISOString() });
+  }
+});
+
 // CSRF token endpoint (C12)
 app.get('/api/csrf-token', generateCsrfToken, (req, res) => {
   res.json({ csrfToken: req.csrfToken });
 });
 
 // API Routes
-// C6: Apply stricter rate limiting to auth endpoints (20 req / 15 min)
-app.use('/api/auth', authLimiter, authRoutes);
+// Apply the strict credential rate limit only to authentication mutations.
+// Session/profile/permission reads have the general API limit so normal
+// dashboard refreshes cannot exhaust the sign-in budget.
+const credentialAuthPaths = new Set([
+  '/login', '/register', '/send-otp', '/verify-otp', '/forgot-password',
+  '/reset-password', '/resend-verification', '/verify-email',
+]);
+app.use('/api/auth', (req, res, next) => {
+  if (req.method === 'POST' && credentialAuthPaths.has(req.path)) {
+    return authLimiter(req, res, next);
+  }
+  return next();
+}, authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/checkout', checkoutRoutes);
+app.use('/api/payments', paymentRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/reports', reportsRoutes);
@@ -200,11 +355,23 @@ app.use('/api/policies', policyRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/banners', bannerRoutes);
+app.use('/api/announcements', announcementRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/variants', variantRoutes);
 app.use('/api/subcategories', subcategoryRoutes);
 app.use('/api/shipping', shippingRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/chats', chatsRoutes);
+app.use('/api/seller/chats', sellerChatRoutes);
+app.use('/api/shipments', shipmentRoutes);
+app.use('/api/waybills', waybillRoutes);
+app.use('/api/discounts', discountRoutes);
+app.use('/api/refunds', refundRoutes);
+app.use('/api/pos', posRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -214,18 +381,26 @@ app.use((req, res) => {
 // Error logging middleware (logs to error_logs table)
 app.use(errorLogger);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  // Log full error server-side only
-  console.error('Error:', err.message);
-  // C11: Never expose stack traces to clients, even in development
-  res.status(err.status || 500).json({
-    message: err.message || 'Internal server error',
-  });
-});
+// Global Error handling middleware (formats responses, hides stack trace in production)
+app.use(errorHandler);
 
-// Start server with Socket.IO
-httpServer.listen(PORT, '0.0.0.0', () => {
+let coreStartupReady = true;
+if (isProduction) {
+  try {
+    await checkCoreDatabaseReadiness(pool);
+  } catch (error) {
+    coreStartupReady = false;
+    process.exitCode = 1;
+    console.error(`Production core schema preflight failed: ${error?.code || 'DATABASE_UNAVAILABLE'}`);
+    await pool.end().catch(() => {});
+  }
+}
+
+// Start server with Socket.IO only after the production schema preflight.
+if (coreStartupReady) {
+  startExpiredReservationCleanup();
+  startMaintenanceWorkers();
+  httpServer.listen(PORT, '0.0.0.0', () => {
   console.log('╔══════════════════════════════════════════════╗');
   console.log('║    10TH WEST MOTO - Backend API Server     ║');
   console.log('╚══════════════════════════════════════════════╝');
@@ -236,7 +411,8 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🔗 Frontend URL: ${FRONTEND_URL}`);
   console.log(`🔗 LAN: http://${getLocalIP()}:${PORT}`);
   console.log('════════════════════════════════════════════════');
-});
+  });
+}
 
 // Get local IP for LAN access
 function getLocalIP() {

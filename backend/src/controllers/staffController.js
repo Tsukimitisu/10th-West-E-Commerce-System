@@ -2,7 +2,12 @@ import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { logActivity } from '../middleware/activityLogger.js';
 
-const STAFF_ROLES = ['owner', 'store_staff'];
+const STAFF_ROLES = ['admin', 'owner', 'store_staff', 'cashier'];
+const DELEGATED_STAFF_ROLES = ['store_staff', 'cashier'];
+
+const canManageRole = (actorRole, targetRole) => (
+  actorRole === 'super_admin' || DELEGATED_STAFF_ROLES.includes(targetRole)
+);
 
 // ─── LIST STAFF ────────────────────────────────────────────────────
 export const listStaff = async (req, res) => {
@@ -16,7 +21,7 @@ export const listStaff = async (req, res) => {
              u.failed_login_attempts, u.oauth_provider,
              (SELECT COUNT(*) FROM activity_logs WHERE user_id = u.id) as action_count,
              (SELECT MAX(created_at) FROM activity_logs WHERE user_id = u.id) as last_activity
-      FROM users u WHERE u.role = ANY($1::text[])
+      FROM users u WHERE u.role::text = ANY($1::text[])
     `;
     const params = [STAFF_ROLES];
     let idx = 2;
@@ -32,7 +37,7 @@ export const listStaff = async (req, res) => {
     const result = await pool.query(query, params);
 
     // Count
-    let countQuery = `SELECT COUNT(*) FROM users WHERE role = ANY($1::text[])`;
+    let countQuery = `SELECT COUNT(*) FROM users WHERE role::text = ANY($1::text[])`;
     const cp = [STAFF_ROLES];
     let ci = 2;
     if (role) { countQuery += ` AND role = $${ci++}`; cp.push(role); }
@@ -61,7 +66,7 @@ export const getStaff = async (req, res) => {
       `SELECT id, name, email, role, phone, avatar, is_active, last_login, created_at,
               two_factor_enabled, oauth_provider, failed_login_attempts, locked_until
        FROM users
-       WHERE id = $1 AND role = ANY($2::text[])`,
+       WHERE id = $1 AND role::text = ANY($2::text[])`,
       [req.params.id, STAFF_ROLES]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
@@ -97,10 +102,8 @@ export const addStaff = async (req, res) => {
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) return res.status(400).json({ message: 'Email already registered' });
 
-    const validRoles = STAFF_ROLES;
-    // super_admin cannot be created through Staff Management
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ message: `Invalid role. Allowed: ${validRoles.join(', ')}` });
+    if (!STAFF_ROLES.includes(role) || !canManageRole(req.user.role, role)) {
+      return res.status(403).json({ message: 'You cannot assign this staff role.' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -133,17 +136,20 @@ export const editStaff = async (req, res) => {
   const { name, email, role, phone, password } = req.body;
 
   try {
-    if (!STAFF_ROLES.includes(role)) {
-      return res.status(400).json({ message: `Invalid role. Allowed: ${STAFF_ROLES.join(', ')}` });
+    if (!STAFF_ROLES.includes(role) || !canManageRole(req.user.role, role)) {
+      return res.status(403).json({ message: 'You cannot assign this staff role.' });
     }
 
     const existing = await pool.query(
       `SELECT *
        FROM users
-       WHERE id = $1 AND role = ANY($2::text[])`,
+       WHERE id = $1 AND role::text = ANY($2::text[])`,
       [req.params.id, STAFF_ROLES]
     );
     if (existing.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
+    if (!canManageRole(req.user.role, existing.rows[0].role)) {
+      return res.status(403).json({ message: 'You cannot modify this account.' });
+    }
 
     let query = 'UPDATE users SET name = $1, email = $2, role = $3, phone = $4, updated_at = NOW()';
     const params = [name, email, role, phone];
@@ -179,26 +185,46 @@ export const editStaff = async (req, res) => {
 
 // ─── TOGGLE ACTIVE STATUS ──────────────────────────────────────────
 export const toggleStaffStatus = async (req, res) => {
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
-      `UPDATE users SET is_active = NOT is_active, updated_at = NOW()
-       WHERE id = $1 AND role = ANY($2::text[])
-       RETURNING id, name, email, role, is_active`,
+    await client.query('BEGIN');
+    const existing = await client.query(
+      `SELECT id, name, email, role, is_active
+       FROM users
+       WHERE id = $1 AND role::text = ANY($2::text[])
+       FOR UPDATE`,
       [req.params.id, STAFF_ROLES]
     );
 
-    if (result.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
-    const staff = result.rows[0];
-
-    // Prevent toggling super_admin status from staff management
-    if (staff.role === 'super_admin') {
-      return res.status(403).json({ message: 'Cannot modify Super Admin from Staff Management' });
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Staff member not found' });
     }
+
+    const target = existing.rows[0];
+    if (Number(target.id) === Number(req.user.id)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Cannot change your own account status' });
+    }
+    if (!canManageRole(req.user.role, target.role)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'You cannot modify this account.' });
+    }
+
+    const result = await client.query(
+      `UPDATE users
+       SET is_active = NOT is_active, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, name, email, role, is_active`,
+      [target.id]
+    );
+    const staff = result.rows[0];
 
     // Invalidate sessions if deactivated
     if (!staff.is_active) {
-      await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [req.params.id]);
+      await client.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [target.id]);
     }
+    await client.query('COMMIT');
 
     await logActivity({
       userId: req.user.id,
@@ -212,8 +238,11 @@ export const toggleStaffStatus = async (req, res) => {
 
     res.json({ message: `Staff member ${staff.is_active ? 'activated' : 'deactivated'}`, staff });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Toggle staff status error:', error);
     res.status(500).json({ message: 'Server error' });
+  } finally {
+    client.release();
   }
 };
 
@@ -221,12 +250,15 @@ export const toggleStaffStatus = async (req, res) => {
 export const deleteStaff = async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, email
+      `SELECT id, name, email, role
        FROM users
-       WHERE id = $1 AND role = ANY($2::text[])`,
+       WHERE id = $1 AND role::text = ANY($2::text[])`,
       [req.params.id, STAFF_ROLES]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
+    if (!canManageRole(req.user.role, result.rows[0].role)) {
+      return res.status(403).json({ message: 'You cannot delete this account.' });
+    }
 
     // Don't allow deleting yourself
     if (parseInt(req.params.id) === req.user.id) {
@@ -282,41 +314,86 @@ export const getStaffActivity = async (req, res) => {
 // ─── STAFF PERMISSIONS ─────────────────────────────────────────────
 export const updateStaffPermissions = async (req, res) => {
   const { permissions } = req.body; // Array of { permission_id, granted }
+  if (!Array.isArray(permissions) || permissions.length > 200) {
+    return res.status(400).json({ message: 'Permissions must be an array of at most 200 entries.' });
+  }
 
+  const normalized = [];
+  const seenPermissionIds = new Set();
+  for (const permission of permissions) {
+    const permissionId = Number(permission?.permission_id);
+    if (!Number.isInteger(permissionId) || permissionId <= 0 || typeof permission?.granted !== 'boolean') {
+      return res.status(400).json({ message: 'Every permission requires a valid permission_id and boolean granted value.' });
+    }
+    if (seenPermissionIds.has(permissionId)) {
+      return res.status(400).json({ message: 'Duplicate permission IDs are not allowed.' });
+    }
+    seenPermissionIds.add(permissionId);
+    normalized.push({ permission_id: permissionId, granted: permission.granted });
+  }
+
+  const client = await pool.connect();
   try {
-    const staffResult = await pool.query(
+    await client.query('BEGIN');
+    const staffResult = await client.query(
       `SELECT id, name, role
        FROM users
-       WHERE id = $1 AND role = ANY($2::text[])`,
+       WHERE id = $1 AND role::text = ANY($2::text[])`,
       [req.params.id, STAFF_ROLES]
     );
-    if (staffResult.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });
+    if (staffResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Staff member not found' });
+    }
+    if (Number(req.params.id) === Number(req.user.id)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'You cannot change your own permissions.' });
+    }
+    if (!canManageRole(req.user.role, staffResult.rows[0].role)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'You cannot change permissions for this account.' });
+    }
+
+    if (normalized.length) {
+      const existingPermissions = await client.query(
+        'SELECT id FROM permissions WHERE id = ANY($1::int[])',
+        [normalized.map((permission) => permission.permission_id)]
+      );
+      if (existingPermissions.rowCount !== normalized.length) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'One or more permission IDs do not exist.' });
+      }
+    }
 
     // Clear old custom permissions
-    await pool.query('DELETE FROM user_permissions WHERE user_id = $1', [req.params.id]);
+    await client.query('DELETE FROM user_permissions WHERE user_id = $1', [req.params.id]);
 
     // Insert new
-    for (const perm of permissions) {
-      await pool.query(
+    for (const perm of normalized) {
+      await client.query(
         'INSERT INTO user_permissions (user_id, permission_id, granted) VALUES ($1, $2, $3)',
         [req.params.id, perm.permission_id, perm.granted]
       );
     }
+    await client.query('COMMIT');
 
     await logActivity({
       userId: req.user.id,
       action: 'staff_permissions_updated',
       entityType: 'user',
       entityId: parseInt(req.params.id),
-      details: { permissions },
+      details: { permissions: normalized },
       ipAddress: req.clientIp,
       userAgent: req.clientUa,
     });
 
     res.json({ message: 'Permissions updated' });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Update staff permissions error:', error);
     res.status(500).json({ message: 'Server error' });
+  } finally {
+    client.release();
   }
 };
 
@@ -342,7 +419,7 @@ export const getStaffPerformance = async (req, res) => {
     const staffResult = await pool.query(
       `SELECT id
        FROM users
-       WHERE id = $1 AND role = ANY($2::text[])`,
+       WHERE id = $1 AND role::text = ANY($2::text[])`,
       [staffId, STAFF_ROLES]
     );
     if (staffResult.rows.length === 0) return res.status(404).json({ message: 'Staff member not found' });

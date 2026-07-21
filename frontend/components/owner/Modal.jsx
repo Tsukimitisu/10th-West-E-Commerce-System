@@ -6,12 +6,12 @@ const sizeMap = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl'
 const Modal = ({ isOpen, onClose, title, size = 'lg', children }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className={`relative bg-white rounded-xl shadow-2xl w-full ${sizeMap[size]} max-h-[80vh] flex flex-col animate-fade-in`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-          <h3 className="font-display font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+    <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto px-4 py-[8vh]" role="dialog" aria-modal="true" aria-label={title}>
+      <button type="button" className="fixed inset-0 bg-slate-950/55 backdrop-blur-[2px]" onClick={onClose} aria-label="Close modal" />
+      <div className={`relative flex max-h-[84vh] w-full ${sizeMap[size]} flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-fade-in`}>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h3 className="font-display text-base font-semibold text-slate-950">{title}</h3>
+          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900" aria-label="Close">
             <X size={18} />
           </button>
         </div>
@@ -22,3 +22,5 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', children }) => {
 };
 
 export default Modal;
+
+

@@ -2,10 +2,18 @@ import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import dns from 'dns/promises';
 import nodemailer from 'nodemailer';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { logActivity } from '../middleware/activityLogger.js';
+import { mergeGuestCartIntoUserCart, rotateGuestSession } from './cartController.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch, supabaseRestRequest } from '../services/supabaseRest.js';
+import { decryptTwoFactorSecret, encryptTwoFactorSecret, generateRecoveryCodes, hashRecoveryCode } from '../services/twoFactorCrypto.js';
+import databaseConfig from '../config/databaseConfig.cjs';
+
+const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
+const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
@@ -13,7 +21,7 @@ const createTransporter = () =>
   nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: false,
+    secure: parseInt(process.env.EMAIL_PORT || '587') === 465,
     auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
   });
 
@@ -21,7 +29,13 @@ const signToken = (user) =>
   jwt.sign(
     { id: user.id, email: user.email, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: '7d' }
+    {
+      algorithm: 'HS256',
+      expiresIn: '24h',
+      issuer: process.env.JWT_ISSUER || '10th-west-moto-api',
+      audience: process.env.JWT_AUDIENCE || '10th-west-moto-web',
+      subject: String(user.id),
+    }
   );
 
 const sanitizeUser = (row) => ({
@@ -39,9 +53,327 @@ const sanitizeUser = (row) => ({
   email_verified: row.email_verified || false,
 });
 
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_\-+=]).{8,}$/;
+const getUserFromSupabaseRestByEmail = async (email) => {
+  const rows = await supabaseRestFetch('users', {
+    select: 'id,name,email,role,phone,avatar,store_credit,is_active,is_deleted,two_factor_enabled,two_factor_secret,oauth_provider,last_login,email_verified,password_hash',
+    email: `eq.${email}`,
+    limit: 1,
+  });
+
+  return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+};
+
+const getUserFromSupabaseRestById = async (id) => {
+  const rows = await supabaseRestFetch('users', {
+    select: 'id,name,email,role,phone,avatar,store_credit,is_active,two_factor_enabled,oauth_provider,last_login,email_verified,created_at',
+    id: `eq.${id}`,
+    limit: 1,
+  });
+
+  return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+};
+
+const updateUserViaSupabaseRest = async (id, patch) => {
+  const rows = await supabaseRestRequest('users', {
+    method: 'PATCH',
+    queryParams: { id: `eq.${id}` },
+    prefer: 'return=representation',
+    body: patch,
+  });
+
+  return Array.isArray(rows) ? rows[0] : rows;
+};
+
+const upsertRegistrationOtpViaSupabaseRest = async ({ email, otpHash, expiresAt }) => {
+  const rows = await supabaseRestRequest('registration_otps', {
+    method: 'POST',
+    queryParams: { on_conflict: 'email' },
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: {
+      email,
+      otp_hash: otpHash,
+      expires_at: expiresAt.toISOString(),
+    },
+  });
+
+  return Array.isArray(rows) ? rows[0] : rows;
+};
+
+const parseDurationMs = (value, fallbackMs) => {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return fallbackMs;
+
+  const match = text.match(/^(\d+)(ms|s|m|h|d)?$/);
+  if (!match) return fallbackMs;
+
+  const amount = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(amount) || amount <= 0) return fallbackMs;
+
+  const unit = match[2] || 's';
+  const multipliers = {
+    ms: 1,
+    s: 1000,
+    m: 60 * 1000,
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000,
+  };
+
+  return amount * multipliers[unit];
+};
+
+const getSessionTtlMs = () => parseDurationMs(
+  process.env.SESSION_TTL || process.env.SESSION_TTL_SECONDS,
+  Number(process.env.SESSION_TTL_MS || 7 * 24 * 60 * 60 * 1000)
+);
+
+const getSessionExpiresAt = () => new Date(Date.now() + getSessionTtlMs());
+
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 15;
+const EMAIL_VERIFICATION_WINDOW_MINUTES = Math.min(
+  3,
+  Math.max(1, Number.parseInt(process.env.EMAIL_VERIFICATION_WINDOW_MINUTES || '3', 10) || 3)
+);
+const BCRYPT_ROUNDS = 12;
+const VERIFICATION_LOCK_TIMEOUT_MS = 5000;
+const VERIFICATION_STATEMENT_TIMEOUT_MS = 7000;
+const VERIFICATION_RESPONSE_TIMEOUT_MS = 8000;
+const VERIFIED_TOKEN_LOOKBACK_HOURS = 24;
+const SESSION_PERSIST_TIMEOUT_MS = 1000;
+
+const hashToken = (value) =>
+  crypto.createHash('sha256').update(value).digest('hex');
+
+const isTransientVerificationDbError = (error) => {
+  const code = String(error?.code || '');
+  return code === '55P03' || code === '57014' || code === '40P01';
+};
+
+const queuePostVerificationTasks = ({
+  userId,
+  guestCartSessionId,
+  ipAddress,
+  userAgent,
+  activityAction = 'email_verified',
+}) => {
+  const tasks = [
+    logActivity({ userId, action: activityAction, ipAddress, userAgent }),
+  ];
+
+  if (guestCartSessionId && userId) {
+    tasks.push(mergeGuestCartIntoUserCart(guestCartSessionId, userId));
+  }
+
+  void Promise.allSettled(tasks).then((results) => {
+    results.forEach((result) => {
+      if (result.status === 'rejected') {
+        console.warn('Post-verification task failed:', sanitizeDatabaseError(result.reason));
+      }
+    });
+  });
+};
+
+const getPostVerificationRedirectPath = (user) => {
+  const role = String(user?.role || '').toLowerCase();
+
+  if (role === 'super_admin') return '/super-admin';
+  if (role === 'owner' || role === 'admin' || role === 'store_staff') return '/admin';
+
+  return '/';
+};
+
+const getSessionCookieSameSite = () => {
+  const configured = String(process.env.COOKIE_SAME_SITE || process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
+  if (['lax', 'strict', 'none'].includes(configured)) {
+    return configured;
+  }
+
+  return process.env.NODE_ENV === 'production' ? 'lax' : 'lax';
+};
+
+const isSessionCookieSecure = () => {
+  const configured = String(process.env.COOKIE_SECURE || '').trim().toLowerCase();
+  if (['true', '1', 'yes'].includes(configured)) return true;
+  if (['false', '0', 'no'].includes(configured)) return false;
+  return getSessionCookieSameSite() === 'none' || process.env.NODE_ENV === 'production';
+};
+
+const saveRequestSession = (req) =>
+  new Promise((resolve, reject) => {
+    if (!req.session) return resolve();
+    req.session.save((error) => (error ? reject(error) : resolve()));
+  });
+
+const withTimeout = (promise, timeoutMs, label) =>
+  new Promise((resolve, reject) => {
+    const timerId = setTimeout(() => {
+      const error = new Error(`${label} timed out`);
+      error.code = 'ASYNC_OPERATION_TIMEOUT';
+      reject(error);
+    }, timeoutMs);
+
+    Promise.resolve(promise)
+      .then((result) => {
+        clearTimeout(timerId);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timerId);
+        reject(error);
+      });
+  });
+
+const bindAuthenticatedSession = async (req, user, token) => {
+  if (!req.session || !user?.id || !token) return;
+
+  req.session.auth = {
+    userId: user.id,
+    role: user.role || null,
+    tokenHash: hashToken(token),
+    authenticatedAt: Date.now(),
+  };
+
+  await saveRequestSession(req);
+};
+
+const prepareAuthenticatedSession = async (req, user, token) => {
+  try {
+    await withTimeout(rotateGuestSession(req), SESSION_PERSIST_TIMEOUT_MS, 'rotateGuestSession');
+  } catch (error) {
+    console.warn('Unable to rotate guest session before auth response:', sanitizeDatabaseError(error));
+  }
+
+  try {
+    await withTimeout(bindAuthenticatedSession(req, user, token), SESSION_PERSIST_TIMEOUT_MS, 'bindAuthenticatedSession');
+  } catch (error) {
+    console.warn('Unable to persist authenticated session before auth response:', sanitizeDatabaseError(error));
+  }
+};
+
+const isLocalUrl = (hostname) =>
+  ['localhost', '127.0.0.1'].includes(hostname) ||
+  hostname.startsWith('192.168.') ||
+  hostname.startsWith('10.') ||
+  /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
+
+const getFrontendUrl = () => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const url = new URL(frontendUrl);
+
+  if (!isLocalUrl(url.hostname)) {
+    url.protocol = 'https:';
+  }
+
+  return url;
+};
+
+const createVerificationToken = () => {
+  const token = crypto.randomBytes(32).toString('hex');
+  return {
+    token,
+    tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_WINDOW_MINUTES * 60 * 1000),
+  };
+};
+
+const BLOCKED_EMAIL_DOMAINS = new Set([
+  'example.com',
+  'example.net',
+  'example.org',
+  'test.com',
+  'invalid',
+  'localhost',
+]);
+
+const EMAIL_DNS_TIMEOUT_MS = 3000;
+
+const assertEmailDomainCanReceiveMail = async (email) => {
+  const domain = String(email || '').split('@')[1]?.toLowerCase();
+  if (!domain || BLOCKED_EMAIL_DOMAINS.has(domain)) {
+    const error = new Error('Use a real email address that can receive verification emails.');
+    error.status = 400;
+    error.fieldErrors = { email: 'Use a real email address that can receive verification emails.' };
+    throw error;
+  }
+
+  const lookup = dns.resolveMx(domain);
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => {
+      const error = new Error('Email validation timed out. Please try again.');
+      error.code = 'EMAIL_DNS_TIMEOUT';
+      reject(error);
+    }, EMAIL_DNS_TIMEOUT_MS);
+  });
+
+  try {
+    const records = await Promise.race([lookup, timeout]);
+    const canReceiveMail = Array.isArray(records) && records.some((record) => String(record.exchange || '').trim());
+    if (canReceiveMail) return;
+  } catch (error) {
+    if (error?.code === 'EMAIL_DNS_TIMEOUT') {
+      console.warn(`Email domain MX validation timed out for ${domain}; continuing with verification email send.`);
+      return;
+    }
+  }
+
+  const error = new Error('Use a real email address that can receive verification emails.');
+  error.status = 400;
+  error.fieldErrors = { email: 'This email domain cannot receive verification emails.' };
+  throw error;
+};
+
+const buildVerificationUrl = (token) => {
+  const url = getFrontendUrl();
+  url.hash = `/verify-email?token=${encodeURIComponent(token)}`;
+  return url.toString();
+};
+
+const persistSession = async (client, user, ipAddress, userAgent) => {
+  const token = signToken(user);
+  const tokenHash = hashToken(token);
+  const expiresAt = getSessionExpiresAt();
+
+  await client.query(
+    `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [user.id, tokenHash, ipAddress, userAgent, expiresAt]
+  );
+
+  return token;
+};
+
+const sendVerificationEmail = async ({ email, name, token }) => {
+  const transporter = createTransporter();
+  const verificationUrl = buildVerificationUrl(token);
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
+    to: email,
+    subject: 'Verify your account - 10th West Moto',
+    html: `
+<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; background: #fff; border: 1px solid #eee; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+  <div style="text-align: center; margin-bottom: 25px;">
+    <h2 style="color: #1a1a1a; margin: 0; font-size: 24px;">Verify Your Email</h2>
+  </div>
+  <p style="color: #444; font-size: 16px; line-height: 1.5; text-align: center;">
+    Hi ${name || 'there'},<br>Please verify your email address to activate your account.
+  </p>
+  <div style="text-align: center; margin: 35px 0;">
+    <a href="${verificationUrl}" style="background-color: #dc2626; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);">Verify My Account</a>
+  </div>
+  <p style="color: #666; font-size: 14px; line-height: 1.6; text-align: center;">
+    This verification link will expire in ${EMAIL_VERIFICATION_WINDOW_MINUTES} minutes.
+  </p>
+  <hr style="border: none; border-top: 1px solid #eaeaea; margin: 25px 0;">
+  <p style="color: #888; font-size: 12px; text-align: center; line-height: 1.5;">
+    If the button does not work, copy and paste this link into your browser:<br><br>
+    <a href="${verificationUrl}" style="color: #2563eb; word-break: break-all;">${verificationUrl}</a>
+  </p>
+</div>
+`,
+  });
+};
 
 // ─── Record login attempt ──────────────────────────────────────────
 const recordLoginAttempt = async (email, ip, success) => {
@@ -55,134 +387,462 @@ const recordLoginAttempt = async (email, ip, success) => {
 const isAccountLocked = async (email) => {
   const result = await pool.query(
     `SELECT COUNT(*) as cnt FROM login_attempts
-     WHERE email = $1 AND success = false AND created_at > NOW() - INTERVAL '${LOCK_DURATION_MINUTES} minutes'`,
-    [email]
+     WHERE email = $1 AND success = false AND created_at > NOW() - make_interval(mins => $2)`,
+    [email, LOCK_DURATION_MINUTES]
   );
   return parseInt(result.rows[0].cnt) >= MAX_LOGIN_ATTEMPTS;
 };
 
-// ─── REGISTER ──────────────────────────────────────────────────────
-export const register = async (req, res) => {
-  const { name, email, password, consent_given, age_confirmed } = req.body;
-  // Force role to 'customer' on public registration - staff roles are assigned via admin/staff management
-  const role = 'customer';
-  const ip = req.clientIp;
-  const ua = req.clientUa;
-
+// ─── SEND REGISTRATION OTP ─────────────────────────────────────────
+export const sendRegistrationOtp = async (req, res) => {
+  const { email, name } = req.body;
   try {
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) {
+    let existingUser = null;
+    if (shouldUseDatabaseReadFallback()) {
+      existingUser = await getUserFromSupabaseRestByEmail(email);
+    } else {
+      const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+      existingUser = existing.rows[0] || null;
+    }
+
+    if (existingUser) {
       return res.status(400).json({ message: 'Email already registered' });
     }
 
-    // Password strength check
-    if (!PASSWORD_REGEX.test(password)) {
-      return res.status(400).json({
-        message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character (!@#$%^&*()_-+=)',
-      });
+    await assertEmailDomainCanReceiveMail(email);
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    if (shouldUseDatabaseReadFallback()) {
+      await upsertRegistrationOtpViaSupabaseRest({ email, otpHash, expiresAt });
+    } else {
+      await pool.query(
+        `INSERT INTO registration_otps (email, otp_hash, expires_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (email) DO UPDATE SET otp_hash = $2, expires_at = $3`,
+        [email, otpHash, expiresAt]
+      );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
+      to: email,
+      subject: 'Your Registration Code - 10th West Moto',
+      html: `
+        <!DOCTYPE html><html><head><style>
+          body{font-family:Arial,sans-serif;line-height:1.6;color:#333}
+          .container{max-width:600px;margin:0 auto;padding:20px}
+          .header{background:linear-gradient(135deg,#1e293b,#334155);color:white;padding:30px;text-align:center;border-radius:12px 12px 0 0}
+          .content{padding:30px;background:#f8fafc}
+          .otp{display:inline-block;padding:12px 24px;background:#ea580c;color:white;text-decoration:none;border-radius:8px;font-size:24px;font-weight:bold;letter-spacing:4px;margin:20px 0}
+          .footer{text-align:center;padding:20px;color:#94a3b8;font-size:12px}
+        </style></head><body>
+          <div class="container">
+            <div class="header"><h1 style="margin:0">🔐 Verify Your Email</h1><p style="margin:8px 0 0">10th West Moto Parts</p></div>
+            <div class="content">
+              <h2>Hi ${name || 'there'},</h2>
+              <p>Please use the verification code below to complete your registration:</p>
+              <div style="text-align:center"><span class="otp">${otp}</span></div>
+              <p style="font-size:12px;color:#64748b">This code will expire in 15 minutes. Wait! If you did not request this, you can safely ignore this email.</p>
+            </div>
+            <div class="footer"><p>10th West Moto - Motorcycle Parts & Accessories</p></div>
+          </div>
+        </body></html>
+      `,
+    });
 
-    const result = await pool.query(
-      `INSERT INTO users (name, email, password_hash, role, email_verified, consent_given_at, age_confirmed_at)
-       VALUES ($1, $2, $3, $4, false, $5, $6)
-       RETURNING id, name, email, role, phone, avatar, store_credit, is_active, two_factor_enabled, last_login, email_verified`,
-      [name, email, hashedPassword, role, consent_given ? new Date() : null, age_confirmed ? new Date() : null]
-    );
-
-    const user = result.rows[0];
-    const token = signToken(user);
-
-    await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
-    await logActivity({ userId: user.id, action: 'register', entityType: 'user', entityId: user.id, ipAddress: ip, userAgent: ua });
-
-    res.status(201).json({ message: 'User registered successfully', user: sanitizeUser(user), token });
+    res.json({ message: 'Verification code sent to your email.' });
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ message: 'Server error during registration' });
+    console.error('Send OTP error:', sanitizeDatabaseError(error));
+    if (error?.status && error.fieldErrors) {
+      return res.status(error.status).json({
+        message: error.message || 'Please use a valid email address.',
+        fieldErrors: error.fieldErrors || {},
+      });
+    }
+    if (error?.status) {
+      return res.status(202).json({
+        message: 'Verification code request accepted. Please continue with email verification.',
+        degraded: true,
+      });
+    }
+    if (isDatabaseConnectivityError(error)) {
+      return res.status(202).json({
+        message: 'Verification code request accepted. Please continue with email verification.',
+        degraded: true,
+      });
+    }
+    res.status(500).json({ message: 'Failed to send verification code' });
   }
 };
 
-// ─── LOGIN ─────────────────────────────────────────────────────────
-export const login = async (req, res) => {
-  const { email, password, totp_code } = req.body;
-  const ip = req.clientIp;
-  const ua = req.clientUa;
+// ─── REGISTER ──────────────────────────────────────────────────────
+export const register = async (req, res) => {
+  const {
+    name,
+    email,
+    password,
+    consent_given,
+    age_confirmed,
+  } = req.validatedData || req.body;
+
+  let client;
 
   try {
-    // Check lockout
+    if (shouldUseDatabaseReadFallback()) {
+      const existingUser = await getUserFromSupabaseRestByEmail(email);
+      const verificationToken = createVerificationToken();
+
+      if (existingUser) {
+        if (existingUser.email_verified) {
+          return res.status(409).json({
+            message: 'Email already in use.',
+            fieldErrors: {
+              email: 'This email is already in use.',
+            },
+          });
+        }
+
+        await updateUserViaSupabaseRest(existingUser.id, {
+          email_verification_token: verificationToken.tokenHash,
+          email_verification_expires: verificationToken.expiresAt.toISOString(),
+        });
+
+        try {
+          await sendVerificationEmail({
+            email: existingUser.email,
+            name: existingUser.name,
+            token: verificationToken.token,
+          });
+        } catch (emailError) {
+          console.error('Registration resend email error:', sanitizeDatabaseError(emailError));
+          return res.status(503).json({
+            message: 'Your account is still pending verification, but we could not send a new verification email right now. Please try again shortly.',
+            requiresVerification: true,
+            email,
+            code: 'VERIFICATION_EMAIL_FAILED',
+          });
+        }
+
+        return res.json({
+          message: 'This email is already registered but not verified. A new verification email has been sent.',
+          requiresVerification: true,
+          email,
+          degraded: true,
+        });
+      }
+
+      await assertEmailDomainCanReceiveMail(email);
+
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      const rows = await supabaseRestRequest('users', {
+        method: 'POST',
+        prefer: 'return=representation',
+        body: {
+          name,
+          email,
+          password_hash: passwordHash,
+          role: 'customer',
+          email_verified: false,
+          consent_given_at: consent_given ? new Date().toISOString() : null,
+          age_confirmed_at: age_confirmed ? new Date().toISOString() : null,
+          email_verification_token: verificationToken.tokenHash,
+          email_verification_expires: verificationToken.expiresAt.toISOString(),
+        },
+      });
+      const newUser = Array.isArray(rows) ? rows[0] : rows;
+
+      try {
+        await sendVerificationEmail({
+          email: newUser.email,
+          name: newUser.name,
+          token: verificationToken.token,
+        });
+      } catch (emailError) {
+        console.error('Registration email error:', sanitizeDatabaseError(emailError));
+        return res.status(503).json({
+          message: 'Registration successful, but we could not send the verification email right now. Please use resend verification shortly.',
+          requiresVerification: true,
+          email,
+          code: 'VERIFICATION_EMAIL_FAILED',
+        });
+      }
+
+      return res.status(201).json({
+        message: 'Registration successful. Please check your email to verify your account.',
+        requiresVerification: true,
+        email,
+        degraded: true,
+      });
+    }
+
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const existingResult = await client.query(
+      'SELECT id, name, email, email_verified FROM users WHERE email = $1 FOR UPDATE',
+      [email]
+    );
+
+    const verificationToken = createVerificationToken();
+
+    if (existingResult.rows.length > 0) {
+      const existingUser = existingResult.rows[0];
+
+      if (existingUser.email_verified) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: 'Email already in use.',
+          fieldErrors: {
+            email: 'This email is already in use.',
+          },
+        });
+      }
+
+      await client.query(
+        `UPDATE users
+         SET email_verification_token = $1,
+             email_verification_expires = $2
+         WHERE id = $3`,
+        [verificationToken.tokenHash, verificationToken.expiresAt, existingUser.id]
+      );
+
+      await client.query('COMMIT');
+
+      try {
+        await sendVerificationEmail({
+          email: existingUser.email,
+          name: existingUser.name,
+          token: verificationToken.token,
+        });
+      } catch (emailError) {
+        console.error('Registration resend email error:', sanitizeDatabaseError(emailError));
+        return res.status(503).json({
+          message: 'Your account is still pending verification, but we could not send a new verification email right now. Please try again shortly.',
+          requiresVerification: true,
+          email,
+          code: 'VERIFICATION_EMAIL_FAILED',
+        });
+      }
+
+      return res.json({
+        message: 'This email is already registered but not verified. A new verification email has been sent.',
+        requiresVerification: true,
+        email,
+      });
+    }
+
+    await assertEmailDomainCanReceiveMail(email);
+
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+    const newUserResult = await client.query(
+      `INSERT INTO users (
+         name, email, password_hash, role, email_verified,
+         consent_given_at, age_confirmed_at, email_verification_token, email_verification_expires
+       )
+       VALUES ($1, $2, $3, 'customer', false, $4, $5, $6, $7)
+       RETURNING id, name, email`,
+      [
+        name,
+        email,
+        passwordHash,
+        consent_given ? new Date() : null,
+        age_confirmed ? new Date() : null,
+        verificationToken.tokenHash,
+        verificationToken.expiresAt,
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    try {
+      await sendVerificationEmail({
+        email: newUserResult.rows[0].email,
+        name: newUserResult.rows[0].name,
+        token: verificationToken.token,
+      });
+    } catch (emailError) {
+      console.error('Registration email error:', sanitizeDatabaseError(emailError));
+      return res.status(503).json({
+        message: 'Registration successful, but we could not send the verification email right now. Please use resend verification shortly.',
+        requiresVerification: true,
+        email,
+        code: 'VERIFICATION_EMAIL_FAILED',
+      });
+    }
+
+    res.status(201).json({
+      message: 'Registration successful. Please check your email to verify your account.',
+      requiresVerification: true,
+      email,
+    });
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {}
+    }
+
+    console.error('Registration error:', sanitizeDatabaseError(error));
+
+    if (error?.code === '23505') {
+      return res.status(409).json({
+        message: 'Email already in use.',
+        fieldErrors: {
+          email: 'This email is already in use.',
+        },
+      });
+    }
+
+    if (error?.status) {
+      const status = error.status === 409 ? 409 : error.status;
+      return res.status(status).json({
+        message: error.message || 'Please correct the highlighted fields.',
+        fieldErrors: error.status === 409
+          ? { email: 'This email is already in use.' }
+          : (error.fieldErrors || {}),
+      });
+    }
+
+    res.status(500).json({ message: 'Failed to create account' });
+  } finally {
+    client?.release();
+  }
+};
+
+export const login = async (req, res) => {
+  const { email, password, totp_code: totpCode, recovery_code: recoveryCode } = req.validatedData || req.body;
+  const ipAddress = req.clientIp;
+  const userAgent = req.clientUa;
+  const guestCartSessionId = req.session?.cartSessionId || null;
+
+  try {
     if (await isAccountLocked(email)) {
-      return res.status(423).json({ message: `Account temporarily locked. Try again in ${LOCK_DURATION_MINUTES} minutes.` });
+      return res.status(429).json({
+        message: 'Too many failed login attempts. Please try again later.',
+      });
     }
 
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+
     if (result.rows.length === 0) {
-      await recordLoginAttempt(email, ip, false);
-      await logActivity({ userId: null, action: 'login_failed', details: { email, reason: 'not_found' }, ipAddress: ip, userAgent: ua });
-      return res.status(401).json({ message: 'Invalid email or password' });
+      await recordLoginAttempt(email, ipAddress, false);
+      return res.status(401).json({
+        message: 'Invalid email or password',
+        code: 'INVALID_CREDENTIALS',
+      });
     }
 
     const user = result.rows[0];
 
-    if (!user.is_active) {
-      return res.status(403).json({ message: 'Account has been deactivated. Contact support.' });
+    if (!user.is_active || user.is_deleted) {
+      return res.status(403).json({ message: 'Your account is currently unavailable. Please contact support.' });
     }
 
-    // OAuth-only accounts cannot login with password
-    if (user.oauth_provider && !user.password_hash) {
-      return res.status(400).json({ message: `This account uses ${user.oauth_provider} login. Please sign in with ${user.oauth_provider}.` });
-    }
+    const isValid = await bcrypt.compare(password, user.password_hash || '');
 
-    const isValid = await bcrypt.compare(password, user.password_hash);
     if (!isValid) {
-      await recordLoginAttempt(email, ip, false);
-      await pool.query('UPDATE users SET failed_login_attempts = failed_login_attempts + 1 WHERE id = $1', [user.id]);
-      await logActivity({ userId: user.id, action: 'login_failed', details: { reason: 'wrong_password' }, ipAddress: ip, userAgent: ua });
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    // ── 2FA check ──
-    if (user.two_factor_enabled) {
-      if (!totp_code) {
-        return res.status(200).json({ requires_2fa: true, message: 'Two-factor authentication code required' });
+      await recordLoginAttempt(email, ipAddress, false);
+      if (await isAccountLocked(email)) {
+        return res.status(429).json({
+          message: 'Too many failed login attempts. Please try again later.',
+        });
       }
-      const verified = speakeasy.totp.verify({
-        secret: user.two_factor_secret,
-        encoding: 'base32',
-        token: totp_code,
-        window: 1,
+      return res.status(401).json({
+        message: 'Invalid email or password',
+        code: 'INVALID_CREDENTIALS',
       });
-      if (!verified) {
-        await logActivity({ userId: user.id, action: '2fa_failed', ipAddress: ip, userAgent: ua });
-        return res.status(401).json({ message: 'Invalid 2FA code' });
+    }
+
+    if (!user.email_verified) {
+      return res.status(403).json({
+        message: 'Your account is not verified. Please check your email.',
+        requiresVerification: true,
+        email: user.email,
+        code: 'EMAIL_NOT_VERIFIED',
+      });
+    }
+
+    if (user.two_factor_enabled) {
+      if (!totpCode && !recoveryCode) {
+        return res.json({
+          requires_2fa: true,
+          code: 'TWO_FACTOR_REQUIRED',
+          message: 'Enter the code from your authenticator app.',
+        });
+      }
+
+      const validTotp = Boolean(totpCode && user.two_factor_secret) && speakeasy.totp.verify({
+        secret: decryptTwoFactorSecret(user.two_factor_secret), encoding: 'base32', token: String(totpCode), window: 1,
+      });
+      const recoveryHashes = Array.isArray(user.two_factor_recovery_hashes) ? user.two_factor_recovery_hashes : [];
+      const recoveryHash = recoveryCode ? hashRecoveryCode(recoveryCode) : null;
+      const recoveryIndex = recoveryHash ? recoveryHashes.indexOf(recoveryHash) : -1;
+      const validRecovery = recoveryIndex >= 0;
+
+      if (!validTotp && !validRecovery) {
+        await recordLoginAttempt(email, ipAddress, false);
+        await logActivity({ userId: user.id, action: 'login_2fa_failed', ipAddress, userAgent });
+        return res.status(401).json({
+          message: 'Invalid two-factor authentication code.',
+          code: 'TWO_FACTOR_INVALID',
+          requires_2fa: true,
+        });
+      }
+      if (validRecovery) {
+        recoveryHashes.splice(recoveryIndex, 1);
+        await pool.query('UPDATE users SET two_factor_recovery_hashes=$2::jsonb WHERE id=$1', [user.id, JSON.stringify(recoveryHashes)]);
       }
     }
 
-    // Success
-    await recordLoginAttempt(email, ip, true);
-    await pool.query('UPDATE users SET failed_login_attempts = 0, last_login = NOW() WHERE id = $1', [user.id]);
+    try {
+      await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
+    } catch (cartMergeError) {
+      console.warn('Unable to merge guest cart during login:', sanitizeDatabaseError(cartMergeError));
+    }
 
-    const token = signToken(user);
+    const token = await persistSession(pool, user, ipAddress, userAgent);
+    await prepareAuthenticatedSession(req, user, token);
 
-    // Create session record
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    await pool.query(
-      `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
-       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '7 days')`,
-      [user.id, tokenHash, ip, ua]
-    );
+    // Post-login bookkeeping must not block a valid authentication response.
+    void (async () => {
+      try {
+        await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+        await pool.query(
+          `DELETE FROM login_attempts
+           WHERE email = $1
+             AND success = false
+             AND created_at > NOW() - make_interval(mins => $2)`,
+          [email, LOCK_DURATION_MINUTES]
+        );
+        await recordLoginAttempt(email, ipAddress, true);
+        await logActivity({ userId: user.id, action: 'login', ipAddress, userAgent });
+      } catch (bookkeepingError) {
+        console.warn('Unable to complete login bookkeeping:', sanitizeDatabaseError(bookkeepingError));
+      }
+    })();
 
-    await logActivity({ userId: user.id, action: 'login', entityType: 'user', entityId: user.id, ipAddress: ip, userAgent: ua });
-
-    res.json({ message: 'Login successful', user: sanitizeUser(user), token });
+    res.json({ user: sanitizeUser({ ...user, last_login: new Date(), email_verified: true }) });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+    console.error('Login error:', sanitizeDatabaseError(error));
+    if (isDatabaseUnavailableError(error)) {
+      return res.status(503).json({
+        message: DATABASE_UNAVAILABLE_MESSAGE,
+        code: 'DATABASE_UNAVAILABLE',
+      });
+    }
+
+    res.status(500).json({
+      message: 'Login failed',
+      code: 'LOGIN_FAILED',
+    });
   }
 };
 
-// ─── LOGOUT ────────────────────────────────────────────────────────
 export const logout = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -190,18 +850,69 @@ export const logout = async (req, res) => {
       const token = authHeader.split(' ')[1];
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       await pool.query('UPDATE sessions SET is_active = false WHERE token_hash = $1', [tokenHash]);
+    } else if (req.session?.auth?.tokenHash) {
+      await pool.query('UPDATE sessions SET is_active = false WHERE token_hash = $1', [req.session.auth.tokenHash]);
     }
+
+    if (req.session) {
+      await new Promise((resolve) => {
+        req.session.destroy(() => resolve());
+      });
+      res.clearCookie('twm.sid', {
+        httpOnly: true,
+        sameSite: getSessionCookieSameSite(),
+        secure: isSessionCookieSecure(),
+        path: '/',
+      });
+    }
+
+    await rotateGuestSession(req);
     await logActivity({ userId: req.user?.id, action: 'logout', ipAddress: req.clientIp, userAgent: req.clientUa });
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error('Logout error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error during logout' });
   }
 };
 
 // ─── GET PROFILE ───────────────────────────────────────────────────
+export const getMyPermissions = async (req, res) => {
+  try {
+    if (['owner', 'super_admin', 'admin'].includes(req.user.role)) {
+      const result = await pool.query('SELECT name FROM permissions ORDER BY name');
+      return res.json({ permissions: result.rows.map((row) => row.name) });
+    }
+
+    const result = await pool.query(
+      `SELECT p.name
+       FROM permissions p
+       WHERE COALESCE(
+         (SELECT up.granted FROM user_permissions up
+          WHERE up.user_id = $1 AND up.permission_id = p.id),
+         EXISTS(
+           SELECT 1 FROM role_permissions rp
+           WHERE rp.role = $2 AND rp.permission_id = p.id
+         ),
+         false
+       )
+       ORDER BY p.name`,
+      [req.user.id, req.user.role],
+    );
+    return res.json({ permissions: result.rows.map((row) => row.name) });
+  } catch (error) {
+    console.error('Permission profile error:', sanitizeDatabaseError(error));
+    return res.status(500).json({ message: 'Permissions could not be loaded.', code: 'PERMISSIONS_LOAD_FAILED' });
+  }
+};
+
 export const getProfile = async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      const user = await getUserFromSupabaseRestById(req.user.id);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      return res.json(sanitizeUser(user));
+    }
+
     const result = await pool.query(
       `SELECT id, name, email, role, phone, avatar, store_credit, is_active,
               two_factor_enabled, oauth_provider, last_login, email_verified, created_at
@@ -211,22 +922,33 @@ export const getProfile = async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
     res.json(sanitizeUser(result.rows[0]));
   } catch (error) {
-    console.error('Get profile error:', error);
+    console.error('Get profile error:', sanitizeDatabaseError(error));
+    if (isDatabaseConnectivityError(error)) {
+      try {
+        const user = await getUserFromSupabaseRestById(req.user.id);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        return res.json(sanitizeUser(user));
+      } catch (fallbackError) {
+        console.error('Get profile Supabase REST fallback error:', sanitizeDatabaseError(fallbackError));
+      }
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // ─── FORGOT PASSWORD ───────────────────────────────────────────────
 export const forgotPassword = async (req, res) => {
-  const { email } = req.body;
+  const { email } = req.validatedData || req.body;
 
   try {
-    const result = await pool.query('SELECT id, name, email, oauth_provider, password_hash FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) {
+    const user = shouldUseDatabaseReadFallback()
+      ? await getUserFromSupabaseRestByEmail(email)
+      : (await pool.query('SELECT id, name, email, oauth_provider, password_hash FROM users WHERE email = $1', [email])).rows[0];
+
+    if (!user) {
       return res.json({ message: 'If that email exists, a password reset link has been sent.' });
     }
 
-    const user = result.rows[0];
     if (user.oauth_provider && !user.password_hash) {
       return res.json({ message: 'If that email exists, a password reset link has been sent.' });
     }
@@ -235,14 +957,22 @@ export const forgotPassword = async (req, res) => {
     const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
     const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    await pool.query(
-      'UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3',
-      [hashedToken, expires, user.id]
-    );
+    if (shouldUseDatabaseReadFallback()) {
+      await updateUserViaSupabaseRest(user.id, {
+        password_reset_token: hashedToken,
+        password_reset_expires: expires.toISOString(),
+      });
+    } else {
+      await pool.query(
+        'UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3',
+        [hashedToken, expires, user.id]
+      );
+    }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = getFrontendUrl();
     // Security: token-only URL — no email/PII in URL (RA 10173 §20)
-    const resetUrl = `${frontendUrl}/#/reset-password?token=${resetToken}`;
+    frontendUrl.hash = `/reset-password?token=${encodeURIComponent(resetToken)}`;
+    const resetUrl = frontendUrl.toString();
 
     const transporter = createTransporter();
     await transporter.sendMail({
@@ -277,14 +1007,14 @@ export const forgotPassword = async (req, res) => {
     await logActivity({ userId: user.id, action: 'password_reset_requested', ipAddress: req.clientIp, userAgent: req.clientUa });
     res.json({ message: 'If that email exists, a password reset link has been sent.' });
   } catch (error) {
-    console.error('Forgot password error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Forgot password error:', sanitizeDatabaseError(error));
+    res.json({ message: 'If that email exists, a password reset link has been sent.' });
   }
 };
 
 // ─── VERIFY RESET TOKEN ────────────────────────────────────────────
 export const verifyResetToken = async (req, res) => {
-  const { token } = req.body;
+  const { token } = req.validatedData || req.body;
 
   try {
     if (!token) return res.status(400).json({ message: 'Token is required' });
@@ -300,22 +1030,27 @@ export const verifyResetToken = async (req, res) => {
     }
 
     const user = result.rows[0];
-    if (new Date(user.password_reset_expires) < new Date()) {
-      return res.status(400).json({ message: 'Reset token has expired' });
+    const expiresAt = new Date(user.password_reset_expires);
+    if (expiresAt < new Date()) {
+      await pool.query(
+        'UPDATE users SET password_reset_token = NULL, password_reset_expires = NULL WHERE id = $1',
+        [user.id]
+      );
+      return res.status(400).json({ message: 'Reset token has expired', code: 'RESET_TOKEN_EXPIRED' });
     }
 
     // Return masked email for confirmation (no PII leak)
     const maskedEmail = user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
-    res.json({ valid: true, email: maskedEmail });
+    res.json({ valid: true, email: maskedEmail, expires_at: expiresAt.toISOString() });
   } catch (error) {
-    console.error('Verify reset token error:', error);
+    console.error('Verify reset token error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // ─── RESET PASSWORD (token-only, no email in request) ──────────────
 export const resetPassword = async (req, res) => {
-  const { token, newPassword } = req.body;
+  const { token, newPassword } = req.validatedData || req.body;
 
   try {
     if (!PASSWORD_REGEX.test(newPassword)) {
@@ -355,7 +1090,7 @@ export const resetPassword = async (req, res) => {
 
     res.json({ message: 'Password reset successfully. All sessions terminated. You can now login with your new password.' });
   } catch (error) {
-    console.error('Reset password error:', error);
+    console.error('Reset password error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -365,6 +1100,10 @@ export const changePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   try {
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required.' });
+    }
+
     if (!PASSWORD_REGEX.test(newPassword)) {
       return res.status(400).json({ message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character' });
     }
@@ -372,18 +1111,41 @@ export const changePassword = async (req, res) => {
     const result = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
 
-    if (result.rows[0].password_hash) {
-      const isValid = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
-      if (!isValid) return res.status(401).json({ message: 'Current password is incorrect' });
+    const currentPasswordHash = result.rows[0].password_hash;
+
+    if (!currentPasswordHash) {
+      return res.status(400).json({ message: 'This account does not have a password to change. Please use account recovery or set a password from your login provider settings.' });
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, currentPasswordHash);
+    if (!isValid) return res.status(401).json({ message: 'Current password is incorrect' });
+
+    const isSamePassword = await bcrypt.compare(newPassword, currentPasswordHash);
+    if (isSamePassword) {
+      return res.status(400).json({ message: 'New password must be different from your current password.' });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
     await pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hashedPassword, req.user.id]);
+
+    // Security: Invalidate all other active sessions (keep current one)
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      const currentToken = authHeader.split(' ')[1];
+      const currentTokenHash = crypto.createHash('sha256').update(currentToken).digest('hex');
+      await pool.query(
+        'UPDATE sessions SET is_active = false WHERE user_id = $1 AND token_hash != $2',
+        [req.user.id, currentTokenHash]
+      );
+    } else {
+      await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [req.user.id]);
+    }
+
     await logActivity({ userId: req.user.id, action: 'password_changed', ipAddress: req.clientIp, userAgent: req.clientUa });
 
-    res.json({ message: 'Password changed successfully' });
+    res.json({ message: 'Password changed successfully. All other sessions have been terminated.' });
   } catch (error) {
-    console.error('Change password error:', error);
+    console.error('Change password error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -399,12 +1161,16 @@ export const setup2FA = async (req, res) => {
       issuer: '10th West Moto',
     });
 
-    await pool.query('UPDATE users SET two_factor_secret = $1 WHERE id = $2', [secret.base32, req.user.id]);
+    await pool.query(
+      `UPDATE users SET two_factor_secret=$1,two_factor_enabled=false,two_factor_recovery_hashes='[]'::jsonb WHERE id=$2`,
+      [encryptTwoFactorSecret(secret.base32), req.user.id]
+    );
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
 
-    res.json({ secret: secret.base32, qrCode: qrCodeUrl, message: 'Scan the QR code with your authenticator app, then verify with a code.' });
+    // Security: Only return QR code, never expose the raw secret to the frontend
+    res.json({ qrCode: qrCodeUrl, message: 'Scan the QR code with your authenticator app, then verify with a code.' });
   } catch (error) {
-    console.error('2FA setup error:', error);
+    console.error('2FA setup error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -417,18 +1183,23 @@ export const verify2FA = async (req, res) => {
     const result = await pool.query('SELECT two_factor_secret FROM users WHERE id = $1', [req.user.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
 
-    const secret = result.rows[0].two_factor_secret;
-    if (!secret) return res.status(400).json({ message: 'No 2FA setup in progress' });
+    const encryptedSecret = result.rows[0].two_factor_secret;
+    if (!encryptedSecret) return res.status(400).json({ message: 'No 2FA setup in progress' });
+    const secret = decryptTwoFactorSecret(encryptedSecret);
 
     const verified = speakeasy.totp.verify({ secret, encoding: 'base32', token: totp_code, window: 1 });
     if (!verified) return res.status(400).json({ message: 'Invalid code. Try again.' });
 
-    await pool.query('UPDATE users SET two_factor_enabled = true WHERE id = $1', [req.user.id]);
+    const recoveryCodes = generateRecoveryCodes();
+    await pool.query(
+      `UPDATE users SET two_factor_enabled=true,two_factor_recovery_hashes=$2::jsonb WHERE id=$1`,
+      [req.user.id, JSON.stringify(recoveryCodes.map(hashRecoveryCode))]
+    );
     await logActivity({ userId: req.user.id, action: '2fa_enabled', ipAddress: req.clientIp, userAgent: req.clientUa });
 
-    res.json({ message: 'Two-factor authentication enabled successfully!' });
+    res.json({ message: 'Two-factor authentication enabled successfully!', recovery_codes: recoveryCodes });
   } catch (error) {
-    console.error('2FA verify error:', error);
+    console.error('2FA verify error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -446,12 +1217,12 @@ export const disable2FA = async (req, res) => {
       if (!isValid) return res.status(401).json({ message: 'Invalid password' });
     }
 
-    await pool.query('UPDATE users SET two_factor_enabled = false, two_factor_secret = NULL WHERE id = $1', [req.user.id]);
+    await pool.query(`UPDATE users SET two_factor_enabled=false,two_factor_secret=NULL,two_factor_recovery_hashes='[]'::jsonb WHERE id=$1`, [req.user.id]);
     await logActivity({ userId: req.user.id, action: '2fa_disabled', ipAddress: req.clientIp, userAgent: req.clientUa });
 
     res.json({ message: 'Two-factor authentication disabled' });
   } catch (error) {
-    console.error('2FA disable error:', error);
+    console.error('2FA disable error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -462,6 +1233,12 @@ export const oauthCallback = async (req, res) => {
     const { provider, id: oauthId, email, name, avatar } = req.oauthUser;
     const ip = req.clientIp;
     const ua = req.clientUa;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const redirectToLoginError = (errorCode) => res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent(errorCode)}`);
+
+    if (!email) {
+      return redirectToLoginError('oauth_missing_email');
+    }
 
     let result = await pool.query('SELECT * FROM users WHERE oauth_provider = $1 AND oauth_id = $2', [provider, oauthId]);
     let user;
@@ -469,13 +1246,16 @@ export const oauthCallback = async (req, res) => {
     if (result.rows.length > 0) {
       user = result.rows[0];
       if (!user.is_active) {
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/#/login?error=account_deactivated`);
+        return redirectToLoginError('account_deactivated');
       }
       await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
     } else {
       result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
       if (result.rows.length > 0) {
         user = result.rows[0];
+        if (!user.is_active) {
+          return redirectToLoginError('account_deactivated');
+        }
         await pool.query(
           'UPDATE users SET oauth_provider = $1, oauth_id = $2, avatar = COALESCE(avatar, $3), email_verified = true, last_login = NOW() WHERE id = $4',
           [provider, oauthId, avatar, user.id]
@@ -490,21 +1270,75 @@ export const oauthCallback = async (req, res) => {
       }
     }
 
-    const token = signToken(user);
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    // Security: Use a short-lived opaque code instead of passing JWT directly in URL.
+    // The frontend exchanges this code for a JWT via POST /auth/exchange-code.
+    const oauthCode = crypto.randomBytes(32).toString('hex');
+    const codeHash = crypto.createHash('sha256').update(oauthCode).digest('hex');
     await pool.query(
-      `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at) VALUES ($1, $2, $3, $4, NOW() + INTERVAL '7 days')`,
-      [user.id, tokenHash, ip, ua]
+      `INSERT INTO oauth_codes (user_id, code_hash, ip_address, user_agent, expires_at)
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '2 minutes')`,
+      [user.id, codeHash, ip, ua]
     );
 
     await logActivity({ userId: user.id, action: 'oauth_login', details: { provider }, ipAddress: ip, userAgent: ua });
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    // Only pass token in URL — never expose PII (name, email, phone) in query params
-    res.redirect(`${frontendUrl}/#/oauth-callback?token=${token}`);
+    // Only pass opaque code in URL; never expose JWT or PII in query params.
+    res.redirect(`${frontendUrl}/#/oauth-callback?code=${oauthCode}`);
   } catch (error) {
-    console.error('OAuth callback error:', error);
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/#/login?error=oauth_failed`);
+    console.error('OAuth callback error:', sanitizeDatabaseError(error));
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent('oauth_failed')}`);
+  }
+};
+
+// ─── EXCHANGE OAUTH CODE FOR TOKEN ─────────────────────────────────
+export const exchangeOAuthCode = async (req, res) => {
+  const { code } = req.body;
+  const ip = req.clientIp;
+  const ua = req.clientUa;
+
+  try {
+    if (!code) return res.status(400).json({ message: 'Code is required' });
+
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+    const result = await pool.query(
+      `UPDATE oauth_codes
+          SET used = true
+        WHERE code_hash = $1
+          AND expires_at > NOW()
+          AND used = false
+        RETURNING user_id`,
+      [codeHash]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: 'Invalid or expired code' });
+    }
+
+    const userId = result.rows[0].user_id;
+
+    // Fetch user
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    const token = signToken(user);
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    await pool.query(
+      `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [user.id, tokenHash, ip, ua, getSessionExpiresAt()]
+    );
+
+    await prepareAuthenticatedSession(req, user, token);
+
+    res.json({ user: sanitizeUser(user) });
+  } catch (error) {
+    console.error('Exchange OAuth code error:', sanitizeDatabaseError(error));
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -517,7 +1351,7 @@ export const getActiveSessions = async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    console.error('Get sessions error:', error);
+    console.error('Get sessions error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -527,39 +1361,66 @@ export const revokeSession = async (req, res) => {
     await pool.query('UPDATE sessions SET is_active = false WHERE id = $1 AND user_id = $2', [req.params.sessionId, req.user.id]);
     res.json({ message: 'Session revoked' });
   } catch (error) {
-    console.error('Revoke session error:', error);
+    console.error('Revoke session error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // ─── ACTIVITY LOGS (admin) ─────────────────────────────────────────
 export const getActivityLogs = async (req, res) => {
-  const { page = 1, limit = 50, userId, action } = req.query;
+  const { userId, action, entityType, startDate, endDate, search } = req.query;
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
   const offset = (page - 1) * limit;
 
   try {
-    let query = `SELECT al.*, u.name as user_name, u.email as user_email FROM activity_logs al LEFT JOIN users u ON al.user_id = u.id WHERE 1=1`;
+    const unifiedCte = `
+      WITH unified_logs AS (
+        SELECT CONCAT('activity:', al.id)::text AS unified_id, 'activity'::text AS source,
+               al.user_id AS actor_user_id, al.action, al.entity_type, al.entity_id::text AS entity_id,
+               al.ip_address, al.user_agent, NULL::jsonb AS before_data, NULL::jsonb AS after_data,
+               al.details AS metadata, al.created_at AT TIME ZONE 'UTC' AS created_at
+        FROM activity_logs al
+        UNION ALL
+        SELECT CONCAT('audit:', au.id)::text, 'audit'::text, au.actor_user_id, au.action,
+               au.entity_type, au.entity_id, au.ip_address, au.user_agent, au.before_data,
+               au.after_data, au.metadata, au.created_at
+        FROM audit_logs au
+      )`;
+    const filters = ['1=1'];
     const params = [];
-    let idx = 1;
-
-    if (userId) { query += ` AND al.user_id = $${idx++}`; params.push(userId); }
-    if (action) { query += ` AND al.action = $${idx++}`; params.push(action); }
-
-    query += ` ORDER BY al.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
-    params.push(limit, offset);
-
-    const result = await pool.query(query, params);
-
-    let countQuery = 'SELECT COUNT(*) FROM activity_logs WHERE 1=1';
-    const cp = [];
-    let ci = 1;
-    if (userId) { countQuery += ` AND user_id = $${ci++}`; cp.push(userId); }
-    if (action) { countQuery += ` AND action = $${ci++}`; cp.push(action); }
-    const countResult = await pool.query(countQuery, cp);
-
-    res.json({ logs: result.rows, total: parseInt(countResult.rows[0].count), page: parseInt(page), totalPages: Math.ceil(parseInt(countResult.rows[0].count) / limit) });
+    if (userId) { params.push(userId); filters.push(`ul.actor_user_id = $${params.length}`); }
+    if (action) { params.push(`%${action}%`); filters.push(`ul.action ILIKE $${params.length}`); }
+    if (entityType) { params.push(entityType); filters.push(`ul.entity_type = $${params.length}`); }
+    if (startDate) { params.push(startDate); filters.push(`ul.created_at >= $${params.length}::timestamptz`); }
+    if (endDate) { params.push(endDate); filters.push(`ul.created_at < ($${params.length}::date + INTERVAL '1 day')`); }
+    if (search) {
+      params.push(`%${search}%`);
+      filters.push(`(ul.action ILIKE $${params.length} OR ul.entity_type ILIKE $${params.length} OR ul.entity_id ILIKE $${params.length})`);
+    }
+    const where = filters.join(' AND ');
+    const dataParams = [...params, limit, offset];
+    const result = await pool.query(
+      `${unifiedCte}
+       SELECT ul.unified_id AS id, ul.source, ul.actor_user_id AS user_id, ul.action,
+              ul.entity_type, ul.entity_id, ul.ip_address, ul.user_agent, ul.before_data,
+              ul.after_data, ul.metadata AS details, ul.created_at,
+              u.name AS user_name, u.email AS user_email
+       FROM unified_logs ul
+       LEFT JOIN users u ON u.id = ul.actor_user_id
+       WHERE ${where}
+       ORDER BY ul.created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      dataParams
+    );
+    const countResult = await pool.query(
+      `${unifiedCte} SELECT COUNT(*) FROM unified_logs ul WHERE ${where}`,
+      params
+    );
+    const total = Number.parseInt(countResult.rows[0].count, 10);
+    res.json({ logs: result.rows, total, page, totalPages: Math.ceil(total / limit) });
   } catch (error) {
-    console.error('Get activity logs error:', error);
+    console.error('Get activity logs error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -567,10 +1428,23 @@ export const getActivityLogs = async (req, res) => {
 // ─── DELETE ACCOUNT (Right to be Forgotten - RA 10173 §18) ─────────
 export const deleteAccountHandler = async (req, res) => {
   const userId = req.user.id;
+  const { password } = req.body;
   const ip = req.clientIp;
   const ua = req.clientUa;
 
   try {
+    // Security: Require password confirmation before account deletion
+    const userResult = await pool.query('SELECT password_hash, oauth_provider FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) return res.status(404).json({ message: 'User not found' });
+
+    const user = userResult.rows[0];
+    // Password-based accounts must confirm password; OAuth-only accounts skip
+    if (user.password_hash && user.password_hash !== 'DELETED') {
+      if (!password) return res.status(400).json({ message: 'Password is required to delete your account' });
+      const isValid = await bcrypt.compare(password, user.password_hash);
+      if (!isValid) return res.status(401).json({ message: 'Incorrect password' });
+    }
+
     // Anonymize personal data — retain transaction records for BIR compliance
     await pool.query(
       `UPDATE users SET
@@ -587,102 +1461,230 @@ export const deleteAccountHandler = async (req, res) => {
       [userId]
     );
 
+    // Invalidate all sessions
+    await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [userId]);
+
     await logActivity({ userId, action: 'account_deleted', entityType: 'user', entityId: userId, ipAddress: ip, userAgent: ua });
 
     res.json({ message: 'Account deleted and personal data anonymized per RA 10173' });
   } catch (error) {
-    console.error('Delete account error:', error);
+    console.error('Delete account error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Failed to delete account' });
   }
 };
 
 // ─── RESEND EMAIL VERIFICATION ─────────────────────────────────────
-export const resendVerification = async (req, res) => {
-  const userId = req.user.id;
 
-  try {
-    const result = await pool.query('SELECT email, email_verified FROM users WHERE id = $1', [userId]);
-    if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
-
-    const user = result.rows[0];
-    if (user.email_verified) {
-      return res.json({ message: 'Email is already verified' });
-    }
-
-    // Generate a verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(verificationToken).digest('hex');
-
-    // Store token with 24h expiry
-    await pool.query(
-      `UPDATE users SET reset_token = $1, reset_token_expires = NOW() + INTERVAL '24 hours' WHERE id = $2`,
-      [tokenHash, userId]
-    );
-
-    // Send verification email
-    try {
-      const transporter = createTransporter();
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      const verifyUrl = `${frontendUrl}/#/verify-email?token=${verificationToken}`;
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
-        to: user.email,
-        subject: 'Verify Your Email - 10th West Moto',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: #f97316; padding: 20px; text-align: center;">
-              <h1 style="color: white; margin: 0;">10th West Moto</h1>
-            </div>
-            <div style="padding: 30px; background: #fff;">
-              <h2>Verify Your Email Address</h2>
-              <p>Click the button below to verify your email. This link expires in 24 hours.</p>
-              <a href="${verifyUrl}" style="display: inline-block; padding: 12px 30px; background: #f97316; color: white; text-decoration: none; border-radius: 8px; margin: 20px 0;">Verify Email</a>
-              <p style="color: #666; font-size: 12px;">If you did not create an account, please ignore this email.</p>
-            </div>
-          </div>
-        `,
-      });
-    } catch (emailErr) {
-      console.error('Email send failed (verification will still work via token):', emailErr.message);
-    }
-
-    res.json({ message: 'Verification email sent. Please check your inbox.' });
-  } catch (error) {
-    console.error('Resend verification error:', error);
-    res.status(500).json({ message: 'Failed to send verification email' });
-  }
-};
-
-// ─── VERIFY EMAIL TOKEN ────────────────────────────────────────────
 export const verifyEmailToken = async (req, res) => {
-  const { token } = req.body;
+  const { token } = req.validatedData || req.body;
+  const ipAddress = req.clientIp;
+  const userAgent = req.clientUa;
+  const guestCartSessionId = req.session?.cartSessionId || null;
+  let requestTimedOut = false;
+
+  res.setTimeout(VERIFICATION_RESPONSE_TIMEOUT_MS, () => {
+    requestTimedOut = true;
+    if (res.headersSent || res.writableEnded) return;
+
+    res.status(503).json({
+      success: false,
+      message: 'Verification is taking longer than expected. Please try again.',
+      code: 'VERIFICATION_TIMEOUT',
+    });
+  });
+
+  const sendResponse = (status, payload) => {
+    if (requestTimedOut || res.headersSent || res.writableEnded) return false;
+    const message = String(payload?.message || '').trim() || 'Verification request completed.';
+    const success = typeof payload?.success === 'boolean'
+      ? payload.success
+      : status >= 200 && status < 300;
+
+    res.status(status).json({
+      ...payload,
+      success,
+      message,
+    });
+    return true;
+  };
+
+  if (!token) {
+    return sendResponse(400, {
+      message: 'Verification token is required.',
+      code: 'VERIFICATION_TOKEN_REQUIRED',
+    });
+  }
+
+  const normalizedToken = String(token).trim();
+  const tokenHash = hashToken(normalizedToken);
+  let client = null;
 
   try {
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query(`SET LOCAL lock_timeout = '${VERIFICATION_LOCK_TIMEOUT_MS}ms'`);
+    await client.query(`SET LOCAL statement_timeout = '${VERIFICATION_STATEMENT_TIMEOUT_MS}ms'`);
 
-    const result = await pool.query(
-      `SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()`,
+    const result = await client.query(
+      `SELECT id, name, email, role, phone, avatar, store_credit, is_active,
+              two_factor_enabled, oauth_provider, last_login, email_verified,
+              email_verification_expires
+       FROM users
+       WHERE email_verification_token = $1
+       FOR UPDATE`,
       [tokenHash]
     );
 
     if (result.rows.length === 0) {
-      return res.status(400).json({ message: 'Invalid or expired verification link' });
+      const usedTokenResult = await client.query(
+        `SELECT id, email_verified
+         FROM users
+         WHERE last_email_verification_token = $1
+           AND last_email_verification_at > NOW() - make_interval(hours => $2)
+         LIMIT 1`,
+        [tokenHash, VERIFIED_TOKEN_LOOKBACK_HOURS]
+      );
+
+      await client.query('ROLLBACK');
+
+      if (usedTokenResult.rows.length > 0 && usedTokenResult.rows[0].email_verified) {
+        return sendResponse(200, {
+          success: true,
+          message: 'This email is already verified. Please log in to continue.',
+          code: 'VERIFICATION_TOKEN_USED',
+          alreadyVerified: true,
+        });
+      }
+
+      return sendResponse(400, {
+        success: false,
+        message: 'This verification link is invalid. Please request a new one.',
+        code: 'VERIFICATION_TOKEN_INVALID',
+      });
     }
 
-    await pool.query(
-      `UPDATE users SET email_verified = true, reset_token = NULL, reset_token_expires = NULL WHERE id = $1`,
-      [result.rows[0].id]
+    const user = result.rows[0];
+
+    if (!user.is_active) {
+      await client.query('ROLLBACK');
+      return sendResponse(403, {
+        success: false,
+        message: 'Your account is currently unavailable. Please contact support.',
+        code: 'ACCOUNT_UNAVAILABLE',
+      });
+    }
+
+    const expiresAt = user.email_verification_expires ? new Date(user.email_verification_expires) : null;
+    const tokenIsExpired = !expiresAt || expiresAt <= new Date();
+
+    if (user.email_verified) {
+      await client.query(
+        `UPDATE users
+         SET email_verification_token = NULL,
+             email_verification_expires = NULL,
+             last_email_verification_token = $2,
+             last_email_verification_at = COALESCE(last_email_verification_at, NOW())
+         WHERE id = $1
+         RETURNING id`,
+        [user.id, tokenHash]
+      );
+
+      await client.query('COMMIT');
+
+      return sendResponse(200, {
+        success: true,
+        message: 'This email is already verified. Please log in to continue.',
+        code: 'VERIFICATION_ALREADY_VERIFIED',
+        alreadyVerified: true,
+      });
+    }
+
+    if (tokenIsExpired) {
+      await client.query(
+        'UPDATE users SET email_verification_token = NULL, email_verification_expires = NULL WHERE id = $1',
+        [user.id]
+      );
+      await client.query('COMMIT');
+      return sendResponse(410, {
+        success: false,
+        message: 'This verification link has expired. Request a new verification email to continue.',
+        code: 'VERIFICATION_TOKEN_EXPIRED',
+        requiresResend: true,
+        expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
+        email: user.email,
+      });
+    }
+
+    const updatedUserResult = await client.query(
+      `UPDATE users
+       SET email_verified = true,
+           email_verification_token = NULL,
+           email_verification_expires = NULL,
+           last_email_verification_token = $2,
+           last_email_verification_at = NOW(),
+           last_login = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [user.id, tokenHash]
     );
 
-    res.json({ message: 'Email verified successfully' });
-  } catch (error) {
-    console.error('Verify email error:', error);
-    res.status(500).json({ message: 'Failed to verify email' });
+    const updatedUser = updatedUserResult.rows[0];
+    const sessionToken = await persistSession(client, updatedUser, ipAddress, userAgent);
+
+    await client.query('COMMIT');
+    await prepareAuthenticatedSession(req, updatedUser, sessionToken);
+
+    queuePostVerificationTasks({
+      userId: updatedUser.id,
+      guestCartSessionId,
+      ipAddress,
+      userAgent,
+      activityAction: 'email_verified',
+    });
+
+    return sendResponse(200, {
+      success: true,
+      message: 'Email verified successfully. Logging you in...',
+      user: sanitizeUser(updatedUser),
+      redirectTo: getPostVerificationRedirectPath(updatedUser),
+      authenticated: true,
+      autoLogin: true,
+      alreadyVerified: false,
+    });
+  } catch (err) {
+    try {
+      if (client) {
+        await client.query('ROLLBACK');
+      }
+    } catch {}
+
+    console.error('Verify email error:', sanitizeDatabaseError(err));
+
+    if (requestTimedOut || res.headersSent || res.writableEnded) {
+      return;
+    }
+
+    if (isTransientVerificationDbError(err)) {
+      return sendResponse(503, {
+        success: false,
+        message: 'Verification is taking longer than expected. Please try again.',
+        code: 'VERIFICATION_TEMPORARY_FAILURE',
+      });
+    }
+
+    return sendResponse(500, {
+      success: false,
+      message: 'We could not verify your account right now. Please try again.',
+      code: 'VERIFICATION_FAILED',
+    });
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 };
 
-// ─── DATA EXPORT / PORTABILITY (RA 10173 §18 - Right to Data Portability) ───
+
 export const exportUserData = async (req, res) => {
   const userId = req.user.id;
 
@@ -742,7 +1744,66 @@ export const exportUserData = async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="10thwest-data-export-${userId}-${Date.now()}.json"`);
     res.json(exportData);
   } catch (error) {
-    console.error('Data export error:', error);
+    console.error('Data export error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Failed to export data' });
+  }
+};
+
+export const resendVerification = async (req, res) => {
+  const { email } = req.validatedData || req.body;
+
+  try {
+    const user = shouldUseDatabaseReadFallback()
+      ? await getUserFromSupabaseRestByEmail(email)
+      : (await pool.query(
+        'SELECT id, name, email, email_verified FROM users WHERE email = $1',
+        [email]
+      )).rows[0];
+
+    if (!user) {
+      return res.json({ message: 'If an unverified account exists for this email, a verification email has been sent.' });
+    }
+
+    if (user.email_verified) {
+      return res.status(400).json({ message: 'This account is already verified. You can log in.' });
+    }
+
+    const verificationToken = createVerificationToken();
+
+    if (shouldUseDatabaseReadFallback()) {
+      await updateUserViaSupabaseRest(user.id, {
+        email_verification_token: verificationToken.tokenHash,
+        email_verification_expires: verificationToken.expiresAt.toISOString(),
+      });
+    } else {
+      await pool.query(
+        'UPDATE users SET email_verification_token = $1, email_verification_expires = $2 WHERE id = $3',
+        [verificationToken.tokenHash, verificationToken.expiresAt, user.id]
+      );
+    }
+
+    try {
+      await sendVerificationEmail({
+        email: user.email,
+        name: user.name,
+        token: verificationToken.token,
+      });
+    } catch (emailError) {
+      console.error('Resend verification email error:', sanitizeDatabaseError(emailError));
+      return res.status(503).json({
+        message: 'We could not send the verification email right now. Please try again shortly.',
+      });
+    }
+
+    res.json({
+      message: 'Verification email resent successfully.',
+      expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
+    });
+  } catch (err) {
+    console.error('Resend verification error:', sanitizeDatabaseError(err));
+    if (isDatabaseConnectivityError(err) || err?.status) {
+      return res.json({ message: 'If an unverified account exists for this email, a verification email has been sent.' });
+    }
+    res.status(500).json({ message: 'Failed to resend verification email' });
   }
 };

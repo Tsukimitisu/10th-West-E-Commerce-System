@@ -1,25 +1,257 @@
 import pool from '../config/database.js';
+import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
+
+const REVENUE_ORDER_STATUSES = ['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered'];
+const REVENUE_ORDER_STATUS_SQL = REVENUE_ORDER_STATUSES.map((status) => `'${status}'`).join(', ');
+const PAID_REPORT_STATUSES = new Set(REVENUE_ORDER_STATUSES);
+const BUSINESS_TIME_ZONE = process.env.BUSINESS_TIME_ZONE || 'Asia/Manila';
+const recognizedSaleSql = (alias) => `${alias}.status IN (${REVENUE_ORDER_STATUS_SQL})
+  AND ${alias}.payment_status IN ('paid', 'partially_refunded')
+  AND COALESCE(${alias}.integrity_status, 'valid') = 'valid'
+  AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = ${alias}.id)`;
+
+const buildDateFilter = ({ range = '30d', startDate, endDate, alias = 'o', startIndex = 1 } = {}) => {
+  const column = `${alias}.created_at`;
+  const normalizedRange = String(range || '30d').toLowerCase();
+  if (startDate && endDate) {
+    return {
+      sql: `AND (${column} AT TIME ZONE $${startIndex})::date BETWEEN $${startIndex + 1}::date AND $${startIndex + 2}::date`,
+      params: [BUSINESS_TIME_ZONE, startDate, endDate],
+    };
+  }
+  const rangeDays = { daily: 0, weekly: 7, '7d': 7, monthly: 30, '30d': 30, '90d': 90 };
+  const days = rangeDays[normalizedRange] ?? 30;
+  return {
+    sql: days === 0
+      ? `AND (${column} AT TIME ZONE $${startIndex})::date = (NOW() AT TIME ZONE $${startIndex})::date`
+      : `AND (${column} AT TIME ZONE $${startIndex}) >= (NOW() AT TIME ZONE $${startIndex}) - ($${startIndex + 1}::int * INTERVAL '1 day')`,
+    params: days === 0 ? [BUSINESS_TIME_ZONE] : [BUSINESS_TIME_ZONE, days],
+  };
+};
+
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const dateOnly = (value) => new Date(value).toISOString().slice(0, 10);
+
+const resolveDateWindow = ({ range = 'daily', start_date, end_date, days } = {}) => {
+  const now = new Date();
+  let start = null;
+  let end = null;
+
+  if (days) {
+    start = new Date(now);
+    start.setDate(start.getDate() - Math.max(1, Number.parseInt(days, 10) || 30));
+    return { start, end };
+  }
+
+  if (range === 'daily') {
+    start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+  } else if (range === 'weekly') {
+    start = new Date(now);
+    start.setDate(start.getDate() - 7);
+  } else if (range === 'monthly') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (start_date && end_date) {
+    start = new Date(start_date);
+    end = new Date(end_date);
+    end.setHours(23, 59, 59, 999);
+  }
+
+  return { start, end };
+};
+
+const inWindow = (createdAt, window) => {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return false;
+  if (window.start && date < window.start) return false;
+  if (window.end && date > window.end) return false;
+  return true;
+};
+
+const getReportOrdersFallback = async (filters = {}) => {
+  const orders = await supabaseRestFetch('orders', {
+    select: 'id,total_amount,discount_amount,source,status,payment_status,integrity_status,user_id,created_at',
+    status: `in.(${REVENUE_ORDER_STATUSES.join(',')})`,
+    order: 'created_at.desc',
+    limit: 5000,
+  }).catch((error) => {
+    console.error('Reports orders Supabase REST fallback error:', error);
+    return [];
+  });
+
+  const window = resolveDateWindow(filters);
+  return (Array.isArray(orders) ? orders : [])
+    .filter((order) => PAID_REPORT_STATUSES.has(String(order.status || '').toLowerCase())
+      && ['paid', 'partially_refunded'].includes(String(order.payment_status || '').toLowerCase())
+      && String(order.integrity_status || 'valid') === 'valid')
+    .filter((order) => inWindow(order.created_at, window));
+};
+
+const getProductsFallback = async () => {
+  const products = await supabaseRestFetch('products', {
+    select: 'id,name,part_number,image,price,buying_price,stock_quantity,low_stock_threshold,category_id,categories(name)',
+    limit: 5000,
+  }).catch((error) => {
+    console.error('Reports products Supabase REST fallback error:', error);
+    return [];
+  });
+
+  return Array.isArray(products) ? products : [];
+};
+
+const getOrderItemsFallback = async (orderIds) => {
+  if (!orderIds.length) return [];
+  const items = await supabaseRestFetch('order_items', {
+    select: 'id,order_id,product_id,product_name,sku_snapshot,quantity,product_price,unit_cost_snapshot',
+    order_id: `in.(${orderIds.join(',')})`,
+    limit: 10000,
+  }).catch((error) => {
+    console.error('Reports order items Supabase REST fallback error:', error);
+    return [];
+  });
+
+  return Array.isArray(items) ? items : [];
+};
+
+const salesReportFallback = async ({ range = 'daily', start_date, end_date } = {}) => {
+  const orders = await getReportOrdersFallback({ range, start_date, end_date });
+  const totalRevenue = orders.reduce((sum, order) => sum + toNumber(order.total_amount), 0);
+  const totalDiscounts = orders.reduce((sum, order) => sum + toNumber(order.discount_amount), 0);
+  const onlineOrders = orders.filter((order) => order.source === 'online');
+  const posOrders = orders.filter((order) => order.source === 'pos');
+
+  return {
+    range,
+    start_date: start_date || null,
+    end_date: end_date || null,
+    total_orders: orders.length,
+    total_revenue: totalRevenue,
+    average_order_value: orders.length ? totalRevenue / orders.length : 0,
+    total_discounts: totalDiscounts,
+    online_orders: onlineOrders.length,
+    pos_orders: posOrders.length,
+    online_revenue: onlineOrders.reduce((sum, order) => sum + toNumber(order.total_amount), 0),
+    pos_revenue: posOrders.reduce((sum, order) => sum + toNumber(order.total_amount), 0),
+  };
+};
+
+const stockLevelsFallback = async () => {
+  const products = await getProductsFallback();
+  const totalStock = products.reduce((sum, product) => sum + toNumber(product.stock_quantity), 0);
+  const byCategory = new Map();
+
+  products.forEach((product) => {
+    const category = product.categories?.name || product.category_name || 'Uncategorized';
+    const current = byCategory.get(category) || { category, product_count: 0, total_stock: 0, low_stock_items: 0 };
+    current.product_count += 1;
+    current.total_stock += toNumber(product.stock_quantity);
+    if (toNumber(product.stock_quantity) <= toNumber(product.low_stock_threshold)) current.low_stock_items += 1;
+    byCategory.set(category, current);
+  });
+
+  return {
+    overview: {
+      total_products: products.length,
+      total_stock: totalStock,
+      out_of_stock_count: products.filter((product) => toNumber(product.stock_quantity) === 0).length,
+      low_stock_count: products.filter((product) => toNumber(product.stock_quantity) > 0 && toNumber(product.stock_quantity) <= toNumber(product.low_stock_threshold)).length,
+      in_stock_count: products.filter((product) => toNumber(product.stock_quantity) > toNumber(product.low_stock_threshold)).length,
+      total_inventory_value: products.reduce((sum, product) => sum + (toNumber(product.stock_quantity) * toNumber(product.buying_price)), 0),
+      potential_revenue: products.reduce((sum, product) => sum + (toNumber(product.stock_quantity) * toNumber(product.price)), 0),
+    },
+    by_category: Array.from(byCategory.values()).sort((a, b) => b.total_stock - a.total_stock),
+  };
+};
+
+const topProductsFallback = async ({ limit = 10, start_date, end_date } = {}) => {
+  const orders = await getReportOrdersFallback({ range: 'custom', start_date, end_date });
+  const orderIds = orders.map((order) => Number(order.id)).filter(Boolean);
+  const [items, products] = await Promise.all([getOrderItemsFallback(orderIds), getProductsFallback()]);
+  const productMap = new Map(products.map((product) => [Number(product.id), product]));
+  const totals = new Map();
+
+  items.forEach((item) => {
+    const productId = Number(item.product_id);
+    const product = productMap.get(productId);
+    const current = totals.get(productId) || {
+      ...(product || {}),
+      id: productId,
+      name: product?.name || item.product_name || `Archived product #${productId}`,
+      part_number: product?.part_number || item.sku_snapshot || null,
+      category_name: product?.categories?.name || product?.category_name || 'Archived',
+      order_count: 0,
+      total_sold: 0,
+      quantity_sold: 0,
+      total_revenue: 0,
+    };
+    current.order_count += 1;
+    current.total_sold += toNumber(item.quantity);
+    current.quantity_sold += toNumber(item.quantity);
+    current.total_revenue += toNumber(item.product_price || product?.price) * toNumber(item.quantity);
+    totals.set(productId, current);
+  });
+
+  return Array.from(totals.values())
+    .sort((a, b) => b.total_sold - a.total_sold)
+    .slice(0, Math.max(1, Number.parseInt(limit, 10) || 10));
+};
+
+const dailyTrendFallback = async ({ days = 30 } = {}) => {
+  const orders = await getReportOrdersFallback({ days });
+  const grouped = new Map();
+
+  orders.forEach((order) => {
+    const key = dateOnly(order.created_at);
+    const current = grouped.get(key) || { date: key, order_count: 0, revenue: 0, online_orders: 0, pos_orders: 0 };
+    current.order_count += 1;
+    current.revenue += toNumber(order.total_amount);
+    if (order.source === 'online') current.online_orders += 1;
+    if (order.source === 'pos') current.pos_orders += 1;
+    grouped.set(key, current);
+  });
+
+  return Array.from(grouped.values()).sort((a, b) => a.date.localeCompare(b.date));
+};
+
+const profitReportFallback = async ({ start_date, end_date } = {}) => {
+  const orders = await getReportOrdersFallback({ range: 'custom', start_date, end_date });
+  const orderIds = orders.map((order) => Number(order.id)).filter(Boolean);
+  const items = await getOrderItemsFallback(orderIds);
+  const totalRevenue = orders.reduce((sum, order) => sum + toNumber(order.total_amount), 0);
+  const missingCostLines = items.filter((item) => item.unit_cost_snapshot === null || item.unit_cost_snapshot === undefined).length;
+  const totalCost = items.reduce((sum, item) => sum + (toNumber(item.quantity) * toNumber(item.unit_cost_snapshot)), 0);
+  const totalDiscounts = orders.reduce((sum, order) => sum + toNumber(order.discount_amount), 0);
+  const profitExact = missingCostLines === 0;
+  const grossProfit = profitExact ? totalRevenue - totalCost : null;
+
+  return {
+    total_orders: orders.length,
+    total_revenue: totalRevenue,
+    total_cost: profitExact ? totalCost : null,
+    gross_profit: grossProfit,
+    profit_margin: profitExact && totalRevenue > 0 ? Number(((grossProfit / totalRevenue) * 100).toFixed(2)) : null,
+    total_discounts: totalDiscounts,
+    net_profit: grossProfit,
+    profit_exact: profitExact,
+    missing_cost_lines: missingCostLines,
+    business_time_zone: BUSINESS_TIME_ZONE,
+  };
+};
 
 // Get sales report by date range
 export const getSalesReport = async (req, res) => {
   const { range = 'daily', start_date, end_date } = req.query;
 
   try {
-    let dateFilter = '';
-    const today = new Date();
-    
-    if (range === 'daily') {
-      const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-      dateFilter = `AND o.created_at >= '${startOfDay.toISOString()}'`;
-    } else if (range === 'weekly') {
-      const startOfWeek = new Date(today.setDate(today.getDate() - 7));
-      dateFilter = `AND o.created_at >= '${startOfWeek.toISOString()}'`;
-    } else if (range === 'monthly') {
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      dateFilter = `AND o.created_at >= '${startOfMonth.toISOString()}'`;
-    } else if (start_date && end_date) {
-      dateFilter = `AND o.created_at BETWEEN '${start_date}' AND '${end_date}'`;
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json(await salesReportFallback({ range, start_date, end_date }));
     }
+
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date });
 
     const result = await pool.query(`
       SELECT 
@@ -32,9 +264,9 @@ export const getSalesReport = async (req, res) => {
         COALESCE(SUM(CASE WHEN o.source = 'online' THEN o.total_amount ELSE 0 END), 0) as online_revenue,
         COALESCE(SUM(CASE WHEN o.source = 'pos' THEN o.total_amount ELSE 0 END), 0) as pos_revenue
       FROM orders o
-      WHERE o.status IN ('paid', 'completed')
-      ${dateFilter}
-    `);
+      WHERE ${recognizedSaleSql('o')}
+      ${dateFilter.sql}
+    `, dateFilter.params);
 
     const stats = result.rows[0];
 
@@ -53,19 +285,27 @@ export const getSalesReport = async (req, res) => {
     });
   } catch (error) {
     console.error('Sales report error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json(await salesReportFallback({ range, start_date, end_date }));
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // Get sales by channel
 export const getSalesByChannel = async (req, res) => {
-  const { start_date, end_date } = req.query;
+  const { range = '30d', start_date, end_date } = req.query;
 
   try {
-    let dateFilter = '';
-    if (start_date && end_date) {
-      dateFilter = `AND created_at BETWEEN '${start_date}' AND '${end_date}'`;
+    if (shouldUseDatabaseReadFallback()) {
+      const report = await salesReportFallback({ range: 'custom', start_date, end_date });
+      return res.json([
+        { channel: 'online', order_count: report.online_orders, total_revenue: report.online_revenue, avg_order_value: report.online_orders ? report.online_revenue / report.online_orders : 0 },
+        { channel: 'pos', order_count: report.pos_orders, total_revenue: report.pos_revenue, avg_order_value: report.pos_orders ? report.pos_revenue / report.pos_orders : 0 },
+      ].filter((row) => row.order_count > 0));
     }
+
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date, alias: 'orders' });
 
     const result = await pool.query(`
       SELECT 
@@ -74,11 +314,11 @@ export const getSalesByChannel = async (req, res) => {
         COALESCE(SUM(total_amount), 0) as total_revenue,
         COALESCE(AVG(total_amount), 0) as avg_order_value
       FROM orders
-      WHERE status IN ('paid', 'completed')
-      ${dateFilter}
+      WHERE ${recognizedSaleSql('orders')}
+      ${dateFilter.sql}
       GROUP BY source
       ORDER BY total_revenue DESC
-    `);
+    `, dateFilter.params);
 
     res.json(result.rows.map(row => ({
       channel: row.channel,
@@ -88,6 +328,13 @@ export const getSalesByChannel = async (req, res) => {
     })));
   } catch (error) {
     console.error('Sales by channel error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      const report = await salesReportFallback({ range: 'custom', start_date, end_date });
+      return res.json([
+        { channel: 'online', order_count: report.online_orders, total_revenue: report.online_revenue, avg_order_value: report.online_orders ? report.online_revenue / report.online_orders : 0 },
+        { channel: 'pos', order_count: report.pos_orders, total_revenue: report.pos_revenue, avg_order_value: report.pos_orders ? report.pos_revenue / report.pos_orders : 0 },
+      ].filter((row) => row.order_count > 0));
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -95,6 +342,10 @@ export const getSalesByChannel = async (req, res) => {
 // Get stock levels report
 export const getStockLevelsReport = async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json(await stockLevelsFallback());
+    }
+
     const result = await pool.query(`
       SELECT 
         COUNT(*) as total_products,
@@ -141,26 +392,30 @@ export const getStockLevelsReport = async (req, res) => {
     });
   } catch (error) {
     console.error('Stock levels report error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json(await stockLevelsFallback());
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // Get top selling products
 export const getTopProducts = async (req, res) => {
-  const { limit = 10, start_date, end_date } = req.query;
+  const { limit = 10, range = '30d', start_date, end_date } = req.query;
 
   try {
-    let dateFilter = '';
-    if (start_date && end_date) {
-      dateFilter = `AND o.created_at BETWEEN '${start_date}' AND '${end_date}'`;
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json(await topProductsFallback({ limit, start_date, end_date }));
     }
+
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date, startIndex: 2 });
 
     const result = await pool.query(`
       SELECT 
-        p.id,
-        p.name,
-        p.part_number,
-        p.image,
+        oi.product_id AS id,
+        COALESCE(p.name, MAX(oi.product_name)) AS name,
+        COALESCE(p.part_number, MAX(oi.sku_snapshot)) AS part_number,
+        MAX(p.image) AS image,
         p.price,
         p.stock_quantity,
         c.name as category_name,
@@ -168,26 +423,30 @@ export const getTopProducts = async (req, res) => {
         SUM(oi.quantity) as total_sold,
         SUM(oi.product_price * oi.quantity) as total_revenue
       FROM order_items oi
-      JOIN products p ON oi.product_id = p.id
+      LEFT JOIN products p ON oi.product_id = p.id
       LEFT JOIN categories c ON p.category_id = c.id
       JOIN orders o ON oi.order_id = o.id
-      WHERE o.status IN ('paid', 'completed')
-      ${dateFilter}
-      GROUP BY p.id, p.name, p.part_number, p.image, p.price, p.stock_quantity, c.name
+      WHERE ${recognizedSaleSql('o')}
+      ${dateFilter.sql}
+      GROUP BY oi.product_id, p.name, p.part_number, p.price, p.stock_quantity, c.name
       ORDER BY total_sold DESC
       LIMIT $1
-    `, [limit]);
+    `, [limit, ...dateFilter.params]);
 
     res.json(result.rows.map(row => ({
       ...row,
-      stock_quantity: parseInt(row.stock_quantity),
-      price: parseFloat(row.price),
+      stock_quantity: toNumber(row.stock_quantity),
+      price: toNumber(row.price),
       order_count: parseInt(row.order_count),
       total_sold: parseInt(row.total_sold),
+      quantity_sold: parseInt(row.total_sold),
       total_revenue: parseFloat(row.total_revenue)
     })));
   } catch (error) {
     console.error('Top products error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json(await topProductsFallback({ limit, start_date, end_date }));
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -197,19 +456,25 @@ export const getDailySalesTrend = async (req, res) => {
   const { days = 30 } = req.query;
 
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json(await dailyTrendFallback({ days }));
+    }
+
+    const parsedDays = Math.min(365, Math.max(1, Number.parseInt(days, 10) || 30));
     const result = await pool.query(`
       SELECT 
-        DATE(created_at) as date,
+        (created_at AT TIME ZONE $1)::date as date,
         COUNT(*) as order_count,
         COALESCE(SUM(total_amount), 0) as revenue,
         COUNT(CASE WHEN source = 'online' THEN 1 END) as online_orders,
         COUNT(CASE WHEN source = 'pos' THEN 1 END) as pos_orders
       FROM orders
-      WHERE status IN ('paid', 'completed')
-        AND created_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
-      GROUP BY DATE(created_at)
+      WHERE ${recognizedSaleSql('orders')}
+        AND (created_at AT TIME ZONE $1) >= (NOW() AT TIME ZONE $1) - ($2::int * INTERVAL '1 day')
+        AND EXISTS (SELECT 1 FROM order_items valid_items WHERE valid_items.order_id = orders.id)
+      GROUP BY (created_at AT TIME ZONE $1)::date
       ORDER BY date ASC
-    `);
+    `, [BUSINESS_TIME_ZONE, parsedDays]);
 
     res.json(result.rows.map(row => ({
       date: row.date,
@@ -220,51 +485,194 @@ export const getDailySalesTrend = async (req, res) => {
     })));
   } catch (error) {
     console.error('Daily sales trend error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json(await dailyTrendFallback({ days }));
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // Get profit report (considering buying price)
 export const getProfitReport = async (req, res) => {
-  const { start_date, end_date } = req.query;
+  const { range = '30d', start_date, end_date } = req.query;
 
   try {
-    let dateFilter = '';
-    if (start_date && end_date) {
-      dateFilter = `AND o.created_at BETWEEN '${start_date}' AND '${end_date}'`;
+    if (shouldUseDatabaseReadFallback()) {
+      return res.json(await profitReportFallback({ start_date, end_date }));
     }
 
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date });
+
     const result = await pool.query(`
-      SELECT 
-        COUNT(DISTINCT o.id) as total_orders,
-        COALESCE(SUM(o.total_amount), 0) as total_revenue,
-        COALESCE(SUM(oi.quantity * p.buying_price), 0) as total_cost,
-        COALESCE(SUM(o.total_amount) - SUM(oi.quantity * p.buying_price), 0) as gross_profit,
-        COALESCE(SUM(o.discount_amount), 0) as total_discounts
-      FROM orders o
-      JOIN order_items oi ON o.id = oi.order_id
-      JOIN products p ON oi.product_id = p.id
-      WHERE o.status IN ('paid', 'completed')
-      ${dateFilter}
-    `);
+      WITH valid_orders AS (
+        SELECT o.id, o.total_amount, o.discount_amount
+        FROM orders o
+        WHERE ${recognizedSaleSql('o')}
+          ${dateFilter.sql}
+      ), item_costs AS (
+        SELECT oi.order_id,
+               SUM(oi.quantity * oi.unit_cost_snapshot) AS order_cost,
+               COUNT(*) FILTER (WHERE oi.unit_cost_snapshot IS NULL)::int AS missing_cost_lines
+        FROM order_items oi
+        WHERE oi.order_id IN (SELECT id FROM valid_orders)
+        GROUP BY oi.order_id
+      )
+      SELECT COUNT(*) AS total_orders,
+             COALESCE(SUM(vo.total_amount), 0) AS total_revenue,
+             COALESCE(SUM(ic.order_cost), 0) AS known_total_cost,
+             COALESCE(SUM(ic.missing_cost_lines), 0)::int AS missing_cost_lines,
+             COALESCE(SUM(vo.discount_amount), 0) AS total_discounts
+      FROM valid_orders vo
+      LEFT JOIN item_costs ic ON ic.order_id = vo.id
+    `, dateFilter.params);
 
     const stats = result.rows[0];
     const revenue = parseFloat(stats.total_revenue);
-    const cost = parseFloat(stats.total_cost);
-    const profit = parseFloat(stats.gross_profit);
-    const margin = revenue > 0 ? ((profit / revenue) * 100) : 0;
+    const missingCostLines = parseInt(stats.missing_cost_lines);
+    const profitExact = missingCostLines === 0;
+    const cost = profitExact ? parseFloat(stats.known_total_cost) : null;
+    const profit = profitExact ? revenue - cost : null;
+    const margin = profitExact && revenue > 0 ? ((profit / revenue) * 100) : null;
 
     res.json({
       total_orders: parseInt(stats.total_orders),
       total_revenue: revenue,
       total_cost: cost,
       gross_profit: profit,
-      profit_margin: parseFloat(margin.toFixed(2)),
+      profit_margin: margin === null ? null : parseFloat(margin.toFixed(2)),
       total_discounts: parseFloat(stats.total_discounts),
-      net_profit: profit - parseFloat(stats.total_discounts)
+      net_profit: profit,
+      profit_exact: profitExact,
+      missing_cost_lines: missingCostLines,
+      business_time_zone: BUSINESS_TIME_ZONE,
     });
   } catch (error) {
     console.error('Profit report error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json(await profitReportFallback({ start_date, end_date }));
+    }
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const getPosSalesReport = async (req, res) => {
+  const { range = '30d', start_date, end_date } = req.query;
+  try {
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date });
+    const result = await pool.query(`
+      SELECT o.id, o.receipt_number, o.status, o.payment_status, o.payment_method,
+             o.total_amount, o.voided_at, o.created_at,
+             COUNT(oi.id)::int AS item_lines,
+             COALESCE(SUM(oi.quantity), 0)::int AS units
+      FROM orders o
+      LEFT JOIN order_items oi ON oi.order_id = o.id
+      WHERE o.source = 'pos'
+        AND COALESCE(o.integrity_status, 'valid') = 'valid'
+        ${dateFilter.sql}
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+    `, dateFilter.params);
+    const sales = result.rows.map((row) => ({
+      ...row,
+      total_amount: toNumber(row.total_amount),
+      item_lines: toNumber(row.item_lines),
+      units: toNumber(row.units),
+    }));
+    const completed = sales.filter((sale) => !sale.voided_at && sale.status !== 'cancelled' && sale.payment_status === 'paid');
+    const voided = sales.filter((sale) => sale.voided_at || sale.status === 'cancelled');
+    return res.json({
+      range,
+      total_sales: completed.length,
+      total_revenue: completed.reduce((sum, sale) => sum + sale.total_amount, 0),
+      voided_sales: voided.length,
+      sales,
+    });
+  } catch (error) {
+    console.error('POS sales report error:', error);
+    return res.status(500).json({ message: 'POS sales report could not be loaded.' });
+  }
+};
+
+export const getReturnRefundReport = async (req, res) => {
+  const { range = '30d', start_date, end_date } = req.query;
+  try {
+    const dateFilter = buildDateFilter({ range, startDate: start_date, endDate: end_date, alias: 'r' });
+    const result = await pool.query(`
+      SELECT r.id, r.order_id, r.status, r.return_type, r.reason, r.refund_amount,
+             r.created_at, rf.status AS refund_status, rf.amount AS processed_refund,
+             rf.method AS refund_method, rf.processed_at
+      FROM returns r
+      LEFT JOIN refunds rf ON rf.return_id = r.id
+      WHERE 1=1 ${dateFilter.sql}
+      ORDER BY r.created_at DESC
+    `, dateFilter.params);
+    const rows = result.rows.map((row) => ({
+      ...row,
+      refund_amount: toNumber(row.refund_amount),
+      processed_refund: toNumber(row.processed_refund),
+    }));
+    return res.json({
+      range,
+      total_returns: rows.length,
+      pending_returns: rows.filter((row) => ['pending', 'requested'].includes(row.status)).length,
+      approved_returns: rows.filter((row) => row.status === 'approved').length,
+      rejected_returns: rows.filter((row) => row.status === 'rejected').length,
+      processed_refunds: rows.filter((row) => ['completed', 'paid', 'succeeded'].includes(row.refund_status)).length,
+      refunded_amount: rows
+        .filter((row) => ['completed', 'paid', 'succeeded'].includes(row.refund_status))
+        .reduce((sum, row) => sum + row.processed_refund, 0),
+      returns: rows,
+    });
+  } catch (error) {
+    console.error('Return/refund report error:', error);
+    return res.status(500).json({ message: 'Return and refund report could not be loaded.' });
+  }
+};
+
+export const getCustomerAnalytics = async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      WITH customer_sales AS (
+        SELECT o.user_id,
+               MIN(o.created_at) AS first_order_at,
+               COUNT(*)::int AS order_count,
+               COALESCE(SUM(o.total_amount), 0) AS recognized_revenue
+        FROM orders o
+        WHERE o.user_id IS NOT NULL
+          AND ${recognizedSaleSql('o')}
+        GROUP BY o.user_id
+      ), ranked AS (
+        SELECT cs.*, u.name, u.email,
+               COUNT(*) OVER()::int AS total_customers,
+               COUNT(*) FILTER (
+                 WHERE (cs.first_order_at AT TIME ZONE $1) >= date_trunc('month', NOW() AT TIME ZONE $1)
+               ) OVER()::int AS new_this_month,
+               AVG(cs.order_count) OVER() AS average_order_count
+        FROM customer_sales cs
+        JOIN users u ON u.id=cs.user_id
+        WHERE COALESCE(u.is_deleted,false)=false
+      )
+      SELECT * FROM ranked
+      ORDER BY order_count DESC, recognized_revenue DESC
+      LIMIT 5
+    `, [BUSINESS_TIME_ZONE]);
+    const first = result.rows[0];
+    return res.json({
+      total: toNumber(first?.total_customers),
+      new_this_month: toNumber(first?.new_this_month),
+      average_order_count: toNumber(first?.average_order_count),
+      business_time_zone: BUSINESS_TIME_ZONE,
+      most_active: result.rows.map((row) => ({
+        id: row.user_id,
+        name: row.name || row.email || `Customer #${row.user_id}`,
+        orders: toNumber(row.order_count),
+        total: toNumber(row.recognized_revenue),
+        first_order_at: row.first_order_at,
+      })),
+      pos_unknown_customers_excluded: true,
+    });
+  } catch (error) {
+    console.error('Customer analytics error:', error);
+    return res.status(500).json({ message: 'Customer analytics could not be loaded.' });
   }
 };

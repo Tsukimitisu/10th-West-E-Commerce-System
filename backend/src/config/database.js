@@ -1,43 +1,23 @@
 import pg from 'pg';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-// Get directory name for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Load environment variables from backend/.env
-const envPath = path.join(__dirname, '..', '..', '.env');
-console.log('[DB Config] Loading .env from:', envPath);
-dotenv.config({ path: envPath });
+import databaseConfigModule from './databaseConfig.cjs';
 
 const { Pool } = pg;
-const connectionString = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
+const { getDatabaseConfig, sanitizeDatabaseError } = databaseConfigModule;
+const databaseConfig = getDatabaseConfig();
 
-if (!connectionString) {
-  throw new Error(
-    'Missing Supabase Postgres connection string. Set SUPABASE_DB_URL or DATABASE_URL in backend/.env.'
-  );
-}
+console.log('[DB Config] Environment source:', databaseConfig.safeMetadata.environmentFile);
+console.log('[DB Config] Connection metadata:', databaseConfig.safeMetadata);
 
-const pool = new Pool({
-  connectionString,
-  ssl: {
-    rejectUnauthorized: process.env.NODE_ENV === 'production',
-  },
-});
+const pool = new Pool(databaseConfig.pgPoolConfig);
 
 // Test connection
 pool.on('connect', () => {
   console.log('Database connected successfully');
-  console.log('Using Supabase Postgres connection');
+  console.log('Database connection mode:', databaseConfig.safeMetadata.connectionMode);
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected database error:', err);
-  process.exit(-1);
+  console.error('Unexpected database error:', sanitizeDatabaseError(err));
 });
 
 export default pool;

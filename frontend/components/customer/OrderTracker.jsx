@@ -22,7 +22,7 @@ const OrderTracker = ({ status }) => {
   if (status === 'cancelled') {
     return (
       <div className="flex items-center justify-center py-6">
-        <div className="flex items-center gap-3 bg-orange-50 text-orange-600 px-6 py-3 rounded-xl">
+        <div className="flex items-center gap-3 bg-red-500/10 text-orange-600 px-6 py-3 rounded-xl">
           <Ban className="w-5 h-5" />
           <span className="text-sm font-bold">This order has been cancelled</span>
         </div>
@@ -62,7 +62,7 @@ const OrderTracker = ({ status }) => {
                     {step.name}
                   </span>
                   {isCurrent && (
-                    <span className="mt-1 text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Current</span>
+                    <span className="mt-1 text-[10px] bg-red-500/20 text-orange-700 px-2 py-0.5 rounded-full font-medium">Current</span>
                   )}
                 </div>
               );
@@ -93,7 +93,7 @@ const OrderTracker = ({ status }) => {
                   {step.name}
                 </p>
                 {isCurrent && (
-                  <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Current</span>
+                  <span className="text-[10px] bg-red-500/20 text-orange-700 px-2 py-0.5 rounded-full font-medium">Current</span>
                 )}
               </div>
             </div>
@@ -105,3 +105,5 @@ const OrderTracker = ({ status }) => {
 };
 
 export default OrderTracker;
+
+
