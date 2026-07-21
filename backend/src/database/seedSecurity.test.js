@@ -30,6 +30,17 @@ test('test fixture accounts are explicit opt-in and production disabled', async 
   assert.match(source, /TEST_FIXTURE_PASSWORD/);
   assert.match(source, /\.test-credentials\.local/);
   assert.match(source, /customer@test\.local/);
+  assert.match(source, /cashier@test\.local/);
+  assert.match(source, /staff-noperms@test\.local/);
+  assert.match(source, /staff@test\.local/);
+  assert.match(source, /disabled@test\.local/);
   assert.match(source, /superadmin@test\.local/);
+  assert.match(source, /active:\s*false/);
+  assert.match(source, /STAFF_PERMISSIONS/);
+  assert.match(source, /name = ANY\(\$2::text\[\]\)/);
+  assert.ok(
+    source.indexOf("await client.query('COMMIT')") < source.indexOf('await writeLocalCredentialMapping(password)'),
+    'local credentials must only be written after the database transaction commits'
+  );
   assert.doesNotMatch(source, /LocalTestPass123!|Admin@123|Staff@123|Customer@123/);
 });
