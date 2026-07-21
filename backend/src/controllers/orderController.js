@@ -39,7 +39,7 @@ const memoryOrderStore = {
 };
 
 const ORDER_NOTIFICATION_DETAIL_QUERY = `
-  SELECT o.id, o.user_id, o.status, o.order_number, o.tracking_number,
+  SELECT o.id, o.user_id, o.status, o.id AS order_number, o.tracking_number,
          oi.product_id, COALESCE(oi.product_name, p.name) as product_name,
          p.image as product_image
   FROM orders o

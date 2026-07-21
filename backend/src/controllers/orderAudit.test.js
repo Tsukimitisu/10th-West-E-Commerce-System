@@ -97,3 +97,24 @@ test('COD delivery atomically captures the payment and records delivery audit ev
   assert.match(handler, /action:\s*'order\.delivery\.confirm'/);
   assert.ok(handler.indexOf("await client.query('COMMIT')") > handler.indexOf("action: 'order.delivery.confirm'"));
 });
+
+test('COD reservation commits use separately typed order and reference parameters', async () => {
+  const source = await readController('orderWorkflowController.js');
+  const start = source.indexOf('const commitCodReservations');
+  const end = source.indexOf('const releaseReservations', start);
+  const commit = source.slice(start, end);
+
+  assert.match(commit, /VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,'sale','order',\$8,\$7\)/);
+  assert.match(commit, /actorId, orderId\]/);
+});
+
+test('order notifications derive their display number from the canonical order id', async () => {
+  const source = await readController('orderController.js');
+  const query = source.slice(
+    source.indexOf('const ORDER_NOTIFICATION_DETAIL_QUERY'),
+    source.indexOf('const ensureOrderWorkflowColumns'),
+  );
+
+  assert.match(query, /o\.id AS order_number/);
+  assert.doesNotMatch(query, /o\.order_number/);
+});

@@ -52,8 +52,8 @@ const commitCodReservations = async (client, orderId, actorId) => {
     }
     await client.query(
       `INSERT INTO stock_movements (product_id, variant_id, order_id, quantity_delta, stock_before, stock_after, reason, reference_type, reference_id, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,'sale','order',$3,$7)`,
-      [row.product_id, row.variant_id, orderId, -Number(row.quantity), stock.rows[0].stock_before, stock.rows[0].stock_after, actorId]
+       VALUES ($1,$2,$3,$4,$5,$6,'sale','order',$8,$7)`,
+      [row.product_id, row.variant_id, orderId, -Number(row.quantity), stock.rows[0].stock_before, stock.rows[0].stock_after, actorId, orderId]
     );
     updates.push({ product_id: row.product_id, variant_id: row.variant_id, stock_quantity: Number(stock.rows[0].stock_after) });
   }
