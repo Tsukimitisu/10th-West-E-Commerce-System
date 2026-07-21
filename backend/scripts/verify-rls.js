@@ -1,18 +1,4 @@
-import pg from 'pg';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const connectionString = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
-if (!connectionString) {
-  console.error('RLS verification blocked: SUPABASE_DB_URL or DATABASE_URL is required.');
-  process.exit(2);
-}
-
-const pool = new pg.Pool({
-  connectionString,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : false,
-});
+import pool from '../src/config/database.js';
 
 const browserRoles = ['anon', 'authenticated'];
 
@@ -45,8 +31,10 @@ try {
     FROM pg_policies
     WHERE schemaname = 'public'
       AND (
-        COALESCE(qual, '') ~* '(^|[^a-z_])true([^a-z_]|$)'
-        OR COALESCE(with_check, '') ~* '(^|[^a-z_])true([^a-z_]|$)'
+        -- Match an unconditional literal TRUE policy, not safe uses such as
+        -- current_setting('role', true) where TRUE is a function argument.
+        COALESCE(qual, '') ~* '^[[:space:]]*[(]*[[:space:]]*true[[:space:]]*[)]*[[:space:]]*$'
+        OR COALESCE(with_check, '') ~* '^[[:space:]]*[(]*[[:space:]]*true[[:space:]]*[)]*[[:space:]]*$'
         OR (
           (COALESCE(qual, '') ILIKE '%app_access_check%'
             OR COALESCE(with_check, '') ILIKE '%app_access_check%')

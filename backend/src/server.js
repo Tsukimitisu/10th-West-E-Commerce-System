@@ -1,9 +1,9 @@
+import './config/environment.cjs';
 import express from 'express';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import crypto from 'crypto';
 import path from 'path';
 import os from 'os';
@@ -70,11 +70,6 @@ import {
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-// Load environment variables from backend/.env
-const envPath = path.join(__dirname, '..', '.env');
-console.log('📍 Loading .env from:', envPath);
-dotenv.config({ path: envPath });
 
 const isProduction = process.env.NODE_ENV === 'production';
 
