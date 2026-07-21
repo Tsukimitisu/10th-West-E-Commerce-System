@@ -66,54 +66,17 @@ import {
   getMediaConfigurationStatus,
   selectedIntegrationsReady,
 } from './services/integrationReadiness.js';
+import { normalizeNodeEnvironment, validateCoreEnvironment } from './config/productionConfig.js';
+import { checkCoreDatabaseReadiness } from './services/coreReadiness.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const isProduction = process.env.NODE_ENV === 'production';
-
-// Validate required environment variables
-const requiredEnvVars = [
-  'JWT_SECRET',
-];
-
-const productionRequiredEnvVars = [
-  'SESSION_SECRET',
-  'SESSION_STORE',
-  'FRONTEND_ORIGIN',
-  'COOKIE_SECURE',
-  'COOKIE_SAME_SITE',
-  'CSRF_SECRET',
-  'TWO_FACTOR_ENCRYPTION_KEY',
-];
-
-if (isProduction) {
-  requiredEnvVars.push(...productionRequiredEnvVars);
-}
-
-if (isProduction && String(process.env.SHIPPING_PROVIDER || '').toLowerCase() === 'mock') {
-  console.error('The mock shipping provider cannot be selected in production.');
-  process.exit(1);
-}
-
-if (isProduction && String(process.env.TRACKING_PROVIDER || '').toLowerCase() === 'mock') {
-  console.error('The mock tracking provider cannot be selected in production.');
-  process.exit(1);
-}
-
-const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-if (missingVars.length > 0) {
-  const environmentLabel = isProduction ? 'production' : (process.env.NODE_ENV || 'development');
-  console.error(`Missing required core environment variables for ${environmentLabel}: ${missingVars.join(', ')}`);
-  if (isProduction) {
-    console.error(`Required production core variables: ${productionRequiredEnvVars.join(', ')}`);
-  }
-  console.error('Optional integrations are not required for core startup; leave them empty until real credentials are available.');
-  console.error('❌ Missing required environment variables:', missingVars.join(', '));
-  console.error('Please copy backend/.env.example to backend/.env and fill in the values');
-  process.exit(1);
-}
+const normalizedNodeEnvironment = normalizeNodeEnvironment(process.env.NODE_ENV);
+if (normalizedNodeEnvironment === 'production') process.env.NODE_ENV = 'production';
+const coreEnvironment = validateCoreEnvironment(process.env);
+const isProduction = coreEnvironment.isProduction;
 
 const optionalUploadVars = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
 const missingUploadVars = optionalUploadVars.filter((varName) => !process.env[varName]);
@@ -335,7 +298,7 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/ready', async (_req, res) => {
   try {
-    await pool.query('SELECT 1');
+    await checkCoreDatabaseReadiness(pool);
     const shipping = getShippingConfigurationStatus();
     const tracking = getTrackingConfigurationStatus();
     const paymongo = getPaymongoConfigurationStatus();
@@ -420,11 +383,23 @@ app.use(errorLogger);
 // Global Error handling middleware (formats responses, hides stack trace in production)
 app.use(errorHandler);
 
-// Start server with Socket.IO
-startExpiredReservationCleanup();
-startMaintenanceWorkers();
+let coreStartupReady = true;
+if (isProduction) {
+  try {
+    await checkCoreDatabaseReadiness(pool);
+  } catch (error) {
+    coreStartupReady = false;
+    process.exitCode = 1;
+    console.error(`Production core schema preflight failed: ${error?.code || 'DATABASE_UNAVAILABLE'}`);
+    await pool.end().catch(() => {});
+  }
+}
 
-httpServer.listen(PORT, '0.0.0.0', () => {
+// Start server with Socket.IO only after the production schema preflight.
+if (coreStartupReady) {
+  startExpiredReservationCleanup();
+  startMaintenanceWorkers();
+  httpServer.listen(PORT, '0.0.0.0', () => {
   console.log('╔══════════════════════════════════════════════╗');
   console.log('║    10TH WEST MOTO - Backend API Server     ║');
   console.log('╚══════════════════════════════════════════════╝');
@@ -435,7 +410,8 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🔗 Frontend URL: ${FRONTEND_URL}`);
   console.log(`🔗 LAN: http://${getLocalIP()}:${PORT}`);
   console.log('════════════════════════════════════════════════');
-});
+  });
+}
 
 // Get local IP for LAN access
 function getLocalIP() {
