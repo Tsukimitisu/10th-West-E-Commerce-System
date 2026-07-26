@@ -56,6 +56,45 @@ also trusts the first reverse-proxy hop, so the TLS-terminating ingress must set
 headers. `COOKIE_SAME_SITE=none` is appropriate only when a genuinely cross-site
 frontend requires it; secure cookies remain mandatory.
 
+### Vercel frontend with a Render API
+
+A frontend at `https://your-store.vercel.app` and an API at
+`https://your-api.onrender.com` are different sites. A `SameSite=Lax` session
+cookie is not sent with the frontend's cross-site login POST. The CSRF token is
+then checked against a different server session and the API responds with
+`Invalid CSRF token`.
+
+Set these values on the Render web service:
+
+```env
+NODE_ENV=production
+FRONTEND_ORIGIN=https://your-store.vercel.app
+SESSION_STORE=postgres
+COOKIE_SECURE=true
+COOKIE_SAME_SITE=none
+CSRF_COOKIE_SAME_SITE=none
+```
+
+`FRONTEND_ORIGIN` must be the exact production frontend origin, with no path.
+Add exact preview or alternate frontend origins to `CORS_ALLOWED_ORIGINS` as a
+comma-separated list; credentialed CORS must not use `*`.
+
+Set the Vercel frontend build variable to the public Render API URL:
+
+```env
+VITE_API_URL=https://your-api.onrender.com/api
+```
+
+Environment changes do not modify an already-built Vite bundle. Redeploy the
+Render service after changing its runtime values and create a new Vercel
+deployment after changing `VITE_API_URL`. Clear cookies/site data for both old
+origins before retesting so a stale session and CSRF token are not reused.
+
+For the most reliable long-term cookie behavior, serve the frontend and API on
+same-site custom subdomains such as `www.example.com` and `api.example.com`.
+That topology can retain `COOKIE_SAME_SITE=lax` while still allowing
+cross-origin credentialed requests.
+
 ## Supabase PostgreSQL connection
 
 Copy the complete URI from Supabase Dashboard **Connect**. Do not construct a

@@ -56,6 +56,12 @@ Production startup also requires:
 - `COOKIE_SAME_SITE` set to `lax`, `strict`, or `none`
 - `TWO_FACTOR_ENCRYPTION_KEY`
 
+If the frontend is hosted on Vercel and the API is hosted on Render using their
+default domains, set `COOKIE_SAME_SITE=none`,
+`CSRF_COOKIE_SAME_SITE=none`, and `COOKIE_SECURE=true` on Render. Those default
+domains are cross-site, so `lax` prevents the CSRF-bound session cookie from
+being sent with login. See `docs/PRODUCTION_ENVIRONMENT.md`.
+
 See `docs/PRODUCTION_ENVIRONMENT.md` for the full production checklist.
 
 Payment, shipping, tracking, email, OAuth, and media integrations are optional
