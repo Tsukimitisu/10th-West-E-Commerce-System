@@ -13,7 +13,7 @@ export const isBlockedProductImageUrl = (value) => {
   try {
     const baseUrl = typeof window !== 'undefined' && window.location?.origin
       ? window.location.origin
-      : 'http://localhost';
+      : 'https://app.invalid';
     const parsed = new URL(raw, baseUrl);
     return BLOCKED_PRODUCT_IMAGE_HOSTS.has(parsed.hostname.toLowerCase());
   } catch {

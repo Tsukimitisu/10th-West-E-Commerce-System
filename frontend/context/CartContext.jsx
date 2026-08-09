@@ -2,11 +2,8 @@
 import { validateDiscountCode, ensureCsrfToken } from '../services/api';
 import { supabase } from '../services/supabase.js';
 import { getCurrentAuthUser } from '../services/authSession.js';
+import { API_URL } from '../services/apiConfig.js';
 
-const API_URL = import.meta.env.VITE_API_URL || (() => {
-  const host = window.location.hostname;
-  return `http://${host}:5000/api`;
-})();
 const USE_SUPABASE = false;
 const GUEST_CART_KEY = 'shopCoreGuestCart';
 const GUEST_SELECTED_KEY = `${GUEST_CART_KEY}_selected`;

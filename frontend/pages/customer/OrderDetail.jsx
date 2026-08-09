@@ -2,12 +2,12 @@
 import { useParams, Link } from 'react-router-dom';
 import { Package, ArrowLeft, Truck, MapPin, CreditCard, Clock, CheckCircle2, XCircle, Download, RotateCcw, Calendar, Mail, DollarSign, Printer, AlertTriangle } from 'lucide-react';
 import { getOrderById, getShipmentTracking, cancelOrder, confirmOrderReceipt } from '../../services/api';
+import { API_URL } from '../../services/apiConfig.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Delivered', 'Completed'];
 const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, delivered: 4, completed: 5, cancelled: -1 };
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const ORDER_VAT_RATE = 0.12;
 
 const toFiniteNumber = (value, fallback = 0) => {

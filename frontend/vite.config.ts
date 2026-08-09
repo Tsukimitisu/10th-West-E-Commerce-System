@@ -1,8 +1,14 @@
 import path from 'path';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { validateProductionApiUrl } from './api-url.js';
 
-export default defineConfig(() => {
+export default defineConfig(({ command, mode }) => {
+    if (command === 'build') {
+      const environment = loadEnv(mode, __dirname, '');
+      validateProductionApiUrl(process.env.VITE_API_URL || environment.VITE_API_URL);
+    }
+
     return {
       server: {
         port: 3000,

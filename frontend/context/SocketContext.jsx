@@ -2,13 +2,7 @@
 import { io } from 'socket.io-client';
 import { ToastContainer } from '../components/Toast';
 import { getCurrentAuthUser } from '../services/authSession.js';
-
-function getSocketUrl() {
-  const envUrl = import.meta.env?.VITE_API_URL;
-  if (envUrl) return envUrl.replace(/\/api\/?$/, '');
-  const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-  return `${protocol}://${window.location.hostname}:5000`;
-}
+import { API_ORIGIN } from '../services/apiConfig.js';
 
 const SocketContext = createContext({
   socket: null,
@@ -47,7 +41,7 @@ export const SocketProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const url = getSocketUrl();
+    const url = API_ORIGIN;
     console.log(`[Socket] connecting to ${url}`);
     const initialUser = getCurrentAuthUser();
 

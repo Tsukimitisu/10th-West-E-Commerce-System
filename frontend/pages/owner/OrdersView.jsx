@@ -7,6 +7,7 @@ import { useSocketEvent } from '../../context/SocketContext';
 import { getCurrentAuthUser } from '../../services/authSession';
 import PageHeader from '../../components/operations/PageHeader';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import { API_URL } from '../../services/apiConfig.js';
 
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -411,7 +412,7 @@ const OrdersView = () => {
                 Update Status
               </button>
               <button
-                onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/orders/${detailOrder.id}/invoice`, '_blank')}
+                onClick={() => window.open(`${API_URL}/orders/${detailOrder.id}/invoice`, '_blank')}
                 className="flex-1 min-w-[140px] px-4 py-2.5 bg-gray-800 border border-gray-700 hover:bg-gray-900 text-gray-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 <Printer size={14} /> Print Invoice

@@ -2,19 +2,15 @@ import { Role, OrderStatus, ReturnStatus } from '../types.js';
 import { supabase } from './supabase.js';
 import { clearCurrentAuthUser, getCurrentAuthUser } from './authSession.js';
 import { resolveProductImageUrl } from '../utils/productImages.js';
+import { API_ORIGIN, API_URL } from './apiConfig.js';
 
-// Configuration
-const API_URL = import.meta.env.VITE_API_URL || (() => {
-  const host = window.location.hostname;
-  return `http://${host}:5000/api`;
-})();
 // Direct browser access to application tables is intentionally disabled. All
 // authentication and private data access must go through the backend API.
 const USE_SUPABASE = false;
 const USE_MOCK_DATA = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true';
 const USE_BACKEND_ORDER_API = true;
 const USE_BACKEND_ADDRESS_API = true;
-export const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
+export { API_ORIGIN };
 
 const REGISTRATION_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
 const PROFILE_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;

@@ -2,9 +2,8 @@
 import { useParams, Link } from 'react-router-dom';
 import { CheckCircle2, Package, Truck, Calendar, ArrowRight, Home, ShoppingBag, Printer } from 'lucide-react';
 import { getOrderById } from '../../services/api';
+import { API_URL } from '../../services/apiConfig.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
-
-const API = window.__API_URL__ || import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const toFiniteNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -137,7 +136,7 @@ const OrderConfirmation = () => {
           <Package size={16} /> Track Order
         </Link>
         {order && (
-          <button onClick={() => window.open(`${API}/orders/${order.id}/invoice`, '_blank')}
+          <button onClick={() => window.open(`${API_URL}/orders/${order.id}/invoice`, '_blank')}
             className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-700 text-gray-700 hover:bg-gray-900 font-medium rounded-lg transition-colors">
             <Printer size={16} /> View Invoice
           </button>
