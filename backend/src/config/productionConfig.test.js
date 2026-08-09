@@ -24,7 +24,22 @@ test('production core validation accepts strong distinct secrets and secure cook
   }));
   assert.equal(result.isProduction, true);
   assert.equal(result.frontendOrigin, 'https://store.example.test');
+  assert.deepEqual(result.frontendOrigins, ['https://store.example.test']);
   assert.deepEqual(result.corsAllowedOrigins, ['https://admin.example.test', 'https://support.example.test']);
+});
+
+test('production safely validates both supported frontend origin aliases', () => {
+  const result = validateCoreEnvironment(productionEnvironment({
+    FRONTEND_URL: 'https://legacy-store.example.test/',
+  }));
+  assert.deepEqual(result.frontendOrigins, [
+    'https://store.example.test',
+    'https://legacy-store.example.test',
+  ]);
+  assert.throws(
+    () => validateCoreEnvironment(productionEnvironment({ FRONTEND_URL: 'http://legacy-store.example.test' })),
+    { code: 'PRODUCTION_FRONTEND_URL_INVALID' }
+  );
 });
 
 test('production core validation rejects placeholders, reused secrets, and insecure settings', () => {

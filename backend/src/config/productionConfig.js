@@ -70,6 +70,15 @@ const validateFrontendOrigin = (environment) => validateHttpsOrigin(
   { code: 'PRODUCTION_FRONTEND_ORIGIN_INVALID', label: 'FRONTEND_ORIGIN' },
 );
 
+const validateLegacyFrontendUrl = (environment) => {
+  const value = String(environment.FRONTEND_URL || '').trim();
+  if (!value) return null;
+  return validateHttpsOrigin(value, {
+    code: 'PRODUCTION_FRONTEND_URL_INVALID',
+    label: 'FRONTEND_URL',
+  });
+};
+
 const validateCorsAllowedOrigins = (environment) => {
   const values = String(environment.CORS_ALLOWED_ORIGINS || '')
     .split(',')
@@ -109,6 +118,8 @@ export const validateCoreEnvironment = (environment = process.env) => {
       'SESSION_STORE must be postgres in production.'
     );
   }
+  const frontendOrigin = validateFrontendOrigin(environment);
+  const legacyFrontendUrl = validateLegacyFrontendUrl(environment);
   if (requireValue(environment, 'COOKIE_SECURE').toLowerCase() !== 'true') {
     throw new ProductionConfigurationError(
       'PRODUCTION_COOKIE_SECURE_REQUIRED',
@@ -135,7 +146,8 @@ export const validateCoreEnvironment = (environment = process.env) => {
   return {
     isProduction: true,
     nodeEnvironment,
-    frontendOrigin: validateFrontendOrigin(environment),
+    frontendOrigin,
+    frontendOrigins: [...new Set([frontendOrigin, legacyFrontendUrl].filter(Boolean))],
     corsAllowedOrigins: validateCorsAllowedOrigins(environment),
     cookieSameSite: sameSite,
   };

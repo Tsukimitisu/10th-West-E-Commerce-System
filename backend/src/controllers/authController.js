@@ -11,6 +11,7 @@ import { mergeGuestCartIntoUserCart, rotateGuestSession } from './cartController
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch, supabaseRestRequest } from '../services/supabaseRest.js';
 import { decryptTwoFactorSecret, encryptTwoFactorSecret, generateRecoveryCodes, hashRecoveryCode } from '../services/twoFactorCrypto.js';
 import databaseConfig from '../config/databaseConfig.cjs';
+import { resolveFrontendOrigin } from '../config/frontend.js';
 
 const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
 const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
@@ -258,7 +259,7 @@ const isLocalUrl = (hostname) =>
   /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
 
 const getFrontendUrl = () => {
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const frontendUrl = resolveFrontendOrigin();
   const url = new URL(frontendUrl);
 
   if (!isLocalUrl(url.hostname)) {
@@ -1233,7 +1234,7 @@ export const oauthCallback = async (req, res) => {
     const { provider, id: oauthId, email, name, avatar } = req.oauthUser;
     const ip = req.clientIp;
     const ua = req.clientUa;
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = resolveFrontendOrigin();
     const redirectToLoginError = (errorCode) => res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent(errorCode)}`);
 
     if (!email) {
@@ -1286,7 +1287,7 @@ export const oauthCallback = async (req, res) => {
     res.redirect(`${frontendUrl}/#/oauth-callback?code=${oauthCode}`);
   } catch (error) {
     console.error('OAuth callback error:', sanitizeDatabaseError(error));
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = resolveFrontendOrigin();
     res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent('oauth_failed')}`);
   }
 };

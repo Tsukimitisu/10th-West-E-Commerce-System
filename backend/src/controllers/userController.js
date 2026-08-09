@@ -5,6 +5,7 @@ import { assertValidFileSignature } from '../services/fileSignature.js';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import dns from 'dns/promises';
+import { resolveFrontendOrigin } from '../config/frontend.js';
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
@@ -70,7 +71,7 @@ const isLocalUrl = (hostname) =>
   /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
 
 const getFrontendUrl = () => {
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const frontendUrl = resolveFrontendOrigin();
   const url = new URL(frontendUrl);
 
   if (!isLocalUrl(url.hostname)) {

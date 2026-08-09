@@ -68,6 +68,7 @@ import {
 } from './services/integrationReadiness.js';
 import { normalizeNodeEnvironment, validateCoreEnvironment } from './config/productionConfig.js';
 import { checkCoreDatabaseReadiness } from './services/coreReadiness.js';
+import { resolveAllowedFrontendOrigins, resolveFrontendOrigin } from './config/frontend.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -98,7 +99,7 @@ console.log('');
 const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
-const FRONTEND_URL = process.env.FRONTEND_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000';
+const FRONTEND_URL = resolveFrontendOrigin();
 const PgSessionStore = connectPgSimple(session);
 const parseDurationMs = (value, fallbackMs) => {
   const text = String(value || '').trim().toLowerCase();
@@ -162,12 +163,7 @@ const effectiveSessionSecret = sessionSecret || crypto.randomBytes(48).toString(
 
 // Build allowed origins for LAN access
 function getAllowedOrigins() {
-  const origins = [FRONTEND_URL];
-  const extraOrigins = String(process.env.CORS_ALLOWED_ORIGINS || '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  origins.push(...extraOrigins);
+  const origins = resolveAllowedFrontendOrigins();
   if (process.env.NODE_ENV === 'production') {
     return Array.from(new Set(origins));
   }

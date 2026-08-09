@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, matchedData, validationResult } from 'express-validator';
 import passport from '../config/passport.js';
+import { resolveFrontendOrigin } from '../config/frontend.js';
 import {
   register, login, logout, getProfile,
   forgotPassword, resetPassword, verifyResetToken, changePassword,
@@ -30,7 +31,7 @@ router.get('/providers', (_req, res) => {
   });
 });
 
-const getFrontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173';
+const getFrontendUrl = () => resolveFrontendOrigin();
 
 const redirectToOAuthError = (res, errorCode) => {
   res.redirect(`${getFrontendUrl()}/#/login?error=${encodeURIComponent(errorCode)}`);

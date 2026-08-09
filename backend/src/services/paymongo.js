@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { resolveFrontendOrigin } from '../config/frontend.js';
 
 const PAYMONGO_BASE_URL = 'https://api.paymongo.com/v1';
 
@@ -25,8 +26,7 @@ export const getPaymongoConfigurationStatus = () => {
 
 const getPublicBaseUrl = () => (
   normalizeText(process.env.PUBLIC_APP_URL)
-  || normalizeText(process.env.FRONTEND_URL)
-  || 'http://localhost:3000'
+  || resolveFrontendOrigin()
 ).replace(/\/+$/, '');
 
 const buildRedirectUrl = (envName, fallbackStatus, orderId) => {
