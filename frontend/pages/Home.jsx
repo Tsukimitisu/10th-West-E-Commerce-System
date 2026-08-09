@@ -280,6 +280,16 @@ const Home = () => {
         </section>
       ) : (
         <>
+          {products.length === 0 && (
+            <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+              <EmptyState
+                icon={PackageCheck}
+                title="No products are available yet"
+                description="The catalog is connected, but no products have been published."
+                action={<BrandButton to="/contact">Contact the store</BrandButton>}
+              />
+            </section>
+          )}
           {categories.length > 0 && (
             <section className="bg-slate-50 py-14 sm:py-20">
               <div className="mx-auto max-w-7xl px-4 sm:px-6">

@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Grid3X3, List, Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { AlertTriangle, Grid3X3, List, Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { getProducts, getCategories, getWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
@@ -109,6 +109,8 @@ const ProductList = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState(false);
+  const [catalogRequest, setCatalogRequest] = useState(0);
   const [wishlistedIds, setWishlistedIds] = useState([]);
   const [view, setView] = useState(searchParams.get('view') === 'list' ? 'list' : 'grid');
   const [showDesktopFilters, setShowDesktopFilters] = useState(true);
@@ -127,11 +129,27 @@ const ProductList = () => {
   const [sortBy, setSortBy] = useState(searchParams.get('sort') || (searchParams.get('search') ? 'relevance' : 'newest'));
 
   useEffect(() => {
-    Promise.all([getProducts(), getCategories()])
-      .then(([p, c]) => { setProducts(p); setCategories(c); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    let active = true;
+    setLoading(true);
+    setCatalogError(false);
+
+    Promise.allSettled([getProducts(), getCategories()])
+      .then(([productResult, categoryResult]) => {
+        if (!active) return;
+        if (productResult.status === 'fulfilled') {
+          setProducts(productResult.value || []);
+        } else {
+          setProducts([]);
+          setCatalogError(true);
+        }
+        setCategories(categoryResult.status === 'fulfilled' ? categoryResult.value || [] : []);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [catalogRequest]);
 
   useEffect(() => {
     const loadWishlist = async () => {
@@ -320,6 +338,21 @@ const ProductList = () => {
     );
   }
 
+  if (catalogError) {
+    return (
+      <main className="min-h-screen bg-slate-50">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+          <EmptyState
+            icon={AlertTriangle}
+            title="The catalog is temporarily unavailable"
+            description="The product service could not be reached. Please try again in a moment."
+            action={<BrandButton onClick={() => setCatalogRequest((request) => request + 1)}>Try again</BrandButton>}
+          />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="border-b border-slate-200 bg-white">
@@ -453,9 +486,11 @@ const ProductList = () => {
             ) : filtered.length === 0 ? (
               <EmptyState
                 icon={Search}
-                title="No matching products"
-                description="Try a different product name or remove one or more filters."
-                action={<BrandButton onClick={clearAllFilters}>Clear filters</BrandButton>}
+                title={products.length === 0 ? 'No products are available yet' : 'No matching products'}
+                description={products.length === 0
+                  ? 'The catalog is connected, but no products have been published.'
+                  : 'Try a different product name or remove one or more filters.'}
+                action={products.length > 0 ? <BrandButton onClick={clearAllFilters}>Clear filters</BrandButton> : null}
               />
             ) : view === 'grid' ? (
               <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
