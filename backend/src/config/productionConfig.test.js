@@ -42,6 +42,29 @@ test('production safely validates both supported frontend origin aliases', () =>
   );
 });
 
+test('Vercel production origins require cross-site session and CSRF cookies', () => {
+  const result = validateCoreEnvironment(productionEnvironment({
+    FRONTEND_ORIGIN: 'https://store.vercel.app',
+    COOKIE_SAME_SITE: 'none',
+    CSRF_COOKIE_SAME_SITE: 'none',
+  }));
+  assert.equal(result.cookieSameSite, 'none');
+  assert.equal(result.csrfCookieSameSite, 'none');
+
+  assert.throws(
+    () => validateCoreEnvironment(productionEnvironment({ FRONTEND_ORIGIN: 'https://store.vercel.app' })),
+    { code: 'PRODUCTION_CROSS_SITE_COOKIE_SAMESITE_REQUIRED' }
+  );
+  assert.throws(
+    () => validateCoreEnvironment(productionEnvironment({
+      FRONTEND_ORIGIN: 'https://store.vercel.app',
+      COOKIE_SAME_SITE: 'none',
+      CSRF_COOKIE_SAME_SITE: 'lax',
+    })),
+    { code: 'PRODUCTION_CROSS_SITE_COOKIE_SAMESITE_REQUIRED' }
+  );
+});
+
 test('production core validation rejects placeholders, reused secrets, and insecure settings', () => {
   assert.throws(
     () => validateCoreEnvironment(productionEnvironment({ JWT_SECRET: 'your-super-secret-jwt-key-change-this-in-production' })),
@@ -60,6 +83,10 @@ test('production core validation rejects placeholders, reused secrets, and insec
   assert.throws(
     () => validateCoreEnvironment(productionEnvironment({ COOKIE_SECURE: 'false' })),
     { code: 'PRODUCTION_COOKIE_SECURE_REQUIRED' }
+  );
+  assert.throws(
+    () => validateCoreEnvironment(productionEnvironment({ CSRF_COOKIE_SAME_SITE: 'invalid' })),
+    { code: 'PRODUCTION_CSRF_COOKIE_SAMESITE_INVALID' }
   );
   assert.throws(
     () => validateCoreEnvironment(productionEnvironment({ FRONTEND_ORIGIN: 'http://store.example.test' })),

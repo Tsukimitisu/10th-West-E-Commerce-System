@@ -28,11 +28,16 @@ CSRF_SECRET=
 TWO_FACTOR_ENCRYPTION_KEY=
 SESSION_STORE=postgres
 COOKIE_SECURE=true
-COOKIE_SAME_SITE=lax
+COOKIE_SAME_SITE=none
+CSRF_COOKIE_SAME_SITE=none
 ```
 
 `DB_READ_MODE=postgres` is recommended for PostgreSQL-only core operation.
 `CSRF_COOKIE_SAME_SITE` is optional and otherwise inherits `COOKIE_SAME_SITE`.
+The values above match this project's Vercel-to-Render deployment. A known
+`*.vercel.app` production origin now fails startup unless both effective
+SameSite values are `none`, preventing deployment with a CSRF-breaking cookie
+policy.
 
 `FRONTEND_ORIGIN` must be one absolute HTTPS origin with no credentials, path,
 query, or fragment. Additional `CORS_ALLOWED_ORIGINS` entries are validated as

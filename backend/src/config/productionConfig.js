@@ -133,6 +133,21 @@ export const validateCoreEnvironment = (environment = process.env) => {
       'COOKIE_SAME_SITE must be lax, strict, or none.'
     );
   }
+  const csrfSameSite = String(environment.CSRF_COOKIE_SAME_SITE || sameSite).trim().toLowerCase();
+  if (!['lax', 'strict', 'none'].includes(csrfSameSite)) {
+    throw new ProductionConfigurationError(
+      'PRODUCTION_CSRF_COOKIE_SAMESITE_INVALID',
+      'CSRF_COOKIE_SAME_SITE must be lax, strict, or none.'
+    );
+  }
+
+  const frontendHostname = new URL(frontendOrigin).hostname.toLowerCase();
+  if (frontendHostname.endsWith('.vercel.app') && (sameSite !== 'none' || csrfSameSite !== 'none')) {
+    throw new ProductionConfigurationError(
+      'PRODUCTION_CROSS_SITE_COOKIE_SAMESITE_REQUIRED',
+      'Vercel-to-Render sessions require COOKIE_SAME_SITE=none and CSRF_COOKIE_SAME_SITE=none.'
+    );
+  }
 
   for (const providerName of ['SHIPPING_PROVIDER', 'TRACKING_PROVIDER']) {
     if (String(environment[providerName] || '').trim().toLowerCase() === 'mock') {
@@ -150,5 +165,6 @@ export const validateCoreEnvironment = (environment = process.env) => {
     frontendOrigins: [...new Set([frontendOrigin, legacyFrontendUrl].filter(Boolean))],
     corsAllowedOrigins: validateCorsAllowedOrigins(environment),
     cookieSameSite: sameSite,
+    csrfCookieSameSite: csrfSameSite,
   };
 };
