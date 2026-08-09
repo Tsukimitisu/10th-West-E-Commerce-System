@@ -77,12 +77,35 @@ test.describe('live staff permission boundaries', () => {
     'Seed or configure both Staff fixture credential sets.'
   );
 
-  test('staff without permissions receives 403 for sensitive modules', async ({ page }) => {
+  test('staff without permissions receives 403 across sensitive modules', async ({ page }) => {
     await login(page, staffNoPermissions);
-    const inventoryResponse = await page.request.get(`${apiUrl}/inventory`);
-    expect(inventoryResponse.status()).toBe(403);
-    const body = await inventoryResponse.json();
-    expect(body.code).toBe('PERMISSION_DENIED');
+    const deniedModules = [
+      ['orders', '/orders'],
+      ['inventory', '/inventory'],
+      ['POS', '/pos/products'],
+      ['reports', '/reports/sales'],
+      ['payments', '/payments/0/status'],
+      ['staff management', '/staff'],
+      ['settings', '/admin/settings'],
+      ['audit logs', '/auth/activity-logs'],
+    ];
+
+    for (const [moduleName, path] of deniedModules) {
+      const response = await page.request.get(`${apiUrl}${path}`);
+      expect(response.status(), `${moduleName} must be denied`).toBe(403);
+    }
+
+    const csrfResponse = await page.request.get(`${apiUrl}/csrf-token`);
+    expect(csrfResponse.status()).toBe(200);
+    const { csrfToken } = await csrfResponse.json();
+    const productMutation = await page.request.post(`${apiUrl}/products/upload-image`, {
+      headers: {
+        'content-type': 'application/json',
+        'x-csrf-token': csrfToken,
+      },
+      data: {},
+    });
+    expect(productMutation.status(), 'product management must be denied').toBe(403);
   });
 
   test('staff allow-list succeeds while an unassigned module remains 403', async ({ page }) => {
