@@ -70,6 +70,14 @@ const defaultKeyGenerator = (req) => {
   return `${req.method}:${req.baseUrl || ''}${req.path}:${ip}`;
 };
 
+const namespaceRateLimitKey = (key) => {
+  const namespace = String(process.env.RATE_LIMIT_NAMESPACE || '')
+    .trim()
+    .replace(/[^A-Za-z0-9._-]/g, '_')
+    .slice(0, 64);
+  return namespace ? `${namespace}:${key}` : key;
+};
+
 const normalizeIdentifier = (value) => {
   if (typeof value !== 'string') return '';
   return value.trim().toLowerCase();
@@ -82,7 +90,7 @@ const rateLimit = (windowMs = 60000, maxRequests = 100, options = {}) => {
   return async (req, res, next) => {
     try {
       const now = Date.now();
-      const key = keyGenerator(req);
+      const key = namespaceRateLimitKey(keyGenerator(req));
       let count = 1;
       let retryAfter = Math.ceil(windowMs / 1000);
 

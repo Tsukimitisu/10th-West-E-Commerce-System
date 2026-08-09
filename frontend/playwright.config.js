@@ -50,6 +50,7 @@ const baseURL = base.toString().replace(/\/$/, '');
 const apiURL = api.toString().replace(/\/$/, '');
 const startLocalServer = !configuredBaseURL && process.env.E2E_START_SERVER !== 'false';
 const reuseExistingServer = String(process.env.E2E_REUSE_SERVER || '').trim().toLowerCase() === 'true';
+const rateLimitNamespace = `e2e-${process.pid}-${Date.now()}`;
 process.env.E2E_API_URL = apiURL;
 
 const backendEnvironment = { ...process.env };
@@ -77,6 +78,7 @@ const inheritedDatabaseKeys = [
 for (const key of inheritedDatabaseKeys) delete backendEnvironment[key];
 
 backendEnvironment.NODE_ENV = process.env.E2E_NODE_ENV || 'development';
+backendEnvironment.RATE_LIMIT_NAMESPACE = rateLimitNamespace;
 if (process.env.E2E_DATABASE_URL) backendEnvironment.DATABASE_URL = process.env.E2E_DATABASE_URL;
 if (process.env.E2E_SUPABASE_URL) backendEnvironment.SUPABASE_URL = process.env.E2E_SUPABASE_URL;
 if (process.env.E2E_SUPABASE_ANON_KEY) backendEnvironment.SUPABASE_ANON_KEY = process.env.E2E_SUPABASE_ANON_KEY;
