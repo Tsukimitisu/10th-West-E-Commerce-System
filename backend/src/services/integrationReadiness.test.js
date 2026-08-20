@@ -28,6 +28,8 @@ const ENV_NAMES = [
   'COURIER_PROVIDER',
   'WAYBILL_PROVIDER',
   'JNT_COURIER_NAME',
+  'SHIPPING_COVERAGE',
+  'DISTANCE_PROVIDER',
 ];
 
 const withEnvironment = async (values, callback) => {
@@ -47,7 +49,7 @@ const withEnvironment = async (values, callback) => {
 const sampleProviders = {
   paymongo: { configured: false, mode: 'test' },
   shipping: { provider: 'internal', ready: true, status: 'configured' },
-  tracking: { provider: 'manual', ready: true, status: 'manual_tracking_number_only' },
+  tracking: { provider: 'external_link', ready: true, status: 'available_after_waybill' },
 };
 
 test('public integration readiness reports internal and manual J&T logistics without secrets', async () => {
@@ -55,14 +57,23 @@ test('public integration readiness reports internal and manual J&T logistics wit
     const readiness = buildPublicIntegrationReadiness(sampleProviders);
     assert.deepEqual(readiness, {
       payment: 'blocked_by_credentials',
-      shipping: { provider: 'internal', status: 'configured' },
+      shipping: {
+        provider: 'internal',
+        type: 'luzon_location_weight_distance_based',
+        coverage: 'luzon_only',
+        distance_provider: 'internal',
+        status: 'configured',
+      },
+      courier: {
+        provider: 'jnt',
+        courier_name: 'J&T Express',
+        status: 'configured',
+      },
       waybill: {
         provider: 'manual',
-        courier: 'jnt',
-        courier_name: 'J&T Express',
         status: 'manual_enabled',
       },
-      tracking: { provider: 'manual', status: 'manual_tracking_number_only' },
+      tracking: { provider: 'external_link', status: 'available_after_waybill' },
       email: 'blocked_by_credentials',
       media: 'blocked_by_credentials',
     });
@@ -79,7 +90,11 @@ test('admin integration readiness exposes categories but not secret variable nam
     assert.equal(readiness.trackingmore.status, 'not_selected');
     assert.equal(readiness.shipping.provider, 'internal');
     assert.equal(readiness.waybill.status, 'manual_enabled');
-    assert.equal(readiness.tracking.status, 'manual_tracking_number_only');
+    assert.equal(readiness.shipping.type, 'luzon_location_weight_distance_based');
+    assert.equal(readiness.shipping.coverage, 'luzon_only');
+    assert.equal(readiness.shipping.distance_provider, 'internal');
+    assert.equal(readiness.courier.status, 'configured');
+    assert.equal(readiness.tracking.status, 'available_after_waybill');
     assert.doesNotMatch(JSON.stringify(readiness), /PAYMONGO_SECRET_KEY|SMTP_PASS|CLOUDINARY_API_SECRET|FACEBOOK_APP_SECRET/);
   });
 });

@@ -85,6 +85,7 @@ export const safeJson = async (response) => {
 };
 
 export const toPublicProviderStatus = (status = {}) => {
+  if (status.status === 'available_after_waybill') return 'available_after_waybill';
   if (status.status === 'manual_tracking_number_only') return 'manual_tracking_number_only';
   if (status.status === 'manual_enabled') return 'manual_enabled';
   if (status.mock && status.status === 'development_mock') return 'mock_dev_only';

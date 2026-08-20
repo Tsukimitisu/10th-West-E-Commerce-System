@@ -1,12 +1,14 @@
 import manualProvider from './manualTrackingProvider.js';
+import externalLinkProvider from './externalLinkTrackingProvider.js';
 import { ProviderError } from '../../shipping/providerError.js';
 
 const PROVIDERS = {
+  external_link: externalLinkProvider,
   manual: manualProvider,
 };
 
 export const getSelectedTrackingProviderName = () => String(
-  process.env.TRACKING_PROVIDER || 'manual'
+  process.env.TRACKING_PROVIDER || 'external_link'
 ).trim().toLowerCase();
 
 export const getTrackingProvider = (name = getSelectedTrackingProviderName()) => {

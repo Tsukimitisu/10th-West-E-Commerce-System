@@ -26,4 +26,5 @@ test('maps internal readiness to public-safe provider statuses', () => {
   assert.equal(toPublicProviderStatus({ status: 'not_implemented' }), 'not_implemented');
   assert.equal(toPublicProviderStatus({ mock: true, status: 'development_mock' }), 'mock_dev_only');
   assert.equal(toPublicProviderStatus({ status: 'unsupported_provider' }), 'unavailable');
+  assert.equal(toPublicProviderStatus({ status: 'available_after_waybill' }), 'available_after_waybill');
 });

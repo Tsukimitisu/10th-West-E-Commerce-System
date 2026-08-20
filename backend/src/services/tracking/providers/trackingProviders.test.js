@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import test from 'node:test';
 import aftershipProvider from './aftershipProvider.js';
 import manualProvider from './manualTrackingProvider.js';
+import externalLinkProvider from './externalLinkTrackingProvider.js';
 import trackingMoreProvider from './trackingmoreProvider.js';
 import { getTrackingProvider } from './index.js';
 
@@ -114,4 +115,12 @@ test('manual tracking is ready without a tracking API', () => {
   assert.equal(status.provider, 'manual');
   assert.equal(status.ready, true);
   assert.equal(status.status, 'manual_tracking_number_only');
+});
+
+test('external link tracking is only available after a manual waybill', () => {
+  const status = externalLinkProvider.getConfigurationStatus();
+  assert.equal(status.provider, 'external_link');
+  assert.equal(status.ready, true);
+  assert.equal(status.status, 'available_after_waybill');
+  assert.equal(typeof externalLinkProvider.getTrackingStatus, 'undefined');
 });

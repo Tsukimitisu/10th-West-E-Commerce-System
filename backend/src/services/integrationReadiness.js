@@ -115,16 +115,24 @@ export const buildPublicIntegrationReadiness = ({ paymongo, shipping, tracking }
   const courier = String(process.env.COURIER_PROVIDER || 'jnt').trim().toLowerCase();
   const courierName = String(process.env.JNT_COURIER_NAME || 'J&T Express').trim();
   const waybillProvider = String(process.env.WAYBILL_PROVIDER || 'manual').trim().toLowerCase();
+  const coverage = String(process.env.SHIPPING_COVERAGE || 'luzon_only').trim().toLowerCase();
+  const distanceProvider = String(process.env.DISTANCE_PROVIDER || 'internal').trim().toLowerCase();
   return {
     payment: paymongo.configured ? 'configured' : 'blocked_by_credentials',
     shipping: {
       provider: shipping.provider,
+      type: 'luzon_location_weight_distance_based',
+      coverage,
+      distance_provider: distanceProvider,
       status: toPublicProviderStatus(shipping),
+    },
+    courier: {
+      provider: courier,
+      courier_name: courierName,
+      status: courier === 'jnt' ? 'configured' : 'unavailable',
     },
     waybill: {
       provider: waybillProvider,
-      courier,
-      courier_name: courierName,
       status: waybillProvider === 'manual' ? 'manual_enabled' : 'unavailable',
     },
     tracking: {
@@ -144,6 +152,8 @@ export const buildAdminIntegrationReadiness = ({ paymongo, shipping, tracking })
   const courier = String(process.env.COURIER_PROVIDER || 'jnt').trim().toLowerCase();
   const courierName = String(process.env.JNT_COURIER_NAME || 'J&T Express').trim();
   const waybillProvider = String(process.env.WAYBILL_PROVIDER || 'manual').trim().toLowerCase();
+  const coverage = String(process.env.SHIPPING_COVERAGE || 'luzon_only').trim().toLowerCase();
+  const distanceProvider = String(process.env.DISTANCE_PROVIDER || 'internal').trim().toLowerCase();
   return {
     paymongo: {
       provider: 'paymongo',
@@ -154,18 +164,22 @@ export const buildAdminIntegrationReadiness = ({ paymongo, shipping, tracking })
     },
     shipping: {
       provider: shipping.provider,
+      type: 'luzon_location_weight_distance_based',
       status: toPublicProviderStatus(shipping),
       ready: shipping.ready,
       implementation_needed: Boolean(shipping.implementationNeeded || shipping.status === 'not_implemented'),
       country: 'PH',
-      courier,
+      coverage,
+      distance_provider: distanceProvider,
+    },
+    courier: {
+      provider: courier,
       courier_name: courierName,
-      coverage: 'nationwide_internal_rates',
+      ready: courier === 'jnt',
+      status: courier === 'jnt' ? 'configured' : 'unavailable',
     },
     waybill: {
       provider: waybillProvider,
-      courier,
-      courier_name: courierName,
       ready: waybillProvider === 'manual',
       status: waybillProvider === 'manual' ? 'manual_enabled' : 'unavailable',
     },
@@ -174,8 +188,6 @@ export const buildAdminIntegrationReadiness = ({ paymongo, shipping, tracking })
       provider: tracking.provider,
       status: toPublicProviderStatus(tracking),
       ready: tracking.ready,
-      courier,
-      courier_name: courierName,
     },
     trackingmore: supplemental.trackingmore,
     email: {
