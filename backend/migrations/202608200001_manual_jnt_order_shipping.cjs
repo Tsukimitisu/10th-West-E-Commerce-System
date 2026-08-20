@@ -26,7 +26,13 @@ exports.up = async function up(knex) {
         courier_name = COALESCE(NULLIF(courier_name, ''), 'J&T Express'),
         shipping_status = COALESCE(NULLIF(shipping_status, ''), 'pending'),
         delivery_method = COALESCE(NULLIF(delivery_method, ''), 'standard');
+  `);
 
+  // Flush the existing deferred order-integrity constraint trigger before DDL.
+  // PostgreSQL rejects ALTER TABLE while that UPDATE has pending trigger events.
+  await knex.raw('SET CONSTRAINTS ALL IMMEDIATE');
+
+  await knex.raw(`
     ALTER TABLE orders ALTER COLUMN shipping_fee SET DEFAULT 0;
     ALTER TABLE orders ALTER COLUMN shipping_provider SET DEFAULT 'internal';
     ALTER TABLE orders ALTER COLUMN courier SET DEFAULT 'jnt';
