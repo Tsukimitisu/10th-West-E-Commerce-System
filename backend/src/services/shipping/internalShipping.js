@@ -12,6 +12,7 @@ import {
   assertLuzonShippingAvailable,
   classifyPhilippineShippingZone,
 } from './shippingLocation.js';
+import { estimateDeliveryDistance } from './shippingDistance.js';
 
 export { classifyPhilippineShippingZone } from './shippingLocation.js';
 
@@ -45,6 +46,7 @@ export const calculateInternalShippingQuote = ({ subtotal, address, environment 
   const normalizedSubtotal = money(subtotal, 0);
   const zone = classifyPhilippineShippingZone(address);
   assertLuzonShippingAvailable(zone);
+  const distance = estimateDeliveryDistance({ address, shippingZone: zone, environment });
   const freeShippingApplied = normalizedSubtotal >= config.freeShippingThreshold;
   const zoneFee = zone === 'metro_manila'
     ? config.metroManilaFee
@@ -59,6 +61,9 @@ export const calculateInternalShippingQuote = ({ subtotal, address, environment 
     service_type: config.serviceType,
     coverage: 'luzon_only',
     shipping_zone: zone,
+    estimated_distance_km: distance.estimated_distance_km,
+    distance_class: distance.distance_class,
+    far_delivery: distance.far_delivery,
     shipping_fee: freeShippingApplied ? 0 : zoneFee,
     currency: 'PHP',
     free_shipping_applied: freeShippingApplied,
