@@ -178,9 +178,13 @@ test('shipment status update creates an event and delivered updates order shippi
     }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.shipment.status, 'delivered');
+    assert.ok(client.queries.some((entry) => (
+      entry.sql.includes('SET status = $2::text')
+      && entry.sql.includes("CASE WHEN $2::text = 'cancelled'")
+    )));
     assert.ok(client.queries.some((entry) => entry.sql.includes('INSERT INTO shipment_events')));
     assert.ok(client.queries.some((entry) => (
-      entry.sql.includes('SET shipping_status = $2') && entry.params[1] === 'delivered'
+      entry.sql.includes('SET shipping_status = $2::text') && entry.params[1] === 'delivered'
     )));
   });
 });

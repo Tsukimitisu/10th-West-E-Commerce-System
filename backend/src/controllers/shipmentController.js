@@ -325,8 +325,8 @@ export const updateManualShipmentStatus = async (req, res) => {
 
     await client.query(
       `UPDATE shipments
-       SET status = $2, normalized_status = $2, provider_status = $2,
-           cancelled_at = CASE WHEN $2 = 'cancelled' THEN NOW() ELSE cancelled_at END,
+       SET status = $2::text, normalized_status = $2::text, provider_status = $2::text,
+           cancelled_at = CASE WHEN $2::text = 'cancelled' THEN NOW() ELSE cancelled_at END,
            updated_at = NOW()
        WHERE id = $1`,
       [shipmentId, status]
@@ -347,7 +347,7 @@ export const updateManualShipmentStatus = async (req, res) => {
     );
     await client.query(
       `UPDATE orders
-       SET shipping_status = $2, updated_at = NOW()
+       SET shipping_status = $2::text, updated_at = NOW()
        WHERE id = $1`,
       [shipment.order_id, status]
     );
