@@ -10,6 +10,8 @@ test('checkout computes shipping and total on the backend and saves manual J&T f
   assert.match(checkout, /const total = roundMoney\(subtotal - discount \+ shippingFee \+ taxAmount\)/);
   assert.match(checkout, /shipping_fee, shipping_provider, courier,/);
   assert.match(checkout, /courier_name, shipping_status, delivery_method/);
+  assert.match(checkout, /shipping_zone, shipping_coverage, base_shipping_fee, weight_surcharge, distance_surcharge/);
+  assert.match(checkout, /actual_weight_kg, estimated_distance_km, distance_class, package_class/);
   assert.match(checkout, /shippingQuote\.provider/);
   assert.match(checkout, /shippingQuote\.courier_name/);
   assert.doesNotMatch(checkout, /req\.body\?\.(?:subtotal|shipping_fee|total|total_amount)/);

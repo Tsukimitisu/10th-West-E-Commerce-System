@@ -16,4 +16,11 @@ test('customer-compatible order serialization excludes legacy courier metadata',
   assert.doesNotMatch(mapper, /waybill_label_payload/);
   assert.match(mapper, /courier:/);
   assert.match(mapper, /waybill_number:/);
+  for (const field of [
+    'shipping_zone', 'shipping_coverage', 'base_shipping_fee', 'weight_surcharge',
+    'distance_surcharge', 'actual_weight_kg', 'estimated_distance_km',
+    'distance_class', 'package_class',
+  ]) {
+    assert.match(mapper, new RegExp(`${field}:`));
+  }
 });

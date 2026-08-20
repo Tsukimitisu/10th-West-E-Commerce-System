@@ -287,13 +287,18 @@ export const createCheckout = async (req, res) => {
         user_id, address_id, total_amount, subtotal_amount, shipping_fee, shipping_provider, courier,
         courier_name, shipping_status, delivery_method, discount_amount, tax_amount, currency,
         status, payment_status, payment_method, payment_provider, source, shipping_method, shipping_address,
-        shipping_address_snapshot, shipping_lat, shipping_lng, promo_code_used, checkout_idempotency_key, payment_expires_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,'PHP',$12,'pending',$13,$14,'online',$15,$16,$17::jsonb,$18,$19,$20,$21,$22)
+        shipping_address_snapshot, shipping_lat, shipping_lng, promo_code_used, checkout_idempotency_key, payment_expires_at,
+        shipping_zone, shipping_coverage, base_shipping_fee, weight_surcharge, distance_surcharge,
+        actual_weight_kg, estimated_distance_km, distance_class, package_class
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,'PHP',$12,'pending',$13,$14,'online',$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
       RETURNING *`,
       [req.user.id, address.id, total, subtotal, shippingFee, shippingQuote.provider, shippingQuote.courier,
         shippingQuote.courier_name, shippingQuote.service_type, discount, taxAmount, orderStatus, paymentMethod,
         paymentMethod === 'gcash' ? 'paymongo' : 'cod', shippingQuote.service_type, formatAddress(address),
-        JSON.stringify(snapshot), address.lat, address.lng, promotion?.code || null, idempotencyKey, expiresAt]
+        JSON.stringify(snapshot), address.lat, address.lng, promotion?.code || null, idempotencyKey, expiresAt,
+        shippingQuote.shipping_zone, shippingQuote.coverage, shippingQuote.base_shipping_fee,
+        shippingQuote.weight_surcharge, shippingQuote.distance_surcharge, shippingQuote.actual_weight_kg,
+        shippingQuote.estimated_distance_km, shippingQuote.distance_class, shippingQuote.package_class]
     );
     const order = orderResult.rows[0];
     for (const item of snapshots) {
@@ -1014,6 +1019,23 @@ const buildCheckoutResponse = async (client, order) => {
       discount: money(order.discount_amount),
       tax: money(order.tax_amount),
       total: money(order.total_amount),
+    },
+    shipping: {
+      provider: order.shipping_provider || 'internal',
+      courier: order.courier || 'jnt',
+      courier_name: order.courier_name || 'J&T Express',
+      service_type: order.delivery_method || 'standard',
+      coverage: order.shipping_coverage || 'luzon_only',
+      shipping_zone: order.shipping_zone,
+      base_shipping_fee: money(order.base_shipping_fee),
+      weight_surcharge: money(order.weight_surcharge),
+      distance_surcharge: money(order.distance_surcharge),
+      shipping_fee: money(order.shipping_fee),
+      actual_weight_kg: money(order.actual_weight_kg),
+      estimated_distance_km: money(order.estimated_distance_km),
+      distance_class: order.distance_class,
+      package_class: order.package_class,
+      free_shipping_applied: money(order.shipping_fee) === 0,
     },
     items: itemsResult.rows.map((item) => ({
       ...item,
