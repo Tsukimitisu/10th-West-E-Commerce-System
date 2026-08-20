@@ -57,6 +57,28 @@ test('active shipping routes contain no direct courier integration calls', async
   }
 });
 
+test('Luzon fee calculation uses database actual weight without external or volumetric logic', async () => {
+  const files = [
+    path.join(backendSource, 'services', 'shipping', 'internalShipping.js'),
+    path.join(backendSource, 'services', 'shipping', 'shippingDistance.js'),
+    path.join(backendSource, 'controllers', 'secureCheckoutController.js'),
+  ];
+  const sources = await Promise.all(files.map((file) => readFile(file, 'utf8')));
+  const shippingCalculator = sources[0];
+  const distanceEstimator = sources[1];
+  const checkout = sources[2].slice(
+    sources[2].indexOf('export const createCheckout'),
+    sources[2].indexOf('const extractPaymongoEvent')
+  );
+
+  assert.match(shippingCalculator, /p\.weight_kg/);
+  assert.match(shippingCalculator, /productWeightKg \* item\.quantity/);
+  assert.match(checkout, /item\.weight_kg \* item\.quantity/);
+  assert.doesNotMatch(`${shippingCalculator}\n${distanceEstimator}`, /\bfetch\s*\(|https?:\/\//i);
+  assert.doesNotMatch(`${shippingCalculator}\n${distanceEstimator}\n${checkout}`, /volumetric|chargeable_weight/i);
+  assert.doesNotMatch(checkout, /req\.body\?\.(?:subtotal|shipping_fee|total|total_amount|weight_kg)/);
+});
+
 test('BigSeller never produces success without a mapped official contract', async () => {
   await withEnvironment({}, async () => {
     await assert.rejects(

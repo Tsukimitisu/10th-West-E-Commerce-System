@@ -59,8 +59,8 @@ const createTemporaryProduct = async (marker) => {
   const result = await pool.query(
     `INSERT INTO products (
        part_number, name, description, price, buying_price, stock_quantity,
-       low_stock_threshold, sku, barcode, status, is_deleted, product_type
-     ) VALUES ($1,$2,$3,200,120,3,1,$1,$4,'active',false,'single')
+       low_stock_threshold, sku, barcode, status, is_deleted, product_type, weight_kg
+     ) VALUES ($1,$2,$3,200,120,3,1,$1,$4,'active',false,'single',2)
      RETURNING id, name`,
     [identifier, `Manual J&T E2E ${marker}`, `Temporary Manual J&T fixture ${marker}`, `${identifier}-bar`]
   );
@@ -197,10 +197,23 @@ test.describe('live Manual J&T COD flow', () => {
         courier: 'jnt',
         courier_name: 'J&T Express',
         service_type: 'standard',
-        shipping_fee: 100,
+        coverage: 'luzon_only',
+        shipping_zone: 'metro_manila',
+        base_shipping_fee: 100,
+        weight_surcharge: 50,
+        distance_surcharge: 30,
+        shipping_fee: 180,
+        actual_weight_kg: 2,
+        estimated_distance_km: 12,
+        distance_class: 'mid',
+        package_class: 'medium',
       });
       const shippingSection = page.getByRole('heading', { name: 'Shipping Method' }).locator('..');
-      await expect(shippingSection).toContainText(/(?:₱|PHP)\s*100\.00/);
+      await expect(shippingSection).toContainText(/(?:₱|PHP)\s*180\.00/);
+      await expect(shippingSection).toContainText('Shipping Coverage');
+      await expect(shippingSection).toContainText('Luzon only');
+      await expect(shippingSection).toContainText('Estimated Distance');
+      await expect(shippingSection).toContainText('Actual Weight');
       await expect(page.getByRole('button', { name: /Cash on Delivery/ })).toBeVisible();
       await page.getByText(/I agree to the/).locator('..').getByRole('checkbox').check();
 
@@ -212,7 +225,7 @@ test.describe('live Manual J&T COD flow', () => {
       expect(checkoutResponse.status()).toBe(201);
       const checkout = await checkoutResponse.json();
       orderId = Number(checkout.order_id);
-      expect(checkout.totals.shipping_fee).toBe(100);
+      expect(checkout.totals.shipping_fee).toBe(180);
       expect(checkout.totals.total).toBe(
         checkout.totals.subtotal + checkout.totals.shipping_fee + checkout.totals.tax - checkout.totals.discount
       );
@@ -222,8 +235,14 @@ test.describe('live Manual J&T COD flow', () => {
       const persistedCheckoutResponse = await page.request.get(`${apiUrl}/checkout/${orderId}`);
       expect(persistedCheckoutResponse.status()).toBe(200);
       const persistedCheckout = await persistedCheckoutResponse.json();
-      expect(Number(persistedCheckout.totals.shipping_fee)).toBe(100);
+      expect(Number(persistedCheckout.totals.shipping_fee)).toBe(180);
       expect(Number(persistedCheckout.payment.amount)).toBe(Number(persistedCheckout.totals.total));
+      expect(persistedCheckout.shipping).toMatchObject({
+        shipping_zone: 'metro_manila',
+        actual_weight_kg: 2,
+        estimated_distance_km: 12,
+        distance_surcharge: 30,
+      });
 
       customerCsrf = await getCsrfToken(page);
       const customerWaybillResponse = await jsonMutation(page, 'POST', `/shipments/orders/${orderId}/waybill`, {
@@ -324,6 +343,8 @@ test.describe('live Manual J&T COD flow', () => {
       expect((await deliveredOrderResponse.json()).shipping_status).toBe('delivered');
 
       await page.goto(`/#/orders/${orderId}`);
+      await expect(page.getByText('Shipping Calculation', { exact: true })).toBeVisible();
+      await expect(page.getByText('Luzon only', { exact: true })).toBeVisible();
       await expect(page.getByText(waybillNumber, { exact: true })).toBeVisible();
       await expect(page.getByText(trackingNumber, { exact: true })).toBeVisible();
       await expect(page.getByText(/Tracking updates are manually encoded by the store/)).toBeVisible();
