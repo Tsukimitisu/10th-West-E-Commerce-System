@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('integrity audit covers stock, receipts, COD/POS payments, references, and fixture baselines', async () => {
+test('integrity audit covers commerce, Manual J&T, references, and fixture baselines', async () => {
   const source = await readFile(new URL('../../scripts/integrity-audit.js', import.meta.url), 'utf8');
   for (const invariant of [
     'duplicate_receipts',
@@ -10,9 +10,17 @@ test('integrity audit covers stock, receipts, COD/POS payments, references, and 
     'invalid_variant_stock',
     'valid_cod_orders_without_payment',
     'valid_pos_orders_without_paid_payment',
+    'invalid_shipping_fees',
+    'order_total_mismatches',
+    'cod_payment_amount_mismatches',
+    'duplicate_waybill_numbers',
+    'duplicate_tracking_numbers',
+    'duplicate_active_shipments',
     'unquarantined_null_product_items',
     'orphan_order_items',
     'orphan_payments',
+    'orphan_shipments',
+    'orphan_shipment_events',
     'orphan_stock_reservations',
     'orphan_stock_movements',
     'orphan_returns',

@@ -62,8 +62,43 @@ const result = await pool.query(`
       WHERE o.source = 'pos'
         AND COALESCE(o.integrity_status, 'valid') = 'valid'
         AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.order_id=o.id AND p.status='paid')) AS valid_pos_orders_without_paid_payment,
+    (SELECT COUNT(*)::int FROM orders
+      WHERE shipping_fee IS NULL OR shipping_fee < 0) AS invalid_shipping_fees,
+    (SELECT COUNT(*)::int FROM orders
+      WHERE COALESCE(integrity_status, 'valid') = 'valid'
+        AND ABS(
+          total_amount - CASE
+            WHEN source = 'pos'
+              THEN COALESCE(subtotal_amount, 0) - COALESCE(discount_amount, 0)
+            ELSE COALESCE(subtotal_amount, 0) + COALESCE(shipping_fee, 0)
+              + COALESCE(tax_amount, 0) - COALESCE(discount_amount, 0)
+          END
+        ) > 0.01) AS order_total_mismatches,
+    (SELECT COUNT(*)::int FROM orders o
+      JOIN payments p ON p.order_id = o.id
+      WHERE o.payment_method::text = 'cod'
+        AND p.method::text = 'cod'
+        AND ABS(p.amount - o.total_amount) > 0.01) AS cod_payment_amount_mismatches,
+    (SELECT COALESCE(SUM(duplicates - 1), 0)::int FROM (
+      SELECT COUNT(*)::int AS duplicates FROM shipments
+      WHERE NULLIF(TRIM(waybill_number), '') IS NOT NULL
+      GROUP BY waybill_number HAVING COUNT(*) > 1
+    ) duplicate_groups) AS duplicate_waybill_numbers,
+    (SELECT COALESCE(SUM(duplicates - 1), 0)::int FROM (
+      SELECT COUNT(*)::int AS duplicates FROM shipments
+      WHERE NULLIF(TRIM(tracking_number), '') IS NOT NULL
+      GROUP BY tracking_number HAVING COUNT(*) > 1
+    ) duplicate_groups) AS duplicate_tracking_numbers,
+    (SELECT COALESCE(SUM(duplicates - 1), 0)::int FROM (
+      SELECT COUNT(*)::int AS duplicates FROM shipments
+      WHERE status::text NOT IN ('cancelled', 'returned')
+      GROUP BY order_id HAVING COUNT(*) > 1
+    ) duplicate_groups) AS duplicate_active_shipments,
     (SELECT COUNT(*)::int FROM order_items oi LEFT JOIN orders o ON o.id=oi.order_id WHERE o.id IS NULL) AS orphan_order_items,
     (SELECT COUNT(*)::int FROM payments p LEFT JOIN orders o ON o.id=p.order_id WHERE o.id IS NULL) AS orphan_payments,
+    (SELECT COUNT(*)::int FROM shipments s LEFT JOIN orders o ON o.id=s.order_id WHERE o.id IS NULL) AS orphan_shipments,
+    (SELECT COUNT(*)::int FROM shipment_events se
+      LEFT JOIN shipments s ON s.id=se.shipment_id WHERE s.id IS NULL) AS orphan_shipment_events,
     (SELECT COUNT(*)::int FROM stock_reservations sr
       LEFT JOIN orders o ON o.id=sr.order_id LEFT JOIN products p ON p.id=sr.product_id
       WHERE o.id IS NULL OR p.id IS NULL) AS orphan_stock_reservations,
@@ -100,8 +135,16 @@ const failures = [
   audit.invalid_variant_stock,
   audit.valid_cod_orders_without_payment,
   audit.valid_pos_orders_without_paid_payment,
+  audit.invalid_shipping_fees,
+  audit.order_total_mismatches,
+  audit.cod_payment_amount_mismatches,
+  audit.duplicate_waybill_numbers,
+  audit.duplicate_tracking_numbers,
+  audit.duplicate_active_shipments,
   audit.orphan_order_items,
   audit.orphan_payments,
+  audit.orphan_shipments,
+  audit.orphan_shipment_events,
   audit.orphan_stock_reservations,
   audit.orphan_stock_movements,
   audit.orphan_returns,
