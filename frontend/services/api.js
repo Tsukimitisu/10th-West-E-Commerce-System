@@ -2903,28 +2903,26 @@ export const confirmOrderDelivery = async (id) => {
   return mapOrderFromApi(data.order ?? data);
 };
 
-export const bookShipment = async (orderId, idempotencyKey = `order-${orderId}-shipment-v1`) => {
-  return authenticatedFetch(`${API_URL}/shipments/book`, {
+export const createManualWaybill = async (orderId, waybill) => {
+  return authenticatedFetch(`${API_URL}/shipments/orders/${orderId}/waybill`, {
     method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({ order_id: orderId }),
+    body: JSON.stringify(waybill),
   });
 };
-
-export const generateWaybill = async (id) => {
-  return authenticatedFetch(`${API_URL}/waybills/${id}/generate`, {
-    method: 'POST',
-  });
-};
-
-export const printWaybill = async (id) => authenticatedFetch(`${API_URL}/waybills/${id}/print`);
 
 export const getShipmentTracking = async (orderId) => (
-  authenticatedFetch(`${API_URL}/shipments/${orderId}/tracking`)
+  authenticatedFetch(`${API_URL}/shipments/orders/${orderId}`)
 );
 
-export const refreshShipmentTracking = async (orderId) => (
-  authenticatedFetch(`${API_URL}/shipments/${orderId}/tracking/refresh`, { method: 'POST' })
+export const getShipmentById = async (shipmentId) => (
+  authenticatedFetch(`${API_URL}/shipments/${shipmentId}`)
+);
+
+export const updateShipmentStatus = async (shipmentId, update) => (
+  authenticatedFetch(`${API_URL}/shipments/${shipmentId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify(update),
+  })
 );
 
 export const confirmOrderReceipt = async (id) => {

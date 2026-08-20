@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getOrders, getOrderById, getShipmentTracking, refreshShipmentTracking, updateOrderStatus, confirmOrderDelivery, processRefund, bookShipment, generateWaybill, printWaybill, cancelOrder } from '../../services/api';
+import { getOrders, getOrderById, getShipmentTracking, updateShipmentStatus, updateOrderStatus, confirmOrderDelivery, processRefund, createManualWaybill, cancelOrder, getMyPermissions } from '../../services/api';
 import { OrderStatus } from '../../types.js';
 import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock, Filter, ChevronDown, ChevronUp, ArrowLeft, Printer, DollarSign, MapPin, User, Calendar, CreditCard, AlertCircle, Undo } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
@@ -45,6 +45,16 @@ const staffStatusTransitions = {
   failed: [],
 };
 
+const shipmentStatusOptions = [
+  ['picked_up', 'Picked Up'],
+  ['in_transit', 'In Transit'],
+  ['out_for_delivery', 'Out for Delivery'],
+  ['delivered', 'Delivered'],
+  ['failed', 'Failed'],
+  ['returned', 'Returned'],
+  ['cancelled', 'Cancelled'],
+];
+
 const OrdersView = () => {
   // Role check: staff cannot process refunds
   const currentUser = getCurrentAuthUser();
@@ -70,6 +80,13 @@ const OrdersView = () => {
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
   const [waybillBusy, setWaybillBusy] = useState(false);
+  const [permissions, setPermissions] = useState(new Set());
+  const [waybillModalOpen, setWaybillModalOpen] = useState(false);
+  const [waybillForm, setWaybillForm] = useState({
+    waybill_number: '', tracking_number: '', service_type: 'standard', notes: '',
+  });
+  const [shipmentStatus, setShipmentStatus] = useState('picked_up');
+  const [shipmentStatusBusy, setShipmentStatusBusy] = useState(false);
 
   const fetchOrders = async () => {
     try { const o = await getOrders(); setOrders(o); } catch (e) { console.error(e); }
@@ -77,6 +94,10 @@ const OrdersView = () => {
   };
 
   useEffect(() => { fetchOrders(); }, []);
+
+  useEffect(() => {
+    getMyPermissions().then((items) => setPermissions(new Set(items))).catch(() => setPermissions(new Set()));
+  }, []);
 
   // Real-time: refresh on new/updated orders
   useSocketEvent('order:new', fetchOrders);
@@ -91,6 +112,9 @@ const OrdersView = () => {
       ]);
       setDetailOrder(full);
       setShipmentData(shipment);
+      if (shipment?.shipment?.status) {
+        setShipmentStatus(shipment.shipment.status === 'waybill_created' ? 'picked_up' : shipment.shipment.status);
+      }
     } catch { setDetailOrder(order); }
     setDetailOpen(true);
   };
@@ -156,47 +180,40 @@ const OrdersView = () => {
     setRefunding(false);
   };
 
-  const handleGenerateWaybill = async () => {
+  const handleCreateWaybill = async () => {
     if (!detailOrder) return;
     setStatusError('');
     setWaybillBusy(true);
     try {
-      await bookShipment(detailOrder.id);
-      await generateWaybill(detailOrder.id);
+      const created = await createManualWaybill(detailOrder.id, waybillForm);
       const full = await getOrderById(detailOrder.id);
       setDetailOrder(full);
-      setShipmentData(await getShipmentTracking(detailOrder.id).catch(() => null));
+      setShipmentData(created);
+      setShipmentStatus(created?.shipment?.status === 'waybill_created' ? 'picked_up' : (created?.shipment?.status || 'picked_up'));
+      setWaybillModalOpen(false);
+      setWaybillForm({ waybill_number: '', tracking_number: '', service_type: 'standard', notes: '' });
       fetchOrders();
     } catch (e) {
-      setStatusError(e.message || 'Shipping provider could not generate the waybill.');
+      setStatusError(e.message || 'The manual J&T waybill could not be created.');
     } finally {
       setWaybillBusy(false);
     }
   };
 
-  const handleRefreshTracking = async () => {
-    if (!detailOrder) return;
+  const handleShipmentStatusUpdate = async () => {
+    if (!shipmentData?.shipment?.id) return;
     setStatusError('');
+    setShipmentStatusBusy(true);
     try {
-      await refreshShipmentTracking(detailOrder.id);
-      setShipmentData(await getShipmentTracking(detailOrder.id));
+      const updated = await updateShipmentStatus(shipmentData.shipment.id, { status: shipmentStatus });
+      setShipmentData(updated);
+      const full = await getOrderById(detailOrder.id);
+      setDetailOrder(full);
+      fetchOrders();
     } catch (e) {
-      setStatusError(e.message || 'Tracking updates are not available yet.');
-    }
-  };
-
-  const handlePrintWaybill = async () => {
-    if (!detailOrder) return;
-    setStatusError('');
-    try {
-      const waybill = await printWaybill(detailOrder.id);
-      if (waybill.label_url) {
-        window.open(waybill.label_url, '_blank', 'noopener,noreferrer');
-      } else {
-        setStatusError('The shipping provider did not supply a printable label URL.');
-      }
-    } catch (e) {
-      setStatusError(e.message || 'Waybill could not be loaded.');
+      setStatusError(e.message || 'Shipment status could not be updated.');
+    } finally {
+      setShipmentStatusBusy(false);
     }
   };
 
@@ -213,6 +230,15 @@ const OrdersView = () => {
   const processing = orders.filter(o => ['processing', 'packed', 'ready_for_pickup'].includes(o.status)).length;
   const shipped = orders.filter(o => o.status === 'shipped').length;
   const totalRev = orders.reduce((s, o) => s + (o.total_amount || 0), 0);
+  const privileged = ['admin', 'owner', 'super_admin'].includes(currentUser?.role);
+  const canManageShipments = privileged || permissions.has('shipments.manage');
+  const activeShipment = shipmentData?.shipment
+    && !['cancelled', 'returned'].includes(shipmentData.shipment.status);
+  const waybillEligible = detailOrder
+    && detailOrder.shipping_method !== 'pickup'
+    && detailOrder.source !== 'pos'
+    && ['paid', 'processing', 'packed', 'ready_for_pickup'].includes(detailOrder.status);
+  const canCreateWaybill = canManageShipments && waybillEligible && !activeShipment;
 
   return (
     <div className="space-y-4">
@@ -347,19 +373,58 @@ const OrdersView = () => {
               <div className="p-3 bg-gray-900 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><Package size={12} /> Tracking Number</div>
                 <p className="text-sm font-medium text-white">{shipmentData?.shipment?.tracking_number || detailOrder.tracking_number || '-'}</p>
-                <p className="text-[10px] text-gray-400 mt-1">Waybill: {detailOrder.waybill_status || 'not requested'}</p>
+                <p className="text-[10px] text-gray-400 mt-1">Waybill: {shipmentData?.shipment?.waybill_number || detailOrder.waybill_number || 'not created'}</p>
               </div>
               <div className="p-3 bg-gray-900 rounded-lg">
-                <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><Truck size={12} /> Provider Status</div>
-                <p className="text-sm font-medium text-white capitalize">{shipmentData?.shipment?.shipping_provider || detailOrder.courier || 'Not booked'}</p>
-                <p className="text-[10px] text-gray-400 mt-1 capitalize">{String(shipmentData?.shipment?.status || 'unavailable').replaceAll('_', ' ')}</p>
-                {shipmentData?.shipment?.booking_error && <p className="mt-1 text-[10px] text-red-400">{shipmentData.shipment.booking_error}</p>}
+                <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><Truck size={12} /> Courier</div>
+                <p className="text-sm font-medium text-white">{shipmentData?.shipment?.courier_name || detailOrder.courier_name || 'J&T Express'}</p>
+                <p className="text-[10px] text-gray-400 mt-1 capitalize">{String(shipmentData?.shipment?.status || detailOrder.shipping_status || 'pending').replaceAll('_', ' ')}</p>
               </div>
               <div className="p-3 bg-gray-900 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><User size={12} /> Assigned Staff</div>
                 <p className="text-sm font-medium text-white">{detailOrder.assigned_staff_id ? `Staff #${detailOrder.assigned_staff_id}` : '-'}</p>
               </div>
             </div>
+
+            {shipmentData?.shipment && (
+              <div className="rounded-xl border border-gray-700 bg-gray-900 p-4 space-y-4">
+                <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+                  <div><p className="text-xs text-gray-400">Created</p><p className="font-medium text-white">{new Date(shipmentData.shipment.created_at).toLocaleString('en-PH')}</p></div>
+                  <div><p className="text-xs text-gray-400">Created By</p><p className="font-medium text-white">{shipmentData.shipment.created_by?.name || (shipmentData.shipment.created_by?.id ? `User #${shipmentData.shipment.created_by.id}` : '-')}</p></div>
+                  <div><p className="text-xs text-gray-400">Service</p><p className="font-medium text-white capitalize">{shipmentData.shipment.service_type || 'standard'}</p></div>
+                </div>
+                {shipmentData.events?.length > 0 && (
+                  <ol className="space-y-3 border-l border-gray-600 pl-4">
+                    {shipmentData.events.map((event, index) => (
+                      <li key={`${event.event_time || event.occurred_at}-${index}`}>
+                        <p className="text-sm font-medium text-white capitalize">{String(event.status).replaceAll('_', ' ')}</p>
+                        {event.description && <p className="text-xs text-gray-300">{event.description}</p>}
+                        <p className="text-[10px] text-gray-500">{[event.location, new Date(event.event_time || event.occurred_at).toLocaleString('en-PH')].filter(Boolean).join(' · ')}</p>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {canManageShipments && activeShipment && (
+                  <div className="flex flex-col gap-2 border-t border-gray-700 pt-4 sm:flex-row">
+                    <select
+                      value={shipmentStatus}
+                      onChange={(event) => setShipmentStatus(event.target.value)}
+                      className="flex-1 rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white"
+                    >
+                      {shipmentStatusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleShipmentStatusUpdate}
+                      disabled={shipmentStatusBusy}
+                      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:bg-gray-500"
+                    >
+                      {shipmentStatusBusy ? 'Updating...' : 'Update Shipment Status'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Cancellation Reason */}
             {detailOrder.status === 'cancelled' && detailOrder.cancellation_reason && (
@@ -418,30 +483,12 @@ const OrdersView = () => {
               >
                 <Printer size={14} /> Print Invoice
               </button>
-              {detailOrder.shipping_method !== 'pickup' && detailOrder.source !== 'pos' && ['paid', 'processing', 'packed', 'ready_for_pickup'].includes(detailOrder.status) && (
-                detailOrder.waybill_number ? (
-                  <button
-                    onClick={handlePrintWaybill}
-                    className="flex-1 min-w-[140px] px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-                  >
-                    <Printer size={14} /> Print Waybill
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleGenerateWaybill}
-                    disabled={waybillBusy}
-                    className="flex-1 min-w-[140px] px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-500 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-                  >
-                    <Truck size={14} /> {waybillBusy ? 'Preparing...' : 'Book & Generate Waybill'}
-                  </button>
-                )
-              )}
-              {shipmentData?.shipment?.tracking_number && (
+              {canCreateWaybill && (
                 <button
-                  onClick={handleRefreshTracking}
-                  className="flex-1 min-w-[140px] px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                  onClick={() => { setStatusError(''); setWaybillModalOpen(true); }}
+                  className="flex-1 min-w-[140px] px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
                 >
-                  <RotateCcw size={14} /> Refresh Tracking
+                  <Truck size={14} /> Create J&T Waybill
                 </button>
               )}
               {!isStaff && (['delivered', 'refunded', 'partially_refunded', 'cancelled'].includes(detailOrder.status)) && (
@@ -453,6 +500,63 @@ const OrdersView = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal isOpen={waybillModalOpen} onClose={() => setWaybillModalOpen(false)} title="Create J&T Waybill" size="sm">
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-300">Waybill Number</label>
+            <input
+              value={waybillForm.waybill_number}
+              onChange={(event) => setWaybillForm((current) => ({ ...current, waybill_number: event.target.value }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white"
+              placeholder="JT123456789"
+              maxLength={100}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-300">Tracking Number</label>
+            <input
+              value={waybillForm.tracking_number}
+              onChange={(event) => setWaybillForm((current) => ({ ...current, tracking_number: event.target.value }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white"
+              placeholder="JT123456789"
+              maxLength={100}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-300">Service Type</label>
+            <input
+              value={waybillForm.service_type}
+              onChange={(event) => setWaybillForm((current) => ({ ...current, service_type: event.target.value.toLowerCase() }))}
+              className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white"
+              maxLength={40}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-300">Notes</label>
+            <textarea
+              value={waybillForm.notes}
+              onChange={(event) => setWaybillForm((current) => ({ ...current, notes: event.target.value }))}
+              className="w-full resize-none rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-white"
+              rows={3}
+              maxLength={1000}
+              placeholder="Booked manually through J&T"
+            />
+          </div>
+          {statusError && <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">{statusError}</div>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setWaybillModalOpen(false)} className="rounded-lg px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">Cancel</button>
+            <button
+              type="button"
+              onClick={handleCreateWaybill}
+              disabled={waybillBusy || !waybillForm.waybill_number.trim() || !waybillForm.tracking_number.trim() || !waybillForm.service_type.trim()}
+              className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:bg-gray-500"
+            >
+              {waybillBusy ? 'Saving...' : 'Save Waybill'}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Status Update Modal */}
