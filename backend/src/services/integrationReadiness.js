@@ -112,10 +112,25 @@ export const getSupplementalProviderStatus = () => ({
 export const buildPublicIntegrationReadiness = ({ paymongo, shipping, tracking }) => {
   const email = getEmailConfigurationStatus();
   const media = getMediaConfigurationStatus();
+  const courier = String(process.env.COURIER_PROVIDER || 'jnt').trim().toLowerCase();
+  const courierName = String(process.env.JNT_COURIER_NAME || 'J&T Express').trim();
+  const waybillProvider = String(process.env.WAYBILL_PROVIDER || 'manual').trim().toLowerCase();
   return {
     payment: paymongo.configured ? 'configured' : 'blocked_by_credentials',
-    shipping: toPublicProviderStatus(shipping),
-    tracking: toPublicProviderStatus(tracking),
+    shipping: {
+      provider: shipping.provider,
+      status: toPublicProviderStatus(shipping),
+    },
+    waybill: {
+      provider: waybillProvider,
+      courier,
+      courier_name: courierName,
+      status: waybillProvider === 'manual' ? 'manual_enabled' : 'unavailable',
+    },
+    tracking: {
+      provider: tracking.provider,
+      status: toPublicProviderStatus(tracking),
+    },
     email: publicStatus(email.status),
     media: publicStatus(media.status),
   };
@@ -126,6 +141,9 @@ export const buildAdminIntegrationReadiness = ({ paymongo, shipping, tracking })
   const media = getMediaConfigurationStatus();
   const oauth = getOAuthConfigurationStatus();
   const supplemental = getSupplementalProviderStatus();
+  const courier = String(process.env.COURIER_PROVIDER || 'jnt').trim().toLowerCase();
+  const courierName = String(process.env.JNT_COURIER_NAME || 'J&T Express').trim();
+  const waybillProvider = String(process.env.WAYBILL_PROVIDER || 'manual').trim().toLowerCase();
   return {
     paymongo: {
       provider: 'paymongo',
@@ -139,16 +157,25 @@ export const buildAdminIntegrationReadiness = ({ paymongo, shipping, tracking })
       status: toPublicProviderStatus(shipping),
       ready: shipping.ready,
       implementation_needed: Boolean(shipping.implementationNeeded || shipping.status === 'not_implemented'),
-      country: String(process.env.SHIPPING_COUNTRY || 'PH').toUpperCase(),
-      carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
-      coverage: 'selected_cities',
+      country: 'PH',
+      courier,
+      courier_name: courierName,
+      coverage: 'nationwide_internal_rates',
+    },
+    waybill: {
+      provider: waybillProvider,
+      courier,
+      courier_name: courierName,
+      ready: waybillProvider === 'manual',
+      status: waybillProvider === 'manual' ? 'manual_enabled' : 'unavailable',
     },
     payrecon: supplemental.payrecon,
     tracking: {
       provider: tracking.provider,
       status: toPublicProviderStatus(tracking),
       ready: tracking.ready,
-      carrier: String(process.env.SHIPPING_CARRIER || 'jtexpress-ph').toLowerCase(),
+      courier,
+      courier_name: courierName,
     },
     trackingmore: supplemental.trackingmore,
     email: {

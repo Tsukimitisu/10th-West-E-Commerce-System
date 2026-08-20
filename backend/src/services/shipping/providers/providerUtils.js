@@ -85,6 +85,8 @@ export const safeJson = async (response) => {
 };
 
 export const toPublicProviderStatus = (status = {}) => {
+  if (status.status === 'manual_tracking_number_only') return 'manual_tracking_number_only';
+  if (status.status === 'manual_enabled') return 'manual_enabled';
   if (status.mock && status.status === 'development_mock') return 'mock_dev_only';
   if (status.ready) return 'configured';
   if (status.status === 'blocked_by_credentials') return 'blocked_by_credentials';

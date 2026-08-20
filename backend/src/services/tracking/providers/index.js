@@ -1,16 +1,18 @@
 import aftershipProvider from './aftershipProvider.js';
+import manualProvider from './manualTrackingProvider.js';
 import mockProvider from './mockTrackingProvider.js';
 import shippingProvider from './shippingProviderTracking.js';
 import { ProviderError } from '../../shipping/providerError.js';
 
 const PROVIDERS = {
   aftership: aftershipProvider,
+  manual: manualProvider,
   mock: mockProvider,
   shipping_provider: shippingProvider,
 };
 
 export const getSelectedTrackingProviderName = () => String(
-  process.env.TRACKING_PROVIDER || 'aftership'
+  process.env.TRACKING_PROVIDER || 'manual'
 ).trim().toLowerCase();
 
 export const getTrackingProvider = (name = getSelectedTrackingProviderName()) => {

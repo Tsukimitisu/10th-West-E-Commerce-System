@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import bigsellerProvider, { BIGSELLER_CONTRACT_REQUIREMENTS } from './bigsellerProvider.js';
+import internalProvider from './internalShippingProvider.js';
 import mockProvider from './mockShippingProvider.js';
 import { getShippingProvider } from './index.js';
 
@@ -138,6 +139,14 @@ test('unknown shipping provider is rejected', () => {
     () => getShippingProvider('unknown'),
     (error) => error.code === 'UNSUPPORTED_SHIPPING_PROVIDER' && error.status === 503
   );
+});
+
+test('internal shipping is configured without courier API credentials', () => {
+  const status = internalProvider.getConfigurationStatus();
+  assert.equal(status.provider, 'internal');
+  assert.equal(status.ready, true);
+  assert.equal(status.status, 'configured');
+  assert.deepEqual(status.missing, []);
 });
 
 test('every selectable shipping provider declares Philippine carrier support', () => {

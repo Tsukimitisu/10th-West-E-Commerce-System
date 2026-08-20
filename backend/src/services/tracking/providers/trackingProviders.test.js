@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import test from 'node:test';
 import aftershipProvider from './aftershipProvider.js';
+import manualProvider from './manualTrackingProvider.js';
 import trackingMoreProvider from './trackingmoreProvider.js';
 import { getTrackingProvider } from './index.js';
 
@@ -106,4 +107,11 @@ test('TrackingMore cannot be selected until its contract is implemented', () => 
     () => getTrackingProvider('trackingmore'),
     (error) => error.code === 'UNSUPPORTED_TRACKING_PROVIDER' && error.status === 503
   );
+});
+
+test('manual tracking is ready without a tracking API', () => {
+  const status = manualProvider.getConfigurationStatus();
+  assert.equal(status.provider, 'manual');
+  assert.equal(status.ready, true);
+  assert.equal(status.status, 'manual_tracking_number_only');
 });

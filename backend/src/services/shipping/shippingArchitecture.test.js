@@ -21,12 +21,12 @@ const listSourceFiles = async (directory) => {
   return files;
 };
 
-test('active backend and frontend source contain no direct courier-specific integration', async () => {
+test('active backend and frontend source contain no direct courier API integration', async () => {
   const files = [
     ...await listSourceFiles(backendSource),
     ...await listSourceFiles(path.join(repositoryRoot, 'frontend')),
   ].filter((file) => !/\.test\.[cm]?[jt]sx?$/.test(file));
-  const forbidden = /\bJNT_|direct_jnt|JNT_MOCK_MODE|jntShipments|createJnt|refreshJnt/i;
+  const forbidden = /direct_jnt|JNT_MOCK_MODE|jntShipments|createJnt|refreshJnt|api\.jtexpress|shipmates|ninja\s*van/i;
   const violations = [];
   for (const file of files) {
     const source = await readFile(file, 'utf8');
@@ -67,6 +67,7 @@ test('readiness reports generic shipping and tracking state', async () => {
   assert.match(publicReadiness, /integrations_ready/);
   assert.doesNotMatch(publicReadiness, /shipping_provider|shipping_carrier|tracking_provider/);
   assert.match(adminRoutes, /buildAdminIntegrationReadiness/);
-  assert.match(integrationReadiness, /shipping:\s*\{[\s\S]*?provider: shipping\.provider,[\s\S]*?carrier:/);
-  assert.match(integrationReadiness, /tracking:\s*\{[\s\S]*?provider: tracking\.provider,[\s\S]*?carrier:/);
+  assert.match(integrationReadiness, /shipping:\s*\{[\s\S]*?provider: shipping\.provider,[\s\S]*?courier,/);
+  assert.match(integrationReadiness, /waybill:\s*\{[\s\S]*?provider: waybillProvider,[\s\S]*?courier_name:/);
+  assert.match(integrationReadiness, /tracking:\s*\{[\s\S]*?provider: tracking\.provider,[\s\S]*?courier,/);
 });

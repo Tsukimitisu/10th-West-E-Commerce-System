@@ -25,6 +25,9 @@ const ENV_NAMES = [
   'FACEBOOK_APP_ID',
   'FACEBOOK_APP_SECRET',
   'TRACKING_PROVIDER',
+  'COURIER_PROVIDER',
+  'WAYBILL_PROVIDER',
+  'JNT_COURIER_NAME',
 ];
 
 const withEnvironment = async (values, callback) => {
@@ -43,17 +46,23 @@ const withEnvironment = async (values, callback) => {
 
 const sampleProviders = {
   paymongo: { configured: false, mode: 'test' },
-  shipping: { provider: 'bigseller', ready: false, status: 'blocked_by_credentials' },
-  tracking: { provider: 'aftership', ready: false, status: 'blocked_by_credentials' },
+  shipping: { provider: 'internal', ready: true, status: 'configured' },
+  tracking: { provider: 'manual', ready: true, status: 'manual_tracking_number_only' },
 };
 
-test('public integration readiness reports blocked categories without secret names', async () => {
+test('public integration readiness reports internal and manual J&T logistics without secrets', async () => {
   await withEnvironment({}, async () => {
     const readiness = buildPublicIntegrationReadiness(sampleProviders);
     assert.deepEqual(readiness, {
       payment: 'blocked_by_credentials',
-      shipping: 'blocked_by_credentials',
-      tracking: 'blocked_by_credentials',
+      shipping: { provider: 'internal', status: 'configured' },
+      waybill: {
+        provider: 'manual',
+        courier: 'jnt',
+        courier_name: 'J&T Express',
+        status: 'manual_enabled',
+      },
+      tracking: { provider: 'manual', status: 'manual_tracking_number_only' },
       email: 'blocked_by_credentials',
       media: 'blocked_by_credentials',
     });
@@ -68,6 +77,9 @@ test('admin integration readiness exposes categories but not secret variable nam
     assert.deepEqual(readiness.email.missing_categories, ['host', 'port', 'username', 'password']);
     assert.equal(readiness.payrecon.status, 'implementation_needed');
     assert.equal(readiness.trackingmore.status, 'not_selected');
+    assert.equal(readiness.shipping.provider, 'internal');
+    assert.equal(readiness.waybill.status, 'manual_enabled');
+    assert.equal(readiness.tracking.status, 'manual_tracking_number_only');
     assert.doesNotMatch(JSON.stringify(readiness), /PAYMONGO_SECRET_KEY|SMTP_PASS|CLOUDINARY_API_SECRET|FACEBOOK_APP_SECRET/);
   });
 });

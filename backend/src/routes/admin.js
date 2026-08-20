@@ -96,14 +96,8 @@ router.get('/readiness', async (_req, res) => {
         environment: process.env.NODE_ENV || 'development',
       },
       shipping_activity: {
-        webhook_url: '/api/shipments/webhook',
-        sender_configured: [
-          process.env.SHIPPER_NAME,
-          process.env.SHIPPER_PHONE,
-          process.env.SHIPPER_ADDRESS_LINE1,
-          process.env.SHIPPER_CITY,
-          process.env.SHIPPER_POSTAL_CODE,
-        ].every(Boolean),
+        mode: 'manual_waybill',
+        external_api_required: false,
         ...activity,
       },
       timestamp: new Date().toISOString(),
