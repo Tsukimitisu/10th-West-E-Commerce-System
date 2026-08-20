@@ -4,7 +4,7 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import pool from '../config/database.js';
-import { requirePermission, requirePermissionForRoles } from './auth.js';
+import { requirePermission, requirePermissionForRoles, requireRole } from './auth.js';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,7 +29,7 @@ test('staff without granular shipping permissions is denied', async () => {
   const originalQuery = pool.query;
   pool.query = async () => ({ rows: [] });
   try {
-    for (const permission of ['shipments.manage', 'waybills.generate', 'shipments.view', 'tracking.refresh']) {
+    for (const permission of ['shipments.manage', 'shipments.view']) {
       const req = { user: { id: 99, role: 'store_staff' } };
       const res = makeResponse();
       let nextCalled = false;
@@ -63,10 +63,17 @@ test('customer own-tracking path bypasses staff permission but remains ownership
 
 test('shipment mutation routes use the required granular permissions', async () => {
   const shipmentRoutes = await readFile(path.resolve(directory, '..', 'routes', 'shipments.js'), 'utf8');
-  const waybillRoutes = await readFile(path.resolve(directory, '..', 'routes', 'waybills.js'), 'utf8');
-  assert.match(shipmentRoutes, /'\/book'.*requirePermission\('shipments\.manage'\)/);
-  assert.match(shipmentRoutes, /'\/:orderId\/cancel'.*requirePermission\('shipments\.manage'\)/);
-  assert.match(shipmentRoutes, /'\/:orderId\/tracking\/refresh'.*requirePermission\('tracking\.refresh'\)/);
-  assert.match(waybillRoutes, /generate'.*requirePermission\('waybills\.generate'\)/);
-  assert.match(waybillRoutes, /reprint'.*requirePermission\('waybills\.generate'\)/);
+  assert.match(shipmentRoutes, /'\/orders\/:orderId\/waybill'[\s\S]*?requireRole\(\.\.\.staffRoles\)[\s\S]*?requirePermission\('shipments\.manage'\)/);
+  assert.match(shipmentRoutes, /'\/:shipmentId\/status'[\s\S]*?requireRole\(\.\.\.staffRoles\)[\s\S]*?requirePermission\('shipments\.manage'\)/);
+  assert.match(shipmentRoutes, /'\/orders\/:orderId'.*customerOrShipmentViewer/);
+});
+
+test('customer role cannot create a manual waybill', () => {
+  const req = { user: { id: 10, role: 'customer' } };
+  const res = makeResponse();
+  let nextCalled = false;
+  requireRole('admin', 'super_admin', 'owner', 'store_staff')(req, res, () => { nextCalled = true; });
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.code, 'ROLE_ACCESS_DENIED');
 });

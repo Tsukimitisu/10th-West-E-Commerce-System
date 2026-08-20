@@ -49,13 +49,11 @@ const withEnvironment = async (values, callback) => {
 test('active shipping routes contain no direct courier integration calls', async () => {
   const files = [
     path.join(backendSource, 'routes', 'shipments.js'),
-    path.join(backendSource, 'routes', 'waybills.js'),
     path.join(backendSource, 'controllers', 'shipmentController.js'),
-    path.join(directory, 'shippingService.js'),
   ];
   for (const file of files) {
     const source = await readFile(file, 'utf8');
-    assert.doesNotMatch(source, /JNT_|jntShipments|createJnt|refreshJnt|JNT_MOCK_MODE/i);
+    assert.doesNotMatch(source, /jntShipments|createJnt|refreshJnt|JNT_MOCK_MODE|\bfetch\s*\(/i);
   }
 });
 

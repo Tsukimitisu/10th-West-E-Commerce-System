@@ -35,26 +35,26 @@ test('active backend and frontend source contain no direct courier API integrati
   assert.deepEqual(violations, []);
 });
 
-test('shipment and waybill mutation routes require staff roles and granular permissions', async () => {
+test('manual shipment mutation routes require staff roles and granular permissions', async () => {
   const shipmentRoutes = await readFile(path.join(backendSource, 'routes', 'shipments.js'), 'utf8');
-  const waybillRoutes = await readFile(path.join(backendSource, 'routes', 'waybills.js'), 'utf8');
   assert.match(shipmentRoutes, /const staffRoles = \[\.\.\.STAFF_ROLES\]/);
-  assert.match(shipmentRoutes, /router\.post\('\/book', authenticateToken, requireRole\(\.\.\.staffRoles\), requirePermission\('shipments\.manage'\)/);
+  assert.match(shipmentRoutes, /'\/orders\/:orderId\/waybill'[\s\S]*?requireRole\(\.\.\.staffRoles\)[\s\S]*?requirePermission\('shipments\.manage'\)/);
   assert.match(shipmentRoutes, /requirePermissionForRoles\('shipments\.view'/);
-  assert.match(shipmentRoutes, /requirePermission\('tracking\.refresh'\)/);
-  assert.match(waybillRoutes, /requirePermission\('waybills\.generate'\), generateWaybill/);
-  assert.match(waybillRoutes, /requirePermission\('waybills\.generate'\), reprintWaybill/);
+  assert.match(shipmentRoutes, /'\/:shipmentId\/status'[\s\S]*?requirePermission\('shipments\.manage'\)/);
 });
 
-test('shipping operations delegate through selected providers and persist sanitized errors', async () => {
+test('manual shipping persists waybills, events, audits, and safe customer responses', async () => {
   const controller = await readFile(path.join(backendSource, 'controllers', 'shipmentController.js'), 'utf8');
-  assert.match(controller, /createShipment\(payload\)/);
-  assert.match(controller, /generateProviderWaybill/);
-  assert.match(controller, /getTrackingStatus/);
-  assert.match(controller, /recordProviderError\(shipmentId, 'booking'/);
-  assert.match(controller, /recordProviderError\(failedShipment\.rows\[0\]\?\.id, 'tracking_refresh'/);
-  const publicShipmentMapper = controller.match(/const safeShipment = \(shipment\) => \(\{[\s\S]*?\n\}\);/)?.[0] || '';
-  assert.doesNotMatch(publicShipmentMapper, /provider_metadata/);
+  assert.match(controller, /INSERT INTO shipments/);
+  assert.match(controller, /INSERT INTO shipment_events/);
+  assert.match(controller, /shipment\.manual_waybill\.create/);
+  assert.match(controller, /createOrderWorkflowNotification/);
+  const publicShipmentMapper = controller.slice(
+    controller.indexOf('const serializeShipment'),
+    controller.indexOf('const loadShipmentEvents')
+  );
+  assert.doesNotMatch(publicShipmentMapper, /provider_metadata|raw_event/);
+  assert.match(publicShipmentMapper, /if \(staff\)/);
 });
 
 test('readiness reports generic shipping and tracking state', async () => {

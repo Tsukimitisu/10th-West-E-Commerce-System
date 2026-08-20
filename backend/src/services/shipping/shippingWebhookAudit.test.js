@@ -7,21 +7,15 @@ import { fileURLToPath } from 'node:url';
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const controllerPath = path.resolve(directory, '..', '..', 'controllers', 'shipmentController.js');
 
-test('shipping webhook records accepted, rejected, and unmatched audit outcomes', async () => {
+test('manual waybill and status changes record explicit audit outcomes', async () => {
   const source = await readFile(controllerPath, 'utf8');
-  assert.match(source, /'shipment\.webhook'/);
-  assert.match(source, /'shipment\.webhook_rejected'/);
-  assert.match(source, /'shipment\.webhook_unmatched'/);
-  assert.match(source, /signature_verified: true/);
-  assert.match(source, /signature_verified: false/);
+  assert.match(source, /'shipment\.manual_waybill\.create'/);
+  assert.match(source, /'shipment\.manual_status\.update'/);
+  assert.match(source, /provider: 'manual'/);
 });
 
-test('shipping webhook audit metadata does not persist raw bodies or signatures', async () => {
+test('manual shipment audit metadata excludes raw request bodies', async () => {
   const source = await readFile(controllerPath, 'utf8');
-  const webhookSection = source.slice(
-    source.indexOf('export const shipmentWebhook'),
-    source.indexOf('export const getTracking')
-  );
-  assert.doesNotMatch(webhookSection, /JSON\.stringify\(req\.body\)/);
-  assert.doesNotMatch(webhookSection, /rawBody.*metadata|signature.*metadata/i);
+  assert.doesNotMatch(source, /JSON\.stringify\(req\.body\)/);
+  assert.doesNotMatch(source, /rawBody|webhook|signature_verified/i);
 });
