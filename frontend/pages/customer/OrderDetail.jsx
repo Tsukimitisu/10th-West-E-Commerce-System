@@ -334,19 +334,23 @@ const OrderDetail = () => {
           </div>
           {tracking?.shipment ? (
             <div className="mt-4 space-y-4">
-              <div className="grid gap-3 text-sm sm:grid-cols-3">
-                <div><p className="text-xs text-gray-400">Provider</p><p className="font-medium text-white capitalize">{tracking.shipment.shipping_provider || 'Shipping provider'}</p></div>
+              <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <div><p className="text-xs text-gray-400">Courier</p><p className="font-medium text-white">{tracking.shipment.courier_name || 'J&T Express'}</p></div>
+                <div><p className="text-xs text-gray-400">Waybill number</p><p className="font-medium text-white">{tracking.shipment.waybill_number || 'Pending'}</p></div>
                 <div><p className="text-xs text-gray-400">Tracking number</p><p className="font-medium text-white">{tracking.shipment.tracking_number || 'Pending'}</p></div>
-                <div><p className="text-xs text-gray-400">Status</p><p className="font-medium text-white capitalize">{String(tracking.shipment.status || 'pending').replaceAll('_', ' ')}</p></div>
+                <div><p className="text-xs text-gray-400">Shipping status</p><p className="font-medium text-white capitalize">{String(tracking.shipment.status || 'pending').replaceAll('_', ' ')}</p></div>
               </div>
+              <p className="rounded-lg border border-amber-700/40 bg-amber-500/10 p-3 text-xs leading-5 text-amber-200">
+                Tracking updates are manually encoded by the store. You can also use your J&T tracking number on the official J&T tracker.
+              </p>
               {tracking.events?.length > 0 && (
                 <ol className="space-y-3 border-l border-gray-600 pl-4">
                   {tracking.events.map((event, index) => (
-                    <li key={`${event.occurred_at}-${index}`}>
+                    <li key={`${event.event_time || event.occurred_at}-${index}`}>
                       <p className="text-sm font-medium text-white capitalize">{String(event.status || 'update').replaceAll('_', ' ')}</p>
                       {event.description && <p className="text-xs text-gray-300">{event.description}</p>}
                       <p className="text-xs text-gray-500">
-                        {[event.location, event.occurred_at && new Date(event.occurred_at).toLocaleString('en-PH')].filter(Boolean).join(' · ')}
+                        {[event.location, (event.event_time || event.occurred_at) && new Date(event.event_time || event.occurred_at).toLocaleString('en-PH')].filter(Boolean).join(' · ')}
                       </p>
                     </li>
                   ))}
