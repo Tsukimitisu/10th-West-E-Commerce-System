@@ -5,7 +5,8 @@ import test from 'node:test';
 test('checkout computes shipping and total on the backend and saves manual J&T fields', async () => {
   const source = await readFile(new URL('./secureCheckoutController.js', import.meta.url), 'utf8');
   const checkout = source.slice(source.indexOf('export const createCheckout'), source.indexOf('const extractPaymongoEvent'));
-  assert.match(checkout, /calculateInternalShippingQuote\(\{ subtotal, address \}\)/);
+  assert.match(checkout, /calculateInternalShippingQuote\(\{ subtotal, actualWeightKg, address \}\)/);
+  assert.match(checkout, /item\.weight_kg \* item\.quantity/);
   assert.match(checkout, /const total = roundMoney\(subtotal - discount \+ shippingFee \+ taxAmount\)/);
   assert.match(checkout, /shipping_fee, shipping_provider, courier,/);
   assert.match(checkout, /courier_name, shipping_status, delivery_method/);

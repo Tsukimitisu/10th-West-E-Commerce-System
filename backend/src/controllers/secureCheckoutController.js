@@ -175,6 +175,7 @@ const loadAndReserveItems = async (client, items, expiresAt) => {
       variant_name_snapshot: variant ? `${variant.variant_type}: ${variant.variant_value}` : null,
       image_snapshot: normalizeProductImageUrl(variant?.image_url || product.image || (Array.isArray(product.image_urls) ? product.image_urls[0] : null)),
       stock_before: stockBefore,
+      weight_kg: Number(product.weight_kg) > 0 ? Number(product.weight_kg) : 1,
       reservation_expires_at: expiresAt,
     });
   }
@@ -269,7 +270,11 @@ export const createCheckout = async (req, res) => {
     const expiresAt = paymentMethod === 'gcash' ? new Date(Date.now() + 30 * 60 * 1000) : null;
     const { snapshots, subtotal } = await loadAndReserveItems(client, items, expiresAt);
     const { promotion, discount } = await calculateDiscount(client, req.user.id, req.body?.discount_code, subtotal);
-    const shippingQuote = calculateInternalShippingQuote({ subtotal, address });
+    const actualWeightKg = roundMoney(snapshots.reduce(
+      (sum, item) => sum + (item.weight_kg * item.quantity),
+      0
+    ));
+    const shippingQuote = calculateInternalShippingQuote({ subtotal, actualWeightKg, address });
     const shippingFee = shippingQuote.shipping_fee;
     const taxSettings = await getRuntimeSettings(client, 'tax', { enabled: false, rate: 0 });
     const taxRate = taxSettings.enabled ? Math.max(0, taxSettings.rate / 100) : 0;

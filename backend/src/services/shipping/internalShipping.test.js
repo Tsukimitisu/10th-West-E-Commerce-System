@@ -1,15 +1,27 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  calculateDistanceSurcharge,
   calculateDatabaseShippingQuote,
   calculateInternalShippingQuote,
+  calculateWeightSurcharge,
 } from './internalShipping.js';
 
 const environment = {
   METRO_MANILA_SHIPPING_FEE: '100',
-  PROVINCIAL_SHIPPING_FEE: '150',
+  LUZON_SHIPPING_FEE: '150',
   DEFAULT_SHIPPING_FEE: '120',
   FREE_SHIPPING_THRESHOLD: '3000',
+  SMALL_PACKAGE_MAX_KG: '1',
+  MEDIUM_PACKAGE_MAX_KG: '3',
+  LARGE_PACKAGE_MAX_KG: '5',
+  MEDIUM_PACKAGE_SURCHARGE: '50',
+  LARGE_PACKAGE_SURCHARGE: '100',
+  OVERSIZED_PACKAGE_SURCHARGE: '150',
+  NEAR_DISTANCE_SURCHARGE: '0',
+  MID_DISTANCE_SURCHARGE: '30',
+  FAR_DISTANCE_SURCHARGE: '80',
+  VERY_FAR_DISTANCE_SURCHARGE: '120',
   COURIER_PROVIDER: 'jnt',
   JNT_COURIER_NAME: 'J&T Express',
   JNT_DEFAULT_SERVICE: 'standard',
@@ -18,6 +30,7 @@ const environment = {
 test('Metro Manila quote uses the internal J&T metro fee', () => {
   assert.deepEqual(calculateInternalShippingQuote({
     subtotal: 2500,
+    actualWeightKg: 2,
     address: { state: 'National Capital Region', city: 'Makati' },
     environment,
   }), {
@@ -27,11 +40,16 @@ test('Metro Manila quote uses the internal J&T metro fee', () => {
     service_type: 'standard',
     coverage: 'luzon_only',
     shipping_zone: 'metro_manila',
+    base_shipping_fee: 100,
+    weight_surcharge: 50,
+    distance_surcharge: 30,
+    shipping_fee: 180,
+    currency: 'PHP',
+    actual_weight_kg: 2,
     estimated_distance_km: 25,
     distance_class: 'mid',
+    package_class: 'medium',
     far_delivery: false,
-    shipping_fee: 100,
-    currency: 'PHP',
     free_shipping_applied: false,
     estimated_delivery_days: '3-7 days',
   });
@@ -48,8 +66,31 @@ test('Luzon and known Luzon-region addresses use configured fees', () => {
     address: { region: 'Central Luzon', state: 'Unlisted Province', city: 'Unlisted Place' },
     environment,
   });
-  assert.equal(luzon.shipping_fee, 150);
-  assert.equal(fallback.shipping_fee, 120);
+  assert.equal(luzon.base_shipping_fee, 150);
+  assert.equal(luzon.shipping_fee, 180);
+  assert.equal(fallback.base_shipping_fee, 120);
+  assert.equal(fallback.shipping_fee, 200);
+});
+
+test('weight surcharge covers small, medium, large, and oversized actual packages', () => {
+  assert.deepEqual(calculateWeightSurcharge(1, environment), { packageClass: 'small', surcharge: 0 });
+  assert.deepEqual(calculateWeightSurcharge(2, environment), { packageClass: 'medium', surcharge: 50 });
+  assert.deepEqual(calculateWeightSurcharge(4, environment), { packageClass: 'large', surcharge: 100 });
+  assert.deepEqual(calculateWeightSurcharge(6, environment), { packageClass: 'oversized', surcharge: 150 });
+});
+
+test('distance surcharge covers near, mid, far, and very far tiers', () => {
+  assert.equal(calculateDistanceSurcharge({ distance_class: 'near', estimated_distance_km: 5 }, environment), 0);
+  assert.equal(calculateDistanceSurcharge({ distance_class: 'mid', estimated_distance_km: 25 }, environment), 30);
+  assert.equal(calculateDistanceSurcharge({ distance_class: 'far', estimated_distance_km: 100 }, environment), 80);
+  assert.equal(calculateDistanceSurcharge({ distance_class: 'very_far', estimated_distance_km: 350 }, environment), 120);
+});
+
+test('rate-per-km mode is available while tier mode remains the default', () => {
+  assert.equal(calculateDistanceSurcharge(
+    { distance_class: 'mid', estimated_distance_km: 12.5 },
+    { ...environment, DISTANCE_SURCHARGE_MODE: 'rate_per_km', DISTANCE_FREE_KM: '5', DISTANCE_RATE_PER_KM: '5' }
+  ), 38);
 });
 
 test('outside-Luzon and unclear addresses are blocked', () => {
@@ -71,6 +112,8 @@ test('free shipping threshold overrides every destination fee', () => {
   });
   assert.equal(quote.shipping_fee, 0);
   assert.equal(quote.free_shipping_applied, true);
+  assert.ok(quote.base_shipping_fee > 0);
+  assert.ok(quote.distance_surcharge > 0);
 });
 
 test('database quote validates address ownership and ignores frontend prices and totals', async () => {
@@ -84,7 +127,7 @@ test('database quote validates address ownership and ignores frontend prices and
       if (sql.includes('FROM products p')) {
         return { rows: [{
           id: 1, name: 'Helmet', price: '1250.00', sale_price: null,
-          is_on_sale: false, status: 'active', is_deleted: false, has_variants: false,
+          weight_kg: '1.25', is_on_sale: false, status: 'active', is_deleted: false, has_variants: false,
         }] };
       }
       throw new Error(`Unexpected query: ${sql}`);
@@ -93,9 +136,11 @@ test('database quote validates address ownership and ignores frontend prices and
   const quote = await calculateDatabaseShippingQuote(db, {
     userId: 7,
     addressId: 10,
-    items: [{ product_id: 1, quantity: 2, price: 1, subtotal: 2, shipping_fee: 0 }],
+    items: [{ product_id: 1, quantity: 2, price: 1, subtotal: 2, shipping_fee: 0, weight_kg: 0.01 }],
   });
-  assert.equal(quote.shipping_fee, 100);
+  assert.equal(quote.shipping_fee, 180);
+  assert.equal(quote.actual_weight_kg, 2.5);
+  assert.match(calls.find((call) => call.sql.includes('FROM products p')).sql, /p\.weight_kg/);
   assert.deepEqual(calls[0].params, [10, 7]);
 
   await assert.rejects(
