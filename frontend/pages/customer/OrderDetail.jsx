@@ -21,6 +21,9 @@ const roundCurrency = (value) => {
 };
 
 const formatCurrency = (value) => `₱${roundCurrency(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+const formatShippingLabel = (value) => String(value || 'Pending')
+  .replaceAll('_', ' ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -422,6 +425,22 @@ const OrderDetail = () => {
               <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold text-white">
                 <span>Total</span><span>{formatCurrency(totalAmount)}</span>
               </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+            <h3 className="font-semibold text-white text-sm mb-3">Shipping Calculation</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-gray-400"><span>Shipping Coverage</span><span className="text-white">Luzon only</span></div>
+              <div className="flex justify-between text-gray-400"><span>Courier</span><span className="text-white">{order.courier_name || 'J&T Express'}</span></div>
+              <div className="flex justify-between text-gray-400"><span>Shipping Zone</span><span className="text-white">{formatShippingLabel(order.shipping_zone)}</span></div>
+              <div className="flex justify-between text-gray-400"><span>Estimated Distance</span><span className="text-white">{toFiniteNumber(order.estimated_distance_km)} km</span></div>
+              <div className="flex justify-between text-gray-400"><span>Actual Weight</span><span className="text-white">{toFiniteNumber(order.actual_weight_kg)} kg</span></div>
+              <div className="flex justify-between text-gray-400"><span>Base Shipping Fee</span><span className="text-white">{formatCurrency(order.base_shipping_fee)}</span></div>
+              <div className="flex justify-between text-gray-400"><span>Weight Surcharge</span><span className="text-white">{formatCurrency(order.weight_surcharge)}</span></div>
+              <div className="flex justify-between text-gray-400"><span>Distance Surcharge</span><span className="text-white">{formatCurrency(order.distance_surcharge)}</span></div>
+              <div className="flex justify-between text-gray-400"><span>Final Shipping Fee</span><span className="text-white">{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
+              <div className="flex justify-between text-gray-400"><span>Free Shipping Applied</span><span className="text-white">{order.free_shipping_applied ? 'Yes' : 'No'}</span></div>
             </div>
           </div>
 

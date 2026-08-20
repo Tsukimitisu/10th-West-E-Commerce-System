@@ -209,6 +209,7 @@ const Checkout = () => {
   const [shippingQuote, setShippingQuote] = useState(null);
   const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
   const [shippingQuoteError, setShippingQuoteError] = useState('');
+  const [shippingQuoteErrorCode, setShippingQuoteErrorCode] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [agreeTerms, setAgreeTerms] = useState(() => {
     try {
@@ -338,18 +339,28 @@ const Checkout = () => {
       setShippingQuote(null);
       setShippingQuoteLoading(false);
       setShippingQuoteError('');
+      setShippingQuoteErrorCode('');
       return () => { active = false; };
     }
     setShippingQuoteLoading(true);
     setShippingQuoteError('');
+    setShippingQuoteErrorCode('');
     getShippingQuote({ address_id: Number(selectedAddress), items: shippingQuoteItems })
       .then((quote) => {
         if (active) setShippingQuote(quote);
       })
       .catch((quoteError) => {
         if (!active) return;
+        const errorCode = quoteError.error || quoteError.code || '';
         setShippingQuote(null);
-        setShippingQuoteError(quoteError.message || 'Shipping could not be calculated.');
+        setShippingQuoteErrorCode(errorCode);
+        setShippingQuoteError(
+          errorCode === 'SHIPPING_NOT_AVAILABLE'
+            ? 'Shipping is currently available within Luzon only.'
+            : errorCode === 'SHIPPING_ADDRESS_UNCLEAR'
+              ? 'Please update your shipping address with a valid Luzon city or province.'
+              : quoteError.message || 'Shipping could not be calculated.'
+        );
       })
       .finally(() => {
         if (active) setShippingQuoteLoading(false);
@@ -358,6 +369,7 @@ const Checkout = () => {
   }, [selectedAddress, shippingQuoteItemsKey]);
 
   const shippingCost = roundCurrency(shippingQuote?.shipping_fee ?? 0);
+  const shippingBlocked = ['SHIPPING_NOT_AVAILABLE', 'SHIPPING_ADDRESS_UNCLEAR'].includes(shippingQuoteErrorCode);
   const vatBase = roundCurrency(Math.max(0, total + shippingCost));
   const vatAmount = roundCurrency(vatBase * CHECKOUT_VAT_RATE);
   const grandTotal = roundCurrency(vatBase + vatAmount);
@@ -366,6 +378,9 @@ const Checkout = () => {
     const safePrice = roundCurrency(price);
     return `PHP ${safePrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
   };
+  const formatShippingLabel = (value) => String(value || 'Pending')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
   const digitsOnly = (value) => value.replace(/\D/g, '');
   const validateZip = (zip) => /^\d{4}$/.test(zip);
 
@@ -813,14 +828,33 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                       <Truck size={18} className="text-red-600" />
                       <div>
                         <p className="text-sm font-semibold text-gray-900">Standard Delivery</p>
-                        <p className="text-xs text-gray-600">Eligible orders receive a provider waybill and tracking updates after booking.</p>
+                        <p className="text-xs text-gray-600">Manual J&T waybill is created by authorized store staff after order processing.</p>
                       </div>
                     </div>
                     <span className={`text-sm font-semibold ${shippingCost === 0 && shippingQuote ? 'text-green-600' : 'text-gray-900'}`}>
                       {shippingQuoteLoading ? 'Calculating...' : shippingQuote ? (shippingCost === 0 ? 'Free' : formatPrice(shippingCost)) : 'Select an address'}
                     </span>
                   </div>
+                  {shippingQuote && (
+                    <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 border-t border-red-200 pt-4 text-xs sm:grid-cols-2">
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Shipping Coverage</dt><dd className="font-medium text-gray-900">Luzon only</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Courier</dt><dd className="font-medium text-gray-900">{shippingQuote.courier_name || 'J&T Express'}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Shipping Zone</dt><dd className="font-medium text-gray-900">{formatShippingLabel(shippingQuote.shipping_zone)}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Estimated Distance</dt><dd className="font-medium text-gray-900">{toFiniteNumber(shippingQuote.estimated_distance_km)} km</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Actual Weight</dt><dd className="font-medium text-gray-900">{toFiniteNumber(shippingQuote.actual_weight_kg)} kg</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Base Shipping Fee</dt><dd className="font-medium text-gray-900">{formatPrice(shippingQuote.base_shipping_fee)}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Weight Surcharge</dt><dd className="font-medium text-gray-900">{formatPrice(shippingQuote.weight_surcharge)}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Distance Surcharge</dt><dd className="font-medium text-gray-900">{formatPrice(shippingQuote.distance_surcharge)}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Final Shipping Fee</dt><dd className="font-semibold text-gray-900">{shippingCost === 0 ? 'Free' : formatPrice(shippingCost)}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-gray-600">Free Shipping Applied</dt><dd className="font-medium text-gray-900">{shippingQuote.free_shipping_applied ? 'Yes' : 'No'}</dd></div>
+                    </dl>
+                  )}
                 </div>
+                {shippingQuoteError && (
+                  <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+                    {shippingQuoteError}
+                  </p>
+                )}
               </Section>
 
               <Section title="Payment Method" icon={<CreditCard size={18} />}>
@@ -1019,7 +1053,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
 
                 <button
                   type="submit"
-                  disabled={processing || !agreeTerms || shippingQuoteLoading || !shippingQuote}
+                  disabled={processing || !agreeTerms || shippingQuoteLoading || !shippingQuote || shippingBlocked}
                   className="w-full mt-4 py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
                 >
                   {processing ? (
