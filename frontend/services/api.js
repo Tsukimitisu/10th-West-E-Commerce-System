@@ -2293,24 +2293,34 @@ const mapOrderItemToCartItem = (item) => {
 
 const mapOrderFromApi = (order) => {
   const mappedItems = Array.isArray(order.items) ? order.items.map(mapOrderItemToCartItem) : [];
+  const checkoutTotals = order.totals && typeof order.totals === 'object' ? order.totals : {};
+  const shippingDetails = order.shipping && typeof order.shipping === 'object' ? order.shipping : {};
   const derivedSubtotal = roundCurrency(mappedItems.reduce((sum, item) => {
     const quantity = toFiniteNumber(item.quantity, 0);
     const price = roundCurrency(item.product?.price ?? 0);
     return sum + (price * quantity);
   }, 0));
-  const discountAmount = roundCurrency(order.discount_amount ?? order.discount ?? 0);
-  const shippingMethod = normalizeShippingMethod(order.shipping_method);
+  const discountAmount = roundCurrency(order.discount_amount ?? order.discount ?? checkoutTotals.discount ?? 0);
+  const shippingMethod = normalizeShippingMethod(
+    order.shipping_method ?? order.delivery_method ?? shippingDetails.service_type
+  );
+  const flatShippingAmount = typeof order.shipping === 'number' || typeof order.shipping === 'string'
+    ? order.shipping
+    : undefined;
   const shippingAmount = roundCurrency(
-    order.shipping ?? order.shipping_fee ?? deriveShippingFromMethod(shippingMethod, derivedSubtotal)
+    order.shipping_fee ?? flatShippingAmount ?? checkoutTotals.shipping_fee
+      ?? deriveShippingFromMethod(shippingMethod, derivedSubtotal)
   );
   const fallbackTaxAmount = roundCurrency(Math.max(0, derivedSubtotal - discountAmount + shippingAmount) * ORDER_VAT_RATE);
-  const taxAmount = roundCurrency(order.tax_amount ?? order.vat_amount ?? fallbackTaxAmount);
+  const taxAmount = roundCurrency(order.tax_amount ?? order.vat_amount ?? checkoutTotals.tax ?? fallbackTaxAmount);
   const fallbackTotal = roundCurrency(Math.max(0, derivedSubtotal - discountAmount + shippingAmount + taxAmount));
-  const totalAmount = roundCurrency(order.total_amount ?? order.total ?? fallbackTotal);
-  const subtotalAmount = roundCurrency(order.subtotal ?? order.subtotal_amount ?? derivedSubtotal);
+  const totalAmount = roundCurrency(order.total_amount ?? order.total ?? checkoutTotals.total ?? fallbackTotal);
+  const subtotalAmount = roundCurrency(order.subtotal ?? order.subtotal_amount ?? checkoutTotals.subtotal ?? derivedSubtotal);
+  const orderId = order.id ?? order.order_id;
 
   return {
-    id: order.id,
+    id: orderId,
+    order_id: orderId,
     user_id: order.user_id ?? undefined,
     guest_info: order.guest_name
       ? { name: order.guest_name, email: order.guest_email }
@@ -2332,11 +2342,11 @@ const mapOrderFromApi = (order) => {
     source: order.source ?? 'online',
     payment_method: order.payment_method,
     tracking_number: order.tracking_number ?? undefined,
-    courier: order.courier ?? undefined,
-    courier_name: order.courier_name ?? undefined,
-    shipping_provider: order.shipping_provider ?? 'internal',
+    courier: order.courier ?? shippingDetails.courier ?? undefined,
+    courier_name: order.courier_name ?? shippingDetails.courier_name ?? undefined,
+    shipping_provider: order.shipping_provider ?? shippingDetails.provider ?? 'internal',
     shipping_status: order.shipping_status ?? 'pending',
-    delivery_method: order.delivery_method ?? shippingMethod,
+    delivery_method: order.delivery_method ?? shippingDetails.service_type ?? shippingMethod,
     waybill_number: order.waybill_number ?? undefined,
     waybill_status: order.waybill_status ?? undefined,
     waybill_generated_at: order.waybill_generated_at ?? undefined,

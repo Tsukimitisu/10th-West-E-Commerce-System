@@ -14,6 +14,10 @@ test('checkout displays the authenticated internal shipping quote and includes i
   assert.match(checkout, /<span>Shipping<\/span>/);
   assert.match(checkout, /total \+ shippingCost/);
   assert.match(api, /\/shipping\/quote/);
+  assert.match(api, /id: orderId/);
+  assert.match(api, /order_id: orderId/);
+  assert.match(api, /checkoutTotals\.shipping_fee/);
+  assert.match(api, /shippingDetails\.provider/);
 });
 
 test('customer and admin order details display the saved shipping fee', async () => {
