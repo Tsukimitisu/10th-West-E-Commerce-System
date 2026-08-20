@@ -891,7 +891,8 @@ const mapProductFromSupabase = (p) => ({
   boxNumber: p.box_number,
   status: normalizeProductPublicationStatus(p.status),
   shipping_option: normalizeProductShippingOption(p.shipping_option),
-  shipping_weight_kg: normalizeProductShippingWeight(p.shipping_weight_kg),
+  weight_kg: normalizeProductShippingWeight(p.weight_kg ?? p.shipping_weight_kg),
+  shipping_weight_kg: normalizeProductShippingWeight(p.weight_kg ?? p.shipping_weight_kg),
   shipping_dimensions: normalizeProductShippingDimensions(p.shipping_dimensions),
   bulk_pricing: normalizeBulkPricing(p.bulk_pricing),
   rating: Number(p.rating || 0),
@@ -1009,8 +1010,8 @@ const mapProductToSupabase = (product) => ({
   ...(Object.prototype.hasOwnProperty.call(product, 'shipping_option')
     ? { shipping_option: normalizeProductShippingOption(product.shipping_option) }
     : {}),
-  ...(Object.prototype.hasOwnProperty.call(product, 'shipping_weight_kg')
-    ? { shipping_weight_kg: normalizeProductShippingWeight(product.shipping_weight_kg) }
+  ...(Object.prototype.hasOwnProperty.call(product, 'weight_kg') || Object.prototype.hasOwnProperty.call(product, 'shipping_weight_kg')
+    ? { weight_kg: normalizeProductShippingWeight(product.weight_kg ?? product.shipping_weight_kg) }
     : {}),
   ...(Object.prototype.hasOwnProperty.call(product, 'shipping_dimensions')
     ? { shipping_dimensions: normalizeProductShippingDimensions(product.shipping_dimensions) }
@@ -1666,8 +1667,8 @@ export const addProduct = async (product) => {
     ...(Object.prototype.hasOwnProperty.call(product, 'shipping_option')
       ? { shipping_option: normalizeProductShippingOption(product.shipping_option) }
       : {}),
-    ...(Object.prototype.hasOwnProperty.call(product, 'shipping_weight_kg')
-      ? { shipping_weight_kg: normalizeProductShippingWeight(product.shipping_weight_kg) }
+    ...(Object.prototype.hasOwnProperty.call(product, 'weight_kg') || Object.prototype.hasOwnProperty.call(product, 'shipping_weight_kg')
+      ? { weight_kg: normalizeProductShippingWeight(product.weight_kg ?? product.shipping_weight_kg) }
       : {}),
     ...(Object.prototype.hasOwnProperty.call(product, 'shipping_dimensions')
       ? { shipping_dimensions: normalizeProductShippingDimensions(product.shipping_dimensions) }
@@ -1741,8 +1742,8 @@ export const updateProduct = async (id, product) => {
     ...(Object.prototype.hasOwnProperty.call(product, 'shipping_option')
       ? { shipping_option: normalizeProductShippingOption(product.shipping_option) }
       : {}),
-    ...(Object.prototype.hasOwnProperty.call(product, 'shipping_weight_kg')
-      ? { shipping_weight_kg: normalizeProductShippingWeight(product.shipping_weight_kg) }
+    ...(Object.prototype.hasOwnProperty.call(product, 'weight_kg') || Object.prototype.hasOwnProperty.call(product, 'shipping_weight_kg')
+      ? { weight_kg: normalizeProductShippingWeight(product.weight_kg ?? product.shipping_weight_kg) }
       : {}),
     ...(Object.prototype.hasOwnProperty.call(product, 'shipping_dimensions')
       ? { shipping_dimensions: normalizeProductShippingDimensions(product.shipping_dimensions) }

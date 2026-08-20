@@ -195,8 +195,13 @@ const productValidation = [
   body('fitments').optional({ nullable: true }).isArray().withMessage('fitments must be an array'),
   body('bundle_components').optional({ nullable: true }).isArray().withMessage('bundle_components must be an array'),
   body('shipping_option').optional({ nullable: true }).isIn(PRODUCT_SHIPPING_OPTIONS).withMessage('shipping_option must be standard or express'),
-  body('shipping_weight_kg').exists({ checkNull: true }).withMessage('Shipping weight is required').bail()
-    .isFloat({ gt: 0 }).withMessage('Shipping weight must be greater than 0'),
+  body('weight_kg').optional({ nullable: true }).isFloat({ gt: 0 }).withMessage('Product weight must be greater than 0'),
+  body('shipping_weight_kg').optional({ nullable: true }).isFloat({ gt: 0 }).withMessage('Product weight must be greater than 0'),
+  body().custom((_value, { req }) => {
+    const weight = Number(req.body?.weight_kg ?? req.body?.shipping_weight_kg);
+    if (!Number.isFinite(weight) || weight <= 0) throw new Error('Product weight is required and must be greater than 0');
+    return true;
+  }),
   body('image').optional({ nullable: true }).custom((value) => value === '' || sanitizeHttpUrlOrPath(value) !== null)
     .withMessage('image must be a valid URL')
     .customSanitizer((value) => sanitizeHttpUrlOrPath(value)),
@@ -237,7 +242,8 @@ const productUpdateValidation = [
   body('fitments').optional({ nullable: true }).isArray().withMessage('fitments must be an array'),
   body('bundle_components').optional({ nullable: true }).isArray().withMessage('bundle_components must be an array'),
   body('shipping_option').optional({ nullable: true }).isIn(PRODUCT_SHIPPING_OPTIONS).withMessage('shipping_option must be standard or express'),
-  body('shipping_weight_kg').optional({ nullable: true }).isFloat({ gt: 0 }).withMessage('Shipping weight must be greater than 0'),
+  body('weight_kg').optional({ nullable: true }).isFloat({ gt: 0 }).withMessage('Product weight must be greater than 0'),
+  body('shipping_weight_kg').optional({ nullable: true }).isFloat({ gt: 0 }).withMessage('Product weight must be greater than 0'),
   body('image').optional({ nullable: true }).custom((value) => value === '' || sanitizeHttpUrlOrPath(value) !== null)
     .withMessage('image must be a valid URL')
     .customSanitizer((value) => sanitizeHttpUrlOrPath(value)),

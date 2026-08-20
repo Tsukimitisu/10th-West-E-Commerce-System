@@ -743,7 +743,8 @@ const mapProductResponse = (product, { includeInternal = false, relations = null
     price: parseFloat(product.price),
     sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
     shipping_option: toNullableShippingOption(product.shipping_option) || 'standard',
-    shipping_weight_kg: product.shipping_weight_kg !== null ? parseFloat(product.shipping_weight_kg) : null,
+    weight_kg: parseFloat(product.weight_kg ?? product.shipping_weight_kg ?? 1),
+    shipping_weight_kg: parseFloat(product.weight_kg ?? product.shipping_weight_kg ?? 1),
     stock_quantity: purchasableStock,
     available_stock: parseInt(product.stock_quantity ?? purchasableStock, 10),
     reserved_stock: parseInt(product.reserved_stock ?? 0, 10),
@@ -779,7 +780,8 @@ const mapSupabaseRestProduct = (product, { includeInternal = false } = {}) => {
     reserved_stock: product.reserved_stock || 0,
     damaged_stock: product.damaged_stock || 0,
     shipping_option: product.shipping_option || 'standard',
-    shipping_weight_kg: product.shipping_weight_kg ?? 0.1,
+    weight_kg: product.weight_kg ?? product.shipping_weight_kg ?? 1,
+    shipping_weight_kg: product.weight_kg ?? product.shipping_weight_kg ?? 1,
   }, {
     includeInternal,
     relations: {
@@ -1062,7 +1064,7 @@ export const getTopSellers = async (req, res) => {
       SELECT 
         p.id, p.name, p.brand, p.part_number, p.image, p.description, p.product_type,
         p.price, p.sale_price, p.is_on_sale, p.stock_quantity, p.reserved_stock, p.damaged_stock,
-        p.low_stock_threshold, p.rating, p.created_at, p.status, p.shipping_option, p.shipping_weight_kg,
+        p.low_stock_threshold, p.rating, p.created_at, p.status, p.shipping_option, p.weight_kg, p.shipping_weight_kg,
         c.name as category_name,
         COALESCE((
           SELECT ROUND(AVG(r.rating)::numeric, 1)
@@ -1353,7 +1355,7 @@ export const recordProductView = async (req, res) => {
 export const createProduct = async (req, res) => {
   const {
     part_number, name, description, price, buying_price,
-    image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions, box_number,
+    image, video_url, category_id, stock_quantity, shipping_option, weight_kg, shipping_weight_kg, shipping_dimensions, box_number,
     low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing, auto_generate_sku,
     product_type, reserved_stock, damaged_stock, color, fitments, bundle_components
   } = req.body;
@@ -1376,7 +1378,7 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({ message: 'Stock quantity must be an integer 0 or higher' });
     }
 
-    const parsedShippingWeightKg = parseRequiredPositiveNumber(shipping_weight_kg);
+    const parsedShippingWeightKg = parseRequiredPositiveNumber(weight_kg ?? shipping_weight_kg);
     if (parsedShippingWeightKg === null) {
       return res.status(400).json({ message: 'Shipping weight (kg) is required and must be greater than 0' });
     }
@@ -1527,10 +1529,10 @@ export const createProduct = async (req, res) => {
       const result = await client.query(
         `INSERT INTO products (
           part_number, name, description, price, buying_price,
-          image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions,
+          image, video_url, category_id, stock_quantity, shipping_option, weight_kg, shipping_weight_kg, shipping_dimensions,
           box_number, low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing,
           product_type, reserved_stock, damaged_stock, color
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::product_shipping_option_enum, 'standard'::product_shipping_option_enum), $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb), COALESCE($23, 'single'), COALESCE($24, 0), COALESCE($25, 0), $26)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::product_shipping_option_enum, 'standard'::product_shipping_option_enum), $11, $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb), COALESCE($23, 'single'), COALESCE($24, 0), COALESCE($25, 0), $26)
         RETURNING *`,
         [
           cleanPartNumber, cleanName, cleanDescription, parsedPrice, buyingPriceField.value,
@@ -1584,7 +1586,7 @@ export const updateProduct = async (req, res) => {
   const { id } = req.validatedData || req.params;
   const {
     part_number, name, description, price, buying_price,
-    image, video_url, category_id, stock_quantity, shipping_option, shipping_weight_kg, shipping_dimensions, box_number,
+    image, video_url, category_id, stock_quantity, shipping_option, weight_kg, shipping_weight_kg, shipping_dimensions, box_number,
     low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing, auto_generate_sku,
     product_type, reserved_stock, damaged_stock, color, fitments, bundle_components
   } = req.body;
@@ -1631,7 +1633,7 @@ export const updateProduct = async (req, res) => {
     const hasImageUrlsPayload = hasBodyField(req.body, 'image_urls');
     const hasBulkPricingPayload = hasBodyField(req.body, 'bulk_pricing');
     const hasShippingOptionPayload = hasBodyField(req.body, 'shipping_option');
-    const hasShippingWeightPayload = hasBodyField(req.body, 'shipping_weight_kg');
+    const hasShippingWeightPayload = hasBodyField(req.body, 'weight_kg') || hasBodyField(req.body, 'shipping_weight_kg');
     const hasShippingDimensionsPayload = hasBodyField(req.body, 'shipping_dimensions');
 
     const cleanName = hasNamePayload ? (sanitizePlainText(name, { maxLength: 255 }) || '') : null;
@@ -1649,7 +1651,7 @@ export const updateProduct = async (req, res) => {
       return res.status(400).json({ message: 'Stock quantity must be an integer 0 or higher' });
     }
 
-    const shippingWeightField = parseOptionalNumberField(shipping_weight_kg);
+    const shippingWeightField = parseOptionalNumberField(weight_kg ?? shipping_weight_kg);
     if (hasShippingWeightPayload) {
       if (!shippingWeightField.valid || shippingWeightField.value === null || shippingWeightField.value <= 0) {
         return res.status(400).json({ message: 'Shipping weight (kg) must be greater than 0' });
@@ -1833,7 +1835,10 @@ export const updateProduct = async (req, res) => {
       if (hasImageUrlsPayload) patch.image_urls = cleanImageUrls;
       if (hasBulkPricingPayload) patch.bulk_pricing = bulkPricingValidation.value ?? [];
       if (hasShippingOptionPayload) patch.shipping_option = cleanShippingOption;
-      if (hasShippingWeightPayload) patch.shipping_weight_kg = shippingWeightField.value;
+      if (hasShippingWeightPayload) {
+        patch.weight_kg = shippingWeightField.value;
+        patch.shipping_weight_kg = shippingWeightField.value;
+      }
       if (hasShippingDimensionsPayload) patch.shipping_dimensions = shippingDimensionsField.value;
       if (hasProductTypePayload) patch.product_type = cleanProductType;
       if (hasReservedStockPayload) patch.reserved_stock = reservedStockField.value;
@@ -1880,6 +1885,7 @@ export const updateProduct = async (req, res) => {
         bulk_pricing = CASE WHEN $22 THEN COALESCE($23::jsonb, '[]'::jsonb) ELSE bulk_pricing END,
         shipping_option = CASE WHEN $24 THEN $25 ELSE shipping_option END,
         shipping_weight_kg = CASE WHEN $26 THEN $27 ELSE shipping_weight_kg END,
+        weight_kg = CASE WHEN $26 THEN $27 ELSE weight_kg END,
         shipping_dimensions = CASE WHEN $28 THEN $29::jsonb ELSE shipping_dimensions END,
         product_type = CASE WHEN $32 THEN $33 ELSE product_type END,
         reserved_stock = CASE WHEN $34 THEN $35 ELSE reserved_stock END,

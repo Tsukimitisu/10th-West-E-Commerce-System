@@ -79,7 +79,7 @@ const PRODUCT_FIELD_TO_STEP = {
   sku: 3,
   bulk_pricing: 3,
   shipping_option: 4,
-  shipping_weight_kg: 4,
+  weight_kg: 4,
   shipping_dimensions: 4,
   shipping_length_cm: 4,
   shipping_width_cm: 4,
@@ -206,7 +206,7 @@ const inferProductFieldErrorsFromMessage = (message) => {
   if (text.includes('variant')) setField('variant_options', message);
   if (text.includes('sku')) setField('sku', message);
   if (text.includes('shipping option')) setField('shipping_option', message);
-  if (text.includes('shipping weight')) setField('shipping_weight_kg', message);
+  if (text.includes('shipping weight') || text.includes('product weight')) setField('weight_kg', message);
   if (text.includes('shipping dimensions')) {
     setField('shipping_length_cm', message);
     setField('shipping_width_cm', message);
@@ -702,7 +702,7 @@ const createProductFormState = (overrides = {}) => ({
   status: PRODUCT_STATUS_DRAFT,
   variant_notes: '',
   shipping_option: 'standard',
-  shipping_weight_kg: '',
+  weight_kg: '',
   shipping_length_cm: '',
   shipping_width_cm: '',
   shipping_height_cm: '',
@@ -1166,7 +1166,7 @@ const ProductsView = () => {
       brand: p.brand || '',
       status: normalizeProductStatus(p.status),
       shipping_option: resolveShippingOptionDraft(p.shipping_option),
-      shipping_weight_kg: p.shipping_weight_kg !== undefined && p.shipping_weight_kg !== null ? String(p.shipping_weight_kg) : '',
+      weight_kg: p.weight_kg !== undefined && p.weight_kg !== null ? String(p.weight_kg) : '',
       shipping_length_cm: shippingDimensionsDraft.shipping_length_cm,
       shipping_width_cm: shippingDimensionsDraft.shipping_width_cm,
       shipping_height_cm: shippingDimensionsDraft.shipping_height_cm,
@@ -1224,7 +1224,7 @@ const ProductsView = () => {
       brand: p.brand || '',
       status: PRODUCT_STATUS_DRAFT,
       shipping_option: resolveShippingOptionDraft(p.shipping_option),
-      shipping_weight_kg: p.shipping_weight_kg !== undefined && p.shipping_weight_kg !== null ? String(p.shipping_weight_kg) : '',
+      weight_kg: p.weight_kg !== undefined && p.weight_kg !== null ? String(p.weight_kg) : '',
       shipping_length_cm: shippingDimensionsDraft.shipping_length_cm,
       shipping_width_cm: shippingDimensionsDraft.shipping_width_cm,
       shipping_height_cm: shippingDimensionsDraft.shipping_height_cm,
@@ -1331,11 +1331,11 @@ const ProductsView = () => {
         };
       }
 
-      const shippingWeight = Number(form.shipping_weight_kg);
+      const shippingWeight = Number(form.weight_kg);
       if (!Number.isFinite(shippingWeight) || shippingWeight <= 0) {
         return {
           message: 'Shipping weight is required and must be greater than 0.',
-          fieldErrors: { shipping_weight_kg: 'Shipping weight is required and must be greater than 0.' },
+          fieldErrors: { weight_kg: 'Product weight is required and must be greater than 0.' },
         };
       }
 
@@ -1741,7 +1741,7 @@ const ProductsView = () => {
       const hasBuyingPrice = String(form.buyingPrice || '').trim() !== '';
       const hasSalePrice = String(form.sale_price || '').trim() !== '';
       const shippingOption = resolveShippingOptionDraft(form.shipping_option);
-      const shippingWeightKg = Number(form.shipping_weight_kg);
+      const shippingWeightKg = Number(form.weight_kg);
       if (!Number.isFinite(shippingWeightKg) || shippingWeightKg <= 0) {
         throw new Error('Shipping weight is required and must be greater than 0.');
       }
@@ -1798,7 +1798,7 @@ const ProductsView = () => {
         fitments: Array.isArray(form.fitments) ? form.fitments : [],
         bundle_components: Array.isArray(form.bundle_components) ? form.bundle_components : [],
         shipping_option: shippingOption,
-        shipping_weight_kg: shippingWeightKg,
+        weight_kg: shippingWeightKg,
         shipping_dimensions: shippingDimensionsPayload,
         boxNumber: form.boxNumber,
         low_stock_threshold: form.low_stock_threshold === '' ? undefined : parseInt(form.low_stock_threshold, 10),
@@ -3204,16 +3204,16 @@ const ProductsView = () => {
                         type="number"
                         step="0.001"
                         min="0.001"
-                        value={form.shipping_weight_kg}
+                        value={form.weight_kg}
                         onChange={e => {
-                          setForm(f => ({ ...f, shipping_weight_kg: e.target.value }));
-                          clearFieldError('shipping_weight_kg');
+                          setForm(f => ({ ...f, weight_kg: e.target.value }));
+                          clearFieldError('weight_kg');
                         }}
-                        className={getInputClassName('shipping_weight_kg')}
+                        className={getInputClassName('weight_kg')}
                         placeholder="0.500"
                       />
-                      {getFieldError('shipping_weight_kg') && (
-                        <p className="mt-1 text-xs text-red-300">{getFieldError('shipping_weight_kg')}</p>
+                      {getFieldError('weight_kg') && (
+                        <p className="mt-1 text-xs text-red-300">{getFieldError('weight_kg')}</p>
                       )}
                     </InputField>
                   </div>
