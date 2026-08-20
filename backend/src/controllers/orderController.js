@@ -129,10 +129,16 @@ const parseShippingAddressSnapshot = (order) => {
 
 const mapOrderRecord = (order) => ({
   ...order,
+  subtotal_amount: roundMoney(order.subtotal_amount || 0),
+  shipping_fee: roundMoney(order.shipping_fee || 0),
   total_amount: roundMoney(order.total_amount),
   discount_amount: roundMoney(order.discount_amount || 0),
   tax_amount: roundMoney(order.tax_amount || 0),
   shipping_method: resolveShippingMethod(order.shipping_method),
+  shipping_provider: normalizeText(order.shipping_provider) || 'internal',
+  courier_name: normalizeText(order.courier_name) || 'J&T Express',
+  shipping_status: normalizeText(order.shipping_status) || 'pending',
+  delivery_method: normalizeText(order.delivery_method) || 'standard',
   shipping_address_snapshot: parseShippingAddressSnapshot(order),
   courier: normalizeText(order.courier),
   waybill_number: normalizeText(order.waybill_number),
@@ -1405,6 +1411,7 @@ export const getOrderInvoice = async (req, res) => {
       return sum + (linePrice * quantity);
     }, 0));
     const discount = roundMoney(order.discount_amount || 0);
+    const shippingFee = roundMoney(order.shipping_fee || 0);
     const totalAmount = roundMoney(order.total_amount);
     const vatAmount = roundMoney(toFiniteNumber(order.tax_amount, totalAmount - roundMoney(totalAmount / (1 + VAT_RATE))));
     const vatableSales = roundMoney(totalAmount - vatAmount);
@@ -1516,6 +1523,10 @@ export const getOrderInvoice = async (req, res) => {
               <td class="text-right">-₱${discount.toFixed(2)}</td>
             </tr>
             ` : ''}
+            <tr>
+              <td>Shipping Fee:</td>
+              <td class="text-right">&#8369;${shippingFee.toFixed(2)}</td>
+            </tr>
             <tr class="grand-total">
               <td><strong>TOTAL (VAT Inclusive):</strong></td>
               <td class="text-right"><strong>₱${totalAmount.toFixed(2)}</strong></td>

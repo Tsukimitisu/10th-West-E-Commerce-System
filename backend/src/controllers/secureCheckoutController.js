@@ -8,6 +8,7 @@ import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import { createOrderWorkflowNotification } from '../utils/notifications.js';
 import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl } from '../utils/productImages.js';
+import { calculateInternalShippingQuote } from '../services/shipping/internalShipping.js';
 
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
@@ -201,15 +202,6 @@ const calculateDiscount = async (client, userId, code, subtotal) => {
   return { promotion, discount: roundMoney(Math.max(0, Math.min(subtotal, discount))) };
 };
 
-const calculateShipping = async (client, subtotal) => {
-  const result = await client.query(
-    `SELECT * FROM shipping_rates WHERE is_active = true AND method = 'standard' ORDER BY id LIMIT 1`
-  );
-  const rate = result.rows[0];
-  if (!rate) return roundMoney(Number(process.env.DEFAULT_SHIPPING_FEE || 150));
-  return rate.min_purchase_free !== null && subtotal >= money(rate.min_purchase_free) ? 0 : roundMoney(money(rate.base_fee));
-};
-
 const releaseOrderReservations = async (client, orderId, nextStatus, reason) => {
   const reservations = await client.query(
     `SELECT * FROM stock_reservations WHERE order_id = $1 AND status = 'active' FOR UPDATE`,
@@ -277,7 +269,8 @@ export const createCheckout = async (req, res) => {
     const expiresAt = paymentMethod === 'gcash' ? new Date(Date.now() + 30 * 60 * 1000) : null;
     const { snapshots, subtotal } = await loadAndReserveItems(client, items, expiresAt);
     const { promotion, discount } = await calculateDiscount(client, req.user.id, req.body?.discount_code, subtotal);
-    const shippingFee = await calculateShipping(client, subtotal);
+    const shippingQuote = calculateInternalShippingQuote({ subtotal, address });
+    const shippingFee = shippingQuote.shipping_fee;
     const taxSettings = await getRuntimeSettings(client, 'tax', { enabled: false, rate: 0 });
     const taxRate = taxSettings.enabled ? Math.max(0, taxSettings.rate / 100) : 0;
     const taxAmount = roundMoney(Math.max(0, subtotal - discount + shippingFee) * taxRate);
@@ -286,14 +279,16 @@ export const createCheckout = async (req, res) => {
     const orderStatus = paymentMethod === 'gcash' ? 'payment_pending' : 'pending';
     const orderResult = await client.query(
       `INSERT INTO orders (
-        user_id, address_id, total_amount, subtotal_amount, shipping_fee, discount_amount, tax_amount, currency,
+        user_id, address_id, total_amount, subtotal_amount, shipping_fee, shipping_provider, courier,
+        courier_name, shipping_status, delivery_method, discount_amount, tax_amount, currency,
         status, payment_status, payment_method, payment_provider, source, shipping_method, shipping_address,
         shipping_address_snapshot, shipping_lat, shipping_lng, promo_code_used, checkout_idempotency_key, payment_expires_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'PHP',$8,'pending',$9,$10,'online','standard',$11,$12::jsonb,$13,$14,$15,$16,$17)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,'PHP',$12,'pending',$13,$14,'online',$15,$16,$17::jsonb,$18,$19,$20,$21,$22)
       RETURNING *`,
-      [req.user.id, address.id, total, subtotal, shippingFee, discount, taxAmount, orderStatus, paymentMethod,
-        paymentMethod === 'gcash' ? 'paymongo' : 'cod', formatAddress(address), JSON.stringify(snapshot), address.lat,
-        address.lng, promotion?.code || null, idempotencyKey, expiresAt]
+      [req.user.id, address.id, total, subtotal, shippingFee, shippingQuote.provider, shippingQuote.courier,
+        shippingQuote.courier_name, shippingQuote.service_type, discount, taxAmount, orderStatus, paymentMethod,
+        paymentMethod === 'gcash' ? 'paymongo' : 'cod', shippingQuote.service_type, formatAddress(address),
+        JSON.stringify(snapshot), address.lat, address.lng, promotion?.code || null, idempotencyKey, expiresAt]
     );
     const order = orderResult.rows[0];
     for (const item of snapshots) {
@@ -374,6 +369,7 @@ export const createCheckout = async (req, res) => {
       status: orderStatus,
       currency: 'PHP',
       totals: { subtotal, shipping_fee: shippingFee, discount, tax: taxAmount, total },
+      shipping: shippingQuote,
     };
     if (paymentMethod === 'gcash') {
       let attemptId = null;

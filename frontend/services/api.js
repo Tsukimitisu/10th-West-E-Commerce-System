@@ -2307,7 +2307,7 @@ const mapOrderFromApi = (order) => {
   const taxAmount = roundCurrency(order.tax_amount ?? order.vat_amount ?? fallbackTaxAmount);
   const fallbackTotal = roundCurrency(Math.max(0, derivedSubtotal - discountAmount + shippingAmount + taxAmount));
   const totalAmount = roundCurrency(order.total_amount ?? order.total ?? fallbackTotal);
-  const subtotalAmount = roundCurrency(order.subtotal ?? derivedSubtotal);
+  const subtotalAmount = roundCurrency(order.subtotal ?? order.subtotal_amount ?? derivedSubtotal);
 
   return {
     id: order.id,
@@ -2322,6 +2322,7 @@ const mapOrderFromApi = (order) => {
     discount: discountAmount,
     discount_amount: discountAmount,
     shipping: shippingAmount,
+    shipping_fee: shippingAmount,
     tax_amount: taxAmount,
     shipping_method: shippingMethod,
     status: order.status,
@@ -2332,6 +2333,10 @@ const mapOrderFromApi = (order) => {
     payment_method: order.payment_method,
     tracking_number: order.tracking_number ?? undefined,
     courier: order.courier ?? undefined,
+    courier_name: order.courier_name ?? undefined,
+    shipping_provider: order.shipping_provider ?? 'internal',
+    shipping_status: order.shipping_status ?? 'pending',
+    delivery_method: order.delivery_method ?? shippingMethod,
     waybill_number: order.waybill_number ?? undefined,
     waybill_status: order.waybill_status ?? undefined,
     waybill_generated_at: order.waybill_generated_at ?? undefined,

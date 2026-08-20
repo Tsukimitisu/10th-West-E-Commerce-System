@@ -393,6 +393,7 @@ const OrdersView = () => {
             {/* Totals */}
             <div className="p-4 bg-gray-900 rounded-lg space-y-2 text-sm">
               <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>₱{(detailOrder.subtotal || detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+              <div className="flex justify-between text-gray-400"><span>Shipping Fee</span><span>₱{(detailOrder.shipping || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
               {detailOrder.tax > 0 && <div className="flex justify-between text-gray-400"><span>Tax</span><span>₱{detailOrder.tax.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
               {detailOrder.discount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-₱{detailOrder.discount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
               <div className="flex justify-between font-bold text-white text-base pt-2 border-t border-gray-700"><span>Total</span><span>₱{(detailOrder.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
