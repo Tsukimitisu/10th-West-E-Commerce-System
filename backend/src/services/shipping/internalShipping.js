@@ -8,11 +8,12 @@ const DEFAULTS = Object.freeze({
   serviceType: 'standard',
 });
 
-const METRO_MANILA_CITIES = new Set([
-  'caloocan', 'las pinas', 'makati', 'malabon', 'mandaluyong', 'manila',
-  'marikina', 'muntinlupa', 'navotas', 'paranaque', 'pasay', 'pasig',
-  'pateros', 'quezon city', 'san juan', 'taguig', 'valenzuela',
-]);
+import {
+  assertLuzonShippingAvailable,
+  classifyPhilippineShippingZone,
+} from './shippingLocation.js';
+
+export { classifyPhilippineShippingZone } from './shippingLocation.js';
 
 const money = (value, fallback) => {
   const parsed = Number(value);
@@ -39,33 +40,15 @@ const envConfig = (environment = process.env) => ({
   serviceType: normalizedPlace(environment.JNT_DEFAULT_SERVICE).replaceAll(' ', '_') || DEFAULTS.serviceType,
 });
 
-export const classifyPhilippineShippingZone = (address = {}) => {
-  const regions = [address.state, address.province, address.region]
-    .map(normalizedPlace)
-    .filter(Boolean);
-  const city = normalizedPlace(address.city);
-  const addressText = normalizedPlace(address.address_string);
-  const metroAlias = (value) => (
-    value === 'ncr'
-    || value.includes('metro manila')
-    || value.includes('national capital region')
-  );
-
-  if (regions.some(metroAlias) || metroAlias(addressText) || METRO_MANILA_CITIES.has(city)) {
-    return 'metro_manila';
-  }
-  if (regions.length > 0 || city || addressText) return 'provincial';
-  return 'default';
-};
-
 export const calculateInternalShippingQuote = ({ subtotal, address, environment = process.env }) => {
   const config = envConfig(environment);
   const normalizedSubtotal = money(subtotal, 0);
   const zone = classifyPhilippineShippingZone(address);
+  assertLuzonShippingAvailable(zone);
   const freeShippingApplied = normalizedSubtotal >= config.freeShippingThreshold;
   const zoneFee = zone === 'metro_manila'
     ? config.metroManilaFee
-    : zone === 'provincial'
+    : zone === 'luzon'
       ? config.provincialFee
       : config.defaultFee;
 
@@ -74,6 +57,8 @@ export const calculateInternalShippingQuote = ({ subtotal, address, environment 
     courier: config.courier,
     courier_name: config.courierName,
     service_type: config.serviceType,
+    coverage: 'luzon_only',
+    shipping_zone: zone,
     shipping_fee: freeShippingApplied ? 0 : zoneFee,
     currency: 'PHP',
     free_shipping_applied: freeShippingApplied,

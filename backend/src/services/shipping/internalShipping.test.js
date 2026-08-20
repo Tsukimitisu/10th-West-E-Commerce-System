@@ -25,6 +25,8 @@ test('Metro Manila quote uses the internal J&T metro fee', () => {
     courier: 'jnt',
     courier_name: 'J&T Express',
     service_type: 'standard',
+    coverage: 'luzon_only',
+    shipping_zone: 'metro_manila',
     shipping_fee: 100,
     currency: 'PHP',
     free_shipping_applied: false,
@@ -32,21 +34,36 @@ test('Metro Manila quote uses the internal J&T metro fee', () => {
   });
 });
 
-test('provincial and unclassified addresses use their configured fallback fees', () => {
-  const provincial = calculateInternalShippingQuote({
+test('Luzon and known Luzon-region addresses use configured fees', () => {
+  const luzon = calculateInternalShippingQuote({
     subtotal: 500,
-    address: { state: 'Cebu', city: 'Cebu City' },
+    address: { state: 'Bulacan', city: 'Malolos' },
     environment,
   });
-  const fallback = calculateInternalShippingQuote({ subtotal: 500, address: {}, environment });
-  assert.equal(provincial.shipping_fee, 150);
+  const fallback = calculateInternalShippingQuote({
+    subtotal: 500,
+    address: { region: 'Central Luzon', state: 'Unlisted Province', city: 'Unlisted Place' },
+    environment,
+  });
+  assert.equal(luzon.shipping_fee, 150);
   assert.equal(fallback.shipping_fee, 120);
+});
+
+test('outside-Luzon and unclear addresses are blocked', () => {
+  assert.throws(
+    () => calculateInternalShippingQuote({ subtotal: 500, address: { state: 'Cebu' }, environment }),
+    (error) => error.code === 'SHIPPING_NOT_AVAILABLE'
+  );
+  assert.throws(
+    () => calculateInternalShippingQuote({ subtotal: 500, address: {}, environment }),
+    (error) => error.code === 'SHIPPING_ADDRESS_UNCLEAR'
+  );
 });
 
 test('free shipping threshold overrides every destination fee', () => {
   const quote = calculateInternalShippingQuote({
     subtotal: 3000,
-    address: { state: 'Cebu' },
+    address: { state: 'Bulacan' },
     environment,
   });
   assert.equal(quote.shipping_fee, 0);

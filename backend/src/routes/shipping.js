@@ -17,6 +17,7 @@ router.post('/quote', authenticateToken, requireRole('customer'), async (req, re
     const status = Number.isInteger(error?.status) ? error.status : 500;
     if (status >= 500) console.error('Shipping quote error:', error.message);
     return res.status(status).json({
+      ...(error?.code ? { error: error.code } : {}),
       message: status >= 500 ? 'Shipping quote could not be calculated.' : error.message,
     });
   }
