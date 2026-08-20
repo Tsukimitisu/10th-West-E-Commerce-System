@@ -1,739 +1,389 @@
 import pool from '../config/database.js';
-import { emitOrderStatusUpdate } from '../socket.js';
-import { createOrderWorkflowNotification } from '../utils/notifications.js';
-import {
-  calculateRates as calculateProviderRates,
-  cancelShipment as cancelProviderShipment,
-  createShipment,
-  generateWaybill as generateProviderWaybill,
-  assertShippingOperationAvailable,
-} from '../services/shipping/shippingService.js';
-import { providerHttpStatus, publicProviderError } from '../services/shipping/providerError.js';
-import {
-  getSelectedShippingProviderName,
-} from '../services/shipping/providers/index.js';
-import { assertShippingProviderSchema, assertWaybillProviderSchema } from '../services/shipping/shippingSchema.js';
-import {
-  getSelectedTrackingProviderName,
-} from '../services/tracking/providers/index.js';
-import {
-  getTrackingStatus,
-  handleTrackingWebhook,
-  registerTracking,
-} from '../services/tracking/trackingService.js';
-
 import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
+import { createOrderWorkflowNotification } from '../utils/notifications.js';
+import { writeAuditLog } from '../utils/audit.js';
 
-const STAFF_ROLES = STAFF_ROLE_SET;
-const SHIPMENT_TO_ORDER = {
-  picked_up: 'shipped',
-  in_transit: 'shipped',
-  out_for_delivery: 'out_for_delivery',
-  delivered: 'delivered',
-  failed: 'failed',
-  failed_delivery: 'failed',
-  returned: 'returned',
-};
-const TRACKING_ORDER_TRANSITIONS = {
-  paid: new Set(['shipped', 'failed']),
-  processing: new Set(['shipped', 'failed']),
-  packed: new Set(['shipped', 'failed']),
-  ready_for_pickup: new Set(['shipped', 'failed']),
-  shipped: new Set(['out_for_delivery', 'delivered', 'failed', 'returned']),
-  out_for_delivery: new Set(['delivered', 'failed', 'returned']),
-  failed: new Set(['shipped', 'out_for_delivery', 'returned']),
-};
+export const MANUAL_SHIPMENT_STATUSES = Object.freeze([
+  'pending',
+  'waybill_created',
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+  'failed',
+  'cancelled',
+  'returned',
+]);
 
-const isAllowedTrackingOrderTransition = (fromStatus, toStatus) => (
-  fromStatus === toStatus || TRACKING_ORDER_TRANSITIONS[fromStatus]?.has(toStatus) === true
-);
+const MANUAL_SHIPMENT_STATUS_SET = new Set(MANUAL_SHIPMENT_STATUSES);
+const COD_WAYBILL_STATUSES = new Set(['confirmed', 'paid', 'processing', 'packed', 'ready_for_pickup']);
+const ACTIVE_SHIPMENT_STATUSES = new Set(['cancelled', 'returned']);
 
-const validOrderId = (value) => {
-  const orderId = Number(value);
-  return Number.isInteger(orderId) && orderId > 0 ? orderId : null;
+const fail = (status, message, code) => Object.assign(new Error(message), { status, code });
+
+const positiveId = (value, label) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) throw fail(400, `Invalid ${label}.`, 'INVALID_ID');
+  return parsed;
 };
 
-const providerFailure = (res, error, fallback) => {
-  const status = providerHttpStatus(error);
-  const publicError = publicProviderError(error);
+const cleanText = (value, { field, required = false, max = 1000, pattern = null } = {}) => {
+  const text = String(value ?? '').trim();
+  if (required && !text) throw fail(400, `${field} is required.`, 'VALIDATION_ERROR');
+  if (text.length > max || (text && pattern && !pattern.test(text))) {
+    throw fail(400, `${field} is invalid.`, 'VALIDATION_ERROR');
+  }
+  return text || null;
+};
+
+export const validateManualWaybillInput = (body = {}) => {
+  const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{5,99}$/;
+  const servicePattern = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+  return {
+    waybillNumber: cleanText(body.waybill_number, {
+      field: 'Waybill number', required: true, max: 100, pattern: identifierPattern,
+    }),
+    trackingNumber: cleanText(body.tracking_number, {
+      field: 'Tracking number', required: true, max: 100, pattern: identifierPattern,
+    }),
+    serviceType: cleanText(body.service_type || process.env.JNT_DEFAULT_SERVICE || 'standard', {
+      field: 'Service type', required: true, max: 40, pattern: servicePattern,
+    }).toLowerCase(),
+    notes: cleanText(body.notes, { field: 'Notes', max: 1000 }),
+  };
+};
+
+export const assertManualWaybillEligible = (order) => {
+  if (!order) throw fail(404, 'Order not found.', 'ORDER_NOT_FOUND');
+  if (String(order.status || '').toLowerCase() === 'cancelled') {
+    throw fail(409, 'Cancelled orders cannot have a waybill.', 'ORDER_CANCELLED');
+  }
+  if (String(order.shipping_method || '').toLowerCase() === 'pickup') {
+    throw fail(409, 'Pickup orders do not require a waybill.', 'PICKUP_ORDER');
+  }
+  if (
+    String(order.payment_method || '').toLowerCase() === 'cod'
+    && !COD_WAYBILL_STATUSES.has(String(order.status || '').toLowerCase())
+  ) {
+    throw fail(409, 'Confirm or process the COD order before creating its waybill.', 'COD_ORDER_NOT_CONFIRMED');
+  }
+};
+
+const isStaff = (user) => STAFF_ROLE_SET.has(user?.role);
+
+const serializeShipment = (shipment, { staff = false } = {}) => {
+  const serialized = {
+    id: shipment.id,
+    order_id: shipment.order_id,
+    provider: shipment.provider || 'manual',
+    shipping_provider: shipment.shipping_provider || 'internal',
+    tracking_provider: shipment.tracking_provider || 'manual',
+    courier: shipment.courier || 'jnt',
+    courier_name: shipment.courier_name || 'J&T Express',
+    service_type: shipment.service_type || 'standard',
+    waybill_number: shipment.waybill_number,
+    tracking_number: shipment.tracking_number,
+    shipping_fee: Number(shipment.shipping_fee || 0),
+    currency: shipment.currency || 'PHP',
+    status: shipment.normalized_status || shipment.status,
+    label_url: shipment.label_url || null,
+    created_at: shipment.created_at,
+    updated_at: shipment.updated_at,
+  };
+  if (staff) {
+    serialized.created_by = shipment.created_by
+      ? { id: shipment.created_by, name: shipment.created_by_name || null }
+      : null;
+    serialized.notes = shipment.metadata?.notes || null;
+  }
+  return serialized;
+};
+
+const loadShipmentEvents = async (db, shipmentId) => {
+  const result = await db.query(
+    `SELECT status, description, location,
+            COALESCE(event_time, occurred_at, created_at) AS event_time,
+            COALESCE(event_time, occurred_at, created_at) AS occurred_at,
+            created_at
+     FROM shipment_events
+     WHERE shipment_id = $1
+     ORDER BY COALESCE(event_time, occurred_at, created_at), id`,
+    [shipmentId]
+  );
+  return result.rows;
+};
+
+const shipmentResponse = async (db, shipment, staff) => ({
+  shipment: serializeShipment(shipment, { staff }),
+  events: await loadShipmentEvents(db, shipment.id),
+});
+
+const loadShipmentForAccess = async ({ orderId = null, shipmentId = null, user }) => {
+  const byOrder = orderId !== null;
+  const lookup = byOrder ? orderId : shipmentId;
+  const result = await pool.query(
+    `SELECT s.*, o.user_id AS order_user_id, creator.name AS created_by_name
+     FROM shipments s
+     JOIN orders o ON o.id = s.order_id
+     LEFT JOIN users creator ON creator.id = s.created_by
+     WHERE ${byOrder ? 's.order_id' : 's.id'} = $1
+       AND ($2::boolean OR o.user_id = $3)
+     ORDER BY s.created_at DESC
+     LIMIT 1`,
+    [lookup, isStaff(user), user.id]
+  );
+  return result.rows[0] || null;
+};
+
+const duplicateError = (error) => {
+  if (error?.code !== '23505') return null;
+  const target = `${error.constraint || ''} ${error.detail || ''}`.toLowerCase();
+  if (target.includes('waybill')) return fail(409, 'Waybill number is already in use.', 'DUPLICATE_WAYBILL_NUMBER');
+  if (target.includes('tracking')) return fail(409, 'Tracking number is already in use.', 'DUPLICATE_TRACKING_NUMBER');
+  if (target.includes('active_order') || target.includes('order_id')) {
+    return fail(409, 'This order already has an active shipment.', 'ACTIVE_SHIPMENT_EXISTS');
+  }
+  return fail(409, 'Shipment identifiers must be unique.', 'DUPLICATE_SHIPMENT_IDENTIFIER');
+};
+
+const sendError = (res, error, fallback) => {
+  const safe = duplicateError(error) || error;
+  const status = Number.isInteger(safe?.status) ? safe.status : 500;
+  if (status >= 500) console.error(fallback, error.message);
   return res.status(status).json({
-    ...publicError,
-    message: publicError.message || fallback,
+    message: status >= 500 ? fallback : safe.message,
+    ...(safe?.code ? { code: safe.code } : {}),
   });
 };
 
-const safeShipment = (shipment) => ({
-  id: shipment.id,
-  order_id: shipment.order_id,
-  shipping_provider: shipment.shipping_provider,
-  tracking_provider: shipment.tracking_provider,
-  status: shipment.normalized_status || shipment.status,
-  provider_status: shipment.provider_status,
-  provider_shipment_id: shipment.provider_shipment_id,
-  provider_tracking_id: shipment.provider_tracking_id,
-  tracking_number: shipment.tracking_number,
-  waybill_number: shipment.waybill_number,
-  label_url: shipment.label_url,
-  shipping_fee: shipment.shipping_fee,
-  currency: shipment.currency,
-  booked_at: shipment.booked_at,
-  cancelled_at: shipment.cancelled_at,
-  last_tracking_refresh_at: shipment.last_tracking_refresh_at,
-  booking_error: shipment.booking_error,
-  created_at: shipment.created_at,
-  updated_at: shipment.updated_at,
-});
-
-const loadOrderPayload = async (orderId) => {
-  const orderResult = await pool.query('SELECT * FROM orders WHERE id = $1', [orderId]);
-  if (!orderResult.rowCount) return null;
-  const items = await pool.query(
-    `SELECT oi.*, p.name AS product_name, p.shipping_weight_kg, p.shipping_dimensions
-     FROM order_items oi
-     LEFT JOIN products p ON p.id = oi.product_id
-     WHERE oi.order_id = $1
-     ORDER BY oi.id`,
-    [orderId]
-  );
-  return { order: orderResult.rows[0], items: items.rows };
-};
-
-const assertBookable = (order) => {
-  if (order.payment_method !== 'cod' && order.payment_status !== 'paid') {
-    const error = new Error('Online payment must be verified before shipment booking.');
-    error.status = 409;
-    throw error;
-  }
-  if (!['paid', 'processing', 'packed', 'ready_for_pickup'].includes(order.status)) {
-    const error = new Error('Order is not ready for shipment booking.');
-    error.status = 409;
-    throw error;
-  }
-  if (String(order.shipping_method || '').toLowerCase() === 'pickup') {
-    const error = new Error('Pickup orders do not require shipment booking.');
-    error.status = 409;
-    throw error;
-  }
-};
-
-const writeAudit = (client, req, action, entityType, entityId, metadata = {}) => client.query(
-  `INSERT INTO audit_logs
-    (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, metadata)
-   VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
-  [
-    req.user?.id || null,
-    action,
-    entityType,
-    String(entityId),
-    req.ip,
-    req.get('user-agent'),
-    JSON.stringify(metadata),
-  ]
-);
-
-const insertEvents = async (client, shipmentId, events, source) => {
-  for (const [index, event] of events.entries()) {
-    const occurredAt = new Date(event.occurredAt || Date.now());
-    if (Number.isNaN(occurredAt.getTime())) continue;
-    const eventId = String(event.eventId || `${source}-${shipmentId}-${occurredAt.toISOString()}-${index}`).slice(0, 255);
-    await client.query(
-      `INSERT INTO shipment_events
-        (shipment_id, provider_event_id, status, location, description, payload, occurred_at)
-       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)
-       ON CONFLICT (shipment_id, provider_event_id) DO NOTHING`,
-      [
-        shipmentId,
-        eventId,
-        String(event.status || 'pending').slice(0, 40),
-        event.location ? String(event.location).slice(0, 255) : null,
-        event.description ? String(event.description).slice(0, 2000) : null,
-        JSON.stringify({ source, simulated: event.simulated === true }),
-        occurredAt,
-      ]
-    );
-  }
-};
-
-const recordProviderError = async (shipmentId, operation, error) => {
-  if (!shipmentId) return;
-  await pool.query(
-    `INSERT INTO shipment_events
-      (shipment_id, provider_event_id, status, description, payload, occurred_at)
-     VALUES ($1,$2,'provider_error',$3,$4::jsonb,NOW())
-     ON CONFLICT (shipment_id, provider_event_id) DO NOTHING`,
-    [
-      shipmentId,
-      `provider-error-${operation}-${Date.now()}`,
-      String(error?.message || 'Provider request failed').slice(0, 2000),
-      JSON.stringify({
-        operation,
-        code: error?.code || 'PROVIDER_ERROR',
-        provider: error?.provider || null,
-      }),
-    ]
-  ).catch(() => {});
-};
-
-const applyTrackingResult = async (shipment, tracking, { webhook = false } = {}) => {
-  const normalizedStatus = String(tracking.normalizedStatus || 'pending');
-  const client = await pool.connect();
+export const createManualWaybill = async (req, res) => {
+  let client;
   try {
+    const orderId = positiveId(req.params.orderId, 'order ID');
+    const input = validateManualWaybillInput(req.body);
+    client = await pool.connect();
     await client.query('BEGIN');
-    await insertEvents(client, shipment.id, tracking.events || [], tracking.provider || shipment.tracking_provider);
-    await client.query(
-      `UPDATE shipments
-       SET tracking_provider = COALESCE($2, tracking_provider),
-           provider_tracking_id = COALESCE($3, provider_tracking_id),
-           tracking_number = COALESCE($4, tracking_number),
-           provider_status = COALESCE($5, provider_status),
-           normalized_status = $6,
-           status = $6,
-           last_tracking_refresh_at = CASE WHEN $7::boolean THEN last_tracking_refresh_at ELSE NOW() END,
-           webhook_received_at = CASE WHEN $7::boolean THEN NOW() ELSE webhook_received_at END,
-           updated_at = NOW()
-       WHERE id = $1`,
-      [
-        shipment.id,
-        tracking.provider || shipment.tracking_provider,
-        tracking.providerTrackingId || null,
-        tracking.trackingNumber || null,
-        tracking.providerStatus || null,
-        normalizedStatus,
-        webhook,
-      ]
-    );
 
-    const nextOrderStatus = SHIPMENT_TO_ORDER[normalizedStatus];
-    let previousOrderStatus = null;
-    let orderStatusChanged = false;
-    if (nextOrderStatus) {
-      const order = await client.query('SELECT status,user_id FROM orders WHERE id = $1 FOR UPDATE', [shipment.order_id]);
-      previousOrderStatus = order.rows[0]?.status || null;
-      if (
-        previousOrderStatus
-        && previousOrderStatus !== nextOrderStatus
-        && isAllowedTrackingOrderTransition(previousOrderStatus, nextOrderStatus)
-      ) {
-        await client.query(
-          `UPDATE orders
-           SET status = $2,
-               delivered_at = CASE WHEN $2 = 'delivered' THEN NOW() ELSE delivered_at END,
-               updated_at = NOW()
-           WHERE id = $1`,
-          [shipment.order_id, nextOrderStatus]
-        );
-        await createOrderWorkflowNotification(client, {
-          userId: order.rows[0].user_id,
-          orderId: shipment.order_id,
-          type: 'shipment_update',
-          status: nextOrderStatus,
-          title: nextOrderStatus === 'delivered' ? 'Order delivered' : 'Shipment update',
-          extra: { shipment_id: shipment.id },
-        });
-        await client.query(
-          `INSERT INTO order_status_history
-            (order_id, from_status, to_status, source, note, metadata)
-           VALUES ($1,$2,$3,'courier',$4,$5::jsonb)`,
-          [
-            shipment.order_id,
-            previousOrderStatus,
-            nextOrderStatus,
-            `Tracking provider reported ${normalizedStatus}`,
-            JSON.stringify({ tracking_provider: tracking.provider || shipment.tracking_provider }),
-          ]
-        );
-        orderStatusChanged = true;
-      } else if (previousOrderStatus && previousOrderStatus !== nextOrderStatus) {
-        await client.query(
-          `INSERT INTO audit_logs
-            (actor_user_id, action, entity_type, entity_id, metadata)
-           VALUES (NULL, 'shipment.tracking_transition_rejected', 'order', $1, $2::jsonb)`,
-          [
-            String(shipment.order_id),
-            JSON.stringify({
-              from_status: previousOrderStatus,
-              rejected_status: nextOrderStatus,
-              shipment_status: normalizedStatus,
-              tracking_provider: tracking.provider || shipment.tracking_provider,
-            }),
-          ]
-        );
-      }
-    }
-    await client.query('COMMIT');
-    if (orderStatusChanged) {
-      emitOrderStatusUpdate(shipment.order_id, nextOrderStatus, {
-        previous_status: previousOrderStatus,
-        shipment_status: normalizedStatus,
-      });
-    }
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw error;
-  } finally {
-    client.release();
-  }
-};
-
-export const calculateRates = async (req, res) => {
-  const orderId = validOrderId(req.body?.order_id);
-  if (!orderId) return res.status(400).json({ message: 'Valid order_id is required.' });
-  try {
-    const payload = await loadOrderPayload(orderId);
-    if (!payload) return res.status(404).json({ message: 'Order not found.' });
-    assertBookable(payload.order);
-    const rates = await calculateProviderRates(payload);
-    return res.json({ provider: getSelectedShippingProviderName(), rates });
-  } catch (error) {
-    if (error.status === 409) return res.status(409).json({ message: error.message });
-    console.error('Shipment rate calculation failed:', error.code || error.message);
-    return providerFailure(res, error, 'Shipment rates could not be calculated.');
-  }
-};
-
-export const bookShipment = async (req, res) => {
-  const orderId = validOrderId(req.body?.order_id);
-  const key = String(req.get('Idempotency-Key') || '').trim();
-  if (!orderId) return res.status(400).json({ message: 'Valid order_id is required.' });
-  if (!/^[A-Za-z0-9._:-]{8,255}$/.test(key)) {
-    return res.status(400).json({ message: 'A valid Idempotency-Key header is required.' });
-  }
-
-  let shipmentId = null;
-  let providerBooked = false;
-  try {
-    await assertShippingProviderSchema(pool);
-    const existing = await pool.query('SELECT * FROM shipments WHERE order_id = $1', [orderId]);
-    if (existing.rows[0] && existing.rows[0].booking_idempotency_key !== key) {
-      return res.status(409).json({ message: 'This order already has a shipment booking attempt.' });
-    }
-    if (existing.rows[0]?.provider_shipment_id) return res.json(safeShipment(existing.rows[0]));
-
-    const payload = await loadOrderPayload(orderId);
-    if (!payload) return res.status(404).json({ message: 'Order not found.' });
-    assertBookable(payload.order);
-    await writeAudit(pool, req, 'shipment.book_attempt', 'order', orderId, {
-      shipping_provider: getSelectedShippingProviderName(),
-    });
-    assertShippingOperationAvailable('shipment booking');
-
-    const shippingProvider = getSelectedShippingProviderName();
-    const trackingProvider = getSelectedTrackingProviderName();
-    const inserted = await pool.query(
-      `INSERT INTO shipments
-        (order_id, provider, shipping_provider, tracking_provider, status, normalized_status,
-         shipping_fee, booking_idempotency_key)
-       VALUES ($1,$2,$2,$3,'pending','pending',$4,$5)
-       ON CONFLICT (order_id) DO UPDATE
-       SET provider = EXCLUDED.provider,
-           shipping_provider = EXCLUDED.shipping_provider,
-           tracking_provider = EXCLUDED.tracking_provider,
-           updated_at = NOW()
-       RETURNING *`,
-      [orderId, shippingProvider, trackingProvider, payload.order.shipping_fee || 0, key]
-    );
-    shipmentId = inserted.rows[0].id;
-
-    const booked = await createShipment(payload);
-    providerBooked = true;
-    let trackingRegistration = null;
-    let trackingWarning = null;
-    try {
-      trackingRegistration = await registerTracking({
-        trackingNumber: booked.trackingNumber,
-        providerShipmentId: booked.providerShipmentId,
-        courierSlug: booked.courierSlug,
-        orderId,
-      });
-    } catch (error) {
-      trackingWarning = publicProviderError(error);
-    }
-
-    const updated = await pool.query(
-      `UPDATE shipments
-       SET status = $2,
-           normalized_status = $2,
-           provider_status = $3,
-           provider_shipment_id = $4,
-           tracking_number = $5,
-           provider_tracking_id = $6,
-           provider_metadata = $7::jsonb,
-           booking_error = $8,
-           booked_at = NOW(),
-           updated_at = NOW()
+    const orderResult = await client.query(
+      `SELECT id, user_id, status, payment_method, payment_status, shipping_method,
+              shipping_fee, delivery_method
+       FROM orders
        WHERE id = $1
-       RETURNING *`,
-      [
-        shipmentId,
-        booked.normalizedStatus || 'booked',
-        booked.providerStatus || null,
-        booked.providerShipmentId || null,
-        booked.trackingNumber || null,
-        trackingRegistration?.providerTrackingId || null,
-        JSON.stringify({ simulated: booked.simulated === true }),
-        trackingWarning?.message || null,
-      ]
+       FOR UPDATE`,
+      [orderId]
     );
-    await pool.query(
-      `UPDATE orders
-       SET courier = $2, tracking_number = $3, updated_at = NOW()
-       WHERE id = $1`,
-      [orderId, shippingProvider, booked.trackingNumber || null]
-    );
-    await writeAudit(pool, req, 'shipment.book', 'shipment', shipmentId, {
-      order_id: orderId,
-      shipping_provider: shippingProvider,
-      tracking_provider: trackingProvider,
-      simulated: booked.simulated === true,
-    });
-    return res.status(201).json({
-      shipment: safeShipment(updated.rows[0]),
-      tracking_registration: trackingRegistration
-        ? { status: 'registered', provider: trackingProvider }
-        : { status: 'unavailable', error: trackingWarning },
-    });
-  } catch (error) {
-    if (shipmentId) {
-      if (providerBooked) {
-        await pool.query(
-          `UPDATE shipments SET booking_error = $2, updated_at = NOW() WHERE id = $1`,
-          [shipmentId, String(error.message || 'Local shipment finalization failed').slice(0, 2000)]
-        ).catch(() => {});
-      } else {
-        await pool.query(
-          `UPDATE shipments
-           SET status = 'failed', normalized_status = 'failed', booking_error = $2, updated_at = NOW()
-           WHERE id = $1`,
-          [shipmentId, String(error.message || 'Provider request failed').slice(0, 2000)]
-        ).catch(() => {});
-      }
-      await recordProviderError(shipmentId, 'booking', error);
-    }
-    await writeAudit(pool, req, 'shipment.book_failed', 'order', orderId, {
-      code: publicProviderError(error).code,
-      shipment_id: shipmentId,
-    }).catch(() => {});
-    if (error.status === 409) return res.status(409).json({ message: error.message });
-    console.error('Shipment booking failed:', error.code || error.message);
-    return providerFailure(res, error, 'Shipment booking failed.');
-  }
-};
+    const order = orderResult.rows[0];
+    assertManualWaybillEligible(order);
 
-export const shipmentWebhook = async (req, res) => {
-  try {
-    const result = await handleTrackingWebhook({
-      rawBody: req.rawBody,
-      body: req.body,
-      headers: req.headers,
-    });
-    const tracking = result.tracking || {};
-    const trackingNumber = tracking.trackingNumber;
-    const providerTrackingId = tracking.providerTrackingId;
-    if (!trackingNumber && !providerTrackingId) {
-      return res.status(400).json({ message: 'Tracking webhook does not identify a shipment.' });
-    }
-    const shipmentResult = await pool.query(
-      `SELECT * FROM shipments
-       WHERE ($1::text IS NOT NULL AND tracking_number = $1)
-          OR ($2::text IS NOT NULL AND provider_tracking_id = $2)
-       ORDER BY id DESC
+    const active = await client.query(
+      `SELECT id FROM shipments
+       WHERE order_id = $1 AND status NOT IN ('cancelled', 'returned')
        LIMIT 1`,
-      [trackingNumber || null, providerTrackingId || null]
-    );
-    if (!shipmentResult.rowCount) {
-      await writeAudit(pool, req, 'shipment.webhook_unmatched', 'shipping_webhook', providerTrackingId || trackingNumber, {
-        provider: tracking.provider || getSelectedTrackingProviderName(),
-        event_type: String(req.body?.event_type || req.body?.event || 'tracking_update').slice(0, 100),
-        tracking_number: trackingNumber || null,
-        normalized_status: tracking.normalizedStatus || null,
-        signature_verified: true,
-      }).catch(() => {});
-      return res.status(404).json({ message: 'Shipment not found.' });
-    }
-    await applyTrackingResult(shipmentResult.rows[0], {
-      ...tracking,
-      events: result.events || tracking.events || [],
-    }, { webhook: true });
-    await writeAudit(pool, req, 'shipment.webhook', 'shipment', shipmentResult.rows[0].id, {
-      provider: tracking.provider || getSelectedTrackingProviderName(),
-      event_type: String(req.body?.event_type || req.body?.event || 'tracking_update').slice(0, 100),
-      order_id: shipmentResult.rows[0].order_id,
-      tracking_number: trackingNumber || shipmentResult.rows[0].tracking_number || null,
-      normalized_status: tracking.normalizedStatus || null,
-      signature_verified: true,
-    });
-    return res.json({ message: 'SUCCESS' });
-  } catch (error) {
-    if (error?.code === 'INVALID_WEBHOOK_SIGNATURE') {
-      await writeAudit(pool, req, 'shipment.webhook_rejected', 'shipping_webhook', getSelectedTrackingProviderName(), {
-        provider: getSelectedTrackingProviderName(),
-        signature_verified: false,
-        code: 'INVALID_WEBHOOK_SIGNATURE',
-      }).catch(() => {});
-    }
-    console.error('Tracking webhook failed:', error.code || error.message);
-    return providerFailure(res, error, 'Tracking webhook could not be processed.');
-  }
-};
-
-export const getTracking = async (req, res) => {
-  const orderId = validOrderId(req.params.orderId);
-  if (!orderId) return res.status(400).json({ message: 'Invalid order ID.' });
-  try {
-    const staff = STAFF_ROLES.has(req.user.role);
-    const shipment = await pool.query(
-      `SELECT s.* FROM shipments s
-       JOIN orders o ON o.id = s.order_id
-       WHERE s.order_id = $1 AND ($2::boolean OR o.user_id = $3)`,
-      [orderId, staff, req.user.id]
-    );
-    if (!shipment.rowCount) return res.status(404).json({ message: 'Shipment not found.' });
-    const events = await pool.query(
-      `SELECT status, location, description, occurred_at
-       FROM shipment_events
-       WHERE shipment_id = $1
-       ORDER BY occurred_at, id`,
-      [shipment.rows[0].id]
-    );
-    return res.json({ shipment: safeShipment(shipment.rows[0]), events: events.rows });
-  } catch (error) {
-    console.error('Get tracking failed:', error.message);
-    return res.status(500).json({ message: 'Tracking could not be loaded.' });
-  }
-};
-
-export const getShipmentDetail = getTracking;
-
-export const __testing = {
-  isAllowedTrackingOrderTransition,
-};
-
-export const refreshTracking = async (req, res) => {
-  const orderId = validOrderId(req.params.orderId);
-  if (!orderId) return res.status(400).json({ message: 'Invalid order ID.' });
-  try {
-    const result = await pool.query('SELECT * FROM shipments WHERE order_id = $1', [orderId]);
-    const shipment = result.rows[0];
-    if (!shipment) return res.status(404).json({ message: 'Shipment not found.' });
-    if (!shipment.tracking_number) return res.status(409).json({ message: 'Shipment has no tracking number.' });
-    const tracking = await getTrackingStatus({
-      providerTrackingId: shipment.provider_tracking_id,
-      providerShipmentId: shipment.provider_shipment_id,
-      trackingNumber: shipment.tracking_number,
-    });
-    await applyTrackingResult(shipment, tracking);
-    await writeAudit(pool, req, 'shipment.tracking_refresh', 'shipment', shipment.id, {
-      order_id: orderId,
-      tracking_provider: shipment.tracking_provider,
-    });
-    const refreshed = await pool.query('SELECT * FROM shipments WHERE id = $1', [shipment.id]);
-    return res.json({ shipment: safeShipment(refreshed.rows[0]), events: tracking.events || [] });
-  } catch (error) {
-    const failedShipment = await pool.query(
-      'SELECT id FROM shipments WHERE order_id = $1',
-      [orderId]
-    ).catch(() => ({ rows: [] }));
-    await recordProviderError(failedShipment.rows[0]?.id, 'tracking_refresh', error);
-    console.error('Tracking refresh failed:', error.code || error.message);
-    return providerFailure(res, error, 'Tracking could not be refreshed.');
-  }
-};
-
-export const cancelShipment = async (req, res) => {
-  const orderId = validOrderId(req.params.orderId || req.body?.order_id);
-  if (!orderId) return res.status(400).json({ message: 'Valid order ID is required.' });
-  const reason = String(req.body?.reason || '').trim().slice(0, 500) || 'Shipment cancelled by staff';
-  try {
-    const result = await pool.query('SELECT * FROM shipments WHERE order_id = $1', [orderId]);
-    const shipment = result.rows[0];
-    if (!shipment) return res.status(404).json({ message: 'Shipment not found.' });
-    if (['delivered', 'cancelled', 'returned'].includes(shipment.normalized_status || shipment.status)) {
-      return res.status(409).json({ message: 'This shipment can no longer be cancelled.' });
-    }
-    await cancelProviderShipment({
-      orderId,
-      providerShipmentId: shipment.provider_shipment_id,
-      trackingNumber: shipment.tracking_number,
-      reason,
-    });
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(
-        `UPDATE shipments
-         SET status = 'cancelled', normalized_status = 'cancelled', provider_status = 'cancelled',
-             cancelled_at = NOW(), updated_at = NOW()
-         WHERE id = $1`,
-        [shipment.id]
-      );
-      await insertEvents(client, shipment.id, [{
-        eventId: `cancel-${shipment.id}-${Date.now()}`,
-        status: 'cancelled',
-        description: reason,
-        occurredAt: new Date().toISOString(),
-      }], shipment.shipping_provider);
-      await writeAudit(client, req, 'shipment.cancel', 'shipment', shipment.id, { order_id: orderId, reason });
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw error;
-    } finally {
-      client.release();
-    }
-    return res.json({ message: 'Shipment cancelled.', order_id: orderId, status: 'cancelled' });
-  } catch (error) {
-    const failedShipment = await pool.query(
-      'SELECT id FROM shipments WHERE order_id = $1',
-      [orderId]
-    ).catch(() => ({ rows: [] }));
-    await recordProviderError(failedShipment.rows[0]?.id, 'cancellation', error);
-    console.error('Shipment cancellation failed:', error.code || error.message);
-    return providerFailure(res, error, 'Shipment could not be cancelled.');
-  }
-};
-
-export const generateWaybill = async (req, res) => {
-  const orderId = validOrderId(req.params.orderId);
-  if (!orderId) return res.status(400).json({ message: 'Invalid order ID.' });
-  try {
-    await assertShippingProviderSchema(pool);
-    await assertWaybillProviderSchema(pool);
-    await writeAudit(pool, req, 'waybill.generate_attempt', 'order', orderId, {
-      shipping_provider: getSelectedShippingProviderName(),
-    });
-    assertShippingOperationAvailable('waybill generation');
-    const existing = await pool.query(
-      `SELECT w.*, s.shipping_provider, s.tracking_number, s.provider_shipment_id,
-              s.id AS linked_shipment_id, s.status AS shipment_status
-       FROM shipments s
-       LEFT JOIN waybills w ON w.shipment_id = s.id
-       WHERE s.order_id = $1`,
       [orderId]
     );
-    const shipment = existing.rows[0];
-    if (!shipment) return res.status(409).json({ message: 'Book the shipment before generating a waybill.' });
-    if (shipment.waybill_number) return res.json(shipment);
-    if (!shipment.provider_shipment_id) {
-      return res.status(409).json({ message: 'Shipment booking must succeed before waybill generation.' });
+    if (active.rowCount) throw fail(409, 'This order already has an active shipment.', 'ACTIVE_SHIPMENT_EXISTS');
+
+    const existingIdentifier = await client.query(
+      `SELECT waybill_number, tracking_number
+       FROM shipments
+       WHERE waybill_number = $1 OR tracking_number = $2
+       LIMIT 1`,
+      [input.waybillNumber, input.trackingNumber]
+    );
+    if (existingIdentifier.rows[0]?.waybill_number === input.waybillNumber) {
+      throw fail(409, 'Waybill number is already in use.', 'DUPLICATE_WAYBILL_NUMBER');
     }
-    const payload = await loadOrderPayload(orderId);
-    const generated = await generateProviderWaybill({
-      ...payload,
-      shipment: {
-        id: shipment.linked_shipment_id,
-        provider_shipment_id: shipment.provider_shipment_id,
-        tracking_number: shipment.tracking_number,
-      },
-    });
-    if (!generated.waybillNumber || (!generated.labelPayload && !generated.labelUrl)) {
-      const error = new Error('Shipping provider did not return a usable waybill label.');
-      error.code = 'INVALID_PROVIDER_RESPONSE';
-      error.status = 502;
-      throw error;
+    if (existingIdentifier.rows[0]?.tracking_number === input.trackingNumber) {
+      throw fail(409, 'Tracking number is already in use.', 'DUPLICATE_TRACKING_NUMBER');
     }
-    const inserted = await pool.query(
-      `INSERT INTO waybills
-        (order_id, shipment_id, waybill_number, status, label_payload, label_url, provider, generated_by)
-       VALUES ($1,$2,$3,'generated',$4::jsonb,$5,$6,$7)
-       ON CONFLICT (order_id) DO UPDATE
-       SET waybill_number = EXCLUDED.waybill_number,
-           label_payload = EXCLUDED.label_payload,
-           label_url = EXCLUDED.label_url,
-           provider = EXCLUDED.provider,
-           status = 'generated',
-           updated_at = NOW()
+
+    const inserted = await client.query(
+      `INSERT INTO shipments (
+         order_id, provider, shipping_provider, tracking_provider, courier, courier_name,
+         service_type, waybill_number, tracking_number, shipping_fee, currency, status,
+         normalized_status, provider_status, metadata, created_by, booked_at
+       ) VALUES ($1,'manual','internal','manual','jnt',$2,$3,$4,$5,$6,'PHP',
+                 'waybill_created','waybill_created','waybill_created',$7::jsonb,$8,NOW())
        RETURNING *`,
       [
         orderId,
-        shipment.linked_shipment_id,
-        generated.waybillNumber,
-        JSON.stringify(generated.labelPayload || { label_url: generated.labelUrl }),
-        generated.labelUrl || null,
-        generated.provider || shipment.shipping_provider,
+        String(process.env.JNT_COURIER_NAME || 'J&T Express').trim(),
+        input.serviceType,
+        input.waybillNumber,
+        input.trackingNumber,
+        Number(order.shipping_fee || 0),
+        JSON.stringify({ notes: input.notes }),
         req.user.id,
       ]
     );
-    await pool.query(
-      `UPDATE shipments
-       SET waybill_number = $2, label_url = $3, updated_at = NOW()
-       WHERE id = $1`,
-      [shipment.linked_shipment_id, generated.waybillNumber, generated.labelUrl || null]
+    const shipment = inserted.rows[0];
+
+    await client.query(
+      `INSERT INTO shipment_events (
+         shipment_id, provider, provider_event_id, status, description, raw_event,
+         payload, event_time, occurred_at
+       ) VALUES ($1,'manual',$2,'waybill_created',$3,$4::jsonb,$4::jsonb,NOW(),NOW())`,
+      [
+        shipment.id,
+        `manual-waybill-created-${shipment.id}`,
+        input.notes || 'J&T waybill created manually by the store.',
+        JSON.stringify({ source: 'manual', notes: input.notes }),
+      ]
     );
-    await pool.query(
+
+    await client.query(
       `UPDATE orders
-       SET courier = $2, waybill_number = $3, waybill_status = 'generated',
-           waybill_generated_at = NOW(), updated_at = NOW()
+       SET shipping_provider = 'internal', courier = 'jnt', courier_name = $2,
+           shipping_status = 'waybill_created', delivery_method = $3,
+           waybill_number = $4, waybill_status = 'generated', waybill_generated_at = NOW(),
+           tracking_number = $5, updated_at = NOW()
        WHERE id = $1`,
-      [orderId, generated.provider || shipment.shipping_provider, generated.waybillNumber]
+      [orderId, shipment.courier_name, input.serviceType, input.waybillNumber, input.trackingNumber]
     );
-    await writeAudit(pool, req, 'waybill.generate', 'waybill', inserted.rows[0].id, {
-      order_id: orderId,
-      provider: generated.provider || shipment.shipping_provider,
-      simulated: generated.simulated === true,
+
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'shipment.manual_waybill.create',
+      entityType: 'shipment',
+      entityId: shipment.id,
+      afterData: {
+        order_id: orderId,
+        courier: 'jnt',
+        status: 'waybill_created',
+      },
+      metadata: { provider: 'manual' },
     });
-    return res.status(201).json(inserted.rows[0]);
+    await createOrderWorkflowNotification(client, {
+      userId: order.user_id,
+      orderId,
+      type: 'shipment_update',
+      status: 'waybill_created',
+      title: 'J&T waybill created',
+      message: 'Your J&T Express tracking number is now available.',
+      extra: { shipment_id: shipment.id },
+    });
+
+    await client.query('COMMIT');
+    return res.status(201).json(await shipmentResponse(pool, {
+      ...shipment,
+      created_by_name: req.user.name || null,
+    }, true));
   } catch (error) {
-    const failedShipment = await pool.query(
-      'SELECT id FROM shipments WHERE order_id = $1',
-      [orderId]
-    ).catch(() => ({ rows: [] }));
-    await recordProviderError(failedShipment.rows[0]?.id, 'waybill_generation', error);
-    await writeAudit(pool, req, 'waybill.generate_failed', 'order', orderId, {
-      code: publicProviderError(error).code,
-      shipment_id: failedShipment.rows[0]?.id || null,
-    }).catch(() => {});
-    console.error('Waybill generation failed:', error.code || error.message);
-    return providerFailure(res, error, 'Waybill could not be generated.');
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    return sendError(res, error, 'Manual waybill could not be created.');
+  } finally {
+    client?.release();
   }
 };
 
-export const getWaybill = async (req, res) => {
-  const orderId = validOrderId(req.params.orderId);
-  if (!orderId) return res.status(400).json({ message: 'Invalid order ID.' });
+export const getShipmentByOrder = async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT w.*, s.shipping_provider, s.tracking_number,
-              COALESCE(s.normalized_status, s.status) AS shipment_status
-       FROM waybills w
-       LEFT JOIN shipments s ON s.id = w.shipment_id
-       WHERE w.order_id = $1`,
-      [orderId]
+    const orderId = positiveId(req.params.orderId, 'order ID');
+    const shipment = await loadShipmentForAccess({ orderId, user: req.user });
+    if (!shipment) return res.status(404).json({ message: 'Shipment not found.' });
+    return res.json(await shipmentResponse(pool, shipment, isStaff(req.user)));
+  } catch (error) {
+    return sendError(res, error, 'Shipment could not be loaded.');
+  }
+};
+
+export const getShipmentById = async (req, res) => {
+  try {
+    const shipmentId = positiveId(req.params.shipmentId, 'shipment ID');
+    const shipment = await loadShipmentForAccess({ shipmentId, user: req.user });
+    if (!shipment) return res.status(404).json({ message: 'Shipment not found.' });
+    return res.json(await shipmentResponse(pool, shipment, isStaff(req.user)));
+  } catch (error) {
+    return sendError(res, error, 'Shipment could not be loaded.');
+  }
+};
+
+export const updateManualShipmentStatus = async (req, res) => {
+  let client;
+  try {
+    const shipmentId = positiveId(req.params.shipmentId, 'shipment ID');
+    const status = String(req.body?.status || '').trim().toLowerCase();
+    if (!MANUAL_SHIPMENT_STATUS_SET.has(status)) {
+      throw fail(400, 'Shipment status is invalid.', 'INVALID_SHIPMENT_STATUS');
+    }
+    const description = cleanText(req.body?.description, { field: 'Description', max: 2000 });
+    const location = cleanText(req.body?.location, { field: 'Location', max: 255 });
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `SELECT s.*, o.user_id AS order_user_id
+       FROM shipments s
+       JOIN orders o ON o.id = s.order_id
+       WHERE s.id = $1
+       FOR UPDATE OF s, o`,
+      [shipmentId]
     );
-    if (!result.rowCount) return res.status(404).json({ message: 'Waybill not found.' });
-    return res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Get waybill failed:', error.message);
-    return res.status(500).json({ message: 'Waybill could not be loaded.' });
-  }
-};
+    const shipment = result.rows[0];
+    if (!shipment) throw fail(404, 'Shipment not found.', 'SHIPMENT_NOT_FOUND');
 
-const recordWaybillOutput = async (req, res, action) => {
-  const orderId = validOrderId(req.params.orderId);
-  if (!orderId) return res.status(400).json({ message: 'Invalid order ID.' });
-  try {
-    const result = await pool.query('SELECT * FROM waybills WHERE order_id = $1', [orderId]);
-    if (!result.rowCount) return res.status(404).json({ message: 'Waybill not found.' });
-    const waybill = result.rows[0];
-    await pool.query(
-      `UPDATE waybills
-       SET reprint_count = reprint_count + 1,
-           last_printed_at = NOW(),
-           last_reprinted_at = CASE WHEN $2 = 'reprint' THEN NOW() ELSE last_reprinted_at END,
+    await client.query(
+      `UPDATE shipments
+       SET status = $2, normalized_status = $2, provider_status = $2,
+           cancelled_at = CASE WHEN $2 = 'cancelled' THEN NOW() ELSE cancelled_at END,
            updated_at = NOW()
        WHERE id = $1`,
-      [waybill.id, action]
+      [shipmentId, status]
     );
-    await writeAudit(pool, req, `waybill.${action}`, 'waybill', waybill.id, { order_id: orderId });
-    return res.json({
-      ...waybill,
-      print_instructions: 'Render this provider label in the protected staff print view.',
+    await client.query(
+      `INSERT INTO shipment_events (
+         shipment_id, provider, provider_event_id, status, description, location,
+         raw_event, payload, event_time, occurred_at
+       ) VALUES ($1,'manual',$2,$3,$4,$5,$6::jsonb,$6::jsonb,NOW(),NOW())`,
+      [
+        shipmentId,
+        `manual-status-${shipmentId}-${Date.now()}`,
+        status,
+        description || `Shipment status updated to ${status.replaceAll('_', ' ')}.`,
+        location,
+        JSON.stringify({ source: 'manual', changed_by: req.user.id }),
+      ]
+    );
+    await client.query(
+      `UPDATE orders
+       SET shipping_status = $2, updated_at = NOW()
+       WHERE id = $1`,
+      [shipment.order_id, status]
+    );
+    await writeAuditLog(client, {
+      req,
+      actorUserId: req.user.id,
+      action: 'shipment.manual_status.update',
+      entityType: 'shipment',
+      entityId: shipmentId,
+      beforeData: { status: shipment.normalized_status || shipment.status },
+      afterData: { status },
+      metadata: { order_id: shipment.order_id, provider: 'manual' },
     });
+    await createOrderWorkflowNotification(client, {
+      userId: shipment.order_user_id,
+      orderId: shipment.order_id,
+      type: 'shipment_update',
+      status,
+      title: 'J&T shipment update',
+      message: description || `Your shipment status is now ${status.replaceAll('_', ' ')}.`,
+      extra: { shipment_id: shipmentId },
+    });
+    await client.query('COMMIT');
+
+    const refreshed = await loadShipmentForAccess({ shipmentId, user: req.user });
+    return res.json(await shipmentResponse(pool, refreshed, true));
   } catch (error) {
-    console.error(`Waybill ${action} failed:`, error.message);
-    return res.status(500).json({ message: 'Waybill could not be loaded.' });
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    return sendError(res, error, 'Shipment status could not be updated.');
+  } finally {
+    client?.release();
   }
 };
 
-export const printWaybill = (req, res) => recordWaybillOutput(req, res, 'print');
-export const reprintWaybill = (req, res) => recordWaybillOutput(req, res, 'reprint');
+export const __testing = {
+  serializeShipment,
+  duplicateError,
+  isActiveShipmentStatus: (status) => !ACTIVE_SHIPMENT_STATUSES.has(status),
+};

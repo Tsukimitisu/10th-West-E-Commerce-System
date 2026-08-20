@@ -1,12 +1,8 @@
-import bigsellerProvider from './bigsellerProvider.js';
 import internalProvider from './internalShippingProvider.js';
-import mockProvider from './mockShippingProvider.js';
 import { ProviderError } from '../providerError.js';
 
 const PROVIDERS = {
-  bigseller: bigsellerProvider,
   internal: internalProvider,
-  mock: mockProvider,
 };
 
 export const getSelectedShippingProviderName = () => String(

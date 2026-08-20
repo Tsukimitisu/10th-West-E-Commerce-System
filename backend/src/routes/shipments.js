@@ -1,23 +1,32 @@
 import express from 'express';
 import { authenticateToken, requirePermission, requirePermissionForRoles, requireRole } from '../middleware/auth.js';
 import {
-  bookShipment,
-  calculateRates,
-  cancelShipment,
-  getShipmentDetail,
-  getTracking,
-  refreshTracking,
-  shipmentWebhook,
+  createManualWaybill,
+  getShipmentById,
+  getShipmentByOrder,
+  updateManualShipmentStatus,
 } from '../controllers/shipmentController.js';
 import { STAFF_ROLES } from '../constants/schemaEnums.js';
 
 const router = express.Router();
 const staffRoles = [...STAFF_ROLES];
-router.post('/webhook', shipmentWebhook);
-router.post('/rates', authenticateToken, requireRole(...staffRoles), requirePermission('shipments.manage'), calculateRates);
-router.post('/book', authenticateToken, requireRole(...staffRoles), requirePermission('shipments.manage'), bookShipment);
-router.get('/:orderId/tracking', authenticateToken, requirePermissionForRoles('shipments.view', ...staffRoles), getTracking);
-router.post('/:orderId/tracking/refresh', authenticateToken, requireRole(...staffRoles), requirePermission('tracking.refresh'), refreshTracking);
-router.get('/:orderId', authenticateToken, requirePermissionForRoles('shipments.view', ...staffRoles), getShipmentDetail);
-router.post('/:orderId/cancel', authenticateToken, requireRole(...staffRoles), requirePermission('shipments.manage'), cancelShipment);
+const customerOrShipmentViewer = requirePermissionForRoles('shipments.view', ...staffRoles);
+
+router.post(
+  '/orders/:orderId/waybill',
+  authenticateToken,
+  requireRole(...staffRoles),
+  requirePermission('shipments.manage'),
+  createManualWaybill,
+);
+router.get('/orders/:orderId', authenticateToken, customerOrShipmentViewer, getShipmentByOrder);
+router.get('/:shipmentId', authenticateToken, customerOrShipmentViewer, getShipmentById);
+router.patch(
+  '/:shipmentId/status',
+  authenticateToken,
+  requireRole(...staffRoles),
+  requirePermission('shipments.manage'),
+  updateManualShipmentStatus,
+);
+
 export default router;

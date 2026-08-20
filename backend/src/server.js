@@ -45,7 +45,6 @@ import chatRoutes from './routes/chat.js';
 import chatsRoutes from './routes/chats.js';
 import sellerChatRoutes from './routes/sellerChats.js';
 import shipmentRoutes from './routes/shipments.js';
-import waybillRoutes from './routes/waybills.js';
 import discountRoutes from './routes/discounts.js';
 import refundRoutes from './routes/refunds.js';
 import posRoutes from './routes/pos.js';
@@ -264,8 +263,7 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
 }));
 app.use(express.json({
   verify: (req, _res, buf) => {
-    if (String(req.originalUrl || '').startsWith('/api/payments/paymongo/webhook')
-      || String(req.originalUrl || '').startsWith('/api/shipments/webhook')) {
+    if (String(req.originalUrl || '').startsWith('/api/payments/paymongo/webhook')) {
       req.rawBody = Buffer.from(buf);
     }
   },
@@ -364,7 +362,6 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/chats', chatsRoutes);
 app.use('/api/seller/chats', sellerChatRoutes);
 app.use('/api/shipments', shipmentRoutes);
-app.use('/api/waybills', waybillRoutes);
 app.use('/api/discounts', discountRoutes);
 app.use('/api/refunds', refundRoutes);
 app.use('/api/pos', posRoutes);
