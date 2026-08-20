@@ -4621,6 +4621,13 @@ export const adjustStock = createStockAdjustment;
 
 // ==================== SHIPPING ====================
 
+export const getShippingQuote = async ({ address_id, items }) => (
+  authenticatedFetch(`${API_URL}/shipping/quote`, {
+    method: 'POST',
+    body: JSON.stringify({ address_id, items }),
+  })
+);
+
 export const getShippingRates = async () => {
   if (USE_SUPABASE) {
     const { data } = await supabase.from('shipping_rates').select('*').eq('is_active', true).order('base_fee');

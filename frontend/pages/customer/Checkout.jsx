@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield, Wallet } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { getAddresses, createGcashCheckout, createOrder, getProductById, validateDiscountCode } from '../../services/api';
+import { getAddresses, createGcashCheckout, createOrder, getProductById, getShippingQuote, validateDiscountCode } from '../../services/api';
 import AddressDropdowns from '../../components/AddressDropdowns';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
@@ -12,8 +12,6 @@ import { handleProductImageError, resolveProductImageUrl } from '../../utils/pro
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 const CHECKOUT_TERMS_SESSION_KEY = 'checkoutTermsAccepted';
 const CHECKOUT_VAT_RATE = 0;
-const CHECKOUT_FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
-const CHECKOUT_STANDARD_SHIPPING_FEE = 150;
 
 const toFiniteNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -208,6 +206,9 @@ const Checkout = () => {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [shippingMethod] = useState('standard');
+  const [shippingQuote, setShippingQuote] = useState(null);
+  const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
+  const [shippingQuoteError, setShippingQuoteError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [agreeTerms, setAgreeTerms] = useState(() => {
     try {
@@ -324,9 +325,39 @@ const Checkout = () => {
     }).catch(() => {});
   }, []);
 
-  const shippingCost = subtotal >= CHECKOUT_FREE_STANDARD_SHIPPING_THRESHOLD
-    ? 0
-    : CHECKOUT_STANDARD_SHIPPING_FEE;
+  const shippingQuoteItems = useMemo(() => items.map((item) => ({
+    product_id: item.productId,
+    variant_id: item.variantId || item.product?.selected_variant?.id || null,
+    quantity: Math.max(1, Math.trunc(toFiniteNumber(item.quantity, 1))),
+  })), [items]);
+  const shippingQuoteItemsKey = JSON.stringify(shippingQuoteItems);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedAddress || shippingQuoteItems.length === 0) {
+      setShippingQuote(null);
+      setShippingQuoteLoading(false);
+      setShippingQuoteError('');
+      return () => { active = false; };
+    }
+    setShippingQuoteLoading(true);
+    setShippingQuoteError('');
+    getShippingQuote({ address_id: Number(selectedAddress), items: shippingQuoteItems })
+      .then((quote) => {
+        if (active) setShippingQuote(quote);
+      })
+      .catch((quoteError) => {
+        if (!active) return;
+        setShippingQuote(null);
+        setShippingQuoteError(quoteError.message || 'Shipping could not be calculated.');
+      })
+      .finally(() => {
+        if (active) setShippingQuoteLoading(false);
+      });
+    return () => { active = false; };
+  }, [selectedAddress, shippingQuoteItemsKey]);
+
+  const shippingCost = roundCurrency(shippingQuote?.shipping_fee ?? 0);
   const vatBase = roundCurrency(Math.max(0, total + shippingCost));
   const vatAmount = roundCurrency(vatBase * CHECKOUT_VAT_RATE);
   const grandTotal = roundCurrency(vatBase + vatAmount);
@@ -398,6 +429,11 @@ const Checkout = () => {
     e.preventDefault();
     if (!agreeTerms) {
       setError('Please agree to the terms and conditions');
+      return;
+    }
+
+    if (!shippingQuote || shippingQuoteLoading || shippingQuoteError) {
+      setError(shippingQuoteError || 'Please wait for the shipping fee to finish calculating.');
       return;
     }
 
@@ -780,8 +816,8 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                         <p className="text-xs text-gray-600">Eligible orders receive a provider waybill and tracking updates after booking.</p>
                       </div>
                     </div>
-                    <span className={`text-sm font-semibold ${shippingCost === 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                      {shippingCost === 0 ? 'Free' : formatPrice(shippingCost)}
+                    <span className={`text-sm font-semibold ${shippingCost === 0 && shippingQuote ? 'text-green-600' : 'text-gray-900'}`}>
+                      {shippingQuoteLoading ? 'Calculating...' : shippingQuote ? (shippingCost === 0 ? 'Free' : formatPrice(shippingCost)) : 'Select an address'}
                     </span>
                   </div>
                 </div>
@@ -961,7 +997,8 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
                   {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(discountAmount)}</span></div>}
-                  <div className="flex justify-between text-gray-500"><span>Shipping</span><span className={shippingCost === 0 ? 'text-green-500 font-medium' : 'text-gray-600'}>{shippingCost === 0 ? 'Free' : formatPrice(shippingCost)}</span></div>
+                  <div className="flex justify-between text-gray-500"><span>Shipping</span><span className={shippingCost === 0 && shippingQuote ? 'text-green-500 font-medium' : 'text-gray-600'}>{shippingQuoteLoading ? 'Calculating...' : shippingQuote ? (shippingCost === 0 ? 'Free' : formatPrice(shippingCost)) : 'Select an address'}</span></div>
+                  {shippingQuoteError && <p className="text-xs text-red-500">{shippingQuoteError}</p>}
                   <div className="flex justify-between text-gray-400 text-xs"><span>VAT (12%)</span><span>{formatPrice(vatAmount)}</span></div>
                   <div className="border-t border-slate-200 pt-2 flex justify-between"><span className="font-semibold text-gray-900">Total</span><span className="font-bold text-2xl text-gray-900">{formatPrice(grandTotal)}</span></div>
                 </div>
@@ -982,7 +1019,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
 
                 <button
                   type="submit"
-                  disabled={processing || !agreeTerms}
+                  disabled={processing || !agreeTerms || shippingQuoteLoading || !shippingQuote}
                   className="w-full mt-4 py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
                 >
                   {processing ? (
