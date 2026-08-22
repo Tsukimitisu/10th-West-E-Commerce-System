@@ -103,7 +103,8 @@ const ForgotPassword = () => {
                 <CheckCircle size={32} className="text-green-500" />
               </div>
               <h1 className="mb-2 font-display text-xl font-semibold text-slate-950">Check your email</h1>
-              <p className="mb-6 text-sm leading-6 text-slate-600">If an account matches <strong>{email}</strong>, a password reset link has been sent. Check your inbox and spam folder, then follow the instructions in the email.</p>
+              <p className="mb-2 text-sm leading-6 text-slate-600">If an account exists for this email, password reset instructions have been sent.</p>
+              <p className="mb-6 text-xs leading-5 text-slate-500">Check the inbox and spam folder for <strong>{email}</strong>.</p>
               <Link to="/login" className="inline-flex items-center gap-2 text-sm text-red-500 hover:text-orange-600 font-medium">
                 <ArrowLeft size={16} /> Back to Sign In
               </Link>

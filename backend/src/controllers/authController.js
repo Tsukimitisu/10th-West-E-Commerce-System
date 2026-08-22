@@ -942,6 +942,7 @@ export const getProfile = async (req, res) => {
 // ─── FORGOT PASSWORD ───────────────────────────────────────────────
 export const forgotPassword = async (req, res) => {
   const { email } = req.validatedData || req.body;
+  const genericResponse = 'If an account exists for this email, password reset instructions have been sent.';
 
   try {
     const user = shouldUseDatabaseReadFallback()
@@ -949,11 +950,11 @@ export const forgotPassword = async (req, res) => {
       : (await pool.query('SELECT id, name, email, oauth_provider, password_hash FROM users WHERE email = $1', [email])).rows[0];
 
     if (!user) {
-      return res.json({ message: 'If that email exists, a password reset link has been sent.' });
+      return res.json({ message: genericResponse });
     }
 
     if (user.oauth_provider && !user.password_hash) {
-      return res.json({ message: 'If that email exists, a password reset link has been sent.' });
+      return res.json({ message: genericResponse });
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -1008,10 +1009,10 @@ export const forgotPassword = async (req, res) => {
     });
 
     await logActivity({ userId: user.id, action: 'password_reset_requested', ipAddress: req.clientIp, userAgent: req.clientUa });
-    res.json({ message: 'If that email exists, a password reset link has been sent.' });
+    res.json({ message: genericResponse });
   } catch (error) {
     console.error('Forgot password error:', sanitizeDatabaseError(error));
-    res.json({ message: 'If that email exists, a password reset link has been sent.' });
+    res.json({ message: genericResponse });
   }
 };
 
