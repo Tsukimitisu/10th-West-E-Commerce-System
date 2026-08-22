@@ -25,6 +25,7 @@ import {
   classifyPhilippineShippingZone,
 } from './shippingLocation.js';
 import { estimateDeliveryDistance } from './shippingDistance.js';
+import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../../constants/commerce.js';
 
 export { classifyPhilippineShippingZone } from './shippingLocation.js';
 
@@ -155,16 +156,16 @@ export const normalizeShippingQuoteItems = (input) => {
       ? null
       : Number(variantValue);
     const quantity = Number(raw?.quantity);
-    if (!Number.isInteger(productId) || productId <= 0 || !Number.isInteger(quantity) || quantity <= 0 || quantity > 100) {
-      throw Object.assign(new Error('Each item requires a valid product_id and quantity from 1 to 100.'), { status: 400 });
+    if (!Number.isInteger(productId) || productId <= 0 || !Number.isInteger(quantity) || quantity <= 0 || quantity > MAX_ITEM_QUANTITY) {
+      throw Object.assign(new Error(quantity > MAX_ITEM_QUANTITY ? MAX_ITEM_QUANTITY_MESSAGE : `Each item requires a valid product_id and quantity from 1 to ${MAX_ITEM_QUANTITY}.`), { status: 400 });
     }
     if (variantId !== null && (!Number.isInteger(variantId) || variantId <= 0)) {
       throw Object.assign(new Error('variant_id is invalid.'), { status: 400 });
     }
     const key = `${productId}:${variantId || 0}`;
     const combined = (merged.get(key)?.quantity || 0) + quantity;
-    if (combined > 100) {
-      throw Object.assign(new Error('Combined item quantity cannot exceed 100.'), { status: 400 });
+    if (combined > MAX_ITEM_QUANTITY) {
+      throw Object.assign(new Error(MAX_ITEM_QUANTITY_MESSAGE), { status: 400 });
     }
     merged.set(key, { product_id: productId, variant_id: variantId, quantity: combined });
   }

@@ -1,8 +1,7 @@
 import crypto from 'crypto';
 import pool from '../config/database.js';
 import { isDatabaseConnectivityError } from '../services/supabaseRest.js';
-
-const MAX_ITEM_QUANTITY = 99;
+import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
 
 const toPositiveInt = (value) => {
   const parsed = Number(value);
@@ -224,19 +223,38 @@ export const mergeGuestCartIntoUserCart = async (guestSessionId, userId) => {
         [userCart.id, guestItem.product_id, guestItem.variant_id]
       );
 
-      if (existingItemResult.rows.length > 0) {
+      const stockResult = guestItem.variant_id
+        ? await client.query(
+            `SELECT stock_quantity - reserved_stock AS available_stock
+             FROM product_variants WHERE id = $1 AND product_id = $2 FOR UPDATE`,
+            [guestItem.variant_id, guestItem.product_id]
+          )
+        : await client.query(
+            `SELECT stock_quantity - reserved_stock AS available_stock
+             FROM products WHERE id = $1 FOR UPDATE`,
+            [guestItem.product_id]
+          );
+      const availableStock = Math.max(0, Number(stockResult.rows[0]?.available_stock || 0));
+      const mergedQuantity = Number(existingItemResult.rows[0]?.quantity || 0) + Number(guestItem.quantity || 0);
+      const safeQuantity = Math.min(MAX_ITEM_QUANTITY, availableStock, mergedQuantity);
+
+      if (safeQuantity <= 0) {
+        if (existingItemResult.rows[0]?.id) {
+          await client.query('DELETE FROM cart_items WHERE id = $1', [existingItemResult.rows[0].id]);
+        }
+      } else if (existingItemResult.rows.length > 0) {
         await client.query(
           `UPDATE cart_items
-           SET quantity = quantity + $1,
+           SET quantity = $1,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $2`,
-          [guestItem.quantity, existingItemResult.rows[0].id]
+          [safeQuantity, existingItemResult.rows[0].id]
         );
       } else {
         await client.query(
           `INSERT INTO cart_items (cart_id, product_id, variant_id, quantity)
            VALUES ($1, $2, $3, $4)`,
-          [userCart.id, guestItem.product_id, guestItem.variant_id, guestItem.quantity]
+          [userCart.id, guestItem.product_id, guestItem.variant_id, safeQuantity]
         );
       }
     }
@@ -313,7 +331,7 @@ export const addToCart = async (req, res) => {
 
   if (!quantity || quantity > MAX_ITEM_QUANTITY) {
     return res.status(400).json({
-      message: `Quantity must be between 1 and ${MAX_ITEM_QUANTITY}`,
+      message: quantity > MAX_ITEM_QUANTITY ? MAX_ITEM_QUANTITY_MESSAGE : `Quantity must be between 1 and ${MAX_ITEM_QUANTITY}`,
     });
   }
 
@@ -379,7 +397,7 @@ export const addToCart = async (req, res) => {
         }
 
         if (nextQuantity > MAX_ITEM_QUANTITY) {
-          const qtyError = new Error(`Quantity must be between 1 and ${MAX_ITEM_QUANTITY}`);
+          const qtyError = new Error(MAX_ITEM_QUANTITY_MESSAGE);
           qtyError.statusCode = 400;
           throw qtyError;
         }
@@ -422,7 +440,7 @@ export const updateCartItem = async (req, res) => {
 
   if (!quantity || quantity > MAX_ITEM_QUANTITY) {
     return res.status(400).json({
-      message: `Quantity must be between 1 and ${MAX_ITEM_QUANTITY}`,
+      message: quantity > MAX_ITEM_QUANTITY ? MAX_ITEM_QUANTITY_MESSAGE : `Quantity must be between 1 and ${MAX_ITEM_QUANTITY}`,
     });
   }
 

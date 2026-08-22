@@ -4,6 +4,7 @@ import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft, 
 import { useCart } from '../../context/CartContext';
 import { getCurrentAuthUser } from '../../services/authSession.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../../constants/commerce.js';
 
 const CART_VAT_RATE = 0.12;
 const CART_FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
@@ -85,8 +86,6 @@ const Cart = () => {
     removeFromCart(productId);
   };
 
-  const MAX_QUANTITY = 50;
-
   const handleQuantityInputChange = (item, rawValue) => {
     if (rawValue === '') {
       setLocalQuantities(prev => ({ ...prev, [item.productId]: '' }));
@@ -114,9 +113,9 @@ const Cart = () => {
     const stock = Number(item.product.stock_quantity ?? Infinity);
     let errorMsg = null;
 
-    if (val > MAX_QUANTITY) {
-      val = MAX_QUANTITY;
-      errorMsg = `Maximum quantity limit is ${MAX_QUANTITY}.`;
+    if (val > MAX_ITEM_QUANTITY) {
+      val = MAX_ITEM_QUANTITY;
+      errorMsg = MAX_ITEM_QUANTITY_MESSAGE;
     }
     if (Number.isFinite(stock) && val > stock) {
       val = stock;
@@ -142,8 +141,8 @@ const Cart = () => {
 
   const handleIncreaseQty = (item) => {
     const stock = Number(item.product.stock_quantity ?? Infinity);
-    if (item.quantity >= MAX_QUANTITY) {
-      setQuantityErrors((prev) => ({ ...prev, [item.productId]: `Maximum quantity limit is ${MAX_QUANTITY}.` }));
+    if (item.quantity >= MAX_ITEM_QUANTITY) {
+      setQuantityErrors((prev) => ({ ...prev, [item.productId]: MAX_ITEM_QUANTITY_MESSAGE }));
       return;
     }
     if (Number.isFinite(stock) && item.quantity >= stock) {

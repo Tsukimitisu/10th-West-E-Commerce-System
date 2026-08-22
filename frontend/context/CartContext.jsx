@@ -3,6 +3,7 @@ import { validateDiscountCode, ensureCsrfToken } from '../services/api';
 import { supabase } from '../services/supabase.js';
 import { getCurrentAuthUser } from '../services/authSession.js';
 import { API_URL } from '../services/apiConfig.js';
+import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
 
 const USE_SUPABASE = false;
 const GUEST_CART_KEY = 'shopCoreGuestCart';
@@ -231,12 +232,12 @@ export const CartProvider = ({ children }) => {
 
       const existing = merged.get(productId);
       if (existing) {
-        existing.quantity += quantity;
+        existing.quantity = Math.min(MAX_ITEM_QUANTITY, existing.quantity + quantity);
         if (!existing.product && rawItem?.product) existing.product = rawItem.product;
       } else {
         merged.set(productId, {
           productId,
-          quantity,
+          quantity: Math.min(MAX_ITEM_QUANTITY, quantity),
           product: rawItem?.product || null,
         });
       }
@@ -467,8 +468,8 @@ export const CartProvider = ({ children }) => {
       const maxStock = resolveMaxStock(stockSource);
       const desiredQuantity = (existingItem?.quantity || 0) + guestItem.quantity;
       const nextQuantity = Number.isFinite(maxStock)
-        ? Math.max(0, Math.min(desiredQuantity, maxStock))
-        : desiredQuantity;
+        ? Math.max(0, Math.min(desiredQuantity, maxStock, MAX_ITEM_QUANTITY))
+        : Math.min(desiredQuantity, MAX_ITEM_QUANTITY);
 
       if (nextQuantity <= 0) continue;
 
@@ -494,7 +495,7 @@ export const CartProvider = ({ children }) => {
 
   const addToCart = async (product, quantity = 1) => {
     const requestedQty = Number(quantity);
-    if (!Number.isFinite(requestedQty) || requestedQty < 1) {
+    if (!Number.isInteger(requestedQty) || requestedQty < 1) {
       setError('Invalid quantity.');
       return false;
     }
@@ -504,6 +505,11 @@ export const CartProvider = ({ children }) => {
     const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
     const currentQty = existingItem?.quantity || 0;
     const nextQty = currentQty + requestedQty;
+
+    if (requestedQty > MAX_ITEM_QUANTITY || nextQty > MAX_ITEM_QUANTITY) {
+      setError(MAX_ITEM_QUANTITY_MESSAGE);
+      return false;
+    }
 
     if (Number.isFinite(maxStock) && maxStock <= 0) {
       setError('This item is out of stock.');
@@ -601,10 +607,17 @@ export const CartProvider = ({ children }) => {
           setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
           return true;
         } else {
-          throw new Error('Failed to add item to cart');
+          const payload = await response.json().catch(() => ({}));
+          const requestError = new Error(payload.message || 'Failed to add item to cart');
+          requestError.status = response.status;
+          throw requestError;
         }
       } catch (err) {
         console.error('Error adding to cart:', err);
+        if (Number(err?.status) >= 400 && Number(err?.status) < 500) {
+          setError(err.message || 'Failed to add item to cart');
+          return false;
+        }
         // Fall back to local cart
         const fallbackAdded = addToCartLocal(product, requestedQty);
         if (!fallbackAdded) {
@@ -622,7 +635,7 @@ export const CartProvider = ({ children }) => {
 
   const addToCartLocal = (product, quantity) => {
     const requestedQty = Number(quantity);
-    if (!Number.isFinite(requestedQty) || requestedQty < 1) {
+    if (!Number.isInteger(requestedQty) || requestedQty < 1) {
       setError('Invalid quantity.');
       return false;
     }
@@ -630,6 +643,11 @@ export const CartProvider = ({ children }) => {
     const variantId = product?.selected_variant?.id ?? product?.variant_id ?? null;
     const existingItem = items.find(item => item.productId === product.id && Number(item.variantId || 0) === Number(variantId || 0));
     const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
+
+    if (requestedQty > MAX_ITEM_QUANTITY || (existingItem?.quantity || 0) + requestedQty > MAX_ITEM_QUANTITY) {
+      setError(MAX_ITEM_QUANTITY_MESSAGE);
+      return false;
+    }
 
     if (Number.isFinite(maxStock) && maxStock <= 0) {
       setError('This item is out of stock.');
@@ -741,7 +759,12 @@ export const CartProvider = ({ children }) => {
   };
 
   const updateQuantity = async (productId, quantity) => {
-    if (quantity < 1) return;
+    if (!Number.isInteger(quantity) || quantity < 1) return false;
+
+    if (quantity > MAX_ITEM_QUANTITY) {
+      setError(MAX_ITEM_QUANTITY_MESSAGE);
+      return false;
+    }
 
     const targetItem = items.find((item) => item.productId === productId);
     const maxStock = resolveMaxStock(targetItem?.product);
@@ -823,6 +846,10 @@ export const CartProvider = ({ children }) => {
   };
 
   const updateQuantityLocal = (productId, quantity) => {
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_ITEM_QUANTITY) {
+      setError(quantity > MAX_ITEM_QUANTITY ? MAX_ITEM_QUANTITY_MESSAGE : 'Invalid quantity.');
+      return false;
+    }
     setItems(currentItems => {
       const target = currentItems.find((item) => item.productId === productId);
       const maxStock = resolveMaxStock(target?.product);

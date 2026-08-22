@@ -8,6 +8,7 @@ import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
 import { getCurrentAuthUser } from '../../services/authSession.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../../constants/commerce.js';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 const CHECKOUT_TERMS_SESSION_KEY = 'checkoutTermsAccepted';
@@ -231,8 +232,6 @@ const Checkout = () => {
 
   const [localQuantities, setLocalQuantities] = useState({});
   const [quantityErrors, setQuantityErrors] = useState({});
-  const MAX_QUANTITY = 50;
-
   const handleQuantityInputChange = (item, rawValue) => {
     if (rawValue === '') {
       setLocalQuantities(prev => ({ ...prev, [item.productId]: '' }));
@@ -260,9 +259,9 @@ const Checkout = () => {
     const stock = Number(item.product.stock_quantity ?? Infinity);
     let errorMsg = null;
 
-    if (val > MAX_QUANTITY) {
-      val = MAX_QUANTITY;
-      errorMsg = `Maximum quantity limit is ${MAX_QUANTITY}.`;
+    if (val > MAX_ITEM_QUANTITY) {
+      val = MAX_ITEM_QUANTITY;
+      errorMsg = MAX_ITEM_QUANTITY_MESSAGE;
     }
     if (Number.isFinite(stock) && val > stock) {
       val = stock;
@@ -926,7 +925,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                                 }
                                 let val = parseInt(rawVal, 10);
                                 if (isNaN(val)) return;
-                                const maxQty = 50;
+                                const maxQty = MAX_ITEM_QUANTITY;
                                 const stock = Number(item.product.stock_quantity ?? Infinity);
                                 if (val < 1) val = 1;
                                 if (val > maxQty) val = maxQty;
@@ -943,8 +942,8 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                             />
                             <button
                               type="button"
-                              disabled={buyNowQty >= (item.product.stock_quantity || 100) || buyNowQty >= 50}
-                              onClick={() => setBuyNowQty(Math.min((item.product.stock_quantity || 100), Math.min(50, buyNowQty + 1)))}
+                              disabled={buyNowQty >= (item.product.stock_quantity || MAX_ITEM_QUANTITY) || buyNowQty >= MAX_ITEM_QUANTITY}
+                              onClick={() => setBuyNowQty(Math.min((item.product.stock_quantity || MAX_ITEM_QUANTITY), Math.min(MAX_ITEM_QUANTITY, buyNowQty + 1)))}
                               className="w-5 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed rounded text-gray-700 text-xs transition-colors"
                             >
                               +
@@ -975,12 +974,12 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                               />
                               <button
                                 type="button"
-                                disabled={item.quantity >= (item.product.stock_quantity || 100) || item.quantity >= 50}
+                                disabled={item.quantity >= (item.product.stock_quantity || MAX_ITEM_QUANTITY) || item.quantity >= MAX_ITEM_QUANTITY}
                                 onClick={() => {
-                                  const maxQty = 50;
+                                  const maxQty = MAX_ITEM_QUANTITY;
                                   const stock = Number(item.product.stock_quantity ?? Infinity);
                                   if (item.quantity >= maxQty) {
-                                    setQuantityErrors(prev => ({ ...prev, [item.productId]: `Maximum quantity limit is ${maxQty}.` }));
+                                    setQuantityErrors(prev => ({ ...prev, [item.productId]: MAX_ITEM_QUANTITY_MESSAGE }));
                                     return;
                                   }
                                   if (Number.isFinite(stock) && item.quantity >= stock) {

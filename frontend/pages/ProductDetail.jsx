@@ -6,6 +6,7 @@ import { useCart } from '../context/CartContext';
 import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
 import StarRating from '../components/StarRating';
+import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
 import ReviewCard from '../components/ReviewCard';
 import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
 import { handleProductImageError, PRODUCT_IMAGE_FALLBACK, resolveProductImageUrl } from '../utils/productImages.js';
@@ -1066,13 +1067,13 @@ const ProductDetail = () => {
                     let val = parseInt(rawVal, 10);
                     if (isNaN(val)) return;
                     
-                    const maxQty = 50;
+                    const maxQty = MAX_ITEM_QUANTITY;
                     let errorMsg = '';
                     
                     if (val < 1) val = 1;
                     if (val > maxQty) {
                       val = maxQty;
-                      errorMsg = `Maximum quantity limit is ${maxQty}.`;
+                      errorMsg = MAX_ITEM_QUANTITY_MESSAGE;
                     }
                     if (val > maxStock) {
                       val = Math.max(1, maxStock);
@@ -1093,9 +1094,9 @@ const ProductDetail = () => {
                 <button
                   onClick={() => {
                     setQuantity((q) => {
-                      const maxQty = 50;
+                      const maxQty = MAX_ITEM_QUANTITY;
                       if (q >= maxQty) {
-                        setQuantityError(`Maximum quantity limit is ${maxQty}.`);
+                        setQuantityError(MAX_ITEM_QUANTITY_MESSAGE);
                         return maxQty;
                       }
                       if (q >= maxStock) {

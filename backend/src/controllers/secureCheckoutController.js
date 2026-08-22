@@ -9,6 +9,7 @@ import { createOrderWorkflowNotification } from '../utils/notifications.js';
 import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl } from '../utils/productImages.js';
 import { calculateInternalShippingQuote } from '../services/shipping/internalShipping.js';
+import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
 
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
@@ -29,13 +30,13 @@ const normalizeItems = (input) => {
     const variantValue = raw?.variant_id ?? raw?.variantId;
     const variantId = variantValue === undefined || variantValue === null || variantValue === '' ? null : Number(variantValue);
     const quantity = Number(raw?.quantity);
-    if (!Number.isInteger(productId) || productId <= 0 || !Number.isInteger(quantity) || quantity <= 0 || quantity > 100) {
-      throw fail(400, 'Each item requires a valid product_id and quantity from 1 to 100.');
+    if (!Number.isInteger(productId) || productId <= 0 || !Number.isInteger(quantity) || quantity <= 0 || quantity > MAX_ITEM_QUANTITY) {
+      throw fail(400, quantity > MAX_ITEM_QUANTITY ? MAX_ITEM_QUANTITY_MESSAGE : `Each item requires a valid product_id and quantity from 1 to ${MAX_ITEM_QUANTITY}.`);
     }
     if (variantId !== null && (!Number.isInteger(variantId) || variantId <= 0)) throw fail(400, 'variant_id is invalid.');
     const key = `${productId}:${variantId || 0}`;
     const nextQuantity = (merged.get(key)?.quantity || 0) + quantity;
-    if (nextQuantity > 100) throw fail(400, 'Combined item quantity cannot exceed 100.');
+    if (nextQuantity > MAX_ITEM_QUANTITY) throw fail(400, MAX_ITEM_QUANTITY_MESSAGE);
     merged.set(key, { product_id: productId, variant_id: variantId, quantity: nextQuantity });
   }
   return [...merged.values()];
