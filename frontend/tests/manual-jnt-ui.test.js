@@ -9,7 +9,7 @@ test('checkout displays the authenticated internal shipping quote and includes i
     read('pages/customer/Checkout.jsx'),
     read('services/api.js'),
   ]);
-  assert.match(checkout, /getShippingQuote\(\{ address_id: Number\(selectedAddress\), items: shippingQuoteItems \}\)/);
+  assert.match(checkout, /getShippingQuote\(\{[\s\S]*?address_id:[\s\S]*?address:[\s\S]*?items: shippingQuoteItems/);
   assert.match(checkout, /shippingQuote\?\.shipping_fee/);
   assert.match(checkout, /<span>Shipping<\/span>/);
   assert.match(checkout, /total \+ shippingCost/);

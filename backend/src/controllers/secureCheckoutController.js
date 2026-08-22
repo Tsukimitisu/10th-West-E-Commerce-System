@@ -132,7 +132,7 @@ const loadAndReserveItems = async (client, items, expiresAt) => {
          WHERE id = $2 AND stock_quantity - reserved_stock >= $1 RETURNING id`,
         [item.quantity, variant.id]
       );
-      if (!updated.rowCount) throw fail(409, `Insufficient stock for ${product.name} (${variant.variant_value}).`);
+      if (!updated.rowCount) throw fail(409, `Insufficient stock for ${product.name} (${variant.variant_value}).`, undefined, 'OUT_OF_STOCK');
     } else {
       stockBefore = Number(product.stock_quantity);
       const updated = await client.query(
@@ -140,7 +140,7 @@ const loadAndReserveItems = async (client, items, expiresAt) => {
          WHERE id = $2 AND stock_quantity - reserved_stock >= $1 RETURNING id`,
         [item.quantity, product.id]
       );
-      if (!updated.rowCount) throw fail(409, `Insufficient stock for ${product.name}.`);
+      if (!updated.rowCount) throw fail(409, `Insufficient stock for ${product.name}.`, undefined, 'OUT_OF_STOCK');
     }
     if (!Number.isFinite(unitPrice) || unitPrice < 0) throw fail(409, `${product.name} has an invalid price.`);
     subtotal = roundMoney(subtotal + unitPrice * item.quantity);

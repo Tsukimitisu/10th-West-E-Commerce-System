@@ -171,7 +171,7 @@ const getMemoryOrderBundle = (id) => {
   return { order, items };
 };
 
-const parseStatusFilter = (query = {}) => {
+export const parseStatusFilter = (query = {}) => {
   if (query.status === undefined || query.status === null || String(query.status).trim() === '') return null;
   const status = String(query.status).trim().toLowerCase();
   if (!VALID_ORDER_STATUS_SET.has(status)) {

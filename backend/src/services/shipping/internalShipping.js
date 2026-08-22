@@ -173,13 +173,20 @@ export const normalizeShippingQuoteItems = (input) => {
   return [...merged.values()];
 };
 
-export const calculateDatabaseShippingQuote = async (db, { userId, addressId, address: addressPayload, items }) => {
+export const calculateDatabaseShippingQuote = async (db, {
+  userId,
+  addressId,
+  address: addressPayload,
+  items,
+  validateAddressLocation = true,
+}) => {
   const normalizedItems = normalizeShippingQuoteItems(items);
   const address = await resolveCheckoutAddress(db, {
     userId,
     addressId,
     address: addressPayload,
     saveAddress: false,
+    validateLocation: validateAddressLocation,
   });
 
   let subtotal = 0;

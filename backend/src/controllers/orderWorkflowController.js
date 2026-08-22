@@ -53,6 +53,7 @@ export const commitCodReservations = async (client, orderId, actorId) => {
     if (!stock.rowCount) {
       const error = new Error('Reserved inventory could not be committed.');
       error.status = 409;
+      error.code = 'OUT_OF_STOCK';
       throw error;
     }
     await client.query(

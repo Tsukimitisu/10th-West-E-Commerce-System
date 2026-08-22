@@ -122,7 +122,11 @@ test('database quote validates address ownership and ignores frontend prices and
     async query(sql, params) {
       calls.push({ sql, params });
       if (sql.includes('FROM addresses')) {
-        return { rows: [{ id: 10, user_id: 7, state: 'NCR', city: 'Quezon City' }] };
+        return { rows: [{
+          id: 10, user_id: 7, recipient_name: 'Test Rider', phone: '09171234567',
+          street: '1 Main Street', barangay: 'Bagumbayan', state: 'NCR', city: 'Quezon City',
+          postal_code: '1110', country: 'Philippines', lat: null, lng: null,
+        }] };
       }
       if (sql.includes('FROM products p')) {
         return { rows: [{
@@ -149,4 +153,30 @@ test('database quote validates address ownership and ignores frontend prices and
     }),
     (error) => error.status === 404 && /address/i.test(error.message)
   );
+});
+
+test('database quote accepts a complete new unsaved checkout address', async () => {
+  const db = {
+    async query(sql) {
+      if (String(sql).includes('FROM products p')) {
+        return { rows: [{
+          id: 1, name: 'Helmet', price: '1250.00', sale_price: null,
+          weight_kg: '1', is_on_sale: false, status: 'active', is_deleted: false, has_variants: false,
+        }] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  };
+  const quote = await calculateDatabaseShippingQuote(db, {
+    userId: 7,
+    address: {
+      recipient_name: 'Test Rider', phone: '09171234567', street: '1 Main Street',
+      barangay: 'Bagumbayan', city: 'Quezon City', state: 'Metro Manila (NCR)',
+      postal_code: '1110', country: 'Philippines',
+    },
+    items: [{ product_id: 1, quantity: 1 }],
+    validateAddressLocation: false,
+  });
+  assert.equal(quote.shipping_zone, 'metro_manila');
+  assert.equal(quote.actual_weight_kg, 1);
 });
