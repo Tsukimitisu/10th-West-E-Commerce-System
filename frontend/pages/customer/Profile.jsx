@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { User, Mail, Phone, Lock, Eye, EyeOff, Save, Check, AlertCircle, Shield, Camera, Trash2, AlertTriangle, Download } from 'lucide-react';
-import { updateProfile, uploadProfileAvatar, changePassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData } from '../../services/api';
+import { updateProfile, uploadProfileAvatar, changePassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData, getAuthAvailability } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
 import { clearCurrentAuthUser, getCurrentAuthUser, setCurrentAuthUser, subscribeAuthChanges } from '../../services/authSession';
 
@@ -28,6 +28,11 @@ const Profile = () => {
   const [totpCode, setTotpCode] = useState('');
   const [twoFAEnabled, setTwoFAEnabled] = useState(user?.two_factor_enabled || false);
   const [recoveryCodes, setRecoveryCodes] = useState([]);
+  const [twoFAAvailable, setTwoFAAvailable] = useState(null);
+  const [twoFAPassword, setTwoFAPassword] = useState('');
+  const [twoFADisablePassword, setTwoFADisablePassword] = useState('');
+  const [twoFAAction, setTwoFAAction] = useState('');
+  const [twoFAMessage, setTwoFAMessage] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletePassword, setDeletePassword] = useState('');
@@ -66,6 +71,12 @@ const Profile = () => {
       setAvatarPreview(user?.avatar || '');
     }
   }, [user?.avatar, avatarFile]);
+
+  useEffect(() => {
+    getAuthAvailability()
+      .then((availability) => setTwoFAAvailable(Boolean(availability?.two_factor?.available)))
+      .catch(() => setTwoFAAvailable(false));
+  }, []);
 
   useEffect(() => () => {
     if (avatarPreview?.startsWith('blob:')) {
@@ -295,13 +306,23 @@ const Profile = () => {
   };
 
   const handle2FASetup = async () => {
+    setTwoFAAction('setup');
+    setTwoFAMessage('');
     try {
-      const data = await setup2FA();
+      const data = await setup2FA(twoFAPassword);
       setTwoFASetup(data);
-    } catch {}
+      setTwoFAPassword('');
+      setTwoFAMessage('Scan the QR code and enter a current code to finish enabling 2FA.');
+    } catch (error) {
+      setTwoFAMessage(error.message || 'Two-factor setup could not be started.');
+    } finally {
+      setTwoFAAction('');
+    }
   };
 
   const handle2FAVerify = async () => {
+    setTwoFAAction('verify');
+    setTwoFAMessage('');
     try {
       const result = await verify2FA(totpCode);
       setRecoveryCodes(Array.isArray(result?.recovery_codes) ? result.recovery_codes : []);
@@ -310,18 +331,29 @@ const Profile = () => {
       setTotpCode('');
       const saved = { ...user, two_factor_enabled: true };
       saveAuthUser(saved);
-    } catch {}
+      setTwoFAMessage('Two-factor authentication enabled successfully.');
+    } catch (error) {
+      setTwoFAMessage(error.message || 'The authentication code could not be verified.');
+    } finally {
+      setTwoFAAction('');
+    }
   };
 
   const handle2FADisable = async () => {
-    const password = window.prompt('Enter your password to disable 2FA:');
-    if (!password) return;
+    setTwoFAAction('disable');
+    setTwoFAMessage('');
     try {
-      await disable2FA(password);
+      await disable2FA(twoFADisablePassword);
       setTwoFAEnabled(false);
+      setTwoFADisablePassword('');
       const saved = { ...user, two_factor_enabled: false };
       saveAuthUser(saved);
-    } catch {}
+      setTwoFAMessage('Two-factor authentication disabled.');
+    } catch (error) {
+      setTwoFAMessage(error.message || 'Two-factor authentication could not be disabled.');
+    } finally {
+      setTwoFAAction('');
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -553,6 +585,11 @@ const Profile = () => {
 
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <h2 className="font-display font-semibold text-lg text-gray-900 mb-4 flex items-center gap-2"><Shield size={20} className="text-red-500" /> Two-Factor Authentication</h2>
+          {twoFAMessage && (
+            <div role="status" className={`mb-4 rounded-lg border p-3 text-sm ${twoFAMessage.toLowerCase().includes('success') || twoFAMessage.toLowerCase().includes('scan') || twoFAMessage.toLowerCase().includes('disabled') ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+              {twoFAMessage}
+            </div>
+          )}
           {recoveryCodes.length > 0 && (
             <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
               <p className="font-semibold text-amber-900">Save these recovery codes now. They will not be shown again.</p>
@@ -562,8 +599,13 @@ const Profile = () => {
               <button type="button" onClick={() => setRecoveryCodes([])} className="mt-3 text-sm underline">I saved them</button>
             </div>
           )}
-          {twoFAEnabled ? (
-            <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
+          {twoFAAvailable === false ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-medium text-gray-700">Two-factor authentication is not configured yet.</p>
+              <p className="mt-1 text-xs text-gray-500">Contact support before relying on this account protection.</p>
+            </div>
+          ) : twoFAEnabled ? (
+            <div className="flex flex-col gap-4 p-4 bg-green-50 rounded-lg sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <Check size={20} className="text-green-600" />
                 <div>
@@ -571,7 +613,19 @@ const Profile = () => {
                   <p className="text-xs text-green-600">Your account is protected with two-factor authentication.</p>
                 </div>
               </div>
-              <button onClick={handle2FADisable} className="px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 border border-red-200 rounded-lg transition-colors duration-500">Disable</button>
+              <div className="flex flex-col gap-2 sm:w-64">
+                <input
+                  type="password"
+                  value={twoFADisablePassword}
+                  onChange={(event) => setTwoFADisablePassword(event.target.value)}
+                  placeholder="Current password"
+                  autoComplete="current-password"
+                  className="w-full rounded-lg border border-green-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+                <button onClick={handle2FADisable} disabled={twoFAAction !== '' || (!user?.oauth_provider && !twoFADisablePassword)} className="px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 border border-red-200 rounded-lg transition-colors duration-500 disabled:cursor-not-allowed disabled:opacity-50">
+                  {twoFAAction === 'disable' ? 'Disabling...' : 'Disable 2FA'}
+                </button>
+              </div>
             </div>
           ) : twoFASetup ? (
             <div className="space-y-4">
@@ -582,17 +636,31 @@ const Profile = () => {
               <div className="flex gap-2">
                 <input type="text" value={totpCode} onChange={e => setTotpCode(e.target.value.replace(/\D/g, ''))} maxLength={6} placeholder="000000"
                   className="flex-1 px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-center tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-red-500" />
-                <button onClick={handle2FAVerify} disabled={totpCode.length !== 6}
-                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors duration-500">Verify</button>
+                <button onClick={handle2FAVerify} disabled={totpCode.length !== 6 || twoFAAction !== ''}
+                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors duration-500">{twoFAAction === 'verify' ? 'Verifying...' : 'Verify'}</button>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
+            <div className="flex flex-col gap-4 p-4 bg-gray-100 rounded-lg sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-700">2FA is disabled</p>
                 <p className="text-xs text-gray-400">Add an extra layer of security to your account.</p>
               </div>
-              <button onClick={handle2FASetup} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all duration-300 ease-in-out">Enable 2FA</button>
+              <div className="flex flex-col gap-2 sm:w-64">
+                {!user?.oauth_provider && (
+                  <input
+                    type="password"
+                    value={twoFAPassword}
+                    onChange={(event) => setTwoFAPassword(event.target.value)}
+                    placeholder="Confirm current password"
+                    autoComplete="current-password"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                )}
+                <button onClick={handle2FASetup} disabled={twoFAAvailable !== true || twoFAAction !== '' || (!user?.oauth_provider && !twoFAPassword)} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white rounded-lg transition-all duration-300 ease-in-out disabled:cursor-not-allowed">
+                  {twoFAAction === 'setup' ? 'Preparing...' : 'Enable 2FA'}
+                </button>
+              </div>
             </div>
           )}
         </div>

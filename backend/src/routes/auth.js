@@ -247,9 +247,21 @@ router.put('/change-password',
 );
 
 // ─── 2FA ───────────────────────────────────────────────────────────
-router.get('/2fa/setup', authenticateToken, setup2FA);
+router.post(
+  '/2fa/setup',
+  authenticateToken,
+  body('password').optional({ nullable: true }).isString().withMessage('Password confirmation is invalid'),
+  validate,
+  setup2FA
+);
 router.post('/2fa/verify', authenticateToken, body('totp_code').notEmpty(), validate, verify2FA);
-router.delete('/2fa', authenticateToken, body('password').notEmpty(), validate, disable2FA);
+router.delete(
+  '/2fa',
+  authenticateToken,
+  body('password').optional({ nullable: true }).isString().withMessage('Password confirmation is invalid'),
+  validate,
+  disable2FA
+);
 
 // ─── Session management ────────────────────────────────────────────
 router.get('/sessions', authenticateToken, getActiveSessions);

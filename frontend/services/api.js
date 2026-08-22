@@ -609,6 +609,8 @@ export const getProfile = async ({ optional = false } = {}) => {
   return await authenticatedFetch(`${API_URL}/auth/profile${optional ? '/optional' : ''}`);
 };
 
+export const getAuthAvailability = async () => authenticatedFetch(`${API_URL}/auth/providers`);
+
 // Delete account - Right to be Forgotten (RA 10173 Â§18)
 export const deleteAccount = async (password) => {
   return await authenticatedFetch(`${API_URL}/auth/account`, {
@@ -671,8 +673,11 @@ export const changePassword = async (currentPassword, newPassword) => {
 
 
 // 2FA
-export const setup2FA = async () => {
-  return authenticatedFetch(`${API_URL}/auth/2fa/setup`);
+export const setup2FA = async (password = '') => {
+  return authenticatedFetch(`${API_URL}/auth/2fa/setup`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
 };
 
 export const verify2FA = async (totp_code) => {

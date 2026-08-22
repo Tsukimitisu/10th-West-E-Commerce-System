@@ -1154,8 +1154,29 @@ export const changePassword = async (req, res) => {
 // ─── 2FA: SETUP ───────────────────────────────────────────────────
 export const setup2FA = async (req, res) => {
   try {
-    const user = await pool.query('SELECT id, email FROM users WHERE id = $1', [req.user.id]);
+    const user = await pool.query('SELECT id, email, password_hash, two_factor_enabled FROM users WHERE id = $1', [req.user.id]);
     if (user.rows.length === 0) return res.status(404).json({ message: 'User not found' });
+
+    if (user.rows[0].two_factor_enabled) {
+      return res.status(409).json({ message: 'Two-factor authentication is already enabled.' });
+    }
+
+    if (user.rows[0].password_hash) {
+      const password = String(req.body?.password || '');
+      if (!password) {
+        return res.status(400).json({
+          message: 'Enter your current password before enabling two-factor authentication.',
+          code: 'PASSWORD_CONFIRMATION_REQUIRED',
+        });
+      }
+      const passwordMatches = await bcrypt.compare(password, user.rows[0].password_hash);
+      if (!passwordMatches) {
+        return res.status(401).json({
+          message: 'Current password is incorrect.',
+          code: 'PASSWORD_CONFIRMATION_FAILED',
+        });
+      }
+    }
 
     const secret = speakeasy.generateSecret({
       name: `10th West Moto (${user.rows[0].email})`,
@@ -1214,6 +1235,12 @@ export const disable2FA = async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
 
     if (result.rows[0].password_hash) {
+      if (!password) {
+        return res.status(400).json({
+          message: 'Enter your current password before disabling two-factor authentication.',
+          code: 'PASSWORD_CONFIRMATION_REQUIRED',
+        });
+      }
       const isValid = await bcrypt.compare(password, result.rows[0].password_hash);
       if (!isValid) return res.status(401).json({ message: 'Invalid password' });
     }
