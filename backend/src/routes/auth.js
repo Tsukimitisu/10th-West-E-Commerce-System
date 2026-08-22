@@ -24,11 +24,21 @@ import {
 
 const router = express.Router();
 
+export const getAuthAvailability = () => ({
+  google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && passport._strategy('google')),
+  facebook: Boolean(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET && passport._strategy('facebook')),
+  two_factor: {
+    available: true,
+    method: 'totp',
+  },
+  phone_verification: {
+    available: false,
+    status: 'unavailable',
+  },
+});
+
 router.get('/providers', (_req, res) => {
-  res.json({
-    google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && passport._strategy('google')),
-    facebook: Boolean(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET && passport._strategy('facebook')),
-  });
+  res.json(getAuthAvailability());
 });
 
 const getFrontendUrl = () => resolveFrontendOrigin();
