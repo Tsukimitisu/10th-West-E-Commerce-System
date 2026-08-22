@@ -11,6 +11,7 @@ import { normalizeProductImageUrl } from '../utils/productImages.js';
 import { calculateInternalShippingQuote } from '../services/shipping/internalShipping.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
 import { normalizeCheckoutAddress, resolveCheckoutAddress } from '../utils/checkoutAddress.js';
+import { commitCodReservations } from './orderWorkflowController.js';
 
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
@@ -211,6 +212,7 @@ export const createCheckout = async (req, res) => {
   let client;
   let idempotencyKey;
   let requestHash;
+  let stockUpdates = [];
   try {
     const items = normalizeItems(req.body?.items);
     const paymentMethod = String(req.body?.payment_method || '').trim().toLowerCase();
@@ -307,6 +309,9 @@ export const createCheckout = async (req, res) => {
         [order.id, item.product_id, item.variant_id, item.quantity, expiresAt]
       );
     }
+    if (paymentMethod === 'cod') {
+      stockUpdates = await commitCodReservations(client, order.id, req.user.id);
+    }
     await client.query(
       `INSERT INTO order_status_history (order_id, to_status, source, changed_by, note) VALUES ($1,$2,'checkout',$3,'Order placed')`,
       [order.id, orderStatus, req.user.id]
@@ -363,6 +368,7 @@ export const createCheckout = async (req, res) => {
       );
     }
     await client.query('COMMIT');
+    stockUpdates.forEach(emitStockUpdate);
 
     let response = {
       order_id: order.id,

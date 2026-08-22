@@ -20,12 +20,17 @@ const TRANSITIONS = {
   refund_processing: ['refunded', 'partially_refunded'],
 };
 
-const commitCodReservations = async (client, orderId, actorId) => {
+export const commitCodReservations = async (client, orderId, actorId) => {
   const reservations = await client.query(
     `SELECT * FROM stock_reservations WHERE order_id = $1 AND status = 'active' FOR UPDATE`,
     [orderId]
   );
   if (!reservations.rowCount) {
+    const committed = await client.query(
+      `SELECT 1 FROM stock_reservations WHERE order_id = $1 AND status = 'committed' LIMIT 1`,
+      [orderId]
+    );
+    if (committed.rowCount) return [];
     const error = new Error('Order has no active stock reservation.');
     error.status = 409;
     throw error;
@@ -73,6 +78,46 @@ const releaseReservations = async (client, orderId) => {
   await client.query(`UPDATE stock_reservations SET status = 'released', released_at = NOW() WHERE order_id = $1 AND status = 'active'`, [orderId]);
 };
 
+export const restoreCommittedReservations = async (client, orderId, actorId) => {
+  const reservations = await client.query(
+    `SELECT * FROM stock_reservations WHERE order_id = $1 AND status = 'committed' FOR UPDATE`,
+    [orderId]
+  );
+  const updates = [];
+  for (const row of reservations.rows) {
+    const stock = row.variant_id
+      ? await client.query(
+        `UPDATE product_variants SET stock_quantity = stock_quantity + $1, updated_at = NOW()
+         WHERE id = $2
+         RETURNING stock_quantity - $1 AS stock_before, stock_quantity AS stock_after`,
+        [row.quantity, row.variant_id]
+      )
+      : await client.query(
+        `UPDATE products SET stock_quantity = stock_quantity + $1, updated_at = NOW()
+         WHERE id = $2
+         RETURNING stock_quantity - $1 AS stock_before, stock_quantity AS stock_after`,
+        [row.quantity, row.product_id]
+      );
+    if (!stock.rowCount) {
+      const error = new Error('Committed inventory could not be restored.');
+      error.status = 409;
+      throw error;
+    }
+    await client.query(
+      `INSERT INTO stock_movements (product_id, variant_id, order_id, quantity_delta, stock_before, stock_after, reason, reference_type, reference_id, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,'order_cancelled','order',$8,$7)`,
+      [row.product_id, row.variant_id, orderId, Number(row.quantity), stock.rows[0].stock_before, stock.rows[0].stock_after, actorId, orderId]
+    );
+    updates.push({ product_id: row.product_id, variant_id: row.variant_id, stock_quantity: Number(stock.rows[0].stock_after) });
+  }
+  await client.query(
+    `UPDATE stock_reservations SET status = 'released', released_at = NOW()
+     WHERE order_id = $1 AND status = 'committed'`,
+    [orderId]
+  );
+  return updates;
+};
+
 export const getOrderTimeline = async (req, res) => {
   try {
     const orderId = Number(req.params.id);
@@ -116,7 +161,22 @@ export const updateOrderStatusSecure = async (req, res) => {
     if (order.payment_method === 'cod' && order.status === 'pending' && nextStatus === 'processing') {
       stockUpdates = await commitCodReservations(client, orderId, req.user.id);
     }
-    await client.query(`UPDATE orders SET status = $2, updated_at = NOW() WHERE id = $1`, [orderId, nextStatus]);
+    if (nextStatus === 'cancelled') {
+      if (order.payment_status === 'paid') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: 'A paid order must use the refund cancellation flow.' });
+      }
+      await releaseReservations(client, orderId);
+      stockUpdates = [...stockUpdates, ...await restoreCommittedReservations(client, orderId, req.user.id)];
+      await client.query(`UPDATE payments SET status = 'cancelled', updated_at = NOW() WHERE order_id = $1 AND status <> 'paid'`, [orderId]);
+      await releaseDiscountUsage(client, { orderId, reason: note || 'Order cancelled by staff' });
+      await client.query(
+        `UPDATE orders SET status = 'cancelled', payment_status = 'cancelled', cancelled_at = NOW(), cancellation_reason = $2, updated_at = NOW() WHERE id = $1`,
+        [orderId, note || 'Order cancelled by staff']
+      );
+    } else {
+      await client.query(`UPDATE orders SET status = $2, updated_at = NOW() WHERE id = $1`, [orderId, nextStatus]);
+    }
     await client.query(
       `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note) VALUES ($1,$2,$3,'staff',$4,$5)`,
       [orderId, order.status, nextStatus, req.user.id, note]
@@ -149,6 +209,7 @@ export const cancelOrderSecure = async (req, res) => {
   const reason = String(req.body?.reason || '').trim().slice(0, 1000);
   if (!reason) return res.status(400).json({ message: 'Cancellation reason is required.' });
   const client = await pool.connect();
+  let stockUpdates = [];
   try {
     await client.query('BEGIN');
     const result = await client.query(`SELECT * FROM orders WHERE id = $1 FOR UPDATE`, [orderId]);
@@ -176,6 +237,7 @@ export const cancelOrderSecure = async (req, res) => {
     const isCaptured = order.payment_status === 'paid';
     if (!isCaptured) {
       await releaseReservations(client, orderId);
+      stockUpdates = await restoreCommittedReservations(client, orderId, req.user.id);
       await client.query(`UPDATE payments SET status = 'cancelled', updated_at = NOW() WHERE order_id = $1 AND status <> 'paid'`, [orderId]);
       await releaseDiscountUsage(client, { orderId, reason });
     }
@@ -195,6 +257,7 @@ export const cancelOrderSecure = async (req, res) => {
       [req.user.id, String(orderId), req.ip, req.get('user-agent'), JSON.stringify({ status: order.status }), JSON.stringify({ status: nextStatus, reason })]
     );
     await client.query('COMMIT');
+    stockUpdates.forEach(emitStockUpdate);
     emitOrderStatusUpdate(orderId, nextStatus, {
       previous_status: order.status,
       payment_status: isCaptured ? 'processing' : 'cancelled',
@@ -204,6 +267,6 @@ export const cancelOrderSecure = async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('Secure cancellation failed:', error);
-    return res.status(500).json({ message: 'Order could not be cancelled.' });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : 'Order could not be cancelled.' });
   } finally { client.release(); }
 };
