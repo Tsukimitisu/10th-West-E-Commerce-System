@@ -10,6 +10,7 @@ import { writeAuditLog } from '../utils/audit.js';
 
 const STAFF_ROLES = STAFF_ROLE_SET;
 const VALID_ORDER_STATUSES = ORDER_STATUSES;
+const VALID_ORDER_STATUS_SET = new Set(VALID_ORDER_STATUSES);
 const VAT_RATE = 0.12;
 const FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
 const STANDARD_SHIPPING_FEE = 150;
@@ -170,6 +171,15 @@ const getMemoryOrderBundle = (id) => {
   return { order, items };
 };
 
+const parseStatusFilter = (query = {}) => {
+  if (query.status === undefined || query.status === null || String(query.status).trim() === '') return null;
+  const status = String(query.status).trim().toLowerCase();
+  if (!VALID_ORDER_STATUS_SET.has(status)) {
+    throw Object.assign(new Error('Invalid order status filter.'), { status: 400, code: 'INVALID_ORDER_STATUS' });
+  }
+  return status;
+};
+
 const normalizeWaybillStatus = (value) => {
   const status = String(value || 'not_requested').trim().toLowerCase();
   return ['not_requested', 'pending', 'generated', 'failed'].includes(status) ? status : 'not_requested';
@@ -299,8 +309,9 @@ const buildOrderReturnInfo = async (db, order, userId, isStaff) => {
 export const getAllOrders = async (req, res) => {
   try {
     const { page, limit, offset, paginated } = parsePagination(req.query || {});
+    const statusFilter = parseStatusFilter(req.query || {});
     if (shouldUseDatabaseReadFallback()) {
-      const orders = await getOrdersFallback({ page, limit, paginated });
+      const orders = await getOrdersFallback({ page, limit, paginated, status: statusFilter });
       if (paginated) {
         return res.json({
           orders,
@@ -313,6 +324,11 @@ export const getAllOrders = async (req, res) => {
       return res.json(orders);
     }
 
+    const params = [];
+    const statusClause = statusFilter ? `WHERE o.status = $${params.push(statusFilter)}` : '';
+    const paginationClause = paginated
+      ? `LIMIT $${params.push(limit)} OFFSET $${params.push(offset)}`
+      : '';
     const query = `
       SELECT o.*, 
              u.name as customer_name, u.email as customer_email,
@@ -327,16 +343,18 @@ export const getAllOrders = async (req, res) => {
         LEFT JOIN products p ON p.id = oi.product_id
         WHERE oi.order_id = o.id
       ) item_summary ON TRUE
+      ${statusClause}
       ORDER BY o.created_at DESC
-      ${paginated ? 'LIMIT $1 OFFSET $2' : ''}
+      ${paginationClause}
     `;
 
-    const result = paginated
-      ? await pool.query(query, [limit, offset])
-      : await pool.query(query);
+    const result = await pool.query(query, params);
 
     const total = paginated
-      ? Number((await pool.query('SELECT COUNT(*)::int AS total FROM orders')).rows[0]?.total || 0)
+      ? Number((await pool.query(
+          `SELECT COUNT(*)::int AS total FROM orders ${statusFilter ? 'WHERE status = $1' : ''}`,
+          statusFilter ? [statusFilter] : []
+        )).rows[0]?.total || 0)
       : result.rows.length;
 
     const orders = result.rows.map(order => ({
@@ -359,7 +377,8 @@ export const getAllOrders = async (req, res) => {
     console.error('Get all orders error:', error);
     if (isDatabaseConnectivityError(error)) {
       const { page, limit, paginated } = parsePagination(req.query || {});
-      const orders = await getOrdersFallback({ page, limit, paginated });
+      const statusFilter = parseStatusFilter(req.query || {});
+      const orders = await getOrdersFallback({ page, limit, paginated, status: statusFilter });
       if (paginated) {
         return res.json({
           orders,
@@ -371,7 +390,7 @@ export const getAllOrders = async (req, res) => {
       }
       return res.json(orders);
     }
-    res.status(500).json({ message: 'Server error' });
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Server error', ...(error.code ? { code: error.code } : {}) });
   }
 };
 
@@ -380,8 +399,9 @@ export const getUserOrders = async (req, res) => {
   try {
     const userId = req.user.id;
     const { page, limit, offset, paginated } = parsePagination(req.query || {});
+    const statusFilter = parseStatusFilter(req.query || {});
     if (shouldUseDatabaseReadFallback()) {
-      const orders = await getOrdersFallback({ userId, page, limit, paginated });
+      const orders = await getOrdersFallback({ userId, page, limit, paginated, status: statusFilter });
       if (paginated) {
         return res.json({
           orders,
@@ -394,6 +414,11 @@ export const getUserOrders = async (req, res) => {
       return res.json(orders);
     }
 
+    const params = [userId];
+    const statusClause = statusFilter ? `AND o.status = $${params.push(statusFilter)}` : '';
+    const paginationClause = paginated
+      ? `LIMIT $${params.push(limit)} OFFSET $${params.push(offset)}`
+      : '';
     const query = `
       SELECT o.*,
              COALESCE(item_summary.item_count, 0) AS item_count,
@@ -407,16 +432,18 @@ export const getUserOrders = async (req, res) => {
         WHERE oi.order_id = o.id
       ) item_summary ON TRUE
       WHERE o.user_id = $1
+      ${statusClause}
       ORDER BY o.created_at DESC
-      ${paginated ? 'LIMIT $2 OFFSET $3' : ''}
+      ${paginationClause}
     `;
 
-    const result = paginated
-      ? await pool.query(query, [userId, limit, offset])
-      : await pool.query(query, [userId]);
+    const result = await pool.query(query, params);
 
     const total = paginated
-      ? Number((await pool.query('SELECT COUNT(*)::int AS total FROM orders WHERE user_id = $1', [userId])).rows[0]?.total || 0)
+      ? Number((await pool.query(
+          `SELECT COUNT(*)::int AS total FROM orders WHERE user_id = $1 ${statusFilter ? 'AND status = $2' : ''}`,
+          statusFilter ? [userId, statusFilter] : [userId]
+        )).rows[0]?.total || 0)
       : result.rows.length;
 
     const orders = result.rows.map(order => ({
@@ -440,7 +467,8 @@ export const getUserOrders = async (req, res) => {
     if (isDatabaseConnectivityError(error)) {
       const userId = req.user.id;
       const { page, limit, paginated } = parsePagination(req.query || {});
-      const orders = await getOrdersFallback({ userId, page, limit, paginated });
+      const statusFilter = parseStatusFilter(req.query || {});
+      const orders = await getOrdersFallback({ userId, page, limit, paginated, status: statusFilter });
       if (paginated) {
         return res.json({
           orders,
@@ -452,7 +480,7 @@ export const getUserOrders = async (req, res) => {
       }
       return res.json(orders);
     }
-    res.status(500).json({ message: 'Server error' });
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Server error', ...(error.code ? { code: error.code } : {}) });
   }
 };
 
@@ -925,7 +953,7 @@ export const cancelOrder = async (req, res) => {
   }
 };
 
-const getOrdersFallback = async ({ userId = null, page, limit, paginated } = {}) => {
+const getOrdersFallback = async ({ userId = null, page, limit, paginated, status = null } = {}) => {
   const params = {
     select: '*,customer:users!orders_user_id_fkey(name,email)',
     order: 'created_at.desc',
@@ -933,6 +961,9 @@ const getOrdersFallback = async ({ userId = null, page, limit, paginated } = {})
   };
   if (userId) {
     params.user_id = `eq.${userId}`;
+  }
+  if (status) {
+    params.status = `eq.${status}`;
   }
 
   const orders = await supabaseRestFetch('orders', params).catch(() => []);
@@ -969,6 +1000,7 @@ const getOrdersFallback = async ({ userId = null, page, limit, paginated } = {})
 
   const memoryOrders = memoryOrderStore.orders
     .filter((order) => !userId || Number(order.user_id) === Number(userId))
+    .filter((order) => !status || order.status === status)
     .map((order) => {
       const orderItems = memoryOrderStore.items.filter((item) => Number(item.order_id) === Number(order.id));
       return {

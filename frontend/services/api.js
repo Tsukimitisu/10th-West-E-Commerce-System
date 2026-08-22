@@ -2413,7 +2413,7 @@ const canTransitionStaffOrderStatus = (currentStatus, nextStatus) => {
 
 let MOCK_ORDERS = [];
 
-export const getOrders = async () => {
+export const getOrders = async (status = '') => {
   if (USE_MOCK_DATA) {
     await new Promise(resolve => setTimeout(resolve, 300));
     return [...MOCK_ORDERS];
@@ -2436,11 +2436,12 @@ export const getOrders = async () => {
     }));
   }
 
-  const data = await authenticatedFetch(`${API_URL}/orders`);
+  const statusQuery = status ? `?status=${encodeURIComponent(status)}` : '';
+  const data = await authenticatedFetch(`${API_URL}/orders${statusQuery}`);
   return data.map(mapOrderFromApi);
 };
 
-export const getUserOrders = async (userId) => {
+export const getUserOrders = async (userId, status = '') => {
   if (USE_MOCK_DATA) {
     await new Promise(resolve => setTimeout(resolve, 300));
     return MOCK_ORDERS.filter(order => order.user_id === userId);
@@ -2467,7 +2468,8 @@ export const getUserOrders = async (userId) => {
     }));
   }
 
-  const data = await authenticatedFetch(`${API_URL}/orders/my-orders`);
+  const statusQuery = status ? `?status=${encodeURIComponent(status)}` : '';
+  const data = await authenticatedFetch(`${API_URL}/orders/my-orders${statusQuery}`);
   return data.map(mapOrderFromApi);
 };
 

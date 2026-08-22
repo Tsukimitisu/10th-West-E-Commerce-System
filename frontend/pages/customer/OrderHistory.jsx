@@ -49,10 +49,7 @@ const OrderHistory = () => {
 
   const filtered = orders.filter((o) => {
     const matchesSearch = !search || o.id?.toString().includes(search) || String(o.order_number || '').toLowerCase().includes(search.toLowerCase());
-    let matchesFilter = filter === 'all' || o.status === filter;
-    if (filter === 'completed') {
-      matchesFilter = o.status === 'completed' || o.status === 'delivered';
-    }
+    const matchesFilter = filter === 'all' || o.status === filter;
     return matchesSearch && matchesFilter;
   });
 
@@ -80,9 +77,10 @@ const OrderHistory = () => {
           <div className="flex overflow-x-auto hide-scrollbar -mb-px space-x-6 px-1">
             {[
               { id: 'all', label: 'All Orders' },
-              { id: 'preparing', label: 'Preparing' },
+              { id: 'pending', label: 'Pending' },
+              { id: 'processing', label: 'Processing' },
               { id: 'shipped', label: 'Shipped' },
-              { id: 'completed', label: 'Delivered / Completed' },
+              { id: 'delivered', label: 'Delivered' },
               { id: 'cancelled', label: 'Cancelled' }
             ].map((tab) => (
               <button
