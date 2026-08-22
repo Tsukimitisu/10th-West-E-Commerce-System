@@ -17,7 +17,7 @@ const Profile = () => {
 
   const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '', phone: user?.phone || '' });
   const [passData, setPassData] = useState({ current: '', new: '', confirm: '' });
-  const [showPasswords, setShowPasswords] = useState(false);
+  const [passwordVisibility, setPasswordVisibility] = useState({ current: false, new: false, confirm: false });
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
   const [passMessage, setPassMessage] = useState('');
@@ -320,6 +320,10 @@ const Profile = () => {
     }
   };
 
+  const togglePasswordVisibility = (field) => {
+    setPasswordVisibility((current) => ({ ...current, [field]: !current[field] }));
+  };
+
   const handle2FAVerify = async () => {
     setTwoFAAction('verify');
     setTwoFAMessage('');
@@ -576,24 +580,35 @@ const Profile = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
               <div className="relative">
-                <input type={showPasswords ? 'text' : 'password'} value={passData.current} onChange={e => setPassData(p => ({ ...p, current: e.target.value }))} required
+                <input type={passwordVisibility.current ? 'text' : 'password'} value={passData.current} onChange={e => setPassData(p => ({ ...p, current: e.target.value }))} required autoComplete="current-password"
                   className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 pr-10" />
-                <button type="button" onClick={() => setShowPasswords(!showPasswords)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                  {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
+                <button type="button" onClick={() => togglePasswordVisibility('current')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" aria-label={passwordVisibility.current ? 'Hide current password' : 'Show current password'}>
+                  {passwordVisibility.current ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                <input type={showPasswords ? 'text' : 'password'} value={passData.new} onChange={e => setPassData(p => ({ ...p, new: e.target.value }))} required
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                <div className="relative">
+                  <input type={passwordVisibility.new ? 'text' : 'password'} value={passData.new} onChange={e => setPassData(p => ({ ...p, new: e.target.value }))} required autoComplete="new-password"
+                    className="w-full px-3 py-2.5 pr-10 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <button type="button" onClick={() => togglePasswordVisibility('new')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" aria-label={passwordVisibility.new ? 'Hide new password' : 'Show new password'}>
+                    {passwordVisibility.new ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
                 <p className="mt-1 text-xs text-gray-500">Use at least 8 characters with uppercase, lowercase, number, and special character.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-                <input type="password" value={passData.confirm} onChange={e => setPassData(p => ({ ...p, confirm: e.target.value }))} required
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                <div className="relative">
+                  <input type={passwordVisibility.confirm ? 'text' : 'password'} value={passData.confirm} onChange={e => setPassData(p => ({ ...p, confirm: e.target.value }))} required autoComplete="new-password"
+                    className={`w-full px-3 py-2.5 pr-10 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${passData.confirm && passData.new !== passData.confirm ? 'border-red-400' : 'border-slate-300'}`} />
+                  <button type="button" onClick={() => togglePasswordVisibility('confirm')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" aria-label={passwordVisibility.confirm ? 'Hide password confirmation' : 'Show password confirmation'}>
+                    {passwordVisibility.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                {passData.confirm && passData.new !== passData.confirm && <p className="mt-1 text-xs text-red-500">Passwords do not match.</p>}
               </div>
             </div>
             <button type="submit" disabled={passLoading}
