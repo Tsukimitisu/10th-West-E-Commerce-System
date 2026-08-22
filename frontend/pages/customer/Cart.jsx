@@ -206,7 +206,7 @@ const Cart = () => {
                   const isUpdating = updatingItemIds?.has(item.productId);
                   return (
                     <div key={item.productId} className={`p-4 md:px-6 md:py-5 hover:bg-red-50/30 transition-colors ${i < items.length - 1 ? 'border-b border-slate-200' : ''}`}>
-                      <div className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(7rem,auto)_7.75rem_minmax(7.5rem,auto)] md:gap-4 md:items-center">
+                      <div data-testid={`cart-row-${item.productId}`} className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(7rem,auto)_7.75rem_minmax(7.5rem,auto)] md:gap-4 md:items-center">
                         <div className="min-w-0 flex gap-4 items-center">
                           <input
                             type="checkbox"
@@ -229,14 +229,14 @@ const Cart = () => {
                           </div>
                         </div>
 
-                        <div className="hidden min-w-[7rem] text-center md:block">
+                        <div data-testid="cart-unit-price" className="hidden min-w-[7rem] text-center md:block">
                           <span className="whitespace-nowrap text-sm font-semibold text-slate-900">{formatPrice(price)}</span>
                           {item.product.is_on_sale && item.product.sale_price && (
                             <span className="block whitespace-nowrap text-xs text-slate-500 line-through">{formatPrice(item.product.price)}</span>
                           )}
                         </div>
 
-                        <div className="flex w-[7.75rem] justify-center mt-3 md:mt-0">
+                        <div data-testid="cart-quantity" className="flex w-[7.75rem] justify-center mt-3 md:mt-0">
                           <div className="flex shrink-0 items-center border border-slate-200 rounded-lg bg-slate-50">
                             <button onClick={() => handleDecreaseQty(item)} className="px-2.5 py-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-50" disabled={item.quantity <= 1 || isUpdating}>
                               <Minus size={14} />
@@ -257,7 +257,7 @@ const Cart = () => {
                           </div>
                         </div>
 
-                        <div className="flex min-w-[7.5rem] items-center justify-between gap-3 mt-3 md:mt-0 md:justify-end">
+                        <div data-testid="cart-line-total" className="flex min-w-[7.5rem] items-center justify-between gap-3 mt-3 md:mt-0 md:justify-end">
                           <span className="whitespace-nowrap text-sm font-bold text-slate-900 md:mr-2">{formatPrice(price * Math.max(0, toFiniteNumber(item.quantity, 0)))}</span>
                           <button onClick={() => handleRemoveItem(item.productId)} disabled={isUpdating} className="hidden md:block p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
                             <Trash2 size={16} />
