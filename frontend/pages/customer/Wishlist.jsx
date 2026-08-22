@@ -6,12 +6,14 @@ import { useCart } from '../../context/CartContext';
 import AccountLayout from '../../components/customer/AccountLayout';
 import { getCurrentAuthUser, subscribeAuthChanges } from '../../services/authSession';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../../constants/commerce.js';
 
 const Wishlist = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState({});
   const [quantityErrors, setQuantityErrors] = useState({});
+  const [addingProductIds, setAddingProductIds] = useState(() => new Set());
   const { addToCart, items: cartItems } = useCart();
 
   useEffect(() => {
@@ -68,20 +70,54 @@ const Wishlist = () => {
     } catch {}
   };
 
-  const handleAddToCart = (item, quantity) => {
+  const handleAddToCart = async (item, quantity) => {
     const productId = item.product_id ?? item.product?.id ?? item.id;
     const name = item.name || item.product_name || item.product?.name;
     const price = Number(item.sale_price ?? item.price ?? item.product?.sale_price ?? item.product?.price ?? 0);
     const image = item.image_url || item.product?.image_url || item.product?.image || '';
-    const stockQuantity = item.stock_quantity ?? item.product?.stock_quantity ?? 0;
+    const stockQuantity = Number(item.stock_quantity ?? item.product?.stock_quantity ?? 0);
+    const cartQuantity = Number(cartItems.find((cartItem) => Number(cartItem.productId) === Number(productId))?.quantity || 0);
+    const requestedQuantity = Number(quantity);
 
-    addToCart({
-      id: productId,
-      name,
-      price,
-      image,
-      stock_quantity: stockQuantity,
-    }, quantity);
+    if (!Number.isInteger(requestedQuantity) || requestedQuantity < 1) {
+      setQuantityErrors((prev) => ({ ...prev, [productId]: 'Quantity must be at least 1.' }));
+      return;
+    }
+    if (requestedQuantity > MAX_ITEM_QUANTITY || cartQuantity + requestedQuantity > MAX_ITEM_QUANTITY) {
+      setQuantityErrors((prev) => ({ ...prev, [productId]: MAX_ITEM_QUANTITY_MESSAGE }));
+      return;
+    }
+    if (cartQuantity + requestedQuantity > stockQuantity) {
+      setQuantityErrors((prev) => ({ ...prev, [productId]: `Only ${Math.max(0, stockQuantity - cartQuantity)} left in stock.` }));
+      return;
+    }
+
+    setAddingProductIds((current) => new Set(current).add(productId));
+    setQuantityErrors((prev) => ({ ...prev, [productId]: null }));
+
+    try {
+      const added = await addToCart({
+        id: productId,
+        name,
+        price,
+        image,
+        stock_quantity: stockQuantity,
+      }, requestedQuantity);
+      if (!added) {
+        setQuantityErrors((prev) => ({
+          ...prev,
+          [productId]: cartQuantity + requestedQuantity > MAX_ITEM_QUANTITY
+            ? MAX_ITEM_QUANTITY_MESSAGE
+            : 'Unable to add this quantity to your cart.'
+        }));
+      }
+    } finally {
+      setAddingProductIds((current) => {
+        const next = new Set(current);
+        next.delete(productId);
+        return next;
+      });
+    }
   };
 
   return (
@@ -116,16 +152,19 @@ const Wishlist = () => {
               const name = item.name || item.product_name || item.product?.name || 'Unknown Product';
               const price = Number(item.price ?? item.product?.price ?? 0);
               const salePrice = item.sale_price != null ? Number(item.sale_price) : (item.product?.sale_price != null ? Number(item.product.sale_price) : null);
-              const stockQuantity = item.stock_quantity ?? item.product?.stock_quantity ?? 0;
+              const stockQuantity = Number(item.stock_quantity ?? item.product?.stock_quantity ?? 0);
               const lowStockThreshold = item.low_stock_threshold ?? item.product?.low_stock_threshold ?? 5;
               const inStock = item.in_stock !== false && stockQuantity > 0;
               const isLowStock = stockQuantity > 0 && stockQuantity <= lowStockThreshold;
               const imageUrl = item.image_url || item.product?.image_url || item.product?.image || '';
               const selectedQty = quantities[productId] ?? 1;
-              const cartQty = cartItems.find((cartItem) => cartItem.productId === productId)?.quantity ?? 0;
-              const availableQty = Math.max(0, stockQuantity - cartQty);
+              const cartQty = Number(cartItems.find((cartItem) => Number(cartItem.productId) === Number(productId))?.quantity || 0);
+              const remainingCartLimit = Math.max(0, MAX_ITEM_QUANTITY - cartQty);
+              const remainingStock = Math.max(0, stockQuantity - cartQty);
+              const availableQty = Math.min(remainingStock, remainingCartLimit);
               const hasQtyError = !!quantityErrors[productId];
-              const canAdd = inStock && !hasQtyError && selectedQty <= availableQty;
+              const isAdding = addingProductIds.has(productId);
+              const canAdd = inStock && !hasQtyError && selectedQty <= availableQty && !isAdding;
 
               return (
                 <div key={productId} className="bg-white rounded-xl border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
@@ -184,10 +223,15 @@ const Wishlist = () => {
                             const safeValue = Number.isFinite(nextValue) && nextValue > 0 ? Math.floor(nextValue) : 1;
                             setQuantities((prev) => ({ ...prev, [productId]: safeValue }));
 
-                            if (availableQty > 0 && safeValue > availableQty) {
+                            if (safeValue > MAX_ITEM_QUANTITY || safeValue > remainingCartLimit) {
                               setQuantityErrors((prev) => ({
                                 ...prev,
-                                [productId]: `Only ${availableQty} left in stock.`
+                                [productId]: MAX_ITEM_QUANTITY_MESSAGE
+                              }));
+                            } else if (safeValue > remainingStock) {
+                              setQuantityErrors((prev) => ({
+                                ...prev,
+                                [productId]: `Only ${remainingStock} left in stock.`
                               }));
                             } else {
                               setQuantityErrors((prev) => ({
@@ -204,7 +248,7 @@ const Wishlist = () => {
                         disabled={!canAdd}
                         className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-xs font-medium rounded-lg transition-all duration-300 ease-in-out flex items-center justify-center gap-1"
                       >
-                        <ShoppingCart size={13} /> Add to Cart
+                        <ShoppingCart size={13} /> {isAdding ? 'Adding…' : 'Add to Cart'}
                       </button>
                       <Link to={`/products/${productId}`} className="px-3 py-2 border border-slate-300 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out flex items-center justify-center">
                         <Eye size={14} />
@@ -214,7 +258,9 @@ const Wishlist = () => {
                       <p className="text-[11px] text-red-500">{quantityErrors[productId]}</p>
                     )}
                     {!hasQtyError && inStock && availableQty === 0 && (
-                      <p className="text-[11px] text-red-500">No more stock available in your cart.</p>
+                      <p className="text-[11px] text-red-500">
+                        {remainingCartLimit === 0 ? MAX_ITEM_QUANTITY_MESSAGE : 'No more stock available in your cart.'}
+                      </p>
                     )}
                   </div>
                 </div>
