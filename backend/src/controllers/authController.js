@@ -12,6 +12,7 @@ import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRes
 import { decryptTwoFactorSecret, encryptTwoFactorSecret, generateRecoveryCodes, hashRecoveryCode } from '../services/twoFactorCrypto.js';
 import databaseConfig from '../config/databaseConfig.cjs';
 import { resolveFrontendOrigin } from '../config/frontend.js';
+import { getPhoneVerificationState } from '../utils/phone.js';
 
 const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
 const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
@@ -45,6 +46,7 @@ const sanitizeUser = (row) => ({
   email: row.email,
   role: row.role,
   phone: row.phone,
+  phone_verification: getPhoneVerificationState(row.phone),
   avatar: row.avatar,
   store_credit: parseFloat(row.store_credit || 0),
   is_active: row.is_active,

@@ -398,6 +398,19 @@ const Profile = () => {
 
   if (!user) return null;
 
+  const savedPhone = normalizePhoneInput(user.phone || '');
+  const currentPhone = normalizePhoneInput(form.phone || '');
+  const phoneVerificationLabel = !currentPhone
+    ? 'Not verified'
+    : currentPhone !== savedPhone
+      ? 'Not verified'
+      : user.phone_verification?.label || 'Verification unavailable';
+  const phoneVerificationTone = user.phone_verification?.verified && currentPhone === savedPhone
+    ? 'border-green-200 bg-green-50 text-green-700'
+    : phoneVerificationLabel === 'Verification unavailable'
+      ? 'border-amber-200 bg-amber-50 text-amber-700'
+      : 'border-slate-200 bg-slate-50 text-slate-600';
+
   return (
     <AccountLayout>
       <div className="space-y-6">
@@ -533,6 +546,13 @@ const Profile = () => {
               </div>
               {fieldErrors.phone && <p className="mt-1 text-xs text-red-500">{fieldErrors.phone}</p>}
               {!fieldErrors.phone && <p className="mt-1 text-xs text-gray-500">Accepted format: 09XXXXXXXXX or +639XXXXXXXXX</p>}
+              <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${phoneVerificationTone}`}>
+                {user.phone_verification?.verified && currentPhone === savedPhone ? <Check size={12} /> : <AlertCircle size={12} />}
+                Phone status: {phoneVerificationLabel}
+              </div>
+              {phoneVerificationLabel === 'Verification unavailable' && (
+                <p className="mt-1 text-xs text-gray-500">SMS verification is not configured, so this number is saved but is not claimed as verified.</p>
+              )}
             </div>
             <button
               type="submit"

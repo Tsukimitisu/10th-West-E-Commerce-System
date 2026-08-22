@@ -6,6 +6,7 @@ import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import dns from 'dns/promises';
 import { resolveFrontendOrigin } from '../config/frontend.js';
+import { getPhoneVerificationState } from '../utils/phone.js';
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
@@ -135,7 +136,8 @@ export const getProfile = async (req, res) => {
     const user = result.rows[0];
     res.json({
       ...user,
-      store_credit: parseFloat(user.store_credit || 0)
+      store_credit: parseFloat(user.store_credit || 0),
+      phone_verification: getPhoneVerificationState(user.phone),
     });
   } catch (error) {
     console.error('Get profile error:', error);
@@ -291,6 +293,7 @@ export const updateProfile = async (req, res) => {
         user: {
           ...user,
           store_credit: parseFloat(user.store_credit || 0),
+          phone_verification: getPhoneVerificationState(user.phone),
         },
       });
     }
@@ -299,7 +302,8 @@ export const updateProfile = async (req, res) => {
       message: 'Profile updated successfully',
       user: {
         ...user,
-        store_credit: parseFloat(user.store_credit || 0)
+        store_credit: parseFloat(user.store_credit || 0),
+        phone_verification: getPhoneVerificationState(user.phone),
       }
     });
   } catch (error) {
