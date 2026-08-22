@@ -15,7 +15,8 @@ const CartDrawer = ({ isOpen, onClose }) => {
     updateQuantity, 
     removeFromCart, 
     subtotal, 
-    itemCount 
+    itemCount,
+    updatingItemIds
   } = useCart();
   const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -157,7 +158,9 @@ const CartDrawer = ({ isOpen, onClose }) => {
                 />
                 <span className="text-sm font-medium text-slate-700">Select All items</span>
               </div>
-              {items.map(item => (
+              {items.map(item => {
+                const isUpdating = updatingItemIds?.has(item.productId);
+                return (
                 <div key={item.productId} className="animate-fade-in">
                   <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
                     <div className="flex gap-3 items-start">
@@ -182,7 +185,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
                         </p>
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex items-center border border-slate-300 rounded-xl overflow-hidden bg-slate-50">
-                            <button onClick={() => handleDecreaseQty(item)} className="px-3 py-1.5 text-slate-500 hover:bg-slate-200 transition-colors" disabled={item.quantity <= 1}><Minus size={14} /></button>
+                            <button onClick={() => handleDecreaseQty(item)} className="px-3 py-1.5 text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-50" disabled={item.quantity <= 1 || isUpdating}><Minus size={14} /></button>
                             <input 
                               type="text" 
                               inputMode="numeric" 
@@ -190,14 +193,18 @@ const CartDrawer = ({ isOpen, onClose }) => {
                               value={localQuantities[item.productId] !== undefined ? localQuantities[item.productId] : item.quantity} 
                               onChange={(e) => handleQuantityInputChange(item, e.target.value)} 
                               onBlur={() => handleQuantityBlur(item)}
-                              className="w-10 py-1 text-sm font-medium text-center bg-transparent text-slate-900 focus:outline-none focus:bg-white transition-colors"
+                              disabled={isUpdating}
+                              className="w-10 py-1 text-sm font-medium text-center bg-transparent text-slate-900 focus:outline-none focus:bg-white transition-colors disabled:opacity-50"
                             />
-                            <button onClick={() => handleIncreaseQty(item)} className="px-3 py-1.5 text-slate-500 hover:bg-slate-200 transition-colors"><Plus size={14} /></button>
+                            <button onClick={() => handleIncreaseQty(item)} disabled={isUpdating} className="px-3 py-1.5 text-slate-500 hover:bg-slate-200 transition-colors disabled:opacity-50"><Plus size={14} /></button>
                           </div>
-                          <button onClick={() => handleRemoveItem(item.productId)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                          <button onClick={() => handleRemoveItem(item.productId)} disabled={isUpdating} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
                             <Trash2 size={16} />
                           </button>
                         </div>
+                        {isUpdating && (
+                          <p className="text-xs text-slate-500 mt-1" role="status">Updating…</p>
+                        )}
                         {quantityErrors[item.productId] && (
                           <p className="text-xs text-red-600 mt-1">{quantityErrors[item.productId]}</p>
                         )}
@@ -205,7 +212,8 @@ const CartDrawer = ({ isOpen, onClose }) => {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Footer */}

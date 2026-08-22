@@ -19,8 +19,10 @@ export const CartProvider = ({ children }) => {
   const [discount, setDiscount] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [updatingItemIds, setUpdatingItemIds] = useState(() => new Set());
   const [initialized, setInitialized] = useState(false);
   const itemsRef = React.useRef(items);
+  const quantityUpdatesRef = React.useRef(new Set());
 
   const getStoredUser = () => {
     return getCurrentAuthUser();
@@ -766,82 +768,84 @@ export const CartProvider = ({ children }) => {
       return false;
     }
 
-    const targetItem = items.find((item) => item.productId === productId);
+    const targetItem = itemsRef.current.find((item) => item.productId === productId);
+    if (!targetItem || quantityUpdatesRef.current.has(productId)) return false;
+
     const maxStock = resolveMaxStock(targetItem?.product);
     if (targetItem && Number.isFinite(maxStock) && quantity > maxStock) {
       setError(`Cannot exceed available stock (${maxStock}).`);
-      return;
+      return false;
     }
+
+    const previousQuantity = targetItem.quantity;
     setError(null);
-    
+    quantityUpdatesRef.current.add(productId);
+    setUpdatingItemIds((current) => new Set(current).add(productId));
+    updateQuantityLocal(productId, quantity);
+
     const cachedUser = getCurrentAuthUser();
     if (USE_SUPABASE && !cachedUser?.id) {
-      updateQuantityLocal(productId, quantity);
-      return;
+      quantityUpdatesRef.current.delete(productId);
+      setUpdatingItemIds((current) => {
+        const next = new Set(current);
+        next.delete(productId);
+        return next;
+      });
+      return true;
     }
-    if (true) {
+
+    try {
       if (USE_SUPABASE) {
-        try {
-          setLoading(true);
-          const currentUser = getCurrentUserFromToken();
-          const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
-          if (!cartId) throw new Error('Unable to access cart');
+        const currentUser = getCurrentUserFromToken();
+        const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
+        if (!cartId) throw new Error('Unable to access cart');
 
-          const targetItem = items.find((item) => item.productId === productId);
-          const cartItemId = targetItem?.cartItemId ?? null;
-
-          if (cartItemId) {
-            const { error: updateError } = await supabase
-              .from('cart_items')
-              .update({ quantity })
-              .eq('id', cartItemId);
-
-            if (updateError) throw new Error(updateError.message);
-          } else {
-            const { error: updateError } = await supabase
-              .from('cart_items')
-              .update({ quantity })
-              .eq('cart_id', cartId)
-              .eq('product_id', productId);
-
-            if (updateError) throw new Error(updateError.message);
-          }
-
-          await syncCart();
-        } catch (err) {
-          console.error('Error updating quantity (Supabase):', err);
-          setError('Failed to update quantity');
-          updateQuantityLocal(productId, quantity);
-        } finally {
-          setLoading(false);
+        const cartItemId = targetItem.cartItemId ?? null;
+        let updateQuery = supabase.from('cart_items').update({ quantity });
+        if (cartItemId) {
+          updateQuery = updateQuery.eq('id', cartItemId);
+        } else {
+          updateQuery = updateQuery.eq('cart_id', cartId).eq('product_id', productId);
         }
-        return;
-      }
 
-      try {
-        setLoading(true);
-        const cartItemId = targetItem?.cartItemId ?? productId;
+        const { error: updateError } = await updateQuery;
+        if (updateError) throw new Error(updateError.message);
+      } else {
+        const cartItemId = targetItem.cartItemId ?? productId;
         const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/update/${cartItemId}`, {
           method: 'PUT',
           body: JSON.stringify({ quantity })
         }, { includeJson: true });
-
-        if (response.ok) {
-          const payload = await response.clone().json().catch(() => ({}));
-          const synced = payload?.degraded ? false : await syncCart();
-          if (!synced) updateQuantityLocal(productId, quantity);
-        } else {
-          throw new Error('Failed to update quantity');
+        const payload = await response.clone().json().catch(() => ({}));
+        if (!response.ok) {
+          const requestError = new Error(payload?.message || 'Failed to update quantity');
+          requestError.status = response.status;
+          throw requestError;
         }
-      } catch (err) {
-        console.error('Error updating quantity:', err);
-        setError('Failed to update quantity');
-        updateQuantityLocal(productId, quantity);
-      } finally {
-        setLoading(false);
+
+        if (payload?.degraded) throw new Error('Cart service is temporarily unavailable.');
       }
-    } else {
-      updateQuantityLocal(productId, quantity);
+
+      const synced = await syncCart();
+      if (!synced) throw new Error('Unable to confirm the updated quantity.');
+      return true;
+    } catch (err) {
+      console.error('Error updating quantity:', err);
+      setError(err.message || 'Failed to update quantity');
+      const synced = await syncCart();
+      if (!synced) {
+        setItems((currentItems) => currentItems.map((item) =>
+          item.productId === productId ? { ...item, quantity: previousQuantity } : item
+        ));
+      }
+      return false;
+    } finally {
+      quantityUpdatesRef.current.delete(productId);
+      setUpdatingItemIds((current) => {
+        const next = new Set(current);
+        next.delete(productId);
+        return next;
+      });
     }
   };
 
@@ -1116,6 +1120,7 @@ export const CartProvider = ({ children }) => {
         clearCheckoutSelection,
         error,
         loading,
+        updatingItemIds,
         syncCart
     }}>
       {children}

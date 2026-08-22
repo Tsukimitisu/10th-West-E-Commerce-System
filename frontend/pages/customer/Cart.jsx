@@ -34,7 +34,8 @@ const Cart = () => {
     subtotal,
     discount,
     discountAmount,
-    total
+    total,
+    updatingItemIds
   } = useCart();
 
   const navigate = useNavigate();
@@ -202,6 +203,7 @@ const Cart = () => {
 
                 {items.map((item, i) => {
                   const price = getEffectiveItemUnitPrice(item);
+                  const isUpdating = updatingItemIds?.has(item.productId);
                   return (
                     <div key={item.productId} className={`p-4 md:px-6 md:py-5 hover:bg-red-50/30 transition-colors ${i < items.length - 1 ? 'border-b border-slate-200' : ''}`}>
                       <div className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(7rem,auto)_7.75rem_minmax(7.5rem,auto)] md:gap-4 md:items-center">
@@ -236,7 +238,7 @@ const Cart = () => {
 
                         <div className="flex w-[7.75rem] justify-center mt-3 md:mt-0">
                           <div className="flex shrink-0 items-center border border-slate-200 rounded-lg bg-slate-50">
-                            <button onClick={() => handleDecreaseQty(item)} className="px-2.5 py-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors" disabled={item.quantity <= 1}>
+                            <button onClick={() => handleDecreaseQty(item)} className="px-2.5 py-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-50" disabled={item.quantity <= 1 || isUpdating}>
                               <Minus size={14} />
                             </button>
                             <input
@@ -246,9 +248,10 @@ const Cart = () => {
                               value={localQuantities[item.productId] !== undefined ? localQuantities[item.productId] : item.quantity}
                               onChange={(e) => handleQuantityInputChange(item, e.target.value)}
                               onBlur={() => handleQuantityBlur(item)}
-                              className="w-12 py-1 text-sm font-semibold text-center bg-transparent text-slate-900 focus:outline-none focus:bg-white transition-colors"
+                              disabled={isUpdating}
+                              className="w-12 py-1 text-sm font-semibold text-center bg-transparent text-slate-900 focus:outline-none focus:bg-white transition-colors disabled:opacity-50"
                             />
-                            <button onClick={() => handleIncreaseQty(item)} className="px-2.5 py-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors">
+                            <button onClick={() => handleIncreaseQty(item)} disabled={isUpdating} className="px-2.5 py-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-50">
                               <Plus size={14} />
                             </button>
                           </div>
@@ -256,13 +259,16 @@ const Cart = () => {
 
                         <div className="flex min-w-[7.5rem] items-center justify-between gap-3 mt-3 md:mt-0 md:justify-end">
                           <span className="whitespace-nowrap text-sm font-bold text-slate-900 md:mr-2">{formatPrice(price * Math.max(0, toFiniteNumber(item.quantity, 0)))}</span>
-                          <button onClick={() => handleRemoveItem(item.productId)} className="hidden md:block p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                          <button onClick={() => handleRemoveItem(item.productId)} disabled={isUpdating} className="hidden md:block p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
                             <Trash2 size={16} />
                           </button>
                         </div>
                       </div>
                       {quantityErrors[item.productId] && (
                         <p className="text-xs text-red-600 mt-2">{quantityErrors[item.productId]}</p>
+                      )}
+                      {isUpdating && (
+                        <p className="text-xs text-slate-500 mt-2" role="status">Updating…</p>
                       )}
                     </div>
                   );
