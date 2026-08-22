@@ -10,6 +10,7 @@ import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl } from '../utils/productImages.js';
 import { calculateInternalShippingQuote } from '../services/shipping/internalShipping.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
+import { normalizeCheckoutAddress, resolveCheckoutAddress } from '../utils/checkoutAddress.js';
 
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
@@ -75,31 +76,6 @@ const claimCheckoutIdempotencyKey = async (client, { userId, key, requestHash })
     throw fail(409, 'This idempotency key was used for a different checkout.', undefined, 'IDEMPOTENCY_KEY_CONFLICT');
   }
   return { claimed: false, row: saved };
-};
-
-const loadAddress = async (client, userId, addressId) => {
-  const id = Number(addressId);
-  if (!Number.isInteger(id) || id <= 0) throw fail(400, 'A saved address_id is required.');
-  const result = await client.query(
-    `SELECT * FROM addresses WHERE id = $1 AND user_id = $2 FOR SHARE`,
-    [id, userId]
-  );
-  const address = result.rows[0];
-  if (!address) throw fail(404, 'Saved address not found.');
-  if (String(address.country || '').trim().toLowerCase() !== 'philippines') throw fail(400, 'Shipping is currently limited to the Philippines.');
-  if (!/^\d{4}$/.test(String(address.postal_code || ''))) throw fail(400, 'The saved address has an invalid Philippine ZIP code.');
-  if (!address.recipient_name || !address.phone || !address.street || !address.city || !address.state || !address.barangay) {
-    throw fail(400, 'The saved address is incomplete.');
-  }
-  if (!/^(?:\+63|0)9\d{9}$/.test(String(address.phone).replace(/[\s()-]/g, ''))) throw fail(400, 'The saved address has an invalid Philippine mobile number.');
-  if (address.lat !== null || address.lng !== null) {
-    const lat = Number(address.lat);
-    const lng = Number(address.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < 4.2 || lat > 21.3 || lng < 116 || lng > 127) {
-      throw fail(400, 'The saved address coordinates are outside the Philippines.');
-    }
-  }
-  return address;
 };
 
 const addressSnapshot = (address) => ({
@@ -240,7 +216,16 @@ export const createCheckout = async (req, res) => {
     const paymentMethod = String(req.body?.payment_method || '').trim().toLowerCase();
     if (!PAYMENT_METHODS.has(paymentMethod)) throw fail(400, 'payment_method must be cod or gcash.');
     idempotencyKey = validateIdempotencyKey(req);
-    const requestIdentity = { items, address_id: Number(req.body?.address_id), discount_code: req.body?.discount_code || null, payment_method: paymentMethod };
+    const addressPayload = req.body?.address ?? req.body?.shipping_address ?? req.body?.shipping_address_snapshot;
+    const hasAddressId = req.body?.address_id !== undefined && req.body?.address_id !== null && req.body?.address_id !== '';
+    const requestIdentity = {
+      items,
+      address_id: hasAddressId ? Number(req.body.address_id) : null,
+      address: hasAddressId ? null : normalizeCheckoutAddress(addressPayload),
+      save_address: !hasAddressId && req.body?.save_address === true,
+      discount_code: req.body?.discount_code || null,
+      payment_method: paymentMethod,
+    };
     requestHash = hashRequest(requestIdentity);
     client = await pool.connect();
     await client.query('BEGIN');
@@ -267,7 +252,13 @@ export const createCheckout = async (req, res) => {
       throw fail(409, 'This checkout is already being processed.', undefined, 'CHECKOUT_IN_PROGRESS');
     }
 
-    const address = await loadAddress(client, req.user.id, req.body?.address_id);
+    const address = await resolveCheckoutAddress(client, {
+      userId: req.user.id,
+      addressId: hasAddressId ? req.body.address_id : null,
+      address: addressPayload,
+      saveAddress: !hasAddressId && req.body?.save_address === true,
+      lockSavedAddress: true,
+    });
     const expiresAt = paymentMethod === 'gcash' ? new Date(Date.now() + 30 * 60 * 1000) : null;
     const { snapshots, subtotal } = await loadAndReserveItems(client, items, expiresAt);
     const { promotion, discount } = await calculateDiscount(client, req.user.id, req.body?.discount_code, subtotal);
@@ -293,7 +284,7 @@ export const createCheckout = async (req, res) => {
         actual_weight_kg, estimated_distance_km, distance_class, package_class
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,'PHP',$12,'pending',$13,$14,'online',$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
       RETURNING *`,
-      [req.user.id, address.id, total, subtotal, shippingFee, shippingQuote.provider, shippingQuote.courier,
+      [req.user.id, address.id || null, total, subtotal, shippingFee, shippingQuote.provider, shippingQuote.courier,
         shippingQuote.courier_name, shippingQuote.service_type, discount, taxAmount, orderStatus, paymentMethod,
         paymentMethod === 'gcash' ? 'paymongo' : 'cod', shippingQuote.service_type, formatAddress(address),
         JSON.stringify(snapshot), address.lat, address.lng, promotion?.code || null, idempotencyKey, expiresAt,

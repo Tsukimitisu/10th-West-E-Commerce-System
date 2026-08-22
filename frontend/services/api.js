@@ -4652,10 +4652,10 @@ export const adjustStock = createStockAdjustment;
 
 // ==================== SHIPPING ====================
 
-export const getShippingQuote = async ({ address_id, items }) => (
+export const getShippingQuote = async ({ address_id, address, items }) => (
   authenticatedFetch(`${API_URL}/shipping/quote`, {
     method: 'POST',
-    body: JSON.stringify({ address_id, items }),
+    body: JSON.stringify({ address_id, address, items }),
   })
 );
 

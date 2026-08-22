@@ -24,6 +24,9 @@ const roundCurrency = (value) => {
   return Math.round(parsed * 100) / 100;
 };
 
+const normalizeMobileNumber = (value) => String(value || '').replace(/[\s()-]/g, '');
+const isValidPhilippineMobile = (value) => /^(?:09\d{9}|\+639\d{9})$/.test(normalizeMobileNumber(value));
+
 const Checkout = () => {
   const {
     items: allCartItems,
@@ -202,6 +205,7 @@ const Checkout = () => {
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showNewAddress, setShowNewAddress] = useState(false);
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoError, setPromoError] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -229,6 +233,36 @@ const Checkout = () => {
     province_code: '', city_code: '', barangay_code: '',
     lat: null, lng: null,
   });
+
+  const isNewAddressMode = showNewAddress || addresses.length === 0;
+  const usingSavedAddress = Boolean(selectedAddress) && !isNewAddressMode;
+  const selectedSavedAddress = usingSavedAddress
+    ? addresses.find((address) => Number(address.id) === Number(selectedAddress))
+    : null;
+  const newAddressPayload = useMemo(() => ({
+    recipient_name: form.name.trim(),
+    phone: normalizeMobileNumber(form.phone),
+    street: form.street.trim(),
+    barangay: form.barangay.trim(),
+    city: form.city.trim(),
+    state: form.state.trim(),
+    postal_code: form.postal_code.trim(),
+    country: 'Philippines',
+    province_code: form.province_code || null,
+    city_code: form.city_code || null,
+    barangay_code: form.barangay_code || null,
+    lat: form.lat,
+    lng: form.lng,
+  }), [form]);
+  const newAddressComplete = Boolean(
+    newAddressPayload.recipient_name
+    && isValidPhilippineMobile(newAddressPayload.phone)
+    && newAddressPayload.street
+    && newAddressPayload.barangay
+    && newAddressPayload.city
+    && newAddressPayload.state
+    && /^\d{4}$/.test(newAddressPayload.postal_code)
+  );
 
   const [localQuantities, setLocalQuantities] = useState({});
   const [quantityErrors, setQuantityErrors] = useState({});
@@ -331,10 +365,13 @@ const Checkout = () => {
     quantity: Math.max(1, Math.trunc(toFiniteNumber(item.quantity, 1))),
   })), [items]);
   const shippingQuoteItemsKey = JSON.stringify(shippingQuoteItems);
+  const newAddressKey = JSON.stringify(newAddressPayload);
 
   useEffect(() => {
     let active = true;
-    if (!selectedAddress || shippingQuoteItems.length === 0) {
+    const canQuoteSavedAddress = usingSavedAddress && Boolean(selectedSavedAddress);
+    const canQuoteNewAddress = isNewAddressMode && newAddressComplete;
+    if ((!canQuoteSavedAddress && !canQuoteNewAddress) || shippingQuoteItems.length === 0) {
       setShippingQuote(null);
       setShippingQuoteLoading(false);
       setShippingQuoteError('');
@@ -344,7 +381,11 @@ const Checkout = () => {
     setShippingQuoteLoading(true);
     setShippingQuoteError('');
     setShippingQuoteErrorCode('');
-    getShippingQuote({ address_id: Number(selectedAddress), items: shippingQuoteItems })
+    const timeoutId = window.setTimeout(() => getShippingQuote({
+      address_id: canQuoteSavedAddress ? Number(selectedAddress) : undefined,
+      address: canQuoteNewAddress ? newAddressPayload : undefined,
+      items: shippingQuoteItems,
+    })
       .then((quote) => {
         if (active) setShippingQuote(quote);
       })
@@ -363,9 +404,12 @@ const Checkout = () => {
       })
       .finally(() => {
         if (active) setShippingQuoteLoading(false);
-      });
-    return () => { active = false; };
-  }, [selectedAddress, shippingQuoteItemsKey]);
+      }), 300);
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [isNewAddressMode, newAddressComplete, newAddressKey, selectedAddress, selectedSavedAddress, shippingQuoteItemsKey, usingSavedAddress]);
 
   const shippingCost = roundCurrency(shippingQuote?.shipping_fee ?? 0);
   const shippingBlocked = ['SHIPPING_NOT_AVAILABLE', 'SHIPPING_ADDRESS_UNCLEAR'].includes(shippingQuoteErrorCode);
@@ -446,21 +490,8 @@ const Checkout = () => {
       return;
     }
 
-    if (!shippingQuote || shippingQuoteLoading || shippingQuoteError) {
-      setError(shippingQuoteError || 'Please wait for the shipping fee to finish calculating.');
-      return;
-    }
-
-const isNewAddressMode = showNewAddress || addresses.length === 0;
-      const usingSavedAddress = selectedAddress && !isNewAddressMode;
-
-      if (!usingSavedAddress) {
-        setError('Save and select a delivery address before checkout.');
-        setProcessing(false);
-        return;
-      }
-      const selectedAddr = addresses.find((a) => a.id === selectedAddress);
-      if (!usingSavedAddress && !isNewAddressMode) {
+    const selectedAddr = selectedSavedAddress;
+    if (!usingSavedAddress && !isNewAddressMode) {
       setError('Please select a shipping address.');
       return;
     }
@@ -474,7 +505,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
       return;
     }
 
-    const zipValid = usingSavedAddress ? true : validateZip(form.postal_code);
+    const zipValid = usingSavedAddress ? true : validateZip(newAddressPayload.postal_code);
     if (!zipValid) {
       setError('Zip Code must contain exactly 4 digits.');
       setZipError('Zip Code must contain exactly 4 digits.');
@@ -482,10 +513,19 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
     }
 
     if (!usingSavedAddress) {
-      if (!form.name || !form.phone || !form.street || !form.barangay || !form.city || !form.state || !form.postal_code) {
+      if (!newAddressPayload.recipient_name || !newAddressPayload.phone || !newAddressPayload.street || !newAddressPayload.barangay || !newAddressPayload.city || !newAddressPayload.state || !newAddressPayload.postal_code) {
         setError('Please complete the shipping address and contact details.');
         return;
       }
+      if (!isValidPhilippineMobile(newAddressPayload.phone)) {
+        setError('Phone must start with 09 or +639 and contain 11 digits.');
+        return;
+      }
+    }
+
+    if (!shippingQuote || shippingQuoteLoading || shippingQuoteError) {
+      setError(shippingQuoteError || 'Please wait for the shipping fee to finish calculating.');
+      return;
     }
 
     setProcessing(true);
@@ -574,9 +614,11 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
           variant_id: i.variantId || i.product?.selected_variant?.id || null,
           quantity: Math.max(1, Math.trunc(toFiniteNumber(i.quantity, 1))),
         })),
-        address_id: Number(selectedAddress),
         payment_method: paymentMethod,
         discount_code: activeDiscount?.code || null,
+        ...(usingSavedAddress
+          ? { address_id: Number(selectedAddress) }
+          : { address: shippingAddressSnapshot, save_address: saveNewAddress }),
       };
 
       let checkout = null;
@@ -681,6 +723,7 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                           onChange={() => {
                             setSelectedAddress(addr.id);
                             setShowNewAddress(false);
+                            setSaveNewAddress(false);
                             setZipError('');
                             setError('');
                             setForm((f) => ({
@@ -816,6 +859,15 @@ const isNewAddressMode = showNewAddress || addresses.length === 0;
                       error={zipError}
                       required={!selectedAddress}
                     />
+                    <label className="md:col-span-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <input
+                        type="checkbox"
+                        checked={saveNewAddress}
+                        onChange={(event) => setSaveNewAddress(event.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-red-500"
+                      />
+                      <span className="text-sm text-gray-700">Save this address to my address book</span>
+                    </label>
                   </div>
                 )}
               </Section>

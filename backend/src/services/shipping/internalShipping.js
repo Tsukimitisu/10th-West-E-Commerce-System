@@ -26,6 +26,7 @@ import {
 } from './shippingLocation.js';
 import { estimateDeliveryDistance } from './shippingDistance.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../../constants/commerce.js';
+import { resolveCheckoutAddress } from '../../utils/checkoutAddress.js';
 
 export { classifyPhilippineShippingZone } from './shippingLocation.js';
 
@@ -172,18 +173,14 @@ export const normalizeShippingQuoteItems = (input) => {
   return [...merged.values()];
 };
 
-export const calculateDatabaseShippingQuote = async (db, { userId, addressId, items }) => {
-  const normalizedAddressId = Number(addressId);
-  if (!Number.isInteger(normalizedAddressId) || normalizedAddressId <= 0) {
-    throw Object.assign(new Error('A valid address_id is required.'), { status: 400 });
-  }
+export const calculateDatabaseShippingQuote = async (db, { userId, addressId, address: addressPayload, items }) => {
   const normalizedItems = normalizeShippingQuoteItems(items);
-  const addressResult = await db.query(
-    'SELECT * FROM addresses WHERE id = $1 AND user_id = $2',
-    [normalizedAddressId, userId]
-  );
-  const address = addressResult.rows[0];
-  if (!address) throw Object.assign(new Error('Saved address not found.'), { status: 404 });
+  const address = await resolveCheckoutAddress(db, {
+    userId,
+    addressId,
+    address: addressPayload,
+    saveAddress: false,
+  });
 
   let subtotal = 0;
   let actualWeightKg = 0;

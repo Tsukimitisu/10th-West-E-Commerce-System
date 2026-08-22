@@ -10,6 +10,7 @@ router.post('/quote', authenticateToken, requireRole('customer'), async (req, re
     const quote = await calculateDatabaseShippingQuote(pool, {
       userId: req.user.id,
       addressId: req.body?.address_id,
+      address: req.body?.address ?? req.body?.shipping_address,
       items: req.body?.items,
     });
     return res.json(quote);
