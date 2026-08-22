@@ -186,8 +186,8 @@ const Cart = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-7">
             <div className="lg:col-span-8">
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3.5 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">
-                  <div className="col-span-6 flex items-center gap-3">
+                <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(7rem,auto)_7.75rem_minmax(7.5rem,auto)] gap-4 px-6 py-3.5 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">
+                  <div className="min-w-0 flex items-center gap-3">
                     <input
                       type="checkbox"
                       checked={selectedItemIds.length === items.length && items.length > 0}
@@ -196,17 +196,17 @@ const Cart = () => {
                     />
                     <span>Product</span>
                   </div>
-                  <div className="col-span-2 text-center">Price</div>
-                  <div className="col-span-2 text-center">Quantity</div>
-                  <div className="col-span-2 text-right">Total</div>
+                  <div className="min-w-[7rem] text-center">Price</div>
+                  <div className="w-[7.75rem] text-center">Quantity</div>
+                  <div className="min-w-[7.5rem] text-right">Total</div>
                 </div>
 
                 {items.map((item, i) => {
                   const price = getEffectiveItemUnitPrice(item);
                   return (
                     <div key={item.productId} className={`p-4 md:px-6 md:py-5 hover:bg-red-50/30 transition-colors ${i < items.length - 1 ? 'border-b border-slate-200' : ''}`}>
-                      <div className="md:grid md:grid-cols-12 md:gap-4 md:items-center">
-                        <div className="col-span-6 flex gap-4 items-center">
+                      <div className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(7rem,auto)_7.75rem_minmax(7.5rem,auto)] md:gap-4 md:items-center">
+                        <div className="min-w-0 flex gap-4 items-center">
                           <input
                             type="checkbox"
                             checked={selectedItemIds.includes(item.productId)}
@@ -228,15 +228,15 @@ const Cart = () => {
                           </div>
                         </div>
 
-                        <div className="col-span-2 text-center hidden md:block">
-                          <span className="text-sm font-semibold text-slate-900">{formatPrice(price)}</span>
+                        <div className="hidden min-w-[7rem] text-center md:block">
+                          <span className="whitespace-nowrap text-sm font-semibold text-slate-900">{formatPrice(price)}</span>
                           {item.product.is_on_sale && item.product.sale_price && (
-                            <span className="block text-xs text-slate-500 line-through">{formatPrice(item.product.price)}</span>
+                            <span className="block whitespace-nowrap text-xs text-slate-500 line-through">{formatPrice(item.product.price)}</span>
                           )}
                         </div>
 
-                        <div className="col-span-2 flex justify-center mt-3 md:mt-0">
-                          <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50">
+                        <div className="flex w-[7.75rem] justify-center mt-3 md:mt-0">
+                          <div className="flex shrink-0 items-center border border-slate-200 rounded-lg bg-slate-50">
                             <button onClick={() => handleDecreaseQty(item)} className="px-2.5 py-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors" disabled={item.quantity <= 1}>
                               <Minus size={14} />
                             </button>
@@ -255,8 +255,8 @@ const Cart = () => {
                           </div>
                         </div>
 
-                        <div className="col-span-2 flex items-center justify-between md:justify-end gap-3 mt-3 md:mt-0">
-                          <span className="text-sm font-bold text-slate-900 md:mr-2">{formatPrice(price * Math.max(0, toFiniteNumber(item.quantity, 0)))}</span>
+                        <div className="flex min-w-[7.5rem] items-center justify-between gap-3 mt-3 md:mt-0 md:justify-end">
+                          <span className="whitespace-nowrap text-sm font-bold text-slate-900 md:mr-2">{formatPrice(price * Math.max(0, toFiniteNumber(item.quantity, 0)))}</span>
                           <button onClick={() => handleRemoveItem(item.productId)} className="hidden md:block p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                             <Trash2 size={16} />
                           </button>
