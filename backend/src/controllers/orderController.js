@@ -316,11 +316,17 @@ export const getAllOrders = async (req, res) => {
     const query = `
       SELECT o.*, 
              u.name as customer_name, u.email as customer_email,
-             COUNT(oi.id) as item_count
+             COALESCE(item_summary.item_count, 0) AS item_count,
+             item_summary.first_item_name
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.id
-      LEFT JOIN order_items oi ON o.id = oi.order_id
-      GROUP BY o.id, u.name, u.email
+      LEFT JOIN LATERAL (
+        SELECT COUNT(oi.id)::int AS item_count,
+               (ARRAY_AGG(COALESCE(NULLIF(oi.product_name, ''), p.name, 'Unknown item') ORDER BY oi.id))[1] AS first_item_name
+        FROM order_items oi
+        LEFT JOIN products p ON p.id = oi.product_id
+        WHERE oi.order_id = o.id
+      ) item_summary ON TRUE
       ORDER BY o.created_at DESC
       ${paginated ? 'LIMIT $1 OFFSET $2' : ''}
     `;
@@ -389,11 +395,18 @@ export const getUserOrders = async (req, res) => {
     }
 
     const query = `
-      SELECT o.*, COUNT(oi.id) as item_count
+      SELECT o.*,
+             COALESCE(item_summary.item_count, 0) AS item_count,
+             item_summary.first_item_name
       FROM orders o
-      LEFT JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN LATERAL (
+        SELECT COUNT(oi.id)::int AS item_count,
+               (ARRAY_AGG(COALESCE(NULLIF(oi.product_name, ''), p.name, 'Unknown item') ORDER BY oi.id))[1] AS first_item_name
+        FROM order_items oi
+        LEFT JOIN products p ON p.id = oi.product_id
+        WHERE oi.order_id = o.id
+      ) item_summary ON TRUE
       WHERE o.user_id = $1
-      GROUP BY o.id
       ORDER BY o.created_at DESC
       ${paginated ? 'LIMIT $2 OFFSET $3' : ''}
     `;
@@ -925,17 +938,21 @@ const getOrdersFallback = async ({ userId = null, page, limit, paginated } = {})
   const orders = await supabaseRestFetch('orders', params).catch(() => []);
   const rows = Array.isArray(orders) ? orders : [];
   const ids = rows.map((order) => Number(order.id)).filter(Boolean);
-  let itemCounts = new Map();
+  let itemSummaries = new Map();
 
   if (ids.length > 0) {
     const items = await supabaseRestFetch('order_items', {
-      select: 'order_id',
+      select: 'id,order_id,product_name',
       order_id: `in.(${ids.join(',')})`,
+      order: 'id.asc',
       limit: 10000,
     }).catch(() => []);
-    itemCounts = (Array.isArray(items) ? items : []).reduce((map, item) => {
+    itemSummaries = (Array.isArray(items) ? items : []).reduce((map, item) => {
       const orderId = Number(item.order_id);
-      map.set(orderId, (map.get(orderId) || 0) + 1);
+      const current = map.get(orderId) || { item_count: 0, first_item_name: null };
+      current.item_count += 1;
+      if (!current.first_item_name && item.product_name) current.first_item_name = item.product_name;
+      map.set(orderId, current);
       return map;
     }, new Map());
   }
@@ -946,15 +963,20 @@ const getOrdersFallback = async ({ userId = null, page, limit, paginated } = {})
       customer_name: order.customer?.name || order.customer_name,
       customer_email: order.customer?.email || order.customer_email,
     }),
-    item_count: itemCounts.get(Number(order.id)) || 0,
+    item_count: itemSummaries.get(Number(order.id))?.item_count || 0,
+    first_item_name: itemSummaries.get(Number(order.id))?.first_item_name || null,
   }));
 
   const memoryOrders = memoryOrderStore.orders
     .filter((order) => !userId || Number(order.user_id) === Number(userId))
-    .map((order) => ({
-      ...mapOrderRecord(order),
-      item_count: memoryOrderStore.items.filter((item) => Number(item.order_id) === Number(order.id)).length,
-    }));
+    .map((order) => {
+      const orderItems = memoryOrderStore.items.filter((item) => Number(item.order_id) === Number(order.id));
+      return {
+        ...mapOrderRecord(order),
+        item_count: orderItems.length,
+        first_item_name: orderItems[0]?.product_name || null,
+      };
+    });
 
   return [...memoryOrders, ...restOrders]
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));

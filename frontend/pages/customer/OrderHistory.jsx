@@ -48,7 +48,7 @@ const OrderHistory = () => {
   }, []);
 
   const filtered = orders.filter((o) => {
-    const matchesSearch = !search || o.id?.toString().includes(search) || o.order_number?.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = !search || o.id?.toString().includes(search) || String(o.order_number || '').toLowerCase().includes(search.toLowerCase());
     let matchesFilter = filter === 'all' || o.status === filter;
     if (filter === 'completed') {
       matchesFilter = o.status === 'completed' || o.status === 'delivered';
@@ -127,21 +127,27 @@ const OrderHistory = () => {
               const st = statusConfig[order.status] || statusConfig.pending;
               const StatusIcon = st.icon;
               const date = new Date(order.created_at || order.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+              const itemCount = Number(order.item_count || order.items?.length || 0);
+              const firstItemName = order.first_item_name || order.items?.[0]?.product?.name || order.items?.[0]?.product_name || '';
+              const itemSummary = firstItemName
+                ? `${firstItemName}${itemCount > 1 ? ` + ${itemCount - 1} more item${itemCount - 1 === 1 ? '' : 's'}` : ''}`
+                : `${itemCount || '-'} items`;
 
               return (
                 <Link key={order.id} to={`/orders/${order.id}`} className="block bg-white rounded-xl border border-slate-200 hover:border-red-200 hover:shadow-sm p-5 transition-all group">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-2 flex-1 min-w-0">
                       <div className="flex items-center gap-3 flex-wrap">
-                        <p className="font-semibold text-gray-900 text-sm">Order #{order.order_number || order.id}</p>
+                        <p className="font-semibold text-gray-900 text-sm">Order Number: #{order.order_number || order.id}</p>
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 border rounded-full text-xs font-medium capitalize ${st.bg} ${st.color}`}>
                           <StatusIcon size={12} /> {order.status}
                         </span>
                       </div>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span className="flex items-center gap-1"><Calendar size={12} /> {date}</span>
-                        <span>{order.items?.length || order.item_count || '-'} items</span>
+                        <span>{itemCount || '-'} items</span>
                       </div>
+                      <p className="truncate text-sm font-medium text-gray-800" title={itemSummary}>{itemSummary}</p>
                       {order.items && order.items.length > 0 && (
                         <div className="flex items-center gap-2 mt-2">
                           {order.items.slice(0, 4).map((item, i) => (

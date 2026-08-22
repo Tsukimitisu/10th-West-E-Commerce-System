@@ -161,10 +161,12 @@ const OrderDetail = () => {
       </Link>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="font-display font-bold text-xl text-white">Order #{order.order_number || order.id}</h1>
-          <p className="text-sm text-gray-400 flex items-center gap-1 mt-0.5"><Calendar size={14} /> Placed on {date}</p>
+      <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5 mb-6">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Order Number</p>
+          <h1 className="break-words font-display text-xl font-bold text-slate-950">#{order.order_number || order.id}</h1>
+          <p className="mt-1 text-xs text-slate-600">Use this number when asking support about your order.</p>
+          <p className="text-sm text-slate-500 flex items-center gap-1 mt-2"><Calendar size={14} /> Placed on {date}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {/* View Invoice */}
@@ -379,7 +381,9 @@ const OrderDetail = () => {
               const productId = resolveOrderItemProductId(item);
               const itemTitle = item.name || item.product_name || item.product?.name;
               const itemImage = item.image_url || item.product?.image;
-              const lineTotal = roundCurrency(roundCurrency(item.price ?? item.product?.price ?? 0) * Math.max(0, toFiniteNumber(item.quantity, 0)));
+              const unitPrice = roundCurrency(item.price ?? item.product?.price ?? 0);
+              const itemQuantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+              const lineTotal = roundCurrency(unitPrice * itemQuantity);
 
               return (
                 <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-4 p-4">
@@ -403,9 +407,13 @@ const OrderDetail = () => {
                       <p className="text-sm font-medium text-white truncate">{itemTitle}</p>
                     )}
                     {(item.sku || item.product?.sku) && <p className="text-xs text-gray-400">SKU: {item.sku || item.product?.sku}</p>}
-                    <p className="text-xs text-gray-400">Qty: {Math.max(0, toFiniteNumber(item.quantity, 0))}</p>
+                    <p className="text-xs text-gray-300">Quantity: {itemQuantity}</p>
+                    <p className="text-xs text-gray-300">Unit price: {formatCurrency(unitPrice)}</p>
                   </div>
-                  <p className="text-sm font-semibold text-white">{formatCurrency(lineTotal)}</p>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400">Line total</p>
+                    <p className="text-sm font-semibold text-white">{formatCurrency(lineTotal)}</p>
+                  </div>
                 </div>
               );
             })}
