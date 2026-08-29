@@ -47,6 +47,7 @@ const OrderConfirmation = () => {
 
   const vatAmount = roundCurrency(order?.tax_amount ?? order?.vat_amount ?? 0);
   const totalAmount = roundCurrency(order?.total ?? order?.total_amount ?? 0);
+  const secondaryActionClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-white px-6 py-3 font-medium text-slate-800 transition-colors hover:bg-slate-900 hover:text-white focus-visible:bg-slate-900 focus-visible:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 active:bg-slate-950 active:text-white';
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-16">
@@ -55,8 +56,8 @@ const OrderConfirmation = () => {
         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <CheckCircle2 size={40} className="text-green-600" />
         </div>
-        <h1 className="font-display font-bold text-2xl text-white mb-2">Order Confirmed!</h1>
-        <p className="text-gray-400">Thank you for your purchase. We've sent a confirmation to your email.</p>
+        <h1 className="font-display font-bold text-2xl text-slate-950 mb-2">Order Confirmed!</h1>
+        <p className="text-slate-600">Thank you for your purchase. We've sent a confirmation to your email.</p>
       </div>
 
       {order && (
@@ -72,8 +73,8 @@ const OrderConfirmation = () => {
 
           {/* Estimated delivery */}
           <div className="p-4 bg-gray-900 flex items-center justify-center gap-3 text-sm">
-            <Truck size={18} className="text-gray-600" />
-            <span className="text-gray-600">Estimated delivery:</span>
+            <Truck size={18} className="text-slate-300" />
+            <span className="text-slate-300">Estimated delivery:</span>
             <span className="font-medium text-white">3-7 business days</span>
           </div>
 
@@ -137,16 +138,16 @@ const OrderConfirmation = () => {
         </Link>
         {order && (
           <button onClick={() => window.open(`${API_URL}/orders/${order.id}/invoice`, '_blank')}
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-700 text-gray-700 hover:bg-gray-900 font-medium rounded-lg transition-colors">
+            className={secondaryActionClass}>
             <Printer size={16} /> View Invoice
           </button>
         )}
         <Link to="/shop"
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-700 text-gray-700 hover:bg-gray-900 font-medium rounded-lg transition-colors">
+          className={secondaryActionClass}>
           <ShoppingBag size={16} /> Continue Shopping
         </Link>
         <Link to="/"
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-gray-700 text-gray-700 hover:bg-gray-900 font-medium rounded-lg transition-colors">
+          className={secondaryActionClass}>
           <Home size={16} /> Go Home
         </Link>
       </div>
