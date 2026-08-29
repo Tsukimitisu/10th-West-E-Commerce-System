@@ -2294,6 +2294,13 @@ const mapOrderItemToCartItem = (item) => {
     productReferenceId: hasProductReference ? productId : null,
     product,
     quantity: resolvedQuantity,
+    name: product.name,
+    product_name: product.name,
+    image: item.image_url ?? item.image_snapshot ?? product.image,
+    image_url: item.image_url ?? item.image_snapshot ?? product.image,
+    price: roundCurrency(item.unit_price ?? item.product_price ?? item.price ?? product.price),
+    unit_price: roundCurrency(item.unit_price ?? item.product_price ?? item.price ?? product.price),
+    line_total: roundCurrency(item.line_total ?? ((item.unit_price ?? item.product_price ?? item.price ?? product.price) * resolvedQuantity)),
   };
 };
 

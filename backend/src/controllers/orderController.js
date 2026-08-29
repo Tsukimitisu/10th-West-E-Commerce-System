@@ -201,16 +201,30 @@ const normalizeWaybillStatus = (value) => {
   return ['not_requested', 'pending', 'generated', 'failed'].includes(status) ? status : 'not_requested';
 };
 
+const mapOrderItemRecord = (item) => {
+  const quantity = Math.max(1, Number.parseInt(String(item.quantity || 1), 10) || 1);
+  const unitPrice = roundMoney(item.product_price ?? item.price ?? item.product_price_current ?? 0);
+  const productName = normalizeText(item.product_name || item.product_name_current) || 'Product unavailable';
+  const imageUrl = normalizeText(item.image_snapshot || item.product_image);
+  return {
+    ...item,
+    name: productName,
+    product_name: productName,
+    image_url: imageUrl,
+    quantity,
+    price: unitPrice,
+    product_price: unitPrice,
+    unit_price: unitPrice,
+    line_total: roundMoney(unitPrice * quantity),
+  };
+};
+
 const mapMemoryOrderBundle = ({ order, items }) => ({
   ...mapOrderRecord(order),
   return_eligible: false,
   return_eligibility_message: '',
   return_request: null,
-  items: items.map((item) => ({
-    ...item,
-    product_price: roundMoney(item.product_price),
-    price: roundMoney(item.product_price),
-  })),
+  items: items.map(mapOrderItemRecord),
 });
 
 const createMemoryOrder = (req) => {
@@ -546,7 +560,7 @@ export const getOrderById = async (req, res) => {
         return_eligible: false,
         return_eligibility_message: '',
         return_request: null,
-        items: (Array.isArray(items) ? items : []).map((item) => ({
+        items: (Array.isArray(items) ? items : []).map((item) => mapOrderItemRecord({
           ...item,
           product_name: item.product_name || item.products?.name,
           product_image: item.products?.image,
@@ -561,7 +575,6 @@ export const getOrderById = async (req, res) => {
           product_is_on_sale: item.products?.is_on_sale,
           product_sku: item.products?.sku,
           product_barcode: item.products?.barcode,
-          product_price: roundMoney(item.product_price),
         })),
       });
     }
@@ -612,10 +625,7 @@ export const getOrderById = async (req, res) => {
     res.json({
       ...mapOrderRecord(order),
       ...returnInfo,
-      items: itemsResult.rows.map(item => ({
-        ...item,
-        product_price: roundMoney(item.product_price)
-      }))
+      items: itemsResult.rows.map(mapOrderItemRecord)
     });
   } catch (error) {
     console.error('Get order error:', error);
