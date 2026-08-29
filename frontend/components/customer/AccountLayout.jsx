@@ -1,15 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-import { User as UserIcon, Package, MapPin, Heart, RotateCcw, Wallet, ChevronRight } from 'lucide-react';
+import { User as UserIcon, Package, MapPin, Heart, RotateCcw, Wallet, ChevronRight, MessageCircle } from 'lucide-react';
 import { getCurrentAuthUser } from '../../services/authSession.js';
 
 const menuItems = [
   { path: '/profile', label: 'My Profile', icon: UserIcon },
   { path: '/orders', label: 'My Orders', icon: Package },
-  { path: '/my-returns', label: 'Returns', icon: RotateCcw },
-  { path: '/addresses', label: 'Address Book', icon: MapPin },
+  { path: '/messages', label: 'Messages', icon: MessageCircle },
   { path: '/wishlist', label: 'Wishlist', icon: Heart },
+  { path: '/addresses', label: 'Address Book', icon: MapPin },
+  { path: '/my-returns', label: 'Returns', icon: RotateCcw },
 ];
 
 const getMenuIndex = (pathname) => menuItems.findIndex((item) => item.path === pathname);
@@ -73,7 +74,7 @@ const AccountLayout = ({ children }) => {
                   {user.store_credit !== undefined && user.store_credit > 0 && (
                     <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
                       <Wallet size={16} className="text-green-600" />
-                      <span className="text-sm font-medium text-green-700">?{user.store_credit.toFixed(2)} credit</span>
+                      <span className="text-sm font-medium text-green-700">₱{user.store_credit.toFixed(2)} credit</span>
                     </div>
                   )}
                 </div>

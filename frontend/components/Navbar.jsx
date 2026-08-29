@@ -678,7 +678,7 @@ const Navbar = ({ user, onLogout }) => {
                         </Link>
                       )}
                       <Link to="/wishlist" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Heart size={16} className="text-red-400" /> Wishlist</Link>
-                      <Link to="/addresses" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><MapPin size={16} className="text-red-400" /> Addresses</Link>
+                      <Link to="/addresses" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><MapPin size={16} className="text-red-400" /> Address Book</Link>
                       <Link to="/my-returns" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><RotateCcw size={16} className="text-red-400" /> Returns</Link>
                       {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
                         <>
@@ -814,7 +814,7 @@ const Navbar = ({ user, onLogout }) => {
                   )}
                   <Link to="/wishlist" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/wishlist' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Wishlist</Link>
                   <Link to="/addresses" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/addresses' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Address Book</Link>
-                  <Link to="/my-returns" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/my-returns' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Returns</Link>
+                  <Link to="/my-returns" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/my-returns' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Returns</Link>
                 </>
               )}
               {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
