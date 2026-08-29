@@ -32,6 +32,20 @@ test('POS cart normalization rejects zero and negative quantities', () => {
   );
 });
 
+test('POS cart normalization enforces the maximum quantity per item', () => {
+  assert.throws(
+    () => __testing.normalizeCartItems([{ product_id: 10, quantity: 101 }]),
+    /Maximum POS quantity per item is 100\./,
+  );
+  assert.throws(
+    () => __testing.normalizeCartItems([
+      { product_id: 10, quantity: 60 },
+      { product_id: 10, quantity: 41 },
+    ]),
+    /Maximum POS quantity per item is 100\./,
+  );
+});
+
 test('POS currency rounding is stable', () => {
   assert.equal(__testing.round(10.005), 10.01);
   assert.equal(__testing.round(99.999), 100);

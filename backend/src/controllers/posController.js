@@ -54,9 +54,12 @@ const normalizeCartItems = (rawItems) => {
     if (
       !Number.isInteger(productId) || productId <= 0
       || (variantId !== null && (!Number.isInteger(variantId) || variantId <= 0))
-      || !Number.isInteger(quantity) || quantity <= 0 || quantity > 100
+      || !Number.isInteger(quantity) || quantity <= 0
     ) {
       throw fail(400, 'Every POS item requires a valid product, optional variant, and quantity from 1 to 100.', 'POS_ITEM_INVALID');
+    }
+    if (quantity > 100) {
+      throw fail(400, 'Maximum POS quantity per item is 100.', 'POS_QUANTITY_INVALID');
     }
     const key = `${productId}:${variantId || 0}`;
     const existing = grouped.get(key);
@@ -69,7 +72,7 @@ const normalizeCartItems = (rawItems) => {
 
   const items = Array.from(grouped.values());
   if (items.some((item) => item.quantity > 100)) {
-    throw fail(400, 'The combined quantity for one POS item cannot exceed 100.', 'POS_QUANTITY_INVALID');
+    throw fail(400, 'Maximum POS quantity per item is 100.', 'POS_QUANTITY_INVALID');
   }
   return items;
 };

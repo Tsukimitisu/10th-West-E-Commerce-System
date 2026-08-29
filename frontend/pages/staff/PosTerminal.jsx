@@ -39,6 +39,9 @@ import PaymentModal from './PaymentModal';
 import ReceiptModal from './ReceiptModal';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
+const MAX_POS_QUANTITY = 100;
+const MAX_POS_QUANTITY_MESSAGE = 'Maximum POS quantity per item is 100.';
+
 const formatCurrency = (value) => new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
@@ -168,6 +171,10 @@ const PosTerminal = () => {
     const key = lineKey(product.id, variant?.id);
     setCart((current) => {
       const existing = current.find((item) => item.key === key);
+      if (existing && existing.quantity >= MAX_POS_QUANTITY) {
+        showToast('error', MAX_POS_QUANTITY_MESSAGE);
+        return current;
+      }
       if (existing && existing.quantity >= available) {
         showToast('error', `Only ${available} available.`);
         return current;
@@ -197,8 +204,10 @@ const PosTerminal = () => {
   const updateQuantity = (key, nextQuantity) => {
     setCart((current) => current.map((item) => {
       if (item.key !== key) return item;
-      const quantity = Math.max(1, Math.min(item.available_stock, Number(nextQuantity) || 1));
-      if (quantity !== Number(nextQuantity)) showToast('error', `Available stock: ${item.available_stock}`);
+      const requestedQuantity = Number(nextQuantity) || 1;
+      const quantity = Math.max(1, Math.min(MAX_POS_QUANTITY, item.available_stock, requestedQuantity));
+      if (requestedQuantity > MAX_POS_QUANTITY) showToast('error', MAX_POS_QUANTITY_MESSAGE);
+      else if (requestedQuantity > item.available_stock) showToast('error', `Available stock: ${item.available_stock}`);
       return { ...item, quantity };
     }));
   };
@@ -461,8 +470,8 @@ const PosTerminal = () => {
                     <div className="mt-3 flex items-center justify-between">
                       <div className="flex items-center rounded-lg border border-slate-200">
                         <button onClick={() => updateQuantity(item.key, item.quantity - 1)} className="grid h-9 w-9 place-items-center text-slate-600 hover:bg-slate-50" aria-label="Decrease quantity"><Minus size={14} /></button>
-                        <input type="number" min="1" max={item.available_stock} value={item.quantity} onChange={(event) => updateQuantity(item.key, event.target.value)} className="h-9 w-11 border-x border-slate-200 text-center text-sm font-bold focus:outline-none" aria-label={`${item.product.name} quantity`} />
-                        <button onClick={() => updateQuantity(item.key, item.quantity + 1)} className="grid h-9 w-9 place-items-center text-slate-600 hover:bg-slate-50" aria-label="Increase quantity"><Plus size={14} /></button>
+                        <input type="number" min="1" max={Math.min(MAX_POS_QUANTITY, item.available_stock)} value={item.quantity} onChange={(event) => updateQuantity(item.key, event.target.value)} className="h-9 w-11 border-x border-slate-200 text-center text-sm font-bold focus:outline-none" aria-label={`${item.product.name} quantity`} />
+                        <button disabled={item.quantity >= Math.min(MAX_POS_QUANTITY, item.available_stock)} onClick={() => updateQuantity(item.key, item.quantity + 1)} className="grid h-9 w-9 place-items-center text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300" aria-label="Increase quantity"><Plus size={14} /></button>
                       </div>
                       <strong className="text-sm">{formatCurrency(productPrice(item.product, item.variant) * item.quantity)}</strong>
                     </div>
