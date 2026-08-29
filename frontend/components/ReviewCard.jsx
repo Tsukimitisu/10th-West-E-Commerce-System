@@ -169,9 +169,18 @@ const ReviewCard = ({ review }) => {
         )}
 
         <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-700">
-          <button className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
-            <ThumbsUp size={13} /> Helpful
+          <button
+            type="button"
+            disabled
+            title="Mark this review as helpful for other shoppers."
+            aria-describedby={`review-helpful-${review.id}`}
+            className="flex cursor-not-allowed items-center gap-1.5 text-xs text-gray-400 opacity-80"
+          >
+            <ThumbsUp size={13} /> Helpful (coming soon)
           </button>
+          <span id={`review-helpful-${review.id}`} className="text-xs text-gray-400">
+            Mark this review as helpful for other shoppers.
+          </span>
         </div>
       </div>
 
@@ -292,5 +301,4 @@ function getTimeAgo(date) {
 }
 
 export default ReviewCard;
-
 
