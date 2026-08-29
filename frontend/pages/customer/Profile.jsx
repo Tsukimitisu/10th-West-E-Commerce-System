@@ -555,7 +555,9 @@ const Profile = () => {
                 Phone status: {phoneVerificationLabel}
               </div>
               {phoneVerificationLabel === 'Verification unavailable' && (
-                <p className="mt-1 text-xs text-gray-500">SMS verification is not configured, so this number is saved but is not claimed as verified.</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Phone number verification is not configured yet. You can still save a valid Philippine mobile number, but it will not be marked as verified.
+                </p>
               )}
             </div>
             <button

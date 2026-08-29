@@ -18,7 +18,7 @@ test('profile exposes TOTP setup, truthful phone state, and independent password
   assert.match(profile, /setup2FA/);
   assert.match(profile, /recoveryCodes/);
   assert.match(profile, /phone_verification/);
-  assert.match(profile, /SMS verification is not configured/);
+  assert.match(profile, /Phone number verification is not configured yet/);
   for (const key of ['current', 'new', 'confirm']) {
     assert.match(profile, new RegExp(`passwordVisibility\\.${key}`));
   }
