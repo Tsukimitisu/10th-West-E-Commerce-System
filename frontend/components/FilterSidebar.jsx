@@ -208,7 +208,13 @@ const FilterSidebar = ({
     return (
       <>
         <div className={`${showDesktop ? 'hidden lg:block' : 'hidden'} w-64 flex-shrink-0`}>
-          <div className="bg-white/10 backdrop-blur-md border border-white/30 rounded-2xl p-4 sticky top-24 shadow-lg">{content}</div>
+          <div
+            className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain rounded-2xl border border-white/30 bg-white/10 p-4 pr-3 shadow-lg backdrop-blur-md [scrollbar-gutter:stable]"
+            data-testid="shop-filter-scroll"
+            aria-label="Shop filters"
+          >
+            {content}
+          </div>
         </div>
 
         {isMobileOpen && (
@@ -225,7 +231,7 @@ const FilterSidebar = ({
   }
 
   return (
-    <div className="bg-white/10 backdrop-blur-md border border-white/30 rounded-2xl p-4 shadow-lg">
+    <div className="max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain rounded-2xl border border-white/30 bg-white/10 p-4 shadow-lg backdrop-blur-md [scrollbar-gutter:stable]" data-testid="shop-filter-scroll" aria-label="Shop filters">
       {content}
     </div>
   );
