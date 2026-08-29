@@ -1,20 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, ChevronDown, ChevronUp, HelpCircle, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getFAQs } from '../../services/api';
 
+const PAYMENT_METHODS_ANSWER = 'Currently, customers can pay using Cash on Delivery. GCash via PayMongo and credit card payments are planned but not yet available.';
+const PAYMENT_SECURITY_ANSWER = 'Cash on Delivery does not require card or e-wallet details. Never send payment credentials through chat or email.';
+
 const defaultFAQs = [
-  { category: 'Orders', question: 'How do I track my order?', answer: 'Go to My Account â†’ Orders and click on your order to see the latest tracking information.' },
-  { category: 'Orders', question: 'Can I cancel my order?', answer: 'You can cancel your order within 1 hour of placing it. Go to My Account â†’ Orders, find the order and click Cancel.' },
-  { category: 'Shipping', question: 'How long does shipping take?', answer: 'Standard shipping takes 3â€“7 business days within Metro Manila. Express shipping delivers within 1â€“2 business days.' },
-  { category: 'Shipping', question: 'Do you offer free shipping?', answer: 'Yes! Orders over ₱2,500 qualify for free standard shipping.' },
-  { category: 'Returns', question: 'What is your return policy?', answer: 'We accept returns within 15 days of delivery. Items must be unused and in original packaging. See our Returns page for details.' },
-  { category: 'Returns', question: 'How do I request a return?', answer: 'Go to My Account â†’ Orders, select the order, and click "Request Return". Fill out the form and we\'ll provide a return label.' },
-  { category: 'Payment', question: 'What payment methods do you accept?', answer: 'Checkout supports Cash on Delivery and GCash when the method is available for your order.' },
-  { category: 'Payment', question: 'Is my payment information secure?', answer: 'Yes, online payments are processed through PayMongo/GCash with signed webhook verification.' },
+  { category: 'Orders', question: 'How do I track my order?', answer: 'Go to My Account → My Orders and open an order to see its current status and Manual J&T details when available.' },
+  { category: 'Orders', question: 'Can I cancel my order?', answer: 'Open the order in My Account → My Orders. If the order is still eligible for cancellation, the cancel action will be available there.' },
+  { category: 'Shipping', question: 'How long does shipping take?', answer: 'The estimated delivery period is shown at checkout. Delivery is currently available within Luzon through the store-managed J&T process.' },
+  { category: 'Shipping', question: 'Do you offer free shipping?', answer: 'The current free-shipping threshold and your progress toward it are shown in both the cart and checkout.' },
+  { category: 'Returns', question: 'What is your return policy?', answer: 'Return eligibility and the request deadline are shown on each delivered order. See the Return & Refund Policy for details.' },
+  { category: 'Returns', question: 'How do I request a return?', answer: 'Go to My Account → My Orders, open an eligible delivered order, and submit a return request with the required details and proof.' },
+  { category: 'Payment', question: 'What payment methods do you accept?', answer: PAYMENT_METHODS_ANSWER },
+  { category: 'Payment', question: 'Is my payment information secure?', answer: PAYMENT_SECURITY_ANSWER },
   { category: 'Products', question: 'How do I find parts for my motorcycle?', answer: 'Use the search bar to search by part name or browse categories. You can filter by brand and compatibility.' },
   { category: 'Products', question: 'Are your parts genuine/OEM?', answer: 'We carry both OEM and high-quality aftermarket parts. Each product listing clearly indicates the type.' },
 ];
+
+const ensureAccuratePaymentWording = (faq) => {
+  const question = String(faq?.question || '').toLowerCase();
+  if (question.includes('payment method')) {
+    return { ...faq, category: faq.category || 'Payment', answer: PAYMENT_METHODS_ANSWER };
+  }
+  if (question.includes('payment information') || question.includes('payment secure')) {
+    return { ...faq, category: faq.category || 'Payment', answer: PAYMENT_SECURITY_ANSWER };
+  }
+  return faq;
+};
 
 const FAQ = () => {
   const [faqs, setFaqs] = useState(defaultFAQs);
@@ -26,117 +40,75 @@ const FAQ = () => {
     const load = async () => {
       try {
         const data = await getFAQs();
-        if (data && data.length > 0) setFaqs(data);
+        if (data && data.length > 0) setFaqs(data.map(ensureAccuratePaymentWording));
       } catch {}
     };
     load();
   }, []);
 
-  const categories = ['All', ...Array.from(new Set(faqs.map(f => f.category)))];
-
-  const filtered = faqs.filter(f => {
-    const matchesSearch = !search || f.question.toLowerCase().includes(search.toLowerCase()) || f.answer.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = activeCategory === 'All' || f.category === activeCategory;
-    return matchesSearch && matchesCategory;
+  const categories = ['All', ...Array.from(new Set(faqs.map((faq) => faq.category || 'General')))];
+  const normalizedSearch = search.trim().toLowerCase();
+  const filtered = faqs.filter((faq) => {
+    const question = String(faq.question || '');
+    const answer = String(faq.answer || '');
+    const category = faq.category || 'General';
+    const matchesSearch = !normalizedSearch
+      || question.toLowerCase().includes(normalizedSearch)
+      || answer.toLowerCase().includes(normalizedSearch);
+    return matchesSearch && (activeCategory === 'All' || category === activeCategory);
   });
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
-      <div className="max-w-4xl mx-auto px-4 py-12 md:py-16">
-        <div className="text-center mb-10">
-          <h1 className="font-display font-bold text-3xl md:text-4xl text-gray-900 mb-3">
-            Frequently Asked Questions
-          </h1>
-          <p className="text-gray-600">
-            Find answers to common questions about orders, shipping, returns, and more.
-          </p>
-          <div className="h-1 w-20 bg-red-600 mt-4 mx-auto skew-x-[-20deg]"></div>
+      <div className="mx-auto max-w-4xl px-4 py-12 md:py-16">
+        <div className="mb-10 text-center">
+          <h1 className="mb-3 font-display text-3xl font-bold text-gray-900 md:text-4xl">Frequently Asked Questions</h1>
+          <p className="text-gray-600">Find answers to common questions about orders, shipping, returns, and more.</p>
+          <div className="mx-auto mt-4 h-1 w-20 -skew-x-[20deg] bg-red-600" />
         </div>
 
-        {/* Search */}
         <div className="relative mb-6">
           <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search questions..."
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
+          <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search questions..." className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
         </div>
 
-        {/* Categories */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {categories.map(cat => (
-            <button
-              key={cat}
-              onClick={() => { setActiveCategory(cat); setOpenIndex(null); }}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                activeCategory === cat
-                  ? 'bg-red-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {cat}
+        <div className="mb-6 flex flex-wrap gap-2">
+          {categories.map((category) => (
+            <button key={category} type="button" onClick={() => { setActiveCategory(category); setOpenIndex(null); }} className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${activeCategory === category ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+              {category}
             </button>
           ))}
         </div>
 
-        {/* Accordion */}
         {filtered.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 border border-gray-200 rounded-xl">
-            <HelpCircle size={40} className="mx-auto text-gray-300 mb-3" />
-            <p className="text-gray-500 text-sm">No matching questions found. Try a different search.</p>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 py-12 text-center">
+            <HelpCircle size={40} className="mx-auto mb-3 text-gray-300" />
+            <p className="text-sm text-gray-500">No matching questions found. Try a different search.</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((faq, i) => (
-              <div
-                key={i}
-                className={`bg-gray-50 rounded-xl border transition-all ${
-                  openIndex === i ? 'border-red-300 shadow-sm' : 'border-gray-200'
-                }`}
-              >
-                <button
-                  onClick={() => setOpenIndex(openIndex === i ? null : i)}
-                  className="w-full flex items-center justify-between p-4 text-left"
-                >
-                  <div className="flex items-start gap-3 flex-1">
-                    <HelpCircle
-                      size={16}
-                      className={`mt-0.5 flex-shrink-0 ${openIndex === i ? 'text-red-600' : 'text-gray-400'}`}
-                    />
+            {filtered.map((faq, index) => (
+              <div key={faq.id || `${faq.question}-${index}`} className={`rounded-xl border bg-gray-50 transition-all ${openIndex === index ? 'border-red-300 shadow-sm' : 'border-gray-200'}`}>
+                <button type="button" onClick={() => setOpenIndex(openIndex === index ? null : index)} className="flex w-full items-center justify-between p-4 text-left" aria-expanded={openIndex === index}>
+                  <div className="flex flex-1 items-start gap-3">
+                    <HelpCircle size={16} className={`mt-0.5 flex-shrink-0 ${openIndex === index ? 'text-red-600' : 'text-gray-400'}`} />
                     <div>
-                      <p className={`text-sm font-medium ${openIndex === i ? 'text-gray-900' : 'text-gray-700'}`}>
-                        {faq.question}
-                      </p>
-                      <span className="text-xs text-gray-500 mt-0.5">{faq.category}</span>
+                      <p className={`text-sm font-medium ${openIndex === index ? 'text-gray-900' : 'text-gray-700'}`}>{faq.question}</p>
+                      <span className="mt-0.5 text-xs text-gray-500">{faq.category || 'General'}</span>
                     </div>
                   </div>
-                  {openIndex === i ? (
-                    <ChevronUp size={16} className="text-red-600" />
-                  ) : (
-                    <ChevronDown size={16} className="text-gray-400" />
-                  )}
+                  {openIndex === index ? <ChevronUp size={16} className="text-red-600" /> : <ChevronDown size={16} className="text-gray-400" />}
                 </button>
-                {openIndex === i && (
-                  <div className="px-4 pb-4 pl-11">
-                    <p className="text-sm text-gray-600 leading-relaxed">{faq.answer}</p>
-                  </div>
-                )}
+                {openIndex === index && <div className="px-4 pb-4 pl-11"><p className="text-sm leading-relaxed text-gray-600">{faq.answer}</p></div>}
               </div>
             ))}
           </div>
         )}
 
-        {/* Still need help */}
-        <div className="mt-10 bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
-          <h3 className="font-semibold text-gray-900 mb-1">Still need help?</h3>
-          <p className="text-sm text-gray-600 mb-4">Our support team is ready to assist you.</p>
-          <Link
-            to="/contact"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
+        <div className="mt-10 rounded-xl border border-gray-200 bg-gray-50 p-6 text-center">
+          <h3 className="mb-1 font-semibold text-gray-900">Still need help?</h3>
+          <p className="mb-4 text-sm text-gray-600">Our support team is ready to assist you.</p>
+          <Link to="/contact" className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-700">
             <MessageSquare size={16} /> Contact Support
           </Link>
         </div>
@@ -146,5 +118,3 @@ const FAQ = () => {
 };
 
 export default FAQ;
-
-
