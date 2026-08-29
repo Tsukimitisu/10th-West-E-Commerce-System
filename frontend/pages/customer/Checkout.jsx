@@ -39,6 +39,7 @@ const Checkout = () => {
     persistCheckoutSelection,
     getCheckoutSelection,
     clearCheckoutSelection,
+    clearPurchasedItemsLocal,
   } = useCart();
 
   const navigate = useNavigate();
@@ -660,6 +661,7 @@ const Checkout = () => {
           quantity: Math.max(1, Math.trunc(toFiniteNumber(i.quantity, 1))),
         })),
         payment_method: paymentMethod,
+        purchase_source: isBuyNow ? 'buy_now' : 'cart',
         discount_code: activeDiscount?.code || null,
         ...(usingSavedAddress
           ? { address_id: Number(selectedAddress) }
@@ -678,6 +680,9 @@ const Checkout = () => {
       }
 
       if (!isBuyNow) {
+        if (paymentMethod === 'cod' && checkout?.order_id) {
+          clearPurchasedItemsLocal(items);
+        }
         clearCheckoutSelection();
       } else {
         sessionStorage.removeItem(BUY_NOW_SESSION_KEY);

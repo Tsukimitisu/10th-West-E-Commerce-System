@@ -72,6 +72,36 @@ test('checkout idempotency rejects different payloads and in-progress duplicate 
   );
 });
 
+test('successful COD checkout clears only the purchased product and variant pairs', async () => {
+  const client = scriptedClient([
+    { rowCount: 2, rows: [{ id: 11 }, { id: 12 }] },
+    { rowCount: 1, rows: [] },
+  ]);
+  const removed = await checkoutTesting.clearPurchasedCartItems(client, {
+    userId: 7,
+    items: [
+      { product_id: 10, variant_id: null },
+      { product_id: 20, variant_id: 4 },
+    ],
+  });
+
+  assert.equal(removed, 2);
+  assert.match(client.calls[0].sql, /DELETE FROM cart_items/);
+  assert.match(client.calls[0].sql, /ci\.variant_id IS NOT DISTINCT FROM/);
+  assert.deepEqual(client.calls[0].params, [7, 10, null, 20, 4]);
+  assert.match(client.calls[1].sql, /UPDATE carts SET updated_at/);
+});
+
+test('cart deletion is gated behind a successfully created COD order', async () => {
+  const source = await readFile(new URL('./secureCheckoutController.js', import.meta.url), 'utf8');
+  const orderInsert = source.indexOf('INSERT INTO orders');
+  const cartClear = source.indexOf('await clearPurchasedCartItems');
+  const transactionCommit = source.indexOf("await client.query('COMMIT');", cartClear);
+  assert.ok(orderInsert > -1 && cartClear > orderInsert);
+  assert.ok(transactionCommit > cartClear);
+  assert.match(source, /paymentMethod === 'cod' && purchaseSource === 'cart'/);
+});
+
 test('POS idempotency claim is atomic and replays completed same-payload requests', async () => {
   const claimedClient = scriptedClient([{ rows: [{ id: 2, request_hash: 'hash-a', status: 'processing' }] }]);
   const claimed = await posTesting.claimPosIdempotencyKey(claimedClient, {

@@ -951,6 +951,30 @@ export const CartProvider = ({ children }) => {
     persistCheckoutSelection(nextCheckoutSelection);
   };
 
+  const clearPurchasedItemsLocal = (purchasedItems = []) => {
+    const purchasedKeys = new Set((Array.isArray(purchasedItems) ? purchasedItems : []).map((item) => {
+      const productId = Number(item?.productId ?? item?.product_id);
+      const variantValue = item?.variantId ?? item?.variant_id ?? item?.product?.selected_variant?.id ?? null;
+      const variantId = variantValue == null || variantValue === '' ? null : Number(variantValue);
+      return `${productId}:${variantId ?? 'none'}`;
+    }));
+    if (purchasedKeys.size === 0) return;
+
+    const shouldRemove = (item) => {
+      const productId = Number(item?.productId ?? item?.product_id);
+      const variantValue = item?.variantId ?? item?.variant_id ?? item?.product?.selected_variant?.id ?? null;
+      const variantId = variantValue == null || variantValue === '' ? null : Number(variantValue);
+      return purchasedKeys.has(`${productId}:${variantId ?? 'none'}`);
+    };
+
+    setItems((prev) => prev.filter((item) => !shouldRemove(item)));
+    setSelectedItemIds((prev) => prev.filter((id) => !purchasedItems.some((item) => Number(item?.productId ?? item?.product_id) === Number(id))));
+    setError(null);
+    const currentLocal = JSON.parse(sessionStorage.getItem(getCartKey()) || '[]');
+    sessionStorage.setItem(getCartKey(), JSON.stringify(currentLocal.filter((item) => !shouldRemove(item))));
+    clearCheckoutSelection();
+  };
+
   const clearItemsByIds = async (ids = []) => {
     const targetIds = normalizeTargetProductIds(ids);
     if (targetIds.length === 0) return;
@@ -1108,6 +1132,7 @@ export const CartProvider = ({ children }) => {
         clearCart,
         clearSelectedItems,
         clearItemsByIds,
+        clearPurchasedItemsLocal,
         itemCount,
         subtotal,
         total,

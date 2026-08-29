@@ -208,6 +208,37 @@ const releaseOrderReservations = async (client, orderId, nextStatus, reason) => 
   }
 };
 
+const clearPurchasedCartItems = async (client, { userId, items }) => {
+  const uniqueItems = new Map();
+  for (const item of items) {
+    const productId = Number(item.product_id);
+    const variantId = item.variant_id == null ? null : Number(item.variant_id);
+    uniqueItems.set(`${productId}:${variantId ?? 'none'}`, { productId, variantId });
+  }
+  if (uniqueItems.size === 0) return 0;
+
+  const params = [userId];
+  const itemClauses = [...uniqueItems.values()].map(({ productId, variantId }) => {
+    params.push(productId, variantId);
+    const productParameter = params.length - 1;
+    const variantParameter = params.length;
+    return `(ci.product_id = $${productParameter} AND ci.variant_id IS NOT DISTINCT FROM $${variantParameter})`;
+  });
+  const deleted = await client.query(
+    `DELETE FROM cart_items AS ci
+     USING carts AS c
+     WHERE ci.cart_id = c.id
+       AND c.user_id = $1
+       AND (${itemClauses.join(' OR ')})
+     RETURNING ci.id`,
+    params
+  );
+  if (deleted.rowCount > 0) {
+    await client.query('UPDATE carts SET updated_at = CURRENT_TIMESTAMP WHERE user_id = $1', [userId]);
+  }
+  return deleted.rowCount;
+};
+
 export const createCheckout = async (req, res) => {
   let client;
   let idempotencyKey;
@@ -217,6 +248,8 @@ export const createCheckout = async (req, res) => {
     const items = normalizeItems(req.body?.items);
     const paymentMethod = String(req.body?.payment_method || '').trim().toLowerCase();
     if (!PAYMENT_METHODS.has(paymentMethod)) throw fail(400, 'payment_method must be cod or gcash.');
+    const purchaseSource = String(req.body?.purchase_source || 'cart').trim().toLowerCase();
+    if (!['cart', 'buy_now'].includes(purchaseSource)) throw fail(400, 'purchase_source must be cart or buy_now.');
     idempotencyKey = validateIdempotencyKey(req);
     const addressPayload = req.body?.address ?? req.body?.shipping_address ?? req.body?.shipping_address_snapshot;
     const hasAddressId = req.body?.address_id !== undefined && req.body?.address_id !== null && req.body?.address_id !== '';
@@ -227,6 +260,7 @@ export const createCheckout = async (req, res) => {
       save_address: !hasAddressId && req.body?.save_address === true,
       discount_code: req.body?.discount_code || null,
       payment_method: paymentMethod,
+      purchase_source: purchaseSource,
     };
     requestHash = hashRequest(requestIdentity);
     client = await pool.connect();
@@ -367,6 +401,9 @@ export const createCheckout = async (req, res) => {
         [promotion.id, req.user.id, order.id, discount]
       );
     }
+    const clearedCartItemCount = paymentMethod === 'cod' && purchaseSource === 'cart'
+      ? await clearPurchasedCartItems(client, { userId: req.user.id, items: snapshots })
+      : 0;
     await client.query('COMMIT');
     stockUpdates.forEach(emitStockUpdate);
 
@@ -378,6 +415,7 @@ export const createCheckout = async (req, res) => {
       currency: 'PHP',
       totals: { subtotal, shipping_fee: shippingFee, discount, tax: taxAmount, total },
       shipping: shippingQuote,
+      cart_items_cleared: clearedCartItemCount,
     };
     if (paymentMethod === 'gcash') {
       let attemptId = null;
@@ -1247,6 +1285,7 @@ export const startExpiredReservationCleanup = ({ intervalMs = Number(process.env
 };
 
 export const __testing = {
+  clearPurchasedCartItems,
   claimCheckoutIdempotencyKey,
   hashRequest,
   normalizeItems,
