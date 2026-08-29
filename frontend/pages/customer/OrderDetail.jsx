@@ -426,10 +426,10 @@ const OrderDetail = () => {
           <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
             <h3 className="font-semibold text-white text-sm mb-3">Order Summary</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotalAmount)}</span></div>
+              <div className="flex justify-between text-slate-300"><span>Subtotal</span><span>{formatCurrency(subtotalAmount)}</span></div>
               {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(discountAmount)}</span></div>}
-              <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
-              <div className="flex justify-between text-gray-600"><span>VAT (12%)</span><span>{formatCurrency(vatAmount)}</span></div>
+              <div className="flex justify-between text-slate-300"><span>Shipping</span><span>{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
+              <div className="flex justify-between text-slate-300"><span>VAT (12%)</span><span>{formatCurrency(vatAmount)}</span></div>
               <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold text-white">
                 <span>Total</span><span>{formatCurrency(totalAmount)}</span>
               </div>
@@ -455,13 +455,13 @@ const OrderDetail = () => {
           {/* Shipping Address */}
           <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
             <h3 className="font-semibold text-white text-sm mb-2 flex items-center gap-1.5"><MapPin size={14} /> Shipping Address</h3>
-            <div className="text-sm text-gray-600 leading-relaxed">
+            <div className="text-sm text-slate-200 leading-relaxed">
               {addressLines.length > 0 ? (
                 addressLines.map((line, index) => (
                   <div key={index}>{line}</div>
                 ))
               ) : (
-                <div className="text-gray-500">No address provided</div>
+                <div className="text-slate-400">No address provided</div>
               )}
               {shippingPhone && <div>{shippingPhone}</div>}
             </div>
@@ -470,8 +470,8 @@ const OrderDetail = () => {
           {/* Payment */}
           <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
             <h3 className="font-semibold text-white text-sm mb-2 flex items-center gap-1.5"><CreditCard size={14} /> Payment</h3>
-            <p className="text-sm text-gray-600 capitalize">{order.payment_method || 'Card'}</p>
-            {order.payment_status && <p className="text-xs text-gray-400 capitalize mt-0.5">Status: {order.payment_status}</p>}
+            <p className="text-sm text-slate-200 capitalize">{order.payment_method || 'Cash on Delivery'}</p>
+            {order.payment_status && <p className="text-xs text-slate-400 capitalize mt-0.5">Status: {order.payment_status}</p>}
           </div>
         </div>
       </div>
