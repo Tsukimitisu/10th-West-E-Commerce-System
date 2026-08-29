@@ -51,8 +51,8 @@ const Login = ({ onLogin }) => {
     fetch(`${API_ORIGIN}/api/auth/providers`, { credentials: 'include' })
       .then((response) => response.ok ? response.json() : {})
       .then((providers) => setOauthProviders({
-        google: Boolean(providers.google),
-        facebook: Boolean(providers.facebook),
+        google: Boolean(providers.google?.available),
+        facebook: Boolean(providers.facebook?.available),
         loading: false,
       }))
       .catch(() => setOauthProviders({ google: false, facebook: false, loading: false }));

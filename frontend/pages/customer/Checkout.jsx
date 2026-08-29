@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield, Wallet } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { getAddresses, createGcashCheckout, createOrder, getProductById, getShippingQuote, validateDiscountCode } from '../../services/api';
+import { getAddresses, createGcashCheckout, createOrder, getAuthAvailability, getProductById, getShippingQuote, validateDiscountCode } from '../../services/api';
 import AddressDropdowns from '../../components/AddressDropdowns';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
@@ -216,6 +216,7 @@ const Checkout = () => {
   const [shippingQuoteError, setShippingQuoteError] = useState('');
   const [shippingQuoteErrorCode, setShippingQuoteErrorCode] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cod');
+  const [gcashAvailability, setGcashAvailability] = useState({ available: false, loading: true });
   const [agreeTerms, setAgreeTerms] = useState(() => {
     try {
       const storedAgreement = sessionStorage.getItem(CHECKOUT_TERMS_SESSION_KEY);
@@ -226,6 +227,29 @@ const Checkout = () => {
   });
   const [zipError, setZipError] = useState('');
   const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    getAuthAvailability()
+      .then((availability) => {
+        if (!active) return;
+        setGcashAvailability({
+          available: Boolean(availability?.gcash?.available),
+          loading: false,
+        });
+      })
+      .catch(() => {
+        if (active) setGcashAvailability({ available: false, loading: false });
+      });
+
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!gcashAvailability.loading && !gcashAvailability.available && paymentMethod === 'gcash') {
+      setPaymentMethod('cod');
+    }
+  }, [gcashAvailability, paymentMethod]);
 
   const [form, setForm] = useState({
     name: '', email: '', phone: '',
@@ -530,6 +554,10 @@ const Checkout = () => {
 
     setProcessing(true);
     setError('');
+    if (paymentMethod === 'gcash' && !gcashAvailability.available) {
+      setError('GCash is not configured yet. Please use Cash on Delivery.');
+      return;
+    }
 
     try {
       const u = getCurrentAuthUser();
@@ -923,16 +951,29 @@ const Checkout = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod('gcash')}
-                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'gcash' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                    onClick={() => gcashAvailability.available && setPaymentMethod('gcash')}
+                    disabled={gcashAvailability.loading || !gcashAvailability.available}
+                    aria-describedby="gcash-availability-message"
+                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'gcash' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'} disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:opacity-80`}
                   >
                     <Shield size={18} className={paymentMethod === 'gcash' ? 'text-blue-700' : 'text-slate-500'} />
                     <span>
                       <span className="block text-sm font-semibold text-gray-900">GCash via PayMongo</span>
-                      <span className="block text-xs text-gray-600">Redirect to secure GCash checkout.</span>
+                      <span className="block text-xs text-gray-600">
+                        {gcashAvailability.loading
+                          ? 'Checking availability...'
+                          : gcashAvailability.available
+                            ? 'Redirect to secure GCash checkout.'
+                            : 'Coming soon'}
+                      </span>
                     </span>
                   </button>
                 </div>
+                {!gcashAvailability.loading && !gcashAvailability.available && (
+                  <p id="gcash-availability-message" className="mt-3 text-sm font-medium text-slate-600">
+                    GCash is not configured yet. Cash on Delivery remains available.
+                  </p>
+                )}
                 {paymentMethod === 'gcash' && (
                   <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
                     <p className="mb-3 text-xs text-blue-700">After placing your order, you will be redirected to PayMongo to complete secure GCash payment.</p>

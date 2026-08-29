@@ -13,6 +13,7 @@ import {
 } from '../controllers/authController.js';
 import { authenticateOptional, authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
+import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import {
   resendVerificationLimiter,
   registerLimiter,
@@ -24,18 +25,44 @@ import {
 
 const router = express.Router();
 
-export const getAuthAvailability = () => ({
-  google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && passport._strategy('google')),
-  facebook: Boolean(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET && passport._strategy('facebook')),
-  two_factor: {
-    available: true,
-    method: 'totp',
-  },
-  phone_verification: {
-    available: false,
-    status: 'unavailable',
-  },
-});
+export const getAuthAvailability = () => {
+  const googleAvailable = Boolean(
+    process.env.GOOGLE_CLIENT_ID
+      && process.env.GOOGLE_CLIENT_SECRET
+      && passport._strategy('google')
+  );
+  const facebookAvailable = Boolean(
+    process.env.FACEBOOK_APP_ID
+      && process.env.FACEBOOK_APP_SECRET
+      && passport._strategy('facebook')
+  );
+  const gcashAvailable = getPaymongoConfigurationStatus().configured;
+
+  return {
+    google: {
+      available: googleAvailable,
+      reason: googleAvailable ? null : 'not_configured',
+    },
+    facebook: {
+      available: facebookAvailable,
+      reason: facebookAvailable ? null : 'not_configured',
+    },
+    two_factor: {
+      available: true,
+      reason: null,
+      method: 'totp',
+    },
+    gcash: {
+      available: gcashAvailable,
+      reason: gcashAvailable ? null : 'not_configured',
+    },
+    phone_verification: {
+      available: false,
+      status: 'unavailable',
+      reason: 'not_configured',
+    },
+  };
+};
 
 router.get('/providers', (_req, res) => {
   res.json(getAuthAvailability());
