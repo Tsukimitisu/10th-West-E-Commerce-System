@@ -62,7 +62,7 @@ const Footer = () => {
 
           <div>
             <h2 className="font-display text-sm font-bold text-white">Payments and support</h2>
-            <p className="mt-4 text-sm leading-6 text-slate-400">Checkout supports Cash on Delivery and GCash when available for your order.</p>
+            <p className="mt-4 text-sm leading-6 text-slate-400">Cash on Delivery is available. Other payment methods appear only when configured.</p>
             <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold">
               <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">COD</span>
               <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">GCash</span>

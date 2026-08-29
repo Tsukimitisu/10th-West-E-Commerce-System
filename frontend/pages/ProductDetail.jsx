@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle, Play } from 'lucide-react';
-import { getProductById, getRelatedProducts, getProductReviews, getReviewEligibility, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, startProductChat, WISHLIST_SYNC_EVENT } from '../services/api';
+import { getProductById, getRelatedProducts, getProductReviews, getReviewEligibility, addReview, addToWishlist, removeFromWishlist, getWishlist, getShippingConfig, getAuthAvailability, recordProductView, startProductChat, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useCart } from '../context/CartContext';
 import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
@@ -215,11 +215,31 @@ const ProductDetail = () => {
   const [reviewSuccess, setReviewSuccess] = useState('');
   const [reviewFieldErrors, setReviewFieldErrors] = useState({});
   const [reviewEligibility, setReviewEligibility] = useState({ eligible: false, loading: false });
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(3000);
+  const [gcashAvailability, setGcashAvailability] = useState({ available: false, loading: true });
   const { addToCart } = useCart();
 
   const currentUser = getCurrentAuthUser();
   const userId = currentUser?.id ?? null;
   const isWishlisted = wishlistedIds.includes(Number(id));
+
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([getShippingConfig(), getAuthAvailability()]).then(([shippingResult, authResult]) => {
+      if (!active) return;
+      if (shippingResult.status === 'fulfilled') {
+        const configuredThreshold = Number(shippingResult.value?.free_shipping_threshold);
+        if (Number.isFinite(configuredThreshold) && configuredThreshold >= 0) {
+          setFreeShippingThreshold(configuredThreshold);
+        }
+      }
+      setGcashAvailability({
+        available: authResult.status === 'fulfilled' && Boolean(authResult.value?.gcash?.available),
+        loading: false,
+      });
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1216,7 +1236,7 @@ const ProductDetail = () => {
                   <Truck size={18} className="text-slate-700" />
                 </span>
                 <p className="text-xs text-slate-800 font-semibold">Free Shipping</p>
-                <p className="text-[11px] text-slate-500">Orders PHP 2,500+</p>
+                <p className="text-[11px] text-slate-500">Subtotal {formatPrice(freeShippingThreshold)}+</p>
               </div>
               <div className="text-center p-2 sm:border-x border-slate-200">
                 <span className="inline-flex w-9 h-9 items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm mb-2">
@@ -1245,7 +1265,13 @@ const ProductDetail = () => {
                 <Shield size={18} className="mt-0.5 text-red-600" />
                 <div>
                   <p className="text-sm font-semibold text-slate-900">GCash checkout</p>
-                  <p className="text-xs text-slate-600">Online checkout redirects securely through PayMongo GCash.</p>
+                  <p className="text-xs text-slate-600">
+                    {gcashAvailability.loading
+                      ? 'Checking payment availability…'
+                      : gcashAvailability.available
+                        ? 'Available through the configured PayMongo checkout.'
+                        : 'Coming soon — GCash is not configured yet.'}
+                  </p>
                 </div>
               </div>
             </div>
