@@ -2,6 +2,26 @@ import pool from '../config/database.js';
 import { emitStockUpdate, emitLowStockAlert } from '../socket.js';
 import { mutateInventory } from '../services/inventory.js';
 
+export const STOCK_ADJUSTMENT_REASONS = Object.freeze({
+  add: Object.freeze(['restocking', 'returned', 'correction_add', 'supplier_delivery', 'initial_stock']),
+  remove: Object.freeze(['damaged', 'expired', 'correction_remove', 'sold_adjustment', 'lost']),
+});
+
+export const validateStockAdjustmentReason = (quantityChange, reason) => {
+  const type = Number(quantityChange) > 0 ? 'add' : Number(quantityChange) < 0 ? 'remove' : null;
+  const normalizedReason = String(reason || '').trim().toLowerCase();
+  if (!type) return { valid: false, type, reason: normalizedReason };
+  return {
+    valid: STOCK_ADJUSTMENT_REASONS[type].includes(normalizedReason),
+    type,
+    reason: normalizedReason,
+  };
+};
+
+const invalidReasonMessage = (type) => (
+  `Invalid ${type.toUpperCase()} stock reason. Allowed reasons: ${STOCK_ADJUSTMENT_REASONS[type].join(', ')}.`
+);
+
 // Get all inventory with low stock alerts
 export const getInventory = async (req, res) => {
   try {
@@ -73,6 +93,19 @@ export const updateStock = async (req, res) => {
 
   if (!Number.isInteger(quantity) || quantity < 0 || !['set', 'add', 'subtract'].includes(adjustment_type)) {
     return res.status(400).json({ message: 'quantity must be a non-negative integer and adjustment_type must be set, add, or subtract' });
+  }
+  if (['add', 'subtract'].includes(adjustment_type)) {
+    if (quantity === 0) {
+      return res.status(400).json({ message: 'ADD and REMOVE stock quantities must be greater than zero.' });
+    }
+    const reasonValidation = validateStockAdjustmentReason(adjustment_type === 'add' ? quantity : -quantity, reason);
+    if (!reasonValidation.valid) {
+      return res.status(400).json({
+        message: invalidReasonMessage(reasonValidation.type),
+        code: 'INVALID_STOCK_ADJUSTMENT_REASON',
+        allowed_reasons: STOCK_ADJUSTMENT_REASONS[reasonValidation.type],
+      });
+    }
   }
 
   const client = await pool.connect();
@@ -227,8 +260,16 @@ export const createStockAdjustment = async (req, res) => {
     return res.status(400).json({ message: 'product_id and a non-zero integer quantity_change are required' });
   }
 
-  const reasonMap = { restock: 'received', returned: 'correction', shrinkage: 'lost', other: 'correction', manual: 'correction' };
-  const dbReason = reasonMap[reason] || reason || 'correction';
+  const reasonValidation = validateStockAdjustmentReason(quantity_change, reason);
+  if (!reasonValidation.valid) {
+    return res.status(400).json({
+      message: invalidReasonMessage(reasonValidation.type),
+      code: 'INVALID_STOCK_ADJUSTMENT_REASON',
+      allowed_reasons: STOCK_ADJUSTMENT_REASONS[reasonValidation.type],
+    });
+  }
+
+  const dbReason = reasonValidation.reason;
   const client = await pool.connect();
 
   try {

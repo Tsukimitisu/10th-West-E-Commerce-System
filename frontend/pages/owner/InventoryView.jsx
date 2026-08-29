@@ -7,6 +7,27 @@ import { useSocketEvent } from '../../context/SocketContext';
 import PageHeader from '../../components/operations/PageHeader';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
+const STOCK_ADJUSTMENT_REASONS = Object.freeze({
+  add: [
+    ['restocking', 'Restocking'],
+    ['returned', 'Customer return'],
+    ['correction_add', 'Correction (add)'],
+    ['supplier_delivery', 'Supplier delivery'],
+    ['initial_stock', 'Initial stock'],
+  ],
+  remove: [
+    ['damaged', 'Damaged'],
+    ['expired', 'Expired'],
+    ['correction_remove', 'Correction (remove)'],
+    ['sold_adjustment', 'Sold adjustment'],
+    ['lost', 'Lost'],
+  ],
+});
+
+const formatLegacyReason = (reason) => String(reason || 'Not recorded')
+  .replace(/_/g, ' ')
+  .replace(/\b\w/g, (character) => character.toUpperCase());
+
 const InventoryView = () => {
   const [products, setProducts] = useState([]);
   const [adjustments, setAdjustments] = useState([]);
@@ -16,7 +37,7 @@ const InventoryView = () => {
   const [tab, setTab] = useState('stock');
   const [adjustModal, setAdjustModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [adjForm, setAdjForm] = useState({ type: 'add', quantity: '', reason: 'restock', notes: '' });
+  const [adjForm, setAdjForm] = useState({ type: 'add', quantity: '', reason: 'restocking', notes: '' });
 
   const [adjLoading, setAdjLoading] = useState(false);
   const [adjError, setAdjError] = useState('');
@@ -40,7 +61,7 @@ const InventoryView = () => {
   useSocketEvent('product:created', fetchData);
   useSocketEvent('product:deleted', fetchData);
 
-  const openAdjust = (p) => { setSelectedProduct(p); setAdjForm({ type: 'add', quantity: '', reason: 'restock', notes: '' }); setAdjError(''); setAdjustModal(true); };
+  const openAdjust = (p) => { setSelectedProduct(p); setAdjForm({ type: 'add', quantity: '', reason: 'restocking', notes: '' }); setAdjError(''); setAdjustModal(true); };
 
   const handleAdjust = async (e) => {
     e.preventDefault();
@@ -85,7 +106,7 @@ const InventoryView = () => {
     { id: 'alerts', label: 'Low Stock Alerts', icon: AlertTriangle, count: lowStock.length },
   ];
 
-  const reasons = ['restock', 'damaged', 'returned', 'correction', 'shrinkage', 'transfer', 'expired', 'other'];
+  const reasons = STOCK_ADJUSTMENT_REASONS[adjForm.type];
 
   return (
     <div className="space-y-4">
@@ -229,7 +250,7 @@ const InventoryView = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-bold text-sm">{isAdd ? '+' : ''}{qty}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 capitalize">{a.reason || '-'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400">{formatLegacyReason(a.reason)}</td>
                     </tr>
                   );
                 })}
@@ -281,11 +302,11 @@ const InventoryView = () => {
           </div>
 
           <div className="flex gap-2">
-            <button type="button" onClick={() => setAdjForm(f => ({...f, type: 'add'}))}
+            <button type="button" onClick={() => setAdjForm(f => ({...f, type: 'add', reason: STOCK_ADJUSTMENT_REASONS.add[0][0]}))}
               className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${adjForm.type === 'add' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-900'}`}>
               <ArrowUpCircle size={16} /> Add Stock
             </button>
-            <button type="button" onClick={() => setAdjForm(f => ({...f, type: 'remove'}))}
+            <button type="button" onClick={() => setAdjForm(f => ({...f, type: 'remove', reason: STOCK_ADJUSTMENT_REASONS.remove[0][0]}))}
               className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${adjForm.type === 'remove' ? 'bg-red-500/10 border-red-200 text-orange-600' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-900'}`}>
               <ArrowDownCircle size={16} /> Remove Stock
             </button>
@@ -301,7 +322,7 @@ const InventoryView = () => {
             <label className="block text-xs font-medium text-gray-600 mb-1">Reason</label>
             <select value={adjForm.reason} onChange={e => setAdjForm(f => ({...f, reason: e.target.value}))}
               className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20">
-              {reasons.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+              {reasons.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </div>
 
