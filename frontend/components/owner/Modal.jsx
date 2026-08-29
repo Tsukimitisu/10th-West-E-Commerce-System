@@ -1,7 +1,7 @@
 ﻿import React from 'react';
 import { X } from 'lucide-react';
 
-const sizeMap = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl', '2xl': 'max-w-2xl' };
+const sizeMap = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl', '2xl': 'max-w-2xl', '3xl': 'max-w-5xl' };
 
 const Modal = ({ isOpen, onClose, title, size = 'lg', children }) => {
   if (!isOpen) return null;

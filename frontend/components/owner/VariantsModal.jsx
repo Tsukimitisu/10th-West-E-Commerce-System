@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getProductVariants, saveProductVariants, uploadProductImage } from '../../services/api';
 import Modal from './Modal';
-import { Plus, Save, Trash2, Upload } from 'lucide-react';
+import { PackageOpen, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 
 const MAX_OPTIONS = 5;
 const MAX_VARIANTS = 300;
@@ -420,10 +420,10 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
   const matrixCount = variants.length;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Variants - ${product.name}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={`Manage variants — ${product.name}`} size="3xl">
       <div className="space-y-4">
-        {error ? <p className="text-sm font-medium text-red-500">{error}</p> : null}
-        {success ? <p className="text-sm font-medium text-emerald-400">{success}</p> : null}
+        {error ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p> : null}
+        {success ? <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-700">{success}</p> : null}
 
         <input
           ref={imagePickerRef}
@@ -433,34 +433,34 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
           onChange={handleVariantImagePick}
         />
 
-        <section className="rounded-xl border border-gray-700 bg-gray-900/60 p-4 space-y-3">
-          <div className="flex items-center justify-between">
+        <section className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h4 className="text-sm font-semibold text-white">Variant Options</h4>
-              <p className="text-xs text-gray-400">Add option groups like Size, Color, Material, then values for each group.</p>
+              <h4 className="text-sm font-semibold text-slate-950">Variant options</h4>
+              <p className="mt-1 text-xs text-slate-600">Add groups such as size, color, or material, then enter their values.</p>
             </div>
             <button
               type="button"
               onClick={addOption}
-              className="h-9 px-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors flex items-center gap-1"
+              className="inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-lg bg-orange-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-orange-700 sm:w-auto"
             >
               <Plus size={15} /> Add Option
             </button>
           </div>
 
           {options.map((option) => (
-            <div key={option.id} className="rounded-lg border border-gray-700 bg-[#121620] p-3 space-y-2">
+            <div key={option.id} className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
               <div className="flex gap-2">
                 <input
                   value={option.name}
                   onChange={(event) => updateOptionName(option.id, event.target.value)}
                   placeholder="Option name (e.g. Size)"
-                  className="flex-1 px-3 py-2 bg-black border border-gray-700 rounded-lg text-sm text-white"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                 />
                 <button
                   type="button"
                   onClick={() => removeOption(option.id)}
-                  className="h-10 w-10 rounded-lg border border-gray-700 text-gray-400 hover:text-red-400 hover:border-red-500/40 transition-colors flex items-center justify-center"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-300 text-slate-500 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600"
                   title="Remove option"
                 >
                   <Trash2 size={15} />
@@ -469,21 +469,21 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
 
               <div className="flex flex-wrap gap-2">
                 {option.values.map((value) => (
-                  <span key={`${option.id}-${value}`} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-800 text-gray-200 text-xs border border-gray-700">
+                  <span key={`${option.id}-${value}`} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
                     {value}
                     <button
                       type="button"
-                      className="text-gray-400 hover:text-red-400"
+                      className="text-slate-500 hover:text-red-600"
                       onClick={() => removeOptionValue(option.id, value)}
                       aria-label={`Remove ${value}`}
                     >
-                      ×
+                      <X size={12} />
                     </button>
                   </span>
                 ))}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   value={valueDraftByOption[option.id] || ''}
                   onChange={(event) => setValueDraftByOption((current) => ({
@@ -497,12 +497,12 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
                     }
                   }}
                   placeholder="Add values (comma separated)"
-                  className="flex-1 px-3 py-2 bg-black border border-gray-700 rounded-lg text-sm text-white"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                 />
                 <button
                   type="button"
                   onClick={() => addOptionValues(option.id)}
-                  className="h-10 px-3 rounded-lg border border-orange-500/40 text-orange-300 hover:bg-orange-500/10 text-sm font-medium"
+                  className="min-h-10 rounded-lg border border-orange-300 px-3 text-sm font-semibold text-orange-700 hover:bg-orange-50"
                 >
                   Add Values
                 </button>
@@ -511,24 +511,24 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
           ))}
         </section>
 
-        <section className="rounded-xl border border-gray-700 bg-gray-900/60 p-4 space-y-3">
-          <div className="flex items-center justify-between">
+        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h4 className="text-sm font-semibold text-white">Variant Matrix</h4>
-              <p className="text-xs text-gray-400">Combinations are generated automatically from option values.</p>
+              <h4 className="text-sm font-semibold text-slate-950">Variant matrix</h4>
+              <p className="mt-1 text-xs text-slate-600">Combinations are generated automatically from the option values.</p>
             </div>
-            <div className="text-xs text-gray-300">
+            <div className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
               <strong>{matrixCount}</strong> combinations
             </div>
           </div>
 
           {combinationWarning ? (
-            <p className="text-xs text-amber-300">{combinationWarning}</p>
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">{combinationWarning}</p>
           ) : null}
 
-          <div className="max-h-[340px] overflow-auto rounded-lg border border-gray-800">
-            <table className="w-full text-left text-sm text-gray-200">
-              <thead className="bg-gray-800 text-[11px] uppercase tracking-wide text-gray-400">
+          <div className="max-h-[420px] overflow-auto rounded-lg border border-slate-200">
+            <table className="min-w-[760px] w-full text-left text-sm text-slate-700">
+              <thead className="sticky top-0 z-10 bg-slate-100 text-[11px] uppercase tracking-wide text-slate-600">
                 <tr>
                   <th className="px-3 py-2">Combination</th>
                   <th className="px-3 py-2 w-28">Price</th>
@@ -537,20 +537,20 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
                   <th className="px-3 py-2 w-28">SKU</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800">
+              <tbody className="divide-y divide-slate-200 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan="5" className="px-3 py-6 text-center text-gray-400">Loading variants...</td>
+                    <td colSpan="5" className="px-3 py-10 text-center text-slate-500">Loading variants...</td>
                   </tr>
                 ) : variants.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-3 py-6 text-center text-gray-500">No combinations yet.</td>
+                    <td colSpan="5" className="px-3 py-12 text-center text-slate-500"><PackageOpen size={24} className="mx-auto mb-2 text-slate-400" />No combinations yet. Add an option name and at least one value.</td>
                   </tr>
                 ) : (
                   variants.map((row) => (
-                    <tr key={row.combination_key} className="hover:bg-gray-800/40 transition-colors">
+                    <tr key={row.combination_key} className="transition-colors hover:bg-slate-50">
                       <td className="px-3 py-2 align-top">
-                        <div className="font-medium text-white">{row.label}</div>
+                        <div className="font-medium text-slate-900">{row.label}</div>
                       </td>
                       <td className="px-3 py-2 align-top">
                         <input
@@ -559,7 +559,7 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
                           step="0.01"
                           value={row.price}
                           onChange={(event) => updateVariantField(row.combination_key, 'price', event.target.value)}
-                          className="w-full px-2 py-1.5 bg-black border border-gray-700 rounded text-sm text-white"
+                          className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
                         />
                       </td>
                       <td className="px-3 py-2 align-top">
@@ -569,7 +569,7 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
                           step="1"
                           value={row.stock_quantity}
                           onChange={(event) => updateVariantField(row.combination_key, 'stock_quantity', event.target.value)}
-                          className="w-full px-2 py-1.5 bg-black border border-gray-700 rounded text-sm text-white"
+                          className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
                         />
                       </td>
                       <td className="px-3 py-2 align-top">
@@ -578,12 +578,12 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
                             value={row.image_url}
                             onChange={(event) => updateVariantField(row.combination_key, 'image_url', event.target.value)}
                             placeholder="https://..."
-                            className="flex-1 px-2 py-1.5 bg-black border border-gray-700 rounded text-sm text-white"
+                            className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
                           />
                           <button
                             type="button"
                             onClick={() => triggerVariantImageUpload(row.combination_key)}
-                            className="h-8 px-2 rounded border border-gray-700 text-gray-300 hover:text-white hover:border-orange-400/50 transition-colors flex items-center gap-1"
+                            className="flex h-8 items-center gap-1 rounded border border-slate-300 px-2 text-slate-600 transition-colors hover:border-orange-400 hover:text-orange-700"
                             title="Upload image"
                             disabled={uploadingKey === row.combination_key}
                           >
@@ -597,7 +597,7 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
                           value={row.sku}
                           onChange={(event) => updateVariantField(row.combination_key, 'sku', event.target.value)}
                           placeholder="Optional"
-                          className="w-full px-2 py-1.5 bg-black border border-gray-700 rounded text-sm text-white"
+                          className="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
                         />
                       </td>
                     </tr>
@@ -608,11 +608,11 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
           </div>
         </section>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={fetchVariants}
-            className="h-10 px-4 rounded-lg border border-gray-600 text-gray-200 hover:border-gray-500 hover:bg-gray-800 transition-colors text-sm"
+            className="min-h-10 rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
             disabled={loading || saving}
           >
             Reload
@@ -620,7 +620,7 @@ const VariantsModal = ({ isOpen, onClose, product }) => {
           <button
             type="button"
             onClick={handleSave}
-            className="h-10 px-4 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-semibold transition-colors flex items-center gap-1"
+            className="flex min-h-10 items-center justify-center gap-1 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-orange-700 disabled:opacity-60"
             disabled={loading || saving}
           >
             <Save size={15} /> {saving ? 'Saving...' : 'Save Variants'}
