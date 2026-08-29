@@ -1,158 +1,92 @@
-﻿import React from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Undo2 } from 'lucide-react';
 
-const ReturnPolicy = () => {
-  return (
-    <div className="min-h-screen bg-gray-900">
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        <Link to="/" className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-red-500 mb-6 transition-colors">
-          <ArrowLeft size={16} /> Back to Home
-        </Link>
+const sections = [
+  {
+    title: 'Eligibility for Return',
+    content: (
+      <p>An item may be eligible when its delivered order still shows an active return window and the item is unused, complete, and in its original packaging. Approval is subject to inspection.</p>
+    ),
+  },
+  {
+    title: 'Non-Returnable Items',
+    content: (
+      <ul className="list-disc space-y-1 pl-5">
+        <li>Opened oils, lubricants, chemicals, and other consumables</li>
+        <li>Custom-ordered or personalized items</li>
+        <li>Items damaged by misuse, incorrect installation, modification, or normal wear</li>
+        <li>Incomplete items or requests submitted after the order's return window</li>
+      </ul>
+    ),
+  },
+  {
+    title: 'Return Request Period',
+    content: (
+      <p>Submit the request within the deadline shown on the delivered order. The current default window is 15 days after delivery, but the deadline displayed on your order is the one that applies.</p>
+    ),
+  },
+  {
+    title: 'Required Proof',
+    content: (
+      <p>Provide the order number, return reason, a clear description, and photos or other evidence when relevant. Keep the item and packaging until the request has been reviewed.</p>
+    ),
+  },
+  {
+    title: 'Refund Process',
+    content: (
+      <p>Approved items are inspected after they are returned. For Cash on Delivery orders, support will coordinate the available refund method after approval. A refund is not issued before the return is approved and inspected.</p>
+    ),
+  },
+  {
+    title: 'Exchange Policy',
+    content: (
+      <p>When an exchange is approved, support will confirm replacement availability. If the replacement is unavailable, the request may be handled as an approved return and a separate new order.</p>
+    ),
+  },
+  {
+    title: 'Damaged or Incorrect Items',
+    content: (
+      <p>Report a damaged, defective, or incorrect item promptly through the order's return request. Include clear photos of the item, packaging, and shipping label so the store can review the case.</p>
+    ),
+  },
+  {
+    title: 'Contact and Support Instructions',
+    content: (
+      <p>Open <Link to="/orders" className="font-semibold text-red-700 underline underline-offset-2 hover:text-red-800">My Orders</Link> to start or check a return. If the return action is unavailable or you need help, <Link to="/contact" className="font-semibold text-red-700 underline underline-offset-2 hover:text-red-800">contact support</Link> and include your order number.</p>
+    ),
+  },
+];
 
-        <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-sm p-8 md:p-12">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center">
-              <Undo2 size={20} className="text-red-500" />
-            </div>
-            <div>
-              <h1 className="font-display font-bold text-2xl text-white">Return & Refund Policy</h1>
-              <p className="text-sm text-gray-400">Last updated: March 1, 2026</p>
-            </div>
+const ReturnPolicy = () => (
+  <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="mx-auto max-w-4xl px-4 py-10 sm:py-12">
+      <Link to="/" className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+        <ArrowLeft size={16} /> Back to Home
+      </Link>
+
+      <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8 md:p-10">
+        <header className="mb-8 flex items-start gap-3 border-b border-slate-200 pb-6">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-700">
+            <Undo2 size={21} />
           </div>
-
-          <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-6">
-            <div className="bg-red-500/10 border border-red-200 rounded-xl p-4 text-sm">
-              <p className="font-medium text-gray-300 mb-1">
-                This policy complies with DTI Department Administrative Order No. 21-01 (Rules and Regulations on
-                E-Commerce) and the Consumer Act of the Philippines (RA 7394).
-              </p>
-            </div>
-
-            <h2 className="font-display font-semibold text-lg text-white mt-8">1. 7-Day Return Right (Change of Mind)</h2>
-            <p>
-              Under <strong>DTI DAO 21-01 Section 12</strong>, you have the right to return any product purchased online within
-              <strong> 7 calendar days from the date you receive the delivery</strong>, even without any defect ("change of mind" return).
-            </p>
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
-              <p className="font-medium text-sm text-white mb-2">Conditions for Change-of-Mind Returns:</p>
-              <ul className="list-disc pl-4 space-y-1 text-sm">
-                <li>The product must be <strong>unused</strong> and in its <strong>original packaging</strong></li>
-                <li>All tags, seals, and accessories must be intact</li>
-                <li>You must provide the order number and proof of purchase</li>
-                <li>Return shipping costs are borne by the customer</li>
-              </ul>
-            </div>
-
-            <h2 className="font-display font-semibold text-lg text-white mt-8">2. Defective or Wrong Items</h2>
-            <p>
-              If you receive a defective, damaged, or wrong item, you may request a return/replacement at any time
-              within the warranty period. In such cases:
-            </p>
-            <ul className="list-disc pl-6 space-y-1">
-              <li>Return shipping costs are covered by 10th West Moto Parts</li>
-              <li>You may choose between a <strong>full refund</strong>, <strong>replacement</strong>, or <strong>store credit</strong></li>
-              <li>Please include photos of the defective/wrong item with your return request</li>
-              <li>We will inspect returned items and process your request within <strong>5 business days</strong> of receiving the return</li>
-            </ul>
-
-            <h2 className="font-display font-semibold text-lg text-white mt-8">3. Non-Returnable Items</h2>
-            <p>The following items cannot be returned:</p>
-            <ul className="list-disc pl-6 space-y-1">
-              <li>Opened consumable products (oils, lubricants, chemicals)</li>
-              <li>Custom-ordered or personalized items</li>
-              <li>Items damaged due to misuse or modification by the customer</li>
-              <li>Items returned after the 7-day return period (unless defective)</li>
-            </ul>
-
-            <h2 className="font-display font-semibold text-lg text-white mt-8">4. How to Initiate a Return</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              {[
-                { step: '1', title: 'Request', desc: 'Go to Order History â†’ select the order â†’ click "Request Return"' },
-                { step: '2', title: 'Review', desc: 'Our team will review your request within 2 business days' },
-                { step: '3', title: 'Ship Back', desc: 'Once approved, ship the item back with the provided return label' },
-                { step: '4', title: 'Refund', desc: 'Refund processed within 15 business days of receiving the return' },
-              ].map((s, i) => (
-                <div key={i} className="p-4 bg-gray-900 rounded-xl border border-gray-700 text-center">
-                  <div className="w-8 h-8 bg-red-500/100 text-white rounded-full flex items-center justify-center mx-auto mb-2 text-sm font-bold">{s.step}</div>
-                  <p className="text-sm font-medium text-white">{s.title}</p>
-                  <p className="text-xs text-gray-600 mt-1">{s.desc}</p>
-                </div>
-              ))}
-            </div>
-
-            <h2 className="font-display font-semibold text-lg text-white mt-8">5. Refund Methods & Timeline</h2>
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-gray-900">
-                  <th className="text-left p-3 border border-gray-700 font-medium">Payment Method</th>
-                  <th className="text-left p-3 border border-gray-700 font-medium">Refund Method</th>
-                  <th className="text-left p-3 border border-gray-700 font-medium">Timeline</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="p-3 border border-gray-700">Credit/Debit Card</td>
-                  <td className="p-3 border border-gray-700">Reversed to original card</td>
-                  <td className="p-3 border border-gray-700">5â€“15 business days</td>
-                </tr>
-                <tr>
-                  <td className="p-3 border border-gray-700">GCash</td>
-                  <td className="p-3 border border-gray-700">Refund to GCash wallet</td>
-                  <td className="p-3 border border-gray-700">3â€“7 business days</td>
-                </tr>
-                <tr>
-                  <td className="p-3 border border-gray-700">Bank Transfer</td>
-                  <td className="p-3 border border-gray-700">Refund to bank account</td>
-                  <td className="p-3 border border-gray-700">5â€“10 business days</td>
-                </tr>
-                <tr>
-                  <td className="p-3 border border-gray-700">Cash on Delivery</td>
-                  <td className="p-3 border border-gray-700">Bank transfer or store credit</td>
-                  <td className="p-3 border border-gray-700">5â€“10 business days</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <h2 className="font-display font-semibold text-lg text-white mt-8">6. Cancelled Orders</h2>
-            <ul className="list-disc pl-6 space-y-1">
-              <li>Orders may be cancelled before the status changes to <strong>"Preparing"</strong></li>
-              <li>Cancellations are processed immediately and refunded within 3â€“5 business days</li>
-              <li>Orders already in "Preparing" or "Shipped" status cannot be cancelled but may be returned after delivery</li>
-            </ul>
-
-            <h2 className="font-display font-semibold text-lg text-white mt-8">7. Exchanges</h2>
-            <p>
-              We currently process exchanges as a return followed by a new order. To exchange an item, initiate a return
-              request and place a new order for the desired item. If there is a price difference, it will be adjusted
-              during the refund process.
-            </p>
-
-            <h2 className="font-display font-semibold text-lg text-white mt-8">8. Disputes</h2>
-            <p>
-              If you are unsatisfied with our resolution, you may escalate your concern to the{' '}
-              <strong>DTI Fair Trade Enforcement Bureau</strong> or the appropriate government agency. Contact details:
-            </p>
-            <div className="bg-gray-900 rounded-xl p-4 text-sm border border-gray-700">
-              <p><strong>DTI Consumer Care Hotline:</strong> 1-DTI (1-384)</p>
-              <p><strong>Email:</strong> ConsumerCare@dti.gov.ph</p>
-              <p><strong>Website:</strong> <a href="https://www.dti.gov.ph" target="_blank" rel="noopener noreferrer" className="text-red-500">www.dti.gov.ph</a></p>
-            </div>
-
-            <h2 className="font-display font-semibold text-lg text-white mt-8">9. Contact Us</h2>
-            <div className="bg-red-500/10 border border-red-200 rounded-xl p-4 text-sm space-y-1">
-              <p><strong>10th West Moto Parts - Returns Department</strong></p>
-              <p><strong>Email:</strong> <a href="mailto:returns@10thwestmoto.com" className="text-red-500">returns@10thwestmoto.com</a></p>
-              <p><strong>Phone:</strong> (02) 8888-1234</p>
-              <p><strong>Hours:</strong> Monday â€“ Saturday, 9:00 AM â€“ 6:00 PM</p>
-            </div>
+          <div>
+            <h1 className="font-display text-2xl font-bold text-slate-950 sm:text-3xl">Return &amp; Refund Policy</h1>
+            <p className="mt-1 text-sm text-slate-600">A simple guide for return, exchange, and refund requests.</p>
           </div>
-        </div>
-      </div>
+        </header>
+
+        <ol className="list-decimal space-y-7 pl-6 marker:font-bold marker:text-red-700">
+          {sections.map((section) => (
+            <li key={section.title} className="pl-2">
+              <h2 className="font-display text-lg font-semibold text-slate-950">{section.title}</h2>
+              <div className="mt-2 text-sm leading-7 text-slate-700 sm:text-base">{section.content}</div>
+            </li>
+          ))}
+        </ol>
+      </article>
     </div>
-  );
-};
+  </div>
+);
 
 export default ReturnPolicy;
-
-
