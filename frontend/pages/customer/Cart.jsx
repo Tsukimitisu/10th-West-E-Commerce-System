@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft, LogIn, X } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { getCurrentAuthUser } from '../../services/authSession.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../../constants/commerce.js';
+import { getShippingConfig } from '../../services/api.js';
 
 const CART_VAT_RATE = 0.12;
-const CART_FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
+const DEFAULT_FREE_SHIPPING_THRESHOLD = 3000;
 const CART_STANDARD_SHIPPING_FEE = 150;
 
 const toFiniteNumber = (value, fallback = 0) => {
@@ -42,8 +43,24 @@ const Cart = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [quantityErrors, setQuantityErrors] = useState({});
   const [localQuantities, setLocalQuantities] = useState({});
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(DEFAULT_FREE_SHIPPING_THRESHOLD);
 
-  const shippingFee = subtotal >= CART_FREE_STANDARD_SHIPPING_THRESHOLD ? 0 : CART_STANDARD_SHIPPING_FEE;
+  useEffect(() => {
+    let active = true;
+    getShippingConfig()
+      .then((config) => {
+        const configuredThreshold = Number(config?.free_shipping_threshold);
+        if (active && Number.isFinite(configuredThreshold) && configuredThreshold >= 0) {
+          setFreeShippingThreshold(configuredThreshold);
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const freeShippingApplied = subtotal >= freeShippingThreshold;
+  const amountNeededForFreeShipping = roundCurrency(Math.max(0, freeShippingThreshold - subtotal));
+  const shippingFee = freeShippingApplied ? 0 : CART_STANDARD_SHIPPING_FEE;
   const vatBase = roundCurrency(Math.max(0, toFiniteNumber(total, 0) + shippingFee));
   const vatAmount = roundCurrency(vatBase * CART_VAT_RATE);
   const grandTotal = roundCurrency(vatBase + vatAmount);
@@ -286,8 +303,13 @@ const Cart = () => {
             <div className="lg:col-span-4">
               <div className="bg-white rounded-2xl border border-slate-200 p-6 sticky top-24 shadow-sm">
                 <h2 className="font-display font-semibold text-lg text-slate-900 mb-4">Order Summary</h2>
-                <div className="mb-4 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700 font-medium">
-                  Free shipping on orders above \u20B12,500
+                <div className="mb-4 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700 font-medium" role="status">
+                  <p>Free shipping applies when your order subtotal reaches {formatPrice(freeShippingThreshold)} before shipping fees.</p>
+                  <p className="mt-1">
+                    {freeShippingApplied
+                      ? 'Free shipping applied.'
+                      : `${formatPrice(amountNeededForFreeShipping)} more to unlock free shipping.`}
+                  </p>
                 </div>
 
                 <div className="space-y-3 text-sm">

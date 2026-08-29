@@ -5,7 +5,7 @@ import { validatePhilippineAddress } from '../services/psgc.js';
 
 const VAT_RATE = 0.12;
 const STANDARD_SHIPPING_FEE = Number.parseFloat(process.env.DEFAULT_SHIPPING_FEE || '150');
-const FREE_SHIPPING_THRESHOLD = Number.parseFloat(process.env.FREE_SHIPPING_THRESHOLD || '2500');
+const FREE_SHIPPING_THRESHOLD = Number.parseFloat(process.env.FREE_SHIPPING_THRESHOLD || '3000');
 const PAYMENT_STATUSES = new Set(['pending', 'paid', 'failed', 'expired', 'refunded']);
 
 const normalizeText = (value) => {

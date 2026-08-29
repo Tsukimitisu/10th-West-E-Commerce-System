@@ -141,6 +141,7 @@ export const calculateInternalShippingQuote = ({ subtotal, actualWeightKg = 1, a
     package_class: weight.packageClass,
     far_delivery: distance.far_delivery,
     free_shipping_applied: freeShippingApplied,
+    free_shipping_threshold: config.freeShippingThreshold,
     estimated_delivery_days: '3-7 days',
   };
 };

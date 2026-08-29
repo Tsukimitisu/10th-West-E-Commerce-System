@@ -1,9 +1,18 @@
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
-import { calculateDatabaseShippingQuote } from '../services/shipping/internalShipping.js';
+import { calculateDatabaseShippingQuote, getInternalShippingConfig } from '../services/shipping/internalShipping.js';
 
 const router = express.Router();
+
+router.get('/config', (_req, res) => {
+  const config = getInternalShippingConfig();
+  res.json({
+    coverage: 'luzon_only',
+    currency: 'PHP',
+    free_shipping_threshold: config.freeShippingThreshold,
+  });
+});
 
 router.post('/quote', authenticateToken, requireRole('customer'), async (req, res) => {
   try {

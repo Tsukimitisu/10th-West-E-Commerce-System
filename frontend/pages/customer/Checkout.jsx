@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield, Wallet } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { getAddresses, createGcashCheckout, createOrder, getAuthAvailability, getProductById, getShippingQuote, validateDiscountCode } from '../../services/api';
+import { getAddresses, createGcashCheckout, createOrder, getAuthAvailability, getProductById, getShippingConfig, getShippingQuote, validateDiscountCode } from '../../services/api';
 import AddressDropdowns from '../../components/AddressDropdowns';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPinPicker from '../../components/MapPinPicker';
@@ -215,6 +215,7 @@ const Checkout = () => {
   const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
   const [shippingQuoteError, setShippingQuoteError] = useState('');
   const [shippingQuoteErrorCode, setShippingQuoteErrorCode] = useState('');
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(3000);
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [gcashAvailability, setGcashAvailability] = useState({ available: false, loading: true });
   const [agreeTerms, setAgreeTerms] = useState(() => {
@@ -242,6 +243,19 @@ const Checkout = () => {
         if (active) setGcashAvailability({ available: false, loading: false });
       });
 
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getShippingConfig()
+      .then((config) => {
+        const configuredThreshold = Number(config?.free_shipping_threshold);
+        if (active && Number.isFinite(configuredThreshold) && configuredThreshold >= 0) {
+          setFreeShippingThreshold(configuredThreshold);
+        }
+      })
+      .catch(() => {});
     return () => { active = false; };
   }, []);
 
@@ -436,6 +450,9 @@ const Checkout = () => {
   }, [isNewAddressMode, newAddressComplete, newAddressKey, selectedAddress, selectedSavedAddress, shippingQuoteItemsKey, usingSavedAddress]);
 
   const shippingCost = roundCurrency(shippingQuote?.shipping_fee ?? 0);
+  const resolvedFreeShippingThreshold = roundCurrency(shippingQuote?.free_shipping_threshold ?? freeShippingThreshold);
+  const amountNeededForFreeShipping = roundCurrency(Math.max(0, resolvedFreeShippingThreshold - subtotal));
+  const freeShippingApplied = Boolean(shippingQuote?.free_shipping_applied || subtotal >= resolvedFreeShippingThreshold);
   const shippingBlocked = ['SHIPPING_NOT_AVAILABLE', 'SHIPPING_ADDRESS_UNCLEAR'].includes(shippingQuoteErrorCode);
   const vatBase = roundCurrency(Math.max(0, total + shippingCost));
   const vatAmount = roundCurrency(vatBase * CHECKOUT_VAT_RATE);
@@ -928,6 +945,14 @@ const Checkout = () => {
                       <div className="flex justify-between gap-3"><dt className="text-gray-600">Free Shipping Applied</dt><dd className="font-medium text-gray-900">{shippingQuote.free_shipping_applied ? 'Yes' : 'No'}</dd></div>
                     </dl>
                   )}
+                  <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800" role="status">
+                    <p>Free shipping applies when your order subtotal reaches {formatPrice(resolvedFreeShippingThreshold)} before shipping fees.</p>
+                    <p className="mt-1 font-semibold">
+                      {freeShippingApplied
+                        ? 'Free shipping applied.'
+                        : `${formatPrice(amountNeededForFreeShipping)} more to unlock free shipping.`}
+                    </p>
+                  </div>
                 </div>
                 {shippingQuoteError && (
                   <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">

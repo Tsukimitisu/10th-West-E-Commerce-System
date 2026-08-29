@@ -51,6 +51,7 @@ test('Metro Manila quote uses the internal J&T metro fee', () => {
     package_class: 'medium',
     far_delivery: false,
     free_shipping_applied: false,
+    free_shipping_threshold: 3000,
     estimated_delivery_days: '3-7 days',
   });
 });

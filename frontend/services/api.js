@@ -2234,7 +2234,7 @@ const deleteCategoryMock = async (id) => {
 // ==================== ORDERS ====================
 
 const ORDER_VAT_RATE = 0.12;
-const ORDER_FREE_STANDARD_SHIPPING_THRESHOLD = 2500;
+const ORDER_FREE_STANDARD_SHIPPING_THRESHOLD = 3000;
 const ORDER_STANDARD_SHIPPING_FEE = 150;
 const ORDER_EXPRESS_SHIPPING_FEE = 300;
 
@@ -4659,13 +4659,15 @@ export const getShippingQuote = async ({ address_id, address, items }) => (
   })
 );
 
+export const getShippingConfig = async () => authenticatedFetch(`${API_URL}/shipping/config`);
+
 export const getShippingRates = async () => {
   if (USE_SUPABASE) {
     const { data } = await supabase.from('shipping_rates').select('*').eq('is_active', true).order('base_fee');
     return data || [];
   }
   return authenticatedFetch(`${API_URL}/shipping/rates`).catch(() => [
-    { id: 1, method: 'standard', label: 'Standard Shipping', base_fee: 0, min_purchase_free: 2500, estimated_days: '5-7 days', is_active: true },
+    { id: 1, method: 'standard', label: 'Standard Shipping', base_fee: 0, min_purchase_free: 3000, estimated_days: '5-7 days', is_active: true },
     { id: 2, method: 'express', label: 'Express Shipping', base_fee: 300, min_purchase_free: null, estimated_days: '1-2 days', is_active: true },
     { id: 3, method: 'pickup', label: 'Store Pickup', base_fee: 0, min_purchase_free: 0, estimated_days: 'Same day', is_active: true },
   ]);
