@@ -66,6 +66,49 @@ const validateSettings = (category, settings) => {
   return { normalized };
 };
 
+// Customer directory is intentionally separate from super-admin user management.
+// Store staff are denied at the role check even if a legacy permission assignment exists.
+router.get(
+  '/customers',
+  authenticateToken,
+  requireRole('super_admin', 'owner', 'admin'),
+  requirePermission('customers.view'),
+  async (req, res) => {
+    try {
+      const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
+      const limit = 100;
+      const offset = (page - 1) * limit;
+      const search = String(req.query.search || '').trim();
+      const params = [];
+      const where = ["role = 'customer'"];
+      if (search) {
+        params.push(`%${search}%`);
+        where.push(`(name ILIKE $${params.length} OR email ILIKE $${params.length})`);
+      }
+      const whereClause = where.join(' AND ');
+      const countResult = await pool.query(`SELECT COUNT(*) FROM users WHERE ${whereClause}`, params);
+      params.push(limit, offset);
+      const result = await pool.query(
+        `SELECT id, name, email, phone, is_active, created_at
+         FROM users
+         WHERE ${whereClause}
+         ORDER BY created_at DESC
+         LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params
+      );
+      return res.json({
+        customers: result.rows,
+        total: Number(countResult.rows[0]?.count || 0),
+        page,
+        limit,
+      });
+    } catch (error) {
+      console.error('Get customers error:', error);
+      return res.status(500).json({ message: 'Customer directory could not be loaded.' });
+    }
+  }
+);
+
 // All admin/system routes require super_admin only
 router.use(authenticateToken, (req, res, next) => {
   if (req.path === '/settings' || req.path.startsWith('/settings/') || req.path.startsWith('/security/settings')) {

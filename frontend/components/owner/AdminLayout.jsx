@@ -137,6 +137,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   const navItems = createNavItems(badges).filter((item) => (
     (privileged ? ADMIN_NAV.includes(item.id) : (item.id === 'dashboard' || Boolean(item.permission)))
     && (!item.permission || privileged || permissions?.has(item.permission))
+    && !(user?.role === 'store_staff' && item.id === 'customers')
   ));
 
   useEffect(() => {

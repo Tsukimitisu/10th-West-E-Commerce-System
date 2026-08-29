@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { getOrders, adminDeleteUser, adminGetAllUsers } from '../../services/api';
+import { getOrders, adminDeleteUser, getCustomers } from '../../services/api';
 import { Users, Search, Eye, ShoppingBag, DollarSign, Star, Mail, Phone, MapPin, Calendar, Package, Trash2 } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
+import { getCurrentAuthUser } from '../../services/authSession.js';
 
 const CustomersView = () => {
   const [customers, setCustomers] = useState([]);
@@ -9,13 +10,14 @@ const CustomersView = () => {
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const canDeleteCustomers = getCurrentAuthUser()?.role === 'super_admin';
 
   useEffect(() => {
     (async () => {
       try {
         // First fetch actual customers from DB
-        const usersResp = await adminGetAllUsers({ role: 'customer', page: 1 });
-        const allCust = usersResp.users || [];
+        const usersResp = await getCustomers({ page: 1 });
+        const allCust = usersResp.customers || [];
         
         const orders = await getOrders();
         const map = new Map();
@@ -152,7 +154,7 @@ const CustomersView = () => {
                   <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                           <button onClick={() => setSelectedCustomer(c)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title={`View ${c.name}`}><Eye size={14} /></button>
-                          <button onClick={() => setDeleteId(c.id)} className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors text-xs font-medium"><Trash2 size={13} /> Delete {c.name}</button>
+                          {canDeleteCustomers && <button onClick={() => setDeleteId(c.id)} className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors text-xs font-medium"><Trash2 size={13} /> Delete {c.name}</button>}
                       </div>
                   </td>
                 </tr>
@@ -245,7 +247,7 @@ const CustomersView = () => {
 
             {/* Action Buttons */}
             <div className="pt-4 border-t border-gray-700 flex justify-end">
-              <button
+              {canDeleteCustomers && <button
                 onClick={() => {
                   setSelectedCustomer(null);
                   setDeleteId(selectedCustomer.id);
@@ -253,7 +255,7 @@ const CustomersView = () => {
                 className="flex items-center gap-2 px-4 py-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-lg transition-colors font-medium text-sm"
               >
                 <Trash2 size={16} /> Delete {selectedCustomer.name}
-              </button>
+              </button>}
             </div>
           </div>
         )}

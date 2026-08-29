@@ -36,6 +36,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     reviews: <ReviewsView />, reports: <ReportsView />, promotions: <PromotionsView />,
     banners: <BannersView />, content: <ContentView />, chat: <ChatView />,
   };
+  if (isStaff && activeView === 'customers') return <Navigate to="/staff/dashboard" replace />;
   if (!views[activeView]) return <Navigate to={`${basePath}/dashboard`} replace />;
   return <AdminLayout activeView={activeView} onNavigate={setActiveView} onLogout={onLogout} user={user}>{views[activeView]}</AdminLayout>;
 };

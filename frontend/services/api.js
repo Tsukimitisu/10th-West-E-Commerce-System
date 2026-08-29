@@ -5323,6 +5323,12 @@ export const createBackup = async () => {
   return authenticatedFetch(`${API_URL}/admin/backup`, { method: 'POST' });
 };
 
+export const getCustomers = async ({ page = 1, search = '' } = {}) => {
+  const params = new URLSearchParams({ page: String(page) });
+  if (String(search).trim()) params.set('search', String(search).trim());
+  return authenticatedFetch(`${API_URL}/admin/customers?${params.toString()}`);
+};
+
 export const getBackupHistory = async () => {
   if (USE_SUPABASE) {
     const { data } = await supabase.from('backup_history').select('*').order('created_at', { ascending: false }).limit(50);
