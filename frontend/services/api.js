@@ -1056,7 +1056,7 @@ const REVIEW_MEDIA_BUCKET = 'review-media';
 const REVIEW_MEDIA_MAX_FILES = 4;
 const REVIEW_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const REVIEW_VIDEO_MAX_BYTES = 25 * 1024 * 1024;
-const REVIEW_ELIGIBLE_ORDER_STATUSES = ['delivered'];
+const REVIEW_ELIGIBLE_ORDER_STATUSES = ['delivered', 'completed'];
 
 const buildReviewEligibilityError = () => {
   const eligibilityError = new Error('Only customers with delivered orders for this product can leave a review.');
@@ -3664,6 +3664,10 @@ export const getReviews = async (productId) => {
   return Array.isArray(response) ? response : (Array.isArray(response?.reviews) ? response.reviews : []);
 };
 export const getProductReviews = getReviews;
+
+export const getReviewEligibility = async (productId) => authenticatedFetch(
+  `${API_URL}/reviews/eligibility/${Number(productId)}`
+);
 
 export const addReview = async (review) => {
   if (USE_SUPABASE) {

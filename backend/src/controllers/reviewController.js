@@ -138,7 +138,7 @@ const getVerifiedPurchaseExpression = `
     JOIN orders o ON o.id = oi.order_id
     WHERE oi.product_id = r.product_id
       AND o.user_id = r.user_id
-      AND o.status = 'delivered'
+      AND o.status IN ('delivered', 'completed')
     LIMIT 1
   )
 `;
@@ -225,6 +225,37 @@ export const getProductReviews = async (req, res) => {
   }
 };
 
+export const getReviewEligibility = async (req, res) => {
+  const productId = Number(req.params.productId);
+  if (!Number.isInteger(productId) || productId <= 0) {
+    return res.status(400).json({ message: 'Invalid product ID.' });
+  }
+
+  try {
+    const deliveredPurchase = await pool.query(
+      `SELECT 1
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE oi.product_id = $1
+         AND o.user_id = $2
+         AND o.status IN ('delivered', 'completed')
+       LIMIT 1`,
+      [productId, req.user.id]
+    );
+    const eligible = deliveredPurchase.rowCount > 0;
+    return res.json({
+      eligible,
+      reason: eligible ? 'delivered_purchase' : 'not_delivered',
+      message: eligible
+        ? 'You can review this delivered item.'
+        : 'You can review this item after it is delivered.',
+    });
+  } catch (error) {
+    console.error('Get review eligibility error:', error);
+    return res.status(500).json({ message: 'Review eligibility could not be checked.' });
+  }
+};
+
 export const createReview = async (req, res) => {
   const productId = Number(req.body.product_id ?? req.body.productId);
   const rating = Number(req.body.rating);
@@ -277,7 +308,7 @@ export const createReview = async (req, res) => {
         JOIN orders o ON o.id = oi.order_id
         WHERE oi.product_id = $1
           AND o.user_id = $2
-          AND o.status = 'delivered'
+          AND o.status IN ('delivered', 'completed')
         LIMIT 1
       `,
       [productId, req.user.id],

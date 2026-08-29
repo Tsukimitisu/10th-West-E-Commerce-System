@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle, Play } from 'lucide-react';
-import { getProductById, getRelatedProducts, getProductReviews, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, startProductChat, WISHLIST_SYNC_EVENT } from '../services/api';
+import { getProductById, getRelatedProducts, getProductReviews, getReviewEligibility, addReview, addToWishlist, removeFromWishlist, getWishlist, recordProductView, startProductChat, WISHLIST_SYNC_EVENT } from '../services/api';
 import { useCart } from '../context/CartContext';
 import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
@@ -214,11 +214,30 @@ const ProductDetail = () => {
   const [reviewError, setReviewError] = useState('');
   const [reviewSuccess, setReviewSuccess] = useState('');
   const [reviewFieldErrors, setReviewFieldErrors] = useState({});
+  const [reviewEligibility, setReviewEligibility] = useState({ eligible: false, loading: false });
   const { addToCart } = useCart();
 
   const currentUser = getCurrentAuthUser();
   const userId = currentUser?.id ?? null;
   const isWishlisted = wishlistedIds.includes(Number(id));
+
+  useEffect(() => {
+    let active = true;
+    if (!userId || !product?.id) {
+      setReviewEligibility({ eligible: false, loading: false, reason: userId ? 'not_loaded' : 'not_authenticated' });
+      return () => { active = false; };
+    }
+
+    setReviewEligibility({ eligible: false, loading: true });
+    getReviewEligibility(product.id)
+      .then((eligibility) => {
+        if (active) setReviewEligibility({ ...eligibility, loading: false });
+      })
+      .catch(() => {
+        if (active) setReviewEligibility({ eligible: false, loading: false, reason: 'unavailable' });
+      });
+    return () => { active = false; };
+  }, [product?.id, userId]);
 
   useEffect(() => {
     const loadWishlist = async () => {
@@ -1287,7 +1306,8 @@ const ProductDetail = () => {
 
           {activeTab === 'reviews' && (
             <div className="animate-fade-in">
-              <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              {reviewEligibility.eligible ? (
+                <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-5">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h3 className="font-display text-lg font-semibold text-gray-900">Write a review</h3>
@@ -1404,7 +1424,23 @@ const ProductDetail = () => {
                     {reviewSubmitting ? 'Submitting...' : 'Submit review'}
                   </button>
                 </form>
-              </div>
+                </div>
+              ) : (
+                <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-5" data-review-eligibility={reviewEligibility.reason || 'checking'}>
+                  <p className="text-sm font-medium text-slate-700">
+                    {reviewEligibility.loading
+                      ? 'Checking review eligibility...'
+                      : userId
+                        ? 'You can review this item after it is delivered.'
+                        : 'Log in to see whether this purchase is ready for review.'}
+                  </p>
+                  {!userId && (
+                    <Link to="/login" className="mt-2 inline-flex text-sm font-semibold text-red-600 hover:text-red-700">
+                      Log in
+                    </Link>
+                  )}
+                </div>
+              )}
 
               {/* Rating summary */}
               <div className="flex flex-col md:flex-row gap-8 mb-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl">

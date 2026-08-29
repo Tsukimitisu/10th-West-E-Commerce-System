@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticateToken, authenticateTokenOrSupabaseToken, requirePermission, requireRole } from '../middleware/auth.js';
-import { createReview, getModerationReviews, moderateReview, uploadReviewMedia } from '../controllers/reviewController.js';
+import { createReview, getModerationReviews, getReviewEligibility, moderateReview, uploadReviewMedia } from '../controllers/reviewController.js';
 
 const router = express.Router();
 
@@ -11,6 +11,7 @@ router.post(
 	uploadReviewMedia,
 );
 router.post('/', authenticateToken, createReview);
+router.get('/eligibility/:productId', authenticateToken, getReviewEligibility);
 router.get(
   '/moderation',
   authenticateToken,
