@@ -771,7 +771,9 @@ const ProductsView = () => {
     setLoading(true);
     try {
       const [p, c, s] = await Promise.all([getProducts(), getCategories(), getSubcategories()]);
-      setProducts(p); setCategories(c); setSubcategories(s || []);
+      setProducts(Array.isArray(p) ? p : []);
+      setCategories(Array.isArray(c) ? c.filter((category) => category?.id != null) : []);
+      setSubcategories(Array.isArray(s) ? s : []);
       setLoadError('');
     } catch (e) {
       setLoadError(getFriendlyRequestErrorMessage(e, 'Failed to load products. Please refresh and try again.'));
@@ -782,6 +784,12 @@ const ProductsView = () => {
   };
 
   useEffect(() => { fetch(); }, []);
+
+  useEffect(() => {
+    if (filterCat && !categories.some((category) => String(category.id) === String(filterCat))) {
+      setFilterCat('');
+    }
+  }, [categories, filterCat]);
 
   // Real-time: refresh on product/inventory changes
   useSocketEvent('product:created', fetch);
@@ -2102,16 +2110,24 @@ const ProductsView = () => {
     }
   };
 
-  const filtered = products.filter(p => {
-    const term = search.toLowerCase();
-    const matchesSearch = !term || p.name.toLowerCase().includes(term) || p.partNumber?.toLowerCase().includes(term) || p.sku?.toLowerCase().includes(term);
-    const matchesCat = !filterCat || p.category_id.toString() === filterCat;
-    const matchesStock = !filterStock || (filterStock === 'low' && p.stock_quantity <= p.low_stock_threshold) || (filterStock === 'out' && p.stock_quantity === 0) || (filterStock === 'in' && p.stock_quantity > 0);
+  const filtered = products.filter((product) => {
+    const term = String(search || '').trim().toLowerCase();
+    const matchesSearch = !term
+      || String(product?.name || '').toLowerCase().includes(term)
+      || String(product?.partNumber || '').toLowerCase().includes(term)
+      || String(product?.sku || '').toLowerCase().includes(term);
+    const matchesCat = !filterCat || String(product?.category_id ?? '') === String(filterCat);
+    const stockQuantity = Number(product?.stock_quantity || 0);
+    const lowStockThreshold = Number(product?.low_stock_threshold || 0);
+    const matchesStock = !filterStock
+      || (filterStock === 'low' && stockQuantity <= lowStockThreshold)
+      || (filterStock === 'out' && stockQuantity === 0)
+      || (filterStock === 'in' && stockQuantity > 0);
     return matchesSearch && matchesCat && matchesStock;
   });
 
   const filteredCategoryOptions = categories.filter((category) => (
-    category.name.toLowerCase().includes(categorySearchQuery.trim().toLowerCase())
+    String(category?.name || '').toLowerCase().includes(String(categorySearchQuery || '').trim().toLowerCase())
   ));
   const variantOptionRows = Array.isArray(form.variant_options) ? form.variant_options : [];
   const variantOptionsValidation = validateVariantOptionsDraft(variantOptionRows);
@@ -2137,7 +2153,10 @@ const ProductsView = () => {
           <input type="text" placeholder="Search products, SKU, part number..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 border border-white/10 bg-[#202430] text-gray-100 rounded-lg text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400" />
         </div>
-        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="px-3 py-2 border border-white/10 bg-[#202430] text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20">
+        <select value={filterCat} onChange={(event) => {
+          const nextCategory = event.target.value;
+          setFilterCat(nextCategory && categories.some((category) => String(category.id) === nextCategory) ? nextCategory : '');
+        }} className="px-3 py-2 border border-white/10 bg-[#202430] text-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20">
           <option value="">All Categories</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
@@ -2178,8 +2197,8 @@ const ProductsView = () => {
               </tr></thead>
               <tbody className="divide-y divide-white/10">
                 {filtered.map(p => {
-                  const cat = categories.find(c => c.id === p.category_id);
-                  const subcat = subcategories.find(s => s.id === p.subcategory_id);
+                  const cat = categories.find((category) => String(category.id) === String(p.category_id ?? ''));
+                  const subcat = subcategories.find((subcategory) => String(subcategory.id) === String(p.subcategory_id ?? ''));
                   const normalizedStatus = normalizeProductStatus(p.status);
                   const displayStatus = normalizedStatus.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
                   const displayStatusClass = normalizedStatus === PRODUCT_STATUS_ACTIVE
