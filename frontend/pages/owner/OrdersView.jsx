@@ -50,10 +50,25 @@ const shipmentStatusOptions = [
   ['in_transit', 'In Transit'],
   ['out_for_delivery', 'Out for Delivery'],
   ['delivered', 'Delivered'],
-  ['failed', 'Failed'],
+  ['failed', 'Delivery Failed'],
   ['returned', 'Returned'],
   ['cancelled', 'Cancelled'],
 ];
+
+const getOrderStatusLabel = (status) => {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'failed') return 'Payment Failed';
+  return normalized.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+};
+
+const getShipmentStatusLabel = (status) => {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'failed') return 'Delivery Failed';
+  return normalized.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+};
+
+const PAYMENT_FAILED_HELP = 'Payment Failed: payment was not completed or was rejected.';
+const DELIVERY_FAILED_HELP = 'Delivery Failed: courier/store could not complete delivery.';
 
 const OrdersView = () => {
   // Role check: staff cannot process refunds
@@ -274,7 +289,7 @@ const OrdersView = () => {
         <div className="flex gap-1 flex-wrap">
           <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
           {statuses.map(s => (
-            <button key={s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all capitalize ${statusFilter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>{s}</button>
+            <button key={s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} title={s === 'failed' ? PAYMENT_FAILED_HELP : undefined} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${statusFilter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>{getOrderStatusLabel(s)}</button>
           ))}
         </div>
       </div>
@@ -312,8 +327,8 @@ const OrdersView = () => {
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400">{new Date(o.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => openStatusChange(o)} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer hover:opacity-80 ${statusColors[o.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>
-                      {statusIcons[o.status]} {o.status}
+                    <button onClick={() => openStatusChange(o)} title={o.status === 'failed' ? PAYMENT_FAILED_HELP : undefined} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer hover:opacity-80 ${statusColors[o.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>
+                      {statusIcons[o.status]} {getOrderStatusLabel(o.status)}
                     </button>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
@@ -339,7 +354,7 @@ const OrdersView = () => {
             {/* Status + Date */}
             <div className="flex items-center justify-between p-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/20 shadow-sm">
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase border tracking-wider ${statusColors[detailOrder.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>
-                {statusIcons[detailOrder.status]} {detailOrder.status}
+                {statusIcons[detailOrder.status]} {getOrderStatusLabel(detailOrder.status)}
               </span>
               <div className="flex flex-col items-end">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Order Date</p>
@@ -390,6 +405,10 @@ const OrdersView = () => {
               </div>
             </div>
 
+            {detailOrder.status === 'failed' && (
+              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">{PAYMENT_FAILED_HELP}</p>
+            )}
+
             {shipmentData?.shipment && (
               <div className="rounded-xl border border-gray-700 bg-gray-900 p-4 space-y-4">
                 <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
@@ -401,7 +420,7 @@ const OrdersView = () => {
                   <ol className="space-y-3 border-l border-gray-600 pl-4">
                     {shipmentData.events.map((event, index) => (
                       <li key={`${event.event_time || event.occurred_at}-${index}`}>
-                        <p className="text-sm font-medium text-white capitalize">{String(event.status).replaceAll('_', ' ')}</p>
+                        <p className="text-sm font-medium text-white">{getShipmentStatusLabel(event.status)}</p>
                         {event.description && <p className="text-xs text-gray-300">{event.description}</p>}
                         <p className="text-[10px] text-gray-500">{[event.location, new Date(event.event_time || event.occurred_at).toLocaleString('en-PH')].filter(Boolean).join(' · ')}</p>
                       </li>
@@ -409,7 +428,9 @@ const OrdersView = () => {
                   </ol>
                 )}
                 {canManageShipments && activeShipment && (
-                  <div className="flex flex-col gap-2 border-t border-gray-700 pt-4 sm:flex-row">
+                  <div className="border-t border-gray-700 pt-4">
+                    <p className="mb-2 text-xs text-gray-300">{DELIVERY_FAILED_HELP}</p>
+                    <div className="flex flex-col gap-2 sm:flex-row">
                     <select
                       value={shipmentStatus}
                       onChange={(event) => setShipmentStatus(event.target.value)}
@@ -425,6 +446,7 @@ const OrdersView = () => {
                     >
                       {shipmentStatusBusy ? 'Updating...' : 'Update Shipment Status'}
                     </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -568,14 +590,14 @@ const OrdersView = () => {
         <div className="space-y-4">
           <div className="p-3 bg-gray-900 rounded-lg text-sm">
             <span className="text-gray-400">Order </span><span className="font-bold text-white">#{statusTarget?.id.toString().padStart(4, '0')}</span>
-            <span className="text-gray-400"> - Current: </span><span className={`font-semibold capitalize ${statusTarget?.status === 'delivered' ? 'text-green-600' : 'text-white'}`}>{statusTarget?.status}</span>
+            <span className="text-gray-400"> - Current: </span><span className={`font-semibold ${statusTarget?.status === 'delivered' ? 'text-green-600' : 'text-white'}`}>{getOrderStatusLabel(statusTarget?.status)}</span>
           </div>
           {nextStatusOptions.length > 0 ? (
             <div className="space-y-1.5">
               {nextStatusOptions.map((s) => (
                 <button key={s} onClick={() => setNewStatus(s)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium border transition-all capitalize ${newStatus === s ? 'bg-red-500/10 border-red-200 text-orange-600' : 'bg-gray-800 border-gray-700 text-gray-600 hover:bg-gray-900'}`}>
-                  {statusIcons[s]} {s}
+                  {statusIcons[s]} {getOrderStatusLabel(s)}
                 </button>
               ))}
             </div>
