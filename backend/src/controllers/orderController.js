@@ -128,8 +128,23 @@ const parseShippingAddressSnapshot = (order) => {
   return buildShippingAddressSnapshot(snapshot || {}, order.shipping_address);
 };
 
-const mapOrderRecord = (order) => ({
+const resolveCustomerDisplayName = (order, shippingSnapshot) => {
+  const registeredName = normalizeText(order.customer_name);
+  if (registeredName) return registeredName;
+  const recipientName = normalizeText(shippingSnapshot?.recipient_name);
+  if (recipientName) return recipientName;
+  const email = normalizeText(order.customer_email || order.guest_email);
+  if (email) return email;
+  if (!order.user_id && (order.guest_name || order.guest_email || order.guest_info)) return 'Guest Customer';
+  return 'Customer unavailable';
+};
+
+const mapOrderRecord = (order) => {
+  const shippingSnapshot = parseShippingAddressSnapshot(order);
+  return ({
   ...order,
+  customer_display_name: resolveCustomerDisplayName(order, shippingSnapshot),
+  shipping_name: normalizeText(shippingSnapshot.recipient_name),
   subtotal_amount: roundMoney(order.subtotal_amount || 0),
   shipping_fee: roundMoney(order.shipping_fee || 0),
   shipping_zone: normalizeText(order.shipping_zone),
@@ -149,7 +164,7 @@ const mapOrderRecord = (order) => ({
   courier_name: normalizeText(order.courier_name) || 'J&T Express',
   shipping_status: normalizeText(order.shipping_status) || 'pending',
   delivery_method: normalizeText(order.delivery_method) || 'standard',
-  shipping_address_snapshot: parseShippingAddressSnapshot(order),
+  shipping_address_snapshot: shippingSnapshot,
   courier: normalizeText(order.courier),
   waybill_number: normalizeText(order.waybill_number),
   waybill_status: normalizeWaybillStatus(order.waybill_status),
@@ -160,7 +175,8 @@ const mapOrderRecord = (order) => ({
   payment_checkout_url: normalizeText(order.payment_checkout_url),
   payment_metadata: order.payment_metadata || null,
   paid_at: order.paid_at || null,
-});
+  });
+};
 
 const getMemoryOrderBundle = (id) => {
   const order = memoryOrderStore.orders.find((item) => Number(item.id) === Number(id));

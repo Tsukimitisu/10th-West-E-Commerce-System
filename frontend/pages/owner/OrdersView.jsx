@@ -219,7 +219,11 @@ const OrdersView = () => {
 
   const filtered = orders.filter(o => {
     const term = search.toLowerCase();
-    const matchSearch = !term || o.id.toString().includes(term) || o.customer_name?.toLowerCase().includes(term) || o.customer_email?.toLowerCase().includes(term);
+    const matchSearch = !term
+      || o.id.toString().includes(term)
+      || o.customer_display_name?.toLowerCase().includes(term)
+      || o.customer_name?.toLowerCase().includes(term)
+      || o.customer_email?.toLowerCase().includes(term);
     const matchStatus = !statusFilter || o.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -303,7 +307,7 @@ const OrdersView = () => {
                     <p className="text-[10px] text-gray-400">{o.items?.length || '-'} items</p>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
-                    <p className="text-sm text-gray-700">{o.customer_name || o.shipping_name || `User ${o.user_id}`}</p>
+                    <p className="text-sm text-gray-700">{o.customer_display_name || 'Customer unavailable'}</p>
                     <p className="text-[10px] text-gray-400">{o.customer_email || ''}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400">{new Date(o.created_at).toLocaleDateString()}</td>
@@ -347,7 +351,7 @@ const OrdersView = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-3 bg-gray-900 rounded-lg">
                 <div className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2"><User size={12} /> Customer</div>
-                <p className="text-sm font-medium text-white">{detailOrder.customer_name || detailOrder.shipping_name || `User #${detailOrder.user_id}`}</p>
+                <p className="text-sm font-medium text-white">{detailOrder.customer_display_name || 'Customer unavailable'}</p>
                 <p className="text-xs text-gray-400">{detailOrder.customer_email || ''}</p>
               </div>
               <div className="p-3 bg-gray-900 rounded-lg">

@@ -2328,6 +2328,12 @@ const mapOrderFromApi = (order) => {
     id: orderId,
     order_id: orderId,
     user_id: order.user_id ?? undefined,
+    customer_display_name: order.customer_display_name ?? undefined,
+    customer_name: order.customer_name ?? undefined,
+    customer_email: order.customer_email ?? order.guest_email ?? undefined,
+    shipping_name: order.shipping_name ?? order.shipping_address_snapshot?.recipient_name ?? undefined,
+    item_count: Number.isFinite(Number(order.item_count)) ? Number(order.item_count) : mappedItems.length,
+    first_item_name: order.first_item_name ?? undefined,
     guest_info: order.guest_name
       ? { name: order.guest_name, email: order.guest_email }
       : order.guest_info,
@@ -2347,6 +2353,7 @@ const mapOrderFromApi = (order) => {
     created_at: order.created_at ?? new Date().toISOString(),
     source: order.source ?? 'online',
     payment_method: order.payment_method,
+    payment_status: order.payment_status ?? undefined,
     tracking_number: order.tracking_number ?? undefined,
     courier: order.courier ?? shippingDetails.courier ?? undefined,
     courier_name: order.courier_name ?? shippingDetails.courier_name ?? undefined,
