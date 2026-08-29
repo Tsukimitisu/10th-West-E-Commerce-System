@@ -280,13 +280,13 @@ const OrdersView = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1 max-w-sm">
+      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)] lg:items-start" data-testid="staff-orders-filters">
+        <div className="relative w-full min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input type="text" placeholder="Search orders..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
         </div>
-        <div className="flex gap-1 flex-wrap">
+        <div className="flex min-w-0 flex-wrap gap-1.5">
           <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
           {statuses.map(s => (
             <button key={s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} title={s === 'failed' ? PAYMENT_FAILED_HELP : undefined} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${statusFilter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>{getOrderStatusLabel(s)}</button>
