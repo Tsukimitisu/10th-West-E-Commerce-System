@@ -137,15 +137,15 @@ const InventoryView = () => {
             <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
           ) : (
             <table className="w-full text-sm">
-              <thead><tr className="bg-[#202430]/80 border-b border-white/10">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Product</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Current Stock</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden lg:table-cell">Reserved</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden lg:table-cell">Damaged</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Threshold</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Status</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Value</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-24">Adjust</th>
+              <thead><tr className="border-b border-slate-200 bg-slate-100">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Product</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700">Current Stock</th>
+                <th className="hidden px-4 py-3 text-right text-xs font-semibold text-slate-700 lg:table-cell">Reserved</th>
+                <th className="hidden px-4 py-3 text-right text-xs font-semibold text-slate-700 lg:table-cell">Damaged</th>
+                <th className="hidden px-4 py-3 text-right text-xs font-semibold text-slate-700 sm:table-cell">Threshold</th>
+                <th className="hidden px-4 py-3 text-left text-xs font-semibold text-slate-700 md:table-cell">Status</th>
+                <th className="hidden px-4 py-3 text-right text-xs font-semibold text-slate-700 md:table-cell">Value</th>
+                <th className="w-24 px-4 py-3 text-right text-xs font-semibold text-slate-700">Adjust</th>
               </tr></thead>
               <tbody className="divide-y divide-white/10">
                 {filtered.map(p => {
@@ -197,12 +197,12 @@ const InventoryView = () => {
             <div className="p-12 text-center text-sm text-gray-400">No adjustments recorded</div>
           ) : (
             <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50/80 border-b border-gray-700">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Date</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Product</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Type</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Qty</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Reason</th>
+              <thead><tr className="border-b border-slate-200 bg-slate-100">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Date</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Product</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Type</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700">Qty</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Reason</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-50">
                 {adjustments.slice(0, 50).map((a, i) => {

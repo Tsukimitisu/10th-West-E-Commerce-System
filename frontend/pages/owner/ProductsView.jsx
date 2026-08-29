@@ -2167,14 +2167,14 @@ const ProductsView = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="bg-[#202430]/80 border-b border-white/10">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-300">Product</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-300 hidden md:table-cell">SKU</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-300">Category</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-300">Price</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-300">Stock</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-300">Status</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-300 w-24">Actions</th>
+              <thead><tr className="border-b border-slate-200 bg-slate-100">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Product</th>
+                <th className="hidden px-4 py-3 text-left text-xs font-semibold text-slate-700 md:table-cell">SKU</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Category</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700">Price</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700">Stock</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Status</th>
+                <th className="w-24 px-4 py-3 text-right text-xs font-semibold text-slate-700">Actions</th>
               </tr></thead>
               <tbody className="divide-y divide-white/10">
                 {filtered.map(p => {
