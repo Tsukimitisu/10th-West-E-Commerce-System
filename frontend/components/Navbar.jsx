@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List, MessageCircle } from 'lucide-react';
+import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List, MessageCircle, AlertTriangle, CheckCircle2, XCircle, Info } from 'lucide-react';
 import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements, getProducts, getBuyerChatConversations } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
@@ -8,6 +8,7 @@ import { useSocket } from '../context/SocketContext';
 import CartDrawer from './CartDrawer';
 import BrandMark from './ui/BrandMark';
 import { handleProductImageError, resolveProductImageUrl } from '../utils/productImages.js';
+import { repairMojibake } from '../utils/text.js';
 
 const Navbar = ({ user, onLogout }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -114,16 +115,13 @@ const Navbar = ({ user, onLogout }) => {
     return '';
   };
 
-  const normalizeDisplayText = (value) => {
-    if (!value) return '';
-    return String(value)
-      .replace(/â€”/g, '—')
-      .replace(/â€“/g, '–')
-      .replace(/â€˜/g, "'")
-      .replace(/â€™/g, "'")
-      .replace(/â€œ/g, '"')
-      .replace(/â€/g, '"')
-      .replace(/₱/g, '₱');
+  const getNotificationIcon = (notification) => {
+    const type = `${notification?.type || ''} ${notification?.metadata?.status || ''}`.toLowerCase();
+    if (/failed|error|cancelled|rejected/.test(type)) return <XCircle size={16} aria-label="Error notification" />;
+    if (/warning|stock|low/.test(type)) return <AlertTriangle size={16} aria-label="Warning notification" />;
+    if (/success|paid|delivered|approved/.test(type)) return <CheckCircle2 size={16} aria-label="Success notification" />;
+    if (/info|announcement/.test(type)) return <Info size={16} aria-label="Information notification" />;
+    return <Bell size={16} aria-label="Notification" />;
   };
 
   const getNotificationTypeLabel = (notification) => {
@@ -564,8 +562,8 @@ const Navbar = ({ user, onLogout }) => {
                         ) : (
                           notifications.map((notification, i) => {
                             const n = normalizeIncomingNotification(notification);
-                            const title = normalizeDisplayText(getNotificationTitle(n));
-                            const summary = normalizeDisplayText(getNotificationSummary(n));
+                            const title = repairMojibake(getNotificationTitle(n));
+                            const summary = repairMojibake(getNotificationSummary(n));
                             const typeLabel = getNotificationTypeLabel(n);
 
                             return (
@@ -578,13 +576,9 @@ const Navbar = ({ user, onLogout }) => {
                                   <div className="mt-0.5 shrink-0">
                                     {n.thumbnail_url ? (
                                       <img src={resolveProductImageUrl(n.thumbnail_url)} alt="" onError={handleProductImageError} className="h-11 w-11 rounded-xl object-cover bg-[#0b111a] border border-white/10 shadow-sm" />
-                                    ) : n.type === 'announcement' ? (
-                                      <div className="h-10 w-10 rounded-xl bg-blue-500/15 text-blue-300 border border-blue-400/30 flex items-center justify-center">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                                      </div>
                                     ) : (
                                       <div className="h-10 w-10 rounded-xl bg-red-500/15 text-red-300 border border-red-400/30 flex items-center justify-center">
-                                        <Bell size={16} />
+                                        {getNotificationIcon(n)}
                                       </div>
                                     )}
                                   </div>

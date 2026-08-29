@@ -17,6 +17,9 @@ import {
   Tag,
   UserCog,
   Users,
+  CheckCircle2,
+  Info,
+  XCircle,
 } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
 import {
@@ -30,6 +33,7 @@ import {
 import { clearCurrentAuthUser } from '../../services/authSession';
 import OperationsShell from '../operations/OperationsShell';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import { repairMojibake } from '../../utils/text.js';
 
 const createNavItems = (badges = {}) => [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' },
@@ -66,13 +70,22 @@ const parseNotification = (notification) => {
 };
 
 const notificationTitle = (notification) => {
-  if (notification.title) return notification.title;
+  if (notification.title) return repairMojibake(notification.title);
   if (notification.reference_type === 'order' || notification.type?.includes('order')) {
     const number = notification.metadata?.order_number || notification.reference_id;
     return number ? `Order #${String(number).padStart(4, '0')} update` : 'Order update';
   }
   if (notification.type?.includes('return')) return 'Return request update';
   return 'Operations update';
+};
+
+const notificationIcon = (notification) => {
+  const type = `${notification?.type || ''} ${notification?.metadata?.status || ''}`.toLowerCase();
+  if (/failed|error|cancelled|rejected/.test(type)) return <XCircle size={16} aria-label="Error notification" />;
+  if (/warning|stock|low/.test(type)) return <AlertTriangle size={16} aria-label="Warning notification" />;
+  if (/success|paid|delivered|approved/.test(type)) return <CheckCircle2 size={16} aria-label="Success notification" />;
+  if (/info|announcement/.test(type)) return <Info size={16} aria-label="Information notification" />;
+  return <Bell size={16} aria-label="Notification" />;
 };
 
 const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = {}, user, children }) => {
@@ -224,12 +237,12 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
                   <img src={resolveProductImageUrl(notification.thumbnail_url)} alt="" onError={handleProductImageError} className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 object-cover" />
                 ) : (
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
-                    {notification.type?.includes('stock') ? <AlertTriangle size={16} /> : <Bell size={16} />}
+                    {notificationIcon(notification)}
                   </span>
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium text-slate-900">{notificationTitle(notification)}</span>
-                  {notification.message && <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-slate-500">{notification.message}</span>}
+                  {notification.message && <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-slate-500">{repairMojibake(notification.message)}</span>}
                   <span className="mt-1 block text-[10px] text-slate-400">
                     {notification.created_at ? new Date(notification.created_at).toLocaleString() : ''}
                   </span>
