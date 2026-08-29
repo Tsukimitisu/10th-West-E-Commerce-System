@@ -1642,3 +1642,9 @@ export const getOrderInvoice = async (req, res) => {
     res.status(500).json({ message: 'Failed to generate invoice' });
   }
 };
+
+export const __testing = Object.freeze({
+  computeShippingCost,
+  resolveCustomerDisplayName,
+  mapOrderItemRecord,
+});
