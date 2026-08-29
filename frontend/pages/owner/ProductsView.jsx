@@ -697,6 +697,7 @@ const createProductFormState = (overrides = {}) => ({
   bulk_pricing: [],
   variant_options: [],
   sku: '',
+  barcode: '',
   sku_mode: SKU_MODE_AUTO,
   brand: '',
   status: PRODUCT_STATUS_DRAFT,
@@ -1170,6 +1171,7 @@ const ProductsView = () => {
       sale_price: p.sale_price?.toString() || '',
       is_on_sale: p.is_on_sale || false,
       sku: p.sku || '',
+      barcode: p.barcode || '',
       sku_mode: p.sku ? SKU_MODE_MANUAL : SKU_MODE_AUTO,
       brand: p.brand || '',
       status: normalizeProductStatus(p.status),
@@ -1228,6 +1230,7 @@ const ProductsView = () => {
       sale_price: p.sale_price?.toString() || '',
       is_on_sale: false,
       sku: '',
+      barcode: '',
       sku_mode: SKU_MODE_AUTO,
       brand: p.brand || '',
       status: PRODUCT_STATUS_DRAFT,
@@ -1814,6 +1817,7 @@ const ProductsView = () => {
         is_on_sale: form.is_on_sale,
         status: normalizeProductStatus(forcedStatus || form.status),
         sku: shouldAutoGenerateSku ? undefined : manualSku,
+        barcode: String(form.barcode || '').trim() || null,
         auto_generate_sku: shouldAutoGenerateSku,
         bulk_pricing: bulkPricingValidation.value,
         brand: form.brand
@@ -2115,7 +2119,8 @@ const ProductsView = () => {
     const matchesSearch = !term
       || String(product?.name || '').toLowerCase().includes(term)
       || String(product?.partNumber || '').toLowerCase().includes(term)
-      || String(product?.sku || '').toLowerCase().includes(term);
+      || String(product?.sku || '').toLowerCase().includes(term)
+      || String(product?.barcode || '').toLowerCase().includes(term);
     const matchesCat = !filterCat || String(product?.category_id ?? '') === String(filterCat);
     const stockQuantity = Number(product?.stock_quantity || 0);
     const lowStockThreshold = Number(product?.low_stock_threshold || 0);
@@ -2150,7 +2155,7 @@ const ProductsView = () => {
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search products, SKU, part number..." value={search} onChange={e => setSearch(e.target.value)}
+          <input type="text" placeholder="Search products, SKU, part number, barcode..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 border border-white/10 bg-[#202430] text-gray-100 rounded-lg text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400" />
         </div>
         <select value={filterCat} onChange={(event) => {
@@ -2957,6 +2962,22 @@ const ProductsView = () => {
                       ) : (
                         <p className="text-xs text-gray-400">Manual SKU is required in manual mode.</p>
                       )}
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Barcode (Optional)</p>
+                      <p className="mt-1 text-xs text-gray-400">Barcode field/search only. Scanner integration is not configured.</p>
+                    </div>
+                    <input
+                      value={form.barcode}
+                      onChange={(event) => setForm((current) => ({ ...current, barcode: event.target.value }))}
+                      className={inputClass}
+                      maxLength={100}
+                      autoComplete="off"
+                      placeholder="Enter barcode value"
+                    />
+                    <p className="text-xs text-gray-400">Enter or scan a product barcode if supported by your device.</p>
                   </div>
 
                   <div className="rounded-xl border border-white/10 bg-[#202430]/40 p-4 space-y-3">

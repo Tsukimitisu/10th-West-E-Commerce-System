@@ -167,7 +167,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
               <ScanBarcode size={20} className="text-red-500" />
               Receive Stock
             </h2>
-            <p className="text-xs text-gray-400">Scan barcodes or enter part numbers to receive inventory</p>
+            <p className="text-xs text-gray-400">Look up barcode values or part numbers to receive inventory</p>
           </div>
         </div>
         {cart.length > 0 && (
@@ -203,7 +203,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
           </div>
         )}
         <p className="mt-2 text-[11px] text-gray-400">
-          Scan a barcode or type a Part Number / SKU and press Enter. Items are added to the list below.
+          Barcode field/search only; camera scanner integration is not configured. Enter or scan a product barcode if supported by your device.
         </p>
       </div>
 
@@ -344,7 +344,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
             <ScanBarcode size={28} className="text-gray-300" />
           </div>
           <p className="text-sm text-gray-400 font-medium mb-1">No items scanned yet</p>
-          <p className="text-xs text-gray-400">Scan a barcode or enter a Part Number above to start receiving stock</p>
+          <p className="text-xs text-gray-400">Enter a barcode value, Part Number, or SKU above to start receiving stock.</p>
         </div>
       )}
     </div>

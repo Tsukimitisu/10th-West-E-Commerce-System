@@ -71,7 +71,11 @@ const InventoryView = () => {
 
   const filtered = products.filter(p => {
     const term = search.toLowerCase();
-    return !term || p.name.toLowerCase().includes(term) || p.partNumber?.toLowerCase().includes(term) || p.sku?.toLowerCase().includes(term);
+    return !term
+      || String(p.name || '').toLowerCase().includes(term)
+      || String(p.partNumber || p.part_number || '').toLowerCase().includes(term)
+      || String(p.sku || '').toLowerCase().includes(term)
+      || String(p.barcode || '').toLowerCase().includes(term);
   });
 
   const tabs = [
@@ -129,9 +133,12 @@ const InventoryView = () => {
           <div className="p-3 border-b border-white/10">
             <div className="relative max-w-xs">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" placeholder="Search inventory..." value={search} onChange={e => setSearch(e.target.value)}
+              <input type="text" placeholder="Search name, part number, SKU, or barcode" value={search} onChange={e => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-1.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
             </div>
+            <p className="mt-2 text-xs text-gray-400">
+              Barcode field/search only. Scanner integration is not configured. Enter or scan a product barcode if supported by your device.
+            </p>
           </div>
           {loading ? (
             <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>

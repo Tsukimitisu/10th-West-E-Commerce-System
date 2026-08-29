@@ -422,6 +422,7 @@ const PosTerminal = () => {
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </select>
             </div>
+            <p className="mt-2 text-xs text-slate-500">Barcode field/search only. Enter or scan a product barcode if supported by your device.</p>
             {dailySummary && (
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
                 <span><strong className="text-slate-950">{dailySummary.transaction_count}</strong> sales today</span>
