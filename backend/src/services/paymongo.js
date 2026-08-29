@@ -10,13 +10,19 @@ const normalizeText = (value) => {
 
 const getSecretKey = () => normalizeText(process.env.PAYMONGO_SECRET_KEY);
 
+const isUsableCredential = (value) => {
+  const credential = normalizeText(value);
+  if (!credential) return false;
+  return !/(?:your[_-]|change[_-]?me|placeholder|example|^<.*>$)/i.test(credential);
+};
+
 export const getPaymongoConfigurationStatus = () => {
   const required = [
     'PAYMONGO_PUBLIC_KEY',
     'PAYMONGO_SECRET_KEY',
     'PAYMONGO_WEBHOOK_SECRET',
   ];
-  const missing = required.filter((key) => !normalizeText(process.env[key]));
+  const missing = required.filter((key) => !isUsableCredential(process.env[key]));
   return {
     configured: missing.length === 0,
     missing,

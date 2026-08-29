@@ -30,6 +30,37 @@ test('PayMongo reports missing configuration without creating fake checkout succ
   }
 });
 
+test('PayMongo template placeholders are not reported as configured', () => {
+  const previous = {
+    publicKey: process.env.PAYMONGO_PUBLIC_KEY,
+    secretKey: process.env.PAYMONGO_SECRET_KEY,
+    webhookSecret: process.env.PAYMONGO_WEBHOOK_SECRET,
+  };
+
+  process.env.PAYMONGO_PUBLIC_KEY = 'pk_test_your_public_key_here';
+  process.env.PAYMONGO_SECRET_KEY = 'sk_test_your_secret_key_here';
+  process.env.PAYMONGO_WEBHOOK_SECRET = 'whsec_your_webhook_secret_here';
+
+  try {
+    const status = getPaymongoConfigurationStatus();
+    assert.equal(status.configured, false);
+    assert.deepEqual(status.missing.sort(), [
+      'PAYMONGO_PUBLIC_KEY',
+      'PAYMONGO_SECRET_KEY',
+      'PAYMONGO_WEBHOOK_SECRET',
+    ].sort());
+  } finally {
+    for (const [key, value] of Object.entries({
+      PAYMONGO_PUBLIC_KEY: previous.publicKey,
+      PAYMONGO_SECRET_KEY: previous.secretKey,
+      PAYMONGO_WEBHOOK_SECRET: previous.webhookSecret,
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test('PayMongo checkout uses configured redirect URLs', async () => {
   const previousEnv = {
     publicKey: process.env.PAYMONGO_PUBLIC_KEY,
