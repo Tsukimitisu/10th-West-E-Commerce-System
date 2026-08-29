@@ -705,7 +705,7 @@ const Profile = () => {
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <h2 className="font-display font-semibold text-lg text-gray-900 mb-4 flex items-center gap-2"><Download size={20} className="text-red-500" /> Download My Data</h2>
           <p className="text-sm text-gray-600 mb-3">
-            Under the Data Privacy Act of 2012 (RA 10173 Ã‚Â§18), you have the right to obtain a copy of your personal data in a portable format.
+            Under the Data Privacy Act of 2012 (RA 10173 §18), you have the right to obtain a copy of your personal data in a portable format.
           </p>
           <ul className="text-xs text-gray-400 mb-4 space-y-1 list-disc pl-4">
             <li>Includes your profile information, order history, saved addresses, and activity logs</li>
@@ -726,7 +726,7 @@ const Profile = () => {
         <div className="bg-white rounded-xl border border-red-200 p-6 shadow-sm">
           <h2 className="font-display font-semibold text-lg text-red-600 mb-4 flex items-center gap-2"><Trash2 size={20} /> Delete My Account</h2>
           <p className="text-sm text-gray-600 mb-3">
-            Under the Data Privacy Act of 2012 (RA 10173 Ã‚Â§18), you have the right to request deletion of your personal data.
+            Under the Data Privacy Act of 2012 (RA 10173 §18), you have the right to request deletion of your personal data.
             This action will permanently anonymize your account and cannot be undone.
           </p>
           <ul className="text-xs text-gray-400 mb-4 space-y-1 list-disc pl-4">

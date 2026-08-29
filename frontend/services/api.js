@@ -611,7 +611,7 @@ export const getProfile = async ({ optional = false } = {}) => {
 
 export const getAuthAvailability = async () => authenticatedFetch(`${API_URL}/auth/providers`);
 
-// Delete account - Right to be Forgotten (RA 10173 Â§18)
+// Delete account - Right to be Forgotten (RA 10173 §18)
 export const deleteAccount = async (password) => {
   return await authenticatedFetch(`${API_URL}/auth/account`, {
     method: 'DELETE',
@@ -619,7 +619,7 @@ export const deleteAccount = async (password) => {
   });
 };
 
-// Data export / portability - RA 10173 Â§18
+// Data export / portability - RA 10173 §18
 export const exportMyData = async () => {
   return await authenticatedFetch(`${API_URL}/auth/export-data`);
 };
@@ -2650,7 +2650,7 @@ export const createOrder = async (order) => {
     notifyAdminStaff(
       'order.new',
       'New Order Received',
-      `Order #${String(orderData.id).padStart(4, '0')} â€” ₱${roundCurrency(order.total_amount).toLocaleString()} (${orderItems.length} item${orderItems.length !== 1 ? 's' : ''})`,
+      `Order #${String(orderData.id).padStart(4, '0')} — ₱${roundCurrency(order.total_amount).toLocaleString()} (${orderItems.length} item${orderItems.length !== 1 ? 's' : ''})`,
       orderData.id,
       'order'
     );
@@ -3495,7 +3495,7 @@ export const deleteFAQ = async (id) => {
 export const getPolicy = async (type) => {
   const data = await fetch(`${API_URL}/policies/${type}`);
   if (data.status === 404) {
-    // Policy doesn't exist yet â€” return empty for initial creation
+    // Policy doesn't exist yet — return empty for initial creation
     return { title: '', content: '' };
   }
   if (!data.ok) {

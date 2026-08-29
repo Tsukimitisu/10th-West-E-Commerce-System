@@ -21,7 +21,7 @@ const ResetPassword = () => {
 
   const token = searchParams.get('token') || '';
 
-  // Validate token on mount â€” no email in URL (backend resolves from token)
+  // Validate token on mount — no email in URL (backend resolves from token)
   useEffect(() => {
     if (!token) {
       setTokenValid(false);
@@ -47,7 +47,7 @@ const ResetPassword = () => {
     };
     checkToken();
 
-    // Security: clear token from browser history (RA 10173 Â§20)
+    // Security: clear token from browser history (RA 10173 §20)
     if (window.history.replaceState) {
       window.history.replaceState(null, '', '/#/reset-password');
     }
@@ -155,7 +155,7 @@ const ResetPassword = () => {
               </div>
               <h1 className="font-display font-semibold text-xl text-slate-950 mb-2">Link expired or invalid</h1>
               <p className="text-sm text-slate-600 mb-2">{error || 'This password reset link is invalid or has expired.'}</p>
-              <p className="text-xs text-gray-400 mb-6">Reset links expire after 1 hour for your security (RA 10173 Â§20).</p>
+              <p className="text-xs text-gray-400 mb-6">Reset links expire after 1 hour for your security (RA 10173 §20).</p>
             <Link to="/forgot-password" className="inline-flex items-center gap-2 px-6 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">
               Request New Link
             </Link>

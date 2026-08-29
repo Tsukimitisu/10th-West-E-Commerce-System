@@ -132,7 +132,7 @@ const PrivacyPolicy = () => {
             <p>
               Our services are not directed to individuals under 18 years of age. We do not knowingly collect personal
               data from minors. Users must confirm they are at least 18 years old during registration. If we discover
-              we have collected data from a minor without proper consent, we will delete it promptly per RA 10173 Â§3(c).
+              we have collected data from a minor without proper consent, we will delete it promptly per RA 10173 §3(c).
             </p>
 
             <h2 className="font-display font-semibold text-lg text-white mt-8">11. Changes to This Policy</h2>
