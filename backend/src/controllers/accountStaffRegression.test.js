@@ -31,7 +31,11 @@ const withoutProviderEnvironment = (callback) => {
 
 test('unconfigured OAuth and GCash readiness is explicit while real TOTP remains available', () => {
   const readiness = withoutProviderEnvironment(() => getAuthAvailability());
-  assert.deepEqual(readiness.google, { available: false, reason: 'not_configured' });
+  assert.equal(readiness.google.available, false);
+  assert.equal(readiness.google.reason, 'missing_google_oauth_config');
+  assert.equal(readiness.google.client_id_present, false);
+  assert.equal(readiness.google.client_secret_present, false);
+  assert.equal(readiness.google.callback_url_present, true);
   assert.deepEqual(readiness.facebook, { available: false, reason: 'not_configured' });
   assert.deepEqual(readiness.gcash, { available: false, reason: 'not_configured' });
   assert.deepEqual(readiness.two_factor, { available: true, reason: null, method: 'totp' });

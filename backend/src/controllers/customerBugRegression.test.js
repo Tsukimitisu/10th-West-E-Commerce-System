@@ -53,12 +53,15 @@ test('auth availability is truthful and exposes working TOTP without secrets', (
   assert.equal(typeof availability.gcash.available, 'boolean');
   assert.equal(availability.two_factor.available, true);
   assert.equal(availability.two_factor.method, 'totp');
+  assert.equal(typeof availability.google.client_id_present, 'boolean');
+  assert.equal(typeof availability.google.client_secret_present, 'boolean');
+  assert.equal(typeof availability.google.callback_url, 'string');
   assert.deepEqual(availability.phone_verification, {
     available: false,
     status: 'unavailable',
     reason: 'not_configured',
   });
-  assert.doesNotMatch(JSON.stringify(availability), /secret|client_id|app_id/i);
+  assert.doesNotMatch(JSON.stringify(availability), /access_token|refresh_token|GOOGLE_CLIENT_SECRET/i);
 });
 
 test('phone verification state never reports an unverified number as verified', () => {

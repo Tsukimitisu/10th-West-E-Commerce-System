@@ -1,12 +1,15 @@
 import express from 'express';
 import { body, matchedData, validationResult } from 'express-validator';
-import passport from '../config/passport.js';
+import passport, {
+  GOOGLE_OAUTH_SCOPES,
+  getGoogleOAuthConfigurationStatus,
+} from '../config/passport.js';
 import { resolveFrontendOrigin } from '../config/frontend.js';
 import {
   register, login, logout, getProfile,
   forgotPassword, resetPassword, verifyResetToken, changePassword,
   setup2FA, verify2FA, disable2FA,
-  oauthCallback, exchangeOAuthCode,
+  googleOAuthCallback, oauthCallback, exchangeOAuthCode,
   getActiveSessions, revokeSession,
   getActivityLogs, sendRegistrationOtp,
   deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData, getMyPermissions,
@@ -25,12 +28,28 @@ import {
 
 const router = express.Router();
 
+export const getGoogleAuthAvailability = ({
+  configuration = getGoogleOAuthConfigurationStatus(),
+  strategyAvailable = Boolean(passport._strategy('google')),
+} = {}) => {
+  const available = Boolean(configuration.configured && strategyAvailable);
+  const reason = available
+    ? null
+    : configuration.configured
+      ? 'google_oauth_restart_required'
+      : 'missing_google_oauth_config';
+
+  return {
+    available,
+    reason,
+    client_id_present: Boolean(configuration.clientIdPresent),
+    client_secret_present: Boolean(configuration.clientSecretPresent),
+    callback_url_present: Boolean(configuration.callbackUrlPresent),
+    callback_url: configuration.callbackUrl || null,
+  };
+};
+
 export const getAuthAvailability = () => {
-  const googleAvailable = Boolean(
-    process.env.GOOGLE_CLIENT_ID
-      && process.env.GOOGLE_CLIENT_SECRET
-      && passport._strategy('google')
-  );
   const facebookAvailable = Boolean(
     process.env.FACEBOOK_APP_ID
       && process.env.FACEBOOK_APP_SECRET
@@ -39,10 +58,7 @@ export const getAuthAvailability = () => {
   const gcashAvailable = getPaymongoConfigurationStatus().configured;
 
   return {
-    google: {
-      available: googleAvailable,
-      reason: googleAvailable ? null : 'not_configured',
-    },
+    google: getGoogleAuthAvailability(),
     facebook: {
       available: facebookAvailable,
       reason: facebookAvailable ? null : 'not_configured',
@@ -74,9 +90,16 @@ const redirectToOAuthError = (res, errorCode) => {
   res.redirect(`${getFrontendUrl()}/#/login?error=${encodeURIComponent(errorCode)}`);
 };
 
+const handleOAuthProviderResponseError = (provider) => (req, res, next) => {
+  const providerError = String(req.query?.error || '').trim().toLowerCase();
+  if (!providerError) return next();
+  if (providerError === 'access_denied') return redirectToOAuthError(res, 'access_denied');
+  return redirectToOAuthError(res, `${provider}_failed`);
+};
+
 const ensureOAuthProviderConfigured = (provider) => (req, res, next) => {
   const isConfigured = provider === 'google'
-    ? Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+    ? getGoogleAuthAvailability().available
     : Boolean(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET);
 
   if (!isConfigured || !passport._strategy(provider)) {
@@ -87,13 +110,17 @@ const ensureOAuthProviderConfigured = (provider) => (req, res, next) => {
 };
 
 const completeOAuthAuthentication = (provider) => (req, res, next) => {
-  passport.authenticate(provider, { session: false }, (err, user) => {
+  passport.authenticate(provider, { session: false }, (err, user, info) => {
     if (err) {
-      console.error(`${provider} OAuth error:`, err);
+      console.error(`${provider} OAuth provider request failed`, {
+        name: String(err?.name || 'OAuthError').slice(0, 80),
+      });
       return redirectToOAuthError(res, `${provider}_failed`);
     }
 
     if (!user) {
+      const stateFailure = /authorization request state/i.test(String(info?.message || ''));
+      if (stateFailure) return redirectToOAuthError(res, 'oauth_invalid_state');
       return redirectToOAuthError(res, `${provider}_failed`);
     }
 
@@ -236,12 +263,13 @@ router.post('/exchange-code', body('code').notEmpty(), validate, exchangeOAuthCo
 // ─── OAuth: Google ─────────────────────────────────────────────────
 router.get('/google',
   ensureOAuthProviderConfigured('google'),
-  passport.authenticate('google', { scope: ['profile', 'email'], session: false })
+  passport.authenticate('google', { scope: GOOGLE_OAUTH_SCOPES, session: false })
 );
 router.get('/google/callback',
   ensureOAuthProviderConfigured('google'),
+  handleOAuthProviderResponseError('google'),
   completeOAuthAuthentication('google'),
-  oauthCallback
+  googleOAuthCallback
 );
 
 // ─── OAuth: Facebook ───────────────────────────────────────────────

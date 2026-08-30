@@ -1,19 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { exchangeOAuthCode, getProfile } from '../services/api';
+import { exchangeOAuthCode, getProfile, refreshCsrfAfterSessionRotation } from '../services/api';
 
 const OAUTH_ERROR_MESSAGES = {
   access_denied: 'Google sign in was cancelled.',
   account_deactivated: 'This account is deactivated. Please contact support.',
   google_not_configured: 'Google sign in is not available right now.',
   google_failed: 'Google sign in failed. Please try again.',
-  oauth_missing_email: 'Google did not return a verified email address. Please use another Google account or sign in with email.',
+  oauth_invalid_state: 'The Google sign-in request expired or was invalid. Please try again.',
+  oauth_missing_email: 'Google did not return an email address. Please use another Google account or sign in with email.',
+  oauth_unverified_email: 'Google did not verify this email address. Please use another Google account or sign in with email.',
+  oauth_account_conflict: 'This Google account cannot be linked automatically. Please contact support.',
+  oauth_session_failed: 'Google sign in succeeded, but a secure session could not be created. Please try again.',
   oauth_failed: 'Authentication failed. Please try again.',
 };
 
 const getOAuthErrorMessage = (error) => {
   const normalized = String(error || '').trim();
-  return OAUTH_ERROR_MESSAGES[normalized] || normalized || OAUTH_ERROR_MESSAGES.oauth_failed;
+  return OAUTH_ERROR_MESSAGES[normalized] || OAUTH_ERROR_MESSAGES.oauth_failed;
 };
 
 const clearOAuthCallbackQuery = () => {
@@ -31,49 +35,48 @@ const OAuthCallback = ({ onLogin }) => {
     if (handledRef.current) return undefined;
     handledRef.current = true;
 
-    const code = searchParams.get('code');
+    const legacyCode = searchParams.get('code');
     const error = searchParams.get('error');
     let cancelled = false;
 
     if (error) {
-      navigate(`/login?error=${encodeURIComponent(getOAuthErrorMessage(error))}`, { replace: true });
+      navigate(`/login?error=${encodeURIComponent(error)}`, { replace: true });
       return () => { cancelled = true; };
     }
 
-    if (code) {
-      clearOAuthCallbackQuery();
+    clearOAuthCallbackQuery();
 
-      exchangeOAuthCode(code)
-        .then(() => getProfile())
-        .then((user) => {
-          if (cancelled) return;
-          if (!user?.id) {
-            throw new Error('Authentication failed. Please try again.');
-          }
-          onLogin(user);
-          navigate('/', { replace: true });
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          const message = err?.message || 'Authentication failed. Please try again.';
-          setDisplayError(message);
-          navigate(`/login?error=${encodeURIComponent(message)}`, { replace: true });
-        });
-    } else {
-      navigate(`/login?error=${encodeURIComponent('Authentication failed. Missing OAuth verification code.')}`, { replace: true });
-    }
+    const completeLegacyExchange = legacyCode
+      ? exchangeOAuthCode(legacyCode)
+      : Promise.resolve();
+
+    completeLegacyExchange
+      .then(() => refreshCsrfAfterSessionRotation())
+      .then(() => getProfile())
+      .then((user) => {
+        if (cancelled) return;
+        if (!user?.id) throw new Error(OAUTH_ERROR_MESSAGES.oauth_failed);
+        onLogin(user);
+        navigate('/', { replace: true });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const message = getOAuthErrorMessage('oauth_failed');
+        setDisplayError(message);
+        navigate('/login?error=oauth_failed', { replace: true });
+      });
 
     return () => { cancelled = true; };
   }, [searchParams, navigate, onLogin]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900">
-      <div className="text-center">
-        <div className="w-10 h-10 border-3 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-sm text-gray-400">Completing sign in...</p>
-        {displayError && <p className="text-sm text-red-400 mt-3">{displayError}</p>}
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <div className="text-center" role="status" aria-live="polite">
+        <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-3 border-red-500 border-t-transparent" />
+        <p className="text-sm text-slate-600">Completing secure Google sign in...</p>
+        {displayError && <p className="mt-3 text-sm text-red-600">{displayError}</p>}
       </div>
-    </div>
+    </main>
   );
 };
 

@@ -1,6 +1,7 @@
 const REQUIRED_CORE_RELATIONS = Object.freeze([
   'knex_migrations',
   'users',
+  'user_oauth_accounts',
   'sessions',
   'http_sessions',
   'permissions',

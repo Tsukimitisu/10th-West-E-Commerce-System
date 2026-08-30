@@ -13,6 +13,7 @@ import { decryptTwoFactorSecret, encryptTwoFactorSecret, generateRecoveryCodes, 
 import databaseConfig from '../config/databaseConfig.cjs';
 import { resolveFrontendOrigin } from '../config/frontend.js';
 import { getPhoneVerificationState } from '../utils/phone.js';
+import { linkOrCreateOAuthUser } from '../services/oauthAccounts.js';
 
 const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
 const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
@@ -240,17 +241,29 @@ const bindAuthenticatedSession = async (req, user, token) => {
   await saveRequestSession(req);
 };
 
-const prepareAuthenticatedSession = async (req, user, token) => {
+const prepareAuthenticatedSession = async (req, user, token, { strict = false } = {}) => {
   try {
     await withTimeout(rotateGuestSession(req), SESSION_PERSIST_TIMEOUT_MS, 'rotateGuestSession');
   } catch (error) {
     console.warn('Unable to rotate guest session before auth response:', sanitizeDatabaseError(error));
+    if (strict) {
+      const sessionError = new Error('Unable to establish a secure application session');
+      sessionError.code = 'OAUTH_SESSION_FAILED';
+      sessionError.cause = error;
+      throw sessionError;
+    }
   }
 
   try {
     await withTimeout(bindAuthenticatedSession(req, user, token), SESSION_PERSIST_TIMEOUT_MS, 'bindAuthenticatedSession');
   } catch (error) {
     console.warn('Unable to persist authenticated session before auth response:', sanitizeDatabaseError(error));
+    if (strict) {
+      const sessionError = new Error('Unable to establish a secure application session');
+      sessionError.code = 'OAUTH_SESSION_FAILED';
+      sessionError.cause = error;
+      throw sessionError;
+    }
   }
 };
 
@@ -1259,6 +1272,93 @@ export const disable2FA = async (req, res) => {
 };
 
 // ─── OAUTH CALLBACK ────────────────────────────────────────────────
+const googleOAuthErrorCode = (error) => {
+  switch (error?.code) {
+    case 'OAUTH_EMAIL_REQUIRED': return 'oauth_missing_email';
+    case 'OAUTH_EMAIL_UNVERIFIED': return 'oauth_unverified_email';
+    case 'OAUTH_ACCOUNT_CONFLICT': return 'oauth_account_conflict';
+    case 'OAUTH_ACCOUNT_DEACTIVATED': return 'account_deactivated';
+    case 'OAUTH_SESSION_FAILED': return 'oauth_session_failed';
+    case 'ASYNC_OPERATION_TIMEOUT': return 'oauth_session_failed';
+    default: return 'google_failed';
+  }
+};
+
+export const googleOAuthCallback = async (req, res) => {
+  const frontendUrl = resolveFrontendOrigin();
+  const redirectToLoginError = (errorCode) => res.redirect(
+    `${frontendUrl}/#/login?error=${encodeURIComponent(errorCode)}`
+  );
+  const guestCartSessionId = req.session?.cartSessionId || null;
+  const ipAddress = req.clientIp;
+  const userAgent = req.clientUa;
+  let client = null;
+  let sessionToken = null;
+  let transactionCommitted = false;
+
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const { user } = await linkOrCreateOAuthUser(client, req.oauthUser);
+    sessionToken = await persistSession(client, user, ipAddress, userAgent);
+
+    await client.query('COMMIT');
+    transactionCommitted = true;
+
+    await prepareAuthenticatedSession(req, user, sessionToken, { strict: true });
+
+    if (guestCartSessionId) {
+      try {
+        await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
+      } catch (cartMergeError) {
+        console.warn('Unable to merge guest cart during Google login:', sanitizeDatabaseError(cartMergeError));
+      }
+    }
+
+    void logActivity({
+      userId: user.id,
+      action: 'oauth_login',
+      details: { provider: 'google' },
+      ipAddress,
+      userAgent,
+    }).catch((activityError) => {
+      console.warn('Unable to record Google login activity:', sanitizeDatabaseError(activityError));
+    });
+
+    return res.redirect(`${frontendUrl}/#/oauth-callback`);
+  } catch (error) {
+    if (client && !transactionCommitted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {}
+    }
+
+    if (sessionToken) {
+      const tokenHash = hashToken(sessionToken);
+      await pool.query(
+        'UPDATE sessions SET is_active = false WHERE token_hash = $1',
+        [tokenHash]
+      ).catch(() => {});
+
+      if (req.session?.auth?.tokenHash === tokenHash) {
+        delete req.session.auth;
+        await saveRequestSession(req).catch(() => {});
+      }
+    }
+
+    console.error('Google OAuth callback failed:', {
+      code: String(error?.code || 'GOOGLE_OAUTH_FAILED').slice(0, 80),
+    });
+    return redirectToLoginError(googleOAuthErrorCode(error));
+  } finally {
+    client?.release();
+  }
+};
+
+// Legacy provider callback. Google uses googleOAuthCallback above so its
+// verified identity is linked through user_oauth_accounts and its application
+// session is established before redirecting to the frontend.
 export const oauthCallback = async (req, res) => {
   try {
     const { provider, id: oauthId, email, name, avatar } = req.oauthUser;
