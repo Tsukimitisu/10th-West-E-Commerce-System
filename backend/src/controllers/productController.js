@@ -1015,7 +1015,9 @@ export const getProducts = async (req, res) => {
         console.error('Get products Supabase REST fallback error:', fallbackError);
       }
     }
-    res.status(500).json({ message: 'Server error' });
+    const databaseUnavailable = isDatabaseConnectivityError(error);
+    res.status(databaseUnavailable ? 503 : 500)
+      .json({ message: databaseUnavailable ? 'Catalog is temporarily unavailable.' : 'Server error' });
   }
 };
 
