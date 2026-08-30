@@ -139,6 +139,9 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                 />
                 <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
                 <Route path="/payment-result" element={user ? <PaymentResult /> : <Navigate to="/login" />} />
+                <Route path="/payment/success" element={user ? <PaymentResult /> : <Navigate to="/login" />} />
+                <Route path="/payment/failed" element={user ? <PaymentResult /> : <Navigate to="/login" />} />
+                <Route path="/payment/cancelled" element={user ? <PaymentResult /> : <Navigate to="/login" />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/faq" element={<FAQ />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />

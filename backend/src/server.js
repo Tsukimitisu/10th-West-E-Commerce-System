@@ -305,6 +305,13 @@ app.get('/api/ready', async (_req, res) => {
       commerce_ready: true,
       integrations_ready: integrationsReady,
       integrations,
+      payments: {
+        provider: paymongo.provider || 'paymongo',
+        mode: paymongo.mode || 'test',
+        methods: paymongo.methods || ['gcash'],
+        status: paymongo.configured ? 'configured' : 'not_configured',
+        ...(paymongo.configured ? {} : { reason: 'missing_paymongo_credentials' }),
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

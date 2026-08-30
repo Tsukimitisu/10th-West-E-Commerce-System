@@ -1,7 +1,9 @@
 import crypto from 'crypto';
 import { resolveFrontendOrigin } from '../config/frontend.js';
 
-const PAYMONGO_BASE_URL = 'https://api.paymongo.com/v1';
+const getPaymongoBaseUrl = () => (normalizeText(process.env.PAYMONGO_API_BASE_URL) || 'https://api.paymongo.com/v1').replace(/\/+$/, '');
+const getPaymongoCurrency = () => normalizeText(process.env.PAYMONGO_CURRENCY) || 'PHP';
+const getPaymongoMethods = () => (normalizeText(process.env.PAYMONGO_ALLOWED_METHODS) || 'gcash').split(',').map((method) => method.trim().toLowerCase()).filter(Boolean);
 
 const normalizeText = (value) => {
   const text = String(value || '').trim();
@@ -27,8 +29,21 @@ export const getPaymongoConfigurationStatus = () => {
     configured: missing.length === 0,
     missing,
     mode: normalizeText(process.env.PAYMONGO_SECRET_KEY)?.startsWith('sk_live_') ? 'live' : 'test',
+    provider: normalizeText(process.env.PAYMENT_PROVIDER) || 'paymongo',
+    methods: getPaymongoMethods(),
+    api_base_url: getPaymongoBaseUrl(),
   };
 };
+
+export const safePaymongoError = (error) => ({
+  code: error?.code || 'PAYMONGO_ERROR',
+  status: Number.isInteger(error?.status) ? error.status : undefined,
+  message: error?.code === 'PAYMONGO_NOT_CONFIGURED'
+    ? 'GCash payment is not configured.'
+    : error?.code === 'PAYMONGO_API_ERROR'
+      ? 'PayMongo could not create the checkout session.'
+      : 'PayMongo payment could not be completed.',
+});
 
 const getPublicBaseUrl = () => (
   normalizeText(process.env.PUBLIC_APP_URL)
@@ -77,13 +92,19 @@ export const createPaymongoGcashCheckout = async ({ order, items }) => {
   const orderId = Number(order.id);
   const orderNumber = order.order_number || `TWM-${String(orderId).padStart(8, '0')}`;
   let lineItems = items.map((item) => ({
-    currency: 'PHP',
+    currency: getPaymongoCurrency(),
     amount: Math.round(Number(item.product_price || item.price || 0) * 100),
     name: String(item.product_name || item.name || `Product #${item.product_id}`).slice(0, 120),
     quantity: Math.max(1, Number.parseInt(String(item.quantity || 1), 10)),
   })).filter((item) => item.amount > 0);
 
   const orderTotalCents = Math.round(Number(order.total_amount || 0) * 100);
+  const paymentMethods = getPaymongoMethods().filter((method) => method === 'gcash');
+  if (paymentMethods.length === 0) {
+    const error = new Error('GCash is not an allowed PayMongo payment method.');
+    error.code = 'PAYMONGO_GCASH_NOT_ALLOWED';
+    throw error;
+  }
   const lineItemsTotalCents = lineItems.reduce((sum, item) => sum + (item.amount * item.quantity), 0);
   if (orderTotalCents > 0 && lineItemsTotalCents !== orderTotalCents) {
     lineItems = [{
@@ -94,7 +115,7 @@ export const createPaymongoGcashCheckout = async ({ order, items }) => {
     }];
   }
 
-  const response = await fetch(`${PAYMONGO_BASE_URL}/checkout_sessions`, {
+  const response = await fetch(`${getPaymongoBaseUrl()}/checkout_sessions`, {
     method: 'POST',
     headers: {
       Authorization: buildAuthHeader(),
@@ -106,7 +127,7 @@ export const createPaymongoGcashCheckout = async ({ order, items }) => {
         attributes: {
           description: `10th West Moto Order #${orderId}`,
           line_items: lineItems,
-          payment_method_types: ['gcash'],
+          payment_method_types: paymentMethods,
           success_url: buildRedirectUrl('PAYMONGO_SUCCESS_URL', 'success', orderId),
           cancel_url: buildRedirectUrl('PAYMONGO_CANCEL_URL', 'cancelled', orderId),
           metadata: {
@@ -114,6 +135,8 @@ export const createPaymongoGcashCheckout = async ({ order, items }) => {
             payment_id: String(order.payment_id || ''),
             order_number: String(orderNumber),
             payment_reference: String(order.payment_reference || ''),
+            user_id: String(order.user_id || ''),
+            source: '10th-west-moto',
             failed_url: buildRedirectUrl('PAYMONGO_FAILED_URL', 'failed', orderId),
           },
         },
@@ -144,7 +167,7 @@ export const createPaymongoRefund = async ({ paymentId, amount, idempotencyKey, 
   if (!paymentId || !Number.isInteger(Number(amount)) || Number(amount) <= 0) {
     throw new Error('A PayMongo payment ID and positive centavo amount are required.');
   }
-  const response = await fetch(`${PAYMONGO_BASE_URL}/refunds`, {
+  const response = await fetch(`${getPaymongoBaseUrl()}/refunds`, {
     method: 'POST',
     headers: {
       Authorization: buildAuthHeader(),

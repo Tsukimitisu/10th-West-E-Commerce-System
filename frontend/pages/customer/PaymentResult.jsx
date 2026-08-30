@@ -22,8 +22,8 @@ const getCopy = (paymentStatus, queryStatus) => {
 
   return {
     icon: <Clock size={42} className="text-blue-600" />,
-    title: 'Waiting for GCash confirmation',
-    body: 'PayMongo is still confirming your payment. This page will refresh automatically.',
+    title: 'Payment is being verified',
+    body: 'Please check your order status. PayMongo is still confirming your payment.',
   };
 };
 
