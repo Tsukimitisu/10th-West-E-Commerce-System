@@ -451,7 +451,7 @@ const Navbar = ({ user, onLogout }) => {
               <Link to="/shop?sort=best-selling" className={`${navLinkClass(location.pathname === '/shop' && currentSort === 'best-selling')} hidden xl:block`}>
                 Best Sellers
               </Link>
-              <Link to="/shop?focus=brands" className={`${navLinkClass(location.pathname === '/shop' && searchParams.get('focus') === 'brands')} hidden 2xl:block`}>
+              <Link to="/shop?focus=brands" className={`${navLinkClass(location.pathname === '/shop' && searchParams.get('focus') === 'brands')} hidden xl:block`}>
                 Brands
               </Link>
               <div ref={supportMenuRef} className="relative">
