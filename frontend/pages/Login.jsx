@@ -182,9 +182,9 @@ const Login = ({ onLogin }) => {
             </div>
           )}
 
-          {(pageError || pageGoogleReason) && (
+          {pageError && (
             <div className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex items-center gap-2">
-              <AlertCircle size={16} /> {pageGoogleReason || pageError}
+              <AlertCircle size={16} /> {pageError}
             </div>
           )}
 
