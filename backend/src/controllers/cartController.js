@@ -316,6 +316,14 @@ export const getCart = async (req, res) => {
     console.error('Get cart error:', error);
     const connectivityFailure = error?.code === 'EACCES'
       || error?.errors?.some((nestedError) => nestedError?.code === 'EACCES');
+    // A guest has no server-side cart ownership to restore. During a
+    // transient database outage, return the safe empty guest state so public
+    // pages and the login flow do not surface a service error. Authenticated
+    // carts still fail closed with 503 and never fall back to another cart.
+    if (!req.user && (isDatabaseConnectivityError(error) || connectivityFailure)) {
+      console.warn('CART_GUEST_DEGRADED', { reason: 'database_unavailable' });
+      return res.json({ cart_id: null, items: [], degraded: true });
+    }
     res.status(isDatabaseConnectivityError(error) || connectivityFailure ? 503 : 500)
       .json({ message: 'Cart is temporarily unavailable.' });
   }

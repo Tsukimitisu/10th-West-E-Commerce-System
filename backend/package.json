@@ -17,6 +17,7 @@
     "migrations:verify": "node scripts/verify-migration-source.js",
     "db:check": "node scripts/database-check.js",
     "audit:integrity": "node scripts/integrity-audit.js",
+    "verify:google-local": "node scripts/verify-google-local.js",
     "test:live-concurrency": "node scripts/verify-live-concurrency.js",
     "seed:test-fixtures": "node scripts/seed-test-fixtures.js",
     "data:quarantine-orders": "node scripts/quarantine-order-integrity.js",
