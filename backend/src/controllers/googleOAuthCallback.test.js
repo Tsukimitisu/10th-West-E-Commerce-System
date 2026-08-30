@@ -215,6 +215,6 @@ test('Google callback maps unverified email and database errors to customer-safe
     headers: {},
     session: makeSession(),
   }, databaseFailureResponse);
-  assert.equal(databaseFailureResponse.redirectUrl, 'http://localhost:5173/#/login?error=google_failed');
+  assert.match(databaseFailureResponse.redirectUrl, /#\/login\?error=google_failed&google=failed&reason=callback_failed$/);
   assert.doesNotMatch(databaseFailureResponse.redirectUrl, /secret|postgresql/i);
 });

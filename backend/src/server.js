@@ -158,6 +158,9 @@ if (!sessionSecret) {
   console.warn('⚠️ SESSION_SECRET is not set. Using an ephemeral secret for development only.');
 }
 
+if (!sessionSecret && passport._strategy('google')) {
+  console.warn('GOOGLE_SESSION_SECRET_MISSING: set a stable SESSION_SECRET before testing Google OAuth.');
+}
 const effectiveSessionSecret = sessionSecret || crypto.randomBytes(48).toString('hex');
 
 // Build allowed origins for LAN access
@@ -400,6 +403,15 @@ if (isProduction) {
 if (coreStartupReady) {
   startExpiredReservationCleanup();
   startMaintenanceWorkers();
+  httpServer.on('error', (error) => {
+    if (error?.code === 'EADDRINUSE' && Number(PORT) === 5000) {
+      console.error('Port 5000 is already in use. Stop the existing backend process or restart your terminal before running npm run dev.');
+      process.exitCode = 1;
+      return;
+    }
+    console.error('Backend server failed to start:', { code: error?.code || 'SERVER_ERROR' });
+    process.exitCode = 1;
+  });
   httpServer.listen(PORT, '0.0.0.0', () => {
   console.log('╔══════════════════════════════════════════════╗');
   console.log('║    10TH WEST MOTO - Backend API Server     ║');
