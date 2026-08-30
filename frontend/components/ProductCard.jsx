@@ -88,7 +88,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
 
   if (view === 'list') {
     return (
-      <article className="interactive-card flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row">
+      <article className="interactive-card flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row">
         <Link to={productUrl} className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-xl bg-slate-100 sm:h-36 sm:w-40" aria-label={`View ${product.name}`}>
           <img
             src={image}
@@ -97,22 +97,22 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
             onError={handleProductImageError}
             className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
           />
-          {onSale && <span className="absolute left-2 top-2 rounded-lg bg-red-600 px-2 py-1 text-[11px] font-bold text-white">Save {discount}%</span>}
+          {onSale && <span className="absolute left-2 top-2 rounded-md bg-orange-600 px-2 py-1 text-[11px] font-bold text-white">Save {discount}%</span>}
         </Link>
         <div className="min-w-0 flex flex-1 flex-col">
           <div className="flex items-start justify-between gap-3">
             <div>
-              {product.category_name && <p className="text-[11px] font-bold uppercase tracking-wider text-red-600">{product.category_name}</p>}
-              <Link to={productUrl} className="mt-1 block font-display text-base font-bold text-slate-950 hover:text-red-600">{product.name}</Link>
+              {product.category_name && <p className="text-[11px] font-bold uppercase tracking-wider text-orange-700">{product.category_name}</p>}
+              <Link to={productUrl} className="mt-1 block font-display text-base font-bold text-slate-950 transition-colors hover:text-orange-700">{product.name}</Link>
             </div>
             <button
               type="button"
               onClick={handleWishlist}
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
               aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
               aria-pressed={wishlisted}
             >
-              <Heart size={18} className={wishlisted ? 'fill-red-500 text-red-500' : ''} />
+              <Heart size={18} className={wishlisted ? 'fill-orange-500 text-orange-500' : ''} />
             </button>
           </div>
           {product.description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{product.description}</p>}
@@ -130,7 +130,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
               type="button"
               onClick={handleAddToCart}
               disabled={outOfStock || cartLoading}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:bg-slate-300"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600 disabled:bg-slate-300"
             >
               {added ? <Check size={16} /> : <ShoppingCart size={16} />}
               {added ? 'Added' : hasVariants ? 'Choose options' : 'Add to cart'}
@@ -142,29 +142,29 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
   }
 
   return (
-    <article className="interactive-card group flex h-full min-h-[350px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <article className={`interactive-card group flex h-full min-h-[330px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white ${outOfStock ? 'bg-slate-50' : ''}`}>
       <div className="relative">
-        <Link to={productUrl} className="block aspect-square overflow-hidden bg-slate-100" aria-label={`View ${product.name}`}>
+        <Link to={productUrl} className="block aspect-[4/3] overflow-hidden bg-slate-100" aria-label={`View ${product.name}`}>
           <img
             src={image}
             alt={product.name}
             loading="lazy"
             onError={handleProductImageError}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.035]"
+            className={`h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.025] ${outOfStock ? 'saturate-[0.65]' : ''}`}
           />
         </Link>
         <div className="absolute left-2 top-2 flex flex-col items-start gap-1.5">
-          {onSale && <span className="rounded-lg bg-red-600 px-2 py-1 text-[10px] font-bold text-white shadow-sm">SAVE {discount}%</span>}
+          {onSale && <span className="rounded-md bg-orange-600 px-2 py-1 text-[10px] font-bold text-white shadow-sm">SAVE {discount}%</span>}
           {lowStock && <span className="rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-800 shadow-sm">LOW STOCK</span>}
         </div>
         <button
           type="button"
           onClick={handleWishlist}
-          className="absolute right-2 top-2 grid h-10 w-10 place-items-center rounded-xl border border-white/60 bg-white/92 text-slate-500 shadow-sm backdrop-blur transition-colors hover:text-red-600"
+          className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full border border-white/80 bg-white/95 text-slate-500 shadow-sm backdrop-blur transition-all duration-200 hover:border-orange-200 hover:text-orange-700"
           aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
           aria-pressed={wishlisted}
         >
-          <Heart size={18} className={wishlisted ? 'fill-red-500 text-red-500' : ''} />
+          <Heart size={17} className={wishlisted ? 'fill-orange-500 text-orange-500' : ''} />
         </button>
         {outOfStock && (
           <div className="absolute inset-0 grid place-items-center bg-white/72 backdrop-blur-[1px]">
@@ -175,7 +175,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
 
       <div className="flex flex-1 flex-col p-3.5 sm:p-4">
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-red-600">
+          <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700">
             {product.category_name || product.brand || 'Moto part'}
           </p>
           {Number(product.rating) > 0 && (
@@ -184,7 +184,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
             </span>
           )}
         </div>
-        <Link to={productUrl} className="mt-1.5 line-clamp-2 min-h-10 text-sm font-bold leading-5 text-slate-950 transition-colors hover:text-red-600">
+        <Link to={productUrl} className="mt-1.5 line-clamp-2 min-h-10 text-sm font-bold leading-5 text-slate-950 transition-colors duration-150 hover:text-orange-700">
           {product.name}
         </Link>
         <div className="mt-2">
@@ -201,7 +201,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
           type="button"
           onClick={handleAddToCart}
           disabled={outOfStock || cartLoading}
-          className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-red-600 disabled:bg-slate-300"
+          className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white transition-colors duration-200 hover:bg-orange-600 focus-visible:bg-orange-600 disabled:bg-slate-300"
         >
           {added ? <Check size={15} /> : <ShoppingCart size={15} />}
           {added ? 'Added to cart' : hasVariants ? 'Choose options' : 'Add to cart'}
