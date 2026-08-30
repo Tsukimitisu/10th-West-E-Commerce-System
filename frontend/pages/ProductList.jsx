@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, Grid3X3, List, Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { AlertTriangle, Grid3X3, List, Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { getProducts, getCategories, getWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
@@ -240,6 +240,19 @@ const ProductList = () => {
     return Array.from(b).sort();
   }, [products]);
 
+  useEffect(() => {
+    if (searchParams.get('focus') !== 'brands' || brands.length === 0) return undefined;
+    setShowDesktopFilters(true);
+    if (window.innerWidth < 1024) {
+      setMobileFiltersOpen(true);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      document.getElementById('brand-filter-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [brands.length, searchParams]);
+
   const models = useMemo(() => {
     const m = new Set();
     products.forEach((product) => {
@@ -308,17 +321,44 @@ const ProductList = () => {
     return result;
   }, [products, debouncedSearchQuery, selectedCategory, selectedBrand, selectedModel, selectedYear, priceRange, inStockOnly, sortBy]);
 
-  const activeFilterCount = [selectedCategory, selectedBrand, selectedModel, selectedYear, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
+  const activeFilterCount = [searchQuery.trim(), selectedCategory, selectedBrand, selectedModel, selectedYear, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
+
+  const selectedCategoryName = categories.find((category) => String(category.id) === selectedCategory)?.name;
+  const activeFilters = [
+    searchQuery.trim() && { key: 'search', label: `Search: ${searchQuery.trim()}` },
+    selectedCategory && { key: 'category', label: selectedCategoryName || 'Category' },
+    selectedBrand && { key: 'brand', label: selectedBrand },
+    selectedModel && { key: 'model', label: selectedModel },
+    selectedYear && { key: 'year', label: `Year ${selectedYear}` },
+    inStockOnly && { key: 'stock', label: 'In stock' },
+    (priceRange[0] > 0 || priceRange[1] < 100000) && { key: 'price', label: `₱${priceRange[0].toLocaleString()}–₱${priceRange[1].toLocaleString()}` },
+  ].filter(Boolean);
+
+  const removeFilter = (key) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (key === 'search') { setSearchQuery(''); nextParams.delete('search'); }
+    if (key === 'category') { setSelectedCategory(''); nextParams.delete('category'); }
+    if (key === 'brand') { setSelectedBrand(''); setSelectedModel(''); }
+    if (key === 'model') setSelectedModel('');
+    if (key === 'year') setSelectedYear('');
+    if (key === 'stock') setInStockOnly(false);
+    if (key === 'price') setPriceRange([0, 100000]);
+    nextParams.delete('focus');
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const clearAllFilters = () => {
     setSelectedCategory(''); setSelectedBrand(''); setSelectedModel(''); setSelectedYear(''); setPriceRange([0, 100000]); setInStockOnly(false); setSearchQuery('');
-    setSearchParams({});
+    const nextParams = new URLSearchParams();
+    if (sortBy !== 'newest') nextParams.set('sort', sortBy);
+    if (view !== 'grid') nextParams.set('view', view);
+    setSearchParams(nextParams, { replace: true });
   };
 
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-50">
-        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+        <div className="mx-auto max-w-[1600px] px-4 py-12 sm:px-6 lg:px-8">
           <LoadingSkeleton className="h-10 w-64" />
           <LoadingSkeleton className="mt-4 h-5 w-80 max-w-full" />
           <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
@@ -341,7 +381,7 @@ const ProductList = () => {
   if (catalogError) {
     return (
       <main className="min-h-screen bg-slate-50">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+        <div className="mx-auto max-w-[1600px] px-4 py-16 sm:px-6 lg:px-8">
           <EmptyState
             icon={AlertTriangle}
             title="The catalog is temporarily unavailable"
@@ -356,11 +396,13 @@ const ProductList = () => {
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-600">10th West Moto catalog</p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">Motorcycle parts & accessories</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Search the live catalog, confirm stock, and filter by category, brand, model, or price.</p>
-          <div className="relative mt-6 max-w-2xl">
+        <div className="mx-auto grid max-w-[1600px] gap-6 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(24rem,38rem)] lg:items-end lg:px-8">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-600">10th West Moto catalog</p>
+            <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">Motorcycle parts & accessories</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Find dependable parts, riding gear, and accessories with clear fitment and stock information.</p>
+          </div>
+          <div className="relative">
             <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
@@ -368,14 +410,14 @@ const ProductList = () => {
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search products, brands, or part numbers"
               aria-label="Search products"
-              className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm text-slate-950 shadow-sm placeholder:text-slate-500 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
+              className="h-12 w-full rounded-xl border border-slate-300 bg-slate-50 pl-11 pr-4 text-sm text-slate-950 transition placeholder:text-slate-500 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-orange-500/10"
             />
           </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-6 border-b border-slate-200 pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-slate-950" aria-live="polite">{filtered.length} {filtered.length === 1 ? 'product' : 'products'}</p>
@@ -386,14 +428,14 @@ const ProductList = () => {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setMobileFiltersOpen(true)}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 lg:hidden"
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 transition-colors hover:border-slate-400 hover:bg-slate-50 lg:hidden"
               >
                 <SlidersHorizontal size={16} />
                 Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
               </button>
               <button
                 onClick={() => setShowDesktopFilters(prev => !prev)}
-                className="hidden h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 lg:inline-flex"
+                className="hidden h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 lg:inline-flex"
               >
                 {showDesktopFilters ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
                 {showDesktopFilters ? 'Hide Filters' : 'Show Filters'}
@@ -402,7 +444,7 @@ const ProductList = () => {
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value)}
                 aria-label="Sort products"
-                className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
+                className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
               >
                 {searchQuery && <option value="relevance">Relevance</option>}
                 <option value="newest">Newest</option>
@@ -411,52 +453,26 @@ const ProductList = () => {
                 <option value="best-selling">Best Selling</option>
                 <option value="top-rated">Top Rated</option>
               </select>
-              <div className="hidden rounded-xl border border-slate-300 p-1 sm:flex" aria-label="Product view">
+              <div className="hidden rounded-lg border border-slate-300 p-1 sm:flex" aria-label="Product view">
                 <button type="button" onClick={() => setView('grid')} aria-label="Grid view" aria-pressed={view === 'grid'} className={`grid h-8 w-8 place-items-center rounded-lg ${view === 'grid' ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'}`}><Grid3X3 size={15} /></button>
                 <button type="button" onClick={() => setView('list')} aria-label="List view" aria-pressed={view === 'list'} className={`grid h-8 w-8 place-items-center rounded-lg ${view === 'list' ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'}`}><List size={15} /></button>
               </div>
             </div>
           </div>
+          {activeFilters.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Active filters">
+              {activeFilters.map((filter) => (
+                <button key={filter.key} type="button" onClick={() => removeFilter(filter.key)} className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-950" aria-label={`Remove ${filter.label} filter`}>
+                  <span className="max-w-52 truncate">{filter.label}</span>
+                  <X size={13} aria-hidden="true" />
+                </button>
+              ))}
+              <button type="button" onClick={clearAllFilters} className="px-2 py-1.5 text-xs font-semibold text-orange-700 transition-colors hover:text-orange-900">Clear all</button>
+            </div>
+          )}
         </div>
 
-        <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-          <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Motorcycle fitment</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <select
-              value={selectedBrand}
-              onChange={(event) => {
-                setSelectedBrand(event.target.value);
-                setSelectedModel('');
-              }}
-              aria-label="Motorcycle brand"
-              className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
-            >
-              <option value="">Brand</option>
-              {brands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
-            </select>
-            <select
-              value={selectedModel}
-              onChange={(event) => setSelectedModel(event.target.value)}
-              aria-label="Motorcycle model"
-              className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
-            >
-              <option value="">Model</option>
-              {models.map((model) => <option key={model} value={model}>{model}</option>)}
-            </select>
-            <input
-              type="number"
-              value={selectedYear}
-              onChange={(event) => setSelectedYear(event.target.value)}
-              placeholder="Year"
-              min="1900"
-              max="2100"
-              aria-label="Motorcycle year"
-              className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
-            />
-          </div>
-        </div>
-
-        <div className="flex gap-6">
+        <div className="flex gap-5 xl:gap-7">
           <FilterSidebar
             categories={categories}
             selectedCategory={selectedCategory}
@@ -464,6 +480,11 @@ const ProductList = () => {
             selectedBrand={selectedBrand}
             onBrandChange={setSelectedBrand}
             brands={brands}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            models={models}
+            selectedYear={selectedYear}
+            onYearChange={setSelectedYear}
             priceRange={priceRange}
             onPriceChange={setPriceRange}
             inStockOnly={inStockOnly}
@@ -493,7 +514,7 @@ const ProductList = () => {
                 action={products.length > 0 ? <BrandButton onClick={clearAllFilters}>Clear filters</BrandButton> : null}
               />
             ) : view === 'grid' ? (
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 2xl:gap-5">
                 {filtered.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} view="grid" />)}
               </div>
             ) : (
