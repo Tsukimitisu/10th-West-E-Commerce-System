@@ -336,7 +336,14 @@ const ProductList = () => {
 
   const removeFilter = (key) => {
     const nextParams = new URLSearchParams(searchParams);
-    if (key === 'search') { setSearchQuery(''); nextParams.delete('search'); }
+    if (key === 'search') {
+      setSearchQuery('');
+      nextParams.delete('search');
+      if (sortBy === 'relevance') {
+        setSortBy('newest');
+        nextParams.delete('sort');
+      }
+    }
     if (key === 'category') { setSelectedCategory(''); nextParams.delete('category'); }
     if (key === 'brand') { setSelectedBrand(''); setSelectedModel(''); }
     if (key === 'model') setSelectedModel('');
@@ -349,8 +356,10 @@ const ProductList = () => {
 
   const clearAllFilters = () => {
     setSelectedCategory(''); setSelectedBrand(''); setSelectedModel(''); setSelectedYear(''); setPriceRange([0, 100000]); setInStockOnly(false); setSearchQuery('');
+    const nextSort = sortBy === 'relevance' ? 'newest' : sortBy;
+    setSortBy(nextSort);
     const nextParams = new URLSearchParams();
-    if (sortBy !== 'newest') nextParams.set('sort', sortBy);
+    if (nextSort !== 'newest') nextParams.set('sort', nextSort);
     if (view !== 'grid') nextParams.set('view', view);
     setSearchParams(nextParams, { replace: true });
   };

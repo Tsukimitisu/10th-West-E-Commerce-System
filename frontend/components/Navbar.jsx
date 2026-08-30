@@ -442,7 +442,7 @@ const Navbar = ({ user, onLogout }) => {
               <Link to="/" className={navLinkClass(location.pathname === '/')}>
                 Home
               </Link>
-              <Link to="/shop" className={navLinkClass(location.pathname === '/shop' && !currentSort)}>
+              <Link to="/shop" className={navLinkClass(location.pathname === '/shop' && !currentSort && !searchParams.get('focus'))}>
                 Shop
               </Link>
               <Link to="/shop?sort=newest" className={`${navLinkClass(location.pathname === '/shop' && currentSort === 'newest')} hidden xl:block`}>
