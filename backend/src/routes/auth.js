@@ -113,6 +113,7 @@ const completeOAuthAuthentication = (provider) => (req, res, next) => {
   passport.authenticate(provider, { session: false }, (err, user, info) => {
     if (err) {
       console.error(`${provider} OAuth provider request failed`, {
+        reason_code: provider === 'google' ? 'GOOGLE_CALLBACK_ERROR' : `${provider.toUpperCase()}_CALLBACK_ERROR`,
         name: String(err?.name || 'OAuthError').slice(0, 80),
       });
       return redirectToOAuthError(res, `${provider}_failed`);
@@ -120,6 +121,11 @@ const completeOAuthAuthentication = (provider) => (req, res, next) => {
 
     if (!user) {
       const stateFailure = /authorization request state/i.test(String(info?.message || ''));
+      if (provider === 'google') {
+        console.error('Google OAuth callback rejected provider response', {
+          reason_code: stateFailure ? 'OAUTH_STATE_MISMATCH' : 'GOOGLE_CALLBACK_ERROR',
+        });
+      }
       if (stateFailure) return redirectToOAuthError(res, 'oauth_invalid_state');
       return redirectToOAuthError(res, `${provider}_failed`);
     }

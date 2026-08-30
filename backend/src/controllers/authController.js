@@ -1284,6 +1284,18 @@ const googleOAuthErrorCode = (error) => {
   }
 };
 
+const googleOAuthFailureReason = (error) => {
+  switch (error?.code) {
+    case 'OAUTH_EMAIL_REQUIRED': return 'GOOGLE_PROFILE_MISSING_EMAIL';
+    case 'OAUTH_EMAIL_UNVERIFIED': return 'GOOGLE_EMAIL_NOT_VERIFIED';
+    case 'OAUTH_ACCOUNT_CONFLICT': return 'GOOGLE_ACCOUNT_LINK_FAILED';
+    case 'OAUTH_SESSION_FAILED':
+    case 'ASYNC_OPERATION_TIMEOUT': return 'SESSION_SAVE_FAILED';
+    case '23505': return 'USER_CREATION_FAILED';
+    default: return 'GOOGLE_CALLBACK_ERROR';
+  }
+};
+
 export const googleOAuthCallback = async (req, res) => {
   const frontendUrl = resolveFrontendOrigin();
   const redirectToLoginError = (errorCode) => res.redirect(
@@ -1348,7 +1360,8 @@ export const googleOAuthCallback = async (req, res) => {
     }
 
     console.error('Google OAuth callback failed:', {
-      code: String(error?.code || 'GOOGLE_OAUTH_FAILED').slice(0, 80),
+      reason_code: googleOAuthFailureReason(error),
+      database_code: String(error?.code || 'GOOGLE_OAUTH_FAILED').slice(0, 80),
     });
     return redirectToLoginError(googleOAuthErrorCode(error));
   } finally {
