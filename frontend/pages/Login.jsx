@@ -47,6 +47,7 @@ const Login = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [queryErrorMessage, setQueryErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
@@ -58,11 +59,12 @@ const Login = ({ onLogin }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const defaultRedirect = searchParams.get('redirect') || '/';
   const pageMessage = searchParams.get('message') || '';
-  const pageError = getLoginErrorMessage(searchParams.get('error'));
-  const pageGoogleReason = GOOGLE_REASON_MESSAGES[searchParams.get('reason')] || '';
+  const pageError = queryErrorMessage;
 
   React.useEffect(() => {
-    if (!searchParams.get('error')) return;
+    const queryError = searchParams.get('error');
+    if (!queryError) return;
+    setQueryErrorMessage(GOOGLE_REASON_MESSAGES[searchParams.get('reason')] || getLoginErrorMessage(queryError));
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('error');
     nextParams.delete('google');
@@ -86,6 +88,7 @@ const Login = ({ onLogin }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setQueryErrorMessage('');
     setNeedsVerification(false);
     setVerificationEmail('');
     setResendSuccess('');
@@ -142,7 +145,10 @@ const Login = ({ onLogin }) => {
   const handleOAuth = (provider) => {
     const cleanParams = new URLSearchParams(searchParams);
     cleanParams.delete('error');
+    cleanParams.delete('google');
+    cleanParams.delete('reason');
     setSearchParams(cleanParams, { replace: true });
+    setQueryErrorMessage('');
     if (!oauthProviders[provider]) {
       const label = provider === 'google' ? 'Google' : 'Facebook';
       setError(provider === 'google' && oauthProviders.error
