@@ -509,7 +509,7 @@ const Navbar = ({ user, onLogout }) => {
                                     {showInternalProductMeta ? (product.part_number || product.category_name) : product.category_name}
                                   </p>
                                 </div>
-                                <div className="text-sm font-bold text-red-500 shrink-0">₱{product.price?.toFixed(2) || '0.00'}</div>
+                                <div className="text-sm font-bold text-red-500 shrink-0">₱{Number(product.price || 0).toFixed(2)}</div>
                               </Link>
                             ))}
                           </div>
@@ -748,7 +748,7 @@ const Navbar = ({ user, onLogout }) => {
                                   {showInternalProductMeta ? (product.part_number || product.category_name) : product.category_name}
                                 </p>
                               </div>
-                              <div className="text-sm font-bold text-red-500 shrink-0">₱{product.price?.toFixed(2) || '0.00'}</div>
+                              <div className="text-sm font-bold text-red-500 shrink-0">₱{Number(product.price || 0).toFixed(2)}</div>
                             </Link>
                           ))}
                         </div>

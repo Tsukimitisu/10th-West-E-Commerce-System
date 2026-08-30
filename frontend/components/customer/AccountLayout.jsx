@@ -18,6 +18,7 @@ const getMenuIndex = (pathname) => menuItems.findIndex((item) => item.path === p
 const AccountLayout = ({ children }) => {
   const location = useLocation();
   const user = getCurrentAuthUser();
+  const storeCredit = Number(user?.store_credit ?? 0);
   const previousPathRef = useRef(location.pathname);
 
   const previousPath = previousPathRef.current;
@@ -71,10 +72,10 @@ const AccountLayout = ({ children }) => {
                       <p className="text-xs text-gray-500 truncate">{user.email}</p>
                     </div>
                   </div>
-                  {user.store_credit !== undefined && user.store_credit > 0 && (
+                  {Number.isFinite(storeCredit) && storeCredit > 0 && (
                     <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
                       <Wallet size={16} className="text-green-600" />
-                      <span className="text-sm font-medium text-green-700">₱{user.store_credit.toFixed(2)} credit</span>
+                      <span className="text-sm font-medium text-green-700">₱{storeCredit.toFixed(2)} credit</span>
                     </div>
                   )}
                 </div>
