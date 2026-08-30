@@ -4,11 +4,14 @@ import test from 'node:test';
 
 const read = (relativePath) => readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-test('storefront navbar exposes clear primary destinations without a generic More menu', async () => {
+test('storefront navbar keeps primary destinations concise without catalog shortcuts or a generic More menu', async () => {
   const navbar = await read('components/Navbar.jsx');
 
-  for (const destination of ['Home', 'Shop', 'New Arrivals', 'Best Sellers', 'Brands', 'Support']) {
+  for (const destination of ['Home', 'Shop', 'Support']) {
     assert.match(navbar, new RegExp(`>${destination}<|\\n\\s*${destination}\\n`));
+  }
+  for (const removedDestination of ['New Arrivals', 'Best Sellers', 'Brands']) {
+    assert.doesNotMatch(navbar, new RegExp(`>${removedDestination}<|\\n\\s*${removedDestination}\\n`));
   }
   assert.doesNotMatch(navbar, />\s*More\s*</);
   assert.match(navbar, /aria-label="Primary navigation"/);

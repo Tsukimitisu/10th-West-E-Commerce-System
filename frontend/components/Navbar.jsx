@@ -371,7 +371,6 @@ const Navbar = ({ user, onLogout }) => {
   const isShopRoute = location.pathname === '/shop';
   const isHomeRoute = location.pathname === '/';
   const shouldShowGlobalSearch = isShopRoute || isHomeRoute;
-  const currentSort = searchParams.get('sort');
   const navLinkClass = (active) => `relative px-2.5 py-2 text-sm font-semibold transition-colors duration-200 after:absolute after:inset-x-2.5 after:-bottom-0.5 after:h-0.5 after:origin-left after:rounded-full after:bg-orange-500 after:transition-transform after:duration-200 ${active ? 'text-white after:scale-x-100' : 'text-slate-400 after:scale-x-0 hover:text-white hover:after:scale-x-100'}`;
   const showInternalProductMeta = user?.role === Role.OWNER
     || user?.role === Role.STORE_STAFF
@@ -442,17 +441,8 @@ const Navbar = ({ user, onLogout }) => {
               <Link to="/" className={navLinkClass(location.pathname === '/')}>
                 Home
               </Link>
-              <Link to="/shop" className={navLinkClass(location.pathname === '/shop' && !currentSort && !searchParams.get('focus'))}>
+              <Link to="/shop" className={navLinkClass(location.pathname === '/shop')}>
                 Shop
-              </Link>
-              <Link to="/shop?sort=newest" className={`${navLinkClass(location.pathname === '/shop' && currentSort === 'newest')} hidden xl:block`}>
-                New Arrivals
-              </Link>
-              <Link to="/shop?sort=best-selling" className={`${navLinkClass(location.pathname === '/shop' && currentSort === 'best-selling')} hidden xl:block`}>
-                Best Sellers
-              </Link>
-              <Link to="/shop?focus=brands" className={`${navLinkClass(location.pathname === '/shop' && searchParams.get('focus') === 'brands')} hidden xl:block`}>
-                Brands
               </Link>
               <div ref={supportMenuRef} className="relative">
                 <button
@@ -801,10 +791,7 @@ const Navbar = ({ user, onLogout }) => {
             )}
             <nav className="p-4 space-y-1">
               <Link to="/" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Home</Link>
-              <Link to="/shop" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/shop' && !currentSort ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Shop</Link>
-              <Link to="/shop?sort=newest" onClick={() => setMobileOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-colors duration-200 hover:bg-zinc-800 hover:text-white">New Arrivals</Link>
-              <Link to="/shop?sort=best-selling" onClick={() => setMobileOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-colors duration-200 hover:bg-zinc-800 hover:text-white">Best Sellers</Link>
-              <Link to="/shop?focus=brands" onClick={() => setMobileOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-colors duration-200 hover:bg-zinc-800 hover:text-white">Brands</Link>
+              <Link to="/shop" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/shop' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Shop</Link>
               <div className="border-t border-zinc-800 my-2" />
               <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Support</p>
               <Link to="/faq" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/faq' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Help & FAQ</Link>
