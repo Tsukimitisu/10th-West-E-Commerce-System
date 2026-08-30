@@ -180,6 +180,8 @@ test('Google routes use state-protected Passport flow and map cancellation safel
   const source = await readFile(new URL('../routes/auth.js', import.meta.url), 'utf8');
   assert.match(source, /router\.get\('\/google'/);
   assert.match(source, /scope: GOOGLE_OAUTH_SCOPES/);
+  assert.match(source, /getGoogleAuthAvailability\(\)\.callback_url/);
+  assert.doesNotMatch(source, /getGoogleOAuthAvailability\(\)/);
   assert.match(source, /router\.get\('\/google\/callback'/);
   assert.match(source, /handleOAuthProviderResponseError\('google'\)/);
   assert.match(source, /providerError === 'access_denied'/);

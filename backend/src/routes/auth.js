@@ -269,7 +269,13 @@ router.post('/exchange-code', body('code').notEmpty(), validate, exchangeOAuthCo
 // ─── OAuth: Google ─────────────────────────────────────────────────
 router.get('/google',
   ensureOAuthProviderConfigured('google'),
-  (req, _res, next) => { console.info('GOOGLE_AUTH_START', { has_session: Boolean(req.session), callback_url: getGoogleOAuthAvailability().callback_url }); next(); },
+  (req, _res, next) => {
+    console.info('GOOGLE_AUTH_START', {
+      has_session: Boolean(req.session),
+      callback_url: getGoogleAuthAvailability().callback_url,
+    });
+    next();
+  },
   (req, res, next) => {
     const authenticate = passport.authenticate('google', { scope: GOOGLE_OAUTH_SCOPES, session: false });
     const handleError = (error) => {
