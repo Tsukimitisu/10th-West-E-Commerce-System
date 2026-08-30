@@ -35,19 +35,19 @@ const sectionMotion = {
 const ProductSection = ({ eyebrow, title, description, products, wishlistedIds, onWishlistToggle, light = true }) => {
   if (!products.length) return null;
   return (
-    <section className={`py-14 sm:py-20 ${light ? 'bg-white' : 'bg-slate-50'}`}>
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        <div className="mb-8 flex items-end justify-between gap-6">
+    <section className={`py-12 sm:py-16 ${light ? 'bg-white' : 'bg-slate-50'}`}>
+      <div className="mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8">
+        <div className="mb-7 flex items-end justify-between gap-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-600">{eyebrow}</p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-600">{eyebrow}</p>
             <h2 className="mt-2 font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h2>
             {description && <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{description}</p>}
           </div>
-          <Link to="/shop" className="hidden shrink-0 items-center gap-2 text-sm font-semibold text-slate-700 transition-colors hover:text-red-600 sm:flex">
+          <Link to="/shop" className="hidden shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-orange-200 hover:text-orange-700 sm:flex">
             Shop all <ArrowRight size={16} />
           </Link>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:gap-5">
           {products.slice(0, 8).map((product) => (
             <ProductCard
               key={product.id}
@@ -181,7 +181,7 @@ const Home = () => {
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,13,25,0.98)_0%,rgba(11,16,32,0.88)_45%,rgba(11,16,32,0.35)_100%)]" />
         <div className="absolute -right-24 top-0 h-full w-2/5 -skew-x-12 bg-gradient-to-b from-red-600/15 to-orange-500/5" aria-hidden="true" />
 
-        <div className="relative mx-auto flex min-h-[560px] max-w-7xl items-center px-4 py-20 sm:min-h-[620px] sm:px-6">
+        <div className="relative mx-auto flex min-h-[560px] max-w-[1500px] items-center px-4 py-20 sm:min-h-[620px] sm:px-6 lg:px-8">
           <motion.div
             className="max-w-3xl"
             initial={reduceMotion ? false : 'hidden'}
@@ -236,7 +236,7 @@ const Home = () => {
       </section>
 
       <section aria-label="Store benefits" className="border-b border-slate-200 bg-white">
-        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-px bg-slate-200 sm:grid-cols-4">
+        <div className="mx-auto grid max-w-[1500px] grid-cols-2 gap-px bg-slate-200 sm:grid-cols-4">
           {[
             { icon: Truck, title: 'Fast delivery', copy: 'Tracked local shipping' },
             { icon: ShieldCheck, title: 'Secure checkout', copy: 'Protected transactions' },
@@ -257,7 +257,7 @@ const Home = () => {
       </section>
 
       {loading ? (
-        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+        <section className="mx-auto max-w-[1500px] px-4 py-16 sm:px-6 lg:px-8">
           <LoadingSkeleton className="h-8 w-56" />
           <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-4">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -270,7 +270,7 @@ const Home = () => {
           </div>
         </section>
       ) : catalogError ? (
-        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+        <section className="mx-auto max-w-[1500px] px-4 py-16 sm:px-6 lg:px-8">
           <EmptyState
             icon={PackageCheck}
             title="The catalog is temporarily unavailable"
@@ -281,7 +281,7 @@ const Home = () => {
       ) : (
         <>
           {products.length === 0 && (
-            <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
+            <section className="mx-auto max-w-[1500px] px-4 py-16 sm:px-6 lg:px-8">
               <EmptyState
                 icon={PackageCheck}
                 title="No products are available yet"
@@ -291,14 +291,14 @@ const Home = () => {
             </section>
           )}
           {categories.length > 0 && (
-            <section className="bg-slate-50 py-14 sm:py-20">
-              <div className="mx-auto max-w-7xl px-4 sm:px-6">
-                <div className="mb-8 flex items-end justify-between gap-6">
+            <section className="bg-slate-50 py-12 sm:py-16">
+              <div className="mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8">
+                <div className="mb-7 flex items-end justify-between gap-6">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-600">Browse faster</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-600">Browse faster</p>
                     <h2 className="mt-2 font-display text-2xl font-extrabold text-slate-950 sm:text-3xl">Shop by category</h2>
                   </div>
-                  <Link to="/shop" className="hidden items-center gap-2 text-sm font-semibold text-slate-700 hover:text-red-600 sm:flex">
+                  <Link to="/shop" className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-orange-200 hover:text-orange-700 sm:flex">
                     All categories <ArrowRight size={16} />
                   </Link>
                 </div>
@@ -307,13 +307,13 @@ const Home = () => {
                     <Link
                       key={category.id}
                       to={`/shop?category=${category.id}`}
-                      className="interactive-card group relative min-h-36 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                      className="interactive-card group relative min-h-36 overflow-hidden rounded-xl border border-slate-200 bg-white p-4"
                     >
-                      <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-100 text-slate-600 transition-colors group-hover:bg-red-50 group-hover:text-red-600">
+                      <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-100 text-slate-600 transition-colors group-hover:bg-orange-50 group-hover:text-orange-700">
                         <Wrench size={17} aria-hidden="true" />
                       </span>
                       <h3 className="mt-6 font-display text-sm font-bold leading-5 text-slate-950">{category.name}</h3>
-                      <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 group-hover:text-red-600">
+                      <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 transition-colors group-hover:text-orange-700">
                         View parts <ChevronRight size={13} />
                       </span>
                     </Link>
@@ -359,7 +359,7 @@ const Home = () => {
       )}
 
       <section className="bg-[#0b1020] py-14 text-white">
-        <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-4 sm:px-6 md:flex-row md:items-center">
+        <div className="mx-auto flex max-w-[1500px] flex-col items-start justify-between gap-6 px-4 sm:px-6 md:flex-row md:items-center lg:px-8">
           <div className="flex items-start gap-4">
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/10 text-orange-400">
               <Headphones size={23} aria-hidden="true" />
