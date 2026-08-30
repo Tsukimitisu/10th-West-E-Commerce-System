@@ -317,6 +317,7 @@ router.get('/profile/optional', authenticateOptional, (req, res) => {
   if (!req.user) return res.status(204).end();
   return getProfile(req, res);
 });
+router.get('/me', authenticateToken, getProfile);
 router.get('/profile', authenticateToken, getProfile);
 router.get('/permissions', authenticateToken, getMyPermissions);
 router.put('/change-password',
