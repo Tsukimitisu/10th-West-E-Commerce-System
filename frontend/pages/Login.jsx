@@ -25,6 +25,15 @@ const getLoginErrorMessage = (error) => {
   return LOGIN_ERROR_MESSAGES[normalized] || normalized;
 };
 
+const GOOGLE_REASON_MESSAGES = {
+  state_mismatch: 'Google sign in session expired. Please try again.',
+  session_save_failed: 'Google sign in completed but the session could not be saved.',
+  user_create_failed: 'Google sign in completed but your account could not be created.',
+  profile_missing_email: 'Google did not return an email address. Please try another account.',
+  email_not_verified: 'Google did not verify this email address. Please try another account.',
+  callback_failed: 'Google sign in failed. Please try again.',
+};
+
 const getLoginSubmissionErrorMessage = (error) => {
   const code = String(error?.code || '').toUpperCase();
   if (code === 'DATABASE_UNAVAILABLE' || Number(error?.status) === 503) {
@@ -50,11 +59,14 @@ const Login = ({ onLogin }) => {
   const defaultRedirect = searchParams.get('redirect') || '/';
   const pageMessage = searchParams.get('message') || '';
   const pageError = getLoginErrorMessage(searchParams.get('error'));
+  const pageGoogleReason = GOOGLE_REASON_MESSAGES[searchParams.get('reason')] || '';
 
   React.useEffect(() => {
     if (!searchParams.get('error')) return;
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('error');
+    nextParams.delete('google');
+    nextParams.delete('reason');
     setSearchParams(nextParams, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -164,9 +176,9 @@ const Login = ({ onLogin }) => {
             </div>
           )}
 
-          {pageError && (
+          {(pageError || pageGoogleReason) && (
             <div className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex items-center gap-2">
-              <AlertCircle size={16} /> {pageError}
+              <AlertCircle size={16} /> {pageGoogleReason || pageError}
             </div>
           )}
 
