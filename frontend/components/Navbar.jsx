@@ -20,7 +20,7 @@ const Navbar = ({ user, onLogout }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [supportMenuOpen, setSupportMenuOpen] = useState(false);
   const { itemCount } = useCart();
   const { on, off, connected } = useSocket();
   const location = useLocation();
@@ -35,7 +35,7 @@ const Navbar = ({ user, onLogout }) => {
   const mobileSearchDropdownRef = useRef(null);
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
-  const moreMenuRef = useRef(null);
+  const supportMenuRef = useRef(null);
   const searchRequestRef = useRef(0);
   const searchCacheRef = useRef(new Map());
 
@@ -144,7 +144,7 @@ const Navbar = ({ user, onLogout }) => {
   useEffect(() => {
     setMobileOpen(false);
     setUserMenuOpen(false);
-    setMoreMenuOpen(false);
+    setSupportMenuOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -304,7 +304,7 @@ const Navbar = ({ user, onLogout }) => {
   useEffect(() => {
     const notifHandler = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setMoreMenuOpen(false);
+      if (supportMenuRef.current && !supportMenuRef.current.contains(e.target)) setSupportMenuOpen(false);
     };
     document.addEventListener('mousedown', notifHandler);
     return () => document.removeEventListener('mousedown', notifHandler);
@@ -371,6 +371,8 @@ const Navbar = ({ user, onLogout }) => {
   const isShopRoute = location.pathname === '/shop';
   const isHomeRoute = location.pathname === '/';
   const shouldShowGlobalSearch = isShopRoute || isHomeRoute;
+  const currentSort = searchParams.get('sort');
+  const navLinkClass = (active) => `relative px-2.5 py-2 text-sm font-semibold transition-colors duration-200 after:absolute after:inset-x-2.5 after:-bottom-0.5 after:h-0.5 after:origin-left after:rounded-full after:bg-orange-500 after:transition-transform after:duration-200 ${active ? 'text-white after:scale-x-100' : 'text-slate-400 after:scale-x-0 hover:text-white hover:after:scale-x-100'}`;
   const showInternalProductMeta = user?.role === Role.OWNER
     || user?.role === Role.STORE_STAFF
     || user?.role === Role.ADMIN
@@ -425,7 +427,7 @@ const Navbar = ({ user, onLogout }) => {
     <>
       {/* Main navbar */}
       <header className={`sticky top-0 z-50 border-b border-white/10 bg-[#080d19]/95 backdrop-blur-xl transition-shadow duration-300 ${scrolled ? 'shadow-lg shadow-black/15' : 'shadow-none'}`}>
-        <div className="max-w-7xl mx-auto px-4 lg:px-6">
+        <div className="mx-auto max-w-[1600px] px-4 lg:px-6">
           <div className="flex items-center justify-between h-16">
             {/* Mobile menu button */}
             <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 -ml-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
@@ -436,27 +438,39 @@ const Navbar = ({ user, onLogout }) => {
             <BrandMark dark className="shrink-0 transition-opacity hover:opacity-90 [&>span:last-child]:hidden sm:[&>span:last-child]:block" />
 
             {/* Desktop navigation - Center */}
-            <nav className="hidden lg:flex items-center gap-2 ml-8 flex-1">
-              <Link to="/" className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${location.pathname === '/' ? 'text-red-500 font-bold bg-zinc-800/40 border border-red-500/20 shadow-sm shadow-red-950/20' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/40'}`}>
+            <nav className="ml-6 hidden min-w-0 flex-1 items-center gap-0.5 lg:flex xl:ml-8" aria-label="Primary navigation">
+              <Link to="/" className={navLinkClass(location.pathname === '/')}>
                 Home
               </Link>
-              <Link to="/shop" className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${location.pathname === '/shop' ? 'text-red-500 font-bold bg-zinc-800/40 border border-red-500/20 shadow-sm shadow-red-950/20' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/40'}`}>
+              <Link to="/shop" className={navLinkClass(location.pathname === '/shop' && !currentSort)}>
                 Shop
               </Link>
-              <div ref={moreMenuRef} className="relative">
+              <Link to="/shop?sort=newest" className={`${navLinkClass(location.pathname === '/shop' && currentSort === 'newest')} hidden xl:block`}>
+                New Arrivals
+              </Link>
+              <Link to="/shop?sort=best-selling" className={`${navLinkClass(location.pathname === '/shop' && currentSort === 'best-selling')} hidden xl:block`}>
+                Best Sellers
+              </Link>
+              <Link to="/shop?focus=brands" className={`${navLinkClass(location.pathname === '/shop' && searchParams.get('focus') === 'brands')} hidden 2xl:block`}>
+                Brands
+              </Link>
+              <div ref={supportMenuRef} className="relative">
                 <button
-                  onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 flex items-center gap-1.5 ${location.pathname === '/faq' || location.pathname === '/contact' ? 'text-red-500 font-bold bg-zinc-800/40 border border-red-500/20 shadow-sm shadow-red-950/20' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/40'}`}
+                  type="button"
+                  onClick={() => setSupportMenuOpen(!supportMenuOpen)}
+                  className={`${navLinkClass(location.pathname === '/faq' || location.pathname === '/contact')} flex items-center gap-1.5`}
+                  aria-expanded={supportMenuOpen}
+                  aria-haspopup="menu"
                 >
-                  More <ChevronDown size={14} className={`transition-transform duration-300 ${moreMenuOpen ? 'rotate-180' : ''}`} />
+                  Support <ChevronDown size={14} className={`transition-transform duration-200 ${supportMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
-                {moreMenuOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-zinc-950 rounded-2xl shadow-xl border border-zinc-800/85 py-2 animate-fade-in z-50 transition-all duration-300 ease-in-out">
-                    <Link to="/faq" className="block px-4 py-2.5 text-sm font-medium text-zinc-400 hover:text-red-500 hover:bg-zinc-900 transition-all duration-200 ease-in-out">
-                      FAQ
+                {supportMenuOpen && (
+                  <div className="absolute left-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#0d1422] py-1.5 shadow-2xl animate-fade-in" role="menu">
+                    <Link to="/faq" className="block px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors duration-150 hover:bg-white/5 hover:text-orange-400" role="menuitem">
+                      Help & FAQ
                     </Link>
-                    <Link to="/contact" className="block px-4 py-2.5 text-sm font-medium text-zinc-400 hover:text-red-500 hover:bg-zinc-900 transition-all duration-200 ease-in-out">
-                      Contact
+                    <Link to="/contact" className="block px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors duration-150 hover:bg-white/5 hover:text-orange-400" role="menuitem">
+                      Contact Support
                     </Link>
                   </div>
                 )}
@@ -787,10 +801,14 @@ const Navbar = ({ user, onLogout }) => {
             )}
             <nav className="p-4 space-y-1">
               <Link to="/" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Home</Link>
-              <Link to="/shop" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/shop' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Shop All</Link>
+              <Link to="/shop" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/shop' && !currentSort ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Shop</Link>
+              <Link to="/shop?sort=newest" onClick={() => setMobileOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-colors duration-200 hover:bg-zinc-800 hover:text-white">New Arrivals</Link>
+              <Link to="/shop?sort=best-selling" onClick={() => setMobileOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-colors duration-200 hover:bg-zinc-800 hover:text-white">Best Sellers</Link>
+              <Link to="/shop?focus=brands" onClick={() => setMobileOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-zinc-300 transition-colors duration-200 hover:bg-zinc-800 hover:text-white">Brands</Link>
               <div className="border-t border-zinc-800 my-2" />
-              <Link to="/faq" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/faq' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>FAQ</Link>
-              <Link to="/contact" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/contact' ? 'text-red-500 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Contact</Link>
+              <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Support</p>
+              <Link to="/faq" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/faq' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Help & FAQ</Link>
+              <Link to="/contact" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${location.pathname === '/contact' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Contact Support</Link>
               {user && (
                 <>
                   <div className="border-t border-zinc-800 my-2" />
