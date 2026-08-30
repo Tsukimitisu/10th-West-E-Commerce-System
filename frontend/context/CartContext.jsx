@@ -292,6 +292,18 @@ export const CartProvider = ({ children }) => {
       }
     }
 
+    // Guest carts are maintained locally until checkout. Avoid probing the
+    // authenticated cart endpoint on login/public pages, where no user
+    // ownership exists and a transient backend outage should not surface as
+    // an application-wide error.
+    const currentUser = getCurrentUser();
+    if (!currentUser?.id) {
+      const savedCart = sessionStorage.getItem(getCartKey());
+      setItems(savedCart ? JSON.parse(savedCart) : []);
+      setInitialized(true);
+      return true;
+    }
+
     try {
       const response = await fetch(`${API_URL}/cart`, {
         credentials: 'include',
