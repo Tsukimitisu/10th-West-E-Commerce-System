@@ -270,7 +270,22 @@ router.post('/exchange-code', body('code').notEmpty(), validate, exchangeOAuthCo
 router.get('/google',
   ensureOAuthProviderConfigured('google'),
   (req, _res, next) => { console.info('GOOGLE_AUTH_START', { has_session: Boolean(req.session), callback_url: getGoogleOAuthAvailability().callback_url }); next(); },
-  passport.authenticate('google', { scope: GOOGLE_OAUTH_SCOPES, session: false })
+  (req, res, next) => {
+    const authenticate = passport.authenticate('google', { scope: GOOGLE_OAUTH_SCOPES, session: false });
+    const handleError = (error) => {
+      if (!error) return next();
+      console.error('GOOGLE_AUTH_START_FAILED', {
+        reason: error?.name || 'oauth_start_failed',
+        message: String(error?.message || 'OAuth start failed').slice(0, 200),
+      });
+      return redirectToOAuthError(res, 'google_failed');
+    };
+    try {
+      return authenticate(req, res, handleError);
+    } catch (error) {
+      return handleError(error);
+    }
+  }
 );
 router.get('/google/callback',
   ensureOAuthProviderConfigured('google'),
