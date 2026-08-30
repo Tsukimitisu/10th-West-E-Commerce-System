@@ -53,7 +53,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 
 const RouteFallback = () => (
   <div className="flex min-h-[50vh] items-center justify-center bg-slate-50" role="status" aria-label="Loading page">
-    <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-red-600" />
+    <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-orange-600" />
   </div>
 );
 
@@ -90,10 +90,10 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={`${location.pathname}${location.search}`}
-            initial={shouldReduceMotion || isAccountRoute ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={shouldReduceMotion || isAccountRoute ? { opacity: 1 } : { opacity: 0 }}
-            transition={{ duration: shouldReduceMotion || isAccountRoute ? 0 : 0.2, ease: 'easeOut' }}
+            initial={shouldReduceMotion || isAccountRoute ? false : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={shouldReduceMotion || isAccountRoute ? { opacity: 1, y: 0 } : { opacity: 0, y: -2 }}
+            transition={{ duration: shouldReduceMotion || isAccountRoute ? 0 : 0.18, ease: 'easeOut' }}
             className="h-full bg-slate-50"
           >
             <AppErrorBoundary resetKey={`${location.pathname}${location.search}`}>
@@ -304,7 +304,7 @@ const App = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-800 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
       </div>
     );
   }

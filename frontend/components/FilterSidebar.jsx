@@ -152,7 +152,7 @@ const FilterSidebar = ({
     return (
       <>
         <aside className={`${showDesktop ? 'hidden lg:block' : 'hidden'} w-[280px] shrink-0 xl:w-[300px]`} aria-label="Shop filters">
-          <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain border-r border-slate-200 bg-white py-1 pr-5 [scrollbar-gutter:stable]" data-testid="shop-filter-scroll">
+          <div className="shop-filter-scroll sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain border-r border-slate-200 bg-white py-1 pr-5 [scrollbar-gutter:stable]" data-testid="shop-filter-scroll">
             {content}
           </div>
         </aside>
@@ -160,7 +160,7 @@ const FilterSidebar = ({
         {isMobileOpen && (
           <div className="fixed inset-0 z-[100] lg:hidden" role="dialog" aria-modal="true" aria-label="Product filters">
             <button type="button" className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px] animate-fade-in" onClick={onMobileClose} aria-label="Close filters" />
-            <div className="absolute inset-y-0 left-0 max-h-[88vh] w-[min(88vw,360px)] overflow-y-auto bg-white p-5 shadow-2xl animate-drawer-in">
+            <div className="shop-filter-scroll absolute inset-y-0 left-0 max-h-[88vh] w-[min(88vw,360px)] overflow-y-auto bg-white p-5 shadow-2xl animate-drawer-in">
               {content}
             </div>
           </div>
@@ -170,7 +170,7 @@ const FilterSidebar = ({
   }
 
   return (
-    <aside className="max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain border-r border-slate-200 bg-white p-5 [scrollbar-gutter:stable]" data-testid="shop-filter-scroll" aria-label="Shop filters">
+    <aside className="shop-filter-scroll max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain border-r border-slate-200 bg-white p-5 [scrollbar-gutter:stable]" data-testid="shop-filter-scroll" aria-label="Shop filters">
       {content}
     </aside>
   );
