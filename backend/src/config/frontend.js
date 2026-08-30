@@ -1,4 +1,4 @@
-const DEFAULT_FRONTEND_ORIGIN = 'http://localhost:3000';
+const DEFAULT_FRONTEND_ORIGIN = 'http://localhost:5173';
 
 const normalizeOrigin = (value) => {
   const parsed = new URL(String(value || '').trim());

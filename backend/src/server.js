@@ -167,7 +167,7 @@ function getAllowedOrigins() {
     return Array.from(new Set(origins));
   }
   // Add all LAN IPs with the frontend port
-  const port = new URL(FRONTEND_URL).port || '3000';
+  const port = new URL(FRONTEND_URL).port || '5173';
   const ifaces = os.networkInterfaces();
   for (const name of Object.keys(ifaces)) {
     for (const iface of ifaces[name]) {

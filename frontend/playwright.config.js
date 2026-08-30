@@ -15,7 +15,7 @@ const parsePort = (name, value, fallback) => {
   }
   return port;
 };
-const frontendPort = parsePort('E2E_FRONTEND_PORT', process.env.E2E_FRONTEND_PORT, 3000);
+const frontendPort = parsePort('E2E_FRONTEND_PORT', process.env.E2E_FRONTEND_PORT, 5173);
 const backendPort = parsePort('E2E_BACKEND_PORT', process.env.E2E_BACKEND_PORT, 5000);
 const parseHttpURL = (name, value) => {
   let url;
