@@ -63,11 +63,11 @@ const AccountLayout = ({ children }) => {
                       />
                     ) : (
                       <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold text-lg font-display">
-                        {user.name.charAt(0).toUpperCase()}
+                        {(user.name || user.email || 'Customer').charAt(0).toUpperCase()}
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">{user.name}</p>
+                      <p className="font-semibold text-gray-900 truncate">{user.name || user.email || 'Customer'}</p>
                       <p className="text-xs text-gray-500 truncate">{user.email}</p>
                     </div>
                   </div>

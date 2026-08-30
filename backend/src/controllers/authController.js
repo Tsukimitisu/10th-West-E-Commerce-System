@@ -43,7 +43,7 @@ const signToken = (user) =>
 
 const sanitizeUser = (row) => ({
   id: row.id,
-  name: row.name,
+  name: String(row.name || '').trim() || String(row.email || '').split('@')[0] || 'Customer',
   email: row.email,
   role: row.role,
   phone: row.phone,

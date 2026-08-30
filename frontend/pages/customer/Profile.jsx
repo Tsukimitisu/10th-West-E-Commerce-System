@@ -414,6 +414,7 @@ const Profile = () => {
     : phoneVerificationLabel === 'Verification unavailable'
       ? 'border-amber-200 bg-amber-50 text-amber-700'
       : 'border-slate-200 bg-slate-50 text-slate-600';
+  const displayName = String(user.name || '').trim() || String(user.email || '').split('@')[0] || 'Customer';
 
   return (
     <AccountLayout>
@@ -426,12 +427,12 @@ const Profile = () => {
               {avatarPreview ? (
                 <img
                   src={avatarPreview}
-                  alt={user.name}
+                  alt={displayName}
                   className="w-16 h-16 rounded-full object-cover border border-slate-200 bg-gray-100"
                 />
               ) : (
                 <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-2xl font-bold font-display">
-                  {user.name.charAt(0).toUpperCase()}
+                  {displayName.charAt(0).toUpperCase()}
                 </div>
               )}
               <button
@@ -451,7 +452,7 @@ const Profile = () => {
               />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-gray-900">{user.name}</p>
+              <p className="font-semibold text-gray-900">{displayName}</p>
               <p className="text-sm text-gray-500">{user.email}</p>
               <p className="text-xs text-gray-500 mt-1">JPG, PNG, or WEBP up to 2 MB.</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">

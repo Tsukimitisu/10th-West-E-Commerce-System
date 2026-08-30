@@ -647,16 +647,16 @@ const Navbar = ({ user, onLogout }) => {
                       />
                     ) : (
                       <div className="w-8 h-8 bg-gradient-to-br from-red-100 to-red-200 text-red-600 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm">
-                        {user.name.charAt(0).toUpperCase()}
+                        {(user.name || user.email || 'Customer').charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className="hidden md:block text-sm font-semibold text-red-500 max-w-20 truncate">{user.name.split(' ')[0]}</span>
+                    <span className="hidden md:block text-sm font-semibold text-red-500 max-w-20 truncate">{(user.name || user.email || 'Customer').split(' ')[0]}</span>
                     <ChevronDown size={14} className="hidden md:block text-gray-300" />
                   </button>
                   {userMenuOpen && (
                     <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-950/95 backdrop-blur-md rounded-2xl shadow-2xl border border-zinc-700 py-2 animate-fade-in">
                       <div className="px-4 py-3 border-b border-zinc-700 mb-1">
-                        <p className="text-sm font-bold text-white truncate">{user.name}</p>
+                        <p className="text-sm font-bold text-white truncate">{user.name || user.email || 'Customer'}</p>
                         <p className="text-xs text-gray-300 truncate">{user.email}</p>
                       </div>
                       <Link to="/profile" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><User size={16} className="text-red-400" /> My Profile</Link>
@@ -777,9 +777,9 @@ const Navbar = ({ user, onLogout }) => {
             {user && (
               <div className="p-4 border-b border-zinc-800 bg-zinc-950/40">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-red-500/10 text-red-500 rounded-lg flex items-center justify-center font-bold">{user.name.charAt(0).toUpperCase()}</div>
+                  <div className="w-10 h-10 bg-red-500/10 text-red-500 rounded-lg flex items-center justify-center font-bold">{(user.name || user.email || 'Customer').charAt(0).toUpperCase()}</div>
                   <div>
-                    <p className="font-semibold text-white text-sm">{user.name}</p>
+                    <p className="font-semibold text-white text-sm">{user.name || user.email || 'Customer'}</p>
                     <p className="text-xs text-zinc-400">{user.email}</p>
                   </div>
                 </div>
