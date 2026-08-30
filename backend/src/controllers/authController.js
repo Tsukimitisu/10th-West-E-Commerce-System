@@ -1296,6 +1296,17 @@ const googleOAuthFailureReason = (error) => {
   }
 };
 
+const googleOAuthFailureQueryReason = (error) => {
+  switch (error?.code) {
+    case 'OAUTH_EMAIL_REQUIRED': return 'profile_missing_email';
+    case 'OAUTH_EMAIL_UNVERIFIED': return 'email_not_verified';
+    case 'OAUTH_ACCOUNT_CONFLICT': return 'user_create_failed';
+    case 'OAUTH_SESSION_FAILED':
+    case 'ASYNC_OPERATION_TIMEOUT': return 'session_save_failed';
+    default: return 'callback_failed';
+  }
+};
+
 export const googleOAuthCallback = async (req, res) => {
   const frontendUrl = resolveFrontendOrigin();
   const redirectToLoginError = (errorCode) => res.redirect(
@@ -1309,16 +1320,23 @@ export const googleOAuthCallback = async (req, res) => {
   let transactionCommitted = false;
 
   try {
+    console.info('GOOGLE_CALLBACK_RECEIVED', { has_provider_profile: Boolean(req.oauthUser) });
+    if (!req.oauthUser?.email) console.warn('GOOGLE_PROFILE_EMAIL_MISSING');
+    if (req.oauthUser?.email && req.oauthUser.emailVerified === false) console.warn('GOOGLE_EMAIL_NOT_VERIFIED');
     client = await pool.connect();
     await client.query('BEGIN');
 
+    console.info('GOOGLE_USER_LINK_START');
     const { user } = await linkOrCreateOAuthUser(client, req.oauthUser);
+    console.info('GOOGLE_USER_LINK_SUCCESS', { user_id_present: Boolean(user?.id), role: user?.role || null });
+    console.info('GOOGLE_SESSION_SAVE_START');
     sessionToken = await persistSession(client, user, ipAddress, userAgent);
 
     await client.query('COMMIT');
     transactionCommitted = true;
 
     await prepareAuthenticatedSession(req, user, sessionToken, { strict: true });
+    console.info('GOOGLE_SESSION_SAVE_SUCCESS');
 
     if (guestCartSessionId) {
       try {
@@ -1338,6 +1356,7 @@ export const googleOAuthCallback = async (req, res) => {
       console.warn('Unable to record Google login activity:', sanitizeDatabaseError(activityError));
     });
 
+    console.info('GOOGLE_FRONTEND_REDIRECT', { target: '/#/oauth-callback' });
     return res.redirect(`${frontendUrl}/#/oauth-callback`);
   } catch (error) {
     if (client && !transactionCommitted) {
@@ -1359,11 +1378,12 @@ export const googleOAuthCallback = async (req, res) => {
       }
     }
 
-    console.error('Google OAuth callback failed:', {
+    const failureReason = googleOAuthFailureQueryReason(error);
+    console.error('GOOGLE_CALLBACK_FAILED', {
       reason_code: googleOAuthFailureReason(error),
       database_code: String(error?.code || 'GOOGLE_OAUTH_FAILED').slice(0, 80),
     });
-    return redirectToLoginError(googleOAuthErrorCode(error));
+    return res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent(googleOAuthErrorCode(error))}&google=failed&reason=${encodeURIComponent(failureReason)}`);
   } finally {
     client?.release();
   }

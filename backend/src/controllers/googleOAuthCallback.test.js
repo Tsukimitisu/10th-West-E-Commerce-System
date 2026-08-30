@@ -179,7 +179,7 @@ test('Google callback deactivates its database session when cookie session persi
 
   await googleOAuthCallback(request, response);
 
-  assert.equal(response.redirectUrl, 'http://localhost:5173/#/login?error=oauth_session_failed');
+  assert.match(response.redirectUrl, /#\/login\?error=oauth_session_failed&google=failed&reason=session_save_failed$/);
   assert.equal(deactivatedTokenHashes.length, 1);
   assert.match(deactivatedTokenHashes[0], /^[a-f0-9]{64}$/);
   assert.equal(request.session.auth, undefined);
@@ -199,7 +199,7 @@ test('Google callback maps unverified email and database errors to customer-safe
     headers: {},
     session: makeSession(),
   }, unverifiedResponse);
-  assert.equal(unverifiedResponse.redirectUrl, 'http://localhost:5173/#/login?error=oauth_unverified_email');
+  assert.match(unverifiedResponse.redirectUrl, /#\/login\?error=oauth_unverified_email&google=failed&reason=email_not_verified$/);
 
   mock.restoreAll();
   mock.method(pool, 'connect', async () => {
