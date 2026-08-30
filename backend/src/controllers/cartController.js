@@ -314,7 +314,10 @@ export const getCart = async (req, res) => {
     });
   } catch (error) {
     console.error('Get cart error:', error);
-    res.status(isDatabaseConnectivityError(error) ? 503 : 500).json({ message: 'Cart is temporarily unavailable.' });
+    const connectivityFailure = error?.code === 'EACCES'
+      || error?.errors?.some((nestedError) => nestedError?.code === 'EACCES');
+    res.status(isDatabaseConnectivityError(error) || connectivityFailure ? 503 : 500)
+      .json({ message: 'Cart is temporarily unavailable.' });
   }
 };
 

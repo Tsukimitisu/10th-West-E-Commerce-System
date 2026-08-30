@@ -295,6 +295,7 @@ test('database errors are classified and sanitized without raw details', () => {
   assert.equal(JSON.stringify(sanitized).includes('private_table'), false);
   assert.equal(classifyDatabaseError({ code: '42P01' }), 'DB_SCHEMA_NOT_READY');
   assert.equal(classifyDatabaseError({ code: '42501' }), 'DB_PERMISSION_DENIED');
+  assert.equal(classifyDatabaseError({ code: 'EACCES', message: 'connect EACCES database socket' }), 'DB_UNAVAILABLE');
   const missingTenant = { code: 'XX000', message: 'Tenant or user not found' };
   assert.equal(classifyDatabaseError(missingTenant), 'DB_TENANT_NOT_FOUND');
   assert.equal(isDatabaseUnavailableError(missingTenant), true);

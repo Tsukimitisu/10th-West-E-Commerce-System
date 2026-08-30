@@ -442,6 +442,10 @@ const classifyDatabaseError = (error) => {
 
   if (['ENOTFOUND', 'EAI_AGAIN'].includes(code)) return 'DB_DNS_ERROR';
   if (code === 'ECONNREFUSED') return 'DB_CONNECTION_REFUSED';
+  // Node reports sandbox/firewall-denied database sockets as EACCES. Treat
+  // this as connectivity failure so callers return a retryable 503 rather
+  // than an internal-server-error 500.
+  if (code === 'EACCES') return 'DB_UNAVAILABLE';
   if (['ECONNRESET', 'EPIPE'].includes(code)) return 'DB_CONNECTION_RESET';
   if (['ETIMEDOUT', 'ESOCKETTIMEDOUT'].includes(code) || message.includes('timeout')) return 'DB_TIMEOUT';
   if (['SELF_SIGNED_CERT_IN_CHAIN', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'CERT_HAS_EXPIRED', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'].includes(code)
