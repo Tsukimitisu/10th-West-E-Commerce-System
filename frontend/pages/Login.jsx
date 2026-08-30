@@ -46,10 +46,17 @@ const Login = ({ onLogin }) => {
   const [totpCode, setTotpCode] = useState('');
   const [oauthProviders, setOauthProviders] = useState({ google: false, facebook: false, loading: true, error: false, googleReason: null });
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const defaultRedirect = searchParams.get('redirect') || '/';
   const pageMessage = searchParams.get('message') || '';
   const pageError = getLoginErrorMessage(searchParams.get('error'));
+
+  React.useEffect(() => {
+    if (!searchParams.get('error')) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('error');
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   React.useEffect(() => {
     fetch(`${API_ORIGIN}/api/auth/providers`, { credentials: 'include' })
@@ -121,6 +128,9 @@ const Login = ({ onLogin }) => {
   };
 
   const handleOAuth = (provider) => {
+    const cleanParams = new URLSearchParams(searchParams);
+    cleanParams.delete('error');
+    setSearchParams(cleanParams, { replace: true });
     if (!oauthProviders[provider]) {
       const label = provider === 'google' ? 'Google' : 'Facebook';
       setError(provider === 'google' && oauthProviders.error

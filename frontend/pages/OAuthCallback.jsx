@@ -81,7 +81,9 @@ const OAuthCallback = ({ onLogin }) => {
         if (cancelled) return;
         setDisplayError(callbackError?.code === 'oauth_timeout'
           ? 'Google sign in took too long. Please try again.'
-          : getOAuthErrorMessage(callbackError?.code || 'oauth_failed'));
+          : callbackError?.code === 'oauth_session_failed'
+            ? 'Google sign in completed but the session could not be loaded.'
+            : getOAuthErrorMessage(callbackError?.code || 'oauth_failed'));
       });
 
     return () => { cancelled = true; };
