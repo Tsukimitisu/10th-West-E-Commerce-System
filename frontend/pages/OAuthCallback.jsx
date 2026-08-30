@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { exchangeOAuthCode, getProfile, refreshCsrfAfterSessionRotation } from '../services/api';
 
 const OAUTH_ERROR_MESSAGES = {
@@ -22,7 +22,22 @@ const getOAuthErrorMessage = (error) => {
 
 const clearOAuthCallbackQuery = () => {
   const hashPath = (window.location.hash || '#/oauth-callback').split('?')[0] || '#/oauth-callback';
-  window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}${hashPath}`);
+  window.history.replaceState({}, document.title, `${window.location.pathname}${hashPath}`);
+};
+
+const withTimeout = (promise, milliseconds = 9000) => Promise.race([
+  promise,
+  new Promise((_, reject) => window.setTimeout(() => {
+    const error = new Error('oauth_timeout');
+    error.code = 'oauth_timeout';
+    reject(error);
+  }, milliseconds)),
+]);
+
+const getSafeReturnPath = () => {
+  const requested = sessionStorage.getItem('oauth_return_to') || '/';
+  sessionStorage.removeItem('oauth_return_to');
+  return requested.startsWith('/') && !requested.startsWith('//') ? requested : '/';
 };
 
 const OAuthCallback = ({ onLogin }) => {
@@ -40,7 +55,8 @@ const OAuthCallback = ({ onLogin }) => {
     let cancelled = false;
 
     if (error) {
-      navigate(`/login?error=${encodeURIComponent(error)}`, { replace: true });
+      clearOAuthCallbackQuery();
+      setDisplayError(getOAuthErrorMessage(error));
       return () => { cancelled = true; };
     }
 
@@ -50,20 +66,22 @@ const OAuthCallback = ({ onLogin }) => {
       ? exchangeOAuthCode(legacyCode)
       : Promise.resolve();
 
-    completeLegacyExchange
+    withTimeout(completeLegacyExchange
       .then(() => refreshCsrfAfterSessionRotation())
-      .then(() => getProfile())
+      .then(() => getProfile()))
       .then((user) => {
         if (cancelled) return;
         if (!user?.id) throw new Error(OAUTH_ERROR_MESSAGES.oauth_failed);
         onLogin(user);
-        navigate('/', { replace: true });
+        const returnPath = getSafeReturnPath();
+        if (returnPath === '/') navigate('/', { replace: true });
+        else navigate(returnPath, { replace: true });
       })
-      .catch(() => {
+      .catch((callbackError) => {
         if (cancelled) return;
-        const message = getOAuthErrorMessage('oauth_failed');
-        setDisplayError(message);
-        navigate('/login?error=oauth_failed', { replace: true });
+        setDisplayError(callbackError?.code === 'oauth_timeout'
+          ? 'Google sign in took too long. Please try again.'
+          : getOAuthErrorMessage(callbackError?.code || 'oauth_failed'));
       });
 
     return () => { cancelled = true; };
@@ -73,8 +91,9 @@ const OAuthCallback = ({ onLogin }) => {
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="text-center" role="status" aria-live="polite">
         <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-3 border-red-500 border-t-transparent" />
-        <p className="text-sm text-slate-600">Completing secure Google sign in...</p>
+        {!displayError && <p className="text-sm text-slate-600">Completing secure Google sign in...</p>}
         {displayError && <p className="mt-3 text-sm text-red-600">{displayError}</p>}
+        {displayError && <Link className="mt-4 inline-block text-sm font-semibold text-red-700 underline" to="/login">Back to login</Link>}
       </div>
     </main>
   );

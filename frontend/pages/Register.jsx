@@ -213,6 +213,7 @@ const Register = () => {
     }
     setError('');
     setLoading(true);
+    sessionStorage.setItem('oauth_return_to', '/');
     window.location.href = `${API_ORIGIN}/api/auth/${provider}`;
   };
 

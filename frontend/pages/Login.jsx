@@ -131,6 +131,7 @@ const Login = ({ onLogin }) => {
     setError('');
     setResendSuccess('');
     setLoading(true);
+    sessionStorage.setItem('oauth_return_to', defaultRedirect.startsWith('/') && !defaultRedirect.startsWith('//') ? defaultRedirect : '/');
     window.location.href = `${API_ORIGIN}/api/auth/${provider}`;
   };
 
