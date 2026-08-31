@@ -38,7 +38,8 @@ const memoryOrderStore = {
 };
 
 const ORDER_NOTIFICATION_DETAIL_QUERY = `
-  SELECT o.id, o.user_id, o.status, o.id AS order_number, o.tracking_number,
+  SELECT o.id, o.user_id, o.status, o.payment_status, o.payment_method,
+         o.customer_confirmed_receipt_at, o.delivered_at, o.id AS order_number, o.tracking_number,
          oi.product_id, COALESCE(oi.product_name, p.name) as product_name,
          p.image as product_image
   FROM orders o
@@ -859,26 +860,45 @@ export const confirmOrderDelivery = async (req, res) => {
 export const confirmOrderReceipt = async (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
+  const client = await pool.connect();
 
   try {
-    const orderDetailResult = await pool.query(ORDER_NOTIFICATION_DETAIL_QUERY, [id]);
+    await client.query('BEGIN');
+    const orderDetailResult = await client.query(`${ORDER_NOTIFICATION_DETAIL_QUERY.trimEnd()} FOR UPDATE OF o`, [id]);
     if (orderDetailResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Order not found' });
     }
 
     const orderDetail = orderDetailResult.rows[0];
     if (orderDetail.user_id !== userId) {
+      await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Access denied' });
     }
 
     const currentStatus = String(orderDetail.status || '').toLowerCase();
     if (currentStatus !== 'delivered') {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         message: 'Receipt can only be confirmed after rider delivery confirmation.',
       });
     }
+    if (orderDetail.payment_status !== 'paid') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Receipt cannot be confirmed until payment is completed.' });
+    }
 
-    const result = await pool.query(
+    if (orderDetail.customer_confirmed_receipt_at) {
+      await client.query('COMMIT');
+      return res.json({
+        success: true,
+        already_confirmed: true,
+        message: 'Order receipt was already confirmed.',
+        order: orderDetail,
+      });
+    }
+
+    const result = await client.query(
       `UPDATE orders
        SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
            customer_confirmed_receipt_at = COALESCE(customer_confirmed_receipt_at, CURRENT_TIMESTAMP),
@@ -886,25 +906,24 @@ export const confirmOrderReceipt = async (req, res) => {
        WHERE id = $1
          AND user_id = $2
          AND status = 'delivered'
+         AND customer_confirmed_receipt_at IS NULL
        RETURNING *`,
       [id, userId]
     );
 
     if (result.rows.length === 0) {
-      return res.status(409).json({
-        message: 'Order is no longer eligible for receipt confirmation. Please refresh order details.',
-      });
+      await client.query('COMMIT');
+      return res.json({ success: true, already_confirmed: true, message: 'Order receipt was already confirmed.' });
     }
 
     const updatedOrder = result.rows[0];
-    await pool.query(
+    await client.query(
       `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note)
        VALUES ($1, 'delivered', 'delivered', 'customer', $2, 'Customer confirmed receipt')`,
       [updatedOrder.id, userId]
     );
-    emitOrderStatusUpdate(updatedOrder);
 
-    await createUserNotification(pool, {
+    await createUserNotification(client, {
       user_id: userId,
       type: 'order.status',
       title: `Order #${String(orderDetail.order_number || updatedOrder.id).padStart(4, '0')} receipt confirmed`,
@@ -924,13 +943,21 @@ export const confirmOrderReceipt = async (req, res) => {
       },
     });
 
+    await client.query('COMMIT');
+    emitOrderStatusUpdate(updatedOrder);
+
     res.json({
+      success: true,
+      already_confirmed: false,
       message: 'Order receipt confirmed.',
       order: updatedOrder,
     });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Confirm receipt error:', error);
     res.status(500).json({ message: 'Server error' });
+  } finally {
+    client.release();
   }
 };
 

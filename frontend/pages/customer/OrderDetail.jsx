@@ -36,6 +36,7 @@ const OrderDetail = () => {
   const [cancelReasonOther, setCancelReasonOther] = useState('');
   const [cancelReasonError, setCancelReasonError] = useState('');
   const [confirmingReceipt, setConfirmingReceipt] = useState(false);
+  const receiptRequestInFlight = React.useRef(false);
   const [receiptError, setReceiptError] = useState('');
   const [tracking, setTracking] = useState(null);
   const [trackingUnavailable, setTrackingUnavailable] = useState(false);
@@ -82,7 +83,8 @@ const OrderDetail = () => {
   };
 
   const handleConfirmReceipt = async () => {
-    if (!order) return;
+    if (!order || order.customer_confirmed_receipt_at || receiptRequestInFlight.current) return;
+    receiptRequestInFlight.current = true;
     setConfirmingReceipt(true);
     setReceiptError('');
 
@@ -95,6 +97,7 @@ const OrderDetail = () => {
     }
 
     setConfirmingReceipt(false);
+    receiptRequestInFlight.current = false;
   };
 
   if (loading) return (
@@ -183,7 +186,7 @@ const OrderDetail = () => {
               <XCircle size={14} /> Cancel Order
             </button>
           )}
-          {order.status === 'delivered' && (
+          {order.status === 'delivered' && !order.customer_confirmed_receipt_at && (
             <button
               onClick={handleConfirmReceipt}
               disabled={confirmingReceipt}
@@ -192,6 +195,11 @@ const OrderDetail = () => {
               <CheckCircle2 size={14} />
               {confirmingReceipt ? 'Confirming...' : 'Confirm Receipt'}
             </button>
+          )}
+          {order.status === 'delivered' && order.customer_confirmed_receipt_at && (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+              <CheckCircle2 size={14} /> Receipt Confirmed
+            </span>
           )}
           {order.return_eligible && (
             <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 flex items-center gap-1.5 transition-colors">
