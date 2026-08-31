@@ -49,6 +49,7 @@ import discountRoutes from './routes/discounts.js';
 import refundRoutes from './routes/refunds.js';
 import posRoutes from './routes/pos.js';
 import ecommerceListingRoutes from './routes/ecommerceListings.js';
+import motorcycleModelRoutes from './routes/motorcycleModels.js';
 
 import { apiLimiter, authLimiter } from './middleware/rateLimiter.js';
 import { errorLogger } from './middleware/errorLogger.js';
@@ -351,6 +352,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/ecommerce-listings', ecommerceListingRoutes);
+app.use('/api/motorcycle-models', motorcycleModelRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/addresses', addressRoutes);

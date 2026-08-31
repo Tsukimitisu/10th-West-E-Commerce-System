@@ -1572,6 +1572,8 @@ export const getProducts = async (params = {}) => {
   if (params.category) queryParams.append('category', params.category);
   if (params.brand) queryParams.append('brand', params.brand);
   if (params.model) queryParams.append('model', params.model);
+  if (params.motorcycle_model) queryParams.append('motorcycle_model', params.motorcycle_model);
+  if (params.color) queryParams.append('color', params.color);
   if (params.year) queryParams.append('year', String(params.year));
   if (params.status) queryParams.append('status', params.status);
   if (resultLimit) queryParams.append('limit', String(resultLimit));
@@ -4968,6 +4970,29 @@ export const updateInventoryItem = async (productId, item) => {
     body: JSON.stringify(item),
   });
   return data.item;
+};
+
+export const getMotorcycleModels = async ({ includeInactive = false, manage = false } = {}) => {
+  const path = manage ? '/motorcycle-models/manage' : '/motorcycle-models';
+  const query = includeInactive ? '?include_inactive=true' : '';
+  const data = await authenticatedFetch(`${API_URL}${path}${query}`);
+  return data.models || [];
+};
+
+export const createMotorcycleModel = async (model) => {
+  const data = await authenticatedFetch(`${API_URL}/motorcycle-models`, {
+    method: 'POST',
+    body: JSON.stringify(model),
+  });
+  return data.model;
+};
+
+export const updateMotorcycleModel = async (modelId, model) => {
+  const data = await authenticatedFetch(`${API_URL}/motorcycle-models/${modelId}`, {
+    method: 'PUT',
+    body: JSON.stringify(model),
+  });
+  return data.model;
 };
 
 export const getEcommerceListings = async (search = '') => authenticatedFetch(

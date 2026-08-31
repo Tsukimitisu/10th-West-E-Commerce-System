@@ -34,6 +34,9 @@ const mapInventoryItem = (product) => {
     quantity: Number(product.stock_quantity || 0),
     minimum_stock: Number(product.low_stock_threshold || 0),
     box_location: product.box_location || product.box_number || null,
+    motorcycle_model_id: product.motorcycle_model_id || null,
+    motorcycle_model: product.motorcycle_model_name || product.motorcycle_model || null,
+    color: product.color || null,
     stock_quantity: Number(product.stock_quantity || 0),
     reserved_stock: Number(product.reserved_stock || 0),
     damaged_stock: Number(product.damaged_stock || 0),
@@ -53,17 +56,20 @@ const normalizeInventoryInput = (body, { partial = false } = {}) => {
   if (!INVENTORY_STATUSES.has(inventoryStatus)) {
     throw Object.assign(new Error('Status must be active, inactive, or discontinued.'), { status: 400 });
   }
-  const categoryValue = body.category_id ?? body.categoryId;
-  const categoryId = categoryValue === '' || categoryValue == null ? null : Number(categoryValue);
-  if (categoryId !== null && (!Number.isInteger(categoryId) || categoryId <= 0)) {
-    throw Object.assign(new Error('Category is invalid.'), { status: 400 });
+  const modelValue = body.motorcycle_model_id ?? body.motorcycleModelId;
+  const motorcycleModelId = modelValue === '' || modelValue == null ? null : Number(modelValue);
+  if (!partial && (!Number.isInteger(motorcycleModelId) || motorcycleModelId <= 0)) {
+    throw Object.assign(new Error('Motorcycle model is required.'), { status: 400 });
+  }
+  if (motorcycleModelId !== null && (!Number.isInteger(motorcycleModelId) || motorcycleModelId <= 0)) {
+    throw Object.assign(new Error('Motorcycle model is invalid.'), { status: 400 });
   }
   return {
     partNumber,
     productName,
     brand: asOptionalText(body.brand, 100),
-    motorcycleModel: asOptionalText(body.motorcycle_model ?? body.motorcycleModel, 160),
-    categoryId,
+    motorcycleModelId,
+    color: asOptionalText(body.color, 100),
     storeSellingPrice: asMoney(body.store_selling_price ?? body.storeSellingPrice ?? body.price, 'Store selling price'),
     costPrice: asMoney(body.cost_price ?? body.buying_price ?? body.costPrice ?? 0, 'Cost price'),
     quantity: partial ? undefined : asStock(body.quantity ?? body.stock_quantity ?? 0, 'Quantity'),
@@ -101,21 +107,21 @@ export const getInventory = async (req, res) => {
     const result = await pool.query(`
       SELECT 
         p.*,
-        c.name as category_name,
+        COALESCE(model.model_name, p.motorcycle_model) AS motorcycle_model_name,
         CASE 
           WHEN p.stock_quantity = 0 THEN 'out_of_stock'
           WHEN p.stock_quantity <= p.low_stock_threshold THEN 'low_stock'
           ELSE 'in_stock'
         END as stock_status
       FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN motorcycle_models model ON p.motorcycle_model_id = model.id
       WHERE ($1 = '' OR
         p.part_number ILIKE $2 OR p.name ILIKE $2 OR p.brand ILIKE $2 OR
-        p.motorcycle_model ILIKE $2 OR c.name ILIKE $2 OR p.box_location ILIKE $2 OR
+        COALESCE(model.model_name, p.motorcycle_model) ILIKE $2 OR p.color ILIKE $2 OR p.box_location ILIKE $2 OR
         p.barcode ILIKE $2 OR p.sku ILIKE $2)
       ORDER BY
         CASE WHEN $1 <> '' AND LOWER(p.part_number) LIKE LOWER($1) || '%' THEN 0 ELSE 1 END,
-        p.stock_quantity ASC, p.name ASC
+        p.created_at DESC, p.id DESC
       LIMIT 500
     `, [search, `%${search}%`]);
 
@@ -287,9 +293,9 @@ export const findInventoryItem = async (req, res) => {
   if (!code) return res.status(400).json({ message: 'Part number or barcode is required.' });
   try {
     const result = await pool.query(
-      `SELECT p.*, c.name AS category_name
+      `SELECT p.*, COALESCE(model.model_name, p.motorcycle_model) AS motorcycle_model_name
          FROM products p
-         LEFT JOIN categories c ON c.id = p.category_id
+         LEFT JOIN motorcycle_models model ON model.id = p.motorcycle_model_id
         WHERE LOWER(p.part_number) = LOWER($1)
            OR LOWER(COALESCE(p.barcode, '')) = LOWER($1)
            OR LOWER(COALESCE(p.sku, '')) = LOWER($1)
@@ -326,29 +332,27 @@ export const createInventoryItem = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: 'Part number already exists.', code: 'DUPLICATE_PART_NUMBER' });
     }
-    // Categories can be deleted or become stale while the inventory form is open.
-    // Validate the selected id before inserting so this normal client error is not
-    // surfaced as a generic 500 foreign-key failure.
-    if (item.categoryId !== null) {
-      const category = await client.query('SELECT id FROM categories WHERE id = $1 LIMIT 1', [item.categoryId]);
-      if (!category.rowCount) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: 'Selected category no longer exists. Please choose another category.', code: 'CATEGORY_NOT_FOUND' });
-      }
+    const model = await client.query(
+      `SELECT id, model_name FROM motorcycle_models WHERE id = $1 AND status = 'active' LIMIT 1`,
+      [item.motorcycleModelId],
+    );
+    if (!model.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Selected motorcycle model is unavailable. Please choose an active model.', code: 'MOTORCYCLE_MODEL_NOT_FOUND' });
     }
     const result = await client.query(
       `INSERT INTO products (
-         part_number, name, brand, motorcycle_model, category_id,
+         part_number, name, brand, motorcycle_model, motorcycle_model_id, color,
          store_selling_price, price, buying_price, stock_quantity,
          low_stock_threshold, box_location, box_number, description,
          inventory_status, status, is_deleted
-       ) VALUES ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9,$10,$10,$11,$12,'draft',false)
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$11,$12,$13,'draft',false)
        RETURNING *`,
-      [item.partNumber, item.productName, item.brand, item.motorcycleModel, item.categoryId,
+      [item.partNumber, item.productName, item.brand, model.rows[0].model_name, item.motorcycleModelId, item.color,
         item.storeSellingPrice, item.costPrice, item.quantity, item.minimumStock,
         item.boxLocation, item.description, item.inventoryStatus]
     );
-    const created = result.rows[0];
+    const created = { ...result.rows[0], motorcycle_model_name: model.rows[0].model_name };
     if (item.quantity > 0) {
       await client.query(
         `INSERT INTO stock_adjustments (product_id, quantity_change, reason, notes, adjusted_by, status)
@@ -370,8 +374,8 @@ export const createInventoryItem = async (req, res) => {
     if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('Create inventory item failed:', { code: error.code, message: error.message });
     if (error.code === '23505') return res.status(409).json({ message: 'Part number already exists.', code: 'DUPLICATE_PART_NUMBER' });
-    if (error.code === '23503' && String(error.constraint || '').toLowerCase().includes('category')) {
-      return res.status(400).json({ message: 'Selected category no longer exists. Please choose another category.', code: 'CATEGORY_NOT_FOUND' });
+    if (error.code === '23503' && String(error.constraint || '').toLowerCase().includes('motorcycle')) {
+      return res.status(400).json({ message: 'Selected motorcycle model is unavailable.', code: 'MOTORCYCLE_MODEL_NOT_FOUND' });
     }
     return res.status(error.status || 500).json({ message: error.status ? error.message : 'Inventory item could not be created.' });
   } finally {
@@ -385,16 +389,22 @@ export const updateInventoryItem = async (req, res) => {
     if (!Number.isInteger(productId) || productId <= 0) return res.status(400).json({ message: 'Invalid inventory item ID.' });
     const item = normalizeInventoryInput(req.body || {}, { partial: true });
     if (!item.productName || !item.partNumber) return res.status(400).json({ message: 'Product name and part number are required.' });
+    if (!item.motorcycleModelId) return res.status(400).json({ message: 'Motorcycle model is required.' });
+    const model = await pool.query(
+      `SELECT id, model_name FROM motorcycle_models WHERE id = $1 AND status = 'active' LIMIT 1`,
+      [item.motorcycleModelId],
+    );
+    if (!model.rowCount) return res.status(400).json({ message: 'Selected motorcycle model is unavailable. Please choose an active model.', code: 'MOTORCYCLE_MODEL_NOT_FOUND' });
     const result = await pool.query(
       `UPDATE products SET
-         part_number=$1, name=$2, brand=$3, motorcycle_model=$4, category_id=$5,
-         store_selling_price=$6, price=$6, buying_price=$7, low_stock_threshold=$8,
-         box_location=$9, box_number=$9, description=$10, inventory_status=$11, updated_at=NOW()
-       WHERE id=$12 AND NOT EXISTS (
+         part_number=$1, name=$2, brand=$3, motorcycle_model=$4, motorcycle_model_id=$5, color=$6,
+         store_selling_price=$7, price=$7, buying_price=$8, low_stock_threshold=$9,
+         box_location=$10, box_number=$10, description=$11, inventory_status=$12, updated_at=NOW()
+       WHERE id=$13 AND NOT EXISTS (
          SELECT 1 FROM products duplicate
-          WHERE duplicate.id <> $12 AND LOWER(duplicate.part_number) = LOWER($1)
+          WHERE duplicate.id <> $13 AND LOWER(duplicate.part_number) = LOWER($1)
        ) RETURNING *`,
-      [item.partNumber, item.productName, item.brand, item.motorcycleModel, item.categoryId,
+      [item.partNumber, item.productName, item.brand, model.rows[0].model_name, item.motorcycleModelId, item.color,
         item.storeSellingPrice, item.costPrice, item.minimumStock, item.boxLocation,
         item.description, item.inventoryStatus, productId]
     );
@@ -404,7 +414,7 @@ export const updateInventoryItem = async (req, res) => {
         message: exists.rowCount ? 'Part number already exists.' : 'Inventory item not found.',
       });
     }
-    return res.json({ message: 'Inventory item updated.', item: mapInventoryItem(result.rows[0]) });
+    return res.json({ message: 'Inventory item updated.', item: mapInventoryItem({ ...result.rows[0], motorcycle_model_name: model.rows[0].model_name }) });
   } catch (error) {
     console.error('Update inventory item failed:', { code: error.code, message: error.message });
     return res.status(error.status || 500).json({ message: error.status ? error.message : 'Inventory item could not be updated.' });
