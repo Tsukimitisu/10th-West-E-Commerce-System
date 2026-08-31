@@ -32,6 +32,13 @@ test('inventory lookup, receiving transactions, and logical stock constraints ar
   assert.match(securityMigration, /products_minimum_stock_nonnegative/);
 });
 
+test('inventory creation validates stale category selections safely', async () => {
+  const controller = await read('./inventoryController.js');
+  assert.match(controller, /CATEGORY_NOT_FOUND/);
+  assert.match(controller, /SELECT id FROM categories WHERE id = \$1 LIMIT 1/);
+  assert.match(controller, /Selected category no longer exists/);
+});
+
 test('storefront listing accepts only extension data and one to ten media items', async () => {
   const source = await read('./ecommerceListingController.js');
   assert.match(source, /FORBIDDEN_CORE_FIELDS/);

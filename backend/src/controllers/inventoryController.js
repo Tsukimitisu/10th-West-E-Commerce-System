@@ -326,6 +326,16 @@ export const createInventoryItem = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: 'Part number already exists.', code: 'DUPLICATE_PART_NUMBER' });
     }
+    // Categories can be deleted or become stale while the inventory form is open.
+    // Validate the selected id before inserting so this normal client error is not
+    // surfaced as a generic 500 foreign-key failure.
+    if (item.categoryId !== null) {
+      const category = await client.query('SELECT id FROM categories WHERE id = $1 LIMIT 1', [item.categoryId]);
+      if (!category.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Selected category no longer exists. Please choose another category.', code: 'CATEGORY_NOT_FOUND' });
+      }
+    }
     const result = await client.query(
       `INSERT INTO products (
          part_number, name, brand, motorcycle_model, category_id,
@@ -360,6 +370,9 @@ export const createInventoryItem = async (req, res) => {
     if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('Create inventory item failed:', { code: error.code, message: error.message });
     if (error.code === '23505') return res.status(409).json({ message: 'Part number already exists.', code: 'DUPLICATE_PART_NUMBER' });
+    if (error.code === '23503' && String(error.constraint || '').toLowerCase().includes('category')) {
+      return res.status(400).json({ message: 'Selected category no longer exists. Please choose another category.', code: 'CATEGORY_NOT_FOUND' });
+    }
     return res.status(error.status || 500).json({ message: error.status ? error.message : 'Inventory item could not be created.' });
   } finally {
     if (client) client.release();
