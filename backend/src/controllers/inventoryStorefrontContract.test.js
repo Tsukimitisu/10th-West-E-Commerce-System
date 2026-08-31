@@ -39,6 +39,16 @@ test('inventory creation validates stale category selections safely', async () =
   assert.match(controller, /Selected category no longer exists/);
 });
 
+test('inventory creation and receiving reasons are accepted by the database constraint', async () => {
+  const migration = await read('../../migrations/202608310004_fix_stock_adjustment_reason_constraint.cjs');
+  assert.match(migration, /stock_adjustments_reason_check/);
+  assert.match(migration, /initial_stock/);
+  assert.match(migration, /supplier_delivery/);
+  assert.match(migration, /correction_add/);
+  assert.match(migration, /correction_remove/);
+  assert.match(migration, /sold_adjustment/);
+});
+
 test('storefront listing accepts only extension data and one to ten media items', async () => {
   const source = await read('./ecommerceListingController.js');
   assert.match(source, /FORBIDDEN_CORE_FIELDS/);
