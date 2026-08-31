@@ -71,8 +71,8 @@ const RequestReturn = () => {
         order_id: order.id,
         reason: normalizedReason,
         items: selectedPreview.map((item) => ({
-          product_id: item.product_id || item.productId || item.id,
-          quantity: item.quantity,
+          order_item_id: item.order_item_id ?? item.orderItemId ?? item.id,
+          quantity: Math.max(1, Number(item.quantity) || 1),
         })),
       });
       setSuccess(true);

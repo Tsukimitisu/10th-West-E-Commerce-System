@@ -14,6 +14,8 @@ const RETURN_REASONS = [
   { value: 'other', label: 'Other' },
 ];
 
+const getOrderItemId = (item) => Number(item?.order_item_id ?? item?.orderItemId ?? item?.id) || null;
+
 const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
   const [step, setStep] = useState(1);
   const [selectedItems, setSelectedItems] = useState({});
@@ -24,27 +26,27 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
   const [submitError, setSubmitError] = useState('');
   const user = getCurrentAuthUser() || {};
 
-  const toggleItem = (productId, maxQty) => {
+  const toggleItem = (orderItemId, maxQty) => {
     setSelectedItems(prev => {
       const copy = { ...prev };
-      if (copy[productId]) {
-        delete copy[productId];
+      if (copy[orderItemId]) {
+        delete copy[orderItemId];
       } else {
-        copy[productId] = maxQty;
+        copy[orderItemId] = maxQty;
       }
       return copy;
     });
   };
 
-  const updateQty = (productId, qty, maxQty) => {
+  const updateQty = (orderItemId, qty, maxQty) => {
     if (qty < 1) qty = 1;
     if (qty > maxQty) qty = maxQty;
-    setSelectedItems(prev => ({ ...prev, [productId]: qty }));
+    setSelectedItems(prev => ({ ...prev, [orderItemId]: qty }));
   };
 
   const selectedCount = Object.keys(selectedItems).length;
-  const refundTotal = Object.entries(selectedItems).reduce((sum, [pid, qty]) => {
-    const item = order.items.find(i => i.productId === Number(pid));
+  const refundTotal = Object.entries(selectedItems).reduce((sum, [orderItemId, qty]) => {
+    const item = order.items.find(i => getOrderItemId(i) === Number(orderItemId));
     return sum + (item ? item.product.price * qty : 0);
   }, 0);
 
@@ -52,12 +54,10 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
     setSubmitting(true);
     try {
       const itemsToReturn = Object.entries(selectedItems).map(([pid, qty]) => {
-        const item = order.items.find(i => i.productId === Number(pid));
+        const item = order.items.find(i => getOrderItemId(i) === Number(pid));
         return {
-          productId: Number(pid),
-          productName: item?.product.name || 'Unknown',
-          quantity: qty,
-          price: item?.product.price || 0
+          order_item_id: Number(pid),
+          quantity: Math.max(1, Number(qty) || 1),
         };
       });
 
@@ -133,14 +133,15 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
             <div className="space-y-3">
               <p className="text-sm text-gray-400 mb-4">Select the items you want to return:</p>
               {order.items.map((item) => {
-                const isSelected = !!selectedItems[item.productId];
+                const orderItemId = getOrderItemId(item);
+                const isSelected = !!selectedItems[orderItemId];
                 return (
                   <div
-                    key={item.productId}
+                    key={orderItemId || item.productId}
                     className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
                       isSelected ? 'border-red-500 bg-red-500/10' : 'border-gray-700 hover:border-gray-300'
                     }`}
-                    onClick={() => toggleItem(item.productId, item.quantity)}
+                    onClick={() => orderItemId && toggleItem(orderItemId, item.quantity)}
                   >
                     <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
                       isSelected ? 'bg-orange-600 border-red-600' : 'border-gray-300'
@@ -158,8 +159,8 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
                       <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                         <label className="text-xs text-gray-400 mr-1">Qty:</label>
                         <select
-                          value={selectedItems[item.productId]}
-                          onChange={(e) => updateQty(item.productId, Number(e.target.value), item.quantity)}
+                          value={selectedItems[orderItemId]}
+                          onChange={(e) => updateQty(orderItemId, Number(e.target.value), item.quantity)}
                           className="border border-gray-300 rounded-lg px-2 py-1 text-sm"
                         >
                           {Array.from({ length: item.quantity }, (_, i) => i + 1).map(n => (

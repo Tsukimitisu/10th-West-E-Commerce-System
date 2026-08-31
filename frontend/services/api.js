@@ -2290,6 +2290,8 @@ const mapOrderItemToCartItem = (item) => {
   };
 
   return {
+    orderItemId: Number(item.order_item_id ?? item.orderItemId ?? item.id) || null,
+    order_item_id: Number(item.order_item_id ?? item.orderItemId ?? item.id) || null,
     productId,
     productReferenceId: hasProductReference ? productId : null,
     product,
@@ -2990,7 +2992,7 @@ export const confirmOrderReceipt = async (id) => {
 
     const { data: currentOrder, error: currentOrderError } = await supabase
       .from('orders')
-      .select('id, status, user_id, delivered_at')
+      .select('id, status, user_id, delivered_at, customer_confirmed_receipt_at, payment_status')
       .eq('id', id)
       .single();
 
@@ -3005,6 +3007,12 @@ export const confirmOrderReceipt = async (id) => {
     if (currentOrder.status !== 'delivered') {
       throw new Error('Receipt can only be confirmed after rider delivery confirmation.');
     }
+    if (currentOrder.payment_status !== 'paid') {
+      throw new Error('Receipt cannot be confirmed until payment is completed.');
+    }
+    if (currentOrder.customer_confirmed_receipt_at) {
+      return mapOrderFromApi(currentOrder);
+    }
 
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
@@ -3015,10 +3023,16 @@ export const confirmOrderReceipt = async (id) => {
         updated_at: nowIso,
       })
       .eq('id', id)
+      .is('customer_confirmed_receipt_at', null)
       .select()
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return mapOrderFromApi({ ...currentOrder, customer_confirmed_receipt_at: new Date().toISOString() });
+      }
+      throw new Error(error.message);
+    }
     await logSupabaseActivity('order.confirm_receipt', 'order', id, {
       customer_id: currentUser.id,
     });
@@ -3374,11 +3388,11 @@ export const createReturn = async (returnRequest) => {
     'return.new',
     'New Return Request',
     `Return request for Order #${String(returnRequest.order_id).padStart(4, '0')}`,
-    data.return?.id,
+    data.return?.id || data.id,
     'return'
   );
 
-  return data.return;
+  return data.return ?? data;
 };
 
 export const updateReturnStatus = async (id, status) => {
