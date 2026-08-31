@@ -4,15 +4,15 @@ import { Check, ChevronDown, SlidersHorizontal, X } from 'lucide-react';
 const INITIAL_VISIBLE_OPTIONS = 6;
 
 const FilterSidebar = ({
-  categories,
-  selectedCategory,
-  onCategoryChange,
   selectedBrand,
   onBrandChange,
   brands,
   selectedModel,
   onModelChange,
   models,
+  selectedColor,
+  onColorChange,
+  colors,
   selectedYear,
   onYearChange,
   priceRange,
@@ -27,14 +27,16 @@ const FilterSidebar = ({
   resultCount,
 }) => {
   const [openSections, setOpenSections] = React.useState({
-    category: true,
+    model: true,
     brand: true,
+    color: true,
     fitment: true,
     price: true,
     stock: true,
   });
-  const [showAllCategories, setShowAllCategories] = React.useState(false);
+  const [showAllModels, setShowAllModels] = React.useState(false);
   const [showAllBrands, setShowAllBrands] = React.useState(false);
+  const [showAllColors, setShowAllColors] = React.useState(false);
 
   React.useEffect(() => {
     if (isMobileOpen === undefined) return undefined;
@@ -48,8 +50,9 @@ const FilterSidebar = ({
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));
   };
 
-  const visibleCategories = showAllCategories ? categories : categories.slice(0, INITIAL_VISIBLE_OPTIONS);
+  const visibleModels = showAllModels ? (models || []) : (models || []).slice(0, INITIAL_VISIBLE_OPTIONS);
   const visibleBrands = showAllBrands ? brands : brands.slice(0, INITIAL_VISIBLE_OPTIONS);
+  const visibleColors = showAllColors ? (colors || []) : (colors || []).slice(0, INITIAL_VISIBLE_OPTIONS);
 
   const content = (
     <div className="flex min-h-full flex-col">
@@ -77,23 +80,23 @@ const FilterSidebar = ({
         </div>
       </div>
 
-      <FilterSection title="Category" open={openSections.category} onToggle={() => toggleSection('category')}>
-        <OptionButton selected={!selectedCategory} onClick={() => onCategoryChange('')}>All categories</OptionButton>
-        {visibleCategories.map((category) => (
-          <OptionButton key={category.id} selected={selectedCategory === String(category.id)} onClick={() => onCategoryChange(String(category.id))}>
-            {category.name}
+      <FilterSection title="Motorcycle Model" open={openSections.model} onToggle={() => toggleSection('model')}>
+        <OptionButton selected={!selectedModel} onClick={() => onModelChange?.('')}>All models</OptionButton>
+        {visibleModels.map((model) => (
+          <OptionButton key={model} selected={selectedModel === model} onClick={() => onModelChange?.(model)}>
+            {model}
           </OptionButton>
         ))}
-        {categories.length > INITIAL_VISIBLE_OPTIONS && (
-          <ShowMoreButton expanded={showAllCategories} onClick={() => setShowAllCategories((current) => !current)} />
+        {(models || []).length > INITIAL_VISIBLE_OPTIONS && (
+          <ShowMoreButton expanded={showAllModels} onClick={() => setShowAllModels((current) => !current)} />
         )}
       </FilterSection>
 
       {brands.length > 0 && (
         <FilterSection title="Brand" open={openSections.brand} onToggle={() => toggleSection('brand')} sectionId="brand-filter-section">
-          <OptionButton selected={!selectedBrand} onClick={() => { onBrandChange(''); onModelChange?.(''); }}>All brands</OptionButton>
+          <OptionButton selected={!selectedBrand} onClick={() => onBrandChange('')}>All brands</OptionButton>
           {visibleBrands.map((brand) => (
-            <OptionButton key={brand} selected={selectedBrand === brand} onClick={() => { onBrandChange(brand); onModelChange?.(''); }}>
+            <OptionButton key={brand} selected={selectedBrand === brand} onClick={() => onBrandChange(brand)}>
               {brand}
             </OptionButton>
           ))}
@@ -103,23 +106,22 @@ const FilterSidebar = ({
         </FilterSection>
       )}
 
-      {(models?.length > 0 || selectedBrand || selectedModel || selectedYear) && (
-        <FilterSection title="Motorcycle fitment" open={openSections.fitment} onToggle={() => toggleSection('fitment')}>
-          <div className="space-y-2.5">
-            <label className="block">
-              <span className="sr-only">Motorcycle model</span>
-              <select value={selectedModel || ''} onChange={(event) => onModelChange?.(event.target.value)} disabled={!models?.length} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-orange-500 focus:ring-3 focus:ring-orange-500/10 disabled:bg-slate-50 disabled:text-slate-400">
-                <option value="">All models</option>
-                {(models || []).map((model) => <option key={model} value={model}>{model}</option>)}
-              </select>
-            </label>
+      {(colors || []).length > 0 && (
+        <FilterSection title="Color" open={openSections.color} onToggle={() => toggleSection('color')}>
+          <OptionButton selected={!selectedColor} onClick={() => onColorChange?.('')}>All colors</OptionButton>
+          {visibleColors.map((color) => <OptionButton key={color} selected={selectedColor === color} onClick={() => onColorChange?.(color)}>{color}</OptionButton>)}
+          {(colors || []).length > INITIAL_VISIBLE_OPTIONS && <ShowMoreButton expanded={showAllColors} onClick={() => setShowAllColors((current) => !current)} />}
+        </FilterSection>
+      )}
+
+      <FilterSection title="Fitment year" open={openSections.fitment} onToggle={() => toggleSection('fitment')}>
+          <div>
             <label className="block">
               <span className="sr-only">Model year</span>
               <input type="number" min="1950" max={new Date().getFullYear() + 1} value={selectedYear || ''} onChange={(event) => onYearChange?.(event.target.value)} placeholder="Model year" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-3 focus:ring-orange-500/10" />
             </label>
           </div>
-        </FilterSection>
-      )}
+      </FilterSection>
 
       <FilterSection title="Price" open={openSections.price} onToggle={() => toggleSection('price')}>
         <div className="grid grid-cols-2 gap-2">

@@ -282,16 +282,19 @@ export const getPosProducts = async (req, res) => {
     const productsResult = await pool.query(
       `SELECT DISTINCT p.id, p.name, p.sku, p.barcode, p.part_number,
               COALESCE(p.store_selling_price, p.price) AS store_selling_price,
-              p.image, p.category_id, c.name AS category_name, p.motorcycle_model, p.box_location,
+              p.image, p.category_id, c.name AS category_name, COALESCE(model.model_name, p.motorcycle_model) AS motorcycle_model,
+              p.motorcycle_model_id, p.color, p.box_location,
               p.stock_quantity, p.reserved_stock, p.inventory_status, p.low_stock_threshold
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
+       LEFT JOIN motorcycle_models model ON model.id = p.motorcycle_model_id
        LEFT JOIN product_variants pv ON pv.product_id = p.id
        WHERE p.inventory_status = 'active'
          AND COALESCE(p.is_deleted, false) = false
          AND ($2::int IS NULL OR p.category_id = $2)
          AND ($1 = '%%' OR p.name ILIKE $1 OR p.sku ILIKE $1 OR p.barcode ILIKE $1
-              OR p.part_number ILIKE $1 OR c.name ILIKE $1 OR pv.sku ILIKE $1)
+              OR p.part_number ILIKE $1 OR COALESCE(model.model_name, p.motorcycle_model) ILIKE $1
+              OR p.color ILIKE $1 OR p.box_location ILIKE $1 OR c.name ILIKE $1 OR pv.sku ILIKE $1)
        ORDER BY p.name
        LIMIT $3`,
       values,

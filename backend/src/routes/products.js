@@ -147,6 +147,10 @@ const productIdValidation = [
 
 const productListValidation = [
   query('category').optional({ nullable: true }).isInt({ min: 1 }).toInt().withMessage('Category must be a positive integer'),
+  query('motorcycle_model').optional({ nullable: true }).isString().isLength({ max: 160 }).withMessage('Motorcycle model must be 160 characters or less')
+    .customSanitizer((value) => sanitizePlainText(value, { maxLength: 160 }) || ''),
+  query('color').optional({ nullable: true }).isString().isLength({ max: 100 }).withMessage('Color must be 100 characters or less')
+    .customSanitizer((value) => sanitizePlainText(value, { maxLength: 100 }) || ''),
   query('search').optional({ nullable: true }).isString().isLength({ max: 120 }).withMessage('Search must be 120 characters or less')
     .customSanitizer((value) => sanitizePlainText(value, { maxLength: 120 }) || ''),
   query('limit').optional({ nullable: true }).isInt({ min: 1, max: 80 }).toInt().withMessage('Limit must be between 1 and 80'),

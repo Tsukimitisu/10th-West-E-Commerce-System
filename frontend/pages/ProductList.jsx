@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Grid3X3, List, Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
-import { getProducts, getCategories, getWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
+import { getProducts, getMotorcycleModels, getWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
 import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
@@ -49,7 +49,8 @@ const buildProductSearchableText = (product) => {
   return [
     product?.name,
     product?.description,
-    product?.category_name,
+    product?.motorcycle_model,
+    product?.color,
     product?.brand,
     ...(Array.isArray(product?.fitments) ? product.fitments.map((fitment) => `${fitment.brand} ${fitment.model} ${fitment.start_year || ''} ${fitment.end_year || ''}`) : []),
     product?.sku,
@@ -68,7 +69,8 @@ const getProductSearchScore = (product, searchTerms, searchPhrase) => {
   const partNumber = String(product?.part_number || product?.partNumber || '').toLowerCase();
   const brand = String(product?.brand || '').toLowerCase();
   const sku = String(product?.sku || '').toLowerCase();
-  const category = String(product?.category_name || '').toLowerCase();
+  const motorcycleModel = String(product?.motorcycle_model || '').toLowerCase();
+  const color = String(product?.color || '').toLowerCase();
   const description = String(product?.description || '').toLowerCase();
   const tags = Array.isArray(product?.tags)
     ? product.tags.join(' ').toLowerCase()
@@ -96,7 +98,8 @@ const getProductSearchScore = (product, searchTerms, searchPhrase) => {
     if (partNumber.includes(term)) score += 24;
     if (sku.includes(term)) score += 20;
     if (brand.includes(term)) score += 16;
-    if (category.includes(term)) score += 14;
+    if (motorcycleModel.includes(term)) score += 18;
+    if (color.includes(term)) score += 12;
     if (tags.includes(term) || keywords.includes(term)) score += 40;
     if (description.includes(term)) score += 8;
   });
@@ -107,7 +110,7 @@ const getProductSearchScore = (product, searchTerms, searchPhrase) => {
 const ProductList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [motorcycleModelRecords, setMotorcycleModelRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState(false);
   const [catalogRequest, setCatalogRequest] = useState(0);
@@ -120,9 +123,9 @@ const ProductList = () => {
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchParams.get('search') || '');
   const [searchSettling, setSearchSettling] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
   const [selectedBrand, setSelectedBrand] = useState('');
-  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedModel, setSelectedModel] = useState(searchParams.get('model') || '');
+  const [selectedColor, setSelectedColor] = useState(searchParams.get('color') || '');
   const [selectedYear, setSelectedYear] = useState('');
   const [priceRange, setPriceRange] = useState([0, 100000]);
   const [inStockOnly, setInStockOnly] = useState(false);
@@ -133,8 +136,8 @@ const ProductList = () => {
     setLoading(true);
     setCatalogError(false);
 
-    Promise.allSettled([getProducts(), getCategories()])
-      .then(([productResult, categoryResult]) => {
+    Promise.allSettled([getProducts(), getMotorcycleModels()])
+      .then(([productResult, modelResult]) => {
         if (!active) return;
         if (productResult.status === 'fulfilled') {
           setProducts(productResult.value || []);
@@ -142,7 +145,7 @@ const ProductList = () => {
           setProducts([]);
           setCatalogError(true);
         }
-        setCategories(categoryResult.status === 'fulfilled' ? categoryResult.value || [] : []);
+        setMotorcycleModelRecords(modelResult.status === 'fulfilled' ? modelResult.value || [] : []);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -196,11 +199,11 @@ const ProductList = () => {
   };
 
   useEffect(() => {
-    const cat = searchParams.get('category');
     const search = searchParams.get('search');
     const sort = searchParams.get('sort');
     const viewMode = searchParams.get('view');
-    setSelectedCategory(cat || '');
+    setSelectedModel(searchParams.get('model') || '');
+    setSelectedColor(searchParams.get('color') || '');
     setSearchQuery(search || '');
     if (sort) setSortBy(sort);
     setView(viewMode === 'list' ? 'list' : 'grid');
@@ -254,16 +257,12 @@ const ProductList = () => {
   }, [brands.length, searchParams]);
 
   const models = useMemo(() => {
-    const m = new Set();
-    products.forEach((product) => {
-      (product.fitments || []).forEach((fitment) => {
-        if (!selectedBrand || fitment.brand === selectedBrand) {
-          if (fitment.model) m.add(fitment.model);
-        }
-      });
-    });
-    return Array.from(m).sort();
-  }, [products, selectedBrand]);
+    const values = new Set(motorcycleModelRecords.filter((model) => model.status === 'active').map((model) => model.model_name));
+    products.forEach((product) => { if (product.motorcycle_model) values.add(product.motorcycle_model); });
+    return Array.from(values).sort();
+  }, [motorcycleModelRecords, products]);
+
+  const colors = useMemo(() => [...new Set(products.map((product) => product.color).filter(Boolean))].sort(), [products]);
 
   const filtered = useMemo(() => {
     let result = [...products];
@@ -287,15 +286,15 @@ const ProductList = () => {
         return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
       });
     }
-    if (selectedCategory) result = result.filter(p => String(p.category_id) === selectedCategory);
-    if (selectedBrand || selectedModel || selectedYear) {
+    if (selectedBrand) result = result.filter((product) => product.brand === selectedBrand);
+    if (selectedModel) result = result.filter((product) => product.motorcycle_model === selectedModel);
+    if (selectedColor) result = result.filter((product) => product.color === selectedColor);
+    if (selectedYear) {
       const yearNumber = selectedYear ? Number(selectedYear) : null;
       result = result.filter((product) => {
         const fitments = Array.isArray(product.fitments) ? product.fitments : [];
-        if (fitments.length === 0) return selectedBrand ? product.brand === selectedBrand : true;
+        if (fitments.length === 0) return true;
         return fitments.some((fitment) => {
-          if (selectedBrand && fitment.brand !== selectedBrand) return false;
-          if (selectedModel && fitment.model !== selectedModel) return false;
           if (Number.isInteger(yearNumber)) {
             if (fitment.start_year && Number(fitment.start_year) > yearNumber) return false;
             if (fitment.end_year && Number(fitment.end_year) < yearNumber) return false;
@@ -303,7 +302,7 @@ const ProductList = () => {
           return true;
         });
       });
-    } else if (selectedBrand) result = result.filter(p => p.brand === selectedBrand);
+    }
     if (inStockOnly) result = result.filter(p => p.stock_quantity > 0);
     result = result.filter(p => {
       const price = p.is_on_sale && p.sale_price ? p.sale_price : p.price;
@@ -319,16 +318,15 @@ const ProductList = () => {
       case 'relevance': break;
     }
     return result;
-  }, [products, debouncedSearchQuery, selectedCategory, selectedBrand, selectedModel, selectedYear, priceRange, inStockOnly, sortBy]);
+  }, [products, debouncedSearchQuery, selectedBrand, selectedModel, selectedColor, selectedYear, priceRange, inStockOnly, sortBy]);
 
-  const activeFilterCount = [searchQuery.trim(), selectedCategory, selectedBrand, selectedModel, selectedYear, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
+  const activeFilterCount = [searchQuery.trim(), selectedBrand, selectedModel, selectedColor, selectedYear, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
 
-  const selectedCategoryName = categories.find((category) => String(category.id) === selectedCategory)?.name;
   const activeFilters = [
     searchQuery.trim() && { key: 'search', label: `Search: ${searchQuery.trim()}` },
-    selectedCategory && { key: 'category', label: selectedCategoryName || 'Category' },
     selectedBrand && { key: 'brand', label: selectedBrand },
     selectedModel && { key: 'model', label: selectedModel },
+    selectedColor && { key: 'color', label: selectedColor },
     selectedYear && { key: 'year', label: `Year ${selectedYear}` },
     inStockOnly && { key: 'stock', label: 'In stock' },
     (priceRange[0] > 0 || priceRange[1] < 100000) && { key: 'price', label: `₱${priceRange[0].toLocaleString()}–₱${priceRange[1].toLocaleString()}` },
@@ -344,9 +342,9 @@ const ProductList = () => {
         nextParams.delete('sort');
       }
     }
-    if (key === 'category') { setSelectedCategory(''); nextParams.delete('category'); }
-    if (key === 'brand') { setSelectedBrand(''); setSelectedModel(''); }
-    if (key === 'model') setSelectedModel('');
+    if (key === 'brand') setSelectedBrand('');
+    if (key === 'model') { setSelectedModel(''); nextParams.delete('model'); }
+    if (key === 'color') { setSelectedColor(''); nextParams.delete('color'); }
     if (key === 'year') setSelectedYear('');
     if (key === 'stock') setInStockOnly(false);
     if (key === 'price') setPriceRange([0, 100000]);
@@ -355,7 +353,7 @@ const ProductList = () => {
   };
 
   const clearAllFilters = () => {
-    setSelectedCategory(''); setSelectedBrand(''); setSelectedModel(''); setSelectedYear(''); setPriceRange([0, 100000]); setInStockOnly(false); setSearchQuery('');
+    setSelectedBrand(''); setSelectedModel(''); setSelectedColor(''); setSelectedYear(''); setPriceRange([0, 100000]); setInStockOnly(false); setSearchQuery('');
     const nextSort = sortBy === 'relevance' ? 'newest' : sortBy;
     setSortBy(nextSort);
     const nextParams = new URLSearchParams();
@@ -483,15 +481,15 @@ const ProductList = () => {
 
         <div className="flex gap-5 xl:gap-7">
           <FilterSidebar
-            categories={categories}
-            selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
             selectedBrand={selectedBrand}
             onBrandChange={setSelectedBrand}
             brands={brands}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
             models={models}
+            selectedColor={selectedColor}
+            onColorChange={setSelectedColor}
+            colors={colors}
             selectedYear={selectedYear}
             onYearChange={setSelectedYear}
             priceRange={priceRange}

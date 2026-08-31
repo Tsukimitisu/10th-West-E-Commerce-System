@@ -834,11 +834,17 @@ const getSupabaseRestProductsFallback = async ({ queryInput = {}, includeInterna
   if (queryInput.category) {
     params.category_id = `eq.${queryInput.category}`;
   }
+  if (queryInput.motorcycle_model) {
+    params.motorcycle_model = `ilike.${String(queryInput.motorcycle_model).trim()}`;
+  }
+  if (queryInput.color) {
+    params.color = `ilike.${String(queryInput.color).trim()}`;
+  }
 
   const searchPhrase = normalizeSearchPhrase(queryInput.search);
   if (searchPhrase) {
     const term = searchPhrase.replace(/[(),]/g, ' ');
-    params.or = `(name.ilike.*${term}*,part_number.ilike.*${term}*,description.ilike.*${term}*,brand.ilike.*${term}*,sku.ilike.*${term}*)`;
+    params.or = `(name.ilike.*${term}*,part_number.ilike.*${term}*,description.ilike.*${term}*,brand.ilike.*${term}*,motorcycle_model.ilike.*${term}*,color.ilike.*${term}*,sku.ilike.*${term}*)`;
   }
 
   let products = await supabaseRestFetch('products', params);
@@ -871,7 +877,7 @@ const getSupabaseRestProductsFallback = async ({ queryInput = {}, includeInterna
 export const getProducts = async (req, res) => {
   try {
     const queryInput = { ...(req.query || {}), ...(req.validatedData || {}) };
-    const { category, search, limit: limitParam, brand, model, year } = queryInput;
+    const { category, search, limit: limitParam, brand, model, year, motorcycle_model: motorcycleModel, color } = queryInput;
     const searchTerms = tokenizeSearchTerms(search);
     const searchPhrase = normalizeSearchPhrase(search);
     const resultLimit = parseResultLimit(limitParam, null, 80);
@@ -883,7 +889,7 @@ export const getProducts = async (req, res) => {
     }
     
     let selectClause = `
-      SELECT p.*, c.name as category_name,
+      SELECT p.*, c.name as category_name, COALESCE(mm.model_name, p.motorcycle_model) AS motorcycle_model,
       COALESCE((
         SELECT SUM(oi.quantity)
         FROM order_items oi
@@ -916,6 +922,7 @@ export const getProducts = async (req, res) => {
       listing_media.listing_primary_media, listing_media.listing_media`;
     let fromClause = `FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN motorcycle_models mm ON p.motorcycle_model_id = mm.id
       LEFT JOIN ecommerce_listings el ON el.inventory_item_id = p.id
       LEFT JOIN LATERAL (
         SELECT
@@ -942,6 +949,17 @@ export const getProducts = async (req, res) => {
     if (category) {
       params.push(category);
       whereClause += ` AND p.category_id = $${params.length}`;
+    }
+
+    const cleanMotorcycleModel = sanitizePlainText(motorcycleModel, { maxLength: 160 });
+    const cleanColor = sanitizePlainText(color, { maxLength: 100 });
+    if (cleanMotorcycleModel) {
+      params.push(cleanMotorcycleModel);
+      whereClause += ` AND COALESCE(mm.model_name, p.motorcycle_model) ILIKE $${params.length}`;
+    }
+    if (cleanColor) {
+      params.push(cleanColor);
+      whereClause += ` AND p.color ILIKE $${params.length}`;
     }
 
     const cleanFitmentBrand = sanitizePlainText(brand, { maxLength: 100 });
@@ -984,6 +1002,8 @@ export const getProducts = async (req, res) => {
           p.part_number ILIKE $${containsIdx} OR 
           COALESCE(el.ecommerce_description, p.description) ILIKE $${containsIdx} OR
           p.brand ILIKE $${containsIdx} OR 
+          COALESCE(mm.model_name, p.motorcycle_model) ILIKE $${containsIdx} OR
+          p.color ILIKE $${containsIdx} OR
           p.sku ILIKE $${containsIdx} OR 
           c.name ILIKE $${containsIdx}
         )`;
@@ -995,6 +1015,8 @@ export const getProducts = async (req, res) => {
           (CASE WHEN p.part_number ILIKE $${containsIdx} THEN 28 ELSE 0 END) +
           (CASE WHEN p.sku ILIKE $${containsIdx} THEN 22 ELSE 0 END) +
           (CASE WHEN p.brand ILIKE $${containsIdx} THEN 16 ELSE 0 END) +
+          (CASE WHEN COALESCE(mm.model_name, p.motorcycle_model) ILIKE $${containsIdx} THEN 18 ELSE 0 END) +
+          (CASE WHEN p.color ILIKE $${containsIdx} THEN 10 ELSE 0 END) +
           (CASE WHEN c.name ILIKE $${containsIdx} THEN 12 ELSE 0 END) +
           (CASE WHEN COALESCE(el.ecommerce_description, p.description) ILIKE $${containsIdx} THEN 7 ELSE 0 END)
         `);

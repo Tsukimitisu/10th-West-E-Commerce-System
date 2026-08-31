@@ -350,9 +350,10 @@ const PosTerminal = () => {
           {available <= 0 && <span className="absolute inset-0 grid place-items-center bg-white/75 text-xs font-black text-red-700">OUT OF STOCK</span>}
         </div>
         <div className="flex flex-1 flex-col p-3">
-          <p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-red-600">{product.category_name || 'Moto part'}</p>
+          <p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-red-600">{product.motorcycle_model || 'Motorcycle part'}</p>
           <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-5 text-slate-950">{product.name}</h3>
           <p className="mt-1 truncate font-mono text-[11px] text-slate-500">{product.sku || product.part_number || 'No SKU'}</p>
+          {product.color && <p className="mt-0.5 truncate text-[11px] text-slate-500">Color: {product.color}</p>}
           <div className="mt-auto flex items-end justify-between gap-2 pt-3">
             <strong className="text-sm text-slate-950">{formatCurrency(productPrice(product))}</strong>
             <span className={`text-[11px] font-semibold ${available > 0 ? 'text-emerald-700' : 'text-red-700'}`}>{available} available</span>
