@@ -78,6 +78,8 @@ const getPaymentStatusLabel = (status) => {
 
 const PAYMENT_FAILED_HELP = 'Payment Failed: payment was not completed or was rejected.';
 const DELIVERY_FAILED_HELP = 'Delivery Failed: courier/store could not complete delivery.';
+const POS_STATUS_LOCK_HELP = 'In-store completed orders are locked. Use the audited POS void workflow for corrections.';
+const isInStoreOrder = (order) => String(order?.source || '').toLowerCase() === 'pos';
 
 const OrdersView = () => {
   // Role check: staff cannot process refunds
@@ -144,6 +146,7 @@ const OrdersView = () => {
   };
 
   const openStatusChange = (order) => {
+    if (isInStoreOrder(order)) return;
     const nextOptions = staffStatusTransitions[order.status] || [];
     setStatusTarget(order);
     setNewStatus(nextOptions[0] || '');
@@ -336,7 +339,12 @@ const OrdersView = () => {
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400">{new Date(o.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => openStatusChange(o)} title={o.status === 'failed' ? PAYMENT_FAILED_HELP : undefined} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer hover:opacity-80 ${statusColors[o.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>
+                    <button
+                      onClick={() => openStatusChange(o)}
+                      disabled={isInStoreOrder(o)}
+                      title={isInStoreOrder(o) ? POS_STATUS_LOCK_HELP : o.status === 'failed' ? PAYMENT_FAILED_HELP : undefined}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${isInStoreOrder(o) ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:opacity-80'} ${statusColors[o.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}
+                    >
                       {statusIcons[o.status]} {getOrderStatusLabel(o.status)}
                     </button>
                   </td>
@@ -422,6 +430,9 @@ const OrdersView = () => {
 
             {detailOrder.status === 'failed' && (
               <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">{PAYMENT_FAILED_HELP}</p>
+            )}
+            {isInStoreOrder(detailOrder) && (
+              <p className="rounded-lg border border-amber-700/40 bg-amber-500/10 p-3 text-xs font-medium text-amber-200">{POS_STATUS_LOCK_HELP}</p>
             )}
 
             <div className="rounded-xl border border-gray-700 bg-gray-900 p-4">
@@ -527,9 +538,11 @@ const OrdersView = () => {
               )}
               <button
                 onClick={() => { setDetailOpen(false); openStatusChange(detailOrder); }}
-                className="flex-1 min-w-[140px] px-4 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
+                disabled={isInStoreOrder(detailOrder)}
+                title={isInStoreOrder(detailOrder) ? POS_STATUS_LOCK_HELP : undefined}
+                className="flex-1 min-w-[140px] px-4 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
               >
-                Update Status
+                {isInStoreOrder(detailOrder) ? 'Status Locked' : 'Update Status'}
               </button>
               <button
                 onClick={() => window.open(`${API_URL}/orders/${detailOrder.id}/invoice`, '_blank')}

@@ -151,6 +151,16 @@ export const updateOrderStatusSecure = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Order not found.' });
     }
+    if (String(order.source || '').toLowerCase() === 'pos') {
+      await client.query('ROLLBACK');
+      const isStoreStaff = req.user.role === 'store_staff';
+      return res.status(isStoreStaff ? 403 : 409).json({
+        message: isStoreStaff
+          ? 'In-store completed orders cannot be changed by store staff.'
+          : 'In-store completed orders must be corrected through the audited POS void workflow.',
+        code: 'POS_ORDER_STATUS_LOCKED',
+      });
+    }
     if (!(TRANSITIONS[order.status] || []).includes(nextStatus)) {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: `Transition from ${order.status} to ${nextStatus} is not allowed.` });
