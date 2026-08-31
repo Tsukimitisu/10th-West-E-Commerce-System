@@ -6,12 +6,14 @@ const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('inventory schema is additive, Box-only, indexed by part number, and links one storefront listing', async () => {
   const migration = await read('../../migrations/202608310001_inventory_storefront_source_of_truth.cjs');
+  const mediaGuard = await read('../../migrations/202608310003_require_active_listing_media.cjs');
   assert.match(migration, /store_selling_price/);
   assert.match(migration, /motorcycle_model/);
   assert.match(migration, /box_location/);
   assert.match(migration, /idx_products_part_number_prefix/);
   assert.match(migration, /inventory_item_id.*unique/s);
   assert.match(migration, /ecommerce_listing_media/);
+  assert.match(mediaGuard, /visibility_status = 'draft'/);
   assert.doesNotMatch(migration, /dropColumn\(['"](?:rack|rack_location|rack_id|rack_name)/i);
 });
 

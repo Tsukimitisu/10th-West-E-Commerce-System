@@ -60,6 +60,13 @@ const InventoryView = () => {
 
   useEffect(() => { fetchData(); }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      getInventory(search).then((rows) => setProducts(Array.isArray(rows) ? rows : [])).catch(() => {});
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   // Real-time: refresh on stock changes
   useSocketEvent('inventory:updated', fetchData);
   useSocketEvent('inventory:low-stock', fetchData);
