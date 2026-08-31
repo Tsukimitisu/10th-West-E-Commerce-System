@@ -442,7 +442,14 @@ export const createCheckout = async (req, res) => {
         });
         await pool.query(
           `UPDATE payments SET external_checkout_id = $2, reference = $2, metadata = $3::jsonb, updated_at = NOW() WHERE id = $1`,
-          [payment.id, checkout.id, JSON.stringify({ checkout_url: checkout.checkout_url })]
+          [payment.id, checkout.id, JSON.stringify({
+            checkout_url: checkout.checkout_url,
+            checkout_session_id: checkout.id,
+            order_id: order.id,
+            payment_id: payment.id,
+            user_id: req.user.id,
+            source: '10th-west-moto',
+          })]
         );
         await pool.query(
           `UPDATE orders SET payment_intent_id = $2, payment_reference = $2, payment_checkout_url = $3, updated_at = NOW() WHERE id = $1`,
@@ -568,18 +575,46 @@ const extractPaymongoEvent = (payload) => {
   const attributes = resource.attributes || {};
   const nestedPayment = Array.isArray(attributes.payments) ? attributes.payments[0] : null;
   const paymentAttributes = nestedPayment?.attributes || attributes;
+  const metadata = attributes.metadata || paymentAttributes.metadata || {};
+  const eventType = event.type;
   return {
     eventId,
-    eventType: event.type,
+    eventType,
     resourceId: resource.id,
     attributes,
     paymentAttributes,
-    metadata: attributes.metadata || paymentAttributes.metadata || {},
-    checkoutId: attributes.checkout_session_id || paymentAttributes.checkout_session_id || (event.type?.startsWith('checkout_session.') ? resource.id : null),
-    externalPaymentId: nestedPayment?.id || (event.type === 'payment.paid' ? resource.id : null),
+    metadata,
+    paymentId: Number(metadata.payment_id || metadata.paymentId) || null,
+    orderId: Number(metadata.order_id || metadata.orderId) || null,
+    checkoutId: attributes.checkout_session_id
+      || paymentAttributes.checkout_session_id
+      || metadata.checkout_session_id
+      || metadata.checkoutSessionId
+      || (eventType?.startsWith('checkout_session.') ? resource.id : null),
+    externalPaymentId: nestedPayment?.id || (eventType?.startsWith('payment.') ? resource.id : null),
     amount: paymentAttributes.amount,
     currency: paymentAttributes.currency,
   };
+};
+
+const findPaymongoWebhookPayment = async (client, event) => {
+  const select = `SELECT p.*, o.user_id AS order_user_id, o.status AS order_status,
+                         o.payment_status AS order_payment_status
+                  FROM payments p
+                  JOIN orders o ON o.id = p.order_id`;
+  const lock = ' FOR UPDATE OF p, o';
+  const lookups = [
+    event.paymentId && { label: 'payment_id', sql: `${select} WHERE p.id = $1${lock}`, value: event.paymentId },
+    event.checkoutId && { label: 'checkout_session_id', sql: `${select} WHERE p.provider = 'paymongo' AND p.external_checkout_id = $1${lock}`, value: event.checkoutId },
+    event.externalPaymentId && { label: 'provider_payment_id', sql: `${select} WHERE p.provider = 'paymongo' AND p.external_payment_id = $1${lock}`, value: event.externalPaymentId },
+    event.orderId && { label: 'order_id', sql: `${select} WHERE p.provider = 'paymongo' AND p.order_id = $1 ORDER BY p.created_at DESC LIMIT 1${lock}`, value: event.orderId },
+  ].filter(Boolean);
+
+  for (const lookup of lookups) {
+    const result = await client.query(lookup.sql, [lookup.value]);
+    if (result.rows[0]) return { payment: result.rows[0], lookup: lookup.label };
+  }
+  return { payment: null, lookup: null };
 };
 
 const finalizePaidOrder = async (client, payment, event) => {
@@ -642,14 +677,36 @@ const finalizePaidOrder = async (client, payment, event) => {
       event_type: event.eventType,
     },
   });
+  console.info('PAYMONGO_PAYMENT_MARKED_PAID', {
+    event_id: event.eventId,
+    order_id: payment.order_id,
+    payment_id: payment.id,
+  });
+  console.info('PAYMONGO_ORDER_STATUS_UPDATED', {
+    order_id: payment.order_id,
+    status: 'paid',
+    payment_status: 'paid',
+  });
 };
 
 export const handlePaymongoWebhook = async (req, res) => {
+  console.info('PAYMONGO_WEBHOOK_RECEIVED', {
+    raw_body_present: Boolean(req.rawBody),
+    signature_present: Boolean(req.get('Paymongo-Signature')),
+  });
   if (!verifyPaymongoWebhookSignature({ rawBody: req.rawBody, signatureHeader: req.get('Paymongo-Signature') })) {
+    console.warn('PAYMONGO_WEBHOOK_FAILED', { reason: 'invalid_signature' });
     return res.status(400).json({ message: 'Invalid PayMongo signature.' });
   }
   const event = extractPaymongoEvent(req.body || {});
-  if (!event.eventId || !event.eventType) return res.status(400).json({ message: 'Malformed PayMongo event.' });
+  if (!event.eventId || !event.eventType) {
+    console.warn('PAYMONGO_WEBHOOK_FAILED', { reason: 'malformed_event' });
+    return res.status(400).json({ message: 'Malformed PayMongo event.' });
+  }
+  console.info('PAYMONGO_WEBHOOK_EVENT_TYPE', {
+    event_id: event.eventId,
+    event_type: event.eventType,
+  });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -660,39 +717,58 @@ export const handlePaymongoWebhook = async (req, res) => {
     );
     if (!inserted.rowCount) {
       await client.query('COMMIT');
+      console.info('PAYMONGO_PAYMENT_ALREADY_PROCESSED', {
+        event_id: event.eventId,
+        event_type: event.eventType,
+      });
       return res.json({ message: 'Event already processed.' });
     }
-    const paymentId = Number(event.metadata.payment_id);
-    const paymentResult = paymentId
-      ? await client.query(
-        `SELECT p.*, o.user_id AS order_user_id, o.status AS order_status, o.payment_status AS order_payment_status
-         FROM payments p JOIN orders o ON o.id = p.order_id WHERE p.id = $1 FOR UPDATE OF p, o`,
-        [paymentId]
-      )
-      : await client.query(
-        `SELECT p.*, o.user_id AS order_user_id, o.status AS order_status, o.payment_status AS order_payment_status
-         FROM payments p JOIN orders o ON o.id = p.order_id
-         WHERE p.provider = 'paymongo' AND p.external_checkout_id = $1 FOR UPDATE OF p, o`,
-        [event.checkoutId]
-      );
-    const payment = paymentResult.rows[0];
-    if (!payment || payment.provider !== 'paymongo') throw fail(400, 'Webhook payment does not match a local payment.');
+    const lookup = await findPaymongoWebhookPayment(client, event);
+    const payment = lookup.payment;
+    if (!payment || payment.provider !== 'paymongo') {
+      console.warn('PAYMONGO_PAYMENT_LOOKUP_FAILED', {
+        event_id: event.eventId,
+        event_type: event.eventType,
+        checkout_id_present: Boolean(event.checkoutId),
+        payment_id_present: Boolean(event.paymentId || event.externalPaymentId),
+        order_id_present: Boolean(event.orderId),
+      });
+      throw fail(400, 'Webhook payment does not match a local payment.');
+    }
+    console.info('PAYMONGO_PAYMENT_LOOKUP_SUCCESS', {
+      event_id: event.eventId,
+      lookup: lookup.lookup,
+      order_id: payment.order_id,
+      payment_id: payment.id,
+    });
     if (event.checkoutId && payment.external_checkout_id !== event.checkoutId) throw fail(400, 'Checkout session mismatch.');
-    const receivedAmount = Number(event.amount) / 100;
-    const receivedCurrency = String(event.currency || '').toUpperCase();
-    const amountMatches = Number.isInteger(Number(event.amount)) && roundMoney(receivedAmount) === roundMoney(money(payment.amount));
-    const currencyMatches = receivedCurrency === payment.currency;
-    await client.query(
-      `INSERT INTO payment_reconciliations (payment_id, result, expected_amount, received_amount, expected_currency, received_currency, details)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
-      [payment.id, amountMatches && currencyMatches ? 'matched' : 'rejected', payment.amount,
-        Number.isFinite(receivedAmount) ? receivedAmount : null, payment.currency, receivedCurrency || null,
-        JSON.stringify({ event_id: event.eventId, checkout_id: event.checkoutId })]
-    );
-    if (!amountMatches || !currencyMatches) throw fail(400, 'Payment amount or currency mismatch.');
-
-    if (['payment.paid', 'checkout_session.payment.paid'].includes(event.eventType)) {
-      if (payment.status !== 'paid') await finalizePaidOrder(client, payment, event);
+    const isPaidEvent = ['payment.paid', 'checkout_session.payment.paid'].includes(event.eventType);
+    if (isPaidEvent) {
+      const receivedAmount = Number(event.amount) / 100;
+      const receivedCurrency = String(event.currency || '').toUpperCase();
+      const amountMatches = Number.isInteger(Number(event.amount)) && roundMoney(receivedAmount) === roundMoney(money(payment.amount));
+      const currencyMatches = receivedCurrency === String(payment.currency || '').toUpperCase();
+      await client.query(
+        `INSERT INTO payment_reconciliations (payment_id, result, expected_amount, received_amount, expected_currency, received_currency, details)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
+        [payment.id, amountMatches && currencyMatches ? 'matched' : 'rejected', payment.amount,
+          Number.isFinite(receivedAmount) ? receivedAmount : null, payment.currency, receivedCurrency || null,
+          JSON.stringify({ event_id: event.eventId, checkout_id: event.checkoutId, lookup: lookup.lookup })]
+      );
+      if (!amountMatches || !currencyMatches) throw fail(400, 'Payment amount or currency mismatch.');
+      if (payment.status !== 'paid') {
+        await finalizePaidOrder(client, payment, event);
+      } else {
+        console.info('PAYMONGO_PAYMENT_ALREADY_PROCESSED', {
+          event_id: event.eventId,
+          order_id: payment.order_id,
+          payment_id: payment.id,
+        });
+        console.info('PAYMONGO_STOCK_DEDUCTION_SKIPPED_ALREADY_DONE', {
+          order_id: payment.order_id,
+          payment_id: payment.id,
+        });
+      }
     } else if (['payment.failed', 'checkout_session.payment.failed', 'checkout_session.expired'].includes(event.eventType)) {
       const terminalStatus = event.eventType.endsWith('expired') ? 'expired' : 'failed';
       if (payment.status !== 'paid') {
@@ -745,7 +821,11 @@ export const handlePaymongoWebhook = async (req, res) => {
     return res.json({ message: 'SUCCESS' });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
-    console.error('PayMongo webhook processing failed:', error);
+    console.error('PAYMONGO_WEBHOOK_FAILED', {
+      event_id: event.eventId,
+      event_type: event.eventType,
+      reason: error.code || error.message,
+    });
     return res.status(error.status || 500).json({ message: error.status ? error.message : 'Webhook processing failed.' });
   } finally { client.release(); }
 };
@@ -843,7 +923,15 @@ export const retryPayment = async (req, res) => {
        SET status = 'pending', external_checkout_id = $2, reference = $2,
            metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb, updated_at = NOW()
        WHERE id = $1`,
-      [payment.id, checkout.id, JSON.stringify({ checkout_url: checkout.checkout_url, retry: true })]
+      [payment.id, checkout.id, JSON.stringify({
+        checkout_url: checkout.checkout_url,
+        checkout_session_id: checkout.id,
+        order_id: orderId,
+        payment_id: payment.id,
+        user_id: req.user.id,
+        source: '10th-west-moto',
+        retry: true,
+      })]
     );
     await pool.query(
       `UPDATE orders
@@ -1298,4 +1386,7 @@ export const __testing = {
   hashRequest,
   normalizeItems,
   safeErrorCode,
+  extractPaymongoEvent,
+  findPaymongoWebhookPayment,
+  finalizePaidOrder,
 };

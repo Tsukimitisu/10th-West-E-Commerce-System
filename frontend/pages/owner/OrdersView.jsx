@@ -67,6 +67,15 @@ const getShipmentStatusLabel = (status) => {
   return normalized.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 };
 
+const getPaymentStatusLabel = (status) => {
+  const normalized = String(status || 'pending').toLowerCase();
+  if (normalized === 'paid') return 'Paid';
+  if (normalized === 'failed') return 'Payment Failed';
+  if (normalized === 'expired') return 'Payment Expired';
+  if (normalized === 'cancelled') return 'Payment Cancelled';
+  return 'Payment Pending';
+};
+
 const PAYMENT_FAILED_HELP = 'Payment Failed: payment was not completed or was rejected.';
 const DELIVERY_FAILED_HELP = 'Delivery Failed: courier/store could not complete delivery.';
 
@@ -332,7 +341,13 @@ const OrdersView = () => {
                     </button>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
-                    <span className="text-xs text-gray-400 capitalize">{o.payment_method || '-'}</span>
+                    <span className="block text-xs font-medium text-gray-200">{String(o.payment_method || '-').toLowerCase() === 'gcash' ? 'GCash' : 'Cash on Delivery'}</span>
+                    <span
+                      className={`mt-0.5 block text-[10px] ${o.payment_status === 'paid' ? 'text-green-400' : o.payment_status === 'failed' ? 'text-red-400' : 'text-amber-300'}`}
+                      title={o.payment_method === 'gcash' && !['paid', 'failed'].includes(o.payment_status) ? 'Waiting for PayMongo confirmation.' : undefined}
+                    >
+                      {getPaymentStatusLabel(o.payment_status)}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-right font-bold text-white">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-right">
@@ -408,6 +423,19 @@ const OrdersView = () => {
             {detailOrder.status === 'failed' && (
               <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">{PAYMENT_FAILED_HELP}</p>
             )}
+
+            <div className="rounded-xl border border-gray-700 bg-gray-900 p-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-gray-400"><CreditCard size={13} /> Payment</div>
+              <div className="mt-3 grid gap-3 text-sm sm:grid-cols-4">
+                <div><p className="text-xs text-gray-500">Method</p><p className="font-medium text-white">{detailOrder.payment_method === 'gcash' ? 'GCash' : 'Cash on Delivery'}</p></div>
+                <div><p className="text-xs text-gray-500">Provider</p><p className="font-medium text-white capitalize">{detailOrder.payment_provider || (detailOrder.payment_method === 'gcash' ? 'PayMongo' : 'COD')}</p></div>
+                <div><p className="text-xs text-gray-500">Status</p><p className={`font-medium ${detailOrder.payment_status === 'paid' ? 'text-green-400' : detailOrder.payment_status === 'failed' ? 'text-red-400' : 'text-amber-300'}`}>{getPaymentStatusLabel(detailOrder.payment_status)}</p></div>
+                <div><p className="text-xs text-gray-500">Paid At</p><p className="font-medium text-white">{detailOrder.paid_at ? new Date(detailOrder.paid_at).toLocaleString('en-PH') : '-'}</p></div>
+              </div>
+              {detailOrder.payment_method === 'gcash' && !['paid', 'failed'].includes(detailOrder.payment_status) && (
+                <p className="mt-3 text-xs text-amber-300">Waiting for PayMongo confirmation.</p>
+              )}
+            </div>
 
             {shipmentData?.shipment && (
               <div className="rounded-xl border border-gray-700 bg-gray-900 p-4 space-y-4">
