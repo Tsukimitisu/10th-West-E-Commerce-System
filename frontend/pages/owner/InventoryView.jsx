@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { createInventoryItem, getCategories, getInventory, getStockAdjustments, getLowStockProducts, adjustStock, updateInventoryItem } from '../../services/api';
-import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, History, Plus, ScanBarcode, Pencil } from 'lucide-react';
+import { createInventoryItem, getInventory, getStockAdjustments, getLowStockProducts, getMotorcycleModels, adjustStock, updateInventoryItem } from '../../services/api';
+import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, History, Plus, ScanBarcode, Pencil, Bike } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import ReceiveStock from '../../components/owner/ReceiveStock';
 import { useSocketEvent } from '../../context/SocketContext';
 import PageHeader from '../../components/operations/PageHeader';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import InventoryItemForm from '../../components/owner/InventoryItemForm';
+import MotorcycleModelManager from '../../components/owner/MotorcycleModelManager';
 
 const STOCK_ADJUSTMENT_REASONS = Object.freeze({
   add: [
@@ -36,7 +37,7 @@ const InventoryView = () => {
   const [products, setProducts] = useState([]);
   const [adjustments, setAdjustments] = useState([]);
   const [lowStock, setLowStock] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [motorcycleModels, setMotorcycleModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('stock');
@@ -48,15 +49,18 @@ const InventoryView = () => {
   const [adjError, setAdjError] = useState('');
   const [itemModal, setItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [modelModal, setModelModal] = useState(false);
+  const [modelSelectCallback, setModelSelectCallback] = useState(null);
+  const [feedback, setFeedback] = useState(null);
 
   const fetchData = async () => {
     try {
-      const [p, a, ls, categoryRows] = await Promise.all([getInventory(), getStockAdjustments(), getLowStockProducts(), getCategories()]);
+      const [p, a, ls, modelRows] = await Promise.all([getInventory(), getStockAdjustments(), getLowStockProducts(), getMotorcycleModels({ includeInactive: true, manage: true })]);
       setProducts(Array.isArray(p) ? p : []);
       setAdjustments(Array.isArray(a) ? a : []);
       // getLowStockProducts returns { count, products } or an array
       setLowStock(Array.isArray(ls) ? ls : (ls?.products || []));
-      setCategories(Array.isArray(categoryRows) ? categoryRows : []);
+      setMotorcycleModels(Array.isArray(modelRows) ? modelRows : []);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -90,7 +94,9 @@ const InventoryView = () => {
         reason: adjForm.reason,
         note: adjForm.notes
       });
-      setAdjustModal(false); fetchData();
+      setAdjustModal(false);
+      setFeedback({ type: 'success', text: 'Inventory stock updated successfully.' });
+      fetchData();
     } catch (err) {
       console.error(err);
       setAdjError(err?.message || 'Failed to adjust stock. Please try again.');
@@ -114,16 +120,40 @@ const InventoryView = () => {
       || String(p.barcode || '').toLowerCase().includes(term)
       || String(p.brand || '').toLowerCase().includes(term)
       || String(p.motorcycle_model || '').toLowerCase().includes(term)
-      || String(p.category_name || '').toLowerCase().includes(term)
+      || String(p.color || '').toLowerCase().includes(term)
       || String(p.box_location || '').toLowerCase().includes(term);
   });
 
   const saveInventoryItem = async (payload) => {
-    if (editingItem) await updateInventoryItem(editingItem.id, payload);
-    else await createInventoryItem(payload);
+    const wasEditing = Boolean(editingItem);
+    const saved = wasEditing
+      ? await updateInventoryItem(editingItem.id, payload)
+      : await createInventoryItem(payload);
+    const term = search.trim().toLowerCase();
+    const searchable = [saved.name, saved.product_name, saved.part_number, saved.brand, saved.motorcycle_model, saved.color, saved.box_location]
+      .filter(Boolean).join(' ').toLowerCase();
+    const hiddenBySearch = Boolean(term && !searchable.includes(term));
+    setProducts((current) => wasEditing
+      ? current.map((item) => Number(item.id) === Number(saved.id) ? saved : item)
+      : [saved, ...current.filter((item) => Number(item.id) !== Number(saved.id))]);
     setItemModal(false);
     setEditingItem(null);
+    setFeedback({
+      type: 'success',
+      text: wasEditing ? 'Inventory item updated successfully.' : 'Inventory item added successfully.',
+      detail: hiddenBySearch ? 'Item was added but hidden by current filters. Clear filters to view it.' : null,
+    });
     await fetchData();
+  };
+
+  const openModelManager = (selectCallback = null) => {
+    setModelSelectCallback(() => selectCallback);
+    setModelModal(true);
+  };
+
+  const refreshModels = async () => {
+    const rows = await getMotorcycleModels({ includeInactive: true, manage: true });
+    setMotorcycleModels(Array.isArray(rows) ? rows : []);
   };
 
   const tabs = [
@@ -141,12 +171,19 @@ const InventoryView = () => {
         eyebrow="Inventory source of truth"
         title="Inventory management"
         description="Manage official part data, Box locations, store pricing and stock used by POS and the online catalog."
-        actions={<button type="button" onClick={() => { setEditingItem(null); setItemModal(true); }} className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"><Plus size={16} /> Add Inventory Item</button>}
+        actions={<div className="flex flex-wrap gap-2"><button type="button" onClick={() => openModelManager()} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Bike size={16} /> Motorcycle Models</button><button type="button" onClick={() => { setEditingItem(null); setItemModal(true); }} className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"><Plus size={16} /> Add Inventory Item</button></div>}
       />
 
       {catalogNotice && (
         <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
           {catalogNotice}
+        </div>
+      )}
+
+      {feedback && (
+        <div role="status" className={`flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${feedback.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
+          <div><p className="font-semibold">{feedback.text}</p>{feedback.detail && <p className="mt-0.5 text-xs">{feedback.detail}</p>}</div>
+          {feedback.detail && <button type="button" onClick={() => setSearch('')} className="shrink-0 font-semibold underline underline-offset-2">Clear filters</button>}
         </div>
       )}
 
@@ -181,7 +218,9 @@ const InventoryView = () => {
       {tab === 'receive' && (
         <ReceiveStock
           products={products}
-          onComplete={fetchData}
+          motorcycleModels={motorcycleModels}
+          onAddMotorcycleModel={openModelManager}
+          onComplete={async () => { await fetchData(); setFeedback({ type: 'success', text: 'Stock received successfully.' }); }}
           onBack={() => setTab('stock')}
         />
       )}
@@ -192,7 +231,7 @@ const InventoryView = () => {
           <div className="p-3 border-b border-white/10">
             <div className="relative max-w-xs">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" placeholder="Search part number, name, model, brand, category, or Box" value={search} onChange={e => setSearch(e.target.value)}
+              <input type="text" placeholder="Search part number, name, model, brand, color, or Box" value={search} onChange={e => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-1.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
             </div>
             <p className="mt-2 text-xs text-gray-400">
@@ -224,7 +263,7 @@ const InventoryView = () => {
                           <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-700">
                             {p.image ? <img src={resolveProductImageUrl(p.image)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" /> : <Package size={14} className="m-auto text-gray-400 mt-1.5" />}
                           </div>
-                          <div><p className="font-medium text-white text-sm">{p.product_name || p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.part_number || '-'}</p><p className="text-[10px] text-gray-500">{p.motorcycle_model || p.brand || 'Model not set'}</p></div>
+                          <div><p className="font-medium text-white text-sm">{p.product_name || p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.part_number || '-'}</p><p className="text-[10px] text-gray-500">{p.motorcycle_model || 'Model not set'}{p.color ? ` · ${p.color}` : ''}</p></div>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -398,9 +437,18 @@ const InventoryView = () => {
         <InventoryItemForm
           key={editingItem?.id || 'new'}
           initialItem={editingItem}
-          categories={categories}
+          motorcycleModels={motorcycleModels}
+          onAddMotorcycleModel={openModelManager}
           onSubmit={saveInventoryItem}
           onCancel={() => { setItemModal(false); setEditingItem(null); }}
+        />
+      </Modal>
+
+      <Modal isOpen={modelModal} onClose={() => { setModelModal(false); setModelSelectCallback(null); }} title="Motorcycle Models" size="2xl">
+        <MotorcycleModelManager
+          models={motorcycleModels}
+          onChanged={refreshModels}
+          onSelect={modelSelectCallback ? (model) => { modelSelectCallback(model); setModelModal(false); setModelSelectCallback(null); } : undefined}
         />
       </Modal>
     </div>

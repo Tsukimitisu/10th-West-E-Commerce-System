@@ -1,10 +1,10 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
 import { ScanBarcode, Search, X, Plus, Minus, Trash2, Package, CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react';
-import { batchReceiveStock, createInventoryItem, findInventoryItem, getCategories } from '../../services/api';
+import { batchReceiveStock, createInventoryItem, findInventoryItem } from '../../services/api';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import InventoryItemForm from './InventoryItemForm';
 
-const ReceiveStock = ({ products, onComplete, onBack }) => {
+const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, onComplete, onBack }) => {
   const [scanInput, setScanInput] = useState('');
   const [cart, setCart] = useState([]); // [{ product, quantity }]
   const [notes, setNotes] = useState('');
@@ -13,17 +13,12 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
   const [submitError, setSubmitError] = useState('');
   const [result, setResult] = useState(null);
   const [unknownPartNumber, setUnknownPartNumber] = useState('');
-  const [categories, setCategories] = useState([]);
   const inputRef = useRef(null);
 
   // Auto-focus the scan input
   useEffect(() => {
     if (!result) inputRef.current?.focus();
   }, [cart, result]);
-
-  useEffect(() => {
-    getCategories().then((items) => setCategories(Array.isArray(items) ? items : [])).catch(() => setCategories([]));
-  }, []);
 
   const findProduct = (code) => {
     const term = code.trim().toLowerCase();
@@ -255,7 +250,8 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
           <InventoryItemForm
             key={unknownPartNumber}
             initialPartNumber={unknownPartNumber}
-            categories={categories}
+            motorcycleModels={motorcycleModels}
+            onAddMotorcycleModel={onAddMotorcycleModel}
             onSubmit={createUnknownItem}
             onCancel={() => setUnknownPartNumber('')}
           />

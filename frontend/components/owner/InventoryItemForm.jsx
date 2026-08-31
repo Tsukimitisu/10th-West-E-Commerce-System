@@ -4,8 +4,8 @@ const emptyItem = {
   part_number: '',
   product_name: '',
   brand: '',
-  motorcycle_model: '',
-  category_id: '',
+  motorcycle_model_id: '',
+  color: '',
   store_selling_price: '',
   cost_price: '',
   quantity: 0,
@@ -15,12 +15,14 @@ const emptyItem = {
   status: 'active',
 };
 
-const InventoryItemForm = ({ initialItem, initialPartNumber = '', categories = [], onSubmit, onCancel }) => {
+const InventoryItemForm = ({ initialItem, initialPartNumber = '', motorcycleModels = [], onAddMotorcycleModel, onSubmit, onCancel }) => {
   const initial = useMemo(() => ({
     ...emptyItem,
     ...initialItem,
     part_number: initialItem?.part_number || initialPartNumber || '',
     product_name: initialItem?.product_name || initialItem?.name || '',
+    motorcycle_model_id: initialItem?.motorcycle_model_id || '',
+    color: initialItem?.color || '',
     store_selling_price: initialItem?.store_selling_price ?? initialItem?.price ?? '',
     cost_price: initialItem?.cost_price ?? initialItem?.buying_price ?? '',
     quantity: initialItem?.quantity ?? initialItem?.stock_quantity ?? 0,
@@ -45,7 +47,7 @@ const InventoryItemForm = ({ initialItem, initialPartNumber = '', categories = [
     try {
       await onSubmit({
         ...form,
-        category_id: form.category_id || null,
+        motorcycle_model_id: Number(form.motorcycle_model_id),
         quantity: Number(form.quantity),
         minimum_stock: Number(form.minimum_stock),
         store_selling_price: Number(form.store_selling_price),
@@ -71,14 +73,17 @@ const InventoryItemForm = ({ initialItem, initialPartNumber = '', categories = [
         <label className="text-xs font-semibold text-slate-700">Brand
           <input value={form.brand} onChange={(event) => set('brand', event.target.value)} className={fieldClass} />
         </label>
-        <label className="text-xs font-semibold text-slate-700">Motorcycle Model
-          <input value={form.motorcycle_model} onChange={(event) => set('motorcycle_model', event.target.value)} className={fieldClass} placeholder="Mio M3" />
-        </label>
-        <label className="text-xs font-semibold text-slate-700">Category
-          <select value={form.category_id || ''} onChange={(event) => set('category_id', event.target.value)} className={fieldClass}>
-            <option value="">Uncategorized</option>
-            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+        <div className="text-xs font-semibold text-slate-700">Motorcycle Model
+          <select required value={form.motorcycle_model_id || ''} onChange={(event) => set('motorcycle_model_id', event.target.value)} className={fieldClass}>
+            <option value="">Select Motorcycle Model</option>
+            {motorcycleModels.filter((model) => model.status === 'active' || String(model.id) === String(form.motorcycle_model_id)).map((model) => (
+              <option key={model.id} value={model.id}>{model.model_name}{model.brand ? ` — ${model.brand}` : ''}</option>
+            ))}
           </select>
+          <button type="button" onClick={() => onAddMotorcycleModel?.((model) => set('motorcycle_model_id', model.id))} className="mt-1.5 text-xs font-semibold text-orange-700 hover:text-orange-800">+ Add Motorcycle Model</button>
+        </div>
+        <label className="text-xs font-semibold text-slate-700">Color <span className="font-normal text-slate-400">(optional)</span>
+          <input value={form.color} onChange={(event) => set('color', event.target.value)} className={fieldClass} placeholder="Black, Matte Red, Chrome…" />
         </label>
         <label className="text-xs font-semibold text-slate-700">Box Location
           <input value={form.box_location} onChange={(event) => set('box_location', event.target.value)} className={fieldClass} placeholder="Box A03" />
