@@ -1344,7 +1344,9 @@ export const recordProductView = async (req, res) => {
 
   try {
     const product = await pool.query(
-      `SELECT id FROM products WHERE id = $1 AND status = 'active' AND COALESCE(is_deleted, false) = false`,
+      `SELECT p.id FROM products p
+       JOIN ecommerce_listings el ON el.inventory_item_id=p.id AND el.visibility_status='active'
+       WHERE p.id = $1 AND p.inventory_status='active' AND COALESCE(p.is_deleted, false) = false`,
       [productId]
     );
     if (!product.rowCount) return res.status(404).json({ message: 'Product not found.' });
@@ -1571,11 +1573,11 @@ export const createProduct = async (req, res) => {
       await client.query('BEGIN');
       const result = await client.query(
         `INSERT INTO products (
-          part_number, name, description, price, buying_price,
+          part_number, name, description, price, store_selling_price, buying_price,
           image, video_url, category_id, stock_quantity, shipping_option, weight_kg, shipping_weight_kg, shipping_dimensions,
-          box_number, low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing,
+          box_number, box_location, low_stock_threshold, brand, sku, barcode, sale_price, is_on_sale, status, image_urls, bulk_pricing,
           product_type, reserved_stock, damaged_stock, color
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::product_shipping_option_enum, 'standard'::product_shipping_option_enum), $11, $11, $12::jsonb, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb), COALESCE($23, 'single'), COALESCE($24, 0), COALESCE($25, 0), $26)
+        ) VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, $9, COALESCE($10::product_shipping_option_enum, 'standard'::product_shipping_option_enum), $11, $11, $12::jsonb, $13, $13, $14, $15, $16, $17, $18, $19, COALESCE($20, 'draft'), COALESCE($21::jsonb, '[]'::jsonb), COALESCE($22::jsonb, '[]'::jsonb), COALESCE($23, 'single'), COALESCE($24, 0), COALESCE($25, 0), $26)
         RETURNING *`,
         [
           cleanPartNumber, cleanName, cleanDescription, parsedPrice, buyingPriceField.value,
@@ -1647,7 +1649,7 @@ export const updateProduct = async (req, res) => {
       existingProduct = Array.isArray(rows) ? rows[0] : null;
     } else {
       const existingResult = await pool.query(
-        `SELECT id, name, part_number, price, sale_price, is_on_sale, product_type
+        `SELECT id, name, part_number, price, store_selling_price, sale_price, is_on_sale, product_type
          FROM products
          WHERE id = $1`,
         [id]
@@ -1735,7 +1737,7 @@ export const updateProduct = async (req, res) => {
       return res.status(400).json({ message: 'Sale price must be a valid number' });
     }
 
-    const resolvedPrice = hasPricePayload ? parsedPrice : Number(existingProduct.price);
+    const resolvedPrice = hasPricePayload ? parsedPrice : Number(existingProduct.store_selling_price ?? existingProduct.price);
     const nextSalePrice = hasSalePricePayload
       ? salePriceField.value
       : (existingProduct.sale_price !== null ? Number(existingProduct.sale_price) : null);
@@ -1861,12 +1863,18 @@ export const updateProduct = async (req, res) => {
       if (hasPartNumberPayload) patch.part_number = cleanPartNumber;
       if (hasNamePayload) patch.name = cleanName;
       if (hasBodyField(req.body, 'description')) patch.description = cleanDescription;
-      if (hasPricePayload) patch.price = parsedPrice;
+      if (hasPricePayload) {
+        patch.price = parsedPrice;
+        patch.store_selling_price = parsedPrice;
+      }
       if (hasBuyingPricePayload) patch.buying_price = buyingPriceField.value;
       if (hasBodyField(req.body, 'image')) patch.image = cleanImage;
       if (hasCategoryIdPayload) patch.category_id = cleanCategoryId;
       if (hasStockPayload) patch.stock_quantity = parsedStockQuantity;
-      if (hasBodyField(req.body, 'box_number')) patch.box_number = cleanBoxNumber;
+      if (hasBodyField(req.body, 'box_number')) {
+        patch.box_number = cleanBoxNumber;
+        patch.box_location = cleanBoxNumber;
+      }
       if (hasLowStockPayload) patch.low_stock_threshold = cleanLowStockThreshold;
       if (hasBodyField(req.body, 'brand')) patch.brand = cleanBrand;
       if (requestedAutoSku || hasSkuPayload) patch.sku = resolvedSku;
@@ -1911,11 +1919,13 @@ export const updateProduct = async (req, res) => {
         name = COALESCE($2, name),
         description = CASE WHEN $31 THEN $3 ELSE description END,
         price = COALESCE($4, price),
+        store_selling_price = COALESCE($4, store_selling_price),
         buying_price = COALESCE($5, buying_price),
         image = COALESCE($6, image),
         category_id = COALESCE($7, category_id),
         stock_quantity = COALESCE($8, stock_quantity),
         box_number = COALESCE($9, box_number),
+        box_location = COALESCE($9, box_location),
         low_stock_threshold = COALESCE($10, low_stock_threshold),
         brand = COALESCE($11, brand),
         sku = COALESCE($12, sku),

@@ -41,10 +41,11 @@ test('storefront listing accepts only extension data and one to ten media items'
 });
 
 test('POS, cart and secure checkout resolve distinct store and online prices from one inventory row', async () => {
-  const [pos, cart, checkout] = await Promise.all([
+  const [pos, cart, checkout, products] = await Promise.all([
     read('./posController.js'),
     read('./cartController.js'),
     read('./secureCheckoutController.js'),
+    read('./productController.js'),
   ]);
   assert.match(pos, /COALESCE\(p\.store_selling_price, p\.price\)/);
   assert.match(pos, /'pos_sale'/);
@@ -52,4 +53,6 @@ test('POS, cart and secure checkout resolve distinct store and online prices fro
   assert.match(checkout, /calculateEcommercePrice\(baseStorePrice\)/);
   assert.match(checkout, /commitCodReservations/);
   assert.match(checkout, /finalizePaidOrder/);
+  assert.match(products, /store_selling_price = COALESCE\(\$4, store_selling_price\)/);
+  assert.match(products, /box_location = COALESCE\(\$9, box_location\)/);
 });
