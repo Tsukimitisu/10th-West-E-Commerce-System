@@ -44,16 +44,18 @@ test('catalog toolbar keeps sorting, views, active chips, and clear actions usab
   assert.match(shop, /Clear all/);
 });
 
-test('category, brand, fitment, price, and availability controls retain their handlers', async () => {
+test('motorcycle model, brand, color, fitment year, price, and availability controls retain their handlers', async () => {
   const [shop, filters] = await Promise.all([
     read('pages/ProductList.jsx'),
     read('components/FilterSidebar.jsx'),
   ]);
 
-  for (const handler of ['onCategoryChange', 'onBrandChange', 'onModelChange', 'onYearChange', 'onPriceChange', 'onStockChange']) {
+  for (const handler of ['onBrandChange', 'onModelChange', 'onColorChange', 'onYearChange', 'onPriceChange', 'onStockChange']) {
     assert.match(filters, new RegExp(handler));
   }
-  assert.match(shop, /selectedCategory=\{selectedCategory\}/);
+  assert.doesNotMatch(filters, /onCategoryChange/);
+  assert.match(shop, /selectedModel=\{selectedModel\}/);
+  assert.match(shop, /selectedColor=\{selectedColor\}/);
   assert.match(shop, /selectedBrand=\{selectedBrand\}/);
   assert.match(shop, /priceRange=\{priceRange\}/);
   assert.match(shop, /inStockOnly=\{inStockOnly\}/);

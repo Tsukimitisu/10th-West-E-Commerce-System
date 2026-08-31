@@ -32,11 +32,22 @@ test('inventory lookup, receiving transactions, and logical stock constraints ar
   assert.match(securityMigration, /products_minimum_stock_nonnegative/);
 });
 
-test('inventory creation validates stale category selections safely', async () => {
-  const controller = await read('./inventoryController.js');
-  assert.match(controller, /CATEGORY_NOT_FOUND/);
-  assert.match(controller, /SELECT id FROM categories WHERE id = \$1 LIMIT 1/);
-  assert.match(controller, /Selected category no longer exists/);
+test('inventory creation uses managed motorcycle models, returns the created item, and stores color', async () => {
+  const [controller, migration, routes] = await Promise.all([
+    read('./inventoryController.js'),
+    read('../../migrations/202609010001_motorcycle_model_master_and_color.cjs'),
+    read('../routes/motorcycleModels.js'),
+  ]);
+  assert.match(controller, /Motorcycle model is required/);
+  assert.match(controller, /MOTORCYCLE_MODEL_NOT_FOUND/);
+  assert.match(controller, /motorcycle_model_id/);
+  assert.match(controller, /color/);
+  assert.match(controller, /item: mapInventoryItem\(created\)/);
+  assert.match(migration, /ux_motorcycle_models_name_ci/);
+  assert.match(migration, /INSERT INTO motorcycle_models/);
+  assert.match(migration, /UPDATE products product/);
+  assert.match(routes, /createMotorcycleModel/);
+  assert.doesNotMatch(controller, /Category is invalid/);
 });
 
 test('inventory creation and receiving reasons are accepted by the database constraint', async () => {
@@ -57,6 +68,21 @@ test('storefront listing accepts only extension data and one to ten media items'
   assert.match(source, /active.*media\.length < 1/s);
   assert.match(source, /inventory_item_id/);
   assert.match(source, /calculateEcommercePrice/);
+  assert.match(source, /p\.color/);
+  assert.match(source, /COALESCE\(model\.model_name, p\.motorcycle_model\)/);
+});
+
+test('inventory, storefront, public catalog, and POS search include motorcycle model and color', async () => {
+  const [inventory, storefront, products, pos] = await Promise.all([
+    read('./inventoryController.js'),
+    read('./ecommerceListingController.js'),
+    read('./productController.js'),
+    read('./posController.js'),
+  ]);
+  for (const source of [inventory, storefront, products, pos]) {
+    assert.match(source, /motorcycle_model/);
+    assert.match(source, /color/);
+  }
 });
 
 test('POS, cart and secure checkout resolve distinct store and online prices from one inventory row', async () => {

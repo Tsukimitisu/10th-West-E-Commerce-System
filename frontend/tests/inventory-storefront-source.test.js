@@ -4,12 +4,16 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('inventory form contains Box Location and official core fields without Rack', async () => {
+test('inventory form uses managed Motorcycle Model and Color without Category or Rack', async () => {
   const source = await read('components/owner/InventoryItemForm.jsx');
   for (const label of ['Part Number', 'Product Name', 'Motorcycle Model', 'Store Selling Price', 'Cost Price', 'Minimum Stock', 'Box Location']) {
     assert.match(source, new RegExp(label));
   }
   assert.doesNotMatch(source, />Rack</i);
+  assert.doesNotMatch(source, />Category</i);
+  assert.match(source, /motorcycle_model_id/);
+  assert.match(source, /\+ Add Motorcycle Model/);
+  assert.match(source, />Color/);
   assert.match(source, /\* 1\.15/);
 });
 
@@ -24,7 +28,10 @@ test('receiving uses scanner-enter lookup and offers add-new inventory for unkno
 });
 
 test('storefront listing selects inventory first, renders core fields read-only, and bounds media at ten', async () => {
-  const source = await read('pages/owner/StorefrontListingsView.jsx');
+  const [source, picker] = await Promise.all([
+    read('pages/owner/StorefrontListingsView.jsx'),
+    read('components/owner/InventoryPickerModal.jsx'),
+  ]);
   assert.match(source, /Select an inventory item/);
   assert.match(source, /Inventory Item/);
   assert.match(source, /E-commerce Price \(\+15%\)/);
@@ -32,6 +39,25 @@ test('storefront listing selects inventory first, renders core fields read-only,
   assert.match(source, /uploadProductImage/);
   assert.match(source, /uploadProductVideo/);
   assert.doesNotMatch(source, /Cost Price/);
+  assert.doesNotMatch(source, /<select disabled=\{Boolean\(editing\)\} required value=\{form\.inventory_item_id\}/);
+  assert.match(source, /Choose Inventory Item/);
+  assert.match(source, /No color specified/);
+  assert.match(picker, /Search part number, product, model, brand, color or Box/);
+  assert.match(picker, /Already listed/);
+  assert.match(picker, /PAGE_SIZE = 10/);
+});
+
+test('inventory save gives success feedback, refreshes the list, and model manager supports add and deactivate', async () => {
+  const [view, manager] = await Promise.all([
+    read('pages/owner/InventoryView.jsx'),
+    read('components/owner/MotorcycleModelManager.jsx'),
+  ]);
+  assert.match(view, /Inventory item added successfully/);
+  assert.match(view, /Item was added but hidden by current filters/);
+  assert.match(view, /setProducts\(\(current\) => wasEditing/);
+  assert.match(view, /await fetchData\(\)/);
+  assert.match(manager, /Motorcycle model added successfully/);
+  assert.match(manager, /value="inactive"/);
 });
 
 test('staff navigation exposes Inventory and Storefront Listings without duplicate Products management', async () => {
