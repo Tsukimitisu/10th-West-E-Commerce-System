@@ -250,7 +250,7 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
         <div className="rounded-xl border border-amber-300 bg-white p-5">
           <div className="mb-4">
             <p className="font-semibold text-slate-950">Part Number Not Found</p>
-            <p className="mt-1 text-sm text-slate-600">Create the inventory master record for <span className="font-mono font-semibold">{unknownPartNumber}</span>. Rack is not used; assign a Box Location if known.</p>
+            <p className="mt-1 text-sm text-slate-600">Create the inventory master record for <span className="font-mono font-semibold">{unknownPartNumber}</span>. Assign a Box Location if known.</p>
           </div>
           <InventoryItemForm
             key={unknownPartNumber}
