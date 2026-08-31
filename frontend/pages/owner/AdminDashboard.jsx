@@ -15,6 +15,7 @@ import PromotionsView from './PromotionsView';
 import ContentView from './ContentView';
 import ChatView from './ChatView';
 import StaffDashboardView from '../staff/StaffDashboardView';
+import StorefrontListingsView from './StorefrontListingsView';
 
 const AdminDashboard = ({ user, onLogout }) => {
   const canAccessAdmin = ['owner', 'store_staff', 'admin'].includes(user?.role);
@@ -31,7 +32,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const views = {
     dashboard: isStaff ? <StaffDashboardView user={user} onNavigate={setActiveView} /> : <DashboardView onNavigate={setActiveView} />,
-    products: <ProductsView />, inventory: <InventoryView />, orders: <OrdersView />,
+    products: <ProductsView />, storefront: <StorefrontListingsView />, inventory: <InventoryView />, orders: <OrdersView />,
     customers: <CustomersView />, returns: <ReturnsView />, staff: <StaffView />,
     reviews: <ReviewsView />, reports: <ReportsView />, promotions: <PromotionsView />,
     banners: <BannersView />, content: <ContentView />, chat: <ChatView />,

@@ -18,6 +18,7 @@ import {
 } from '../utils/inputSanitizer.js';
 import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl } from '../utils/productImages.js';
+import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
@@ -734,14 +735,25 @@ const computePurchasableStock = (product, bundleComponents = []) => {
 const mapProductResponse = (product, { includeInternal = false, relations = null } = {}) => {
   const rel = relations || { fitments: [], bundle_components: [] };
   const purchasableStock = computePurchasableStock(product, rel.bundle_components);
+  const storeSellingPrice = resolveStoreSellingPrice(product) ?? 0;
+  const ecommercePrice = calculateEcommercePrice(storeSellingPrice);
+  const listingMedia = Array.isArray(product.listing_media) ? product.listing_media : [];
+  const listingImageUrls = listingMedia.filter((item) => item.media_type === 'image').map((item) => item.url);
+  const listingVideo = listingMedia.find((item) => item.media_type === 'video')?.url || null;
   const mapped = {
     ...product,
+    name: product.product_name || product.name,
+    description: product.ecommerce_description ?? product.description,
+    image: product.listing_primary_media || product.image,
+    image_urls: listingImageUrls.length ? listingImageUrls : product.image_urls,
+    video_url: listingVideo || product.video_url,
     product_type: product.product_type || 'single',
     rating: parseFloat(product.review_rating ?? product.rating ?? 0),
     review_count: parseInt(product.review_count ?? 0, 10),
     view_count: parseInt(product.view_count ?? 0, 10),
-    price: parseFloat(product.price),
-    sale_price: product.sale_price ? parseFloat(product.sale_price) : null,
+    price: includeInternal ? storeSellingPrice : ecommercePrice,
+    ecommerce_price: ecommercePrice,
+    sale_price: null,
     shipping_option: toNullableShippingOption(product.shipping_option) || 'standard',
     weight_kg: parseFloat(product.weight_kg ?? product.shipping_weight_kg ?? 1),
     shipping_weight_kg: parseFloat(product.weight_kg ?? product.shipping_weight_kg ?? 1),
@@ -755,6 +767,7 @@ const mapProductResponse = (product, { includeInternal = false, relations = null
   };
 
   if (includeInternal) {
+    mapped.store_selling_price = storeSellingPrice;
     mapped.buying_price = product.buying_price !== null && product.buying_price !== undefined
       ? parseFloat(product.buying_price)
       : null;
@@ -762,7 +775,10 @@ const mapProductResponse = (product, { includeInternal = false, relations = null
   }
 
   delete mapped.buying_price;
+  delete mapped.store_selling_price;
+  delete mapped.cost_price;
   delete mapped.box_number;
+  delete mapped.box_location;
   delete mapped.product_box_number;
   delete mapped.damaged_stock;
   return mapped;
@@ -894,13 +910,26 @@ export const getProducts = async (req, res) => {
           AND COALESCE(r.review_status::text, CASE WHEN r.is_approved THEN 'approved' ELSE 'pending' END) = 'approved'
       ), 0) as review_count
     `;
-    let fromClause = 'FROM products p LEFT JOIN categories c ON p.category_id = c.id';
+    selectClause += `,
+      el.ecommerce_description, el.visibility_status,
+      el.is_featured, el.is_best_seller, el.is_new_arrival,
+      listing_media.listing_primary_media, listing_media.listing_media`;
+    let fromClause = `FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN ecommerce_listings el ON el.inventory_item_id = p.id
+      LEFT JOIN LATERAL (
+        SELECT
+          (ARRAY_AGG(m.url ORDER BY m.sort_order))[1] AS listing_primary_media,
+          COALESCE(jsonb_agg(jsonb_build_object('url', m.url, 'media_type', m.media_type, 'sort_order', m.sort_order)
+            ORDER BY m.sort_order), '[]'::jsonb) AS listing_media
+        FROM ecommerce_listing_media m WHERE m.listing_id = el.id
+      ) listing_media ON true`;
     let whereClause = 'WHERE 1=1';
     let orderByClause = '';
     const params = [];
 
     if (!includeUnpublished) {
-      whereClause += ` AND p.status IN ('active', 'out_of_stock') AND COALESCE(p.is_deleted, false) = false`;
+      whereClause += ` AND el.visibility_status = 'active' AND p.inventory_status = 'active' AND COALESCE(p.is_deleted, false) = false`;
     } else if (queryInput.status) {
       const cleanStatusFilter = toNullableProductStatus(queryInput.status);
       if (cleanStatusFilter) {
@@ -953,7 +982,7 @@ export const getProducts = async (req, res) => {
         whereClause += ` AND (
           p.name ILIKE $${containsIdx} OR 
           p.part_number ILIKE $${containsIdx} OR 
-          p.description ILIKE $${containsIdx} OR 
+          COALESCE(el.ecommerce_description, p.description) ILIKE $${containsIdx} OR
           p.brand ILIKE $${containsIdx} OR 
           p.sku ILIKE $${containsIdx} OR 
           c.name ILIKE $${containsIdx}
@@ -967,7 +996,7 @@ export const getProducts = async (req, res) => {
           (CASE WHEN p.sku ILIKE $${containsIdx} THEN 22 ELSE 0 END) +
           (CASE WHEN p.brand ILIKE $${containsIdx} THEN 16 ELSE 0 END) +
           (CASE WHEN c.name ILIKE $${containsIdx} THEN 12 ELSE 0 END) +
-          (CASE WHEN p.description ILIKE $${containsIdx} THEN 7 ELSE 0 END)
+          (CASE WHEN COALESCE(el.ecommerce_description, p.description) ILIKE $${containsIdx} THEN 7 ELSE 0 END)
         `);
       });
 
@@ -979,7 +1008,7 @@ export const getProducts = async (req, res) => {
         relevanceScores.push(`
           (CASE WHEN LOWER(p.name) LIKE $${phrasePrefixIdx} THEN 120 ELSE 0 END) +
           (CASE WHEN LOWER(p.name) LIKE $${phraseContainsIdx} THEN 70 ELSE 0 END) +
-          (CASE WHEN LOWER(p.description) LIKE $${phraseContainsIdx} THEN 24 ELSE 0 END)
+          (CASE WHEN LOWER(COALESCE(el.ecommerce_description, p.description)) LIKE $${phraseContainsIdx} THEN 24 ELSE 0 END)
         `);
       }
 
@@ -1050,7 +1079,7 @@ export const getTopSellers = async (req, res) => {
     `;
 
     if (!includeUnpublished) {
-      whereClause += ` AND p.status IN ('active', 'out_of_stock') AND COALESCE(p.is_deleted, false) = false`;
+      whereClause += ` AND el.visibility_status = 'active' AND p.inventory_status = 'active' AND COALESCE(p.is_deleted, false) = false`;
     }
 
     if (days && days !== 'all') {
@@ -1065,8 +1094,12 @@ export const getTopSellers = async (req, res) => {
     const result = await pool.query(`
       SELECT 
         p.id, p.name, p.brand, p.part_number, p.image, p.description, p.product_type,
-        p.price, p.sale_price, p.is_on_sale, p.stock_quantity, p.reserved_stock, p.damaged_stock,
+        p.price, p.store_selling_price, p.sale_price, p.is_on_sale, p.stock_quantity, p.reserved_stock, p.damaged_stock,
         p.low_stock_threshold, p.rating, p.created_at, p.status, p.shipping_option, p.weight_kg, p.shipping_weight_kg,
+        el.ecommerce_description, el.visibility_status, el.is_featured, el.is_best_seller, el.is_new_arrival,
+        (SELECT m.url FROM ecommerce_listing_media m WHERE m.listing_id=el.id ORDER BY m.sort_order LIMIT 1) AS listing_primary_media,
+        (SELECT COALESCE(jsonb_agg(jsonb_build_object('url', m.url, 'media_type', m.media_type, 'sort_order', m.sort_order) ORDER BY m.sort_order), '[]'::jsonb)
+           FROM ecommerce_listing_media m WHERE m.listing_id=el.id) AS listing_media,
         c.name as category_name,
         COALESCE((
           SELECT ROUND(AVG(r.rating)::numeric, 1)
@@ -1084,9 +1117,10 @@ export const getTopSellers = async (req, res) => {
       FROM orders o
       JOIN order_items oi ON oi.order_id = o.id
       JOIN products p ON p.id = oi.product_id
+      LEFT JOIN ecommerce_listings el ON el.inventory_item_id = p.id
       LEFT JOIN categories c ON p.category_id = c.id
       ${whereClause}
-      GROUP BY p.id, c.name
+      GROUP BY p.id, c.name, el.id
       ORDER BY total_sold DESC, p.id DESC
       LIMIT $1
     `, params);
@@ -1143,6 +1177,11 @@ export const getProductById = async (req, res) => {
     
     const result = await pool.query(
       `SELECT p.*, c.name as category_name,
+              el.ecommerce_description, el.visibility_status,
+              el.is_featured, el.is_best_seller, el.is_new_arrival,
+              (SELECT m.url FROM ecommerce_listing_media m WHERE m.listing_id=el.id ORDER BY m.sort_order LIMIT 1) AS listing_primary_media,
+              (SELECT COALESCE(jsonb_agg(jsonb_build_object('url', m.url, 'media_type', m.media_type, 'sort_order', m.sort_order) ORDER BY m.sort_order), '[]'::jsonb)
+                 FROM ecommerce_listing_media m WHERE m.listing_id=el.id) AS listing_media,
               COALESCE((
                 SELECT ROUND(AVG(r.rating)::numeric, 1)
                 FROM reviews r
@@ -1157,6 +1196,7 @@ export const getProductById = async (req, res) => {
               ), 0) as review_count
        FROM products p 
        LEFT JOIN categories c ON p.category_id = c.id 
+       LEFT JOIN ecommerce_listings el ON el.inventory_item_id = p.id
        WHERE p.id = $1`,
       [id]
     );
@@ -1167,7 +1207,7 @@ export const getProductById = async (req, res) => {
 
     const product = result.rows[0];
 
-    if (!includeUnpublished && (!['active', 'out_of_stock'].includes(String(product.status || '').toLowerCase()) || product.is_deleted)) {
+    if (!includeUnpublished && (product.visibility_status !== 'active' || product.inventory_status !== 'active' || product.is_deleted)) {
       return res.status(404).json({ message: 'Product not found' });
     }
 
@@ -1200,7 +1240,7 @@ export const getProductById = async (req, res) => {
 
     const storedVariantOptions = normalizeStoredVariantOptions(product.variant_options);
     const optionOrder = storedVariantOptions.map((option) => option.name);
-    const basePrice = Number(product.price);
+    const baseStorePrice = resolveStoreSellingPrice(product) ?? 0;
 
     const variants = variantRows
       .map((variantRow) => {
@@ -1235,16 +1275,17 @@ export const getProductById = async (req, res) => {
         }
 
         const normalizedOrder = optionOrder.length > 0 ? optionOrder : Object.keys(normalizedCombination);
-        const resolvedPrice = Number.isFinite(Number(variantRow.price))
+        const storeVariantPrice = Number.isFinite(Number(variantRow.price))
           ? Number(variantRow.price)
-          : basePrice + Number(variantRow.price_adjustment || 0);
+          : baseStorePrice + Number(variantRow.price_adjustment || 0);
+        const resolvedPrice = includeUnpublished ? storeVariantPrice : calculateEcommercePrice(storeVariantPrice);
 
         return {
           id: variantRow.id,
           product_id: variantRow.product_id,
           option_combination: normalizedCombination,
           combination_key: variantRow.combination_key || buildVariantCombinationKey(normalizedCombination, normalizedOrder),
-          price: Number.isFinite(resolvedPrice) ? resolvedPrice : basePrice,
+          price: Number.isFinite(resolvedPrice) ? resolvedPrice : (includeUnpublished ? baseStorePrice : calculateEcommercePrice(baseStorePrice)),
           stock_quantity: Number.isFinite(Number(variantRow.stock_quantity)) ? Number(variantRow.stock_quantity) : 0,
           image_url: String(variantRow.image_url || '').trim() || null,
           sku: String(variantRow.sku || '').trim() || null,

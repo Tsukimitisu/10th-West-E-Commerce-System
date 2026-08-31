@@ -13,6 +13,7 @@ import {
   Package,
   RotateCcw,
   ShoppingCart,
+  Store,
   Star,
   Tag,
   UserCog,
@@ -41,6 +42,7 @@ const createNavItems = (badges = {}) => [
   { id: 'pos', label: 'Point of sale', icon: Monitor, route: '/pos', group: 'Sales', permission: 'pos.access' },
   { id: 'products', label: 'Products', icon: Package, group: 'Catalog', permission: 'products.view' },
   { id: 'inventory', label: 'Inventory', icon: Boxes, badge: badges.lowStock, group: 'Catalog', permission: 'inventory.view' },
+  { id: 'storefront', label: 'Storefront listings', icon: Store, group: 'Catalog', permission: 'products.view' },
   { id: 'promotions', label: 'Promotions', icon: Tag, group: 'Catalog', permission: 'promotions.manage' },
   { id: 'customers', label: 'Customers', icon: Users, group: 'Customers', permission: 'customers.view' },
   { id: 'chat', label: 'Conversations', icon: MessageCircle, group: 'Customers', permission: 'chat.view' },
@@ -53,7 +55,7 @@ const createNavItems = (badges = {}) => [
 ];
 
 const ADMIN_NAV = [
-  'dashboard', 'orders', 'pos', 'products', 'inventory', 'promotions',
+  'dashboard', 'orders', 'pos', 'products', 'inventory', 'storefront', 'promotions',
   'customers', 'chat', 'reviews', 'returns', 'staff', 'reports', 'banners', 'content',
 ];
 
