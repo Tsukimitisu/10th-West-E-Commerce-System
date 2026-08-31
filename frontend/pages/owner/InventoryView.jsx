@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { createInventoryItem, getCategories, getInventory, getStockAdjustments, getLowStockProducts, adjustStock, updateInventoryItem } from '../../services/api';
 import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, History, Plus, ScanBarcode, Pencil } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
@@ -30,6 +31,8 @@ const formatLegacyReason = (reason) => String(reason || 'Not recorded')
   .replace(/\b\w/g, (character) => character.toUpperCase());
 
 const InventoryView = () => {
+  const location = useLocation();
+  const catalogNotice = location.state?.catalogNotice || '';
   const [products, setProducts] = useState([]);
   const [adjustments, setAdjustments] = useState([]);
   const [lowStock, setLowStock] = useState([]);
@@ -140,6 +143,12 @@ const InventoryView = () => {
         description="Manage official part data, Box locations, store pricing and stock used by POS and the online catalog."
         actions={<button type="button" onClick={() => { setEditingItem(null); setItemModal(true); }} className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"><Plus size={16} /> Add Inventory Item</button>}
       />
+
+      {catalogNotice && (
+        <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          {catalogNotice}
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 ">

@@ -27,19 +27,41 @@ test('storefront listing selects inventory first, renders core fields read-only,
   const source = await read('pages/owner/StorefrontListingsView.jsx');
   assert.match(source, /Select an inventory item/);
   assert.match(source, /Inventory Item/);
-  assert.match(source, /Online Price \(\+15%\)/);
+  assert.match(source, /E-commerce Price \(\+15%\)/);
   assert.match(source, /at most 10 images\/videos/);
   assert.match(source, /uploadProductImage/);
   assert.match(source, /uploadProductVideo/);
   assert.doesNotMatch(source, /Cost Price/);
 });
 
-test('staff navigation exposes separate Inventory and Storefront listings workspaces', async () => {
-  const [layout, dashboard] = await Promise.all([
+test('staff navigation exposes Inventory and Storefront Listings without duplicate Products management', async () => {
+  const [layout, dashboard, app] = await Promise.all([
     read('components/owner/AdminLayout.jsx'),
     read('pages/owner/AdminDashboard.jsx'),
+    read('App.jsx'),
   ]);
-  assert.match(layout, /Storefront listings/);
+  assert.match(layout, /Storefront Listings/);
   assert.match(layout, /Inventory/);
+  assert.doesNotMatch(layout, /id: 'products', label: 'Products'/);
   assert.match(dashboard, /StorefrontListingsView/);
+  assert.doesNotMatch(dashboard, /import ProductsView/);
+  assert.doesNotMatch(dashboard, /products: <ProductsView/);
+  assert.match(dashboard, /Product management is now handled through Inventory/);
+  assert.match(dashboard, /\['products', 'categories', 'variants'\]/);
+  assert.match(app, /path="\/products\/manage"/);
+  assert.match(app, /\/staff\/inventory/);
+  assert.match(app, /\/admin\/inventory/);
+});
+
+test('operations dashboards source inventory alerts from the inventory API', async () => {
+  const [ownerDashboard, staffDashboard, security] = await Promise.all([
+    read('pages/owner/DashboardView.jsx'),
+    read('pages/staff/StaffDashboardView.jsx'),
+    read('pages/owner/SecurityView.jsx'),
+  ]);
+  assert.match(ownerDashboard, /getInventory/);
+  assert.doesNotMatch(ownerDashboard, /getProducts/);
+  assert.match(staffDashboard, /getInventory/);
+  assert.doesNotMatch(staffDashboard, /getProducts/);
+  assert.match(security, /Storefront Listings/);
 });

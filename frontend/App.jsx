@@ -127,6 +127,18 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/oauth-callback" element={<OAuthCallback onLogin={onLogin} />} />
+                <Route
+                  path="/products/manage"
+                  element={
+                    user && [Role.OWNER, Role.ADMIN, Role.STORE_STAFF].includes(user.role)
+                      ? <Navigate
+                          to={user.role === Role.STORE_STAFF ? '/staff/inventory' : '/admin/inventory'}
+                          replace
+                          state={{ catalogNotice: 'Product management is now handled through Inventory. Use Storefront Listings to publish items online.' }}
+                        />
+                      : <Navigate to="/login" replace />
+                  }
+                />
                 <Route path="/products/:id" element={<ProductDetail />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route

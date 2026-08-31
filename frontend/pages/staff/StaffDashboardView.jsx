@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import {
   getMyPermissions,
+  getInventory,
   getOrders,
-  getProducts,
   getReturns,
   getSellerChatUnreadCount,
 } from '../../services/api';
@@ -39,7 +39,7 @@ const StaffDashboardView = ({ user, onNavigate }) => {
     setPermissions(allowed);
     const [orderList, productList, returnList, unread] = await Promise.all([
       allowed.has('orders.view') ? getOrders().catch(() => []) : [],
-      allowed.has('inventory.view') || allowed.has('products.view') ? getProducts().catch(() => []) : [],
+      allowed.has('inventory.view') ? getInventory().catch(() => []) : [],
       allowed.has('returns.view') ? getReturns().catch(() => []) : [],
       allowed.has('chat.view') ? getSellerChatUnreadCount().catch(() => 0) : 0,
     ]);

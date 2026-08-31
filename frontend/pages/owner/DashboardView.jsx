@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 import {
   getDashboardStats,
+  getInventory,
   getOrders,
-  getProducts,
   getReturns,
   getSellerChatUnreadCount,
 } from '../../services/api';
@@ -71,7 +71,7 @@ const DashboardView = ({ onNavigate }) => {
     const [stats, orders, products, returns, unreadChats] = await Promise.all([
       getDashboardStats().catch(() => null),
       getOrders().catch(() => []),
-      getProducts().catch(() => []),
+      getInventory().catch(() => []),
       getReturns().catch(() => []),
       getSellerChatUnreadCount().catch(() => 0),
     ]);
@@ -190,7 +190,7 @@ const DashboardView = ({ onNavigate }) => {
           )}
         </SectionCard>
 
-        <SectionCard title="Inventory attention" description="Products nearest to operational risk." padded={false}>
+        <SectionCard title="Inventory attention" description="Inventory items nearest to operational risk." padded={false}>
           {operational.lowStock.length ? (
             <div className="divide-y divide-slate-100">
               {operational.lowStock.slice(0, 6).map((product) => (

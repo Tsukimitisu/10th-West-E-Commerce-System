@@ -2,7 +2,6 @@ import React from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/owner/AdminLayout';
 import DashboardView from './DashboardView';
-import ProductsView from './ProductsView';
 import InventoryView from './InventoryView';
 import OrdersView from './OrdersView';
 import CustomersView from './CustomersView';
@@ -24,15 +23,25 @@ const AdminDashboard = ({ user, onLogout }) => {
   if (!canAccessAdmin) return <Navigate to="/login" replace />;
 
   const isStaff = user?.role === 'store_staff';
-  const aliases = { categories: 'products', variants: 'products', shipments: 'orders', waybills: 'orders', refunds: 'returns', settings: 'content' };
   const segment = location.pathname.split('/').filter(Boolean)[1] || 'dashboard';
+  const aliases = { shipments: 'orders', waybills: 'orders', refunds: 'returns', settings: 'content' };
   const activeView = aliases[segment] || segment;
   const basePath = isStaff ? '/staff' : '/admin';
   const setActiveView = (view) => navigate(view === 'pos' ? '/pos' : `${basePath}/${view}`);
 
+  if (['products', 'categories', 'variants'].includes(segment)) {
+    return (
+      <Navigate
+        to={`${basePath}/inventory`}
+        replace
+        state={{ catalogNotice: 'Product management is now handled through Inventory. Use Storefront Listings to publish items online.' }}
+      />
+    );
+  }
+
   const views = {
     dashboard: isStaff ? <StaffDashboardView user={user} onNavigate={setActiveView} /> : <DashboardView onNavigate={setActiveView} />,
-    products: <ProductsView />, storefront: <StorefrontListingsView />, inventory: <InventoryView />, orders: <OrdersView />,
+    storefront: <StorefrontListingsView />, inventory: <InventoryView />, orders: <OrdersView />,
     customers: <CustomersView />, returns: <ReturnsView />, staff: <StaffView />,
     reviews: <ReviewsView />, reports: <ReportsView />, promotions: <PromotionsView />,
     banners: <BannersView />, content: <ContentView />, chat: <ChatView />,

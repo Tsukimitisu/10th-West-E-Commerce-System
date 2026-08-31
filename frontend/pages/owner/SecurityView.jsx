@@ -82,13 +82,13 @@ const SecurityView = () => {
 
   const roles = [
     { name: 'Admin', color: 'bg-red-500/10 text-orange-600 border-red-200', desc: 'Full system access', permsCount: 'All' },
-    { name: 'Manager', color: 'bg-blue-50 text-blue-700 border-blue-200', desc: 'Manage orders, products, staff', permsCount: '15' },
+    { name: 'Manager', color: 'bg-blue-50 text-blue-700 border-blue-200', desc: 'Manage orders, inventory, storefront listings and staff', permsCount: '15' },
     { name: 'Cashier', color: 'bg-green-50 text-green-700 border-green-200', desc: 'POS access, order processing', permsCount: '8' },
     { name: 'Viewer', color: 'bg-gray-900 text-gray-700 border-gray-700', desc: 'Read-only access to reports', permsCount: '3' },
   ];
 
   const permissionGroups = [
-    { group: 'Products', perms: ['products.view', 'products.create', 'products.edit', 'products.delete'] },
+    { group: 'Storefront Listings', perms: ['products.view', 'products.create', 'products.edit', 'products.delete'] },
     { group: 'Orders', perms: ['orders.view', 'orders.create', 'orders.edit', 'orders.cancel', 'orders.refund'] },
     { group: 'Inventory', perms: ['inventory.view', 'inventory.adjust', 'inventory.import'] },
     { group: 'Reports', perms: ['reports.view', 'reports.export'] },

@@ -149,7 +149,7 @@ const StorefrontListingsView = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs font-semibold text-slate-600"><tr>
-                <th className="px-4 py-3 text-left">Listing</th><th className="px-4 py-3 text-left">Inventory</th><th className="px-4 py-3 text-right">Store Price</th><th className="px-4 py-3 text-right">Online Price</th><th className="px-4 py-3 text-left">Visibility</th><th className="px-4 py-3 text-right">Action</th>
+                <th className="px-4 py-3 text-left">Listing</th><th className="px-4 py-3 text-left">Inventory</th><th className="px-4 py-3 text-right">Store Selling Price</th><th className="px-4 py-3 text-right">E-commerce Price</th><th className="px-4 py-3 text-left">Visibility</th><th className="px-4 py-3 text-right">Action</th>
               </tr></thead>
               <tbody className="divide-y divide-slate-100">{filtered.map((listing) => (
                 <tr key={listing.id} className="hover:bg-slate-50">
@@ -176,7 +176,7 @@ const StorefrontListingsView = () => {
           </label>
 
           {selectedInventory && <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-            {[['Part Number', selectedInventory.part_number], ['Product', selectedInventory.product_name || selectedInventory.name], ['Brand / Model', [selectedInventory.brand, selectedInventory.motorcycle_model].filter(Boolean).join(' · ') || 'Not set'], ['Category', selectedInventory.category_name || 'Uncategorized'], ['Store Price', `₱${Number(selectedInventory.store_selling_price).toFixed(2)}`], ['Online Price (+15%)', `₱${Number(selectedInventory.ecommerce_price).toFixed(2)}`], ['Available Stock', selectedInventory.stock_quantity], ['Box Location', selectedInventory.box_location || 'Not assigned']].map(([label, value]) => <div key={label}><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 font-semibold text-slate-900">{value}</p></div>)}
+            {[['Part Number', selectedInventory.part_number], ['Product', selectedInventory.product_name || selectedInventory.name], ['Brand / Model', [selectedInventory.brand, selectedInventory.motorcycle_model].filter(Boolean).join(' · ') || 'Not set'], ['Category', selectedInventory.category_name || 'Uncategorized'], ['Store Selling Price', `₱${Number(selectedInventory.store_selling_price).toFixed(2)}`], ['E-commerce Price (+15%)', `₱${Number(selectedInventory.ecommerce_price).toFixed(2)}`], ['Available Stock', selectedInventory.stock_quantity], ['Box Location', selectedInventory.box_location || 'Not assigned']].map(([label, value]) => <div key={label}><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 font-semibold text-slate-900">{value}</p></div>)}
           </div>}
 
           <label className="block text-xs font-semibold text-slate-700">E-commerce Description
