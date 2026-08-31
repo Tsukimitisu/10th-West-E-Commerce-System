@@ -4,7 +4,7 @@ import { sanitizeHttpUrlOrPath, sanitizePlainText, sanitizeRichText } from '../u
 
 const VISIBILITY = new Set(['draft', 'active', 'hidden', 'archived']);
 const FORBIDDEN_CORE_FIELDS = new Set([
-  'name', 'product_name', 'part_number', 'brand', 'motorcycle_model', 'category_id',
+  'name', 'product_name', 'part_number', 'brand', 'motorcycle_model', 'motorcycle_model_id', 'category_id', 'color',
   'stock_quantity', 'quantity', 'cost_price', 'buying_price', 'store_selling_price',
   'price', 'box_location', 'box_number',
 ]);
@@ -58,8 +58,9 @@ const normalizeListingInput = (body) => {
 const listingSelect = `
   SELECT l.id, l.inventory_item_id, l.ecommerce_description, l.visibility_status,
          l.is_featured, l.is_best_seller, l.is_new_arrival, l.created_at, l.updated_at,
-         p.part_number, p.name AS product_name, p.brand, p.motorcycle_model,
-         p.category_id, c.name AS category_name, p.store_selling_price,
+         p.part_number, p.name AS product_name, p.brand,
+         COALESCE(model.model_name, p.motorcycle_model) AS motorcycle_model,
+         p.motorcycle_model_id, p.color, p.store_selling_price,
          p.stock_quantity, p.reserved_stock, p.box_location, p.inventory_status,
          COALESCE(
            jsonb_agg(jsonb_build_object(
@@ -70,10 +71,10 @@ const listingSelect = `
          ) AS media
     FROM ecommerce_listings l
     JOIN products p ON p.id = l.inventory_item_id
-    LEFT JOIN categories c ON c.id = p.category_id
+    LEFT JOIN motorcycle_models model ON model.id = p.motorcycle_model_id
     LEFT JOIN ecommerce_listing_media m ON m.listing_id = l.id`;
 
-const listingGroup = ` GROUP BY l.id, p.id, c.name`;
+const listingGroup = ` GROUP BY l.id, p.id, model.model_name`;
 
 const mapListing = (row) => {
   const storePrice = resolveStoreSellingPrice(row) ?? 0;
@@ -101,7 +102,8 @@ export const getEcommerceListings = async (req, res) => {
     const search = String(req.query.q || '').trim();
     const result = await pool.query(
       `${listingSelect}
-       WHERE ($1 = '' OR p.part_number ILIKE $2 OR p.name ILIKE $2 OR p.brand ILIKE $2 OR p.motorcycle_model ILIKE $2)
+       WHERE ($1 = '' OR p.part_number ILIKE $2 OR p.name ILIKE $2 OR p.brand ILIKE $2
+              OR COALESCE(model.model_name, p.motorcycle_model) ILIKE $2 OR p.color ILIKE $2 OR p.box_location ILIKE $2)
        ${listingGroup}
        ORDER BY l.updated_at DESC`,
       [search, `%${search}%`]

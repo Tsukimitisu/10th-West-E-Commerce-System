@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Eye, EyeOff, ImagePlus, Package, Pencil, Plus, Search, Trash2, Video } from 'lucide-react';
 import PageHeader from '../../components/operations/PageHeader';
 import Modal from '../../components/owner/Modal';
@@ -11,6 +11,7 @@ import {
   uploadProductVideo,
 } from '../../services/api';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import InventoryPickerModal from '../../components/owner/InventoryPickerModal';
 
 const createForm = (listing) => ({
   inventory_item_id: listing?.inventory_item_id || '',
@@ -33,6 +34,7 @@ const StorefrontListingsView = () => {
   const [pendingFiles, setPendingFiles] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -47,11 +49,9 @@ const StorefrontListingsView = () => {
   useEffect(() => { load().catch(() => {}); }, []);
 
   const selectedInventory = inventory.find((item) => Number(item.id) === Number(form.inventory_item_id));
-  const listedInventoryIds = useMemo(() => new Set(listings.map((item) => Number(item.inventory_item_id))), [listings]);
-  const availableInventory = inventory.filter((item) => editing || !listedInventoryIds.has(Number(item.id)));
   const filtered = listings.filter((listing) => {
     const term = search.trim().toLowerCase();
-    return !term || [listing.part_number, listing.product_name, listing.brand, listing.motorcycle_model]
+    return !term || [listing.part_number, listing.product_name, listing.brand, listing.motorcycle_model, listing.color]
       .some((value) => String(value || '').toLowerCase().includes(term));
   });
 
@@ -139,7 +139,7 @@ const StorefrontListingsView = () => {
         <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative max-w-md flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search part number, product, model or brand" className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/15" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search part number, product, model, brand or color" className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/15" />
           </div>
           <p className="text-xs text-slate-500">Online price = Store price + 15%</p>
         </div>
@@ -168,15 +168,15 @@ const StorefrontListingsView = () => {
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Storefront Listing' : 'Add Storefront Listing'} size="3xl">
         <form onSubmit={submit} className="space-y-5">
-          <label className="block text-xs font-semibold text-slate-700">Inventory Item
-            <select disabled={Boolean(editing)} required value={form.inventory_item_id} onChange={(event) => setForm((current) => ({ ...current, inventory_item_id: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-500 disabled:bg-slate-100">
-              <option value="">Select by part number, product, model or brand</option>
-              {availableInventory.map((item) => <option key={item.id} value={item.id}>{item.part_number} — {item.product_name || item.name} · {item.motorcycle_model || item.brand || 'No model'}</option>)}
-            </select>
-          </label>
+          <div className="rounded-xl border border-slate-200 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventory Item</p><p className="mt-1 text-sm font-semibold text-slate-900">{selectedInventory ? `${selectedInventory.part_number} — ${selectedInventory.product_name || selectedInventory.name}` : 'No inventory item selected'}</p><p className="mt-1 text-xs text-slate-500">Search Inventory by part number, model, brand, color or Box location.</p></div>
+              {!editing && <button type="button" onClick={() => setPickerOpen(true)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"><Search size={15} /> {selectedInventory ? 'Change Inventory Item' : 'Choose Inventory Item'}</button>}
+            </div>
+          </div>
 
           {selectedInventory && <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-            {[['Part Number', selectedInventory.part_number], ['Product', selectedInventory.product_name || selectedInventory.name], ['Brand / Model', [selectedInventory.brand, selectedInventory.motorcycle_model].filter(Boolean).join(' · ') || 'Not set'], ['Category', selectedInventory.category_name || 'Uncategorized'], ['Store Selling Price', `₱${Number(selectedInventory.store_selling_price).toFixed(2)}`], ['E-commerce Price (+15%)', `₱${Number(selectedInventory.ecommerce_price).toFixed(2)}`], ['Available Stock', selectedInventory.stock_quantity], ['Box Location', selectedInventory.box_location || 'Not assigned']].map(([label, value]) => <div key={label}><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 font-semibold text-slate-900">{value}</p></div>)}
+            {[['Part Number', selectedInventory.part_number], ['Product', selectedInventory.product_name || selectedInventory.name], ['Brand', selectedInventory.brand || 'Not set'], ['Motorcycle Model', selectedInventory.motorcycle_model || 'Not set'], ['Color', selectedInventory.color || 'No color specified'], ['Store Selling Price', `₱${Number(selectedInventory.store_selling_price).toFixed(2)}`], ['E-commerce Price (+15%)', `₱${Number(selectedInventory.ecommerce_price).toFixed(2)}`], ['Available Stock', selectedInventory.stock_quantity], ['Box Location', selectedInventory.box_location || 'Not assigned'], ['Inventory Status', selectedInventory.inventory_status || 'active']].map(([label, value]) => <div key={label}><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 font-semibold text-slate-900">{value}</p></div>)}
           </div>}
 
           <label className="block text-xs font-semibold text-slate-700">E-commerce Description
@@ -202,6 +202,14 @@ const StorefrontListingsView = () => {
           <div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={() => setModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button disabled={saving} type="submit" className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">{saving ? 'Saving and uploading…' : 'Save Listing'}</button></div>
         </form>
       </Modal>
+
+      <InventoryPickerModal
+        open={pickerOpen}
+        items={inventory}
+        listings={listings}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(item) => { setForm((current) => ({ ...current, inventory_item_id: item.id })); setPickerOpen(false); setError(''); }}
+      />
     </div>
   );
 };
