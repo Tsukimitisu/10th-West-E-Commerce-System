@@ -1,6 +1,78 @@
 import pool from '../config/database.js';
 import { emitStockUpdate, emitLowStockAlert } from '../socket.js';
 import { mutateInventory } from '../services/inventory.js';
+import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
+
+const INVENTORY_STATUSES = new Set(['active', 'inactive', 'discontinued']);
+const asOptionalText = (value, maxLength) => {
+  const normalized = String(value ?? '').trim();
+  return normalized ? normalized.slice(0, maxLength) : null;
+};
+const asMoney = (value, field) => {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) {
+    throw Object.assign(new Error(`${field} must be a non-negative number.`), { status: 400 });
+  }
+  return Math.round((number + Number.EPSILON) * 100) / 100;
+};
+const asStock = (value, field) => {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0) {
+    throw Object.assign(new Error(`${field} must be a non-negative integer.`), { status: 400 });
+  }
+  return number;
+};
+const mapInventoryItem = (product) => {
+  const storeSellingPrice = resolveStoreSellingPrice(product) ?? 0;
+  return {
+    ...product,
+    product_name: product.name,
+    partNumber: product.part_number,
+    store_selling_price: storeSellingPrice,
+    ecommerce_price: calculateEcommercePrice(storeSellingPrice),
+    cost_price: Number(product.buying_price || 0),
+    quantity: Number(product.stock_quantity || 0),
+    minimum_stock: Number(product.low_stock_threshold || 0),
+    box_location: product.box_location || product.box_number || null,
+    stock_quantity: Number(product.stock_quantity || 0),
+    reserved_stock: Number(product.reserved_stock || 0),
+    damaged_stock: Number(product.damaged_stock || 0),
+    low_stock_threshold: Number(product.low_stock_threshold || 0),
+    buying_price: Number(product.buying_price || 0),
+    price: storeSellingPrice,
+    sale_price: product.sale_price == null ? null : Number(product.sale_price),
+  };
+};
+
+const normalizeInventoryInput = (body, { partial = false } = {}) => {
+  const productName = asOptionalText(body.product_name ?? body.name, 255);
+  const partNumber = asOptionalText(body.part_number ?? body.partNumber, 100)?.toUpperCase() || null;
+  if (!partial && !productName) throw Object.assign(new Error('Product name is required.'), { status: 400 });
+  if (!partial && !partNumber) throw Object.assign(new Error('Part number is required.'), { status: 400 });
+  const inventoryStatus = String(body.status ?? body.inventory_status ?? 'active').trim().toLowerCase();
+  if (!INVENTORY_STATUSES.has(inventoryStatus)) {
+    throw Object.assign(new Error('Status must be active, inactive, or discontinued.'), { status: 400 });
+  }
+  const categoryValue = body.category_id ?? body.categoryId;
+  const categoryId = categoryValue === '' || categoryValue == null ? null : Number(categoryValue);
+  if (categoryId !== null && (!Number.isInteger(categoryId) || categoryId <= 0)) {
+    throw Object.assign(new Error('Category is invalid.'), { status: 400 });
+  }
+  return {
+    partNumber,
+    productName,
+    brand: asOptionalText(body.brand, 100),
+    motorcycleModel: asOptionalText(body.motorcycle_model ?? body.motorcycleModel, 160),
+    categoryId,
+    storeSellingPrice: asMoney(body.store_selling_price ?? body.storeSellingPrice ?? body.price, 'Store selling price'),
+    costPrice: asMoney(body.cost_price ?? body.buying_price ?? body.costPrice ?? 0, 'Cost price'),
+    quantity: partial ? undefined : asStock(body.quantity ?? body.stock_quantity ?? 0, 'Quantity'),
+    minimumStock: asStock(body.minimum_stock ?? body.low_stock_threshold ?? 0, 'Minimum stock'),
+    boxLocation: asOptionalText(body.box_location ?? body.boxNumber ?? body.box_number, 100),
+    description: asOptionalText(body.description, 10000),
+    inventoryStatus,
+  };
+};
 
 export const STOCK_ADJUSTMENT_REASONS = Object.freeze({
   add: Object.freeze(['restocking', 'returned', 'correction_add', 'supplier_delivery', 'initial_stock']),
@@ -25,6 +97,7 @@ const invalidReasonMessage = (type) => (
 // Get all inventory with low stock alerts
 export const getInventory = async (req, res) => {
   try {
+    const search = String(req.query.q || '').trim();
     const result = await pool.query(`
       SELECT 
         p.*,
@@ -36,19 +109,17 @@ export const getInventory = async (req, res) => {
         END as stock_status
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
-      ORDER BY p.stock_quantity ASC, p.name ASC
-    `);
+      WHERE ($1 = '' OR
+        p.part_number ILIKE $2 OR p.name ILIKE $2 OR p.brand ILIKE $2 OR
+        p.motorcycle_model ILIKE $2 OR c.name ILIKE $2 OR p.box_location ILIKE $2 OR
+        p.barcode ILIKE $2 OR p.sku ILIKE $2)
+      ORDER BY
+        CASE WHEN $1 <> '' AND LOWER(p.part_number) LIKE LOWER($1) || '%' THEN 0 ELSE 1 END,
+        p.stock_quantity ASC, p.name ASC
+      LIMIT 500
+    `, [search, `%${search}%`]);
 
-    res.json(result.rows.map(product => ({
-      ...product,
-      stock_quantity: parseInt(product.stock_quantity),
-      reserved_stock: parseInt(product.reserved_stock || 0, 10),
-      damaged_stock: parseInt(product.damaged_stock || 0, 10),
-      low_stock_threshold: parseInt(product.low_stock_threshold),
-      price: parseFloat(product.price),
-      buying_price: parseFloat(product.buying_price || 0),
-      sale_price: product.sale_price ? parseFloat(product.sale_price) : null
-    })));
+    res.json(result.rows.map(mapInventoryItem));
   } catch (error) {
     console.error('Get inventory error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -208,6 +279,122 @@ export const updateStock = async (req, res) => {
     res.status(500).json({ message: 'Failed to update stock' });
   } finally {
     client.release();
+  }
+};
+
+export const findInventoryItem = async (req, res) => {
+  const code = String(req.query.code || req.query.q || '').trim();
+  if (!code) return res.status(400).json({ message: 'Part number or barcode is required.' });
+  try {
+    const result = await pool.query(
+      `SELECT p.*, c.name AS category_name
+         FROM products p
+         LEFT JOIN categories c ON c.id = p.category_id
+        WHERE LOWER(p.part_number) = LOWER($1)
+           OR LOWER(COALESCE(p.barcode, '')) = LOWER($1)
+           OR LOWER(COALESCE(p.sku, '')) = LOWER($1)
+        ORDER BY CASE WHEN LOWER(p.part_number) = LOWER($1) THEN 0 ELSE 1 END
+        LIMIT 1`,
+      [code]
+    );
+    if (!result.rowCount) {
+      return res.status(404).json({
+        message: 'Part Number Not Found',
+        code: 'PART_NUMBER_NOT_FOUND',
+        can_create: true,
+        part_number: code.toUpperCase(),
+      });
+    }
+    return res.json(mapInventoryItem(result.rows[0]));
+  } catch (error) {
+    console.error('Inventory lookup failed:', { code: error.code, message: error.message });
+    return res.status(500).json({ message: 'Inventory lookup failed.' });
+  }
+};
+
+export const createInventoryItem = async (req, res) => {
+  let client;
+  try {
+    const item = normalizeInventoryInput(req.body || {});
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const duplicate = await client.query(
+      `SELECT id FROM products WHERE LOWER(part_number) = LOWER($1) LIMIT 1`,
+      [item.partNumber]
+    );
+    if (duplicate.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Part number already exists.', code: 'DUPLICATE_PART_NUMBER' });
+    }
+    const result = await client.query(
+      `INSERT INTO products (
+         part_number, name, brand, motorcycle_model, category_id,
+         store_selling_price, price, buying_price, stock_quantity,
+         low_stock_threshold, box_location, box_number, description,
+         inventory_status, status, is_deleted
+       ) VALUES ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9,$10,$10,$11,$12,'draft',false)
+       RETURNING *`,
+      [item.partNumber, item.productName, item.brand, item.motorcycleModel, item.categoryId,
+        item.storeSellingPrice, item.costPrice, item.quantity, item.minimumStock,
+        item.boxLocation, item.description, item.inventoryStatus]
+    );
+    const created = result.rows[0];
+    if (item.quantity > 0) {
+      await client.query(
+        `INSERT INTO stock_adjustments (product_id, quantity_change, reason, notes, adjusted_by, status)
+         VALUES ($1,$2,'initial_stock','Initial inventory quantity',$3,'approved')`,
+        [created.id, item.quantity, req.user.id]
+      );
+      await client.query(
+        `INSERT INTO stock_movements (
+           product_id, quantity_delta, stock_before, stock_after, reason,
+           reference_type, created_by, metadata
+         ) VALUES ($1,$2,0,$2,'stock_received','inventory_create',$3,$4::jsonb)`,
+        [created.id, item.quantity, req.user.id, JSON.stringify({ reason: 'initial_stock' })]
+      );
+    }
+    await client.query('COMMIT');
+    emitStockUpdate({ product_id: created.id, name: created.name, stock_quantity: item.quantity, previous_stock: 0, adjustment: item.quantity });
+    return res.status(201).json({ message: 'Inventory item created.', item: mapInventoryItem(created) });
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    console.error('Create inventory item failed:', { code: error.code, message: error.message });
+    if (error.code === '23505') return res.status(409).json({ message: 'Part number already exists.', code: 'DUPLICATE_PART_NUMBER' });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : 'Inventory item could not be created.' });
+  } finally {
+    if (client) client.release();
+  }
+};
+
+export const updateInventoryItem = async (req, res) => {
+  try {
+    const productId = Number(req.params.productId);
+    if (!Number.isInteger(productId) || productId <= 0) return res.status(400).json({ message: 'Invalid inventory item ID.' });
+    const item = normalizeInventoryInput(req.body || {}, { partial: true });
+    if (!item.productName || !item.partNumber) return res.status(400).json({ message: 'Product name and part number are required.' });
+    const result = await pool.query(
+      `UPDATE products SET
+         part_number=$1, name=$2, brand=$3, motorcycle_model=$4, category_id=$5,
+         store_selling_price=$6, price=$6, buying_price=$7, low_stock_threshold=$8,
+         box_location=$9, box_number=$9, description=$10, inventory_status=$11, updated_at=NOW()
+       WHERE id=$12 AND NOT EXISTS (
+         SELECT 1 FROM products duplicate
+          WHERE duplicate.id <> $12 AND LOWER(duplicate.part_number) = LOWER($1)
+       ) RETURNING *`,
+      [item.partNumber, item.productName, item.brand, item.motorcycleModel, item.categoryId,
+        item.storeSellingPrice, item.costPrice, item.minimumStock, item.boxLocation,
+        item.description, item.inventoryStatus, productId]
+    );
+    if (!result.rowCount) {
+      const exists = await pool.query('SELECT 1 FROM products WHERE id=$1', [productId]);
+      return res.status(exists.rowCount ? 409 : 404).json({
+        message: exists.rowCount ? 'Part number already exists.' : 'Inventory item not found.',
+      });
+    }
+    return res.json({ message: 'Inventory item updated.', item: mapInventoryItem(result.rows[0]) });
+  } catch (error) {
+    console.error('Update inventory item failed:', { code: error.code, message: error.message });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : 'Inventory item could not be updated.' });
   }
 };
 
@@ -467,7 +654,7 @@ export const batchReceiveStock = async (req, res) => {
         variantId: item.variant_id == null ? null : Number(item.variant_id),
         quantity: Number(item.quantity),
         adjustmentType: 'add',
-        reason: 'received',
+        reason: 'supplier_delivery',
         referenceType: 'batch_receive',
         actorId: req.user.id,
         ipAddress: req.clientIp,

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { getInventory, getStockAdjustments, getLowStockProducts, adjustStock } from '../../services/api';
-import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, TrendingDown, History, Plus, Minus, ScanBarcode } from 'lucide-react';
+import { createInventoryItem, getCategories, getInventory, getStockAdjustments, getLowStockProducts, adjustStock, updateInventoryItem } from '../../services/api';
+import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Search, Package, TrendingUp, History, Plus, ScanBarcode, Pencil } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import ReceiveStock from '../../components/owner/ReceiveStock';
 import { useSocketEvent } from '../../context/SocketContext';
 import PageHeader from '../../components/operations/PageHeader';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import InventoryItemForm from '../../components/owner/InventoryItemForm';
 
 const STOCK_ADJUSTMENT_REASONS = Object.freeze({
   add: [
@@ -32,6 +33,7 @@ const InventoryView = () => {
   const [products, setProducts] = useState([]);
   const [adjustments, setAdjustments] = useState([]);
   const [lowStock, setLowStock] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('stock');
@@ -41,14 +43,17 @@ const InventoryView = () => {
 
   const [adjLoading, setAdjLoading] = useState(false);
   const [adjError, setAdjError] = useState('');
+  const [itemModal, setItemModal] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
 
   const fetchData = async () => {
     try {
-      const [p, a, ls] = await Promise.all([getInventory(), getStockAdjustments(), getLowStockProducts()]);
+      const [p, a, ls, categoryRows] = await Promise.all([getInventory(), getStockAdjustments(), getLowStockProducts(), getCategories()]);
       setProducts(Array.isArray(p) ? p : []);
       setAdjustments(Array.isArray(a) ? a : []);
       // getLowStockProducts returns { count, products } or an array
       setLowStock(Array.isArray(ls) ? ls : (ls?.products || []));
+      setCategories(Array.isArray(categoryRows) ? categoryRows : []);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -87,7 +92,7 @@ const InventoryView = () => {
   const totalStock = products.reduce((s, p) => s + p.stock_quantity, 0);
   const reservedStock = products.reduce((s, p) => s + Number(p.reserved_stock || 0), 0);
   const damagedStock = products.reduce((s, p) => s + Number(p.damaged_stock || 0), 0);
-  const totalValue = products.reduce((s, p) => s + (p.stock_quantity * p.price), 0);
+  const totalValue = products.reduce((s, p) => s + (p.stock_quantity * Number(p.cost_price ?? p.buying_price ?? 0)), 0);
   const outOfStock = products.filter(p => p.stock_quantity === 0).length;
 
   const filtered = products.filter(p => {
@@ -96,8 +101,20 @@ const InventoryView = () => {
       || String(p.name || '').toLowerCase().includes(term)
       || String(p.partNumber || p.part_number || '').toLowerCase().includes(term)
       || String(p.sku || '').toLowerCase().includes(term)
-      || String(p.barcode || '').toLowerCase().includes(term);
+      || String(p.barcode || '').toLowerCase().includes(term)
+      || String(p.brand || '').toLowerCase().includes(term)
+      || String(p.motorcycle_model || '').toLowerCase().includes(term)
+      || String(p.category_name || '').toLowerCase().includes(term)
+      || String(p.box_location || '').toLowerCase().includes(term);
   });
+
+  const saveInventoryItem = async (payload) => {
+    if (editingItem) await updateInventoryItem(editingItem.id, payload);
+    else await createInventoryItem(payload);
+    setItemModal(false);
+    setEditingItem(null);
+    await fetchData();
+  };
 
   const tabs = [
     { id: 'stock', label: 'Stock Levels', icon: Boxes, count: products.length },
@@ -110,7 +127,12 @@ const InventoryView = () => {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Catalog operations" title="Inventory management" description="Monitor available, reserved, and damaged stock; receive deliveries and record accountable adjustments." />
+      <PageHeader
+        eyebrow="Inventory source of truth"
+        title="Inventory management"
+        description="Manage official part data, Box locations, store pricing and stock used by POS and the online catalog."
+        actions={<button type="button" onClick={() => { setEditingItem(null); setItemModal(true); }} className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"><Plus size={16} /> Add Inventory Item</button>}
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 ">
@@ -154,7 +176,7 @@ const InventoryView = () => {
           <div className="p-3 border-b border-white/10">
             <div className="relative max-w-xs">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" placeholder="Search name, part number, SKU, or barcode" value={search} onChange={e => setSearch(e.target.value)}
+              <input type="text" placeholder="Search part number, name, model, brand, category, or Box" value={search} onChange={e => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-1.5 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
             </div>
             <p className="mt-2 text-xs text-gray-400">
@@ -168,12 +190,12 @@ const InventoryView = () => {
               <thead><tr className="border-b border-slate-200 bg-slate-100">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Product</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700">Current Stock</th>
-                <th className="hidden px-4 py-3 text-right text-xs font-semibold text-slate-700 lg:table-cell">Reserved</th>
-                <th className="hidden px-4 py-3 text-right text-xs font-semibold text-slate-700 lg:table-cell">Damaged</th>
+                <th className="hidden px-4 py-3 text-left text-xs font-semibold text-slate-700 lg:table-cell">Box Location</th>
+                <th className="hidden px-4 py-3 text-right text-xs font-semibold text-slate-700 lg:table-cell">Store Price</th>
                 <th className="hidden px-4 py-3 text-right text-xs font-semibold text-slate-700 sm:table-cell">Threshold</th>
                 <th className="hidden px-4 py-3 text-left text-xs font-semibold text-slate-700 md:table-cell">Status</th>
-                <th className="hidden px-4 py-3 text-right text-xs font-semibold text-slate-700 md:table-cell">Value</th>
-                <th className="w-24 px-4 py-3 text-right text-xs font-semibold text-slate-700">Adjust</th>
+                <th className="hidden px-4 py-3 text-right text-xs font-semibold text-slate-700 md:table-cell">Online Price</th>
+                <th className="w-36 px-4 py-3 text-right text-xs font-semibold text-slate-700">Actions</th>
               </tr></thead>
               <tbody className="divide-y divide-white/10">
                 {filtered.map(p => {
@@ -186,7 +208,7 @@ const InventoryView = () => {
                           <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-700">
                             {p.image ? <img src={resolveProductImageUrl(p.image)} alt="" onError={handleProductImageError} className="w-full h-full object-cover" /> : <Package size={14} className="m-auto text-gray-400 mt-1.5" />}
                           </div>
-                          <div><p className="font-medium text-white text-sm">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.sku || p.partNumber || '-'}</p></div>
+                          <div><p className="font-medium text-white text-sm">{p.product_name || p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.part_number || '-'}</p><p className="text-[10px] text-gray-500">{p.motorcycle_model || p.brand || 'Model not set'}</p></div>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -197,17 +219,20 @@ const InventoryView = () => {
                           <span className={`font-bold ${status === 'out' ? 'text-red-500' : status === 'low' ? 'text-amber-600' : 'text-white'}`}>{p.stock_quantity}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right text-gray-300 hidden lg:table-cell">{p.reserved_stock || 0}</td>
-                      <td className="px-4 py-3 text-right text-gray-300 hidden lg:table-cell">{p.damaged_stock || 0}</td>
+                      <td className="px-4 py-3 text-left text-gray-300 hidden lg:table-cell">{p.box_location || 'Not assigned'}</td>
+                      <td className="px-4 py-3 text-right text-gray-300 hidden lg:table-cell">₱{Number(p.store_selling_price || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-right text-gray-400 hidden sm:table-cell">{p.low_stock_threshold}</td>
                       <td className="px-4 py-3 hidden md:table-cell">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${status === 'out' ? 'bg-red-500/10 text-red-500' : status === 'low' ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600'}`}>
                           {status === 'out' ? 'Out of Stock' : status === 'low' ? 'Low Stock' : 'In Stock'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right font-medium text-white hidden md:table-cell">₱{(p.stock_quantity * p.price).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right font-medium text-white hidden md:table-cell">₱{Number(p.ecommerce_price || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-right">
-                        <button onClick={() => openAdjust(p)} className="px-2.5 py-1 bg-gray-900 hover:bg-gray-100 border border-gray-700 rounded-lg text-xs font-medium text-gray-600 transition-colors">Adjust</button>
+                        <div className="flex justify-end gap-1.5">
+                          <button onClick={() => { setEditingItem(p); setItemModal(true); }} className="inline-flex items-center gap-1 rounded-lg border border-gray-700 bg-gray-900 px-2.5 py-1 text-xs font-medium text-gray-300 hover:bg-gray-700"><Pencil size={12} /> Edit</button>
+                          <button onClick={() => openAdjust(p)} className="rounded-lg bg-orange-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-700">Adjust</button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -351,6 +376,16 @@ const InventoryView = () => {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={itemModal} onClose={() => { setItemModal(false); setEditingItem(null); }} title={editingItem ? `Edit Inventory — ${editingItem.part_number}` : 'Add Inventory Item'} size="2xl">
+        <InventoryItemForm
+          key={editingItem?.id || 'new'}
+          initialItem={editingItem}
+          categories={categories}
+          onSubmit={saveInventoryItem}
+          onCancel={() => { setItemModal(false); setEditingItem(null); }}
+        />
       </Modal>
     </div>
   );

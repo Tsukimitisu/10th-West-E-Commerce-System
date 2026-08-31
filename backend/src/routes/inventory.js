@@ -7,7 +7,10 @@ import {
   getStockAdjustments,
   createStockAdjustment,
   batchReceiveStock,
-  getStockMovements
+  getStockMovements,
+  findInventoryItem,
+  createInventoryItem,
+  updateInventoryItem,
 } from '../controllers/inventoryController.js';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 
@@ -18,6 +21,9 @@ router.get('/', authenticateToken, requireRole('admin', 'super_admin', 'owner', 
 router.get('/low-stock', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.view'), getLowStockProducts);
 router.get('/adjustments', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.view'), getStockAdjustments);
 router.get('/movements', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.view'), getStockMovements);
+router.get('/lookup', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.view'), findInventoryItem);
+router.post('/items', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('products.manage'), createInventoryItem);
+router.put('/items/:productId', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('products.manage'), updateInventoryItem);
 router.post('/adjustments', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.adjust'), createStockAdjustment);
 router.put('/:productId', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.adjust'), updateStock);
 router.post('/bulk-update', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.adjust'), bulkUpdateStock);

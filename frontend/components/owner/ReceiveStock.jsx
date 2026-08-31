@@ -1,7 +1,8 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
 import { ScanBarcode, Search, X, Plus, Minus, Trash2, Package, CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react';
-import { batchReceiveStock } from '../../services/api';
+import { batchReceiveStock, createInventoryItem, findInventoryItem, getCategories } from '../../services/api';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import InventoryItemForm from './InventoryItemForm';
 
 const ReceiveStock = ({ products, onComplete, onBack }) => {
   const [scanInput, setScanInput] = useState('');
@@ -11,12 +12,18 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [result, setResult] = useState(null);
+  const [unknownPartNumber, setUnknownPartNumber] = useState('');
+  const [categories, setCategories] = useState([]);
   const inputRef = useRef(null);
 
   // Auto-focus the scan input
   useEffect(() => {
     if (!result) inputRef.current?.focus();
   }, [cart, result]);
+
+  useEffect(() => {
+    getCategories().then((items) => setCategories(Array.isArray(items) ? items : [])).catch(() => setCategories([]));
+  }, []);
 
   const findProduct = (code) => {
     const term = code.trim().toLowerCase();
@@ -29,13 +36,31 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
     );
   };
 
-  const handleScan = (e) => {
+  const handleScan = async (e) => {
     e.preventDefault();
     setScanError('');
-    const product = findProduct(scanInput);
+    setUnknownPartNumber('');
+    const code = scanInput.trim();
+    if (!code) return;
+    let product = findProduct(code);
 
     if (!product) {
-      setScanError(`No product found for "${scanInput}"`);
+      try {
+        product = await findInventoryItem(code);
+      } catch (error) {
+        if (error?.code === 'PART_NUMBER_NOT_FOUND' || /not found/i.test(error?.message || '')) {
+          setScanError('Part Number Not Found');
+          setUnknownPartNumber(code.toUpperCase());
+          return;
+        }
+        setScanError(error?.message || 'Inventory lookup failed.');
+        return;
+      }
+    }
+
+    if (!product) {
+      setScanError('Part Number Not Found');
+      setUnknownPartNumber(code.toUpperCase());
       return;
     }
 
@@ -52,6 +77,20 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
     }
 
     setScanInput('');
+  };
+
+  const createUnknownItem = async (payload) => {
+    const created = await createInventoryItem(payload);
+    setUnknownPartNumber('');
+    setScanError('');
+    setScanInput('');
+    onComplete?.();
+    setResult({
+      success_count: 1,
+      total_items: 1,
+      failed_count: 0,
+      results: [{ success: true, name: created.product_name || created.name, quantity_added: created.quantity, new_stock: created.quantity }],
+    });
   };
 
   const updateQuantity = (productId, newQty) => {
@@ -206,6 +245,22 @@ const ReceiveStock = ({ products, onComplete, onBack }) => {
           Barcode field/search only; camera scanner integration is not configured. Enter or scan a product barcode if supported by your device.
         </p>
       </div>
+
+      {unknownPartNumber && (
+        <div className="rounded-xl border border-amber-300 bg-white p-5">
+          <div className="mb-4">
+            <p className="font-semibold text-slate-950">Part Number Not Found</p>
+            <p className="mt-1 text-sm text-slate-600">Create the inventory master record for <span className="font-mono font-semibold">{unknownPartNumber}</span>. Rack is not used; assign a Box Location if known.</p>
+          </div>
+          <InventoryItemForm
+            key={unknownPartNumber}
+            initialPartNumber={unknownPartNumber}
+            categories={categories}
+            onSubmit={createUnknownItem}
+            onCancel={() => setUnknownPartNumber('')}
+          />
+        </div>
+      )}
 
       {/* Cart / Items List */}
       {cart.length > 0 && (

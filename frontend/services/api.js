@@ -4840,7 +4840,7 @@ export const uploadProfileAvatar = async (file) => {
 
 // ==================== INVENTORY ====================
 
-export const getInventory = async () => {
+export const getInventory = async (search = '') => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase
       .from('products')
@@ -4861,12 +4861,14 @@ export const getInventory = async () => {
       stock_status: p.stock_quantity === 0 ? 'out_of_stock' : p.stock_quantity <= p.low_stock_threshold ? 'low_stock' : 'in_stock',
     }));
   }
-  const data = await authenticatedFetch(`${API_URL}/inventory`);
+  const query = String(search || '').trim();
+  const data = await authenticatedFetch(`${API_URL}/inventory${query ? `?q=${encodeURIComponent(query)}` : ''}`);
   return data.map((p) => ({
     ...p,
     partNumber: p.part_number,
     buyingPrice: p.buying_price,
-    boxNumber: p.box_number,
+    boxNumber: p.box_location || p.box_number,
+    box_location: p.box_location || p.box_number,
   }));
 };
 
@@ -4925,8 +4927,49 @@ export const bulkUpdateStock = async (updates) => {
 export const batchReceiveStock = async (items, notes) => {
   return await authenticatedFetch(`${API_URL}/inventory/batch-receive`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
     body: JSON.stringify({ items, notes }),
   });
+};
+
+export const findInventoryItem = async (code) => authenticatedFetch(
+  `${API_URL}/inventory/lookup?code=${encodeURIComponent(String(code || '').trim())}`
+);
+
+export const createInventoryItem = async (item) => {
+  const data = await authenticatedFetch(`${API_URL}/inventory/items`, {
+    method: 'POST',
+    body: JSON.stringify(item),
+  });
+  return data.item;
+};
+
+export const updateInventoryItem = async (productId, item) => {
+  const data = await authenticatedFetch(`${API_URL}/inventory/items/${productId}`, {
+    method: 'PUT',
+    body: JSON.stringify(item),
+  });
+  return data.item;
+};
+
+export const getEcommerceListings = async (search = '') => authenticatedFetch(
+  `${API_URL}/ecommerce-listings${search ? `?q=${encodeURIComponent(search)}` : ''}`
+);
+
+export const createEcommerceListing = async (listing) => {
+  const data = await authenticatedFetch(`${API_URL}/ecommerce-listings`, {
+    method: 'POST',
+    body: JSON.stringify(listing),
+  });
+  return data.listing;
+};
+
+export const updateEcommerceListing = async (listingId, listing) => {
+  const data = await authenticatedFetch(`${API_URL}/ecommerce-listings/${listingId}`, {
+    method: 'PUT',
+    body: JSON.stringify(listing),
+  });
+  return data.listing;
 };
 
 // ==================== REPORTS ====================
