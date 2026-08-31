@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import pool from '../config/database.js';
 import { isDatabaseConnectivityError } from '../services/supabaseRest.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
+import { calculateEcommercePrice } from '../services/catalogPricing.js';
 
 const toPositiveInt = (value) => {
   const parsed = Number(value);
@@ -280,12 +281,14 @@ export const getCart = async (req, res) => {
 
     const items = await pool.query(
       `SELECT ci.id, ci.cart_id, ci.product_id, ci.variant_id, ci.quantity,
-              p.name, p.price, p.sale_price, p.is_on_sale, p.image, p.status,
+              p.name, COALESCE(p.store_selling_price, p.price) AS store_selling_price,
+              p.image, p.inventory_status, el.visibility_status,
               pv.variant_type, pv.variant_value, pv.sku AS variant_sku, pv.image_url AS variant_image,
-              COALESCE(pv.price, CASE WHEN pv.id IS NOT NULL THEN p.price + pv.price_adjustment ELSE p.price END) AS effective_price,
+              COALESCE(pv.price, CASE WHEN pv.id IS NOT NULL THEN COALESCE(p.store_selling_price, p.price) + pv.price_adjustment ELSE COALESCE(p.store_selling_price, p.price) END) AS effective_store_price,
               COALESCE(pv.stock_quantity - pv.reserved_stock, p.stock_quantity - p.reserved_stock) AS available_stock
        FROM cart_items ci
        JOIN products p ON ci.product_id = p.id
+       LEFT JOIN ecommerce_listings el ON el.inventory_item_id = p.id
        LEFT JOIN product_variants pv ON pv.id = ci.variant_id AND pv.product_id = ci.product_id
        WHERE ci.cart_id = $1
        ORDER BY ci.id ASC`,
@@ -300,12 +303,12 @@ export const getCart = async (req, res) => {
         variant_id: item.variant_id,
         quantity: item.quantity,
         available_stock: Number(item.available_stock),
-        is_available: item.status === 'active' && Number(item.available_stock) >= Number(item.quantity),
-        warning: item.status !== 'active' ? 'Product is unavailable' : (Number(item.available_stock) < Number(item.quantity) ? 'Quantity exceeds available stock' : null),
+        is_available: item.inventory_status === 'active' && item.visibility_status === 'active' && Number(item.available_stock) >= Number(item.quantity),
+        warning: item.inventory_status !== 'active' || item.visibility_status !== 'active' ? 'Product is unavailable' : (Number(item.available_stock) < Number(item.quantity) ? 'Quantity exceeds available stock' : null),
         product: {
           id: item.product_id,
           name: item.name,
-          price: parseFloat(item.effective_price),
+          price: calculateEcommercePrice(item.effective_store_price),
           image: item.variant_image || item.image,
           stock_quantity: Number(item.available_stock),
         },
@@ -349,11 +352,12 @@ export const addToCart = async (req, res) => {
   try {
     await withCartTransaction(req, async (client, cart) => {
       const productResult = await client.query(
-        `SELECT id, stock_quantity, reserved_stock,
-                EXISTS (SELECT 1 FROM product_variants WHERE product_id = products.id) AS has_variants
-         FROM products
-         WHERE id = $1 AND status = 'active' AND COALESCE(is_deleted, false) = false
-         FOR UPDATE`,
+          `SELECT p.id, p.stock_quantity, p.reserved_stock,
+                 EXISTS (SELECT 1 FROM product_variants WHERE product_id = p.id) AS has_variants
+           FROM products p
+           JOIN ecommerce_listings el ON el.inventory_item_id = p.id AND el.visibility_status='active'
+           WHERE p.id = $1 AND p.inventory_status = 'active' AND COALESCE(p.is_deleted, false) = false
+           FOR UPDATE OF p`,
         [productId]
       );
 

@@ -12,6 +12,7 @@ import { calculateInternalShippingQuote } from '../services/shipping/internalShi
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
 import { normalizeCheckoutAddress, resolveCheckoutAddress } from '../utils/checkoutAddress.js';
 import { commitCodReservations } from './orderWorkflowController.js';
+import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
 
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
@@ -106,17 +107,21 @@ const loadAndReserveItems = async (client, items, expiresAt) => {
   let subtotal = 0;
   for (const item of items) {
     const productResult = await client.query(
-      `SELECT p.*, EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id) AS has_variants
-       FROM products p WHERE p.id = $1 AND COALESCE(p.is_deleted, false) = false FOR UPDATE`,
+      `SELECT p.*, el.visibility_status,
+              EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id) AS has_variants
+       FROM products p
+       JOIN ecommerce_listings el ON el.inventory_item_id = p.id
+       WHERE p.id = $1 AND COALESCE(p.is_deleted, false) = false FOR UPDATE OF p`,
       [item.product_id]
     );
     const product = productResult.rows[0];
-    if (!product || product.status !== 'active') throw fail(400, `Product #${item.product_id} is not available.`);
+    if (!product || product.inventory_status !== 'active' || product.visibility_status !== 'active') throw fail(400, `Product #${item.product_id} is not available.`);
     if (product.product_type === 'bundle') throw fail(400, `${product.name} must be purchased through the bundle checkout flow.`);
     if (product.has_variants && !item.variant_id) throw fail(400, `Select a variant for ${product.name}.`);
 
     let variant = null;
-    let unitPrice = money(product.sale_price && product.is_on_sale ? product.sale_price : product.price);
+    const baseStorePrice = resolveStoreSellingPrice(product);
+    let unitPrice = baseStorePrice == null ? Number.NaN : calculateEcommercePrice(baseStorePrice);
     let stockBefore;
     if (item.variant_id) {
       const variantResult = await client.query(
@@ -125,7 +130,10 @@ const loadAndReserveItems = async (client, items, expiresAt) => {
       );
       variant = variantResult.rows[0];
       if (!variant) throw fail(400, `The selected variant for ${product.name} is invalid.`);
-      unitPrice = variant.price !== null ? money(variant.price) : roundMoney(unitPrice + money(variant.price_adjustment));
+      const storeVariantPrice = variant.price !== null
+        ? money(variant.price)
+        : roundMoney(baseStorePrice + money(variant.price_adjustment));
+      unitPrice = calculateEcommercePrice(storeVariantPrice);
       stockBefore = Number(variant.stock_quantity);
       const updated = await client.query(
         `UPDATE product_variants SET reserved_stock = reserved_stock + $1, updated_at = NOW()

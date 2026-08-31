@@ -136,10 +136,10 @@ const validateCart = async (client, rawItems, { lock = false, deduct = false } =
 
   for (const item of items) {
     const productResult = await client.query(
-      `SELECT p.id, p.name, p.price, p.buying_price, p.sale_price, p.is_on_sale, p.sku, p.barcode,
+      `SELECT p.id, p.name, p.price, p.store_selling_price, p.buying_price, p.sku, p.barcode,
               p.image, p.stock_quantity, p.reserved_stock, p.variant_options
        FROM products p
-       WHERE p.id = $1 AND p.status = 'active' AND COALESCE(p.is_deleted, false) = false
+       WHERE p.id = $1 AND p.inventory_status = 'active' AND COALESCE(p.is_deleted, false) = false
        ${lock ? 'FOR UPDATE' : ''}`,
       [item.product_id],
     );
@@ -148,7 +148,7 @@ const validateCart = async (client, rawItems, { lock = false, deduct = false } =
 
     let variant = null;
     let available;
-    let unitPrice = Number(product.is_on_sale && product.sale_price ? product.sale_price : product.price);
+    let unitPrice = Number(product.store_selling_price ?? product.price);
     if (item.variant_id) {
       const variantResult = await client.query(
         `SELECT id, product_id, variant_type, variant_value, option_combination, price,
@@ -280,13 +280,14 @@ export const getPosProducts = async (req, res) => {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 60));
     const values = [`%${search}%`, Number.isInteger(categoryId) && categoryId > 0 ? categoryId : null, limit];
     const productsResult = await pool.query(
-      `SELECT DISTINCT p.id, p.name, p.sku, p.barcode, p.part_number, p.price, p.sale_price,
-              p.is_on_sale, p.image, p.category_id, c.name AS category_name,
-              p.stock_quantity, p.reserved_stock, p.status, p.low_stock_threshold
+      `SELECT DISTINCT p.id, p.name, p.sku, p.barcode, p.part_number,
+              COALESCE(p.store_selling_price, p.price) AS store_selling_price,
+              p.image, p.category_id, c.name AS category_name, p.motorcycle_model, p.box_location,
+              p.stock_quantity, p.reserved_stock, p.inventory_status, p.low_stock_threshold
        FROM products p
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN product_variants pv ON pv.product_id = p.id
-       WHERE p.status = 'active'
+       WHERE p.inventory_status = 'active'
          AND COALESCE(p.is_deleted, false) = false
          AND ($2::int IS NULL OR p.category_id = $2)
          AND ($1 = '%%' OR p.name ILIKE $1 OR p.sku ILIKE $1 OR p.barcode ILIKE $1
@@ -318,8 +319,9 @@ export const getPosProducts = async (req, res) => {
     return res.json({
       products: productsResult.rows.map((product) => ({
         ...product,
-        price: money(product.price),
-        sale_price: product.sale_price == null ? null : money(product.sale_price),
+        price: money(product.store_selling_price),
+        store_selling_price: money(product.store_selling_price),
+        sale_price: null,
         stock_quantity: Number(product.stock_quantity || 0),
         available_stock: Math.max(0, Number(product.stock_quantity || 0) - Number(product.reserved_stock || 0)),
         image: normalizeProductImageUrl(product.image) || PRODUCT_IMAGE_FALLBACK,
