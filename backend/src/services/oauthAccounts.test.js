@@ -19,6 +19,18 @@ const googleIdentity = (overrides = {}) => ({
   ...overrides,
 });
 
+const facebookIdentity = (overrides = {}) => ({
+  provider: 'facebook',
+  providerUserId: 'facebook-user-123',
+  email: 'rider@gmail.com',
+  emailVerified: true,
+  firstName: 'Rider',
+  lastName: 'One',
+  displayName: 'Rider One',
+  profileImageUrl: 'https://platform-lookaside.fbsbx.com/rider.jpg',
+  ...overrides,
+});
+
 class MemoryOAuthDatabase {
   constructor({ users = [], identities = [] } = {}) {
     this.users = users.map((user) => ({
@@ -176,6 +188,33 @@ test('repeated Google login reuses the same user and identity', async () => {
   const first = await linkOrCreateOAuthUser(database, googleIdentity());
   const second = await linkOrCreateOAuthUser(database, googleIdentity());
 
+  assert.equal(second.user.id, first.user.id);
+  assert.equal(database.users.length, 1);
+  assert.equal(database.identities.length, 1);
+});
+
+test('Facebook login links an existing local or Google customer by provider-attested email', async () => {
+  const database = new MemoryOAuthDatabase({
+    users: [{ id: 12, email: 'rider@gmail.com', name: 'Preserved Rider', password_hash: 'preserved-hash' }],
+    identities: [{ user_id: 12, provider: 'google', provider_user_id: 'google-existing' }],
+  });
+
+  const result = await linkOrCreateOAuthUser(database, facebookIdentity());
+  assert.equal(result.user.id, 12);
+  assert.equal(result.linked, true);
+  assert.equal(database.users.length, 1);
+  assert.equal(database.users[0].password_hash, 'preserved-hash');
+  assert.equal(database.identities.length, 2);
+});
+
+test('repeated Facebook login creates one complete passwordless customer', async () => {
+  const database = new MemoryOAuthDatabase();
+  const first = await linkOrCreateOAuthUser(database, facebookIdentity());
+  const second = await linkOrCreateOAuthUser(database, facebookIdentity());
+
+  assert.equal(first.created, true);
+  assert.equal(first.user.role, 'customer');
+  assert.equal(first.user.password_hash, null);
   assert.equal(second.user.id, first.user.id);
   assert.equal(database.users.length, 1);
   assert.equal(database.identities.length, 1);

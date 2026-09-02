@@ -36,7 +36,12 @@ test('unconfigured OAuth and GCash readiness is explicit while real TOTP remains
   assert.equal(readiness.google.client_id_present, false);
   assert.equal(readiness.google.client_secret_present, false);
   assert.equal(readiness.google.callback_url_present, true);
-  assert.deepEqual(readiness.facebook, { available: false, reason: 'not_configured' });
+  assert.equal(readiness.facebook.available, false);
+  assert.equal(readiness.facebook.reason, 'missing_facebook_oauth_config');
+  assert.equal(readiness.facebook.app_id_present, false);
+  assert.equal(readiness.facebook.app_secret_present, false);
+  assert.equal(readiness.facebook.callback_url_present, true);
+  assert.equal(readiness.facebook.callback_url, 'http://localhost:5000/api/auth/facebook/callback');
   assert.deepEqual(readiness.gcash, { available: false, reason: 'not_configured' });
   assert.deepEqual(readiness.two_factor, { available: true, reason: null, method: 'totp' });
   assert.deepEqual(readiness.phone_verification, {

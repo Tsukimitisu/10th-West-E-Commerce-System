@@ -18,6 +18,7 @@
     "db:check": "node scripts/database-check.js",
     "audit:integrity": "node scripts/integrity-audit.js",
     "verify:google-local": "node scripts/verify-google-local.js",
+    "verify:facebook-local": "node scripts/verify-facebook-local.js",
     "verify:paymongo-webhook": "node scripts/verify-paymongo-webhook.js",
     "test:live-concurrency": "node scripts/verify-live-concurrency.js",
     "seed:test-fixtures": "node scripts/seed-test-fixtures.js",
