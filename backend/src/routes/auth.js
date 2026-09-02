@@ -1,7 +1,9 @@
 import express from 'express';
 import { body, matchedData, validationResult } from 'express-validator';
 import passport, {
+  FACEBOOK_OAUTH_SCOPES,
   GOOGLE_OAUTH_SCOPES,
+  getFacebookOAuthConfigurationStatus,
   getGoogleOAuthConfigurationStatus,
 } from '../config/passport.js';
 import { resolveFrontendOrigin } from '../config/frontend.js';
@@ -9,7 +11,7 @@ import {
   register, login, logout, getProfile,
   forgotPassword, resetPassword, verifyResetToken, changePassword,
   setup2FA, verify2FA, disable2FA,
-  googleOAuthCallback, oauthCallback, exchangeOAuthCode,
+  facebookOAuthCallback, googleOAuthCallback, exchangeOAuthCode,
   getActiveSessions, revokeSession,
   getActivityLogs, sendRegistrationOtp,
   deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData, getMyPermissions,
@@ -49,20 +51,33 @@ export const getGoogleAuthAvailability = ({
   };
 };
 
+export const getFacebookAuthAvailability = ({
+  configuration = getFacebookOAuthConfigurationStatus(),
+  strategyAvailable = Boolean(passport._strategy('facebook')),
+} = {}) => {
+  const available = Boolean(configuration.configured && strategyAvailable);
+  const reason = available
+    ? null
+    : configuration.configured
+      ? 'facebook_oauth_restart_required'
+      : 'missing_facebook_oauth_config';
+
+  return {
+    available,
+    reason,
+    app_id_present: Boolean(configuration.appIdPresent),
+    app_secret_present: Boolean(configuration.appSecretPresent),
+    callback_url_present: Boolean(configuration.callbackUrlPresent),
+    callback_url: configuration.callbackUrl || null,
+  };
+};
+
 export const getAuthAvailability = () => {
-  const facebookAvailable = Boolean(
-    process.env.FACEBOOK_APP_ID
-      && process.env.FACEBOOK_APP_SECRET
-      && passport._strategy('facebook')
-  );
   const gcashAvailable = getPaymongoConfigurationStatus().configured;
 
   return {
     google: getGoogleAuthAvailability(),
-    facebook: {
-      available: facebookAvailable,
-      reason: facebookAvailable ? null : 'not_configured',
-    },
+    facebook: getFacebookAuthAvailability(),
     two_factor: {
       available: true,
       reason: null,
@@ -86,24 +101,43 @@ router.get('/providers', (_req, res) => {
 
 const getFrontendUrl = () => resolveFrontendOrigin();
 
-const redirectToOAuthError = (res, errorCode) => {
-  res.redirect(`${getFrontendUrl()}/#/login?error=${encodeURIComponent(errorCode)}`);
+const redirectToOAuthError = (res, errorCode, { provider = null, reason = null } = {}) => {
+  const params = new URLSearchParams({ error: errorCode });
+  if (provider) params.set(provider, 'failed');
+  if (reason) params.set('reason', reason);
+  res.redirect(`${getFrontendUrl()}/#/login?${params.toString()}`);
+};
+
+const getSafeProviderFailureReason = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  const code = String(error?.code || '').toLowerCase();
+  if (/redirect_uri|redirect uri/.test(message) || code === 'redirect_uri_mismatch') return 'redirect_uri_mismatch';
+  if (/invalid_client|invalid client/.test(message) || code === 'invalid_client') return 'invalid_client';
+  return 'callback_failed';
 };
 
 const handleOAuthProviderResponseError = (provider) => (req, res, next) => {
   const providerError = String(req.query?.error || '').trim().toLowerCase();
   if (!providerError) return next();
-  if (providerError === 'access_denied') return redirectToOAuthError(res, 'access_denied');
-  return redirectToOAuthError(res, `${provider}_failed`);
+  const reason = providerError === 'access_denied' ? 'access_denied' : 'callback_failed';
+  if (provider === 'facebook') console.warn('FACEBOOK_CALLBACK_FAILED', { reason_code: reason });
+  return redirectToOAuthError(
+    res,
+    providerError === 'access_denied' ? 'access_denied' : `${provider}_failed`,
+    { provider, reason }
+  );
 };
 
 const ensureOAuthProviderConfigured = (provider) => (req, res, next) => {
   const isConfigured = provider === 'google'
     ? getGoogleAuthAvailability().available
-    : Boolean(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET);
+    : getFacebookAuthAvailability().available;
 
   if (!isConfigured || !passport._strategy(provider)) {
-    return redirectToOAuthError(res, `${provider}_not_configured`);
+    return redirectToOAuthError(res, `${provider}_not_configured`, {
+      provider,
+      reason: 'not_configured',
+    });
   }
 
   next();
@@ -116,7 +150,8 @@ const completeOAuthAuthentication = (provider) => (req, res, next) => {
         reason_code: provider === 'google' ? 'GOOGLE_CALLBACK_ERROR' : `${provider.toUpperCase()}_CALLBACK_ERROR`,
         name: String(err?.name || 'OAuthError').slice(0, 80),
       });
-      return redirectToOAuthError(res, `${provider}_failed`);
+      const reason = getSafeProviderFailureReason(err);
+      return redirectToOAuthError(res, `${provider}_failed`, { provider, reason });
     }
 
     if (!user) {
@@ -126,8 +161,13 @@ const completeOAuthAuthentication = (provider) => (req, res, next) => {
           reason_code: stateFailure ? 'OAUTH_STATE_MISMATCH' : 'GOOGLE_CALLBACK_ERROR',
         });
       }
-      if (stateFailure) return redirectToOAuthError(res, 'oauth_invalid_state');
-      return redirectToOAuthError(res, `${provider}_failed`);
+      if (provider === 'facebook') {
+        console.warn('FACEBOOK_CALLBACK_FAILED', {
+          reason_code: stateFailure ? 'state_mismatch' : 'passport_failed',
+        });
+      }
+      if (stateFailure) return redirectToOAuthError(res, 'oauth_invalid_state', { provider, reason: 'state_mismatch' });
+      return redirectToOAuthError(res, `${provider}_failed`, { provider, reason: 'callback_failed' });
     }
 
     req.oauthUser = user;
@@ -303,12 +343,39 @@ router.get('/google/callback',
 // ─── OAuth: Facebook ───────────────────────────────────────────────
 router.get('/facebook',
   ensureOAuthProviderConfigured('facebook'),
-  passport.authenticate('facebook', { scope: ['email'], session: false })
+  (req, _res, next) => {
+    console.info('FACEBOOK_AUTH_START', {
+      has_session: Boolean(req.session),
+      callback_url: getFacebookAuthAvailability().callback_url,
+    });
+    next();
+  },
+  (req, res, next) => {
+    const authenticate = passport.authenticate('facebook', { scope: FACEBOOK_OAUTH_SCOPES, session: false });
+    const handleError = (error) => {
+      if (!error) return next();
+      console.error('FACEBOOK_CALLBACK_FAILED', {
+        reason_code: 'FACEBOOK_AUTH_START_FAILED',
+        name: String(error?.name || 'OAuthError').slice(0, 80),
+      });
+      return redirectToOAuthError(res, 'facebook_failed', {
+        provider: 'facebook',
+        reason: getSafeProviderFailureReason(error),
+      });
+    };
+    try {
+      console.info('FACEBOOK_AUTH_REDIRECT_CREATED');
+      return authenticate(req, res, handleError);
+    } catch (error) {
+      return handleError(error);
+    }
+  }
 );
 router.get('/facebook/callback',
   ensureOAuthProviderConfigured('facebook'),
+  handleOAuthProviderResponseError('facebook'),
   completeOAuthAuthentication('facebook'),
-  oauthCallback
+  facebookOAuthCallback
 );
 
 // ─── Protected routes ──────────────────────────────────────────────

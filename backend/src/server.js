@@ -163,6 +163,9 @@ if (!sessionSecret) {
 if (!sessionSecret && passport._strategy('google')) {
   console.warn('GOOGLE_SESSION_SECRET_MISSING: set a stable SESSION_SECRET before testing Google OAuth.');
 }
+if (!sessionSecret && passport._strategy('facebook')) {
+  console.warn('FACEBOOK_SESSION_SECRET_MISSING: set a stable SESSION_SECRET before testing Facebook OAuth.');
+}
 const effectiveSessionSecret = sessionSecret || crypto.randomBytes(48).toString('hex');
 
 // Build allowed origins for LAN access

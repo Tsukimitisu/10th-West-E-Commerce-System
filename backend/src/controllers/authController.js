@@ -1307,6 +1307,51 @@ const googleOAuthFailureQueryReason = (error) => {
   }
 };
 
+const facebookOAuthErrorCode = (error) => {
+  switch (error?.code) {
+    case 'OAUTH_EMAIL_REQUIRED': return 'oauth_missing_email';
+    case 'OAUTH_EMAIL_UNVERIFIED': return 'oauth_unverified_email';
+    case 'OAUTH_ACCOUNT_CONFLICT': return 'oauth_account_conflict';
+    case 'OAUTH_ACCOUNT_DEACTIVATED': return 'account_deactivated';
+    case 'OAUTH_SESSION_FAILED': return 'oauth_session_failed';
+    case 'ASYNC_OPERATION_TIMEOUT': return 'oauth_session_failed';
+    default: return 'facebook_failed';
+  }
+};
+
+const facebookOAuthFailureReason = (error) => {
+  switch (error?.code) {
+    case 'OAUTH_EMAIL_REQUIRED': return 'FACEBOOK_PROFILE_EMAIL_MISSING';
+    case 'OAUTH_EMAIL_UNVERIFIED': return 'FACEBOOK_PROFILE_EMAIL_MISSING';
+    case 'OAUTH_ACCOUNT_CONFLICT': return 'FACEBOOK_ACCOUNT_LINK_FAILED';
+    case 'OAUTH_SESSION_FAILED':
+    case 'ASYNC_OPERATION_TIMEOUT': return 'FACEBOOK_SESSION_SAVE_FAILED';
+    case '23505': return 'FACEBOOK_USER_CREATE_FAILED';
+    default: return 'FACEBOOK_CALLBACK_FAILED';
+  }
+};
+
+const facebookOAuthFailureQueryReason = (error) => {
+  switch (error?.code) {
+    case 'OAUTH_EMAIL_REQUIRED': return 'profile_missing_email';
+    case 'OAUTH_EMAIL_UNVERIFIED': return 'profile_missing_email';
+    case 'OAUTH_ACCOUNT_CONFLICT': return 'account_link_failed';
+    case 'OAUTH_SESSION_FAILED':
+    case 'ASYNC_OPERATION_TIMEOUT': return 'session_save_failed';
+    case '23505': return 'user_create_failed';
+    default: return 'callback_failed';
+  }
+};
+
+const loginPassportRequest = (req, user) => new Promise((resolve, reject) => {
+  if (typeof req.login !== 'function') {
+    req.user = user;
+    resolve();
+    return;
+  }
+  req.login(user, { session: false }, (error) => (error ? reject(error) : resolve()));
+});
+
 export const googleOAuthCallback = async (req, res) => {
   const frontendUrl = resolveFrontendOrigin();
   const redirectToLoginError = (errorCode) => res.redirect(
@@ -1384,6 +1429,92 @@ export const googleOAuthCallback = async (req, res) => {
       database_code: String(error?.code || 'GOOGLE_OAUTH_FAILED').slice(0, 80),
     });
     return res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent(googleOAuthErrorCode(error))}&google=failed&reason=${encodeURIComponent(failureReason)}`);
+  } finally {
+    client?.release();
+  }
+};
+
+export const facebookOAuthCallback = async (req, res) => {
+  const frontendUrl = resolveFrontendOrigin();
+  const guestCartSessionId = req.session?.cartSessionId || null;
+  const ipAddress = req.clientIp;
+  const userAgent = req.clientUa;
+  let client = null;
+  let sessionToken = null;
+  let transactionCommitted = false;
+
+  try {
+    console.info('FACEBOOK_CALLBACK_RECEIVED', { has_provider_profile: Boolean(req.oauthUser) });
+    if (!req.oauthUser?.email) console.warn('FACEBOOK_PROFILE_EMAIL_MISSING');
+
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    console.info('FACEBOOK_CUSTOMER_SETUP_START');
+    console.info('FACEBOOK_USER_LINK_START');
+    const { user, created, linked } = await linkOrCreateOAuthUser(client, req.oauthUser);
+    if (created) console.info('FACEBOOK_USER_CREATE_SUCCESS', { user_id_present: Boolean(user?.id) });
+    if (linked || !created) console.info('FACEBOOK_USER_LINK_SUCCESS', { user_id_present: Boolean(user?.id) });
+    console.info('FACEBOOK_CUSTOMER_SETUP_SUCCESS', {
+      user_id_present: Boolean(user?.id),
+      role: user?.role || null,
+    });
+
+    console.info('FACEBOOK_SESSION_SAVE_START');
+    sessionToken = await persistSession(client, user, ipAddress, userAgent);
+    await client.query('COMMIT');
+    transactionCommitted = true;
+
+    await loginPassportRequest(req, user);
+    await prepareAuthenticatedSession(req, user, sessionToken, { strict: true });
+    console.info('FACEBOOK_SESSION_SAVE_SUCCESS');
+
+    if (guestCartSessionId) {
+      try {
+        await mergeGuestCartIntoUserCart(guestCartSessionId, user.id);
+      } catch (cartMergeError) {
+        console.warn('Unable to merge guest cart during Facebook login:', sanitizeDatabaseError(cartMergeError));
+      }
+    }
+
+    void logActivity({
+      userId: user.id,
+      action: 'oauth_login',
+      details: { provider: 'facebook' },
+      ipAddress,
+      userAgent,
+    }).catch((activityError) => {
+      console.warn('Unable to record Facebook login activity:', sanitizeDatabaseError(activityError));
+    });
+
+    console.info('FACEBOOK_FRONTEND_REDIRECT', { target: '/#/oauth-callback' });
+    return res.redirect(`${frontendUrl}/#/oauth-callback?provider=facebook&status=success`);
+  } catch (error) {
+    if (client && !transactionCommitted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {}
+    }
+
+    if (sessionToken) {
+      const tokenHash = hashToken(sessionToken);
+      await pool.query(
+        'UPDATE sessions SET is_active = false WHERE token_hash = $1',
+        [tokenHash]
+      ).catch(() => {});
+
+      if (req.session?.auth?.tokenHash === tokenHash) {
+        delete req.session.auth;
+        await saveRequestSession(req).catch(() => {});
+      }
+    }
+
+    const failureReason = facebookOAuthFailureQueryReason(error);
+    console.error('FACEBOOK_CALLBACK_FAILED', {
+      reason_code: facebookOAuthFailureReason(error),
+      database_code: String(error?.code || 'FACEBOOK_OAUTH_FAILED').slice(0, 80),
+    });
+    return res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent(facebookOAuthErrorCode(error))}&facebook=failed&reason=${encodeURIComponent(failureReason)}`);
   } finally {
     client?.release();
   }

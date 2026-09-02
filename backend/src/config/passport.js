@@ -4,6 +4,12 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as FacebookStrategy } from 'passport-facebook';
 
 export const GOOGLE_OAUTH_SCOPES = Object.freeze(['openid', 'email', 'profile']);
+export const FACEBOOK_OAUTH_SCOPES = Object.freeze(['email']);
+export const FACEBOOK_OAUTH_ENV_NAMES = Object.freeze({
+  appId: Object.freeze(['FACEBOOK_APP_ID']),
+  appSecret: Object.freeze(['FACEBOOK_APP_SECRET']),
+  callbackUrl: Object.freeze(['FACEBOOK_CALLBACK_URL']),
+});
 export const GOOGLE_OAUTH_ENV_NAMES = Object.freeze({
   clientId: Object.freeze([
     'GOOGLE_CLIENT_ID',
@@ -47,6 +53,15 @@ const resolveDefaultGoogleCallbackUrl = (environment) => {
   }
 };
 
+const resolveDefaultFacebookCallbackUrl = (environment) => {
+  const backendUrl = cleanEnvironmentValue(environment?.BACKEND_URL) || 'http://localhost:5000';
+  try {
+    return new URL('/api/auth/facebook/callback', backendUrl).toString();
+  } catch {
+    return 'http://localhost:5000/api/auth/facebook/callback';
+  }
+};
+
 const resolveGoogleOAuthRuntimeConfiguration = (environment = process.env) => {
   const clientId = resolveEnvironmentAlias(environment, GOOGLE_OAUTH_ENV_NAMES.clientId);
   const clientSecret = resolveEnvironmentAlias(environment, GOOGLE_OAUTH_ENV_NAMES.clientSecret);
@@ -77,6 +92,21 @@ const isValidGoogleCallbackUrl = (value, environment = process.env) => {
   }
 };
 
+const isValidFacebookCallbackUrl = (value, environment = process.env) => {
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol)
+      && (environment.NODE_ENV !== 'production' || url.protocol === 'https:')
+      && !url.username
+      && !url.password
+      && !url.search
+      && !url.hash
+      && url.pathname === '/api/auth/facebook/callback';
+  } catch {
+    return false;
+  }
+};
+
 export const getGoogleOAuthConfigurationStatus = (environment = process.env) => {
   const configuration = resolveGoogleOAuthRuntimeConfiguration(environment);
   const clientIdValid = isUsableCredential(configuration.clientId);
@@ -101,6 +131,40 @@ export const getGoogleOAuthConfigurationStatus = (environment = process.env) => 
   };
 };
 
+const resolveFacebookOAuthRuntimeConfiguration = (environment = process.env) => {
+  const appId = resolveEnvironmentAlias(environment, FACEBOOK_OAUTH_ENV_NAMES.appId);
+  const appSecret = resolveEnvironmentAlias(environment, FACEBOOK_OAUTH_ENV_NAMES.appSecret);
+  const callback = resolveEnvironmentAlias(environment, FACEBOOK_OAUTH_ENV_NAMES.callbackUrl);
+
+  return {
+    appId: appId.value,
+    appSecret: appSecret.value,
+    callbackUrl: callback.value || resolveDefaultFacebookCallbackUrl(environment),
+    graphApiVersion: cleanEnvironmentValue(environment?.FACEBOOK_GRAPH_API_VERSION) || 'v22.0',
+  };
+};
+
+export const getFacebookOAuthConfigurationStatus = (environment = process.env) => {
+  const configuration = resolveFacebookOAuthRuntimeConfiguration(environment);
+  const appIdValid = isUsableCredential(configuration.appId);
+  const appSecretValid = isUsableCredential(configuration.appSecret);
+  const callbackUrlValid = isValidFacebookCallbackUrl(configuration.callbackUrl, environment);
+
+  return {
+    configured: appIdValid && appSecretValid && callbackUrlValid,
+    appIdPresent: Boolean(configuration.appId),
+    appSecretPresent: Boolean(configuration.appSecret),
+    callbackUrlPresent: Boolean(configuration.callbackUrl),
+    callbackUrl: configuration.callbackUrl,
+    graphApiVersion: configuration.graphApiVersion,
+    missing: [
+      ...(!appIdValid ? ['FACEBOOK_APP_ID'] : []),
+      ...(!appSecretValid ? ['FACEBOOK_APP_SECRET'] : []),
+      ...(!callbackUrlValid ? ['FACEBOOK_CALLBACK_URL'] : []),
+    ],
+  };
+};
+
 export const mapGoogleProfile = (profile = {}) => {
   const emailEntry = Array.isArray(profile.emails)
     ? profile.emails.find((entry) => cleanEnvironmentValue(entry?.value))
@@ -115,6 +179,27 @@ export const mapGoogleProfile = (profile = {}) => {
     lastName: cleanEnvironmentValue(profile.name?.familyName || profile._json?.family_name),
     displayName: cleanEnvironmentValue(profile.displayName || profile._json?.name),
     profileImageUrl: cleanEnvironmentValue(profile.photos?.[0]?.value || profile._json?.picture),
+  };
+};
+
+export const mapFacebookProfile = (profile = {}) => {
+  const emailEntry = Array.isArray(profile.emails)
+    ? profile.emails.find((entry) => cleanEnvironmentValue(entry?.value))
+    : null;
+  const email = cleanEnvironmentValue(emailEntry?.value || profile._json?.email).toLowerCase();
+
+  return {
+    provider: 'facebook',
+    providerUserId: cleanEnvironmentValue(profile.id || profile._json?.id),
+    email,
+    // Facebook only returns this account email after the user grants the email
+    // permission. Treat that provider-returned address as attested; a missing
+    // address still fails closed in the shared OAuth account service.
+    emailVerified: Boolean(email),
+    firstName: cleanEnvironmentValue(profile.name?.givenName || profile._json?.first_name),
+    lastName: cleanEnvironmentValue(profile.name?.familyName || profile._json?.last_name),
+    displayName: cleanEnvironmentValue(profile.displayName || profile._json?.name),
+    profileImageUrl: cleanEnvironmentValue(profile.photos?.[0]?.value || profile._json?.picture?.data?.url),
   };
 };
 
@@ -157,35 +242,50 @@ if (googleConfiguration.configured) {
   });
 }
 
-if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
+const facebookRuntimeConfiguration = resolveFacebookOAuthRuntimeConfiguration();
+const facebookConfiguration = getFacebookOAuthConfigurationStatus();
+
+if (facebookConfiguration.configured) {
   passport.use(
     new FacebookStrategy(
       {
-        clientID: process.env.FACEBOOK_APP_ID,
-        clientSecret: process.env.FACEBOOK_APP_SECRET,
-        callbackURL: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/auth/facebook/callback`,
+        clientID: facebookRuntimeConfiguration.appId,
+        clientSecret: facebookRuntimeConfiguration.appSecret,
+        callbackURL: facebookConfiguration.callbackUrl,
+        graphAPIVersion: facebookConfiguration.graphApiVersion,
+        enableProof: true,
+        state: true,
         profileFields: ['id', 'emails', 'name', 'displayName', 'photos'],
       },
       (_accessToken, _refreshToken, profile, done) => {
-        done(null, {
-          provider: 'facebook',
-          id: profile.id,
-          providerUserId: profile.id,
-          email: profile.emails?.[0]?.value,
-          emailVerified: false,
-          firstName: profile.name?.givenName,
-          lastName: profile.name?.familyName,
-          name: profile.displayName,
-          displayName: profile.displayName,
-          avatar: profile.photos?.[0]?.value,
-          profileImageUrl: profile.photos?.[0]?.value,
-        });
+        try {
+          const identity = mapFacebookProfile(profile);
+          console.info('FACEBOOK_PROFILE_RECEIVED', {
+            provider_id_present: Boolean(identity.providerUserId),
+            email_present: Boolean(identity.email),
+          });
+          done(null, identity);
+        } catch (error) {
+          done(error);
+        }
       }
     )
   );
-  console.log('   Facebook OAuth configured');
+  console.log('   Facebook OAuth configuration:', {
+    available: true,
+    app_id_present: facebookConfiguration.appIdPresent,
+    app_secret_present: facebookConfiguration.appSecretPresent,
+    callback_url_present: facebookConfiguration.callbackUrlPresent,
+    callback_url: facebookConfiguration.callbackUrl,
+  });
 } else {
-  console.log('   Facebook OAuth not configured');
+  console.log('   Facebook OAuth configuration:', {
+    available: false,
+    app_id_present: facebookConfiguration.appIdPresent,
+    app_secret_present: facebookConfiguration.appSecretPresent,
+    callback_url_present: facebookConfiguration.callbackUrlPresent,
+    callback_url: facebookConfiguration.callbackUrl,
+  });
 }
 
 // Passport sessions remain disabled on OAuth routes. Authentication is bound
