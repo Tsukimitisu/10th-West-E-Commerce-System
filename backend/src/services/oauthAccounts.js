@@ -76,7 +76,7 @@ const updateLinkedUser = async (database, userId, profileImageUrl) => {
   return result.rows[0];
 };
 
-export const linkOrCreateOAuthUser = async (database, rawIdentity) => {
+export const linkOrCreateOAuthUser = async (database, rawIdentity, lifecycle = {}) => {
   const identity = normalizeOAuthIdentity(rawIdentity);
   const identityLock = `oauth:${identity.provider}:${identity.providerUserId}`;
   const emailLock = `oauth-email:${identity.email}`;
@@ -130,6 +130,7 @@ export const linkOrCreateOAuthUser = async (database, rawIdentity) => {
   if (user) {
     assertCustomerAvailable(user);
   } else {
+    lifecycle.onCreateStart?.(identity);
     const createdResult = await database.query(
       `INSERT INTO users (
          name, email, password_hash, role, avatar, oauth_provider, oauth_id,

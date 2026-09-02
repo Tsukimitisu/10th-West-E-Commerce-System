@@ -1452,7 +1452,9 @@ export const facebookOAuthCallback = async (req, res) => {
 
     console.info('FACEBOOK_CUSTOMER_SETUP_START');
     console.info('FACEBOOK_USER_LINK_START');
-    const { user, created, linked } = await linkOrCreateOAuthUser(client, req.oauthUser);
+    const { user, created, linked } = await linkOrCreateOAuthUser(client, req.oauthUser, {
+      onCreateStart: () => console.info('FACEBOOK_USER_CREATE_START'),
+    });
     if (created) console.info('FACEBOOK_USER_CREATE_SUCCESS', { user_id_present: Boolean(user?.id) });
     if (linked || !created) console.info('FACEBOOK_USER_LINK_SUCCESS', { user_id_present: Boolean(user?.id) });
     console.info('FACEBOOK_CUSTOMER_SETUP_SUCCESS', {

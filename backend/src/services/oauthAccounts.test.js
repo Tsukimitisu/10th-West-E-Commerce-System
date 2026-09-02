@@ -209,8 +209,10 @@ test('Facebook login links an existing local or Google customer by provider-atte
 
 test('repeated Facebook login creates one complete passwordless customer', async () => {
   const database = new MemoryOAuthDatabase();
-  const first = await linkOrCreateOAuthUser(database, facebookIdentity());
-  const second = await linkOrCreateOAuthUser(database, facebookIdentity());
+  let createStartCount = 0;
+  const lifecycle = { onCreateStart: () => { createStartCount += 1; } };
+  const first = await linkOrCreateOAuthUser(database, facebookIdentity(), lifecycle);
+  const second = await linkOrCreateOAuthUser(database, facebookIdentity(), lifecycle);
 
   assert.equal(first.created, true);
   assert.equal(first.user.role, 'customer');
@@ -218,6 +220,7 @@ test('repeated Facebook login creates one complete passwordless customer', async
   assert.equal(second.user.id, first.user.id);
   assert.equal(database.users.length, 1);
   assert.equal(database.identities.length, 1);
+  assert.equal(createStartCount, 1);
 });
 
 test('unverified Google email is rejected before any database lookup or linking', async () => {
