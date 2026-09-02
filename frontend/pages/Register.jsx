@@ -43,7 +43,7 @@ const Register = () => {
   const [verificationMessage, setVerificationMessage] = useState('');
   const [resending, setResending] = useState(false);
   const [resendStatus, setResendStatus] = useState('');
-  const [oauthProviders, setOauthProviders] = useState({ google: false, facebook: false, loading: true, error: false, googleReason: null });
+  const [oauthProviders, setOauthProviders] = useState({ google: false, facebook: false, loading: true, error: false, googleReason: null, facebookReason: null });
   const errorBannerRef = useRef(null);
   const emailInputRef = useRef(null);
 
@@ -56,8 +56,9 @@ const Register = () => {
         loading: false,
         error: false,
         googleReason: providers.google?.reason || null,
+        facebookReason: providers.facebook?.reason || null,
       }))
-      .catch(() => setOauthProviders({ google: false, facebook: false, loading: false, error: true, googleReason: 'backend_unavailable' }));
+      .catch(() => setOauthProviders({ google: false, facebook: false, loading: false, error: true, googleReason: 'backend_unavailable', facebookReason: 'backend_unavailable' }));
   }, []);
 
   const checks = [
@@ -205,8 +206,8 @@ const Register = () => {
   const handleOAuth = (provider) => {
     if (!oauthProviders[provider]) {
       const label = provider === 'google' ? 'Google' : 'Facebook';
-      setError(provider === 'google' && oauthProviders.error
-        ? 'Google login status is unavailable. Please start or restart the backend and try again.'
+      setError(oauthProviders.error
+        ? `${label} login status is unavailable. Please start or restart the backend and try again.`
         : `${label} login is not configured yet.`);
       scrollToErrorBanner();
       return;
@@ -258,7 +259,7 @@ const Register = () => {
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
               {oauthProviders.loading ? 'Checking Facebook login...' : 'Continue with Facebook'}
             </button>
-            {!oauthProviders.loading && !oauthProviders.facebook && <p className="text-xs text-slate-500">Facebook login is not configured yet.</p>}
+            {!oauthProviders.loading && !oauthProviders.facebook && <p className="text-xs text-slate-500">{oauthProviders.error ? 'Facebook login status is unavailable. Please start or restart the backend.' : 'Facebook login is not configured yet.'}</p>}
           </div>
 
           <div className="relative mb-6">

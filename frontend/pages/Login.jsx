@@ -34,6 +34,18 @@ const GOOGLE_REASON_MESSAGES = {
   callback_failed: 'Google sign in failed. Please try again.',
 };
 
+const FACEBOOK_REASON_MESSAGES = {
+  access_denied: 'Facebook sign in was cancelled.',
+  state_mismatch: 'Facebook sign in expired. Please try again.',
+  session_save_failed: 'Facebook sign in completed but your session could not be saved.',
+  user_create_failed: 'Facebook sign in completed but your account could not be created.',
+  account_link_failed: 'This Facebook account could not be linked safely. Please use email sign in.',
+  profile_missing_email: 'Facebook did not provide an email address. Please use email sign in.',
+  invalid_client: 'Facebook sign in is temporarily unavailable because the app credentials were rejected.',
+  redirect_uri_mismatch: 'Facebook sign in is temporarily unavailable because its callback URL does not match.',
+  callback_failed: 'Facebook sign in failed. Please try again.',
+};
+
 const getLoginSubmissionErrorMessage = (error) => {
   const code = String(error?.code || '').toUpperCase();
   if (code === 'DATABASE_UNAVAILABLE' || Number(error?.status) === 503) {
@@ -54,7 +66,7 @@ const Login = ({ onLogin }) => {
   const [resendSuccess, setResendSuccess] = useState('');
   const [needs2FA, setNeeds2FA] = useState(false);
   const [totpCode, setTotpCode] = useState('');
-  const [oauthProviders, setOauthProviders] = useState({ google: false, facebook: false, loading: true, error: false, googleReason: null });
+  const [oauthProviders, setOauthProviders] = useState({ google: false, facebook: false, loading: true, error: false, googleReason: null, facebookReason: null });
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const defaultRedirect = searchParams.get('redirect') || '/';
@@ -64,10 +76,17 @@ const Login = ({ onLogin }) => {
   React.useEffect(() => {
     const queryError = searchParams.get('error');
     if (!queryError) return;
-    setQueryErrorMessage(GOOGLE_REASON_MESSAGES[searchParams.get('reason')] || getLoginErrorMessage(queryError));
+    const reason = searchParams.get('reason');
+    const providerReasonMessage = searchParams.get('facebook') === 'failed'
+      ? FACEBOOK_REASON_MESSAGES[reason]
+      : searchParams.get('google') === 'failed'
+        ? GOOGLE_REASON_MESSAGES[reason]
+        : null;
+    setQueryErrorMessage(providerReasonMessage || getLoginErrorMessage(queryError));
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('error');
     nextParams.delete('google');
+    nextParams.delete('facebook');
     nextParams.delete('reason');
     setSearchParams(nextParams, { replace: true });
   }, [searchParams, setSearchParams]);
@@ -81,8 +100,9 @@ const Login = ({ onLogin }) => {
         loading: false,
         error: false,
         googleReason: providers.google?.reason || null,
+        facebookReason: providers.facebook?.reason || null,
       }))
-      .catch(() => setOauthProviders({ google: false, facebook: false, loading: false, error: true, googleReason: 'backend_unavailable' }));
+      .catch(() => setOauthProviders({ google: false, facebook: false, loading: false, error: true, googleReason: 'backend_unavailable', facebookReason: 'backend_unavailable' }));
   }, []);
 
   const handleSubmit = async (e) => {
@@ -146,13 +166,14 @@ const Login = ({ onLogin }) => {
     const cleanParams = new URLSearchParams(searchParams);
     cleanParams.delete('error');
     cleanParams.delete('google');
+    cleanParams.delete('facebook');
     cleanParams.delete('reason');
     setSearchParams(cleanParams, { replace: true });
     setQueryErrorMessage('');
     if (!oauthProviders[provider]) {
       const label = provider === 'google' ? 'Google' : 'Facebook';
-      setError(provider === 'google' && oauthProviders.error
-        ? 'Google login status is unavailable. Please start or restart the backend and try again.'
+      setError(oauthProviders.error
+        ? `${label} login status is unavailable. Please start or restart the backend and try again.`
         : `${label} login is not configured yet.`);
       return;
     }
@@ -224,7 +245,7 @@ const Login = ({ onLogin }) => {
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                   {oauthProviders.loading ? 'Checking Facebook login...' : 'Continue with Facebook'}
                 </button>
-                {!oauthProviders.loading && !oauthProviders.facebook && <p className="text-xs text-slate-500">Facebook login is not configured yet.</p>}
+                {!oauthProviders.loading && !oauthProviders.facebook && <p className="text-xs text-slate-500">{oauthProviders.error ? 'Facebook login status is unavailable. Please start or restart the backend.' : 'Facebook login is not configured yet.'}</p>}
               </div>
 
               <div className="relative mb-6">
