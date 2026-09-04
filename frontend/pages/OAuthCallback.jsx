@@ -57,7 +57,12 @@ const OAuthCallback = ({ onLogin }) => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const handledRef = useRef(false);
+  const onLoginRef = useRef(onLogin);
   const [displayError, setDisplayError] = useState('');
+
+  useEffect(() => {
+    onLoginRef.current = onLogin;
+  }, [onLogin]);
 
   useEffect(() => {
     if (handledRef.current) return undefined;
@@ -81,13 +86,15 @@ const OAuthCallback = ({ onLogin }) => {
       ? exchangeOAuthCode(legacyCode)
       : Promise.resolve();
 
-    withTimeout(completeLegacyExchange
-      .then(() => refreshCsrfAfterSessionRotation())
-      .then(() => getProfile()))
+    // /profile is a safe GET and proves the rotated OAuth session immediately.
+    // Do not block navigation on a CSRF refresh; authenticatedFetch already
+    // refreshes and retries CSRF for the next state-changing request.
+    withTimeout(completeLegacyExchange.then(() => getProfile()))
       .then((user) => {
         if (cancelled) return;
         if (!user?.id) throw new Error(OAUTH_ERROR_MESSAGES.oauth_failed);
-        onLogin(user);
+        onLoginRef.current(user);
+        void refreshCsrfAfterSessionRotation().catch(() => {});
         const returnPath = getSafeReturnPath();
         if (returnPath === '/') navigate('/', { replace: true });
         else navigate(returnPath, { replace: true });
@@ -102,7 +109,7 @@ const OAuthCallback = ({ onLogin }) => {
       });
 
     return () => { cancelled = true; };
-  }, [searchParams, navigate, onLogin]);
+  }, [searchParams, navigate]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
