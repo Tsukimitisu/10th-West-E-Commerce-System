@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CheckCircle2, Clock, RefreshCw, XCircle } from 'lucide-react';
 import { getPaymentOrderStatus } from '../../services/api';
@@ -36,7 +36,7 @@ const PaymentResult = () => {
   const [loading, setLoading] = useState(Boolean(orderId));
   const [error, setError] = useState('');
 
-  const loadStatus = async () => {
+  const loadStatus = useCallback(async () => {
     if (!orderId) {
       setLoading(false);
       setError('Missing order reference.');
@@ -52,16 +52,17 @@ const PaymentResult = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [orderId]);
 
   useEffect(() => {
     loadStatus();
     const timer = window.setInterval(() => {
-      if (!orderId || order?.payment_status === 'paid') return;
+      const isTerminal = ['paid', 'failed', 'expired', 'cancelled'].includes(order?.payment_status);
+      if (!orderId || isTerminal) return;
       loadStatus();
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [orderId, order?.payment_status]);
+  }, [loadStatus, orderId, order?.payment_status]);
 
   const copy = getCopy(order?.payment_status, queryStatus);
   const snapshot = order?.shipping_address_snapshot && typeof order.shipping_address_snapshot === 'object'
@@ -100,7 +101,7 @@ const PaymentResult = () => {
             <div className="mt-3 border-t border-slate-200 pt-3">
               <p className="text-gray-500">Shipping address</p>
               <address className="mt-1 not-italic font-medium leading-5 text-slate-800">
-                {addressLines.map((line) => <span key={line} className="block">{line}</span>)}
+                {addressLines.map((line, index) => <span key={`${index}-${line}`} className="block">{line}</span>)}
                 {snapshot.phone && <span className="mt-1 block text-slate-600">{snapshot.phone}</span>}
               </address>
             </div>

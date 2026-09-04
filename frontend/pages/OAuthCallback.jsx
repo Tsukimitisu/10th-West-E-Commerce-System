@@ -38,14 +38,34 @@ const clearOAuthCallbackQuery = () => {
   window.history.replaceState({}, document.title, `${window.location.pathname}${hashPath}`);
 };
 
-const withTimeout = (promise, milliseconds = 9000) => Promise.race([
-  promise,
-  new Promise((_, reject) => window.setTimeout(() => {
+const withTimeout = (promise, milliseconds = 9000) => new Promise((resolve, reject) => {
+  const timer = window.setTimeout(() => {
     const error = new Error('oauth_timeout');
     error.code = 'oauth_timeout';
     reject(error);
-  }, milliseconds)),
-]);
+  }, milliseconds);
+
+  Promise.resolve(promise).then(
+    (value) => {
+      window.clearTimeout(timer);
+      resolve(value);
+    },
+    (error) => {
+      window.clearTimeout(timer);
+      reject(error);
+    },
+  );
+});
+
+const getCallbackFailureMessage = (error, provider, providerName) => {
+  if (error?.code === 'oauth_timeout') {
+    return `${providerName} sign in took too long. Please try again.`;
+  }
+  if (error?.code === 'oauth_session_failed') {
+    return `${providerName} sign in completed but the session could not be loaded.`;
+  }
+  return getOAuthErrorMessage(error?.code || 'oauth_failed', provider);
+};
 
 const getSafeReturnPath = () => {
   const requested = sessionStorage.getItem('oauth_return_to') || '/';
@@ -101,11 +121,7 @@ const OAuthCallback = ({ onLogin }) => {
       })
       .catch((callbackError) => {
         if (cancelled) return;
-        setDisplayError(callbackError?.code === 'oauth_timeout'
-          ? `${providerName} sign in took too long. Please try again.`
-          : callbackError?.code === 'oauth_session_failed'
-            ? `${providerName} sign in completed but the session could not be loaded.`
-            : getOAuthErrorMessage(callbackError?.code || 'oauth_failed', provider));
+        setDisplayError(getCallbackFailureMessage(callbackError, provider, providerName));
       });
 
     return () => { cancelled = true; };
@@ -114,7 +130,7 @@ const OAuthCallback = ({ onLogin }) => {
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="text-center" role="status" aria-live="polite">
-        <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-3 border-red-500 border-t-transparent" />
+        {!displayError && <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-3 border-red-500 border-t-transparent" />}
         {!displayError && <p className="text-sm text-slate-600">Completing secure {searchParams.get('provider') === 'facebook' ? 'Facebook' : 'Google'} sign in...</p>}
         {displayError && <p className="mt-3 text-sm text-red-600">{displayError}</p>}
         {displayError && <Link className="mt-4 inline-block text-sm font-semibold text-red-700 underline" to="/login">Back to login</Link>}
