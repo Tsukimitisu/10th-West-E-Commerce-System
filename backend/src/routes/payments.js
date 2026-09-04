@@ -26,7 +26,9 @@ const staffPermission = (permission) => requirePermissionForRoles(permission, ..
 
 router.post('/:orderId/expire', authenticateToken, staffPermission('payments.manage'), expirePaymentSession);
 router.get('/:orderId/reconciliation', authenticateToken, staffPermission('payments.view'), getPaymentReconciliation);
-router.get('/:orderId/status', authenticateToken, staffPermission('payments.view'), getPaymentStatus);
-router.get('/orders/:orderId/status', authenticateToken, staffPermission('payments.view'), getPaymentStatus);
+// Ownership is enforced inside getPaymentStatus. Customers need this read-only
+// endpoint after returning from hosted checkout, while staff can inspect any order.
+router.get('/:orderId/status', authenticateToken, getPaymentStatus);
+router.get('/orders/:orderId/status', authenticateToken, getPaymentStatus);
 
 export default router;

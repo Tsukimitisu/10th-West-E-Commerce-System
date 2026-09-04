@@ -117,3 +117,49 @@ test('PayMongo checkout uses configured redirect URLs', async () => {
     }
   }
 });
+
+test('PayMongo normalizes Vite HashRouter payment return URLs and preserves the order reference', async () => {
+  const previous = {
+    publicKey: process.env.PAYMONGO_PUBLIC_KEY,
+    secretKey: process.env.PAYMONGO_SECRET_KEY,
+    webhookSecret: process.env.PAYMONGO_WEBHOOK_SECRET,
+    success: process.env.PAYMONGO_SUCCESS_URL,
+    cancel: process.env.PAYMONGO_CANCEL_URL,
+    failed: process.env.PAYMONGO_FAILED_URL,
+  };
+  const previousFetch = globalThis.fetch;
+  let attributes;
+  process.env.PAYMONGO_PUBLIC_KEY = 'pk_test_unit';
+  process.env.PAYMONGO_SECRET_KEY = 'sk_test_unit';
+  process.env.PAYMONGO_WEBHOOK_SECRET = 'whsk_unit';
+  process.env.PAYMONGO_SUCCESS_URL = 'http://localhost:5173/payment/success';
+  process.env.PAYMONGO_CANCEL_URL = 'http://localhost:5173/payment/cancelled';
+  process.env.PAYMONGO_FAILED_URL = 'http://localhost:5173/payment/failed';
+  globalThis.fetch = async (_url, options) => {
+    attributes = JSON.parse(options.body).data.attributes;
+    return { ok: true, json: async () => ({ data: { id: 'cs_hash', attributes: { checkout_url: 'https://paymongo.test/hash' } } }) };
+  };
+
+  try {
+    await createPaymongoGcashCheckout({
+      order: { id: 88, payment_id: 19, total_amount: 500 },
+      items: [{ product_name: 'Helmet', product_price: 500, quantity: 1 }],
+    });
+    assert.equal(attributes.success_url, 'http://localhost:5173/#/payment-result?order=88&status=success');
+    assert.equal(attributes.cancel_url, 'http://localhost:5173/#/payment-result?order=88&status=cancelled');
+    assert.equal(attributes.metadata.failed_url, 'http://localhost:5173/#/payment-result?order=88&status=failed');
+  } finally {
+    globalThis.fetch = previousFetch;
+    for (const [key, value] of Object.entries({
+      PAYMONGO_PUBLIC_KEY: previous.publicKey,
+      PAYMONGO_SECRET_KEY: previous.secretKey,
+      PAYMONGO_WEBHOOK_SECRET: previous.webhookSecret,
+      PAYMONGO_SUCCESS_URL: previous.success,
+      PAYMONGO_CANCEL_URL: previous.cancel,
+      PAYMONGO_FAILED_URL: previous.failed,
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});

@@ -156,6 +156,19 @@ test('checkout_session.payment.paid extracts checkout, payment, and metadata ide
   assert.equal(event.currency, 'PHP');
 });
 
+test('checkout paid parser accepts JSON:API data envelopes used by provider deliveries', () => {
+  const payload = checkoutPaidPayload('evt_enveloped');
+  const originalResource = payload.data.attributes.data;
+  originalResource.attributes.payments = [{ data: originalResource.attributes.payments[0] }];
+  payload.data.attributes.data = { data: originalResource };
+  const event = __testing.extractPaymongoEvent(payload);
+  assert.equal(event.checkoutId, 'cs_test_checkout_1');
+  assert.equal(event.externalPaymentId, 'pay_test_1');
+  assert.equal(event.orderId, 501);
+  assert.equal(event.paymentId, 701);
+  assert.equal(event.amount, 125050);
+});
+
 test('paid webhook marks payment and order paid and deducts reserved stock exactly once', async () => {
   const { client, state } = createWebhookDatabase();
   mock.method(pool, 'connect', async () => client);

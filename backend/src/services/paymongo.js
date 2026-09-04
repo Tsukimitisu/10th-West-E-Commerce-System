@@ -54,9 +54,36 @@ const buildRedirectUrl = (envName, fallbackStatus, orderId) => {
   const configured = normalizeText(process.env[envName]);
   const fallback = `${getPublicBaseUrl()}/#/payment-result?order=${encodeURIComponent(orderId)}&status=${fallbackStatus}`;
   const template = configured || fallback;
-  return template
+  const resolved = template
     .replaceAll('{orderId}', encodeURIComponent(orderId))
     .replaceAll('{status}', encodeURIComponent(fallbackStatus));
+
+  try {
+    const url = new URL(resolved);
+    const isFrontendPaymentPath = /^\/payment\/(success|failed|cancelled)\/?$/i.test(url.pathname);
+    if (isFrontendPaymentPath && !url.hash) {
+      url.pathname = '/';
+      url.search = '';
+      url.hash = `#/payment-result?order=${encodeURIComponent(orderId)}&status=${encodeURIComponent(fallbackStatus)}`;
+      return url.toString();
+    }
+
+    if (!template.includes('{orderId}')) {
+      if (url.hash.startsWith('#/')) {
+        const [hashPath, hashQuery = ''] = url.hash.slice(1).split('?');
+        const params = new URLSearchParams(hashQuery);
+        if (!params.has('order')) params.set('order', String(orderId));
+        if (!params.has('status')) params.set('status', fallbackStatus);
+        url.hash = `${hashPath}?${params.toString()}`;
+      } else {
+        if (!url.searchParams.has('order')) url.searchParams.set('order', String(orderId));
+        if (!url.searchParams.has('status')) url.searchParams.set('status', fallbackStatus);
+      }
+    }
+    return url.toString();
+  } catch {
+    return fallback;
+  }
 };
 
 const buildAuthHeader = () => {

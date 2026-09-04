@@ -571,11 +571,16 @@ export const createCheckout = async (req, res) => {
 const extractPaymongoEvent = (payload) => {
   const eventId = payload?.data?.id;
   const event = payload?.data?.attributes || {};
-  const resource = event.data || {};
+  const resourceEnvelope = event.data || {};
+  const resource = resourceEnvelope?.data || resourceEnvelope;
   const attributes = resource.attributes || {};
-  const nestedPayment = Array.isArray(attributes.payments) ? attributes.payments[0] : null;
+  const nestedPaymentEnvelope = Array.isArray(attributes.payments) ? attributes.payments[0] : null;
+  const nestedPayment = nestedPaymentEnvelope?.data || nestedPaymentEnvelope;
   const paymentAttributes = nestedPayment?.attributes || attributes;
-  const metadata = attributes.metadata || paymentAttributes.metadata || {};
+  const metadata = {
+    ...(paymentAttributes.metadata || {}),
+    ...(attributes.metadata || {}),
+  };
   const eventType = event.type;
   return {
     eventId,
@@ -641,6 +646,13 @@ const finalizePaidOrder = async (client, payment, event) => {
        VALUES ($1,$2,$3,$4,$5,$6,'sale','payment',$7)`,
       [row.product_id, row.variant_id, payment.order_id, -Number(row.quantity), stock.rows[0].stock_before, stock.rows[0].stock_after, payment.id]
     );
+    console.info('PAYMONGO_STOCK_DEDUCTED', {
+      order_id: payment.order_id,
+      payment_id: payment.id,
+      product_id: row.product_id,
+      variant_id: row.variant_id || null,
+      quantity: Number(row.quantity),
+    });
   }
   await client.query(`UPDATE stock_reservations SET status = 'committed', committed_at = NOW() WHERE order_id = $1 AND status = 'active'`, [payment.order_id]);
   const order = await client.query(`SELECT status FROM orders WHERE id = $1 FOR UPDATE`, [payment.order_id]);
@@ -698,6 +710,7 @@ export const handlePaymongoWebhook = async (req, res) => {
     console.warn('PAYMONGO_WEBHOOK_FAILED', { reason: 'invalid_signature' });
     return res.status(400).json({ message: 'Invalid PayMongo signature.' });
   }
+  console.info('PAYMONGO_WEBHOOK_SIGNATURE_VALID');
   const event = extractPaymongoEvent(req.body || {});
   if (!event.eventId || !event.eventType) {
     console.warn('PAYMONGO_WEBHOOK_FAILED', { reason: 'malformed_event' });
@@ -723,6 +736,14 @@ export const handlePaymongoWebhook = async (req, res) => {
       });
       return res.json({ message: 'Event already processed.' });
     }
+    console.info('PAYMONGO_PAYMENT_LOOKUP_START', {
+      event_id: event.eventId,
+      event_type: event.eventType,
+      checkout_id_present: Boolean(event.checkoutId),
+      provider_payment_id_present: Boolean(event.externalPaymentId),
+      metadata_payment_id_present: Boolean(event.paymentId),
+      metadata_order_id_present: Boolean(event.orderId),
+    });
     const lookup = await findPaymongoWebhookPayment(client, event);
     const payment = lookup.payment;
     if (!payment || payment.provider !== 'paymongo') {
@@ -764,9 +785,10 @@ export const handlePaymongoWebhook = async (req, res) => {
           order_id: payment.order_id,
           payment_id: payment.id,
         });
-        console.info('PAYMONGO_STOCK_DEDUCTION_SKIPPED_ALREADY_DONE', {
+      console.info('PAYMONGO_STOCK_DEDUCTION_SKIPPED', {
           order_id: payment.order_id,
           payment_id: payment.id,
+          reason: 'payment_already_paid',
         });
       }
     } else if (['payment.failed', 'checkout_session.payment.failed', 'checkout_session.expired'].includes(event.eventType)) {
@@ -836,8 +858,12 @@ export const getPaymentStatus = async (req, res) => {
     if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ message: 'Invalid order ID.' });
     const staff = STAFF_ROLE_SET.has(req.user.role);
     const result = await pool.query(
-      `SELECT o.id AS order_id, o.user_id, o.status AS order_status, p.status AS payment_status,
-              p.provider, p.method, p.amount, p.currency, p.reference, p.expires_at, p.paid_at, p.updated_at
+      `SELECT o.id AS order_id, o.user_id, o.status AS order_status, o.payment_status AS order_payment_status,
+              o.payment_method, o.payment_provider, o.shipping_address, o.shipping_address_snapshot,
+              o.shipping_fee, o.shipping_method, o.shipping_provider, o.courier, o.courier_name,
+              o.tracking_number, o.waybill_number, o.waybill_status,
+              p.status AS payment_status, p.provider, p.method, p.amount, p.currency,
+              p.reference, p.external_checkout_id, p.external_payment_id, p.expires_at, p.paid_at, p.updated_at
        FROM orders o JOIN payments p ON p.order_id = o.id
        WHERE o.id = $1 AND ($2::boolean OR o.user_id = $3) ORDER BY p.created_at DESC LIMIT 1`,
       [orderId, staff, req.user.id]
