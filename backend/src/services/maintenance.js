@@ -18,7 +18,7 @@ export const runMaintenanceCleanup = async () => {
 
   const sessions = await pool.query(
     `UPDATE sessions
-     SET is_active = false, updated_at = NOW()
+     SET is_active = false
      WHERE is_active = true AND expires_at <= NOW()`
   );
   summary.sessions_expired = sessions.rowCount || 0;
