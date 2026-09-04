@@ -4,6 +4,7 @@ import { BarChart3, Download, Calendar, TrendingUp, Package, DollarSign, Shoppin
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
 import ChartCard from '../../components/owner/ChartCard';
 import PageHeader from '../../components/operations/PageHeader';
+import { buildOwnerReportSections, downloadCsv, openDataReportPdf } from '../../utils/reportExports.js';
 
 const ReportsView = () => {
   const [tab, setTab] = useState('sales');
@@ -68,63 +69,25 @@ const ReportsView = () => {
     { id: 'customers', label: 'Customers', icon: Users },
   ];
 
-  const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-  const toCsv = (rows) => {
-    if (!rows?.length) return '';
-    const keys = Object.keys(rows[0]);
-    return [keys.map(csvCell).join(','), ...rows.map((row) => keys.map((key) => csvCell(row[key])).join(','))].join('\n');
-  };
-
   const handleExport = (type) => {
     const data = type === 'sales' ? salesTrend : type === 'products' ? topProducts : stockLevels;
     if (!data?.length) return;
-    const blob = new Blob([toCsv(data)], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `${type}-report.csv`; a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv({ filename: `${type}-report`, sections: [{ title: `${type} report`, rows: data }] });
   };
 
   const handleExportPDF = () => {
-    window.print();
+    openDataReportPdf({
+      title: '10th West Moto — Owner Report',
+      rangeLabel: dateRange,
+      sections: buildOwnerReportSections({ salesReport, salesTrend, topProducts, stockLevels, profitReport, posReport, returnReport, customerActivity }),
+    });
   };
 
   const handleExportExcel = () => {
-    // Gather all available data into a comprehensive CSV
-    let csvContent = '';
-    // Sales summary
-    if (salesReport) {
-      csvContent += 'SALES SUMMARY\n';
-      csvContent += 'Total Sales,Orders,Avg Order Value,POS Orders\n';
-      csvContent += `${salesReport.total_revenue || 0},${salesReport.total_orders || 0},${salesReport.average_order_value || 0},${salesReport.pos_orders || 0}\n\n`;
-    }
-    // Sales trend
-    if (salesTrend.length > 0) {
-      csvContent += 'SALES TREND\n';
-      csvContent += `${toCsv(salesTrend)}\n`;
-      csvContent += '\n';
-    }
-    // Top products
-    if (topProducts.length > 0) {
-      csvContent += 'TOP PRODUCTS\n';
-      csvContent += `${toCsv(topProducts)}\n`;
-      csvContent += '\n';
-    }
-    // Profit
-    if (profitReport) {
-      csvContent += 'PROFIT & LOSS\n';
-      csvContent += 'Gross Revenue,Total Cost,Net Profit,Margin\n';
-      csvContent += `${profitReport.total_revenue || 0},${profitReport.profit_exact ? profitReport.total_cost : ''},${profitReport.profit_exact ? profitReport.net_profit : ''},${profitReport.profit_exact ? `${profitReport.profit_margin}%` : 'Historical COGS missing'}\n\n`;
-    }
-    // Customer Activity
-    if (customerActivity.mostActive.length > 0) {
-      csvContent += 'CUSTOMER ACTIVITY\n';
-      csvContent += 'Customer,Orders,Total Spent\n';
-      customerActivity.mostActive.forEach(c => { csvContent += `${csvCell(c.name)},${csvCell(c.orders)},${csvCell(c.total)}\n`; });
-    }
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `full-report-${dateRange}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv({
+      filename: `owner-report_${dateRange}`,
+      sections: buildOwnerReportSections({ salesReport, salesTrend, topProducts, stockLevels, profitReport, posReport, returnReport, customerActivity }),
+    });
   };
 
   return (
