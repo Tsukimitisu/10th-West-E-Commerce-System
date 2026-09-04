@@ -3405,10 +3405,11 @@ export const updateReturnStatus = async (id, status) => {
   return data.return;
 };
 
-export const processRefund = async (id, method) => {
+export const processRefund = async (id, payload = {}) => {
   const data = await authenticatedFetch(`${API_URL}/returns/${id}/refund`, {
     method: 'POST',
-    body: JSON.stringify({ method }),
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    body: JSON.stringify(payload),
   });
   return data;
 };

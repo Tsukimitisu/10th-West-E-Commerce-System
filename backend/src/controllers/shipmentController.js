@@ -72,6 +72,10 @@ export const assertManualWaybillEligible = (order) => {
 const isStaff = (user) => STAFF_ROLE_SET.has(user?.role);
 
 const serializeShipment = (shipment, { staff = false } = {}) => {
+  const receiptConfirmed = Boolean(
+    shipment.customer_confirmed_receipt_at
+    || shipment.metadata?.customer_confirmed_receipt
+  );
   const serialized = {
     id: shipment.id,
     order_id: shipment.order_id,
@@ -85,7 +89,10 @@ const serializeShipment = (shipment, { staff = false } = {}) => {
     tracking_number: shipment.tracking_number,
     shipping_fee: Number(shipment.shipping_fee || 0),
     currency: shipment.currency || 'PHP',
-    status: shipment.normalized_status || shipment.status,
+    status: receiptConfirmed ? 'completed' : (shipment.normalized_status || shipment.status),
+    customer_confirmed_receipt_at: shipment.customer_confirmed_receipt_at
+      || shipment.metadata?.customer_confirmed_receipt_at
+      || null,
     label_url: shipment.label_url || null,
     created_at: shipment.created_at,
     updated_at: shipment.updated_at,
@@ -122,7 +129,8 @@ const loadShipmentForAccess = async ({ orderId = null, shipmentId = null, user }
   const byOrder = orderId !== null;
   const lookup = byOrder ? orderId : shipmentId;
   const result = await pool.query(
-    `SELECT s.*, o.user_id AS order_user_id, creator.name AS created_by_name
+    `SELECT s.*, o.user_id AS order_user_id, o.customer_confirmed_receipt_at,
+            creator.name AS created_by_name
      FROM shipments s
      JOIN orders o ON o.id = s.order_id
      LEFT JOIN users creator ON creator.id = s.created_by

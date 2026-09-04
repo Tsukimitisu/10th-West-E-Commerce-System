@@ -190,10 +190,16 @@ const OrdersView = () => {
   };
 
   const handleRefund = async () => {
-    if (!refundAmount || parseFloat(refundAmount) <= 0) return;
+    const approvedReturn = refundOrder?.return_request;
+    if (!approvedReturn?.id || approvedReturn.status !== 'approved') {
+      setRefundError('Refund can only be processed after an approved return/refund request.');
+      return;
+    }
     setRefunding(true);
     try {
-      await processRefund(refundOrder.id, { amount: parseFloat(refundAmount), reason: refundReason });
+      await processRefund(approvedReturn.id, {
+        ...(refundOrder.payment_method === 'cod' ? { manual_reference: refundReason.trim() } : {}),
+      });
       setShowRefundModal(false);
       setRefundOrder(null);
       setRefundAmount('');
@@ -558,8 +564,14 @@ const OrdersView = () => {
                   <Truck size={14} /> Create J&T Waybill
                 </button>
               )}
-              {!isStaff && (['delivered', 'refunded', 'partially_refunded', 'cancelled'].includes(detailOrder.status)) && (
-                <button onClick={() => { setRefundOrder(detailOrder); setRefundAmount(detailOrder.total_amount); setShowRefundModal(true); }}
+              {!isStaff && detailOrder.return_request?.status === 'approved' && (
+                <button onClick={() => {
+                  setRefundOrder(detailOrder);
+                  setRefundAmount(detailOrder.return_request.refund_amount || detailOrder.total_amount);
+                  setRefundReason('');
+                  setRefundError('');
+                  setShowRefundModal(true);
+                }}
                   className="px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg text-sm font-medium flex items-center gap-1">
                   <Undo size={14} /> Process Refund
                 </button>
@@ -719,22 +731,23 @@ const OrdersView = () => {
             <div className="space-y-3">
               <div>
                 <label className="text-sm text-gray-600">Refund Amount ({'\u20B1'})</label>
-                <input type="number" value={refundAmount} onChange={e => setRefundAmount(e.target.value)}
-                  max={refundOrder?.total_amount} min="0" step="0.01"
-                  className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-red-500" />
-                <p className="text-xs text-gray-400 mt-1">Order total: {'\u20B1'}{refundOrder?.total_amount?.toLocaleString()}</p>
+                <input type="number" value={refundAmount} readOnly
+                  className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700" />
+                <p className="text-xs text-gray-400 mt-1">Approved return #{refundOrder?.return_request?.id}</p>
               </div>
               <div>
-                <label className="text-sm text-gray-600">Reason</label>
+                <label className="text-sm text-gray-600">{refundOrder?.payment_method === 'cod' ? 'Manual refund reference' : 'Approved request'}</label>
                 <textarea value={refundReason} onChange={e => setRefundReason(e.target.value)}
                   className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-red-500"
-                  rows={3} placeholder="Reason for refund..." />
+                  rows={3}
+                  readOnly={refundOrder?.payment_method !== 'cod'}
+                  placeholder={refundOrder?.payment_method === 'cod' ? 'Enter the cash refund receipt/reference...' : 'Refund is tied to the approved customer return.'} />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-5">
               <button onClick={() => { setShowRefundModal(false); setRefundOrder(null); }}
                 className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button>
-              <button onClick={handleRefund} disabled={refunding || !refundAmount}
+              <button onClick={handleRefund} disabled={refunding || !refundAmount || (refundOrder?.payment_method === 'cod' && !refundReason.trim())}
                 className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white rounded-lg text-sm disabled:opacity-50">
                 {refunding ? 'Processing...' : 'Confirm Refund'}
               </button>

@@ -39,7 +39,8 @@ const memoryOrderStore = {
 
 const ORDER_NOTIFICATION_DETAIL_QUERY = `
   SELECT o.id, o.user_id, o.status, o.payment_status, o.payment_method,
-         o.customer_confirmed_receipt_at, o.delivered_at, o.id AS order_number, o.tracking_number,
+         o.customer_confirmed_receipt_at, o.delivered_at, o.shipping_status,
+         o.id AS order_number, o.tracking_number,
          oi.product_id, COALESCE(oi.product_name, p.name) as product_name,
          p.image as product_image
   FROM orders o
@@ -142,6 +143,7 @@ const resolveCustomerDisplayName = (order, shippingSnapshot) => {
 
 const mapOrderRecord = (order) => {
   const shippingSnapshot = parseShippingAddressSnapshot(order);
+  const receiptConfirmed = Boolean(order.customer_confirmed_receipt_at);
   return ({
   ...order,
   customer_display_name: resolveCustomerDisplayName(order, shippingSnapshot),
@@ -164,6 +166,8 @@ const mapOrderRecord = (order) => {
   shipping_provider: normalizeText(order.shipping_provider) || 'internal',
   courier_name: normalizeText(order.courier_name) || 'J&T Express',
   shipping_status: normalizeText(order.shipping_status) || 'pending',
+  tracking_status: receiptConfirmed ? 'completed' : (normalizeText(order.shipping_status) || normalizeText(order.status) || 'pending'),
+  display_status: receiptConfirmed ? 'completed' : (normalizeText(order.status) || 'pending'),
   delivery_method: normalizeText(order.delivery_method) || 'standard',
   shipping_address_snapshot: shippingSnapshot,
   courier: normalizeText(order.courier),
@@ -304,7 +308,7 @@ const buildOrderReturnInfo = async (db, order, userId, isStaff) => {
   const [settings, latestReturnResult] = await Promise.all([
     getReturnSettings(db),
     db.query(
-      `SELECT id, status, created_at, updated_at
+      `SELECT id, status, return_type, refund_method, refund_amount, created_at, updated_at
        FROM returns
        WHERE order_id = $1
          ${isStaff ? '' : 'AND user_id = $2'}
@@ -330,6 +334,9 @@ const buildOrderReturnInfo = async (db, order, userId, isStaff) => {
     return_request: latestReturn ? {
       id: latestReturn.id,
       status: latestReturn.status,
+      return_type: latestReturn.return_type,
+      refund_method: latestReturn.refund_method,
+      refund_amount: roundMoney(latestReturn.refund_amount || 0),
       created_at: latestReturn.created_at,
       updated_at: latestReturn.updated_at,
     } : null,
@@ -582,7 +589,7 @@ export const getOrderById = async (req, res) => {
 
     // Get order
     const orderResult = await pool.query(
-      'SELECT o.*, u.name as customer_name, u.email as customer_email FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE o.id = $1',
+      'SELECT o.*, u.name as customer_name, u.email as customer_email, u.phone as customer_phone FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE o.id = $1',
       [id]
     );
 
@@ -894,7 +901,7 @@ export const confirmOrderReceipt = async (req, res) => {
         success: true,
         already_confirmed: true,
         message: 'Order receipt was already confirmed.',
-        order: orderDetail,
+        order: mapOrderRecord(orderDetail),
       });
     }
 
@@ -902,6 +909,7 @@ export const confirmOrderReceipt = async (req, res) => {
       `UPDATE orders
        SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
            customer_confirmed_receipt_at = COALESCE(customer_confirmed_receipt_at, CURRENT_TIMESTAMP),
+           shipping_status = 'completed',
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
          AND user_id = $2
@@ -919,9 +927,30 @@ export const confirmOrderReceipt = async (req, res) => {
     const updatedOrder = result.rows[0];
     await client.query(
       `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note)
-       VALUES ($1, 'delivered', 'delivered', 'customer', $2, 'Customer confirmed receipt')`,
+       VALUES ($1, 'delivered', 'completed', 'customer', $2, 'Customer confirmed receipt')`,
       [updatedOrder.id, userId]
     );
+    const shipments = await client.query(
+      `UPDATE shipments
+       SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
+             'customer_confirmed_receipt_at', $2::text,
+             'customer_confirmed_receipt', true
+           ),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE order_id = $1 AND status NOT IN ('cancelled', 'returned')
+       RETURNING id`,
+      [updatedOrder.id, updatedOrder.customer_confirmed_receipt_at]
+    );
+    for (const shipment of shipments.rows) {
+      await client.query(
+        `INSERT INTO shipment_events (
+           shipment_id, provider, provider_event_id, status, description,
+           raw_event, payload, event_time, occurred_at
+         ) VALUES ($1,'manual',$2,'completed','Customer confirmed receipt',$3::jsonb,$3::jsonb,NOW(),NOW())
+         ON CONFLICT DO NOTHING`,
+        [shipment.id, `customer-receipt-${updatedOrder.id}`, JSON.stringify({ source: 'customer', order_id: updatedOrder.id })]
+      );
+    }
 
     await createUserNotification(client, {
       user_id: userId,
@@ -934,7 +963,7 @@ export const confirmOrderReceipt = async (req, res) => {
       reference_type: 'order',
       thumbnail_url: orderDetail.product_image || null,
       metadata: {
-        status: 'delivered',
+        status: 'completed',
         order_id: updatedOrder.id,
         order_number: orderDetail.order_number || updatedOrder.id,
         customer_confirmed_receipt_at: updatedOrder.customer_confirmed_receipt_at,
@@ -950,7 +979,7 @@ export const confirmOrderReceipt = async (req, res) => {
       success: true,
       already_confirmed: false,
       message: 'Order receipt confirmed.',
-      order: updatedOrder,
+      order: mapOrderRecord(updatedOrder),
     });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -1484,7 +1513,7 @@ export const getOrderInvoice = async (req, res) => {
 
     // Get order
     const orderResult = await pool.query(
-      'SELECT o.*, u.name as customer_name, u.email as customer_email FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE o.id = $1',
+      'SELECT o.*, u.name as customer_name, u.email as customer_email, u.phone as customer_phone FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE o.id = $1',
       [id]
     );
 
@@ -1509,11 +1538,31 @@ export const getOrderInvoice = async (req, res) => {
     );
 
     const items = itemsResult.rows;
-    const [storeSettings, legalSettings, taxSettings] = await Promise.all([
+    const [runtimeStoreSettings, legalSettings, taxSettings] = await Promise.all([
       getRuntimeSettings(pool, 'store', { name: '10th West Moto', address: '', email: '', phone: '' }),
       getRuntimeSettings(pool, 'legal', { tax_id: '', business_registration: '', vat_registered: false }),
       getRuntimeSettings(pool, 'tax', { enabled: false, name: 'Tax', rate: 0 }),
     ]);
+    const storeSettings = {
+      name: normalizeText(process.env.BUSINESS_NAME) || normalizeText(runtimeStoreSettings.name) || '10th West Moto',
+      phone: normalizeText(process.env.BUSINESS_PHONE) || normalizeText(runtimeStoreSettings.phone) || '',
+      email: normalizeText(process.env.BUSINESS_EMAIL) || normalizeText(runtimeStoreSettings.email) || '',
+      address: normalizeText(process.env.BUSINESS_ADDRESS) || normalizeText(runtimeStoreSettings.address) || '',
+    };
+    const invoiceShipping = parseShippingAddressSnapshot(order);
+    const customerPhone = normalizeText(invoiceShipping.phone) || normalizeText(order.customer_phone) || '';
+    const structuredCustomerAddress = [
+      invoiceShipping.street,
+      invoiceShipping.barangay,
+      invoiceShipping.city,
+      invoiceShipping.state,
+      invoiceShipping.postal_code,
+    ].filter(Boolean);
+    const customerAddress = (structuredCustomerAddress.length > 0
+      ? [...structuredCustomerAddress, invoiceShipping.country].filter(Boolean).join(', ')
+      : normalizeText(invoiceShipping.address_string))
+      || normalizeText(order.shipping_address)
+      || '';
     const legalLines = [
       legalSettings.tax_id ? `Tax ID: ${escapeInvoiceHtml(legalSettings.tax_id)}` : '',
       legalSettings.business_registration ? `Business registration: ${escapeInvoiceHtml(legalSettings.business_registration)}` : '',
@@ -1540,7 +1589,7 @@ export const getOrderInvoice = async (req, res) => {
         <title>Invoice #${escapeInvoiceHtml(order.id)}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+          body { font-family: Arial, sans-serif; padding: 40px; color: #333; overflow-wrap: anywhere; }
           .invoice-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #F97316; padding-bottom: 20px; }
           .company-name { font-size: 28px; font-weight: bold; color: #F97316; }
           .company-info { font-size: 11px; color: #666; margin-top: 6px; line-height: 1.6; }
@@ -1575,6 +1624,7 @@ export const getOrderInvoice = async (req, res) => {
           <div class="company-info">
             Motorcycle Parts &amp; Accessories<br>
             ${escapeInvoiceHtml(storeSettings.address)}
+            ${(storeSettings.phone || storeSettings.email) ? `<br>${escapeInvoiceHtml(storeSettings.phone)}${storeSettings.phone && storeSettings.email ? ' &nbsp;|&nbsp; ' : ''}${escapeInvoiceHtml(storeSettings.email)}` : ''}
             ${legalLines.length ? `<br>${legalLines.join(' &nbsp;|&nbsp; ')}` : ''}
           </div>
           <div class="invoice-title">INVOICE</div>
@@ -1586,7 +1636,8 @@ export const getOrderInvoice = async (req, res) => {
             <p>
               <strong>${escapeInvoiceHtml(order.customer_name || 'Customer')}</strong><br>
               ${escapeInvoiceHtml(order.customer_email || '')}<br>
-              ${escapeInvoiceHtml(order.shipping_address || '').replace(/\r?\n/g, '<br>')}
+              ${customerPhone ? `${escapeInvoiceHtml(customerPhone)}<br>` : ''}
+              ${escapeInvoiceHtml(customerAddress).replace(/\r?\n/g, '<br>')}
             </p>
           </div>
           <div class="info-block">
@@ -1595,7 +1646,10 @@ export const getOrderInvoice = async (req, res) => {
               <strong>Invoice #:</strong> ${escapeInvoiceHtml(order.id)}<br>
               <strong>Date:</strong> ${new Date(order.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
               <strong>Payment Method:</strong> ${escapeInvoiceHtml(order.payment_method || 'N/A')}<br>
-              <strong>Status:</strong> ${escapeInvoiceHtml(String(order.status || '').toUpperCase())}
+              <strong>Payment Status:</strong> ${escapeInvoiceHtml(String(order.payment_status || 'pending').toUpperCase())}<br>
+              <strong>Order Status:</strong> ${escapeInvoiceHtml(String(order.status || '').toUpperCase())}<br>
+              <strong>Courier:</strong> ${escapeInvoiceHtml(order.courier_name || order.courier || 'J&T Express')}<br>
+              <strong>Tracking Number:</strong> ${escapeInvoiceHtml(order.tracking_number || order.waybill_number || 'Not assigned')}
             </p>
           </div>
         </div>
@@ -1615,9 +1669,9 @@ export const getOrderInvoice = async (req, res) => {
               <tr>
                 <td class="item-description">${escapeInvoiceHtml(item.product_name || 'Product')}</td>
                 <td>${escapeInvoiceHtml(item.part_number || '-')}</td>
-                <td class="text-right">₱${roundMoney(item.product_price).toFixed(2)}</td>
+                <td class="text-right">&#8369;${roundMoney(item.product_price).toFixed(2)}</td>
                 <td class="text-right">${toFiniteNumber(item.quantity, 0)}</td>
-                <td class="text-right">₱${roundMoney(roundMoney(item.product_price) * toFiniteNumber(item.quantity, 0)).toFixed(2)}</td>
+                <td class="text-right">&#8369;${roundMoney(roundMoney(item.product_price) * toFiniteNumber(item.quantity, 0)).toFixed(2)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -1625,18 +1679,24 @@ export const getOrderInvoice = async (req, res) => {
  
         <div class="totals">
           <table>
+            <tr>
+              <td>Subtotal:</td>
+              <td class="text-right">&#8369;${subtotal.toFixed(2)}</td>
+            </tr>
+            ${taxSettings.enabled ? `
             <tr class="vat-section">
-              <td>${taxSettings.enabled ? `${escapeInvoiceHtml(taxSettings.name)}able Sales:` : 'Subtotal:'}</td>
-              <td class="text-right">₱${vatableSales.toFixed(2)}</td>
+              <td>${escapeInvoiceHtml(taxSettings.name)}able Sales:</td>
+              <td class="text-right">&#8369;${vatableSales.toFixed(2)}</td>
             </tr>
             <tr class="vat-section">
               <td>${escapeInvoiceHtml(taxSettings.name)} (${Number(taxSettings.rate)}%):</td>
-              <td class="text-right">₱${vatAmount.toFixed(2)}</td>
+              <td class="text-right">&#8369;${vatAmount.toFixed(2)}</td>
             </tr>
+            ` : ''}
             ${discount > 0 ? `
             <tr>
               <td>Discount:</td>
-              <td class="text-right">-₱${discount.toFixed(2)}</td>
+              <td class="text-right">-&#8369;${discount.toFixed(2)}</td>
             </tr>
             ` : ''}
             <tr>
@@ -1645,7 +1705,7 @@ export const getOrderInvoice = async (req, res) => {
             </tr>
             <tr class="grand-total">
               <td><strong>TOTAL (VAT Inclusive):</strong></td>
-              <td class="text-right"><strong>₱${totalAmount.toFixed(2)}</strong></td>
+              <td class="text-right"><strong>&#8369;${totalAmount.toFixed(2)}</strong></td>
             </tr>
           </table>
         </div>

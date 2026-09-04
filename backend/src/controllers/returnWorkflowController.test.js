@@ -28,4 +28,6 @@ test('return and refund workflow records audit events and scopes idempotency key
   assert.match(source, /action:\s*'refund\.complete'/);
   assert.match(source, /Number\(existing\.rows\[0\]\.return_id\) !== returnId/);
   assert.match(source, /IDEMPOTENCY_KEY_CONFLICT/);
+  assert.match(source, /data\.status !== 'approved'/);
+  assert.match(source, /Return must be approved before refund processing/);
 });

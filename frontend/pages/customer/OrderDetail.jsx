@@ -118,7 +118,8 @@ const OrderDetail = () => {
     </div>
   );
 
-  const step = stepForStatus[order.status] ?? 0;
+  const effectiveStatus = order.display_status || (order.customer_confirmed_receipt_at ? 'completed' : order.status);
+  const step = stepForStatus[effectiveStatus] ?? 0;
   const date = new Date(order.created_at || order.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   const items = order.items || [];
   const itemsSubtotal = roundCurrency(items.reduce((sum, item) => {
@@ -196,7 +197,7 @@ const OrderDetail = () => {
               {confirmingReceipt ? 'Confirming...' : 'Confirm Receipt'}
             </button>
           )}
-          {order.status === 'delivered' && order.customer_confirmed_receipt_at && (
+          {effectiveStatus === 'completed' && order.customer_confirmed_receipt_at && (
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
               <CheckCircle2 size={14} /> Receipt Confirmed
             </span>
@@ -214,7 +215,7 @@ const OrderDetail = () => {
           <AlertTriangle size={14} /> {receiptError}
         </div>
       )}
-      {order.status === 'delivered' && (
+      {order.status === 'delivered' && !order.customer_confirmed_receipt_at && (
         <div className="bg-red-500/10 border border-red-200 rounded-xl p-4 mb-6">
           <div className="flex items-center gap-3">
             <Truck size={18} className="text-orange-600" />

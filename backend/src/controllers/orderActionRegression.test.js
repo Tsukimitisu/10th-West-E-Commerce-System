@@ -22,7 +22,15 @@ test('receipt confirmation is transactionally idempotent and creates one notific
   const handler = source.slice(start, end);
   assert.match(handler, /BEGIN/);
   assert.match(handler, /customer_confirmed_receipt_at IS NULL/);
+  assert.match(handler, /shipping_status = 'completed'/);
+  assert.match(handler, /'completed','Customer confirmed receipt'/);
   assert.match(handler, /already_confirmed: true/);
   assert.match(handler, /createUserNotification\(client/);
   assert.match(handler, /COMMIT/);
+});
+
+test('customer payment status endpoint relies on controller ownership instead of staff-only permission', async () => {
+  const source = await readFile(new URL('../routes/payments.js', import.meta.url), 'utf8');
+  assert.match(source, /router\.get\('\/orders\/:orderId\/status', authenticateToken, getPaymentStatus\)/);
+  assert.doesNotMatch(source, /router\.get\('\/orders\/:orderId\/status', authenticateToken, staffPermission/);
 });
