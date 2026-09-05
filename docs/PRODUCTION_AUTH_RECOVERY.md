@@ -57,6 +57,7 @@ Set these non-secret values in the service Environment page and redeploy:
 
 ```env
 NODE_ENV=production
+DB_SSL_MODE=no-verify
 FRONTEND_URL=https://10th-west-e-commerce-system.vercel.app
 FRONTEND_ORIGIN=https://10th-west-e-commerce-system.vercel.app
 BACKEND_URL=https://one0th-west-e-commerce-system.onrender.com
@@ -69,9 +70,13 @@ FACEBOOK_CALLBACK_URL=https://one0th-west-e-commerce-system.onrender.com/api/aut
 ```
 
 Keep existing strong, stable, distinct secrets. Do not paste them in support
-messages. Follow `DEPLOYMENT.md` for core secret requirements and verified
-Supabase TLS. Do not set NODE_ENV=development or disable TLS verification as
-a workaround for a production certificate/configuration error.
+messages. Follow `DEPLOYMENT.md` for core secret requirements and Supabase TLS.
+For the reported Render pooler `SELF_SIGNED_CERT_IN_CHAIN` failure, the scoped
+`DB_SSL_MODE=no-verify` setting keeps database TLS enabled without certificate
+verification. Alternatively use `DB_SSL_REJECT_UNAUTHORIZED=false`. Use this
+exception only for managed database pooler compatibility; prefer verified TLS
+with a trusted CA when available. Never use `NODE_TLS_REJECT_UNAUTHORIZED=0`
+or `NODE_ENV=development` as a production workaround.
 
 ## Vercel environment
 

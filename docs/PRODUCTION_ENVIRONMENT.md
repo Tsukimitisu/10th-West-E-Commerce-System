@@ -125,13 +125,17 @@ surrounding whitespace is trimmed or configuration fails. Already-set process
 values win over `backend/.env`, so remove stale platform variables when rotating
 a URL.
 
-Supabase requires TLS. Production defaults to `verify-full` and this application
-verifies the certificate chain for every enabled production SSL mode. Download
+Supabase requires TLS. Production defaults to `verify-full`. Download
 the project CA from **Database Settings > SSL Configuration**, then set
 `NODE_EXTRA_CA_CERTS` in the process environment before Node starts. Defining it
 only in `backend/.env` is too late for Node's trust-store initialization. Keep
-`DB_SSL_MODE=verify-full`; never use `disable` for Supabase. Production startup
-is blocked when the CA cannot be verified. See the official
+`DB_SSL_MODE=verify-full`; never use `disable` for Supabase. For Render managed
+pooler `SELF_SIGNED_CERT_IN_CHAIN` compatibility only, explicitly select
+`DB_SSL_MODE=no-verify` (or `DB_SSL_REJECT_UNAUTHORIZED=false`). TLS remains
+enabled but the certificate is not verified. Keep `NODE_ENV=production` and
+all required security settings; never use `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+See [the scoped override and verification steps](../DEPLOYMENT.md#supabase-and-migrations).
+See the official
 [Supabase SSL enforcement guide](https://supabase.com/docs/guides/platform/ssl-enforcement).
 Optional pool and timeout controls are documented in `backend/.env.example`.
 

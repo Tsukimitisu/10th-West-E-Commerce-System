@@ -114,11 +114,38 @@ for reliable support across browser privacy modes.
 
 Copy the exact direct/session pooler connection from Supabase Connect; prefer
 session mode port 5432 for persistent Render and Knex. URL-encode password
-characters. Production verifies TLS certificates, including when the URL has
-sslmode=require. If needed, upload the Supabase CA as a Render secret file and
-set NODE_EXTRA_CA_CERTS to its absolute path **before Node starts**. Do not
-disable TLS verification. A paused project must be resumed in Supabase; the
+characters. Production defaults to verified TLS. If needed, upload the Supabase
+CA as a Render secret file and set NODE_EXTRA_CA_CERTS to its absolute path
+**before Node starts**. A paused project must be resumed in Supabase; the
 API returns unavailable on database connectivity failures.
+
+For the reported Render managed-pooler `SELF_SIGNED_CERT_IN_CHAIN` failure,
+override the `verify-full` setting above with:
+
+```env
+NODE_ENV=production
+DB_SSL_MODE=no-verify
+SESSION_STORE=postgres
+COOKIE_SECURE=true
+COOKIE_SAME_SITE=none
+CSRF_COOKIE_SAME_SITE=none
+```
+
+This keeps TLS encryption but opts out of database-server certificate verification,
+reducing protection against server impersonation. Use only for managed pooler
+compatibility. An alternative is `DB_SSL_REJECT_UNAUTHORIZED=false`. Never set
+`NODE_TLS_REJECT_UNAUTHORIZED=0`: that would affect all Node HTTPS integrations.
+Supabase `DB_SSL_MODE=disable` remains rejected. All core secrets remain required.
+
+`DB_SSL_MODE` overrides URI `sslmode`. `no-verify` always selects verification
+off; otherwise the explicit boolean `DB_SSL_REJECT_UNAUTHORIZED` overrides the
+mode's verification default. Without either override, production verifies
+certificates (default `verify-full`); local `require` retains its existing behavior.
+The selected policy is shared by pg runtime/session connections and Knex.
+Redeploy after setting the override, then check `/api/ready` and run the database
+checks below. Startup logs only safe connection metadata and a TLS compatibility
+warning. Restore `verify-full` and remove the false override once a trusted CA is
+configured. Do not switch the application to development mode on Render.
 
 Before releasing traffic, run from the backend directory:
 

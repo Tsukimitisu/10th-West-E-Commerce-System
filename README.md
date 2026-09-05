@@ -64,6 +64,12 @@ being sent with login. See `docs/PRODUCTION_ENVIRONMENT.md`.
 
 See `docs/PRODUCTION_ENVIRONMENT.md` for the full production checklist.
 
+Render Supabase pooler `SELF_SIGNED_CERT_IN_CHAIN`: keep `NODE_ENV=production`
+and set `DB_SSL_MODE=no-verify` only for managed pooler compatibility. This
+retains TLS but disables database certificate verification, not global HTTPS
+verification. Never use `NODE_TLS_REJECT_UNAUTHORIZED=0`. See
+[deployment SSL settings](DEPLOYMENT.md#supabase-and-migrations).
+
 Payment, shipping, tracking, email, OAuth, and media integrations are optional
 at core startup. Until their credentials and verified provider contracts are
 available, their status is **Blocked by credentials/configuration.**
