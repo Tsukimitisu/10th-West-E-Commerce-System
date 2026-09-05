@@ -1,5 +1,8 @@
 # Production Environment
 
+For the current Render/Vercel environment list, Semaphore setup, provider
+callbacks and release steps, use [DEPLOYMENT.md](../DEPLOYMENT.md).
+
 The API fails startup when required core security configuration is missing or
 unsafe. Provider-backed features remain unavailable until their real
 credentials and verified contracts are configured.
@@ -162,12 +165,12 @@ are available. Placeholder values do not make an integration operational.
 | Capability | Intended provider | Deployment status |
 | --- | --- | --- |
 | Payment | PayMongo / GCash | **Blocked by credentials/configuration.** |
-| Shipping | BigSeller / J&T Express Philippines | **Blocked by credentials/configuration.** |
-| Waybill and label operations | BigSeller private API contract | **Blocked by credentials/configuration.** |
-| Tracking | AfterShip; TrackingMore contract is not implemented | **Blocked by credentials/configuration.** |
+| Shipping | Internal Luzon fees | Configure the approved fee/weight/distance rules. |
+| Waybill and label operations | Manual J&T | Store-issued waybill; no courier API required. |
+| Tracking | Manual | Staff update the shipment timeline. |
+| Phone verification | Semaphore | Requires API key, credit and approved sender. |
 
-Shipping and waybill work also requires BigSeller's approved private endpoint
-contract; credentials alone are insufficient. Do not select either mock
+Manual J&T does not require an external shipping API contract. Do not select either mock
 shipping or mock tracking in production. Email, OAuth, and Cloudinary are also
 optional and remain unavailable while their respective values are empty.
 
