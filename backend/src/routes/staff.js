@@ -6,13 +6,17 @@ import {
   getStaffActivity, updateStaffPermissions,
   getAllPermissions, getStaffPerformance,
 } from '../controllers/staffController.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
 
 const router = express.Router();
 
 // All staff routes require super_admin, admin, or owner
-router.use(authenticateToken, requireRole('super_admin', 'admin', 'owner'));
+router.use(
+  authenticateToken,
+  requireRole('super_admin', 'admin', 'owner'),
+  requirePermission('staff.manage')
+);
 
 // Staff CRUD
 router.get('/', listStaff);
@@ -22,14 +26,14 @@ router.post('/',
   body('name').trim().notEmpty(),
   body('email').isEmail(),
   body('password').isLength({ min: 8 }),
-  body('role').isIn(['store_staff', 'owner']),
+  body('role').isIn(['admin', 'owner', 'store_staff', 'cashier']),
   validate,
   addStaff
 );
 router.put('/:id',
   body('name').trim().notEmpty(),
   body('email').isEmail(),
-  body('role').isIn(['store_staff', 'owner']),
+  body('role').isIn(['admin', 'owner', 'store_staff', 'cashier']),
   validate,
   editStaff
 );

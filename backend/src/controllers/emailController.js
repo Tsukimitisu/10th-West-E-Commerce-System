@@ -1,22 +1,43 @@
 import nodemailer from 'nodemailer';
 import pool from '../config/database.js';
+import { getEmailConfigurationStatus } from '../services/integrationReadiness.js';
 
 // Create email transporter
 const createTransporter = () => {
-  console.log('📧 Creating email transporter with:');
-  console.log('   HOST:', process.env.EMAIL_HOST);
-  console.log('   PORT:', process.env.EMAIL_PORT);
-  console.log('   USER:', process.env.EMAIL_USER);
-  console.log('   PASSWORD:', process.env.EMAIL_PASSWORD ? '***SET***' : 'NOT SET');
+  const status = getEmailConfigurationStatus();
+  if (!status.ready) {
+    const error = new Error('Email delivery is blocked by credentials/configuration.');
+    error.code = 'EMAIL_CONFIG_MISSING';
+    error.status = 503;
+    error.missing_categories = status.missing_categories;
+    throw error;
+  }
+
+  console.log('Creating email transporter:', status.provider);
   
   return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587'),
+    host: status.transport.host,
+    port: status.transport.port || 587,
     secure: false, // TLS for port 587
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD
+      user: status.transport.user,
+      pass: status.transport.pass,
     }
+  });
+};
+
+const emailFailureResponse = (res, error) => {
+  if (error.code === 'EMAIL_CONFIG_MISSING') {
+    return res.status(503).json({
+      message: 'Email delivery is blocked by credentials/configuration.',
+      code: error.code,
+      missing_categories: error.missing_categories || [],
+    });
+  }
+
+  return res.status(502).json({
+    message: 'Email provider rejected the delivery attempt.',
+    code: 'EMAIL_DELIVERY_FAILED',
   });
 };
 
@@ -134,11 +155,7 @@ export const sendOrderConfirmation = async (req, res) => {
   } catch (error) {
     console.error('❌ Email error:', error.message);
     console.error('Full error:', error);
-    // Don't fail the order if email fails
-    res.status(200).json({ 
-      message: 'Order created but email notification failed',
-      error: error.message 
-    });
+    return emailFailureResponse(res, error);
   }
 };
 // Send order status update email
@@ -260,9 +277,6 @@ export const sendOrderStatusUpdate = async (req, res) => {
     res.json({ message: 'Order status update email sent successfully', messageId: result.messageId });
   } catch (error) {
     console.error('❌ Status update email error:', error.message);
-    res.status(200).json({ 
-      message: 'Status updated but email notification failed',
-      error: error.message 
-    });
+    return emailFailureResponse(res, error);
   }
 };

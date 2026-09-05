@@ -1,13 +1,22 @@
 import pool from '../config/database.js';
 
+const VALID_POLICY_TYPES = ['return_policy', 'privacy_policy', 'terms_of_service', 'shipping_policy'];
+const POLICY_TYPE_ALIASES = {
+  privacy: 'privacy_policy',
+};
+
+export const normalizePolicyType = (type) => {
+  const normalized = String(type || '').trim().toLowerCase();
+  const canonical = POLICY_TYPE_ALIASES[normalized] || normalized;
+  return VALID_POLICY_TYPES.includes(canonical) ? canonical : null;
+};
+
 // Get policy by type (public)
 export const getPolicyByType = async (req, res) => {
   try {
-    const { type } = req.params;
+    const type = normalizePolicyType(req.params.type);
 
-    const validTypes = ['return_policy', 'privacy_policy', 'terms_of_service', 'shipping_policy'];
-
-    if (!validTypes.includes(type)) {
+    if (!type) {
       return res.status(400).json({ message: 'Invalid policy type' });
     }
 
@@ -43,12 +52,10 @@ export const getAllPolicies = async (req, res) => {
 
 // Create or update policy (admin)
 export const upsertPolicy = async (req, res) => {
-  const { type } = req.params;
+  const type = normalizePolicyType(req.params.type);
   const { title, content } = req.body;
 
-  const validTypes = ['return_policy', 'privacy_policy', 'terms_of_service', 'shipping_policy'];
-
-  if (!validTypes.includes(type)) {
+  if (!type) {
     return res.status(400).json({ message: 'Invalid policy type' });
   }
 
@@ -81,7 +88,11 @@ export const upsertPolicy = async (req, res) => {
 
 // Delete policy (admin)
 export const deletePolicy = async (req, res) => {
-  const { type } = req.params;
+  const type = normalizePolicyType(req.params.type);
+
+  if (!type) {
+    return res.status(400).json({ message: 'Invalid policy type' });
+  }
 
   try {
     const result = await pool.query(
@@ -94,7 +105,7 @@ export const deletePolicy = async (req, res) => {
     }
 
     res.json({ message: 'Policy deleted successfully' });
-  } catch (error) {
+  } catch (error) { 
     console.error('Delete policy error:', error);
     res.status(500).json({ message: 'Failed to delete policy' });
   }

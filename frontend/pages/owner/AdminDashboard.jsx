@@ -1,50 +1,54 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import React from 'react';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/owner/AdminLayout';
 import DashboardView from './DashboardView';
-import ProductsView from './ProductsView';
 import InventoryView from './InventoryView';
 import OrdersView from './OrdersView';
+import CustomersView from './CustomersView';
 import ReturnsView from './ReturnsView';
 import StaffView from './StaffView';
+import ReviewsView from './ReviewsView';
 import ReportsView from './ReportsView';
 import BannersView from './BannersView';
 import PromotionsView from './PromotionsView';
 import ContentView from './ContentView';
+import ChatView from './ChatView';
+import StaffDashboardView from '../staff/StaffDashboardView';
+import StorefrontListingsView from './StorefrontListingsView';
 
-const AdminDashboard = ({ onLogout }) => {
-  const userStr = localStorage.getItem('shopCoreUser');
-  const user = userStr ? JSON.parse(userStr) : null;
-  const canAccessAdmin = user?.role === 'owner' || user?.role === 'store_staff';
-
-  if (!canAccessAdmin) {
-    return <Navigate to="/login" replace />;
-  }
+const AdminDashboard = ({ user, onLogout }) => {
+  const canAccessAdmin = ['owner', 'store_staff', 'admin'].includes(user?.role);
+  const location = useLocation();
+  const navigate = useNavigate();
+  if (!canAccessAdmin) return <Navigate to="/login" replace />;
 
   const isStaff = user?.role === 'store_staff';
-  const [activeView, setActiveView] = useState(isStaff ? 'orders' : 'dashboard');
+  const segment = location.pathname.split('/').filter(Boolean)[1] || 'dashboard';
+  const aliases = { shipments: 'orders', waybills: 'orders', refunds: 'returns', settings: 'content' };
+  const activeView = aliases[segment] || segment;
+  const basePath = isStaff ? '/staff' : '/admin';
+  const setActiveView = (view) => navigate(view === 'pos' ? '/pos' : `${basePath}/${view}`);
 
-  const renderView = () => {
-    switch (activeView) {
-      case 'dashboard': return <DashboardView />;
-      case 'products': return <ProductsView />;
-      case 'inventory': return <InventoryView />;
-      case 'orders': return <OrdersView />;
-      case 'returns': return <ReturnsView />;
-      case 'staff': return <StaffView />;
-      case 'reports': return <ReportsView />;
-      case 'promotions': return <PromotionsView />;
-      case 'banners': return <BannersView />;
-      case 'content': return <ContentView />;
-      default: return <DashboardView />;
-    }
+  if (['products', 'categories', 'variants'].includes(segment)) {
+    return (
+      <Navigate
+        to={`${basePath}/inventory`}
+        replace
+        state={{ catalogNotice: 'Product management is now handled through Inventory. Use Storefront Listings to publish items online.' }}
+      />
+    );
+  }
+
+  const views = {
+    dashboard: isStaff ? <StaffDashboardView user={user} onNavigate={setActiveView} /> : <DashboardView onNavigate={setActiveView} />,
+    storefront: <StorefrontListingsView />, inventory: <InventoryView />, orders: <OrdersView />,
+    customers: <CustomersView />, returns: <ReturnsView />, staff: <StaffView />,
+    reviews: <ReviewsView />, reports: <ReportsView />, promotions: <PromotionsView />,
+    banners: <BannersView />, content: <ContentView />, chat: <ChatView />,
   };
-
-  return (
-    <AdminLayout activeView={activeView} onNavigate={setActiveView} onLogout={onLogout}>
-      {renderView()}
-    </AdminLayout>
-  );
+  if (isStaff && activeView === 'customers') return <Navigate to="/staff/dashboard" replace />;
+  if (!views[activeView]) return <Navigate to={`${basePath}/dashboard`} replace />;
+  return <AdminLayout activeView={activeView} onNavigate={setActiveView} onLogout={onLogout} user={user}>{views[activeView]}</AdminLayout>;
 };
 
 export default AdminDashboard;

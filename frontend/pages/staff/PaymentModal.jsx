@@ -1,242 +1,130 @@
-﻿import React, { useState } from 'react';
-import { Loader2, CreditCard, Banknote, X, CheckCircle, Smartphone, Wallet } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Banknote, Loader2, Smartphone, X } from 'lucide-react';
 
-const PaymentModal = ({ total, onComplete, onCancel }) => {
-  const [method, setMethod] = useState(null);
+const formatCurrency = (value) => new Intl.NumberFormat('en-PH', {
+  style: 'currency',
+  currency: 'PHP',
+}).format(Number(value || 0));
+
+const PaymentModal = ({ total, processing = false, error = '', onComplete, onCancel }) => {
+  const [method, setMethod] = useState('cash');
   const [tendered, setTendered] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [cardSuccess, setCardSuccess] = useState(false);
-  const [ewalletRef, setEwalletRef] = useState('');
+  const [reference, setReference] = useState('');
+  const numericTendered = Number(tendered);
+  const changeDue = useMemo(
+    () => method === 'cash' && Number.isFinite(numericTendered) ? Math.max(0, numericTendered - total) : 0,
+    [method, numericTendered, total],
+  );
+  const canSubmit = method === 'cash'
+    ? Number.isFinite(numericTendered) && numericTendered >= total
+    : reference.trim().length >= 4;
 
-  const handleCashSubmit = (e) => {
-    e.preventDefault();
-    const tenderedFloat = parseFloat(tendered);
-    if (tenderedFloat >= total) {
-      onComplete('cash', tenderedFloat, tenderedFloat - total);
-    }
+  const submit = (event) => {
+    event.preventDefault();
+    if (!canSubmit || processing) return;
+    onComplete({
+      paymentMethod: method,
+      amountTendered: method === 'cash' ? numericTendered : total,
+      paymentReference: method === 'gcash' ? reference.trim() : '',
+    });
   };
-
-  const handleCardProcess = () => {
-    setIsProcessing(true);
-    // Simulate terminal interaction
-    setTimeout(() => {
-      setIsProcessing(false);
-      setCardSuccess(true);
-      setTimeout(() => {
-        onComplete('card', total, 0);
-      }, 1000);
-    }, 2000);
-  };
-
-  const handleEwalletProcess = () => {
-    setIsProcessing(true);
-    // Simulate e-wallet confirmation
-    setTimeout(() => {
-      setIsProcessing(false);
-      setCardSuccess(true);
-      setTimeout(() => {
-        onComplete(method, total, 0);
-      }, 1000);
-    }, 2500);
-  };
-
-  const changeDue = tendered ? parseFloat(tendered) - total : 0;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
-      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={onCancel}></div>
+    <div className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="payment-title">
+      <form onSubmit={submit} className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-red-600">Complete sale</p>
+            <h2 id="payment-title" className="mt-1 font-display text-xl font-bold text-slate-950">Payment due: {formatCurrency(total)}</h2>
+          </div>
+          <button type="button" onClick={onCancel} disabled={processing} className="grid h-10 w-10 place-items-center rounded-xl text-slate-500 hover:bg-slate-100" aria-label="Close payment">
+            <X size={20} />
+          </button>
+        </div>
 
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-gray-900">
-                Payment Due: ₱{total.toFixed(2)}
-              </h3>
-              <button onClick={onCancel} className="text-gray-400 hover:text-gray-500">
-                <X className="h-6 w-6" />
+        <div className="space-y-5 p-5 sm:p-6">
+          <fieldset>
+            <legend className="mb-2 text-sm font-semibold text-slate-800">Payment method</legend>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setMethod('cash')}
+                aria-pressed={method === 'cash'}
+                className={`flex min-h-20 items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors ${method === 'cash' ? 'border-red-500 bg-red-50' : 'border-slate-200 hover:border-slate-300'}`}
+              >
+                <Banknote className="text-emerald-600" size={26} />
+                <span><strong className="block text-sm text-slate-950">Cash</strong><span className="text-xs text-slate-600">Calculate change</span></span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMethod('gcash')}
+                aria-pressed={method === 'gcash'}
+                className={`flex min-h-20 items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors ${method === 'gcash' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+              >
+                <Smartphone className="text-blue-600" size={26} />
+                <span><strong className="block text-sm text-slate-950">GCash</strong><span className="text-xs text-slate-600">Manual reference</span></span>
               </button>
             </div>
+          </fieldset>
 
-            {!method ? (
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={() => setMethod('cash')}
-                  className="flex flex-col items-center justify-center p-8 border-2 border-gray-100 rounded-2xl hover:border-orange-500 hover:bg-orange-50 transition-all group"
-                >
-                  <Banknote className="h-12 w-12 text-green-600 mb-4 group-hover:scale-110 transition-transform" />
-                  <span className="text-lg font-bold text-gray-900">Cash</span>
-                </button>
-                <button
-                  onClick={() => setMethod('card')}
-                  className="flex flex-col items-center justify-center p-8 border-2 border-gray-100 rounded-2xl hover:border-orange-500 hover:bg-orange-50 transition-all group"
-                >
-                  <CreditCard className="h-12 w-12 text-orange-500 mb-4 group-hover:scale-110 transition-transform" />
-                  <span className="text-lg font-bold text-gray-900">Card</span>
-                </button>
-                <button
-                  onClick={() => setMethod('gcash')}
-                  className="flex flex-col items-center justify-center p-8 border-2 border-gray-100 rounded-2xl hover:border-blue-500 hover:bg-blue-50 transition-all group"
-                >
-                  <Smartphone className="h-12 w-12 text-blue-500 mb-4 group-hover:scale-110 transition-transform" />
-                  <span className="text-lg font-bold text-gray-900">GCash</span>
-                  <span className="text-xs text-blue-500 font-medium mt-1">E-Wallet</span>
-                </button>
-                <button
-                  onClick={() => setMethod('maya')}
-                  className="flex flex-col items-center justify-center p-8 border-2 border-gray-100 rounded-2xl hover:border-green-500 hover:bg-green-50 transition-all group"
-                >
-                  <Wallet className="h-12 w-12 text-green-500 mb-4 group-hover:scale-110 transition-transform" />
-                  <span className="text-lg font-bold text-gray-900">Maya</span>
-                  <span className="text-xs text-green-500 font-medium mt-1">E-Wallet</span>
-                </button>
+          {method === 'cash' ? (
+            <div>
+              <label htmlFor="amount-received" className="text-sm font-semibold text-slate-800">Amount received</label>
+              <div className="relative mt-2">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-semibold text-slate-500">₱</span>
+                <input
+                  id="amount-received"
+                  type="number"
+                  min={total}
+                  step="0.01"
+                  autoFocus
+                  value={tendered}
+                  onChange={(event) => setTendered(event.target.value)}
+                  className="h-14 w-full rounded-xl border border-slate-300 pl-9 pr-4 text-2xl font-bold text-slate-950 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
+                  placeholder="0.00"
+                />
               </div>
-            ) : method === 'cash' ? (
-              <form onSubmit={handleCashSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Amount Tendered</label>
-                  <div className="relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 sm:text-lg">₱</span>
-                    </div>
-                    <input
-                      type="number"
-                      step="0.01"
-                      autoFocus
-                      required
-                      className="focus:ring-orange-500 focus:border-orange-500 block w-full pl-8 pr-12 sm:text-2xl border-gray-200 rounded-xl py-4"
-                      placeholder="0.00"
-                      value={tendered}
-                      onChange={(e) => setTendered(e.target.value)}
-                    />
-                  </div>
-                </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[total, Math.ceil(total / 100) * 100, Math.ceil(total / 500) * 500, Math.ceil(total / 1000) * 1000]
+                  .filter((value, index, all) => all.indexOf(value) === index)
+                  .map((value) => (
+                    <button key={value} type="button" onClick={() => setTendered(String(value))} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                      {formatCurrency(value)}
+                    </button>
+                  ))}
+              </div>
+              <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-950 px-4 py-3 text-white">
+                <span className="text-sm text-slate-300">Change due</span>
+                <strong className="font-display text-xl">{formatCurrency(changeDue)}</strong>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="gcash-reference" className="text-sm font-semibold text-slate-800">GCash reference number</label>
+              <input
+                id="gcash-reference"
+                type="text"
+                autoFocus
+                value={reference}
+                onChange={(event) => setReference(event.target.value.replace(/[^A-Za-z0-9-]/g, '').slice(0, 64))}
+                className="mt-2 h-12 w-full rounded-xl border border-slate-300 px-4 text-base font-semibold text-slate-950 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+                placeholder="Enter confirmed payment reference"
+              />
+              <p className="mt-2 text-xs leading-5 text-slate-600">Confirm payment in the merchant account before recording the reference. This screen does not simulate or authorize a GCash payment.</p>
+            </div>
+          )}
 
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex justify-between text-lg font-medium">
-                    <span className="text-gray-600">Total:</span>
-                    <span className="text-gray-900">₱{total.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-lg font-medium mt-2">
-                    <span className="text-gray-600">Change Due:</span>
-                    <span className={`text-xl font-bold ${changeDue >= 0 ? 'text-green-600' : 'text-orange-500'}`}>
-                      ₱{changeDue >= 0 ? changeDue.toFixed(2) : '0.00'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => setMethod(null)}
-                    className="flex-1 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={changeDue < 0}
-                    className="flex-1 py-3 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    Complete Transaction
-                  </button>
-                </div>
-              </form>
-            ) : method === 'card' ? (
-              <div className="text-center py-8">
-                {isProcessing ? (
-                  <div className="flex flex-col items-center">
-                    <Loader2 className="h-16 w-16 text-indigo-600 animate-spin mb-4" />
-                    <p className="text-lg font-medium text-gray-900">Processing on terminal...</p>
-                    <p className="text-sm text-gray-500 mt-2">Please tap, insert, or swipe card.</p>
-                  </div>
-                ) : cardSuccess ? (
-                  <div className="flex flex-col items-center animate-bounce-in">
-                    <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
-                    <p className="text-xl font-bold text-gray-900">Approved!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="bg-indigo-50 p-6 rounded-full inline-block">
-                      <CreditCard className="h-12 w-12 text-indigo-600" />
-                    </div>
-                    <p className="text-lg text-gray-600">Ready to charge <strong>₱{total.toFixed(2)}</strong></p>
-                    <div className="flex space-x-3">
-                      <button
-                        type="button"
-                        onClick={() => setMethod(null)}
-                        className="flex-1 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
-                      >
-                        Back
-                      </button>
-                      <button
-                        onClick={handleCardProcess}
-                        className="flex-1 py-3 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 transition-all"
-                      >
-                        Charge Card
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              // E-Wallet (GCash / Maya) flow
-              <div className="text-center py-8">
-                {isProcessing ? (
-                  <div className="flex flex-col items-center">
-                    <Loader2 className="h-16 w-16 text-orange-500 animate-spin mb-4" />
-                    <p className="text-lg font-medium text-gray-900">Waiting for {method === 'gcash' ? 'GCash' : 'Maya'} confirmation...</p>
-                    <p className="text-sm text-gray-500 mt-2">Customer is confirming payment on their phone.</p>
-                  </div>
-                ) : cardSuccess ? (
-                  <div className="flex flex-col items-center animate-bounce-in">
-                    <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
-                    <p className="text-xl font-bold text-gray-900">{method === 'gcash' ? 'GCash' : 'Maya'} Payment Received!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className={`p-6 rounded-full inline-block ${method === 'gcash' ? 'bg-blue-50' : 'bg-green-50'}`}>
-                      {method === 'gcash' ? (
-                        <Smartphone className={`h-12 w-12 text-blue-500`} />
-                      ) : (
-                        <Wallet className={`h-12 w-12 text-green-500`} />
-                      )}
-                    </div>
-                    <p className="text-lg text-gray-600">
-                      Charge <strong>₱{total.toFixed(2)}</strong> via <strong>{method === 'gcash' ? 'GCash' : 'Maya'}</strong>
-                    </p>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Reference Number (optional)</label>
-                      <input
-                        type="text"
-                        className="focus:ring-orange-500 focus:border-orange-500 block w-full text-center text-lg border-gray-200 rounded-xl py-3"
-                        placeholder="Enter ref. number"
-                        value={ewalletRef}
-                        onChange={(e) => setEwalletRef(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex space-x-3">
-                      <button
-                        type="button"
-                        onClick={() => { setMethod(null); setEwalletRef(''); }}
-                        className="flex-1 py-3 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
-                      >
-                        Back
-                      </button>
-                      <button
-                        onClick={handleEwalletProcess}
-                        className={`flex-1 py-3 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white transition-all ${method === 'gcash' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-green-500 hover:bg-green-600'}`}
-                      >
-                        Confirm {method === 'gcash' ? 'GCash' : 'Maya'} Payment
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         </div>
-      </div>
+
+        <div className="flex gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+          <button type="button" onClick={onCancel} disabled={processing} className="min-h-12 flex-1 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+          <button type="submit" disabled={!canSubmit || processing} className="inline-flex min-h-12 flex-[1.4] items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 text-sm font-bold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-45">
+            {processing && <Loader2 size={17} className="animate-spin" />}
+            {processing ? 'Completing sale…' : `Charge ${formatCurrency(total)}`}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };
