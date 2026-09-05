@@ -18,8 +18,10 @@ test('OAuth, 2FA, GCash, and phone readiness are represented truthfully', async 
   assert.match(checkout, /GCash is not configured yet\. Cash on Delivery remains available\./);
   assert.match(profile, /setup2FA/);
   assert.match(profile, /recoveryCodes/);
-  assert.match(profile, /Verification unavailable/);
-  assert.match(profile, /Phone number verification is not configured yet\./);
+  assert.match(profile, /PhoneVerification savedPhone=/);
+  const phone = await read('components/customer/PhoneVerification.jsx');
+  assert.match(phone, /Verification unavailable/);
+  assert.match(phone, /getPhoneVerification/);
   assert.match(profile, /PROFILE_PHONE_REGEX/);
 });
 

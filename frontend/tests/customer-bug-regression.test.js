@@ -17,8 +17,10 @@ test('profile exposes TOTP setup, truthful phone state, and independent password
   const profile = await read('pages/customer/Profile.jsx');
   assert.match(profile, /setup2FA/);
   assert.match(profile, /recoveryCodes/);
-  assert.match(profile, /phone_verification/);
-  assert.match(profile, /Phone number verification is not configured yet/);
+  assert.match(profile, /PhoneVerification savedPhone=/);
+  const phone = await read('components/customer/PhoneVerification.jsx');
+  assert.match(phone, /state\.verified && !unsaved/);
+  assert.match(phone, /pending\.current/);
   for (const key of ['current', 'new', 'confirm']) {
     assert.match(profile, new RegExp(`passwordVisibility\\.${key}`));
   }

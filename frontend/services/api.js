@@ -611,6 +611,12 @@ export const getProfile = async ({ optional = false } = {}) => {
 
 export const getAuthAvailability = async () => authenticatedFetch(`${API_URL}/auth/providers`);
 
+export const getPhoneVerification = () => authenticatedFetch(`${API_URL}/auth/phone-verification`);
+export const sendPhoneVerification = () => authenticatedFetch(`${API_URL}/auth/phone-verification/send`, { method: 'POST' });
+export const verifyPhoneCode = (code) => authenticatedFetch(`${API_URL}/auth/phone-verification/verify`, {
+  method: 'POST', body: JSON.stringify({ code }),
+});
+
 // Delete account - Right to be Forgotten (RA 10173 §18)
 export const deleteAccount = async (password) => {
   return await authenticatedFetch(`${API_URL}/auth/account`, {

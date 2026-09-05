@@ -2,6 +2,7 @@
 import { User, Mail, Phone, Lock, Eye, EyeOff, Save, Check, AlertCircle, Shield, Camera, Trash2, AlertTriangle, Download } from 'lucide-react';
 import { updateProfile, uploadProfileAvatar, changePassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData, getAuthAvailability } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
+import PhoneVerification from '../../components/customer/PhoneVerification';
 import { clearCurrentAuthUser, getCurrentAuthUser, setCurrentAuthUser, subscribeAuthChanges } from '../../services/authSession';
 
 const ALLOWED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -404,16 +405,6 @@ const Profile = () => {
 
   const savedPhone = normalizePhoneInput(user.phone || '');
   const currentPhone = normalizePhoneInput(form.phone || '');
-  const phoneVerificationLabel = !currentPhone
-    ? 'Not verified'
-    : currentPhone !== savedPhone
-      ? 'Not verified'
-      : user.phone_verification?.label || 'Verification unavailable';
-  const phoneVerificationTone = user.phone_verification?.verified && currentPhone === savedPhone
-    ? 'border-green-200 bg-green-50 text-green-700'
-    : phoneVerificationLabel === 'Verification unavailable'
-      ? 'border-amber-200 bg-amber-50 text-amber-700'
-      : 'border-slate-200 bg-slate-50 text-slate-600';
   const displayName = String(user.name || '').trim() || String(user.email || '').split('@')[0] || 'Customer';
 
   return (
@@ -551,15 +542,7 @@ const Profile = () => {
               </div>
               {fieldErrors.phone && <p className="mt-1 text-xs text-red-500">{fieldErrors.phone}</p>}
               {!fieldErrors.phone && <p className="mt-1 text-xs text-gray-500">Accepted format: 09XXXXXXXXX or +639XXXXXXXXX</p>}
-              <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${phoneVerificationTone}`}>
-                {user.phone_verification?.verified && currentPhone === savedPhone ? <Check size={12} /> : <AlertCircle size={12} />}
-                Phone status: {phoneVerificationLabel}
-              </div>
-              {phoneVerificationLabel === 'Verification unavailable' && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Phone number verification is not configured yet. You can still save a valid Philippine mobile number, but it will not be marked as verified.
-                </p>
-              )}
+              <PhoneVerification savedPhone={savedPhone} currentPhone={currentPhone} />
             </div>
             <button
               type="submit"
