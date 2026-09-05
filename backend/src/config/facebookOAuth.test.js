@@ -143,6 +143,6 @@ test('Facebook routes use the shared application session callback and provider e
   assert.match(source, /scope: FACEBOOK_OAUTH_SCOPES/);
   assert.match(source, /handleOAuthProviderResponseError\('facebook'\)/);
   assert.match(source, /facebookOAuthCallback/);
-  assert.match(source, /router\.get\('\/me', authenticateToken, getProfile\)/);
+  assert.match(source, /router\.get\('\/me', traceProfile, authenticateToken, getProfile\)/);
   assert.doesNotMatch(source, /FACEBOOK_APP_SECRET\s*[:=]/);
 });

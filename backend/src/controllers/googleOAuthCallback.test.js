@@ -7,7 +7,7 @@ process.env.JWT_SECRET = 'google-oauth-callback-test-jwt-secret';
 process.env.FRONTEND_ORIGIN = 'http://localhost:5173';
 
 const { default: pool } = await import('../config/database.js');
-const { googleOAuthCallback, logout } = await import('./authController.js');
+const { googleOAuthCallback, logout, getProfile } = await import('./authController.js');
 const { authenticateToken } = await import('../middleware/auth.js');
 
 afterEach(() => mock.restoreAll());
@@ -126,7 +126,7 @@ test('Google callback creates the normal cookie session; protected routes and lo
 
   await googleOAuthCallback(request, response);
 
-  assert.equal(response.redirectUrl, 'http://localhost:5173/#/oauth-callback');
+  assert.equal(response.redirectUrl, 'http://localhost:5173/#/oauth-callback?provider=google&status=success');
   assert.equal(fixture.identityLinked(), true);
   assert.equal(fixture.sessionInserted(), true);
   assert.equal(request.session.auth.userId, customer.id);
@@ -139,6 +139,13 @@ test('Google callback creates the normal cookie session; protected routes and lo
   await authenticateToken(request, makeResponse(), () => { nextCalled = true; });
   assert.equal(nextCalled, true);
   assert.equal(request.user.id, customer.id);
+
+  const profileResponse = makeResponse();
+  await getProfile(request, profileResponse);
+  assert.equal(profileResponse.statusCode, 200);
+  assert.equal(profileResponse.body.id, customer.id);
+  assert.equal(profileResponse.body.role, 'customer');
+  assert.equal('password_hash' in profileResponse.body, false);
 
   const logoutResponse = makeResponse();
   await logout(request, logoutResponse);
@@ -179,7 +186,7 @@ test('Google callback deactivates its database session when cookie session persi
 
   await googleOAuthCallback(request, response);
 
-  assert.match(response.redirectUrl, /#\/login\?error=oauth_session_failed&google=failed&reason=session_save_failed$/);
+  assert.match(response.redirectUrl, /#\/oauth-callback\?provider=google&status=failed&reason=session_save_failed$/);
   assert.equal(deactivatedTokenHashes.length, 1);
   assert.match(deactivatedTokenHashes[0], /^[a-f0-9]{64}$/);
   assert.equal(request.session.auth, undefined);
@@ -199,7 +206,7 @@ test('Google callback maps unverified email and database errors to customer-safe
     headers: {},
     session: makeSession(),
   }, unverifiedResponse);
-  assert.match(unverifiedResponse.redirectUrl, /#\/login\?error=oauth_unverified_email&google=failed&reason=email_not_verified$/);
+  assert.match(unverifiedResponse.redirectUrl, /#\/oauth-callback\?provider=google&status=failed&reason=email_not_verified$/);
 
   mock.restoreAll();
   mock.method(pool, 'connect', async () => {
@@ -215,6 +222,6 @@ test('Google callback maps unverified email and database errors to customer-safe
     headers: {},
     session: makeSession(),
   }, databaseFailureResponse);
-  assert.match(databaseFailureResponse.redirectUrl, /#\/login\?error=google_failed&google=failed&reason=callback_failed$/);
+  assert.match(databaseFailureResponse.redirectUrl, /#\/oauth-callback\?provider=google&status=failed&reason=callback_failed$/);
   assert.doesNotMatch(databaseFailureResponse.redirectUrl, /secret|postgresql/i);
 });

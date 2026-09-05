@@ -14,6 +14,7 @@ import databaseConfig from '../config/databaseConfig.cjs';
 import { resolveFrontendOrigin } from '../config/frontend.js';
 import { getPhoneVerificationState } from '../utils/phone.js';
 import { linkOrCreateOAuthUser } from '../services/oauthAccounts.js';
+import { redirectOAuthResult } from '../services/oauthRedirect.js';
 
 const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
 const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
@@ -1272,18 +1273,6 @@ export const disable2FA = async (req, res) => {
 };
 
 // ─── OAUTH CALLBACK ────────────────────────────────────────────────
-const googleOAuthErrorCode = (error) => {
-  switch (error?.code) {
-    case 'OAUTH_EMAIL_REQUIRED': return 'oauth_missing_email';
-    case 'OAUTH_EMAIL_UNVERIFIED': return 'oauth_unverified_email';
-    case 'OAUTH_ACCOUNT_CONFLICT': return 'oauth_account_conflict';
-    case 'OAUTH_ACCOUNT_DEACTIVATED': return 'account_deactivated';
-    case 'OAUTH_SESSION_FAILED': return 'oauth_session_failed';
-    case 'ASYNC_OPERATION_TIMEOUT': return 'oauth_session_failed';
-    default: return 'google_failed';
-  }
-};
-
 const googleOAuthFailureReason = (error) => {
   switch (error?.code) {
     case 'OAUTH_EMAIL_REQUIRED': return 'GOOGLE_PROFILE_MISSING_EMAIL';
@@ -1298,24 +1287,13 @@ const googleOAuthFailureReason = (error) => {
 
 const googleOAuthFailureQueryReason = (error) => {
   switch (error?.code) {
+    case 'OAUTH_ACCOUNT_DEACTIVATED': return 'account_deactivated';
     case 'OAUTH_EMAIL_REQUIRED': return 'profile_missing_email';
     case 'OAUTH_EMAIL_UNVERIFIED': return 'email_not_verified';
     case 'OAUTH_ACCOUNT_CONFLICT': return 'user_create_failed';
     case 'OAUTH_SESSION_FAILED':
     case 'ASYNC_OPERATION_TIMEOUT': return 'session_save_failed';
     default: return 'callback_failed';
-  }
-};
-
-const facebookOAuthErrorCode = (error) => {
-  switch (error?.code) {
-    case 'OAUTH_EMAIL_REQUIRED': return 'oauth_missing_email';
-    case 'OAUTH_EMAIL_UNVERIFIED': return 'oauth_unverified_email';
-    case 'OAUTH_ACCOUNT_CONFLICT': return 'oauth_account_conflict';
-    case 'OAUTH_ACCOUNT_DEACTIVATED': return 'account_deactivated';
-    case 'OAUTH_SESSION_FAILED': return 'oauth_session_failed';
-    case 'ASYNC_OPERATION_TIMEOUT': return 'oauth_session_failed';
-    default: return 'facebook_failed';
   }
 };
 
@@ -1333,6 +1311,7 @@ const facebookOAuthFailureReason = (error) => {
 
 const facebookOAuthFailureQueryReason = (error) => {
   switch (error?.code) {
+    case 'OAUTH_ACCOUNT_DEACTIVATED': return 'account_deactivated';
     case 'OAUTH_EMAIL_REQUIRED': return 'profile_missing_email';
     case 'OAUTH_EMAIL_UNVERIFIED': return 'profile_missing_email';
     case 'OAUTH_ACCOUNT_CONFLICT': return 'account_link_failed';
@@ -1353,10 +1332,6 @@ const loginPassportRequest = (req, user) => new Promise((resolve, reject) => {
 });
 
 export const googleOAuthCallback = async (req, res) => {
-  const frontendUrl = resolveFrontendOrigin();
-  const redirectToLoginError = (errorCode) => res.redirect(
-    `${frontendUrl}/#/login?error=${encodeURIComponent(errorCode)}`
-  );
   const guestCartSessionId = req.session?.cartSessionId || null;
   const ipAddress = req.clientIp;
   const userAgent = req.clientUa;
@@ -1402,7 +1377,7 @@ export const googleOAuthCallback = async (req, res) => {
     });
 
     console.info('GOOGLE_FRONTEND_REDIRECT', { target: '/#/oauth-callback' });
-    return res.redirect(`${frontendUrl}/#/oauth-callback`);
+    return redirectOAuthResult(res, 'google');
   } catch (error) {
     if (client && !transactionCommitted) {
       try {
@@ -1428,14 +1403,13 @@ export const googleOAuthCallback = async (req, res) => {
       reason_code: googleOAuthFailureReason(error),
       database_code: String(error?.code || 'GOOGLE_OAUTH_FAILED').slice(0, 80),
     });
-    return res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent(googleOAuthErrorCode(error))}&google=failed&reason=${encodeURIComponent(failureReason)}`);
+    return redirectOAuthResult(res, 'google', failureReason);
   } finally {
     client?.release();
   }
 };
 
 export const facebookOAuthCallback = async (req, res) => {
-  const frontendUrl = resolveFrontendOrigin();
   const guestCartSessionId = req.session?.cartSessionId || null;
   const ipAddress = req.clientIp;
   const userAgent = req.clientUa;
@@ -1490,7 +1464,7 @@ export const facebookOAuthCallback = async (req, res) => {
     });
 
     console.info('FACEBOOK_FRONTEND_REDIRECT', { target: '/#/oauth-callback' });
-    return res.redirect(`${frontendUrl}/#/oauth-callback?provider=facebook&status=success`);
+    return redirectOAuthResult(res, 'facebook');
   } catch (error) {
     if (client && !transactionCommitted) {
       try {
@@ -1516,7 +1490,7 @@ export const facebookOAuthCallback = async (req, res) => {
       reason_code: facebookOAuthFailureReason(error),
       database_code: String(error?.code || 'FACEBOOK_OAUTH_FAILED').slice(0, 80),
     });
-    return res.redirect(`${frontendUrl}/#/login?error=${encodeURIComponent(facebookOAuthErrorCode(error))}&facebook=failed&reason=${encodeURIComponent(failureReason)}`);
+    return redirectOAuthResult(res, 'facebook', failureReason);
   } finally {
     client?.release();
   }

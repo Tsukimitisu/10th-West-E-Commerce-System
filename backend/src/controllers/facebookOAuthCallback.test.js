@@ -153,6 +153,6 @@ test('Facebook callback rejects missing provider email with a safe frontend reas
     session,
   }, response);
 
-  assert.match(response.redirectUrl, /error=oauth_missing_email&facebook=failed&reason=profile_missing_email$/);
+  assert.match(response.redirectUrl, /provider=facebook&status=failed&reason=profile_missing_email$/);
   assert.doesNotMatch(response.redirectUrl, /facebook\.rider|secret|token/i);
 });

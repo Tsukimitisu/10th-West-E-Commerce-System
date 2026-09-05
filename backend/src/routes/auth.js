@@ -7,6 +7,7 @@ import passport, {
   getGoogleOAuthConfigurationStatus,
 } from '../config/passport.js';
 import { resolveFrontendOrigin } from '../config/frontend.js';
+import { redirectOAuthResult } from '../services/oauthRedirect.js';
 import {
   register, login, logout, getProfile,
   forgotPassword, resetPassword, verifyResetToken, changePassword,
@@ -99,6 +100,7 @@ router.get('/providers', (_req, res) => {
 const getFrontendUrl = () => resolveFrontendOrigin();
 
 const redirectToOAuthError = (res, errorCode, { provider = null, reason = null } = {}) => {
+  if (provider) return redirectOAuthResult(res, provider, reason || 'callback_failed');
   const params = new URLSearchParams({ error: errorCode });
   if (provider) params.set(provider, 'failed');
   if (reason) params.set('reason', reason);
@@ -345,6 +347,9 @@ router.get('/facebook',
       has_session: Boolean(req.session),
       callback_url: getFacebookAuthAvailability().callback_url,
     });
+    console.info('FACEBOOK_APP_ID_LAST4', { last4: String(process.env.FACEBOOK_APP_ID || '').slice(-4) });
+    console.info('FACEBOOK_REDIRECT_URI', { url: getFacebookAuthAvailability().callback_url });
+    console.info('FACEBOOK_CALLBACK_URL', { url: getFacebookAuthAvailability().callback_url });
     next();
   },
   (req, res, next) => {
@@ -369,6 +374,10 @@ router.get('/facebook',
   }
 );
 router.get('/facebook/callback',
+  (req, _res, next) => {
+    console.info('FACEBOOK_CALLBACK_RECEIVED', { has_session: Boolean(req.session) });
+    next();
+  },
   ensureOAuthProviderConfigured('facebook'),
   handleOAuthProviderResponseError('facebook'),
   completeOAuthAuthentication('facebook'),
@@ -377,12 +386,20 @@ router.get('/facebook/callback',
 
 // ─── Protected routes ──────────────────────────────────────────────
 router.post('/logout', authenticateToken, logout);
-router.get('/profile/optional', authenticateOptional, (req, res) => {
+const traceProfile = (req, res, next) => {
+  res.set('Cache-Control', 'private, no-store');
+  res.on('finish', () => console.info('AUTH_PROFILE_REQUEST', {
+    has_session: Boolean(req.session), authenticated_session: Boolean(req.session?.auth), has_user: Boolean(req.user),
+    user_id_present: Boolean(req.user?.id), status: res.statusCode,
+  }));
+  next();
+};
+router.get('/profile/optional', traceProfile, authenticateOptional, (req, res) => {
   if (!req.user) return res.status(204).end();
   return getProfile(req, res);
 });
-router.get('/me', authenticateToken, getProfile);
-router.get('/profile', authenticateToken, getProfile);
+router.get('/me', traceProfile, authenticateToken, getProfile);
+router.get('/profile', traceProfile, authenticateToken, getProfile);
 router.get('/permissions', authenticateToken, getMyPermissions);
 router.put('/change-password',
   authenticateToken,
