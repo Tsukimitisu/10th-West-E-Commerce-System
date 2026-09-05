@@ -1,16 +1,14 @@
 import crypto from 'crypto';
+import { resolveSessionTransport } from '../config/sessionTransport.js';
 
 const CSRF_TTL_MS = Number(process.env.CSRF_TOKEN_TTL_MS || 60 * 60 * 1000);
 const CSRF_SECRET = process.env.CSRF_SECRET || process.env.SESSION_SECRET || 'dev-csrf-secret';
 const getCookieSecure = () => {
-  const configured = String(process.env.COOKIE_SECURE || '').trim().toLowerCase();
-  if (['true', '1', 'yes'].includes(configured)) return true;
-  if (['false', '0', 'no'].includes(configured)) return false;
-  return process.env.NODE_ENV === 'production';
+  return resolveSessionTransport().cookie.secure;
 };
 const getCookieSameSite = () => {
   const configured = String(process.env.CSRF_COOKIE_SAME_SITE || process.env.COOKIE_SAME_SITE || '').trim().toLowerCase();
-  return ['lax', 'strict', 'none'].includes(configured) ? configured : 'strict';
+  return ['lax', 'strict', 'none'].includes(configured) ? configured : resolveSessionTransport().cookie.sameSite;
 };
 const CSRF_PATH_EXEMPTIONS = new Set([
   '/auth/verify-email',
@@ -70,12 +68,14 @@ const verifyCsrfToken = (token, scope) => {
 };
 
 export const generateCsrfToken = (req, res, next) => {
+  // A token is tied to one cookie session and must never be reused by a cache.
+  res.setHeader('Cache-Control', 'private, no-store');
   const finalize = () => {
     const scope = getCsrfScope(req);
     const token = createCsrfToken(scope);
 
     res.cookie('csrf-token', token, {
-      httpOnly: false,
+      httpOnly: true,
       sameSite: getCookieSameSite(),
       secure: getCookieSecure(),
     });
@@ -108,6 +108,11 @@ export const validateCsrf = (req, res, next) => {
   const scope = getCsrfScope(req);
 
   if (!verifyCsrfToken(token, scope)) {
+    console.warn('CSRF_VALIDATION_FAILED', {
+      token_present: Boolean(token),
+      session_cookie_present: /(?:^|;\s*)twm\.sid=/.test(req.headers.cookie || ''),
+      request_secure: Boolean(req.secure),
+    });
     return res.status(403).json({
       message: 'Invalid CSRF token',
       code: 'CSRF_INVALID_TOKEN',

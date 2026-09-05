@@ -2,6 +2,7 @@ import './environment.cjs';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as FacebookStrategy } from 'passport-facebook';
+import { publicUrl } from './deployment.js';
 
 export const GOOGLE_OAUTH_SCOPES = Object.freeze(['openid', 'email', 'profile']);
 export const FACEBOOK_OAUTH_SCOPES = Object.freeze(['email']);
@@ -80,6 +81,10 @@ const resolveGoogleOAuthRuntimeConfiguration = (environment = process.env) => {
 const isValidGoogleCallbackUrl = (value, environment = process.env) => {
   try {
     const url = new URL(value);
+    if (environment.NODE_ENV === 'production') {
+      publicUrl(value, 'GOOGLE_CALLBACK_URL');
+      if (environment.BACKEND_URL && url.origin !== new URL(environment.BACKEND_URL).origin) return false;
+    }
     return ['http:', 'https:'].includes(url.protocol)
       && (environment.NODE_ENV !== 'production' || url.protocol === 'https:')
       && !url.username
@@ -95,6 +100,10 @@ const isValidGoogleCallbackUrl = (value, environment = process.env) => {
 const isValidFacebookCallbackUrl = (value, environment = process.env) => {
   try {
     const url = new URL(value);
+    if (environment.NODE_ENV === 'production') {
+      publicUrl(value, 'FACEBOOK_CALLBACK_URL');
+      if (environment.BACKEND_URL && url.origin !== new URL(environment.BACKEND_URL).origin) return false;
+    }
     return ['http:', 'https:'].includes(url.protocol)
       && (environment.NODE_ENV !== 'production' || url.protocol === 'https:')
       && !url.username
@@ -244,6 +253,11 @@ if (googleConfiguration.configured) {
 
 const facebookRuntimeConfiguration = resolveFacebookOAuthRuntimeConfiguration();
 const facebookConfiguration = getFacebookOAuthConfigurationStatus();
+
+if (process.env.NODE_ENV === 'production') {
+  console.info('GOOGLE_PRODUCTION_CALLBACK_URL', { callback_url: googleConfiguration.configured ? googleConfiguration.callbackUrl : null });
+  console.info('FACEBOOK_PRODUCTION_CALLBACK_URL', { callback_url: facebookConfiguration.configured ? facebookConfiguration.callbackUrl : null });
+}
 
 if (facebookConfiguration.configured) {
   passport.use(

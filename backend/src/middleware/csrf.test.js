@@ -13,6 +13,7 @@ const issueToken = async (sessionID) => {
   };
   let cookie;
   const response = {
+    setHeader() {},
     cookie(name, value, options) { cookie = { name, value, options }; },
   };
 

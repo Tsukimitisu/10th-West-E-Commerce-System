@@ -72,6 +72,8 @@ import { normalizeNodeEnvironment, validateCoreEnvironment } from './config/prod
 import { validateDeploymentUrls } from './config/deployment.js';
 import { checkCoreDatabaseReadiness } from './services/coreReadiness.js';
 import { resolveAllowedFrontendOrigins, resolveFrontendOrigin } from './config/frontend.js';
+import { resolveSessionTransport, describeSessionTransport } from './config/sessionTransport.js';
+import { getGoogleOAuthConfigurationStatus, getFacebookOAuthConfigurationStatus } from './config/passport.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -122,13 +124,7 @@ const parseDurationMs = (value, fallbackMs) => {
   };
   return amount * multipliers[unit];
 };
-const configuredSessionSameSite = String(process.env.COOKIE_SAME_SITE || process.env.SESSION_COOKIE_SAMESITE || '').trim().toLowerCase();
-const sessionCookieSameSite = ['lax', 'strict', 'none'].includes(configuredSessionSameSite)
-  ? configuredSessionSameSite
-  : 'lax';
-const configuredCookieSecure = String(process.env.COOKIE_SECURE || '').trim().toLowerCase();
-const sessionCookieSecure = ['true', '1', 'yes'].includes(configuredCookieSecure)
-  || (!['false', '0', 'no'].includes(configuredCookieSecure) && (sessionCookieSameSite === 'none' || process.env.NODE_ENV === 'production'));
+const sessionTransport = resolveSessionTransport();
 const sessionTtlMs = parseDurationMs(
   process.env.SESSION_TTL || process.env.SESSION_TTL_SECONDS,
   Number(process.env.SESSION_TTL_MS || 7 * 24 * 60 * 60 * 1000)
@@ -197,12 +193,8 @@ const sessionMiddleware = session({
   resave: false,
   saveUninitialized: false,
   rolling: true,
-  proxy: process.env.NODE_ENV === 'production',
   cookie: {
-    secure: sessionCookieSecure,
-    httpOnly: true,
-    sameSite: sessionCookieSameSite,
-    path: '/',
+    ...sessionTransport.cookie,
     maxAge: sessionTtlMs
   }
 });
@@ -212,7 +204,11 @@ const sessionMiddleware = session({
 const io = initSocket(httpServer, allowedOrigins, { sessionMiddleware });
 
 // Middleware
-app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 0);
+// Leave express-session's proxy option unset: it uses this same trust decision.
+app.set('trust proxy', sessionTransport.trustProxy);
+if (sessionTransport.render && !isProduction) {
+  console.warn('RENDER_ENVIRONMENT_MISMATCH: set NODE_ENV=production and SESSION_STORE=postgres on Render.');
+}
 
 // C8: Security headers via Helmet (CSP, X-Frame-Options, HSTS, etc.)
 app.use(helmet({
@@ -303,6 +299,22 @@ app.get('/api/health', (req, res) => {
     status: 'OK', 
     message: '10th West Moto API is running',
     timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/auth/readiness', async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  let databaseAvailable = false;
+  try { await checkCoreDatabaseReadiness(pool); databaseAvailable = true; } catch { /* No database details in public diagnostics. */ }
+  const google = getGoogleOAuthConfigurationStatus();
+  const facebook = getFacebookOAuthConfigurationStatus();
+  res.status(databaseAvailable ? 200 : 503).json({
+    status: databaseAvailable ? 'ok' : 'unavailable',
+    database_available: databaseAvailable,
+    google: { available: google.configured, callback_url: google.callbackUrl },
+    facebook: { available: facebook.configured, callback_url: facebook.callbackUrl },
+    paymongo: { configured: getPaymongoConfigurationStatus().configured },
+    transport: describeSessionTransport({ transport: sessionTransport, req, allowedOrigins, postgres: usePostgresSessionStore }),
   });
 });
 
