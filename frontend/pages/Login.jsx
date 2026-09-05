@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Shield, Check } from 'lucide-react';
 import { login, API_ORIGIN, resendVerificationEmail } from '../services/api';
 import BrandMark from '../components/ui/BrandMark';
+import { getLoginSubmissionErrorMessage } from '../utils/authErrors';
 
 const LOGIN_ERROR_MESSAGES = {
   access_denied: 'Google sign in was cancelled.',
@@ -18,7 +19,6 @@ const LOGIN_ERROR_MESSAGES = {
   oauth_session_failed: 'Google sign in succeeded, but a secure session could not be created. Please try again.',
   oauth_failed: 'Authentication failed. Please try again.',
 };
-const SERVICE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
 
 const getLoginErrorMessage = (error) => {
   const normalized = String(error || '').trim();
@@ -44,14 +44,6 @@ const FACEBOOK_REASON_MESSAGES = {
   invalid_client: 'Facebook sign in is temporarily unavailable because the app credentials were rejected.',
   redirect_uri_mismatch: 'Facebook sign in is temporarily unavailable because its callback URL does not match.',
   callback_failed: 'Facebook sign in failed. Please try again.',
-};
-
-const getLoginSubmissionErrorMessage = (error) => {
-  const code = String(error?.code || '').toUpperCase();
-  if (code === 'DATABASE_UNAVAILABLE' || Number(error?.status) === 503) {
-    return SERVICE_UNAVAILABLE_MESSAGE;
-  }
-  return error?.message || 'Invalid email or password';
 };
 
 const Login = ({ onLogin }) => {
