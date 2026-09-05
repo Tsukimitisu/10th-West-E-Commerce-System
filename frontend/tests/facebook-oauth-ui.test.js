@@ -36,7 +36,7 @@ test('OAuth callback supports Facebook while preserving the cookie-session refre
   assert.match(callback, /searchParams\.get\('provider'\) === 'facebook'/);
   assert.match(callback, /Completing secure \{searchParams\.get\('provider'\) === 'facebook'/);
   assert.match(callback, /refreshCsrfAfterSessionRotation\(\)/);
-  assert.match(callback, /getProfile\(\)/);
+  assert.match(callback, /getProfile\(\{ oauthRefresh: true \}\)/);
   assert.match(callback, /onLoginRef\.current\(user\)/);
   assert.doesNotMatch(callback, /FACEBOOK_APP_SECRET|access_token|refresh_token/);
 });

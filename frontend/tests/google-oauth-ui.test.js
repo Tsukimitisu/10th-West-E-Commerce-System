@@ -27,7 +27,7 @@ test('OAuth callback consumes the existing cookie session without exposing Googl
   const callback = await readFrontend('pages/OAuthCallback.jsx');
 
   assert.match(callback, /refreshCsrfAfterSessionRotation\(\)/);
-  assert.match(callback, /getProfile\(\)/);
+  assert.match(callback, /getProfile\(\{ oauthRefresh: true \}\)/);
   assert.match(callback, /navigate\('\/'/);
   assert.match(callback, /oauth_invalid_state/);
   assert.match(callback, /oauth_unverified_email/);

@@ -419,6 +419,7 @@ const authenticatedFetch = async (url, options = {}) => {
   const {
     timeoutMs = 0,
     skipCsrf = false,
+    preserveSessionOnFailure = false,
     ...requestOptions
   } = options;
   const headers = {
@@ -512,7 +513,7 @@ const authenticatedFetch = async (url, options = {}) => {
   }
 
   if (!response.ok) {
-    if (isSessionAuthFailure(response.status, responseBody)) {
+    if (!preserveSessionOnFailure && isSessionAuthFailure(response.status, responseBody)) {
       clearAuthSession();
       window.dispatchEvent(new Event('auth:session-expired'));
     }
@@ -605,8 +606,11 @@ export const logoutApi = async () => {
 };
 
 // Get authenticated user profile (used by OAuth callback to avoid PII in URL)
-export const getProfile = async ({ optional = false } = {}) => {
-  return await authenticatedFetch(`${API_URL}/auth/profile${optional ? '/optional' : ''}`);
+export const getProfile = async ({ optional = false, oauthRefresh = false } = {}) => {
+  return await authenticatedFetch(`${API_URL}/auth/profile${optional ? '/optional' : ''}`, {
+    preserveSessionOnFailure: oauthRefresh,
+    ...(oauthRefresh ? { cache: 'no-store', timeoutMs: 4000 } : {}),
+  });
 };
 
 export const getAuthAvailability = async () => authenticatedFetch(`${API_URL}/auth/providers`);

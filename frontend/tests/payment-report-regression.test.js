@@ -16,7 +16,7 @@ test('payment return page polls backend status and renders the saved shipping ad
 
 test('OAuth callback validates the current session before non-blocking CSRF refresh and navigation', async () => {
   const source = await read('pages/OAuthCallback.jsx');
-  const profileIndex = source.indexOf('withTimeout(completeLegacyExchange.then(() => getProfile()))');
+  const profileIndex = source.indexOf('withTimeout(completeLegacyExchange.then(() => refreshOAuthProfile(');
   const loginIndex = source.indexOf('onLoginRef.current(user)');
   const csrfIndex = source.indexOf('void refreshCsrfAfterSessionRotation()');
   const navigateIndex = source.indexOf("navigate('/', { replace: true })");
