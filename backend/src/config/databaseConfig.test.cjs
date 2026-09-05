@@ -24,6 +24,43 @@ const directUrl = (projectRef = 'projectalpha') =>
 const poolerUrl = (projectRef = 'projectalpha', port = 6543) =>
   `postgresql://postgres.${projectRef}:LocalOnly-9x%21@aws-1-ap-southeast-1.pooler.supabase.com:${port}/postgres`;
 
+for (const [label, overrides, mode, verified] of [
+  ['production default', {}, 'verify-full', true],
+  ['verify-full', { DB_SSL_MODE: 'verify-full' }, 'verify-full', true],
+  ['verify-ca', { DB_SSL_MODE: 'verify-ca' }, 'verify-ca', true],
+  ['require', { DB_SSL_MODE: 'require' }, 'require', true],
+  ['allow', { DB_SSL_MODE: 'allow' }, 'allow', true],
+  ['prefer', { DB_SSL_MODE: 'prefer' }, 'prefer', true],
+  ['no-verify', { DB_SSL_MODE: 'no-verify' }, 'no-verify', false],
+  ['explicit false', { DB_SSL_REJECT_UNAUTHORIZED: 'false' }, 'verify-full', false],
+  ['explicit true', { DB_SSL_REJECT_UNAUTHORIZED: 'true' }, 'verify-full', true],
+  ['require override', { DB_SSL_MODE: 'require', DB_SSL_REJECT_UNAUTHORIZED: 'false' }, 'require', false],
+  ['no-verify precedence', { DB_SSL_MODE: 'no-verify', DB_SSL_REJECT_UNAUTHORIZED: 'true' }, 'no-verify', false],
+  ['local default', { NODE_ENV: 'development' }, 'require', false],
+  ['local explicit verification', { NODE_ENV: 'development', DB_SSL_REJECT_UNAUTHORIZED: 'true' }, 'require', true],
+]) {
+  test(`database TLS policy: ${label}`, () => {
+    const config = createDatabaseConfig({ env: { NODE_ENV: 'production', DATABASE_URL: poolerUrl(), ...overrides } });
+    assert.deepEqual(config.ssl, { rejectUnauthorized: verified });
+    assert.deepEqual(config.pgPoolConfig.ssl, config.knexConnectionConfig.ssl);
+    assert.deepEqual(config.safeMetadata.ssl, { mode, enabled: true, rejectUnauthorized: verified });
+    assert.equal(JSON.stringify(config.safeMetadata).includes('LocalOnly'), false);
+  });
+}
+
+test('production Supabase rejects TLS disable and invalid modes even with certificate override', () => {
+  for (const [mode, code] of [['disable', 'DATABASE_SSL_REQUIRED'], ['invalid', 'DATABASE_SSL_MODE_INVALID']]) {
+    assert.throws(() => createDatabaseConfig({ env: {
+      NODE_ENV: 'production', DATABASE_URL: poolerUrl(), DB_SSL_MODE: mode, DB_SSL_REJECT_UNAUTHORIZED: 'false',
+    } }), { code });
+  }
+  const config = createDatabaseConfig({ env: {
+    NODE_ENV: 'production', DATABASE_URL: `${poolerUrl()}?sslmode=verify-full`, DB_SSL_MODE: 'no-verify',
+  } });
+  assert.equal(config.pgPoolConfig.ssl.rejectUnauthorized, false);
+  assert.equal(new URL(config.pgPoolConfig.connectionString).searchParams.has('sslmode'), false);
+});
+
 test('backend environment merge preserves process values and reports each source', () => {
   const processEnv = {
     NODE_ENV: 'test',

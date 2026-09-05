@@ -7,6 +7,9 @@ const databaseConfig = getDatabaseConfig();
 
 console.log('[DB Config] Environment source:', databaseConfig.safeMetadata.environmentFile);
 console.log('[DB Config] Connection metadata:', databaseConfig.safeMetadata);
+if (databaseConfig.nodeEnv === 'production' && databaseConfig.ssl && !databaseConfig.ssl.rejectUnauthorized) {
+  console.warn('Database TLS is enabled without certificate verification for managed Supabase pooler compatibility.');
+}
 
 const pool = new Pool(databaseConfig.pgPoolConfig);
 

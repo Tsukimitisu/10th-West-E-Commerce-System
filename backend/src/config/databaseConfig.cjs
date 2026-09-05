@@ -208,8 +208,13 @@ const resolveSslConfig = ({ env, urlSslMode, nodeEnv, isSupabase }) => {
   }
 
   const enabled = mode !== 'disable';
-  const rejectUnauthorized = enabled
-    && (nodeEnv === 'production' || mode === 'verify-ca' || mode === 'verify-full');
+  const explicitRejectUnauthorized = String(env.DB_SSL_REJECT_UNAUTHORIZED ?? '').trim().toLowerCase();
+  // Opt-outs are scoped to this database connection, never global Node TLS.
+  // The explicit no-verify mode wins over the boolean override.
+  const rejectUnauthorized = enabled && mode !== 'no-verify'
+    && (explicitRejectUnauthorized === 'false' ? false
+      : explicitRejectUnauthorized === 'true' ? true
+        : !(nodeEnv !== 'production' && mode === 'require'));
 
   return {
     mode,
@@ -349,7 +354,7 @@ const createDatabaseConfig = ({
   });
   const ssl = sslConfig.value;
   // pg parses URI TLS options after the explicit ssl object. Remove these
-  // already-validated options so the production certificate policy wins.
+  // already-validated options so the selected database TLS policy wins.
   const driverUrl = new URL(selected.value);
   for (const option of ['sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'ssl']) driverUrl.searchParams.delete(option);
   const pgPoolConfig = deepFreeze({
