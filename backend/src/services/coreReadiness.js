@@ -4,6 +4,7 @@ const REQUIRED_CORE_RELATIONS = Object.freeze([
   'user_oauth_accounts',
   'sessions',
   'http_sessions',
+  'phone_verifications',
   'permissions',
   'role_permissions',
   'products',

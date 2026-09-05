@@ -234,7 +234,9 @@ export const verifyPaymongoWebhookSignature = ({ rawBody, signatureHeader }) => 
 
   const parts = parseSignatureHeader(signatureHeader);
   const timestamp = parts.t;
-  const expected = process.env.NODE_ENV === 'production' ? parts.li : (parts.te || parts.li);
+  // Provider mode is independent of hosting mode: Render can run test payments.
+  const liveMode = (process.env.PAYMONGO_MODE || (getSecretKey()?.startsWith('sk_live_') ? 'live' : 'test')) === 'live';
+  const expected = liveMode ? parts.li : parts.te;
 
   if (!timestamp || !expected || !rawBody) return false;
 

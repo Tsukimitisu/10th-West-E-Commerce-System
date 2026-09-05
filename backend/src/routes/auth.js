@@ -19,6 +19,7 @@ import {
 import { authenticateOptional, authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
+import { phoneOtpReadiness } from '../services/phoneOtp.js';
 import {
   resendVerificationLimiter,
   registerLimiter,
@@ -87,11 +88,7 @@ export const getAuthAvailability = () => {
       available: gcashAvailable,
       reason: gcashAvailable ? null : 'not_configured',
     },
-    phone_verification: {
-      available: false,
-      status: 'unavailable',
-      reason: 'not_configured',
-    },
+    phone_verification: phoneOtpReadiness(),
   };
 };
 

@@ -348,8 +348,12 @@ const createDatabaseConfig = ({
     isSupabase,
   });
   const ssl = sslConfig.value;
+  // pg parses URI TLS options after the explicit ssl object. Remove these
+  // already-validated options so the production certificate policy wins.
+  const driverUrl = new URL(selected.value);
+  for (const option of ['sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'ssl']) driverUrl.searchParams.delete(option);
   const pgPoolConfig = deepFreeze({
-    connectionString: selected.value,
+    connectionString: driverUrl.toString(),
     min: poolMin,
     max: poolMax,
     connectionTimeoutMillis,
@@ -359,7 +363,7 @@ const createDatabaseConfig = ({
     ssl,
   });
   const knexConnectionConfig = deepFreeze({
-    connectionString: selected.value,
+    connectionString: driverUrl.toString(),
     connectionTimeoutMillis,
     query_timeout: queryTimeoutMillis,
     statement_timeout: statementTimeoutMillis,

@@ -15,7 +15,7 @@ test('environment example selects internal fees and manual J&T waybills without 
   assert.match(source, /^DISTANCE_PROVIDER=internal$/m);
   assert.match(source, /^COURIER_PROVIDER=jnt$/m);
   assert.match(source, /^WAYBILL_PROVIDER=manual$/m);
-  assert.match(source, /^TRACKING_PROVIDER=external_link$/m);
+  assert.match(source, /^TRACKING_PROVIDER=manual$/m);
   assert.match(source, /^JNT_COURIER_NAME=J&T Express$/m);
   assert.doesNotMatch(source, /BIGSELLER_|AFTERSHIP_|NINJA|SHIPMATES|JNT_API|JNT_MOCK_MODE/i);
 });

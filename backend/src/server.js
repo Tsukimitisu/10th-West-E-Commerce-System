@@ -14,6 +14,7 @@ import passport from './config/passport.js';
 import { activityLogger } from './middleware/activityLogger.js';
 import { initSocket } from './socket.js';
 import authRoutes from './routes/auth.js';
+import phoneVerificationRoutes from './routes/phoneVerification.js';
 import productRoutes from './routes/products.js';
 import categoryRoutes from './routes/categories.js';
 import cartRoutes from './routes/cart.js';
@@ -68,6 +69,7 @@ import {
   selectedIntegrationsReady,
 } from './services/integrationReadiness.js';
 import { normalizeNodeEnvironment, validateCoreEnvironment } from './config/productionConfig.js';
+import { validateDeploymentUrls } from './config/deployment.js';
 import { checkCoreDatabaseReadiness } from './services/coreReadiness.js';
 import { resolveAllowedFrontendOrigins, resolveFrontendOrigin } from './config/frontend.js';
 
@@ -79,6 +81,7 @@ const normalizedNodeEnvironment = normalizeNodeEnvironment(process.env.NODE_ENV)
 if (normalizedNodeEnvironment === 'production') process.env.NODE_ENV = 'production';
 const coreEnvironment = validateCoreEnvironment(process.env);
 const isProduction = coreEnvironment.isProduction;
+validateDeploymentUrls(process.env);
 
 const optionalUploadVars = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
 const missingUploadVars = optionalUploadVars.filter((varName) => !process.env[varName]);
@@ -291,6 +294,10 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
+app.get('/', (_req, res) => {
+  res.json({ service: '10th West Moto Backend API', status: 'ok', api: '/api', health: '/api/health' });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -347,6 +354,7 @@ app.use('/api/auth', (req, res, next) => {
   return next();
 }, authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/auth/phone-verification', phoneVerificationRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
@@ -423,12 +431,13 @@ if (coreStartupReady) {
   console.log('╔══════════════════════════════════════════════╗');
   console.log('║    10TH WEST MOTO - Backend API Server     ║');
   console.log('╚══════════════════════════════════════════════╝');
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📡 API endpoint: http://localhost:${PORT}/api`);
-  console.log(`⚡ Socket.IO ready on http://localhost:${PORT}`);
+  const publicBackendUrl = isProduction ? process.env.BACKEND_URL.replace(/\/$/, '') : `http://localhost:${PORT}`;
+  console.log(`🚀 Server listening on port ${PORT}`);
+  console.log(`📡 API endpoint: ${publicBackendUrl}/api`);
+  console.log(`⚡ Socket.IO ready on ${publicBackendUrl}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Frontend URL: ${FRONTEND_URL}`);
-  console.log(`🔗 LAN: http://${getLocalIP()}:${PORT}`);
+  if (!isProduction) console.log(`🔗 LAN: http://${getLocalIP()}:${PORT}`);
   console.log('════════════════════════════════════════════════');
   });
 }

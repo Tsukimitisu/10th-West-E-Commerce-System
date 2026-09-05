@@ -1,3 +1,5 @@
+import { isLocalHostname } from './deployment.js';
+
 const SECRET_NAMES = Object.freeze([
   'JWT_SECRET',
   'SESSION_SECRET',
@@ -51,6 +53,7 @@ const validateHttpsOrigin = (value, { code, label }) => {
   }
   if (
     url.protocol !== 'https:'
+    || isLocalHostname(url.hostname)
     || url.username
     || url.password
     || url.search

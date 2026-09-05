@@ -20,6 +20,8 @@
     "verify:google-local": "node scripts/verify-google-local.js",
     "verify:facebook-local": "node scripts/verify-facebook-local.js",
     "verify:paymongo-webhook": "node scripts/verify-paymongo-webhook.js",
+    "verify:production-config": "node scripts/verify-production-config.js",
+    "verify:local": "node scripts/verify-local.js",
     "test:live-concurrency": "node scripts/verify-live-concurrency.js",
     "seed:test-fixtures": "node scripts/seed-test-fixtures.js",
     "data:quarantine-orders": "node scripts/quarantine-order-integrity.js",
@@ -48,6 +50,7 @@
     "express-validator": "^7.0.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
+    "knex": "^3.1.0",
     "nodemailer": "^9.0.1",
     "passport": "^0.7.0",
     "passport-facebook": "^3.0.0",
@@ -58,9 +61,11 @@
     "socket.io": "^4.8.3",
     "speakeasy": "^2.0.0"
   },
+  "overrides": {
+    "qs": "^6.16.0"
+  },
   "devDependencies": {
     "eslint": "^10.8.0",
-    "knex": "^3.1.0",
     "nodemon": "^3.1.14",
     "socket.io-client": "^4.8.3"
   }

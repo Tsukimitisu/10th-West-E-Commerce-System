@@ -33,6 +33,8 @@ for (const name of [
   'DB_USER',
   'DB_PASSWORD',
   'DB_NAME',
+  'SEMAPHORE_API_KEY',
+  'PHONE_VERIFICATION_ENABLED',
 ]) {
   testEnvironment[name] = '';
 }
