@@ -39,9 +39,9 @@ test('production hosting verifies PayMongo test signatures and rejects live-only
     assert.equal(verifyPaymongoWebhookSignature({ rawBody, signatureHeader: `t=${timestamp},li=${digest}` }), true);
   } finally { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } }
 });
-test('URI sslmode cannot override production certificate verification', () => {
+test('URI sslmode cannot override the explicitly selected database TLS policy', () => {
   const config = databaseConfig.createDatabaseConfig({ env: {
-    NODE_ENV: 'production', DATABASE_URL: 'postgresql://app:unitpassword@db.example.test/app?sslmode=no-verify',
+    NODE_ENV: 'production', DB_SSL_MODE: 'verify-full', DATABASE_URL: 'postgresql://app:unitpassword@db.example.test/app?sslmode=no-verify',
   } });
   assert.equal(config.pgPoolConfig.ssl.rejectUnauthorized, true);
   assert.equal(new URL(config.pgPoolConfig.connectionString).searchParams.has('sslmode'), false);
@@ -70,6 +70,9 @@ test('production verifier accepts complete deployment settings and reports names
     env[key] = crypto.randomBytes(32).toString('hex');
   }
   assert.deepEqual(inspectProductionConfig(env), { ready: true, failures: [] });
+  assert.deepEqual(inspectProductionConfig({ ...env, DB_SSL_MODE: 'no-verify' }), { ready: true, failures: [] });
+  assert.deepEqual(inspectProductionConfig({ ...env, DB_SSL_REJECT_UNAUTHORIZED: 'false' }), { ready: true, failures: [] });
+  assert.equal(inspectProductionConfig({ ...env, DB_SSL_MODE: 'disable' }).ready, false);
   for (const override of [{ COOKIE_SECURE: 'false' }, { SESSION_STORE: 'memory' },
     { FACEBOOK_APP_SECRET: '' }, { SEMAPHORE_API_KEY: '' }, { OTP_MAX_ATTEMPTS: '100' },
     { BACKEND_URL: 'http://localhost:5000' }]) {

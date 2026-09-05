@@ -4,6 +4,7 @@ import { validateCoreEnvironment } from './productionConfig.js';
 
 const productionEnvironment = (overrides = {}) => ({
   NODE_ENV: 'production',
+  DATABASE_URL: 'postgresql://app:unitpassword@db.example.test/app',
   FRONTEND_ORIGIN: 'https://store.example.test',
   SESSION_STORE: 'postgres',
   COOKIE_SECURE: 'true',
@@ -108,4 +109,14 @@ test('development still requires JWT but does not require production-only settin
     nodeEnvironment: 'development',
   });
   assert.throws(() => validateCoreEnvironment({ NODE_ENV: 'development' }), { code: 'CORE_ENV_MISSING' });
+});
+
+test('database TLS override does not bypass required production settings', () => {
+  for (const name of ['JWT_SECRET', 'SESSION_SECRET', 'CSRF_SECRET', 'TWO_FACTOR_ENCRYPTION_KEY',
+    'DATABASE_URL', 'FRONTEND_ORIGIN', 'SESSION_STORE', 'COOKIE_SECURE', 'COOKIE_SAME_SITE']) {
+    assert.throws(() => validateCoreEnvironment(productionEnvironment({ DB_SSL_MODE: 'no-verify', [name]: '' })));
+  }
+  const result = validateCoreEnvironment(productionEnvironment({ DB_SSL_MODE: 'no-verify' }));
+  assert.equal(result.isProduction, true);
+  assert.equal(JSON.stringify(result).includes('unitpassword'), false);
 });

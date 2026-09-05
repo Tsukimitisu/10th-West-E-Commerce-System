@@ -24,7 +24,7 @@ export const inspectProductionConfig = (env) => {
   check('Production URL or provider mode mismatch', () => validateDeploymentUrls({ ...env, NODE_ENV: 'production' }));
   check('Database URL, SSL or pool configuration invalid', () => {
     const db = databaseConfig.createDatabaseConfig({ env: { ...env, NODE_ENV: 'production' } });
-    if (!db.ssl?.rejectUnauthorized) throw new Error();
+    if (!db.ssl) throw new Error();
   });
   check('Semaphore configuration or OTP limits invalid', () => { if (!phoneOtpConfig(env).available) throw new Error(); });
   for (const [name, expected] of Object.entries({

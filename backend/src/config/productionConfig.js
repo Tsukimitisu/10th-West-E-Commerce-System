@@ -121,6 +121,8 @@ export const validateCoreEnvironment = (environment = process.env) => {
       'SESSION_STORE must be postgres in production.'
     );
   }
+  // Detailed URL/TLS validation is shared by runtime, migrations and the verifier.
+  requireValue(environment, 'DATABASE_URL');
   const frontendOrigin = validateFrontendOrigin(environment);
   const legacyFrontendUrl = validateLegacyFrontendUrl(environment);
   if (requireValue(environment, 'COOKIE_SECURE').toLowerCase() !== 'true') {
