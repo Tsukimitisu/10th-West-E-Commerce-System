@@ -13,11 +13,14 @@ import {
   updateInventoryItem,
 } from '../controllers/inventoryController.js';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
+import { listInventoryProductItems } from '../controllers/inventoryProductItemsController.js';
 
 const router = express.Router();
 
 // All inventory routes require admin, super_admin, owner, or store_staff authentication
 router.get('/', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.view'), getInventory);
+router.get('/product-items', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.view'), listInventoryProductItems);
+router.all('/product-items', (_req, res) => res.status(405).json({ message: 'Method not allowed' }));
 router.get('/low-stock', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.view'), getLowStockProducts);
 router.get('/adjustments', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.view'), getStockAdjustments);
 router.get('/movements', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('inventory.view'), getStockMovements);
