@@ -92,7 +92,7 @@ const OperationsShell = ({
                       active
                         ? 'bg-white/10 text-white'
                         : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
-                    } ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
+                    } ${collapsed && !mobile ? 'justify-center px-2' : item.parentId ? 'pl-8' : ''}`}
                   >
                     {active && <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-orange-500" />}
                     <Icon size={17} className={active ? 'text-orange-400' : 'text-slate-400'} aria-hidden="true" />

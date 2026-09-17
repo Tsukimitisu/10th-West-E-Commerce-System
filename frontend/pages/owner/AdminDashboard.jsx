@@ -15,6 +15,7 @@ import ContentView from './ContentView';
 import ChatView from './ChatView';
 import StaffDashboardView from '../staff/StaffDashboardView';
 import StorefrontListingsView from './StorefrontListingsView';
+import InventoryProductItemsView from './InventoryProductItemsView';
 
 const AdminDashboard = ({ user, onLogout }) => {
   const canAccessAdmin = ['owner', 'store_staff', 'admin'].includes(user?.role);
@@ -25,9 +26,11 @@ const AdminDashboard = ({ user, onLogout }) => {
   const isStaff = user?.role === 'store_staff';
   const segment = location.pathname.split('/').filter(Boolean)[1] || 'dashboard';
   const aliases = { shipments: 'orders', waybills: 'orders', refunds: 'returns', settings: 'content' };
-  const activeView = aliases[segment] || segment;
+  const activeView = segment === 'inventory' && location.pathname.endsWith('/inventory/product-items')
+    ? 'product-items' : aliases[segment] || segment;
   const basePath = isStaff ? '/staff' : '/admin';
-  const setActiveView = (view) => navigate(view === 'pos' ? '/pos' : `${basePath}/${view}`);
+  const setActiveView = (view) => navigate(view === 'pos' ? '/pos' : view === 'product-items'
+    ? `${basePath}/inventory/product-items` : `${basePath}/${view}`);
 
   if (['products', 'categories', 'variants'].includes(segment)) {
     return (
@@ -41,7 +44,8 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const views = {
     dashboard: isStaff ? <StaffDashboardView user={user} onNavigate={setActiveView} /> : <DashboardView onNavigate={setActiveView} />,
-    storefront: <StorefrontListingsView />, inventory: <InventoryView />, orders: <OrdersView />,
+    storefront: <StorefrontListingsView />, inventory: <InventoryView />,
+    'product-items': <InventoryProductItemsView />, orders: <OrdersView />,
     customers: <CustomersView />, returns: <ReturnsView />, staff: <StaffView />,
     reviews: <ReviewsView />, reports: <ReportsView />, promotions: <PromotionsView />,
     banners: <BannersView />, content: <ContentView />, chat: <ChatView />,

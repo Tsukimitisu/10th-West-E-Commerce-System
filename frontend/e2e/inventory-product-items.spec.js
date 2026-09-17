@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const staff = { email: process.env.E2E_STAFF_EMAIL, password: process.env.E2E_STAFF_PASSWORD };
+const owner = { email: process.env.E2E_OWNER_EMAIL, password: process.env.E2E_OWNER_PASSWORD };
 const customer = { email: process.env.E2E_CUSTOMER_EMAIL, password: process.env.E2E_CUSTOMER_PASSWORD };
 const item = {
   id: 7, partNumber: 'BB3-123', itemName: 'Mio Side Panel', color: 'Black', price: 350,
@@ -24,14 +25,27 @@ test.describe('staff inventory product items browser', () => {
   test('shows inventory fields, searches, empty and error states, and has no mutations', async ({ page }) => {
     await login(page, staff);
     await expect(page).toHaveURL(/#\/staff/);
+    const liveResponse = await page.request.get(`${process.env.E2E_API_URL || 'http://localhost:5000/api'}/inventory/product-items?page=1&pageSize=1`);
+    expect(liveResponse.status()).toBe(200);
+    expect((await liveResponse.json()).items).toEqual(expect.any(Array));
+    let releaseInitialRequests;
+    const initialGate = new Promise((resolve) => { releaseInitialRequests = resolve; });
+    let holdInitialRequests = true;
     await page.route('**/api/inventory/product-items?*', async (route) => {
       const query = new URL(route.request().url()).searchParams.get('q') || '';
+      if (holdInitialRequests && !query) await initialGate;
       if (query === 'error') return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Failure' }) });
       const items = !query || ['BB3', 'Mio'].some((value) => query.toLowerCase().includes(value.toLowerCase())) ? [item] : [];
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items, total: items.length, page: 1, pageSize: 20 }) });
     });
     await page.getByRole('button', { name: 'Product Items' }).click();
     await expect(page).toHaveURL(/#\/staff\/inventory\/product-items/);
+    try {
+      await expect(page.getByText('Loading product items...')).toBeVisible();
+    } finally {
+      holdInitialRequests = false;
+      releaseInitialRequests();
+    }
     await expect(page.getByRole('heading', { name: 'Product Items' })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'BB3-123' })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'Mio Side Panel' })).toBeVisible();
@@ -48,6 +62,16 @@ test.describe('staff inventory product items browser', () => {
     await expect(page.getByText('No product items found.')).toBeVisible();
     await search.fill('error');
     await expect(page.getByRole('alert')).toContainText('Unable to load product items. Please try again.');
+  });
+});
+
+test.describe('owner inventory product items browser', () => {
+  test.skip(!owner.email || !owner.password, 'Owner fixture credentials are required.');
+  test('can open the read-only page', async ({ page }) => {
+    await login(page, owner);
+    await page.goto('/#/admin/inventory/product-items');
+    await expect(page.getByRole('heading', { name: 'Product Items' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Product Items' })).toBeVisible();
   });
 });
 

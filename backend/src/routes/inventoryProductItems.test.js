@@ -37,12 +37,13 @@ test('product items HTTP route is role protected, read-only, and returns safe in
     if (sql.includes('FROM sessions')) return { rows: [{ id: 1 }] };
     if (sql.includes('FROM users')) return { rows: [{ id: 1, role: currentRole,
       is_active: true, is_deleted: false, email_verified: true }] };
-    if (sql.includes('FROM permissions p')) return { rows: [{ has_permission: currentRole !== 'denied' }] };
+    if (sql.includes('FROM permissions p')) return { rows: [{ has_permission: !denyPermission }] };
     if (sql.includes('COUNT(*)::int AS total')) return { rows: [{ total: 1 }] };
     if (sql.includes('SELECT p.id, p.part_number')) return { rows: [row] };
     return { rows: [] };
   };
   let currentRole = 'store_staff';
+  let denyPermission = false;
   const app = express();
   app.use((req, _res, next) => {
     if (req.headers['x-test-role']) req.session = { auth: { userId: 1, tokenHash: 'a'.repeat(64) } };
@@ -74,6 +75,9 @@ test('product items HTTP route is role protected, read-only, and returns safe in
     assert.equal((await fetch(url, { headers: { 'x-test-role': 'customer' } })).status, 403);
     assert.equal((await fetch(url)).status, 401);
     currentRole = 'store_staff';
+    denyPermission = true;
+    assert.equal((await fetch(url, { headers: { 'x-test-role': 'store_staff' } })).status, 403);
+    denyPermission = false;
     assert.equal((await fetch(url, { method: 'PUT', headers: { 'x-test-role': 'store_staff' } })).status, 405);
     assert.equal((await fetch(url, { method: 'POST', headers: { 'x-test-role': 'store_staff' } })).status, 405);
     assert.equal((await fetch(url, { method: 'DELETE', headers: { 'x-test-role': 'store_staff' } })).status, 405);

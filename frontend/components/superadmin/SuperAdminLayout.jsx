@@ -3,6 +3,7 @@ import {
   Activity,
   Database,
   LayoutDashboard,
+  PackageSearch,
   Settings,
   Shield,
   Users,
@@ -14,6 +15,7 @@ import OperationsShell from '../operations/OperationsShell';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'System overview', icon: LayoutDashboard, group: 'Overview' },
+  { id: 'product-items', label: 'Product Items', icon: PackageSearch, group: 'Inventory' },
   { id: 'users', label: 'Users & roles', icon: Users, group: 'Access control' },
   { id: 'security', label: 'Security controls', icon: Shield, group: 'Access control' },
   { id: 'config', label: 'Configuration', icon: Settings, group: 'Platform' },

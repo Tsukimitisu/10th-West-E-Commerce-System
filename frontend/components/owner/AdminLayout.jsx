@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bell,
   Boxes,
+  PackageSearch,
   Image,
   LayoutDashboard,
   MessageCircle,
@@ -40,6 +41,7 @@ const createNavItems = (badges = {}) => [
   { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: badges.pendingOrders, group: 'Sales', permission: 'orders.view' },
   { id: 'pos', label: 'Point of sale', icon: Monitor, route: '/pos', group: 'Sales', permission: 'pos.access' },
   { id: 'inventory', label: 'Inventory', icon: Boxes, badge: badges.lowStock, group: 'Catalog', permission: 'inventory.view' },
+  { id: 'product-items', label: 'Product Items', icon: PackageSearch, group: 'Catalog', parentId: 'inventory', permission: 'inventory.view' },
   { id: 'storefront', label: 'Storefront Listings', icon: Store, group: 'Catalog', permission: 'products.view' },
   { id: 'promotions', label: 'Promotions', icon: Tag, group: 'Catalog', permission: 'promotions.manage' },
   { id: 'customers', label: 'Customers', icon: Users, group: 'Customers', permission: 'customers.view' },
@@ -53,7 +55,7 @@ const createNavItems = (badges = {}) => [
 ];
 
 const ADMIN_NAV = [
-  'dashboard', 'orders', 'pos', 'inventory', 'storefront', 'promotions',
+  'dashboard', 'orders', 'pos', 'inventory', 'product-items', 'storefront', 'promotions',
   'customers', 'chat', 'reviews', 'returns', 'staff', 'reports', 'banners', 'content',
 ];
 
