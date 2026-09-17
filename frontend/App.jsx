@@ -16,6 +16,7 @@ import {
 } from './services/authSession.js';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { Role } from './types.js';
+import { roleLandingPath } from './utils/roleLanding.js';
 import AppErrorBoundary from './components/AppErrorBoundary';
 
 const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
@@ -99,7 +100,9 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
             <AppErrorBoundary resetKey={`${location.pathname}${location.search}`}>
               <Suspense fallback={<RouteFallback />}>
               <Routes location={location}>
-                <Route path="/" element={<Home />} />
+                <Route path="/" element={roleLandingPath(user?.role)
+                  ? <Navigate to={roleLandingPath(user.role)} replace />
+                  : <Home />} />
                 <Route path="/shop" element={<ProductList />} />
                 <Route path="/login" element={
                   user && user.role === Role.STORE_STAFF
@@ -331,7 +334,6 @@ const App = () => {
 };
 
 export default App;
-
 
 
 
