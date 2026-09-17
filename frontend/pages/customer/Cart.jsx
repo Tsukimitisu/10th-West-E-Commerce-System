@@ -38,6 +38,7 @@ const Cart = () => {
     total,
     updatingItemIds,
     syncCart,
+    cartSyncError,
   } = useCart();
 
   const navigate = useNavigate();
@@ -193,7 +194,11 @@ const Cart = () => {
           Shopping Cart {items.length > 0 && <span className="text-slate-500 font-medium text-xl">({items.length} items)</span>}
         </h1>
 
-        {items.length === 0 ? (
+        {cartSyncError && <div role="alert" className="mb-5 rounded-lg bg-amber-50 px-4 py-3 text-amber-900">
+          {cartSyncError} <button type="button" onClick={() => syncCart()} className="ml-2 font-semibold underline">Retry</button>
+        </div>}
+
+        {items.length === 0 && !cartSyncError ? (
           <div className="text-center py-20 bg-white rounded-2xl border border-slate-200 shadow-sm">
             <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
               <ShoppingBag size={40} className="text-red-500" />
@@ -204,7 +209,7 @@ const Cart = () => {
               Start Shopping <ArrowRight size={18} />
             </Link>
           </div>
-        ) : (
+        ) : items.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-7">
             <div className="lg:col-span-8">
               <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -357,7 +362,7 @@ const Cart = () => {
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       <LoginRequiredModal

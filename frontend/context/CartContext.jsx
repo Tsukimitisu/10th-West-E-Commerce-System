@@ -21,6 +21,8 @@ export const CartProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [updatingItemIds, setUpdatingItemIds] = useState(() => new Set());
   const [initialized, setInitialized] = useState(false);
+  const [cartSyncError, setCartSyncError] = useState(null);
+  const cartSyncRequestRef = React.useRef(0);
   const itemsRef = React.useRef(items);
   const quantityUpdatesRef = React.useRef(new Set());
 
@@ -185,7 +187,9 @@ export const CartProvider = ({ children }) => {
     try {
       const raw = sessionStorage.getItem(getCheckoutSelectionKey());
       if (!raw) return [];
-      return normalizeSelectionIds(JSON.parse(raw));
+      return Array.from(new Set(JSON.parse(raw)))
+        .map(Number)
+        .filter((id) => Number.isInteger(id) && id > 0);
     } catch {
       return [];
     }
@@ -250,6 +254,8 @@ export const CartProvider = ({ children }) => {
 
   // Sync cart from backend when user logs in
   const syncCart = async ({ returnItems = false } = {}) => {
+    const requestId = ++cartSyncRequestRef.current;
+    const requestedScope = getCartKey();
     if (USE_SUPABASE) {
       try {
         const currentUser = getCurrentUserFromToken();
@@ -300,6 +306,7 @@ export const CartProvider = ({ children }) => {
     if (!currentUser?.id) {
       const savedCart = sessionStorage.getItem(getCartKey());
       setItems(savedCart ? JSON.parse(savedCart) : []);
+      setCartSyncError(null);
       setInitialized(true);
       return true;
     }
@@ -311,30 +318,33 @@ export const CartProvider = ({ children }) => {
       
       if (response.ok) {
         const data = await response.json();
+        if (requestId !== cartSyncRequestRef.current || requestedScope !== getCartKey()) return false;
         if (data?.degraded || !Array.isArray(data?.items)) {
-          const savedCart = sessionStorage.getItem(getCartKey());
-          setItems(savedCart ? JSON.parse(savedCart) : []);
+          setItems([]);
+          setCartSyncError('Unable to refresh your cart. Please try again.');
           setInitialized(true);
           return false;
         }
         const mappedItems = mapCartItemsFromBackend(data.items || []);
         const stableItems = orderCartItems(mappedItems);
         setItems(stableItems);
+        setCartSyncError(null);
         // Save to tab-scoped storage as backup
         sessionStorage.setItem(getCartKey(), JSON.stringify(stableItems));
         setInitialized(true);
         return returnItems ? stableItems : true;
       } else {
-        // Fall back to tab-scoped storage
-        const savedCart = sessionStorage.getItem(getCartKey());
-        setItems(savedCart ? JSON.parse(savedCart) : []);
+        if (requestId !== cartSyncRequestRef.current || requestedScope !== getCartKey()) return false;
+        setItems([]);
+        setCartSyncError('Unable to refresh your cart. Please try again.');
         setInitialized(true);
         return false;
       }
     } catch (err) {
       console.error('Error syncing cart:', err);
-      const savedCart = sessionStorage.getItem(getCartKey());
-      setItems(savedCart ? JSON.parse(savedCart) : []);
+      if (requestId !== cartSyncRequestRef.current || requestedScope !== getCartKey()) return false;
+      setItems([]);
+      setCartSyncError('Unable to refresh your cart. Please try again.');
       setInitialized(true);
       return false;
     }
@@ -345,6 +355,21 @@ export const CartProvider = ({ children }) => {
     syncCart();
   }, [cartScopeKey]);
 
+  useEffect(() => {
+    const refresh = () => {
+      if (getCurrentUser()?.id) syncCart();
+    };
+    const refreshVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => {
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', refreshVisible);
+    };
+  }, []);
+
   // Monitor auth changes that affect cart scope
   useEffect(() => {
     const handleStorageChange = async () => {
@@ -353,15 +378,18 @@ export const CartProvider = ({ children }) => {
       const nextScopeKey = currentUser?.id ? `shopCoreCart_${currentUser.id}` : GUEST_CART_KEY;
 
       setCartScopeKey(nextScopeKey);
+      setInitialized(false);
       setSelectedItemIds([]);
       setHasLoadedSelection(false);
 
       if (!currentUser?.id) {
+        cartSyncRequestRef.current += 1;
         clearCartStorageForScope(previousScopeKey);
         clearGuestCartStorage();
         setItems([]);
         setDiscount(null);
         setError(null);
+        setCartSyncError(null);
         setInitialized(true);
         clearCheckoutSelection();
         return;
@@ -408,7 +436,7 @@ export const CartProvider = ({ children }) => {
 
   // Save cart state in tab-scoped storage for guest/offline fallback.
   useEffect(() => {
-    if (initialized && hasLoadedSelection) {
+    if (initialized && hasLoadedSelection && !cartSyncError) {
       sessionStorage.setItem(getCartKey(), JSON.stringify(items));
       // cleanup removed items
       const itemIds = new Set(items.map(i => Number(i.productId)));
@@ -420,7 +448,7 @@ export const CartProvider = ({ children }) => {
       const cleanCheckoutSelection = getCheckoutSelection().filter((id) => itemIds.has(Number(id)));
       sessionStorage.setItem(getCheckoutSelectionKey(), JSON.stringify(cleanCheckoutSelection));
     }
-  }, [items, selectedItemIds, initialized, hasLoadedSelection, cartScopeKey]);
+  }, [items, selectedItemIds, initialized, hasLoadedSelection, cartScopeKey, cartSyncError]);
 
   useEffect(() => {
     if (!initialized || !hasLoadedSelection) return;
@@ -1158,7 +1186,9 @@ export const CartProvider = ({ children }) => {
         error,
         loading,
         updatingItemIds,
-        syncCart
+        syncCart,
+        initialized,
+        cartSyncError,
     }}>
       {children}
     </CartContext.Provider>

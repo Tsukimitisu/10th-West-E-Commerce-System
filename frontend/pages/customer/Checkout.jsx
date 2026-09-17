@@ -10,6 +10,7 @@ import { getCurrentAuthUser } from '../../services/authSession.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../../constants/commerce.js';
 import { getCheckoutCartWarning } from '../../utils/checkoutCartReview.js';
+import { reconcileCheckoutSelection } from '../../utils/checkoutSelection.js';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 const CHECKOUT_TERMS_SESSION_KEY = 'checkoutTermsAccepted';
@@ -42,6 +43,8 @@ const Checkout = () => {
     clearCheckoutSelection,
     clearPurchasedItemsLocal,
     syncCart,
+    initialized: cartInitialized,
+    cartSyncError,
   } = useCart();
 
   const navigate = useNavigate();
@@ -74,6 +77,19 @@ const Checkout = () => {
         : storedSelection;
     return normalizeIdList(preferredSelection);
   });
+  const [checkingCart, setCheckingCart] = useState(!isBuyNow);
+  const [cartLoadError, setCartLoadError] = useState(false);
+  const refreshCheckoutCart = async () => {
+    setCheckingCart(true);
+    setCartLoadError(false);
+    const current = await syncCart();
+    setCartLoadError(!current);
+    setCheckingCart(false);
+  };
+
+  useEffect(() => {
+    if (!isBuyNow) refreshCheckoutCart();
+  }, [isBuyNow]);
 
   useEffect(() => {
     if (isBuyNow) return;
@@ -140,23 +156,15 @@ const Checkout = () => {
   }, [checkoutItemIds, clearCheckoutSelection, isBuyNow, persistCheckoutSelection]);
 
   useEffect(() => {
-    if (isBuyNow) return;
+    if (isBuyNow || !cartInitialized || checkingCart || cartLoadError) return;
 
     const availableIds = new Set(
       allCartItems
         .map((item) => Number(item.productId))
         .filter((id) => Number.isInteger(id) && id > 0)
     );
-    const normalizeAvailable = (ids = []) => normalizeIdList(ids).filter((id) => availableIds.has(id));
-
     setCheckoutItemIds((current) => {
-      const filteredCurrent = normalizeAvailable(current);
-      const selectedFromCart = normalizeAvailable(selectedItemIds);
-      const desired = selectedFromCart.length > 0
-        ? selectedFromCart
-        : availableIds.size > 0
-          ? []
-          : filteredCurrent;
+      const desired = reconcileCheckoutSelection(current, selectedItemIds, [...availableIds]);
 
       if (areSameIds(current, desired)) {
         return current;
@@ -164,7 +172,7 @@ const Checkout = () => {
 
       return desired;
     });
-  }, [allCartItems, isBuyNow, selectedItemIds]);
+  }, [allCartItems, isBuyNow, selectedItemIds, cartInitialized, checkingCart, cartLoadError]);
 
   const verifiedCartItems = useMemo(() => {
     if (isBuyNow) return [];
@@ -694,6 +702,15 @@ const Checkout = () => {
       setProcessing(false);
     }
   };
+
+  if (!isBuyNow && (checkingCart || !cartInitialized || cartLoadError || cartSyncError)) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+      <div className="text-center">
+        <p className="text-gray-900 mb-3">{checkingCart || !cartInitialized ? 'Refreshing your cart...' : 'Unable to refresh your cart. Please check your connection and try again.'}</p>
+        {!checkingCart && <button type="button" onClick={refreshCheckoutCart} className="rounded-lg bg-red-600 px-5 py-2 text-white">Retry</button>}
+      </div>
+    </div>;
+  }
 
   if (items.length === 0) {
     return (
