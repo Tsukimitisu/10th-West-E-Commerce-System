@@ -14,7 +14,6 @@ import { reconcileCheckoutSelection } from '../../utils/checkoutSelection.js';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 const CHECKOUT_TERMS_SESSION_KEY = 'checkoutTermsAccepted';
-const CHECKOUT_VAT_RATE = 0;
 
 const toFiniteNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -226,6 +225,7 @@ const Checkout = () => {
   const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
   const [shippingQuoteError, setShippingQuoteError] = useState('');
   const [shippingQuoteErrorCode, setShippingQuoteErrorCode] = useState('');
+  const [quoteRefreshKey, setQuoteRefreshKey] = useState(0);
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(3000);
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [gcashAvailability, setGcashAvailability] = useState({ available: false, loading: true });
@@ -458,7 +458,7 @@ const Checkout = () => {
       active = false;
       window.clearTimeout(timeoutId);
     };
-  }, [isNewAddressMode, newAddressComplete, newAddressKey, selectedAddress, selectedSavedAddress, shippingQuoteItemsKey, usingSavedAddress]);
+  }, [isNewAddressMode, newAddressComplete, newAddressKey, selectedAddress, selectedSavedAddress, shippingQuoteItemsKey, usingSavedAddress, quoteRefreshKey]);
 
   const shippingCost = roundCurrency(shippingQuote?.shipping_fee ?? 0);
   const resolvedFreeShippingThreshold = roundCurrency(shippingQuote?.free_shipping_threshold ?? freeShippingThreshold);
@@ -466,7 +466,8 @@ const Checkout = () => {
   const freeShippingApplied = Boolean(shippingQuote?.free_shipping_applied || subtotal >= resolvedFreeShippingThreshold);
   const shippingBlocked = ['SHIPPING_NOT_AVAILABLE', 'SHIPPING_ADDRESS_UNCLEAR'].includes(shippingQuoteErrorCode);
   const vatBase = roundCurrency(Math.max(0, total + shippingCost));
-  const vatAmount = roundCurrency(vatBase * CHECKOUT_VAT_RATE);
+  const vatRate = Math.max(0, toFiniteNumber(shippingQuote?.tax_rate, 0));
+  const vatAmount = roundCurrency(vatBase * vatRate / 100);
   const grandTotal = roundCurrency(vatBase + vatAmount);
 
   const formatPrice = (price) => {
@@ -512,7 +513,16 @@ const Checkout = () => {
     let latestItems;
     if (isBuyNow) {
       const latestProduct = await getProductById(items[0].productId);
-      latestItems = [{ ...items[0], product: latestProduct }];
+      const selectedVariantId = Number(items[0].variantId || items[0].product?.selected_variant?.id || 0);
+      const selectedVariant = selectedVariantId
+        ? latestProduct.variants?.find((variant) => Number(variant.id) === selectedVariantId)
+        : null;
+      latestItems = selectedVariantId && !selectedVariant ? [] : [{
+        ...items[0],
+        product: selectedVariant
+          ? { ...latestProduct, price: selectedVariant.price, stock_quantity: selectedVariant.stock_quantity }
+          : latestProduct,
+      }];
     } else {
       latestItems = await syncCart({ returnItems: true });
       if (!Array.isArray(latestItems)) throw new Error('Unable to refresh your cart. Please check your connection and try again.');
@@ -696,6 +706,7 @@ const Checkout = () => {
     } catch (err) {
       if (err.code === 'PRICE_CHANGED' || err.code === 'OUT_OF_STOCK' || err.code === 'TOTAL_CHANGED') {
         if (!isBuyNow) await syncCart();
+        if (err.code === 'TOTAL_CHANGED') setQuoteRefreshKey((current) => current + 1);
       }
       setError(err.message || 'Something went wrong');
     } finally {
@@ -1165,7 +1176,7 @@ const Checkout = () => {
                   {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(discountAmount)}</span></div>}
                   <div className="flex justify-between text-gray-500"><span>Shipping</span><span className={shippingCost === 0 && shippingQuote ? 'text-green-500 font-medium' : 'text-gray-600'}>{shippingQuoteLoading ? 'Calculating...' : shippingQuote ? (shippingCost === 0 ? 'Free' : formatPrice(shippingCost)) : 'Select an address'}</span></div>
                   {shippingQuoteError && <p className="text-xs text-red-500">{shippingQuoteError}</p>}
-                  <div className="flex justify-between text-gray-400 text-xs"><span>VAT (12%)</span><span>{formatPrice(vatAmount)}</span></div>
+                  <div className="flex justify-between text-gray-400 text-xs"><span>VAT ({vatRate}%)</span><span>{formatPrice(vatAmount)}</span></div>
                   <div className="border-t border-slate-200 pt-2 flex justify-between"><span className="font-semibold text-gray-900">Total</span><span className="font-bold text-2xl text-gray-900">{formatPrice(grandTotal)}</span></div>
                 </div>
 

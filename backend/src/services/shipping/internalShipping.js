@@ -1,3 +1,5 @@
+import { calculateEcommercePrice, resolveStoreSellingPrice } from '../catalogPricing.js';
+
 const DEFAULTS = Object.freeze({
   metroManilaFee: 100,
   luzonFee: 150,
@@ -194,18 +196,21 @@ export const calculateDatabaseShippingQuote = async (db, {
   let actualWeightKg = 0;
   for (const item of normalizedItems) {
     const productResult = await db.query(
-      `SELECT p.id, p.name, p.price, p.sale_price, p.is_on_sale, p.status, p.is_deleted, p.weight_kg,
+      `SELECT p.id, p.name, p.price, p.store_selling_price, p.inventory_status, p.is_deleted, p.weight_kg,
+              el.visibility_status,
               EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id) AS has_variants
        FROM products p
+       JOIN ecommerce_listings el ON el.inventory_item_id = p.id
        WHERE p.id = $1`,
       [item.product_id]
     );
     const product = productResult.rows[0];
-    if (!product || product.is_deleted || product.status !== 'active') {
+    if (!product || product.is_deleted || product.inventory_status !== 'active' || product.visibility_status !== 'active') {
       throw Object.assign(new Error(`Product #${item.product_id} is not available.`), { status: 400 });
     }
 
-    let unitPrice = money(product.sale_price && product.is_on_sale ? product.sale_price : product.price, -1);
+    const storePrice = resolveStoreSellingPrice(product);
+    let unitPrice = storePrice == null ? -1 : calculateEcommercePrice(storePrice);
     if (item.variant_id) {
       const variantResult = await db.query(
         'SELECT id, price, price_adjustment FROM product_variants WHERE id = $1 AND product_id = $2',
@@ -213,9 +218,10 @@ export const calculateDatabaseShippingQuote = async (db, {
       );
       const variant = variantResult.rows[0];
       if (!variant) throw Object.assign(new Error(`The selected variant for ${product.name} is invalid.`), { status: 400 });
-      unitPrice = variant.price !== null
+      const storeVariantPrice = variant.price !== null
         ? money(variant.price, -1)
-        : money(unitPrice + Number(variant.price_adjustment || 0), -1);
+        : money(storePrice + Number(variant.price_adjustment || 0), -1);
+      unitPrice = storeVariantPrice < 0 ? -1 : calculateEcommercePrice(storeVariantPrice);
     } else if (product.has_variants) {
       throw Object.assign(new Error(`Select a variant for ${product.name}.`), { status: 400 });
     }
@@ -226,7 +232,7 @@ export const calculateDatabaseShippingQuote = async (db, {
     actualWeightKg = money(actualWeightKg + productWeightKg * item.quantity, 0);
   }
 
-  return calculateInternalShippingQuote({ subtotal, actualWeightKg, address });
+  return { ...calculateInternalShippingQuote({ subtotal, actualWeightKg, address }), subtotal };
 };
 
 export const getInternalShippingConfig = envConfig;

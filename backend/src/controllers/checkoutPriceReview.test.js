@@ -11,6 +11,9 @@ test('checkout refuses missing or stale displayed prices before creating an orde
   assert.equal(item.expected_unit_price, 517);
   assert.throws(() => __testing.assertExpectedUnitPrice(690, item.expected_unit_price), (error) => error.status === 409 && error.code === 'PRICE_CHANGED');
   assert.doesNotThrow(() => __testing.assertExpectedUnitPrice(517, item.expected_unit_price));
+  assert.deepEqual(__testing.normalizeItems([{ product_id: 1, quantity: 1 }], { requireExpectedPrice: false }), [
+    { product_id: 1, variant_id: null, quantity: 1 },
+  ]);
 });
 
 test('checkout refuses a total different from the confirmed display', () => {

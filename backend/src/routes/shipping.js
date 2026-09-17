@@ -2,6 +2,7 @@ import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { calculateDatabaseShippingQuote, getInternalShippingConfig } from '../services/shipping/internalShipping.js';
+import { getRuntimeSettings } from '../services/settings.js';
 
 const router = express.Router();
 
@@ -22,7 +23,8 @@ router.post('/quote', authenticateToken, requireRole('customer'), async (req, re
       address: req.body?.address ?? req.body?.shipping_address,
       items: req.body?.items,
     });
-    return res.json(quote);
+    const taxSettings = await getRuntimeSettings(pool, 'tax', { enabled: false, rate: 0 });
+    return res.json({ ...quote, tax_rate: taxSettings.enabled ? Math.max(0, Number(taxSettings.rate) || 0) : 0 });
   } catch (error) {
     const status = Number.isInteger(error?.status) ? error.status : 500;
     if (status >= 500) console.error('Shipping quote error:', error.message);

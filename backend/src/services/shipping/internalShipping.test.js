@@ -132,7 +132,7 @@ test('database quote validates address ownership and ignores frontend prices and
       if (sql.includes('FROM products p')) {
         return { rows: [{
           id: 1, name: 'Helmet', price: '1250.00', sale_price: null,
-          weight_kg: '1.25', is_on_sale: false, status: 'active', is_deleted: false, has_variants: false,
+          weight_kg: '1.25', is_on_sale: false, inventory_status: 'active', visibility_status: 'active', is_deleted: false, has_variants: false,
         }] };
       }
       throw new Error(`Unexpected query: ${sql}`);
@@ -144,6 +144,7 @@ test('database quote validates address ownership and ignores frontend prices and
     items: [{ product_id: 1, quantity: 2, price: 1, subtotal: 2, shipping_fee: 0, weight_kg: 0.01 }],
   });
   assert.equal(quote.shipping_fee, 180);
+  assert.equal(quote.subtotal, 2875);
   assert.equal(quote.actual_weight_kg, 2.5);
   assert.match(calls.find((call) => call.sql.includes('FROM products p')).sql, /p\.weight_kg/);
   assert.deepEqual(calls[0].params, [10, 7]);
@@ -162,7 +163,7 @@ test('database quote accepts a complete new unsaved checkout address', async () 
       if (String(sql).includes('FROM products p')) {
         return { rows: [{
           id: 1, name: 'Helmet', price: '1250.00', sale_price: null,
-          weight_kg: '1', is_on_sale: false, status: 'active', is_deleted: false, has_variants: false,
+          weight_kg: '1', is_on_sale: false, inventory_status: 'active', visibility_status: 'active', is_deleted: false, has_variants: false,
         }] };
       }
       throw new Error(`Unexpected query: ${sql}`);

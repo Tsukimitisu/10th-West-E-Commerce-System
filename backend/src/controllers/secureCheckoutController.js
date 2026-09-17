@@ -35,7 +35,7 @@ const safeErrorCode = (error) => {
   return undefined;
 };
 
-const normalizeItems = (input) => {
+const normalizeItems = (input, { requireExpectedPrice = true } = {}) => {
   if (!Array.isArray(input) || input.length === 0 || input.length > 100) throw fail(400, 'Checkout requires 1 to 100 items.');
   const merged = new Map();
   for (const raw of input) {
@@ -51,13 +51,16 @@ const normalizeItems = (input) => {
     const nextQuantity = (merged.get(key)?.quantity || 0) + quantity;
     if (nextQuantity > MAX_ITEM_QUANTITY) throw fail(400, MAX_ITEM_QUANTITY_MESSAGE);
     const expectedPrice = Number(raw?.expected_unit_price);
-    if (raw?.expected_unit_price == null || !Number.isFinite(expectedPrice) || expectedPrice < 0 || roundMoney(expectedPrice) !== expectedPrice) {
+    if (requireExpectedPrice && (raw?.expected_unit_price == null || !Number.isFinite(expectedPrice) || expectedPrice < 0 || roundMoney(expectedPrice) !== expectedPrice)) {
       throw fail(400, 'Each checkout item requires a valid displayed price. Please refresh your cart.');
     }
-    if (merged.has(key) && merged.get(key).expected_unit_price !== expectedPrice) {
+    if (requireExpectedPrice && merged.has(key) && merged.get(key).expected_unit_price !== expectedPrice) {
       throw fail(400, 'Duplicate checkout items have different displayed prices.');
     }
-    merged.set(key, { product_id: productId, variant_id: variantId, quantity: nextQuantity, expected_unit_price: expectedPrice });
+    merged.set(key, {
+      product_id: productId, variant_id: variantId, quantity: nextQuantity,
+      ...(requireExpectedPrice ? { expected_unit_price: expectedPrice } : {}),
+    });
   }
   return [...merged.values()];
 };
@@ -1360,20 +1363,24 @@ export const cleanupExpiredReservations = async (_req, res) => {
 export const validateDiscount = async (req, res) => {
   const client = await pool.connect();
   try {
-    const items = normalizeItems(req.body?.items);
+    const items = normalizeItems(req.body?.items, { requireExpectedPrice: false });
     await client.query('BEGIN');
     let subtotal = 0;
     for (const item of items) {
       const result = await client.query(
-        `SELECT p.price, p.sale_price, p.is_on_sale, pv.id AS matched_variant_id, pv.price AS variant_price, pv.price_adjustment
-         FROM products p LEFT JOIN product_variants pv ON pv.id = $2 AND pv.product_id = p.id
-         WHERE p.id = $1 AND p.status = 'active' AND COALESCE(p.is_deleted, false) = false`,
+        `SELECT p.price, p.store_selling_price, pv.id AS matched_variant_id, pv.price AS variant_price, pv.price_adjustment
+         FROM products p
+         JOIN ecommerce_listings el ON el.inventory_item_id = p.id
+         LEFT JOIN product_variants pv ON pv.id = $2 AND pv.product_id = p.id
+         WHERE p.id = $1 AND p.inventory_status = 'active' AND el.visibility_status = 'active'
+           AND COALESCE(p.is_deleted, false) = false`,
         [item.product_id, item.variant_id]
       );
       if (!result.rowCount || (item.variant_id && !result.rows[0].matched_variant_id)) throw fail(400, 'One or more checkout items are unavailable.');
       const row = result.rows[0];
-      const base = money(row.is_on_sale && row.sale_price ? row.sale_price : row.price);
-      const price = row.variant_price !== null && row.variant_price !== undefined ? money(row.variant_price) : base + money(row.price_adjustment);
+      const base = resolveStoreSellingPrice(row);
+      const storePrice = row.variant_price !== null && row.variant_price !== undefined ? money(row.variant_price) : base + money(row.price_adjustment);
+      const price = calculateEcommercePrice(storePrice);
       subtotal = roundMoney(subtotal + price * item.quantity);
     }
     const result = await calculateDiscount(client, req.user.id, req.body?.discount_code, subtotal);

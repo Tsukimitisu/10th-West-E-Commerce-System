@@ -1648,7 +1648,9 @@ export const getProductById = async (id) => {
     boxNumber: product.box_number,
     reviewCount: Number(product.review_count ?? product.reviewCount ?? 0),
     variant_options: variantData.options || [],
-    variants: variantData.variants || [],
+    variants: Array.isArray(product.variants) && product.variants.length > 0
+      ? product.variants
+      : (variantData.variants || []),
   };
 };
 
