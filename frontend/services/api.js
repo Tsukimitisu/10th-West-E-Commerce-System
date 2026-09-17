@@ -4871,6 +4871,14 @@ export const uploadProfileAvatar = async (file) => {
 
 // ==================== INVENTORY ====================
 
+export const getInventoryProductItems = async (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== '') query.set(key, String(value).trim());
+  });
+  return authenticatedFetch(`${API_URL}/inventory/product-items?${query.toString()}`);
+};
+
 export const getInventory = async (search = '') => {
   if (USE_SUPABASE) {
     const { data, error } = await supabase
