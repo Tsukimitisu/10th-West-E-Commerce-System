@@ -136,8 +136,8 @@ const MessageBubble = ({ message, currentUserId }) => {
   const imageUrl = resolveImageUrl(message.attachment_url || message.media_urls?.[0]);
 
   return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[78%] rounded-2xl px-4 py-2 shadow-sm ${
+    <div className={`flex min-w-0 ${mine ? 'justify-end' : 'justify-start'}`}>
+      <div className={`min-w-0 max-w-[85%] break-words rounded-2xl px-4 py-2 shadow-sm [overflow-wrap:anywhere] ${
         mine ? 'rounded-br-md bg-orange-600 text-white' : 'rounded-bl-md bg-white text-slate-900 border border-slate-200'
       }`}>
         {imageUrl && (
@@ -343,10 +343,10 @@ const Messages = () => {
   const filteredEmpty = !loadingList && conversations.length === 0;
 
   return (
-    <main className="min-h-[calc(100vh-4rem)] bg-slate-100 text-slate-950">
-      <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-7xl flex-col px-0 md:px-4 md:py-4">
-        <div className="flex min-h-0 flex-1 overflow-hidden border border-slate-200 bg-white shadow-sm md:rounded-lg">
-          <aside className={`${selectedConversation ? 'hidden md:flex' : 'flex'} w-full flex-col border-r border-slate-200 bg-white md:w-96`}>
+    <main className="h-[calc(100dvh-4rem)] min-h-0 max-w-full overflow-x-hidden bg-slate-100 text-slate-950">
+      <div className="mx-auto flex h-full min-h-0 max-w-7xl flex-col px-0 md:px-4 md:py-4">
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden border border-slate-200 bg-white shadow-sm md:rounded-lg">
+          <aside className={`${selectedConversation ? 'hidden md:flex' : 'flex'} min-h-0 min-w-0 w-full flex-col border-r border-slate-200 bg-white md:w-96`}>
             <div className="border-b border-slate-200 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -407,7 +407,7 @@ const Messages = () => {
             </div>
           </aside>
 
-          <section className={`${selectedConversation ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col bg-slate-50`}>
+          <section className={`${selectedConversation ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-slate-50`}>
             {selectedConversation ? (
               <>
                 <div className="flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4">
@@ -459,7 +459,7 @@ const Messages = () => {
                       onChange={handleDraftChange}
                       rows={1}
                       placeholder="Type a message"
-                      className="max-h-28 min-h-11 flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-950 outline-none focus:border-orange-500 focus:bg-white"
+                      className="max-h-28 min-h-11 min-w-0 flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-950 outline-none focus:border-orange-500 focus:bg-white"
                     />
                     <button
                       type="submit"

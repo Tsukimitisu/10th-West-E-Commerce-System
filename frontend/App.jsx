@@ -68,6 +68,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
 
   const isSuperAdmin = user?.role === Role.SUPER_ADMIN;
   const hideChrome = location.pathname === '/pos' || ['/admin', '/staff', '/superadmin', '/super-admin'].some((path) => location.pathname.startsWith(path));
+  const hideFooter = hideChrome || location.pathname === '/messages';
   const isAccountRoute = (
     location.pathname === '/profile' ||
     location.pathname === '/orders' ||
@@ -182,7 +183,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
           </motion.div>
         </AnimatePresence>
       </div>
-      {!hideChrome && !isSuperAdmin && <Footer />}
+      {!hideFooter && !isSuperAdmin && <Footer />}
       <PrivacyBanner />
     </div>
   );
@@ -334,7 +335,6 @@ const App = () => {
 };
 
 export default App;
-
 
 
 
