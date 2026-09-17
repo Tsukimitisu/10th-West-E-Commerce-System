@@ -20,6 +20,8 @@ const Navbar = ({ user, onLogout }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifError, setNotifError] = useState(false);
   const [supportMenuOpen, setSupportMenuOpen] = useState(false);
   const { itemCount } = useCart();
   const { on, off, connected } = useSocket();
@@ -211,10 +213,11 @@ const Navbar = ({ user, onLogout }) => {
 
   const refreshNotifications = useCallback(async () => {
     if (!user) return;
+    setNotifError(false);
     try {
       const [count, list, anns] = await Promise.all([
         getUnreadNotificationCount().catch(() => 0),
-        getNotifications().catch(() => []),
+        getNotifications(),
         getAnnouncements().catch(() => []),
       ]);
       setUnreadCount(count || 0);
@@ -233,7 +236,11 @@ const Navbar = ({ user, onLogout }) => {
       }).slice(0, 20);
 
       setNotifications(combined);
-    } catch { }
+    } catch {
+      setNotifError(true);
+    } finally {
+      setNotifLoading(false);
+    }
   }, [user]);
 
   const refreshMessageUnread = useCallback(async () => {
@@ -252,6 +259,7 @@ const Navbar = ({ user, onLogout }) => {
 
   useEffect(() => {
     if (!user) return;
+    setNotifLoading(true);
     refreshNotifications();
     const interval = setInterval(refreshNotifications, 30000);
     return () => clearInterval(interval);
@@ -542,9 +550,9 @@ const Navbar = ({ user, onLogout }) => {
                     )}
                   </button>
                   {notifOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-[26rem] bg-[#0f141e] rounded-2xl shadow-[0_18px_45px_rgba(0,0,0,0.45)] border border-white/10 animate-fade-in z-50 overflow-hidden">
+                    <div className="fixed left-4 right-4 top-16 z-50 max-h-[calc(100dvh-5rem)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0f141e] shadow-[0_18px_45px_rgba(0,0,0,0.45)] animate-fade-in sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem] sm:max-w-[calc(100vw-2rem)]">
                       <div className="px-4 py-3.5 border-b border-white/10 bg-gradient-to-r from-[#141b2a] to-[#101725]">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <h3 className="font-bold text-white text-sm">Notifications</h3>
                           {unreadCount > 0 && (
                             <button onClick={handleMarkAllRead} className="text-xs text-red-400 hover:text-red-300 font-semibold transition-colors">
@@ -557,8 +565,12 @@ const Navbar = ({ user, onLogout }) => {
                         </p>
                       </div>
 
-                      <div className="max-h-[26rem] overflow-y-auto">
-                        {notifications.length === 0 ? (
+                      <div className="max-h-[min(26rem,calc(100dvh-10rem))] overflow-x-hidden overflow-y-auto">
+                        {notifLoading ? (
+                          <div role="status" className="p-9 text-center text-sm text-slate-400">Loading notifications...</div>
+                        ) : notifError ? (
+                          <div role="alert" className="space-y-3 p-6 text-center text-sm text-slate-300"><p>Unable to load notifications.</p><button type="button" onClick={() => { setNotifLoading(true); refreshNotifications(); }} className="rounded-lg border border-white/20 px-3 py-2 font-semibold text-white">Try again</button></div>
+                        ) : notifications.length === 0 ? (
                           <div className="p-9 text-center text-slate-400 text-sm">
                             <Bell size={24} className="mx-auto mb-2 opacity-40" />
                             No notifications yet
@@ -574,7 +586,7 @@ const Navbar = ({ user, onLogout }) => {
                               <button
                                 key={`${n.id || n.title}-${i}`}
                                 onClick={() => handleNotificationClick(n)}
-                                className={`w-full text-left px-4 py-3.5 transition-colors border-b border-white/10 last:border-b-0 hover:bg-white/5 ${!n.is_read ? 'bg-red-500/10' : 'bg-transparent'}`}
+                                className={`w-full min-w-0 max-w-full break-words px-4 py-3.5 text-left transition-colors border-b border-white/10 last:border-b-0 hover:bg-white/5 [overflow-wrap:anywhere] ${!n.is_read ? 'bg-red-500/10' : 'bg-transparent'}`}
                               >
                                 <div className="flex items-start gap-3.5">
                                   <div className="mt-0.5 shrink-0">
@@ -592,7 +604,7 @@ const Navbar = ({ user, onLogout }) => {
                                       <div className="min-w-0 flex-1">
                                         <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-white' : 'font-medium text-slate-100'}`}>{title}</p>
                                         {summary && <p className="mt-1 text-xs leading-5 text-slate-300 line-clamp-2">{summary}</p>}
-                                        <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
+                                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                                           <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 font-medium text-slate-300">{typeLabel}</span>
                                           <span>{formatNotificationTime(n)}</span>
                                         </div>

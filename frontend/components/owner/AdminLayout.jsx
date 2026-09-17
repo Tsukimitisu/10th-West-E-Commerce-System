@@ -213,15 +213,15 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
       </button>
 
       {notificationsOpen && (
-        <div className="absolute right-0 top-11 z-50 w-[min(92vw,400px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <div className="fixed inset-x-4 top-16 z-50 max-h-[calc(100dvh-5rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-[min(92vw,400px)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
             <div>
               <p className="text-sm font-semibold text-slate-950">Notifications</p>
               <p className="text-[11px] text-slate-500">{unreadCount ? `${unreadCount} unread` : 'You are up to date'}</p>
             </div>
             {unreadCount > 0 && <button type="button" onClick={markAllRead} className="text-xs font-semibold text-orange-700 hover:text-orange-800">Mark all read</button>}
           </div>
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="max-h-[min(420px,calc(100dvh-10rem))] overflow-x-hidden overflow-y-auto">
             {notifications.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <Bell size={24} className="mx-auto text-slate-300" />
@@ -233,7 +233,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
                 key={notification.id}
                 type="button"
                 onClick={() => openNotification(notification)}
-                className={`flex w-full gap-3 border-b border-slate-100 px-4 py-3.5 text-left hover:bg-slate-50 ${notification.is_read ? '' : 'bg-orange-50/50'}`}
+                className={`flex w-full min-w-0 max-w-full gap-3 border-b border-slate-100 px-4 py-3.5 text-left hover:bg-slate-50 ${notification.is_read ? '' : 'bg-orange-50/50'}`}
               >
                 {notification.thumbnail_url ? (
                   <img src={resolveProductImageUrl(notification.thumbnail_url)} alt="" onError={handleProductImageError} className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 object-cover" />
@@ -242,7 +242,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
                     {notificationIcon(notification)}
                   </span>
                 )}
-                <span className="min-w-0 flex-1">
+                <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                   <span className="block text-sm font-medium text-slate-900">{notificationTitle(notification)}</span>
                   {notification.message && <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-slate-500">{repairMojibake(notification.message)}</span>}
                   <span className="mt-1 block text-[10px] text-slate-400">
