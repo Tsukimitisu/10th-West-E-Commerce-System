@@ -49,6 +49,16 @@ test('shop route shows a truthful empty catalog state', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Clear filters' })).toHaveCount(0);
 });
 
+test('injection and symbol searches show no products without script execution', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  for (const search of ["' OR 1=1 --", '<script>alert(1)</script>', '%%%', '###', '😀']) {
+    await page.goto(`/#/shop?search=${encodeURIComponent(search)}`);
+    await expect(page.getByText('No products found.')).toBeVisible();
+  }
+  expect(errors).toEqual([]);
+});
+
 test('cart route renders without authentication', async ({ page }) => {
   await expectNoPageErrors(page, async () => {
     await page.goto('/#/cart');
