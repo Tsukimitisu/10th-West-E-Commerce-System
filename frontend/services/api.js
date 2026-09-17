@@ -4398,7 +4398,7 @@ export const getNotifications = async () => {
       .limit(50);
     return (data || []).map(normalizeNotification);
   }
-  const data = await authenticatedFetch(`${API_URL}/notifications`).catch(() => []);
+  const data = await authenticatedFetch(`${API_URL}/notifications`);
   return (data || []).map(normalizeNotification);
 };
 

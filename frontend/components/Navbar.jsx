@@ -546,7 +546,7 @@ const Navbar = ({ user, onLogout }) => {
               {/* Notifications */}
               {user && (
                 <div ref={notifRef} className="relative">
-                  <button onClick={() => setNotifOpen(!notifOpen)} className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
+                  <button onClick={() => setNotifOpen(!notifOpen)} aria-label="Notifications" className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
                     <Bell size={20} />
                     {unreadCount > 0 && (
                       <span className="absolute top-1 right-1 bg-gradient-to-br from-red-500 to-red-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
