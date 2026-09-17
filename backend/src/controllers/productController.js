@@ -19,7 +19,7 @@ import {
 import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl } from '../utils/productImages.js';
 import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
-import { isUnsafeProductSearch } from '../utils/productSearchSafety.js';
+import { hasSearchableProductText, isUnsafeProductSearch } from '../utils/productSearchSafety.js';
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
@@ -880,6 +880,7 @@ export const getProducts = async (req, res) => {
     const queryInput = { ...(req.query || {}), ...(req.validatedData || {}) };
     const { category, search, limit: limitParam, brand, model, year, motorcycle_model: motorcycleModel, color } = queryInput;
     if (isUnsafeProductSearch(search)) return res.json([]);
+    if (Object.prototype.hasOwnProperty.call(queryInput, 'search') && !hasSearchableProductText(search)) return res.json([]);
     const searchTerms = tokenizeSearchTerms(search);
     const searchPhrase = normalizeSearchPhrase(search);
     const resultLimit = parseResultLimit(limitParam, null, 80);

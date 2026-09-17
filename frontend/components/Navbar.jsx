@@ -416,12 +416,17 @@ const Navbar = ({ user, onLogout }) => {
     const value = globalSearch.trim();
 
     if (isShopRoute) {
-      updateShopParams({ search: value || null });
+      if (value) updateShopParams({ search: value });
+      else {
+        const next = new URLSearchParams(searchParams);
+        next.set('search', '');
+        setSearchParams(next, { replace: true });
+      }
       return;
     }
 
     if (!value) {
-      navigate('/shop');
+      navigate('/shop?search=');
       return;
     }
 

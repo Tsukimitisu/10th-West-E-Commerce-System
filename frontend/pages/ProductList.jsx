@@ -8,7 +8,7 @@ import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSessio
 import BrandButton from '../components/ui/BrandButton';
 import EmptyState from '../components/ui/EmptyState';
 import LoadingSkeleton from '../components/ui/LoadingSkeleton';
-import { isUnsafeProductSearch } from '../utils/productSearchSafety.js';
+import { hasSearchableProductText, isUnsafeProductSearch } from '../utils/productSearchSafety.js';
 
 const tokenizeSearchTerms = (value) => {
   const normalized = String(value || '')
@@ -268,6 +268,7 @@ const ProductList = () => {
   const filtered = useMemo(() => {
     let result = [...products];
     if (isUnsafeProductSearch(debouncedSearchQuery)) return [];
+    if (searchParams.has('search') && !hasSearchableProductText(debouncedSearchQuery)) return [];
     const searchTerms = tokenizeSearchTerms(debouncedSearchQuery);
     const searchPhrase = normalizeSearchPhrase(debouncedSearchQuery);
     if (searchTerms.length > 0) {
@@ -320,7 +321,7 @@ const ProductList = () => {
       case 'relevance': break;
     }
     return result;
-  }, [products, debouncedSearchQuery, selectedBrand, selectedModel, selectedColor, selectedYear, priceRange, inStockOnly, sortBy]);
+  }, [products, debouncedSearchQuery, searchParams, selectedBrand, selectedModel, selectedColor, selectedYear, priceRange, inStockOnly, sortBy]);
 
   const activeFilterCount = [searchQuery.trim(), selectedBrand, selectedModel, selectedColor, selectedYear, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
 
@@ -516,7 +517,7 @@ const ProductList = () => {
             ) : filtered.length === 0 ? (
               <EmptyState
                 icon={Search}
-                title={debouncedSearchQuery ? 'No products found.' : products.length === 0 ? 'No products are available yet' : 'No matching products'}
+                title={searchParams.has('search') ? 'No products found.' : products.length === 0 ? 'No products are available yet' : 'No matching products'}
                 description={products.length === 0
                   ? 'The catalog is connected, but no products have been published.'
                   : 'Try a different product name or remove one or more filters.'}
