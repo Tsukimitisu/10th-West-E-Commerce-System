@@ -206,8 +206,8 @@ const OperationsShell = ({
           </div>
         </header>
 
-        <main className="operations-content min-h-0 flex-1 overflow-y-auto bg-slate-50">
-          <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-5 lg:p-6">{children}</div>
+        <main className={`operations-content min-h-0 min-w-0 flex-1 bg-slate-50 ${activeId === 'chat' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          <div className={`mx-auto w-full max-w-[1600px] ${activeId === 'chat' ? 'h-full min-h-0 p-2 sm:p-3 lg:p-4' : 'p-4 sm:p-5 lg:p-6'}`}>{children}</div>
         </main>
       </div>
 
