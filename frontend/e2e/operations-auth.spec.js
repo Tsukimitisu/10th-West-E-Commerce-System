@@ -57,6 +57,47 @@ for (const account of accounts) {
   });
 }
 
+test.describe('owner root landing after browser reopen', () => {
+  test.skip(!accounts[0].email || !accounts[0].password, 'Set E2E_OWNER_EMAIL and E2E_OWNER_PASSWORD.');
+
+  test('restored owner session opens the dashboard from the site root', async ({ context, page }) => {
+    await login(page, accounts[0]);
+    await page.close();
+    const reopened = await context.newPage();
+    await reopened.goto('/#/');
+    await expect(reopened).toHaveURL(/#\/admin\/dashboard/);
+    await expect(reopened.getByRole('heading', { name: /operations dashboard/i })).toBeVisible();
+  });
+
+  test('owner can open and leave a conversation in the mobile workspace', async ({ page }) => {
+    await login(page, accounts[0]);
+    await page.setViewportSize({ width: 390, height: 780 });
+    await page.route('**/api/seller/chats**', async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith('/read')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      } else if (path.endsWith('/chats/90001')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+          conversation: { id: 90001, buyer_name: 'Layout Test Rider', subject: 'Brake pad question' },
+          messages: [],
+        }) });
+      } else {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+          conversations: [{ id: 90001, buyer_name: 'Layout Test Rider', subject: 'Brake pad question' }],
+        }) });
+      }
+    });
+    await page.goto('/#/admin/chat');
+    await expect(page.getByText('Layout Test Rider').first()).toBeVisible();
+    await page.getByText('Layout Test Rider').first().click();
+    await expect(page.getByPlaceholder('Type a reply')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Back to conversations' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+    await page.getByRole('button', { name: 'Back to conversations' }).click();
+    await expect(page.getByPlaceholder('Search customer or product')).toBeVisible();
+  });
+});
+
 test.describe('cashier operations session', () => {
   test.skip(!cashier.email || !cashier.password, 'Seed or configure the Cashier fixture credentials.');
 

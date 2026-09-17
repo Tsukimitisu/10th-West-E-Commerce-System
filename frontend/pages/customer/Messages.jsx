@@ -185,7 +185,7 @@ const Messages = () => {
       const requestedId = Number(searchParams.get('conversation')) || null;
       if (requestedId && next.some((item) => Number(item.id || item.conversation_id) === requestedId)) {
         setSelectedId(requestedId);
-      } else if (!selectedId && next[0]) {
+      } else if (!selectedId && next[0] && window.matchMedia('(min-width: 1024px)').matches) {
         setSelectedId(Number(next[0].id || next[0].conversation_id));
       }
     } catch (err) {
@@ -413,7 +413,14 @@ const Messages = () => {
                 <div className="flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4">
                   <button
                     type="button"
-                    onClick={() => setSelectedId(null)}
+                    onClick={() => {
+                      setSelectedId(null);
+                      setSearchParams((previous) => {
+                        const next = new URLSearchParams(previous);
+                        next.delete('conversation');
+                        return next;
+                      }, { replace: true });
+                    }}
                     className="grid h-9 w-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 md:hidden"
                     aria-label="Back to conversations"
                   >
