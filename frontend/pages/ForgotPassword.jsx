@@ -5,7 +5,7 @@ import { forgotPassword } from '../services/api';
 import BrandMark from '../components/ui/BrandMark';
 
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
-const EMAIL_VALIDATION_DEBOUNCE_MS = 650;
+const EMAIL_VALIDATION_DEBOUNCE_MS = 650; 
 
 const mapForgotPasswordError = (err) => {
   const message = String(err?.message || '').trim().toLowerCase();
