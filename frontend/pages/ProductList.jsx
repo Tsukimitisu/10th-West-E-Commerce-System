@@ -8,6 +8,7 @@ import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSessio
 import BrandButton from '../components/ui/BrandButton';
 import EmptyState from '../components/ui/EmptyState';
 import LoadingSkeleton from '../components/ui/LoadingSkeleton';
+import { isUnsafeProductSearch } from '../utils/productSearchSafety.js';
 
 const tokenizeSearchTerms = (value) => {
   const normalized = String(value || '')
@@ -266,6 +267,7 @@ const ProductList = () => {
 
   const filtered = useMemo(() => {
     let result = [...products];
+    if (isUnsafeProductSearch(debouncedSearchQuery)) return [];
     const searchTerms = tokenizeSearchTerms(debouncedSearchQuery);
     const searchPhrase = normalizeSearchPhrase(debouncedSearchQuery);
     if (searchTerms.length > 0) {
@@ -514,7 +516,7 @@ const ProductList = () => {
             ) : filtered.length === 0 ? (
               <EmptyState
                 icon={Search}
-                title={products.length === 0 ? 'No products are available yet' : 'No matching products'}
+                title={debouncedSearchQuery ? 'No products found.' : products.length === 0 ? 'No products are available yet' : 'No matching products'}
                 description={products.length === 0
                   ? 'The catalog is connected, but no products have been published.'
                   : 'Try a different product name or remove one or more filters.'}
