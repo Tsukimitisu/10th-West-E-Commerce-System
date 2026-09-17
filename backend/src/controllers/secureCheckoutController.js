@@ -18,6 +18,16 @@ const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
 const money = (value) => Number.parseFloat(value || 0);
 const fail = (status, message, fieldErrors, code) => Object.assign(new Error(message), { status, fieldErrors, code });
+const assertExpectedUnitPrice = (actual, expected) => {
+  if (roundMoney(actual) !== expected) throw fail(409, 'Some item prices have changed. Please review your cart before checkout.', undefined, 'PRICE_CHANGED');
+};
+const assertExpectedTotal = (actual, expected) => {
+  const displayed = Number(expected);
+  if (expected == null || !Number.isFinite(displayed) || displayed < 0 || roundMoney(displayed) !== displayed) {
+    throw fail(400, 'A valid displayed checkout total is required. Please refresh your cart.');
+  }
+  if (actual !== displayed) throw fail(409, 'Your checkout total has changed. Please review the updated total before placing your order.', undefined, 'TOTAL_CHANGED');
+};
 const isConfiguredProviderError = (error) => error?.code === 'PAYMONGO_NOT_CONFIGURED';
 const safeErrorCode = (error) => {
   if (!error?.code) return undefined;
@@ -40,7 +50,14 @@ const normalizeItems = (input) => {
     const key = `${productId}:${variantId || 0}`;
     const nextQuantity = (merged.get(key)?.quantity || 0) + quantity;
     if (nextQuantity > MAX_ITEM_QUANTITY) throw fail(400, MAX_ITEM_QUANTITY_MESSAGE);
-    merged.set(key, { product_id: productId, variant_id: variantId, quantity: nextQuantity });
+    const expectedPrice = Number(raw?.expected_unit_price);
+    if (raw?.expected_unit_price == null || !Number.isFinite(expectedPrice) || expectedPrice < 0 || roundMoney(expectedPrice) !== expectedPrice) {
+      throw fail(400, 'Each checkout item requires a valid displayed price. Please refresh your cart.');
+    }
+    if (merged.has(key) && merged.get(key).expected_unit_price !== expectedPrice) {
+      throw fail(400, 'Duplicate checkout items have different displayed prices.');
+    }
+    merged.set(key, { product_id: productId, variant_id: variantId, quantity: nextQuantity, expected_unit_price: expectedPrice });
   }
   return [...merged.values()];
 };
@@ -135,6 +152,7 @@ const loadAndReserveItems = async (client, items, expiresAt) => {
         : roundMoney(baseStorePrice + money(variant.price_adjustment));
       unitPrice = calculateEcommercePrice(storeVariantPrice);
       stockBefore = Number(variant.stock_quantity);
+      assertExpectedUnitPrice(unitPrice, item.expected_unit_price);
       const updated = await client.query(
         `UPDATE product_variants SET reserved_stock = reserved_stock + $1, updated_at = NOW()
          WHERE id = $2 AND stock_quantity - reserved_stock >= $1 RETURNING id`,
@@ -143,6 +161,7 @@ const loadAndReserveItems = async (client, items, expiresAt) => {
       if (!updated.rowCount) throw fail(409, `Insufficient stock for ${product.name} (${variant.variant_value}).`, undefined, 'OUT_OF_STOCK');
     } else {
       stockBefore = Number(product.stock_quantity);
+      assertExpectedUnitPrice(unitPrice, item.expected_unit_price);
       const updated = await client.query(
         `UPDATE products SET reserved_stock = reserved_stock + $1, updated_at = NOW()
          WHERE id = $2 AND stock_quantity - reserved_stock >= $1 RETURNING id`,
@@ -269,6 +288,7 @@ export const createCheckout = async (req, res) => {
       discount_code: req.body?.discount_code || null,
       payment_method: paymentMethod,
       purchase_source: purchaseSource,
+      expected_total: req.body?.expected_total,
     };
     requestHash = hashRequest(requestIdentity);
     client = await pool.connect();
@@ -316,6 +336,7 @@ export const createCheckout = async (req, res) => {
     const taxRate = taxSettings.enabled ? Math.max(0, taxSettings.rate / 100) : 0;
     const taxAmount = roundMoney(Math.max(0, subtotal - discount + shippingFee) * taxRate);
     const total = roundMoney(subtotal - discount + shippingFee + taxAmount);
+    assertExpectedTotal(total, req.body?.expected_total);
     const snapshot = addressSnapshot(address);
     const orderStatus = paymentMethod === 'gcash' ? 'payment_pending' : 'pending';
     const orderResult = await client.query(
@@ -1411,6 +1432,8 @@ export const __testing = {
   claimCheckoutIdempotencyKey,
   hashRequest,
   normalizeItems,
+  assertExpectedUnitPrice,
+  assertExpectedTotal,
   safeErrorCode,
   extractPaymongoEvent,
   findPaymongoWebhookPayment,

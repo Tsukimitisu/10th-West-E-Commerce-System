@@ -133,8 +133,8 @@ test('adding an existing cart or wishlist item cannot take the final quantity ab
 test('checkout item normalization enforces the same limit for direct and merged quantities', () => {
   assert.throws(() => normalizeItems([{ product_id: 1, quantity: 51 }]), /Maximum quantity per item is 50/);
   assert.throws(() => normalizeItems([
-    { product_id: 1, quantity: 30 },
-    { product_id: 1, quantity: 21 },
+    { product_id: 1, quantity: 30, expected_unit_price: 100 },
+    { product_id: 1, quantity: 21, expected_unit_price: 100 },
   ]), /Maximum quantity per item is 50/);
 });
 

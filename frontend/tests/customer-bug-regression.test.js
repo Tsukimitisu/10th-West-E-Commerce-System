@@ -103,7 +103,7 @@ test('checkout supports saved and new address quote/order payloads and incomplet
 
 test('checkout refetches current stock before placing the order', async () => {
   const checkout = await read('pages/customer/Checkout.jsx');
-  assert.match(checkout, /validateStockBeforeCheckout/);
-  assert.match(checkout, /await getProductById\(item\.productId\)/);
-  assert.match(checkout, /requested: item\.quantity/);
+  assert.match(checkout, /await syncCart\(\{ returnItems: true \}\)/);
+  assert.match(checkout, /getCheckoutCartWarning\(items, latestItems/);
+  assert.match(checkout, /if \(cartWarning\)/);
 });

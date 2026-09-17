@@ -36,7 +36,8 @@ const Cart = () => {
     discount,
     discountAmount,
     total,
-    updatingItemIds
+    updatingItemIds,
+    syncCart,
   } = useCart();
 
   const navigate = useNavigate();
@@ -44,6 +45,10 @@ const Cart = () => {
   const [quantityErrors, setQuantityErrors] = useState({});
   const [localQuantities, setLocalQuantities] = useState({});
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(DEFAULT_FREE_SHIPPING_THRESHOLD);
+
+  useEffect(() => {
+    if (getCurrentAuthUser()) syncCart();
+  }, []);
 
   useEffect(() => {
     let active = true;

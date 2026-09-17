@@ -249,7 +249,7 @@ export const CartProvider = ({ children }) => {
   };
 
   // Sync cart from backend when user logs in
-  const syncCart = async () => {
+  const syncCart = async ({ returnItems = false } = {}) => {
     if (USE_SUPABASE) {
       try {
         const currentUser = getCurrentUserFromToken();
@@ -282,7 +282,7 @@ export const CartProvider = ({ children }) => {
         setItems(stableItems);
         sessionStorage.setItem(getCartKey(), JSON.stringify(stableItems));
         setInitialized(true);
-        return true;
+        return returnItems ? stableItems : true;
       } catch (err) {
         console.error('Error syncing cart (Supabase):', err);
         const savedCart = sessionStorage.getItem(getCartKey());
@@ -323,7 +323,7 @@ export const CartProvider = ({ children }) => {
         // Save to tab-scoped storage as backup
         sessionStorage.setItem(getCartKey(), JSON.stringify(stableItems));
         setInitialized(true);
-        return true;
+        return returnItems ? stableItems : true;
       } else {
         // Fall back to tab-scoped storage
         const savedCart = sessionStorage.getItem(getCartKey());

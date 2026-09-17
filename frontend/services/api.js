@@ -2686,6 +2686,7 @@ export const createOrder = async (order) => {
     price: (item).price ?? (item).product_price ?? (item).product?.price,
     product_price: (item).product_price ?? (item).price ?? (item).product?.price,
     product_name: (item).product_name ?? (item).name ?? (item).product?.name,
+    expected_unit_price: item.expected_unit_price,
   }));
 
   const payload = {

@@ -9,6 +9,7 @@ import MapPinPicker from '../../components/MapPinPicker';
 import { getCurrentAuthUser } from '../../services/authSession.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../../constants/commerce.js';
+import { getCheckoutCartWarning } from '../../utils/checkoutCartReview.js';
 
 const BUY_NOW_SESSION_KEY = 'shopCoreBuyNowSession';
 const CHECKOUT_TERMS_SESSION_KEY = 'checkoutTermsAccepted';
@@ -40,6 +41,7 @@ const Checkout = () => {
     getCheckoutSelection,
     clearCheckoutSelection,
     clearPurchasedItemsLocal,
+    syncCart,
   } = useCart();
 
   const navigate = useNavigate();
@@ -498,31 +500,17 @@ const Checkout = () => {
     removeCartDiscount();
   };
 
-  const validateStockBeforeCheckout = async () => {
-    const validations = await Promise.all(items.map(async (item) => {
-      const fallbackStock = Math.max(0, Number(item.product?.stock_quantity ?? 0));
-      const fallbackName = item.product?.name || `Product #${item.productId}`;
+  const revalidateBeforeCheckout = async () => {
+    let latestItems;
+    if (isBuyNow) {
+      const latestProduct = await getProductById(items[0].productId);
+      latestItems = [{ ...items[0], product: latestProduct }];
+    } else {
+      latestItems = await syncCart({ returnItems: true });
+      if (!Array.isArray(latestItems)) throw new Error('Unable to refresh your cart. Please check your connection and try again.');
+    }
 
-      try {
-        const latest = await getProductById(item.productId);
-        return {
-          requested: item.quantity,
-          available: Math.max(0, Number(latest?.stock_quantity ?? fallbackStock)),
-          name: latest?.name || fallbackName,
-        };
-      } catch {
-        return {
-          requested: item.quantity,
-          available: fallbackStock,
-          name: fallbackName,
-        };
-      }
-    }));
-
-    const exceeded = validations.find((v) => v.requested > v.available);
-    if (!exceeded) return null;
-
-    return `${exceeded.name}: You requested ${exceeded.requested}, but the maximum available quantity is ${exceeded.available}.`;
+    return getCheckoutCartWarning(items, latestItems, { buyNow: isBuyNow });
   };
 
   const handleSubmit = async (e) => {
@@ -625,9 +613,9 @@ const Checkout = () => {
         } catch {}
       }
 
-      const stockError = await validateStockBeforeCheckout();
-      if (stockError) {
-        setError(stockError);
+      const cartWarning = await revalidateBeforeCheckout();
+      if (cartWarning) {
+        setError(cartWarning);
         setProcessing(false);
         return;
       }
@@ -659,7 +647,9 @@ const Checkout = () => {
           product_id: i.productId,
           variant_id: i.variantId || i.product?.selected_variant?.id || null,
           quantity: Math.max(1, Math.trunc(toFiniteNumber(i.quantity, 1))),
+          expected_unit_price: getEffectiveItemUnitPrice(i),
         })),
+        expected_total: grandTotal,
         payment_method: paymentMethod,
         purchase_source: isBuyNow ? 'buy_now' : 'cart',
         discount_code: activeDiscount?.code || null,
@@ -696,6 +686,9 @@ const Checkout = () => {
         navigate(`/payment-result?order=${checkout?.order_id || ''}&status=pending`);
       }
     } catch (err) {
+      if (err.code === 'PRICE_CHANGED' || err.code === 'OUT_OF_STOCK' || err.code === 'TOTAL_CHANGED') {
+        if (!isBuyNow) await syncCart();
+      }
       setError(err.message || 'Something went wrong');
     } finally {
       setProcessing(false);
