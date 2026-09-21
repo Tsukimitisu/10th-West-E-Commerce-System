@@ -170,6 +170,15 @@ const Navbar = ({ user, onLogout }) => {
       return;
     }
 
+    if (isUnsafeProductSearch(query) || !hasSearchableProductText(query)) {
+      searchRequestRef.current += 1;
+      setSearchResults([]);
+      setShowDropdown(true);
+      setSearchError(null);
+      setIsSearching(false);
+      return;
+    }
+
     const normalizedQuery = query.toLowerCase();
     const cachedResults = searchCacheRef.current.get(normalizedQuery);
     if (cachedResults) {
@@ -250,14 +259,6 @@ const Navbar = ({ user, onLogout }) => {
       return;
     }
 
-    if (isUnsafeProductSearch(query) || !hasSearchableProductText(query)) {
-      searchRequestRef.current += 1;
-      setSearchResults([]);
-      setShowDropdown(true);
-      setSearchError(null);
-      setIsSearching(false);
-      return;
-    }
     try {
       const unreadChats = await getBuyerChatConversations({ status: 'unread' });
       const total = (unreadChats || []).reduce((sum, chat) => sum + Number(chat.unread_count || 0), 0);

@@ -25,5 +25,9 @@ test('symbol and empty searches do not fall back to the full catalog', async () 
   assert.match(api, /!hasSearchableProductText\(params\.search\)/);
   assert.match(navbar, /isUnsafeProductSearch\(query\) \|\| !hasSearchableProductText\(query\)/);
   assert.match(navbar, /setSearchResults\(\[\]\)/);
+  assert.ok(
+    navbar.indexOf('isUnsafeProductSearch(query)') < navbar.indexOf('getProducts({ search: query'),
+    'the invalid-query guard must run before the product API request'
+  );
   assert.match(navbar, /navigate\('\/shop\?search='\)/);
 });
