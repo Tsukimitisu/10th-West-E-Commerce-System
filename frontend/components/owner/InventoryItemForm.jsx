@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { ScanLine } from 'lucide-react';
+import CameraScannerModal from '../staff/CameraScannerModal.jsx';
 
 const emptyItem = {
   part_number: '',
@@ -15,7 +17,7 @@ const emptyItem = {
   status: 'active',
 };
 
-const InventoryItemForm = ({ initialItem, initialPartNumber = '', motorcycleModels = [], onAddMotorcycleModel, onSubmit, onCancel }) => {
+const InventoryItemForm = ({ initialItem, initialPartNumber = '', motorcycleModels = [], onAddMotorcycleModel, onPartNumberScanned, onSubmit, onCancel }) => {
   const initial = useMemo(() => ({
     ...emptyItem,
     ...initialItem,
@@ -33,6 +35,7 @@ const InventoryItemForm = ({ initialItem, initialPartNumber = '', motorcycleMode
   const [form, setForm] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
   const editing = Boolean(initialItem?.id);
   const set = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const onlinePrice = Number.isFinite(Number(form.store_selling_price))
@@ -64,9 +67,10 @@ const InventoryItemForm = ({ initialItem, initialPartNumber = '', motorcycleMode
   return (
     <form onSubmit={submit} className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="text-xs font-semibold text-slate-700">Part Number
-          <input required autoFocus value={form.part_number} onChange={(event) => set('part_number', event.target.value.toUpperCase())} className={fieldClass} placeholder="BB3-F1711-00" />
-        </label>
+        <div className="text-xs font-semibold text-slate-700">
+          <div className="flex items-center justify-between gap-2"><label htmlFor="inventory-part-number">Part Number</label><button type="button" onClick={() => setScannerOpen(true)} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-2.5 text-xs font-semibold text-orange-800 hover:bg-orange-100"><ScanLine size={14} /> Scan with Camera</button></div>
+          <input id="inventory-part-number" required autoFocus value={form.part_number} onChange={(event) => set('part_number', event.target.value.toUpperCase())} className={fieldClass} placeholder="BB3-F1711-00" />
+        </div>
         <label className="text-xs font-semibold text-slate-700">Product Name
           <input required value={form.product_name} onChange={(event) => set('product_name', event.target.value)} className={fieldClass} />
         </label>
@@ -124,6 +128,16 @@ const InventoryItemForm = ({ initialItem, initialPartNumber = '', motorcycleMode
           {saving ? 'Saving…' : editing ? 'Save Inventory Item' : 'Create Inventory Item'}
         </button>
       </div>
+      <CameraScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        title="Scan Inventory Part Number"
+        onScan={(value) => {
+          const normalized = String(value || '').trim().toUpperCase().slice(0, 100);
+          set('part_number', normalized);
+          onPartNumberScanned?.(normalized);
+        }}
+      />
     </form>
   );
 };

@@ -3,6 +3,7 @@ import { ScanBarcode, Search, X, Plus, Minus, Trash2, Package, CheckCircle, Aler
 import { batchReceiveStock, createInventoryItem, findInventoryItem } from '../../services/api';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import InventoryItemForm from './InventoryItemForm';
+import CameraScannerModal from '../staff/CameraScannerModal.jsx';
 
 const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, onComplete, onBack }) => {
   const [scanInput, setScanInput] = useState('');
@@ -13,6 +14,7 @@ const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, o
   const [submitError, setSubmitError] = useState('');
   const [result, setResult] = useState(null);
   const [unknownPartNumber, setUnknownPartNumber] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
   const inputRef = useRef(null);
 
   // Auto-focus the scan input
@@ -31,11 +33,10 @@ const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, o
     );
   };
 
-  const handleScan = async (e) => {
-    e.preventDefault();
+  const lookupCode = async (rawCode) => {
     setScanError('');
     setUnknownPartNumber('');
-    const code = scanInput.trim();
+    const code = String(rawCode || '').trim();
     if (!code) return;
     let product = findProduct(code);
 
@@ -72,6 +73,11 @@ const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, o
     }
 
     setScanInput('');
+  };
+
+  const handleScan = async (e) => {
+    e.preventDefault();
+    await lookupCode(scanInput);
   };
 
   const createUnknownItem = async (payload) => {
@@ -213,7 +219,7 @@ const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, o
 
       {/* Scan Input */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-        <form onSubmit={handleScan} className="flex gap-2">
+        <form onSubmit={handleScan} className="flex flex-col gap-2 sm:flex-row">
           <div className="relative flex-1">
             <ScanBarcode size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -229,6 +235,9 @@ const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, o
           <button type="submit" className="px-4 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
             <Search size={14} /> Lookup
           </button>
+          <button type="button" onClick={() => setScannerOpen(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-orange-400 bg-orange-50 px-4 text-sm font-semibold text-orange-800 hover:bg-orange-100">
+            <ScanBarcode size={16} /> Scan with Camera
+          </button>
         </form>
         {scanError && (
           <div className="mt-2 flex items-center gap-2 text-sm text-red-500">
@@ -237,9 +246,19 @@ const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, o
           </div>
         )}
         <p className="mt-2 text-[11px] text-gray-400">
-          Barcode field/search only; camera scanner integration is not configured. Enter or scan a product barcode if supported by your device.
+          Manual entry and physical barcode scanners remain available.
         </p>
       </div>
+
+      <CameraScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        title="Scan Stock-In Item"
+        onScan={(value) => {
+          setScanInput(value);
+          void lookupCode(value);
+        }}
+      />
 
       {unknownPartNumber && (
         <div className="rounded-xl border border-amber-300 bg-white p-5">

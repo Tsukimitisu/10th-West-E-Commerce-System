@@ -439,6 +439,15 @@ const InventoryView = () => {
           initialItem={editingItem}
           motorcycleModels={motorcycleModels}
           onAddMotorcycleModel={openModelManager}
+          onPartNumberScanned={(value) => {
+            const normalized = String(value || '').trim().toLowerCase();
+            const existing = products.find((item) => [item.part_number, item.partNumber, item.sku, item.barcode]
+              .some((candidate) => String(candidate || '').trim().toLowerCase() === normalized));
+            if (existing) {
+              setEditingItem(existing);
+              setFeedback({ type: 'success', text: 'Existing inventory item loaded from scan.' });
+            }
+          }}
           onSubmit={saveInventoryItem}
           onCancel={() => { setItemModal(false); setEditingItem(null); }}
         />

@@ -28,6 +28,7 @@ export default defineConfig(({ command, mode }) => {
             manualChunks(id) {
               const normalizedId = id.replace(/\\/g, '/');
               if (normalizedId.includes('/node_modules/')) {
+                if (normalizedId.includes('/@zxing/')) return 'scanner-vendor';
                 if (normalizedId.includes('/framer-motion/')) return 'motion-vendor';
                 if (normalizedId.includes('/recharts/')) return 'charts-vendor';
                 if (normalizedId.includes('/socket.io-client/')) return 'socket-vendor';
