@@ -877,6 +877,11 @@ const getSupabaseRestProductsFallback = async ({ queryInput = {}, includeInterna
 // Get all products
 export const getProducts = async (req, res) => {
   try {
+    const rawSearchProvided = Object.prototype.hasOwnProperty.call(req.query || {}, 'search');
+    const rawSearch = rawSearchProvided ? req.query.search : undefined;
+    if (rawSearchProvided && (isUnsafeProductSearch(rawSearch) || !hasSearchableProductText(rawSearch))) {
+      return res.json([]);
+    }
     const queryInput = { ...(req.query || {}), ...(req.validatedData || {}) };
     const { category, search, limit: limitParam, brand, model, year, motorcycle_model: motorcycleModel, color } = queryInput;
     if (isUnsafeProductSearch(search)) return res.json([]);

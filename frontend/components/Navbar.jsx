@@ -9,6 +9,7 @@ import CartDrawer from './CartDrawer';
 import BrandMark from './ui/BrandMark';
 import { handleProductImageError, resolveProductImageUrl } from '../utils/productImages.js';
 import { repairMojibake } from '../utils/text.js';
+import { hasSearchableProductText, isUnsafeProductSearch } from '../utils/productSearchSafety.js';
 
 const Navbar = ({ user, onLogout }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -246,6 +247,15 @@ const Navbar = ({ user, onLogout }) => {
   const refreshMessageUnread = useCallback(async () => {
     if (!user || user.role !== Role.CUSTOMER) {
       setMessageUnreadCount(0);
+      return;
+    }
+
+    if (isUnsafeProductSearch(query) || !hasSearchableProductText(query)) {
+      searchRequestRef.current += 1;
+      setSearchResults([]);
+      setShowDropdown(true);
+      setSearchError(null);
+      setIsSearching(false);
       return;
     }
     try {

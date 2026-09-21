@@ -12,6 +12,7 @@ test('script and SQL control payloads cannot become broad product searches', asy
   }
   const controller = await readFile(new URL('../controllers/productController.js', import.meta.url), 'utf8');
   assert.match(controller, /if \(isUnsafeProductSearch\(search\)\) return res\.json\(\[\]\)/);
+  assert.match(controller, /isUnsafeProductSearch\(rawSearch\).*hasSearchableProductText\(rawSearch\)/s);
   assert.match(controller, /p\.name ILIKE \$\$\{containsIdx\}/);
 });
 

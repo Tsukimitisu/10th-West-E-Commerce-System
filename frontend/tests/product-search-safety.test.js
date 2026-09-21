@@ -23,5 +23,7 @@ test('symbol and empty searches do not fall back to the full catalog', async () 
   ]);
   assert.match(page, /searchParams\.has\('search'\) && !hasSearchableProductText\(debouncedSearchQuery\)/);
   assert.match(api, /!hasSearchableProductText\(params\.search\)/);
+  assert.match(navbar, /isUnsafeProductSearch\(query\) \|\| !hasSearchableProductText\(query\)/);
+  assert.match(navbar, /setSearchResults\(\[\]\)/);
   assert.match(navbar, /navigate\('\/shop\?search='\)/);
 });
