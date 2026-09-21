@@ -16,34 +16,43 @@ const ToolButton = ({ onClick, active, title, children }) => (
 
 const RichTextEditor = ({ value, onChange, placeholder, minHeight = '300px' }) => {
   const editorRef = useRef(null);
+  const lastEmittedHtmlRef = useRef('');
+
+  // Do not reapply innerHTML for parent updates caused by this editor. Doing so
+  // resets the browser selection and its native undo/redo history.
+  React.useEffect(() => {
+    const nextHtml = value || '';
+    if (!editorRef.current || nextHtml === lastEmittedHtmlRef.current) return;
+    if (editorRef.current.innerHTML !== nextHtml) editorRef.current.innerHTML = nextHtml;
+    lastEmittedHtmlRef.current = nextHtml;
+  }, [value]);
+
+  const emitChange = useCallback(() => {
+    const html = editorRef.current?.innerHTML || '';
+    lastEmittedHtmlRef.current = html;
+    onChange?.(html);
+  }, [onChange]);
 
   const exec = useCallback((command, val = null) => {
     document.execCommand(command, false, val);
     editorRef.current?.focus();
-    if (onChange) {
-      onChange(editorRef.current?.innerHTML || '');
-    }
-  }, [onChange]);
+    emitChange();
+  }, [emitChange]);
 
-  const handleInput = useCallback(() => {
-    if (onChange) {
-      onChange(editorRef.current?.innerHTML || '');
-    }
-  }, [onChange]);
+  const handleInput = useCallback(() => emitChange(), [emitChange]);
 
   const handlePaste = useCallback((e) => {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
     document.execCommand('insertText', false, text);
-  }, []);
+    emitChange();
+  }, [emitChange]);
 
   const formatBlock = useCallback((tag) => {
     document.execCommand('formatBlock', false, tag);
     editorRef.current?.focus();
-    if (onChange) {
-      onChange(editorRef.current?.innerHTML || '');
-    }
-  }, [onChange]);
+    emitChange();
+  }, [emitChange]);
 
   return (
     <div className="border border-gray-700 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-red-300">
@@ -94,9 +103,9 @@ const RichTextEditor = ({ value, onChange, placeholder, minHeight = '300px' }) =
       <div
         ref={editorRef}
         contentEditable
+        suppressContentEditableWarning
         onInput={handleInput}
         onPaste={handlePaste}
-        dangerouslySetInnerHTML={{ __html: value || '' }}
         data-placeholder={placeholder}
         className="px-3 py-2 text-sm text-gray-800 outline-none overflow-y-auto prose prose-sm max-w-none
           [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-gray-400
