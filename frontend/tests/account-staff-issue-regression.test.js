@@ -22,7 +22,7 @@ test('OAuth, 2FA, GCash, and phone readiness are represented truthfully', async 
   const phone = await read('components/customer/PhoneVerification.jsx');
   assert.match(phone, /Verification unavailable/);
   assert.match(phone, /getPhoneVerification/);
-  assert.match(profile, /PROFILE_PHONE_REGEX/);
+  assert.match(profile, /isValidPhilippineMobile/);
 });
 
 test('customer order summary, shipping address, and payment cards use readable dark-theme text', async () => {
@@ -186,8 +186,9 @@ test('POS, variants, categories, barcode, and inventory adjustment controls rema
   assert.match(variants, /No combinations yet\. Add an option name and at least one value\./);
   assert.match(products, /String\(product\?\.category_id \?\? ''\) === String\(filterCat\)/);
   assert.match(products, /categories\.some/);
-  assert.match(products, /Barcode field\/search only\. Scanner integration is not configured\./);
-  assert.match(receive, /camera scanner integration is not configured/);
+  assert.match(receive, /Scan with Camera/);
+  assert.match(inventory, /onPartNumberScanned/);
+  assert.match(pos, /Scan with Camera/);
   assert.match(inventory, /STOCK_ADJUSTMENT_REASONS\[adjForm\.type\]/);
   assert.match(inventory, /correction_add/);
   assert.match(inventory, /correction_remove/);
