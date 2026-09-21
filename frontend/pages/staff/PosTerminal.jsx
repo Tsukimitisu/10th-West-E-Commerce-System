@@ -12,6 +12,7 @@ import {
   PackageOpen,
   Plus,
   ReceiptText,
+  ScanLine,
   Search,
   ShoppingCart,
   Tag,
@@ -38,6 +39,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import PaymentModal from './PaymentModal';
 import ReceiptModal from './ReceiptModal';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import CameraScannerModal from '../../components/staff/CameraScannerModal.jsx';
 
 const MAX_POS_QUANTITY = 100;
 const MAX_POS_QUANTITY_MESSAGE = 'Maximum POS quantity per item is 100.';
@@ -66,6 +68,7 @@ const PosTerminal = () => {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const [pageError, setPageError] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const [cart, setCart] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -199,6 +202,46 @@ const PosTerminal = () => {
   const chooseProduct = (product) => {
     if (product.variants?.length) setSelectedProduct(product);
     else addLine(product);
+  };
+
+  const handleCameraScan = async (rawValue) => {
+    const value = String(rawValue || '').trim();
+    if (!value) return;
+    setSearch(value);
+    setCatalogLoading(true);
+    try {
+      const rows = await getPosProducts({ search: value });
+      const normalized = value.toLowerCase();
+      let exactProduct = null;
+      let exactVariant = null;
+
+      for (const product of rows) {
+        const productMatch = [product.barcode, product.sku, product.part_number]
+          .some((candidate) => String(candidate || '').trim().toLowerCase() === normalized);
+        const variant = product.variants?.find((candidate) => [candidate.barcode, candidate.sku, candidate.part_number]
+          .some((field) => String(field || '').trim().toLowerCase() === normalized));
+        if (variant) {
+          exactProduct = product;
+          exactVariant = variant;
+          break;
+        }
+        if (productMatch) exactProduct = product;
+      }
+
+      if (exactProduct) {
+        if (exactVariant) addLine(exactProduct, exactVariant);
+        else chooseProduct(exactProduct);
+        showToast('success', `${exactProduct.name} scanned.`);
+        return;
+      }
+      setProducts(rows || []);
+      if (rows?.length) showToast('success', 'Matching items found. Select the correct item.');
+      else showToast('error', 'Item not found in inventory.');
+    } catch (error) {
+      showToast('error', error.message || 'Scanned item lookup failed.');
+    } finally {
+      setCatalogLoading(false);
+    }
   };
 
   const updateQuantity = (key, nextQuantity) => {
@@ -418,12 +461,15 @@ const PosTerminal = () => {
                 />
                 {catalogLoading && <Loader2 size={17} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-red-600" />}
               </div>
+              <button type="button" onClick={() => setScannerOpen(true)} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-orange-400 bg-orange-50 px-4 text-sm font-bold text-orange-800 hover:bg-orange-100">
+                <ScanLine size={18} /> Scan with Camera
+              </button>
               <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold focus:border-orange-500 focus:outline-none">
                 <option value="">All categories</option>
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </select>
             </div>
-            <p className="mt-2 text-xs text-slate-500">Barcode field/search only. Enter or scan a product barcode if supported by your device.</p>
+            <p className="mt-2 text-xs text-slate-500">Use the phone camera, type manually, or keep using a physical barcode scanner.</p>
             {dailySummary && (
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
                 <span><strong className="text-slate-950">{dailySummary.transaction_count}</strong> sales today</span>
@@ -506,6 +552,13 @@ const PosTerminal = () => {
           </div>
         </aside>
       </main>
+
+      <CameraScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        title="Scan POS Item"
+        onScan={(value) => { void handleCameraScan(value); }}
+      />
 
       {selectedProduct && (
         <div className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="variant-title">
