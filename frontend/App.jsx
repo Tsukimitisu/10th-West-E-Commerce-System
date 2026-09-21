@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useEffect, useLayoutEffect } from 'react';
+import React, { lazy, Suspense, useCallback, useState, useEffect, useLayoutEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -18,6 +18,7 @@ import { SocketProvider } from './context/SocketContext.jsx';
 import { Role } from './types.js';
 import { roleLandingPath } from './utils/roleLanding.js';
 import AppErrorBoundary from './components/AppErrorBoundary';
+import IdleSessionGuard from './components/IdleSessionGuard.jsx';
 
 const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
 
@@ -86,6 +87,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-950">
+      <IdleSessionGuard user={user} onLogout={onLogout} />
       {!hideChrome && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
       {!hideChrome && !isSuperAdmin && user && <EmailVerificationBanner user={user} />}
       <div className="flex-1">
@@ -306,7 +308,7 @@ const App = () => {
     setCurrentAuthUser(userData);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await logoutApi();
     } catch (e) {
@@ -315,7 +317,7 @@ const App = () => {
     setUser(null);
     clearCurrentAuthUser();
     // Navigation to /login handled by route guards (user is null)
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -335,7 +337,6 @@ const App = () => {
 };
 
 export default App;
-
 
 
 
