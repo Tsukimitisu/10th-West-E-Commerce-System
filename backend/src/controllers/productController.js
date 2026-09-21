@@ -19,7 +19,7 @@ import {
 import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl } from '../utils/productImages.js';
 import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
-import { hasSearchableProductText, isUnsafeProductSearch } from '../utils/productSearchSafety.js';
+import { shouldReturnEmptyProductSearch } from '../utils/productSearchSafety.js';
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
@@ -879,13 +879,12 @@ export const getProducts = async (req, res) => {
   try {
     const rawSearchProvided = Object.prototype.hasOwnProperty.call(req.query || {}, 'search');
     const rawSearch = rawSearchProvided ? req.query.search : undefined;
-    if (rawSearchProvided && (isUnsafeProductSearch(rawSearch) || !hasSearchableProductText(rawSearch))) {
+    if (rawSearchProvided && shouldReturnEmptyProductSearch(rawSearch)) {
       return res.json([]);
     }
     const queryInput = { ...(req.query || {}), ...(req.validatedData || {}) };
     const { category, search, limit: limitParam, brand, model, year, motorcycle_model: motorcycleModel, color } = queryInput;
-    if (isUnsafeProductSearch(search)) return res.json([]);
-    if (Object.prototype.hasOwnProperty.call(queryInput, 'search') && !hasSearchableProductText(search)) return res.json([]);
+    if (Object.prototype.hasOwnProperty.call(queryInput, 'search') && shouldReturnEmptyProductSearch(search)) return res.json([]);
     const searchTerms = tokenizeSearchTerms(search);
     const searchPhrase = normalizeSearchPhrase(search);
     const resultLimit = parseResultLimit(limitParam, null, 80);

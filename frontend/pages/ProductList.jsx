@@ -8,7 +8,7 @@ import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSessio
 import BrandButton from '../components/ui/BrandButton';
 import EmptyState from '../components/ui/EmptyState';
 import LoadingSkeleton from '../components/ui/LoadingSkeleton';
-import { hasSearchableProductText, isUnsafeProductSearch } from '../utils/productSearchSafety.js';
+import { shouldReturnEmptyProductSearch } from '../utils/productSearchSafety.js';
 
 const tokenizeSearchTerms = (value) => {
   const normalized = String(value || '')
@@ -267,8 +267,7 @@ const ProductList = () => {
 
   const filtered = useMemo(() => {
     let result = [...products];
-    if (isUnsafeProductSearch(debouncedSearchQuery)) return [];
-    if (searchParams.has('search') && !hasSearchableProductText(debouncedSearchQuery)) return [];
+    if (shouldReturnEmptyProductSearch(debouncedSearchQuery)) return [];
     const searchTerms = tokenizeSearchTerms(debouncedSearchQuery);
     const searchPhrase = normalizeSearchPhrase(debouncedSearchQuery);
     if (searchTerms.length > 0) {

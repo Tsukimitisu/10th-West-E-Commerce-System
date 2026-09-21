@@ -3,7 +3,7 @@ import { supabase } from './supabase.js';
 import { clearCurrentAuthUser, getCurrentAuthUser } from './authSession.js';
 import { resolveProductImageUrl } from '../utils/productImages.js';
 import { API_ORIGIN, API_URL } from './apiConfig.js';
-import { hasSearchableProductText, isUnsafeProductSearch } from '../utils/productSearchSafety.js';
+import { shouldReturnEmptyProductSearch } from '../utils/productSearchSafety.js';
 import { isValidPhilippineMobile, normalizePhilippineMobile } from '../utils/phone.js';
 
 // Direct browser access to application tables is intentionally disabled. All
@@ -1521,7 +1521,7 @@ export const getTopSellers = async (days = null) => {
 
 export const getProducts = async (params = {}) => {
   if (Object.prototype.hasOwnProperty.call(params, 'search')
-    && (isUnsafeProductSearch(params.search) || !hasSearchableProductText(params.search))) return [];
+    && shouldReturnEmptyProductSearch(params.search)) return [];
   if (USE_MOCK_DATA) {
     return getProductsMock(params);
   }
