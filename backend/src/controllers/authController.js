@@ -27,6 +27,9 @@ const createTransporter = () =>
     port: parseInt(process.env.EMAIL_PORT || '587'),
     secure: parseInt(process.env.EMAIL_PORT || '587') === 465,
     auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
+    connectionTimeout: 2500,
+    greetingTimeout: 2500,
+    socketTimeout: 3000,
   });
 
 const signToken = (user) =>
@@ -54,6 +57,7 @@ const sanitizeUser = (row) => ({
   is_active: row.is_active,
   two_factor_enabled: row.two_factor_enabled || false,
   oauth_provider: row.oauth_provider || null,
+  has_local_password: Boolean(row.password_hash && row.password_hash !== 'DELETED'),
   last_login: row.last_login,
   email_verified: row.email_verified || false,
 });
@@ -70,7 +74,7 @@ const getUserFromSupabaseRestByEmail = async (email) => {
 
 const getUserFromSupabaseRestById = async (id) => {
   const rows = await supabaseRestFetch('users', {
-    select: 'id,name,email,role,phone,avatar,store_credit,is_active,two_factor_enabled,oauth_provider,last_login,email_verified,created_at',
+    select: 'id,name,email,role,phone,avatar,store_credit,is_active,two_factor_enabled,oauth_provider,last_login,email_verified,created_at,password_hash',
     id: `eq.${id}`,
     limit: 1,
   });
@@ -146,6 +150,10 @@ const VERIFICATION_STATEMENT_TIMEOUT_MS = 7000;
 const VERIFICATION_RESPONSE_TIMEOUT_MS = 8000;
 const VERIFIED_TOKEN_LOOKBACK_HOURS = 24;
 const SESSION_PERSIST_TIMEOUT_MS = 1000;
+const VERIFICATION_DELIVERY_TIMEOUT_MS = Math.min(
+  8000,
+  Math.max(500, Number.parseInt(process.env.VERIFICATION_DELIVERY_TIMEOUT_MS || '2500', 10) || 2500)
+);
 
 const hashToken = (value) =>
   crypto.createHash('sha256').update(value).digest('hex');
@@ -303,7 +311,7 @@ const BLOCKED_EMAIL_DOMAINS = new Set([
   'localhost',
 ]);
 
-const EMAIL_DNS_TIMEOUT_MS = 3000;
+const EMAIL_DNS_TIMEOUT_MS = 1500;
 
 const assertEmailDomainCanReceiveMail = async (email) => {
   const domain = String(email || '').split('@')[1]?.toLowerCase();
@@ -390,6 +398,46 @@ const sendVerificationEmail = async ({ email, name, token }) => {
 </div>
 `,
   });
+};
+
+const deliverAccountVerificationEmail = async ({ email, name, token, userId, requestId }) => {
+  console.info('ACCOUNT_CREATE_VERIFICATION_SEND_START', { request_id: requestId, user_id: userId });
+
+  try {
+    await withTimeout(
+      sendVerificationEmail({ email, name, token }),
+      VERIFICATION_DELIVERY_TIMEOUT_MS,
+      'verification email delivery'
+    );
+    console.info('ACCOUNT_CREATE_VERIFICATION_SEND_SUCCESS', { request_id: requestId, user_id: userId });
+    return 'sent';
+  } catch (error) {
+    const pending = error?.code === 'ASYNC_OPERATION_TIMEOUT';
+    console.warn('ACCOUNT_CREATE_VERIFICATION_SEND_FAILED', {
+      request_id: requestId,
+      user_id: userId,
+      reason: pending ? 'timeout' : String(error?.code || error?.name || 'delivery_failed').slice(0, 80),
+    });
+    return pending ? 'pending' : 'failed';
+  }
+};
+
+const registrationDeliveryResponse = ({ deliveryStatus, existing = false }) => {
+  if (deliveryStatus === 'sent') {
+    return existing
+      ? 'This email is already registered but not verified. A new verification email has been sent.'
+      : 'Registration successful. Please check your email to verify your account.';
+  }
+
+  if (deliveryStatus === 'pending') {
+    return existing
+      ? 'Your account is still pending verification. Email delivery is taking longer than expected; you can resend shortly.'
+      : 'Account created. Verification delivery is pending; you can resend shortly if it does not arrive.';
+  }
+
+  return existing
+    ? 'Your account is still pending verification, but the verification email could not be sent. Please use resend verification.'
+    : 'Account created, but the verification email could not be sent. Please use resend verification.';
 };
 
 // ─── Record login attempt ──────────────────────────────────────────
@@ -507,6 +555,8 @@ export const register = async (req, res) => {
   } = req.validatedData || req.body;
 
   let client;
+  const requestId = crypto.randomUUID();
+  console.info('ACCOUNT_CREATE_START', { request_id: requestId });
 
   try {
     if (shouldUseDatabaseReadFallback()) {
@@ -528,27 +578,21 @@ export const register = async (req, res) => {
           email_verification_expires: verificationToken.expiresAt.toISOString(),
         });
 
-        try {
-          await sendVerificationEmail({
-            email: existingUser.email,
-            name: existingUser.name,
-            token: verificationToken.token,
-          });
-        } catch (emailError) {
-          console.error('Registration resend email error:', sanitizeDatabaseError(emailError));
-          return res.status(503).json({
-            message: 'Your account is still pending verification, but we could not send a new verification email right now. Please try again shortly.',
-            requiresVerification: true,
-            email,
-            code: 'VERIFICATION_EMAIL_FAILED',
-          });
-        }
+        const deliveryStatus = await deliverAccountVerificationEmail({
+          email: existingUser.email,
+          name: existingUser.name,
+          token: verificationToken.token,
+          userId: existingUser.id,
+          requestId,
+        });
 
+        console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, user_id: existingUser.id, delivery_status: deliveryStatus, existing: true });
         return res.json({
-          message: 'This email is already registered but not verified. A new verification email has been sent.',
+          message: registrationDeliveryResponse({ deliveryStatus, existing: true }),
           requiresVerification: true,
           email,
-          degraded: true,
+          verificationDelivery: deliveryStatus,
+          degraded: deliveryStatus !== 'sent',
         });
       }
 
@@ -571,30 +615,32 @@ export const register = async (req, res) => {
         },
       });
       const newUser = Array.isArray(rows) ? rows[0] : rows;
+      console.info('ACCOUNT_CREATE_USER_CREATED', { request_id: requestId, user_id: newUser.id });
 
-      try {
-        await sendVerificationEmail({
-          email: newUser.email,
-          name: newUser.name,
-          token: verificationToken.token,
-        });
-      } catch (emailError) {
-        console.error('Registration email error:', sanitizeDatabaseError(emailError));
-        return res.status(503).json({
-          message: 'Registration successful, but we could not send the verification email right now. Please use resend verification shortly.',
-          requiresVerification: true,
-          email,
-          code: 'VERIFICATION_EMAIL_FAILED',
-        });
-      }
+      const deliveryStatus = await deliverAccountVerificationEmail({
+        email: newUser.email,
+        name: newUser.name,
+        token: verificationToken.token,
+        userId: newUser.id,
+        requestId,
+      });
 
+      console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, user_id: newUser.id, delivery_status: deliveryStatus, existing: false });
       return res.status(201).json({
-        message: 'Registration successful. Please check your email to verify your account.',
+        message: registrationDeliveryResponse({ deliveryStatus }),
         requiresVerification: true,
         email,
-        degraded: true,
+        verificationDelivery: deliveryStatus,
+        degraded: deliveryStatus !== 'sent',
       });
     }
+
+    // Keep external DNS work and CPU-heavy hashing outside the database transaction.
+    // The unique email constraint remains the final duplicate-registration guard.
+    const [, passwordHash] = await Promise.all([
+      assertEmailDomainCanReceiveMail(email),
+      bcrypt.hash(password, BCRYPT_ROUNDS),
+    ]);
 
     client = await pool.connect();
     await client.query('BEGIN');
@@ -629,32 +675,23 @@ export const register = async (req, res) => {
 
       await client.query('COMMIT');
 
-      try {
-        await sendVerificationEmail({
-          email: existingUser.email,
-          name: existingUser.name,
-          token: verificationToken.token,
-        });
-      } catch (emailError) {
-        console.error('Registration resend email error:', sanitizeDatabaseError(emailError));
-        return res.status(503).json({
-          message: 'Your account is still pending verification, but we could not send a new verification email right now. Please try again shortly.',
-          requiresVerification: true,
-          email,
-          code: 'VERIFICATION_EMAIL_FAILED',
-        });
-      }
+      const deliveryStatus = await deliverAccountVerificationEmail({
+        email: existingUser.email,
+        name: existingUser.name,
+        token: verificationToken.token,
+        userId: existingUser.id,
+        requestId,
+      });
 
+      console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, user_id: existingUser.id, delivery_status: deliveryStatus, existing: true });
       return res.json({
-        message: 'This email is already registered but not verified. A new verification email has been sent.',
+        message: registrationDeliveryResponse({ deliveryStatus, existing: true }),
         requiresVerification: true,
         email,
+        verificationDelivery: deliveryStatus,
+        degraded: deliveryStatus !== 'sent',
       });
     }
-
-    await assertEmailDomainCanReceiveMail(email);
-
-    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     const newUserResult = await client.query(
       `INSERT INTO users (
@@ -675,27 +712,24 @@ export const register = async (req, res) => {
     );
 
     await client.query('COMMIT');
+    const createdUser = newUserResult.rows[0];
+    console.info('ACCOUNT_CREATE_USER_CREATED', { request_id: requestId, user_id: createdUser.id });
 
-    try {
-      await sendVerificationEmail({
-        email: newUserResult.rows[0].email,
-        name: newUserResult.rows[0].name,
-        token: verificationToken.token,
-      });
-    } catch (emailError) {
-      console.error('Registration email error:', sanitizeDatabaseError(emailError));
-      return res.status(503).json({
-        message: 'Registration successful, but we could not send the verification email right now. Please use resend verification shortly.',
-        requiresVerification: true,
-        email,
-        code: 'VERIFICATION_EMAIL_FAILED',
-      });
-    }
+    const deliveryStatus = await deliverAccountVerificationEmail({
+      email: createdUser.email,
+      name: createdUser.name,
+      token: verificationToken.token,
+      userId: createdUser.id,
+      requestId,
+    });
 
+    console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, user_id: createdUser.id, delivery_status: deliveryStatus, existing: false });
     res.status(201).json({
-      message: 'Registration successful. Please check your email to verify your account.',
+      message: registrationDeliveryResponse({ deliveryStatus }),
       requiresVerification: true,
       email,
+      verificationDelivery: deliveryStatus,
+      degraded: deliveryStatus !== 'sent',
     });
   } catch (error) {
     if (client) {
@@ -705,6 +739,7 @@ export const register = async (req, res) => {
     }
 
     console.error('Registration error:', sanitizeDatabaseError(error));
+    console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, outcome: 'failed', reason: String(error?.code || error?.name || 'registration_failed').slice(0, 80) });
 
     if (error?.code === '23505') {
       return res.status(409).json({
@@ -932,7 +967,7 @@ export const getProfile = async (req, res) => {
 
     const result = await pool.query(
       `SELECT id, name, email, role, phone, avatar, store_credit, is_active,
-              two_factor_enabled, oauth_provider, last_login, email_verified, created_at
+              two_factor_enabled, oauth_provider, last_login, email_verified, created_at, password_hash
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -1699,11 +1734,14 @@ export const getActivityLogs = async (req, res) => {
 // ─── DELETE ACCOUNT (Right to be Forgotten - RA 10173 §18) ─────────
 export const deleteAccountHandler = async (req, res) => {
   const userId = req.user.id;
-  const { password } = req.body;
+  const { password, confirmation } = req.body;
   const ip = req.clientIp;
   const ua = req.clientUa;
 
   try {
+    if (confirmation !== 'DELETE') {
+      return res.status(400).json({ message: 'Type DELETE to confirm account deletion' });
+    }
     // Security: Require password confirmation before account deletion
     const userResult = await pool.query('SELECT password_hash, oauth_provider FROM users WHERE id = $1', [userId]);
     if (userResult.rows.length === 0) return res.status(404).json({ message: 'User not found' });
@@ -1736,6 +1774,16 @@ export const deleteAccountHandler = async (req, res) => {
     await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [userId]);
 
     await logActivity({ userId, action: 'account_deleted', entityType: 'user', entityId: userId, ipAddress: ip, userAgent: ua });
+
+    if (req.session) {
+      await new Promise((resolve) => req.session.destroy(() => resolve()));
+      res.clearCookie('twm.sid', {
+        httpOnly: true,
+        sameSite: getSessionCookieSameSite(),
+        secure: isSessionCookieSecure(),
+        path: '/',
+      });
+    }
 
     res.json({ message: 'Account deleted and personal data anonymized per RA 10173' });
   } catch (error) {

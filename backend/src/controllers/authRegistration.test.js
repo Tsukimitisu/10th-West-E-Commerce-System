@@ -167,6 +167,38 @@ test('register creates a customer account without exposing password hashes', asy
   assert.doesNotMatch(insertCall.sql, /RETURNING[\s\S]*password_hash/i);
 });
 
+test('registration keeps the created account and returns resendable status when verification delivery fails', async () => {
+  const { client, calls } = makeRegisterClient();
+  mock.method(pool, 'connect', async () => client);
+  mock.method(dns, 'resolveMx', async () => [{ exchange: 'mail.gmail.com', priority: 1 }]);
+  mock.method(nodemailer, 'createTransport', () => ({ sendMail: async () => { throw new Error('provider unavailable'); } }));
+  const res = makeResponse();
+
+  await register({
+    validatedData: {
+      name: 'Jane Rider', email: 'jane.rider@gmail.com', password: 'StrongPass123',
+      consent_given: true, age_confirmed: true,
+    },
+  }, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.requiresVerification, true);
+  assert.equal(res.body.verificationDelivery, 'failed');
+  assert.match(res.body.message, /Account created.*resend verification/i);
+  assert.ok(calls.some((call) => call.sql.includes('COMMIT')));
+});
+
+test('registration has bounded delivery and safe lifecycle logging', async () => {
+  const source = await readFile(new URL('./authController.js', import.meta.url), 'utf8');
+  for (const event of [
+    'ACCOUNT_CREATE_START', 'ACCOUNT_CREATE_USER_CREATED', 'ACCOUNT_CREATE_VERIFICATION_SEND_START',
+    'ACCOUNT_CREATE_VERIFICATION_SEND_SUCCESS', 'ACCOUNT_CREATE_VERIFICATION_SEND_FAILED', 'ACCOUNT_CREATE_DONE',
+  ]) assert.match(source, new RegExp(event));
+  assert.match(source, /VERIFICATION_DELIVERY_TIMEOUT_MS/);
+  assert.match(source, /withTimeout\([\s\S]*sendVerificationEmail/);
+  assert.doesNotMatch(source, /ACCOUNT_CREATE[^\n]*(password|token|otp)/i);
+});
+
 test('register returns a clear duplicate email message for existing verified accounts', async () => {
   const { client, calls } = makeRegisterClient({
     existingRows: [{ id: 9, name: 'Existing Rider', email: 'jane.rider@gmail.com', email_verified: true }],

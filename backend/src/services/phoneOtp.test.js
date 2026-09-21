@@ -9,6 +9,7 @@ test('SMS readiness and limits fail closed and normalize only Philippine mobile 
   assert.throws(() => phoneOtpConfig({ OTP_RESEND_COOLDOWN_SECONDS: '1' }));
   assert.equal(canonicalPhone('09123456789'), '+639123456789');
   assert.equal(canonicalPhone('+63 912 345 6789'), '+639123456789');
+  assert.equal(canonicalPhone('639123456789'), '+639123456789');
   assert.equal(canonicalPhone('1234'), null);
 });
 test('Semaphore sends a real API-shaped request and discards the provider OTP response', async () => {

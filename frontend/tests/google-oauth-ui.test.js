@@ -19,6 +19,7 @@ test('customer login and registration expose Google only when backend readiness 
     assert.match(source, /disabled=\{loading \|\| oauthProviders\.loading \|\| !oauthProviders\.google\}/);
     assert.match(source, /oauthProviders\.error/);
     assert.match(source, /window\.location\.href = `\$\{API_ORIGIN\}\/api\/auth\/\$\{provider\}`/);
+    assert.match(source, /To switch Google accounts, choose another account on the Google screen\./);
     assert.doesNotMatch(source, /GOOGLE_CLIENT_SECRET|GOOGLE_CLIENT_ID/);
   }
 });

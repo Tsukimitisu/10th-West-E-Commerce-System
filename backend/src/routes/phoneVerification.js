@@ -39,9 +39,18 @@ router.post('/send', async (req, res, next) => {
     const tooSoon = previous.last_sent_at && now - new Date(previous.last_sent_at).getTime() < config.cooldown * 1000;
     if (tooSoon || (!newWindow && previous.send_count >= config.daily)) {
       await client.query('ROLLBACK');
-      return res.status(429).json({ message: tooSoon ? 'Please wait before requesting another code.' : 'Daily verification limit reached. Try again tomorrow.' });
+      const retryAfter = tooSoon
+        ? Math.max(1, config.cooldown - Math.floor((now - new Date(previous.last_sent_at).getTime()) / 1000))
+        : null;
+      return res.status(429).json({
+        message: tooSoon ? `Please wait ${retryAfter} seconds before requesting another code.` : 'Daily verification limit reached. Try again tomorrow.',
+        ...(retryAfter ? { resend_after: retryAfter } : {}),
+      });
     }
     const code = String(crypto.randomInt(10 ** (config.length - 1), 10 ** config.length));
+    if (process.env.NODE_ENV !== 'production' && process.env.OTP_DEBUG_LOG_CODE === 'true') {
+      console.debug('PHONE_OTP_DEBUG_CODE', { user_id: req.user.id, phone_last4: phone.slice(-4), code });
+    }
     const hash = hashPhoneCode(req.user.id, phone, code);
     await client.query(`UPDATE phone_verifications SET phone=$2, code_hash=$3,
       expires_at=NOW()+($4 * INTERVAL '1 minute'), last_sent_at=NOW(),
@@ -55,7 +64,7 @@ router.post('/send', async (req, res, next) => {
     try {
       await sendSemaphoreCode({ phone, code, expiry: config.expiry });
     } catch {
-      return res.status(502).json({ message: 'SMS delivery could not be started. Please try again later.' });
+      return res.status(502).json({ message: 'SMS delivery failed. Please try again.' });
     }
     await pool.query('UPDATE phone_verifications SET delivery_accepted=true WHERE user_id=$1 AND code_hash=$2', [req.user.id, hash]);
     return res.json({ message: 'Verification code sent.', expires_in: config.expiry * 60, resend_after: config.cooldown });
@@ -69,7 +78,7 @@ router.post('/verify', async (req, res, next) => {
   if (!phoneOtpReadiness().available) return res.status(503).json({ message: 'Phone verification is unavailable.' });
   const config = phoneOtpConfig();
   const code = String(req.body?.code || '');
-  if (!new RegExp(`^\\d{${config.length}}$`).test(code)) return res.status(400).json({ message: 'Enter a valid verification code.' });
+  if (!new RegExp(`^\\d{${config.length}}$`).test(code)) return res.status(400).json({ message: 'Invalid code.' });
   let client;
   try {
     client = await pool.connect();
@@ -77,10 +86,12 @@ router.post('/verify', async (req, res, next) => {
     const { rows: users } = await client.query('SELECT phone FROM users WHERE id=$1 FOR UPDATE', [req.user.id]);
     const { rows } = await client.query('SELECT * FROM phone_verifications WHERE user_id=$1 FOR UPDATE', [req.user.id]);
     const record = rows[0];
-    if (!record?.code_hash || !record.delivery_accepted || record.attempts >= config.attempts
-      || new Date(record.expires_at).getTime() <= Date.now() || canonicalPhone(users[0]?.phone) !== record.phone) {
+    const expired = !record?.code_hash || !record.delivery_accepted
+      || !record.expires_at || new Date(record.expires_at).getTime() <= Date.now();
+    const invalidState = record?.attempts >= config.attempts || canonicalPhone(users[0]?.phone) !== record?.phone;
+    if (expired || invalidState) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Code expired or unavailable. Request a new code.' });
+      return res.status(400).json({ message: expired ? 'Code expired.' : 'Invalid code.' });
     }
     const hash = hashPhoneCode(req.user.id, record.phone, code);
     const valid = crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(record.code_hash));
@@ -88,7 +99,7 @@ router.post('/verify', async (req, res, next) => {
       verified_at=CASE WHEN $2 THEN NOW() ELSE verified_at END,
       code_hash=CASE WHEN $2 THEN NULL ELSE code_hash END WHERE user_id=$1`, [req.user.id, valid]);
     await client.query('COMMIT');
-    return res.status(valid ? 200 : 400).json(valid ? { verified: true, message: 'Phone number verified.' } : { message: 'Incorrect verification code.' });
+    return res.status(valid ? 200 : 400).json(valid ? { verified: true, message: 'Phone number verified.' } : { message: 'Invalid code.' });
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});
     next(error);

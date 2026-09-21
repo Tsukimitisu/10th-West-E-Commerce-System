@@ -4,6 +4,7 @@ import { clearCurrentAuthUser, getCurrentAuthUser } from './authSession.js';
 import { resolveProductImageUrl } from '../utils/productImages.js';
 import { API_ORIGIN, API_URL } from './apiConfig.js';
 import { hasSearchableProductText, isUnsafeProductSearch } from '../utils/productSearchSafety.js';
+import { isValidPhilippineMobile, normalizePhilippineMobile } from '../utils/phone.js';
 
 // Direct browser access to application tables is intentionally disabled. All
 // authentication and private data access must go through the backend API.
@@ -14,7 +15,6 @@ const USE_BACKEND_ADDRESS_API = true;
 export { API_ORIGIN };
 
 const REGISTRATION_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
-const PROFILE_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const GMAIL_TYPO_DOMAINS = new Set([
   'gmai.com',
@@ -38,14 +38,14 @@ const getRegistrationEmailError = (value) => {
   return '';
 };
 
-const normalizeProfilePhone = (value) => String(value || '').trim().replace(/[\s()-]/g, '');
+const normalizeProfilePhone = normalizePhilippineMobile;
 const normalizeZipCode = (value) => String(value || '').trim().replace(/\D/g, '');
 
 const getProfilePhoneError = (value) => {
   const normalized = normalizeProfilePhone(value);
   if (!normalized) return '';
   if (normalized.length > 13) return 'Phone number must not exceed 13 characters.';
-  if (!PROFILE_PHONE_REGEX.test(normalized)) return 'Enter a valid phone number (09XXXXXXXXX or +639XXXXXXXXX).';
+  if (!isValidPhilippineMobile(normalized)) return 'Enter a valid phone number (09XXXXXXXXX, 639XXXXXXXXX, or +639XXXXXXXXX).';
   return '';
 };
 
@@ -623,10 +623,10 @@ export const verifyPhoneCode = (code) => authenticatedFetch(`${API_URL}/auth/pho
 });
 
 // Delete account - Right to be Forgotten (RA 10173 §18)
-export const deleteAccount = async (password) => {
+export const deleteAccount = async ({ password = '', confirmation = 'DELETE' } = {}) => {
   return await authenticatedFetch(`${API_URL}/auth/account`, {
     method: 'DELETE',
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ password, confirmation }),
   });
 };
 
@@ -690,6 +690,11 @@ export const setup2FA = async (password = '') => {
     body: JSON.stringify({ password }),
   });
 };
+
+export const setLocalPassword = async (newPassword) => authenticatedFetch(`${API_URL}/users/password/set`, {
+  method: 'PUT',
+  body: JSON.stringify({ newPassword }),
+});
 
 export const verify2FA = async (totp_code) => {
   return authenticatedFetch(`${API_URL}/auth/2fa/verify`, {

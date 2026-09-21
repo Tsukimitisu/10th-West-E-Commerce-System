@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { normalizePhilippineMobile, PHILIPPINE_MOBILE_REGEX } from '../utils/phone.js';
 
 const bounded = (value, fallback, min, max) => {
   const number = Number(value || fallback);
@@ -26,9 +27,8 @@ export const phoneOtpReadiness = () => {
 };
 
 export const canonicalPhone = (value) => {
-  const phone = String(value || '').replace(/[\s()-]/g, '');
-  if (/^09\d{9}$/.test(phone)) return `+63${phone.slice(1)}`;
-  return /^\+639\d{9}$/.test(phone) ? phone : null;
+  const phone = normalizePhilippineMobile(value);
+  return PHILIPPINE_MOBILE_REGEX.test(phone) ? phone : null;
 };
 
 export const hashPhoneCode = (userId, phone, code) => crypto.createHmac('sha256', process.env.SESSION_SECRET)

@@ -1,6 +1,11 @@
-export const normalizePhilippineMobile = (value) => String(value || '').trim().replace(/[\s()-]/g, '');
+export const normalizePhilippineMobile = (value) => {
+  const compact = String(value || '').trim().replace(/[\s()-]/g, '');
+  if (/^09\d{9}$/.test(compact)) return `+63${compact.slice(1)}`;
+  if (/^639\d{9}$/.test(compact)) return `+${compact}`;
+  return compact;
+};
 
-export const PHILIPPINE_MOBILE_REGEX = /^(09\d{9}|\+639\d{9})$/;
+export const PHILIPPINE_MOBILE_REGEX = /^\+639\d{9}$/;
 
 export const getPhoneVerificationState = (phone) => {
   const normalized = normalizePhilippineMobile(phone);

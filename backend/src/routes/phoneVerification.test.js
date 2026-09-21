@@ -71,7 +71,22 @@ test('SMS cooldown and daily quota prevent provider calls; provider failures nev
   record.send_count = 0;
   const res = await call('/send');
   assert.equal(res.statusCode, 502);
+  assert.equal(res.body.message, 'SMS delivery failed. Please try again.');
   assert.doesNotMatch(JSON.stringify(res.body), /private|code_hash|123456|apikey/);
   assert.equal(record.send_count, 1);
   assert.equal((await call('/send')).statusCode, 429);
+});
+
+test('expired and incorrect phone codes return distinct safe messages', async () => {
+  const { record } = fixture({ expires_at: new Date(0) });
+  const expired = await call('/verify');
+  assert.equal(expired.statusCode, 400);
+  assert.equal(expired.body.message, 'Code expired.');
+
+  record.code_hash = hashPhoneCode(1, record.phone, '123456');
+  record.expires_at = new Date(Date.now() + 300000);
+  record.delivery_accepted = true;
+  const invalid = await call('/verify', '000000');
+  assert.equal(invalid.statusCode, 400);
+  assert.equal(invalid.body.message, 'Invalid code.');
 });

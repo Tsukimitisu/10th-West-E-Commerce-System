@@ -6,7 +6,7 @@ import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import dns from 'dns/promises';
 import { resolveFrontendOrigin } from '../config/frontend.js';
-import { getPhoneVerificationState } from '../utils/phone.js';
+import { getPhoneVerificationState, normalizePhilippineMobile, PHILIPPINE_MOBILE_REGEX } from '../utils/phone.js';
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
@@ -15,13 +15,11 @@ const MIME_EXTENSION_MAP = {
 };
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const PROFILE_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
-const PROFILE_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const EMAIL_CHANGE_WINDOW_MINUTES = 60;
 const BLOCKED_EMAIL_DOMAINS = new Set(['example.com', 'example.net', 'example.org', 'test.com', 'invalid', 'localhost']);
 const EMAIL_DNS_TIMEOUT_MS = 3000;
 
-const normalizeProfilePhone = (value) => String(value || '').trim().replace(/[\s()-]/g, '');
 const hashToken = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
 const assertEmailDomainCanReceiveMail = async (email) => {
@@ -37,7 +35,7 @@ const assertEmailDomainCanReceiveMail = async (email) => {
   const timeout = new Promise((_, reject) => {
     setTimeout(() => {
       const error = new Error('Email validation timed out. Please try again.');
-      error.status = 503;
+      error.code = 'EMAIL_DNS_TIMEOUT';
       reject(error);
     }, EMAIL_DNS_TIMEOUT_MS);
   });
@@ -48,7 +46,10 @@ const assertEmailDomainCanReceiveMail = async (email) => {
       return;
     }
   } catch (error) {
-    if (error?.status === 503) throw error;
+    if (error?.code === 'EMAIL_DNS_TIMEOUT') {
+      console.warn('Email change MX validation timed out; continuing with verification delivery.');
+      return;
+    }
   }
 
   const error = new Error('Use a real email address that can receive verification emails.');
@@ -63,6 +64,9 @@ const createTransporter = () =>
     port: parseInt(process.env.EMAIL_PORT || '587', 10),
     secure: parseInt(process.env.EMAIL_PORT || '587', 10) === 465,
     auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
+    connectionTimeout: 4000,
+    greetingTimeout: 4000,
+    socketTimeout: 5000,
   });
 
 const isLocalUrl = (hostname) =>
@@ -150,7 +154,7 @@ export const updateProfile = async (req, res) => {
   const rawName = typeof req.body.name === 'string' ? req.body.name.trim() : '';
   const rawEmail = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const rawPhone = typeof req.body.phone === 'string' ? req.body.phone.trim() : '';
-  const normalizedPhone = normalizeProfilePhone(rawPhone);
+  const normalizedPhone = normalizePhilippineMobile(rawPhone);
   const avatar = req.body.avatar ?? null;
 
   const fieldErrors = {};
@@ -172,8 +176,8 @@ export const updateProfile = async (req, res) => {
   if (rawPhone) {
     if (normalizedPhone.length > 13) {
       fieldErrors.phone = 'Phone number must not exceed 13 characters.';
-    } else if (!PROFILE_PHONE_REGEX.test(normalizedPhone)) {
-      fieldErrors.phone = 'Enter a valid phone number (09XXXXXXXXX or +639XXXXXXXXX).';
+    } else if (!PHILIPPINE_MOBILE_REGEX.test(normalizedPhone)) {
+      fieldErrors.phone = 'Enter a valid phone number (09XXXXXXXXX, 639XXXXXXXXX, or +639XXXXXXXXX).';
     }
   }
 
@@ -287,7 +291,7 @@ export const updateProfile = async (req, res) => {
       }
 
       return res.json({
-        message: 'Profile updated. Please verify your new email address to complete the email change.',
+        message: 'Email change request sent. Please verify your new email.',
         requiresEmailVerification: true,
         pending_email: rawEmail,
         user: {
@@ -576,5 +580,40 @@ export const changePassword = async (req, res) => {
   } catch (error) {
     console.error('Change password error:', error);
     res.status(500).json({ message: 'Failed to change password' });
+  }
+};
+
+// OAuth-only accounts may add a password for this application. This never
+// changes the password held by Google or Facebook.
+export const setLocalPassword = async (req, res) => {
+  const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
+
+  if (!STRONG_PASSWORD_REGEX.test(newPassword)) {
+    return res.status(400).json({ message: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.' });
+  }
+
+  try {
+    const userResult = await pool.query(
+      'SELECT password_hash, oauth_provider FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const user = userResult.rows[0];
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.password_hash && user.password_hash !== 'DELETED') {
+      return res.status(409).json({ message: 'A local password already exists. Use Change Password instead.' });
+    }
+    if (!user.oauth_provider) {
+      return res.status(400).json({ message: 'Use account recovery to set a password for this account.' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await pool.query(
+      'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND password_hash IS NULL',
+      [passwordHash, req.user.id]
+    );
+    return res.json({ message: 'Local password set successfully. Your Google/Facebook password was not changed.' });
+  } catch (error) {
+    console.error('Set local password error:', error);
+    return res.status(500).json({ message: 'Failed to set local password' });
   }
 };

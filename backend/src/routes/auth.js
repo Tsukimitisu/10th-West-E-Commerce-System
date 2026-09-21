@@ -316,7 +316,11 @@ router.get('/google',
     next();
   },
   (req, res, next) => {
-    const authenticate = passport.authenticate('google', { scope: GOOGLE_OAUTH_SCOPES, session: false });
+    const authenticate = passport.authenticate('google', {
+      scope: GOOGLE_OAUTH_SCOPES,
+      session: false,
+      prompt: 'select_account',
+    });
     const handleError = (error) => {
       if (!error) return next();
       console.error('GOOGLE_AUTH_START_FAILED', {
@@ -438,7 +442,8 @@ router.get('/activity-logs', authenticateToken, requireRole('admin', 'super_admi
 // ─── Account deletion (Right to be Forgotten - RA 10173) ────────────────────
 router.delete('/account',
   authenticateToken,
-  body('password').notEmpty().withMessage('Password is required'),
+  body('confirmation').equals('DELETE').withMessage('Type DELETE to confirm account deletion'),
+  body('password').optional({ nullable: true }).isString().withMessage('Password confirmation is invalid'),
   validate,
   deleteAccountHandler
 );

@@ -1,6 +1,6 @@
 import express from 'express';
 import { body } from 'express-validator';
-import { getProfile, updateProfile, uploadProfileAvatar, changePassword, confirmEmailChange } from '../controllers/userController.js';
+import { getProfile, updateProfile, uploadProfileAvatar, changePassword, setLocalPassword, confirmEmailChange } from '../controllers/userController.js';
 import { authenticateTokenOrSupabaseToken } from '../middleware/auth.js';
 import { validate } from '../middleware/validator.js';
 
@@ -35,5 +35,6 @@ router.post(
 
 // Change password
 router.put('/password', changePassword);
+router.put('/password/set', setLocalPassword);
 
 export default router;

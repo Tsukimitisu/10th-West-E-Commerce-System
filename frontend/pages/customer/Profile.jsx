@@ -1,17 +1,17 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { User, Mail, Phone, Lock, Eye, EyeOff, Save, Check, AlertCircle, Shield, Camera, Trash2, AlertTriangle, Download } from 'lucide-react';
-import { updateProfile, uploadProfileAvatar, changePassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData, getAuthAvailability } from '../../services/api';
+import { updateProfile, uploadProfileAvatar, changePassword, setLocalPassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData, getAuthAvailability } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
 import PhoneVerification from '../../components/customer/PhoneVerification';
 import { clearCurrentAuthUser, getCurrentAuthUser, setCurrentAuthUser, subscribeAuthChanges } from '../../services/authSession';
+import { isValidPhilippineMobile, normalizePhilippineMobile } from '../../utils/phone.js';
 
 const ALLOWED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const PROFILE_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
-const PROFILE_PHONE_REGEX = /^(09\d{9}|\+639\d{9})$/;
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 
-const normalizePhoneInput = (value) => String(value || '').trim().replace(/[\s()-]/g, '');
+const normalizePhoneInput = normalizePhilippineMobile;
 
 const Profile = () => {
   const [user, setUser] = useState(() => getCurrentAuthUser());
@@ -46,6 +46,11 @@ const Profile = () => {
   const [avatarError, setAvatarError] = useState('');
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef(null);
+  const deleteDialogRef = useRef(null);
+  const deleteConfirmRef = useRef(null);
+  const deleteTriggerRef = useRef(null);
+  const hasLocalPassword = user?.has_local_password ?? !user?.oauth_provider;
+  const oauthProviderLabel = user?.oauth_provider === 'facebook' ? 'Facebook' : 'Google';
 
   const saveAuthUser = (nextUser) => {
     setCurrentAuthUser(nextUser);
@@ -85,6 +90,45 @@ const Profile = () => {
     }
   }, [avatarPreview]);
 
+  useEffect(() => {
+    if (!showDeleteModal) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const frame = requestAnimationFrame(() => {
+      deleteDialogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      deleteConfirmRef.current?.focus({ preventScroll: true });
+    });
+
+    const handleDialogKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setShowDeleteModal(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !deleteDialogRef.current) return;
+      const focusable = [...deleteDialogRef.current.querySelectorAll('button:not([disabled]), input:not([disabled])')];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleDialogKeyDown);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleDialogKeyDown);
+      deleteTriggerRef.current?.focus({ preventScroll: true });
+    };
+  }, [showDeleteModal]);
+
   const validateProfileForm = () => {
     const nextErrors = {};
     const trimmedName = form.name.trim();
@@ -109,8 +153,8 @@ const Profile = () => {
     if (rawPhone) {
       if (normalizedPhone.length > 13) {
         nextErrors.phone = 'Phone number must not exceed 13 characters.';
-      } else if (!PROFILE_PHONE_REGEX.test(normalizedPhone)) {
-        nextErrors.phone = 'Enter a valid phone number (09XXXXXXXXX or +639XXXXXXXXX).';
+      } else if (!isValidPhilippineMobile(normalizedPhone)) {
+        nextErrors.phone = 'Enter a valid phone number (09XXXXXXXXX, 639XXXXXXXXX, or +639XXXXXXXXX).';
       }
     }
 
@@ -275,8 +319,10 @@ const Profile = () => {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
-    if (!passData.current || !passData.new || !passData.confirm) {
-      setPassMessage('Current password, new password, and confirmation are required.');
+    if ((hasLocalPassword && !passData.current) || !passData.new || !passData.confirm) {
+      setPassMessage(hasLocalPassword
+        ? 'Current password, new password, and confirmation are required.'
+        : 'New password and confirmation are required.');
       return;
     }
 
@@ -290,7 +336,7 @@ const Profile = () => {
       return;
     }
 
-    if (passData.new === passData.current) {
+    if (hasLocalPassword && passData.new === passData.current) {
       setPassMessage('New password must be different from your current password.');
       return;
     }
@@ -298,8 +344,15 @@ const Profile = () => {
     setPassLoading(true);
     setPassMessage('');
     try {
-      await changePassword(passData.current, passData.new);
-      setPassMessage('Password changed successfully');
+      if (hasLocalPassword) {
+        await changePassword(passData.current, passData.new);
+        setPassMessage('Password changed successfully');
+      } else {
+        await setLocalPassword(passData.new);
+        const saved = { ...user, has_local_password: true };
+        saveAuthUser(saved);
+        setPassMessage('Local password set successfully. Your Google/Facebook password was not changed.');
+      }
       setPassData({ current: '', new: '', confirm: '' });
     } catch (err) {
       setPassMessage(err.message || 'Failed to change password');
@@ -363,14 +416,14 @@ const Profile = () => {
 
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== 'DELETE') return;
-    if (!deletePassword) {
+    if (hasLocalPassword && !deletePassword) {
       setDeleteError('Password is required to confirm account deletion');
       return;
     }
     setDeleteLoading(true);
     setDeleteError('');
     try {
-      await deleteAccount(deletePassword);
+      await deleteAccount({ password: hasLocalPassword ? deletePassword : '', confirmation: deleteConfirmText });
       clearCurrentAuthUser();
       window.location.href = '/#/login';
     } catch (err) {
@@ -541,7 +594,7 @@ const Profile = () => {
                 />
               </div>
               {fieldErrors.phone && <p className="mt-1 text-xs text-red-500">{fieldErrors.phone}</p>}
-              {!fieldErrors.phone && <p className="mt-1 text-xs text-gray-500">Accepted format: 09XXXXXXXXX or +639XXXXXXXXX</p>}
+              {!fieldErrors.phone && <p className="mt-1 text-xs text-gray-500">Accepted: 09XXXXXXXXX, 639XXXXXXXXX, or +639XXXXXXXXX. Saved as +63.</p>}
               <PhoneVerification savedPhone={savedPhone} currentPhone={currentPhone} />
             </div>
             <button
@@ -556,14 +609,21 @@ const Profile = () => {
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <h2 className="font-display font-semibold text-lg text-gray-900 mb-6 flex items-center gap-2"><Lock size={20} className="text-red-500" /> Change Password</h2>
+          <h2 className="font-display font-semibold text-lg text-gray-900 mb-3 flex items-center gap-2"><Lock size={20} className="text-red-500" /> {hasLocalPassword ? 'Change Password' : 'Set Local Password'}</h2>
+          {user?.oauth_provider && (
+            <p className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-800">
+              This account uses {oauthProviderLabel} sign-in. {hasLocalPassword
+                ? `Changing this password affects only your 10th West Moto account, not your ${oauthProviderLabel} password.`
+                : `To use a local password, set one for this system account only. This will not change your ${oauthProviderLabel} password.`}
+            </p>
+          )}
           {passMessage && (
             <div className={`mb-4 p-3 rounded-lg text-sm flex items-center gap-2 ${passMessage.includes('success') ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-red-500/10 text-red-500 border border-red-200'}`}>
               {passMessage.includes('success') ? <Check size={16} /> : <AlertCircle size={16} />} {passMessage}
             </div>
           )}
           <form onSubmit={handlePasswordChange} className="space-y-4">
-            <div>
+            {hasLocalPassword && <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
               <div className="relative">
                 <input type={passwordVisibility.current ? 'text' : 'password'} value={passData.current} onChange={e => setPassData(p => ({ ...p, current: e.target.value }))} required autoComplete="current-password"
@@ -572,7 +632,7 @@ const Profile = () => {
                   {passwordVisibility.current ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-            </div>
+            </div>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
@@ -599,7 +659,7 @@ const Profile = () => {
             </div>
             <button type="submit" disabled={passLoading}
               className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors duration-500">
-              {passLoading ? 'Updating...' : 'Update Password'}
+              {passLoading ? (hasLocalPassword ? 'Updating...' : 'Setting...') : (hasLocalPassword ? 'Update Password' : 'Set Local Password')}
             </button>
           </form>
         </div>
@@ -718,7 +778,7 @@ const Profile = () => {
             <li>Order history and transaction records will be retained for tax compliance (BIR requirement)</li>
             <li>Active orders in progress will be completed before data removal</li>
           </ul>
-          <button onClick={() => setShowDeleteModal(true)}
+          <button ref={deleteTriggerRef} onClick={() => setShowDeleteModal(true)}
             className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 border border-red-300 rounded-lg transition-all duration-300 ease-in-out flex items-center gap-2">
             <Trash2 size={14} /> Request Account Deletion
           </button>
@@ -726,13 +786,13 @@ const Profile = () => {
       </div>
 
       {showDeleteModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-black/20 flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 animate-scaleIn">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/45 p-4 backdrop-blur-sm animate-fadeIn">
+          <div ref={deleteDialogRef} role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-scaleIn">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
                 <AlertTriangle size={20} className="text-red-600" />
               </div>
-              <h3 className="font-display font-bold text-lg text-gray-900">Delete Your Account?</h3>
+              <h3 id="delete-account-title" className="font-display font-bold text-lg text-gray-900">Delete Your Account?</h3>
             </div>
             <p className="text-sm text-gray-600 mb-4">
               This will permanently remove your personal data. Transaction records will be retained per BIR regulations.
@@ -745,11 +805,11 @@ const Profile = () => {
             )}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Type <strong>DELETE</strong> to confirm:</label>
-              <input type="text" value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)}
+              <input ref={deleteConfirmRef} type="text" value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)}
                 className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="DELETE" />
             </div>
-            <div className="mb-4">
+            {hasLocalPassword ? <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Enter your password:</label>
               <input
                 type="password"
@@ -758,13 +818,17 @@ const Profile = () => {
                 className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="Current password"
               />
-            </div>
+            </div> : (
+              <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                This {oauthProviderLabel}-only account has no local password. Typing DELETE confirms this request; your {oauthProviderLabel} account itself will not be deleted.
+              </p>
+            )}
             <div className="flex gap-3">
               <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); setDeletePassword(''); setDeleteError(''); }}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-300 ease-in-out">
                 Cancel
               </button>
-              <button onClick={handleDeleteAccount} disabled={deleteConfirmText !== 'DELETE' || !deletePassword || deleteLoading}
+              <button onClick={handleDeleteAccount} disabled={deleteConfirmText !== 'DELETE' || (hasLocalPassword && !deletePassword) || deleteLoading}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-300 rounded-lg transition-all duration-300 ease-in-out flex items-center justify-center gap-2">
                 {deleteLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Trash2 size={14} />}
                 Delete Forever

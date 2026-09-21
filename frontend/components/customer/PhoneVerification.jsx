@@ -43,7 +43,10 @@ export default function PhoneVerification({ savedPhone, currentPhone }) {
       if (verify) { setState((value) => ({ ...value, verified: true })); setCode(''); }
       else setCooldown(result.resend_after);
     } catch (error) {
-      if (requestRevision === revision.current) setMessage(error.message || 'Phone verification failed.');
+      if (requestRevision === revision.current) {
+        setMessage(error.message || 'Phone verification failed.');
+        if (!verify && Number(error.resend_after) > 0) setCooldown(Number(error.resend_after));
+      }
     }
     finally { pending.current = false; setBusy(false); }
   };
