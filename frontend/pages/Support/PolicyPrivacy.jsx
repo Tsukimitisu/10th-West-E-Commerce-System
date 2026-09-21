@@ -4,9 +4,9 @@ import { ArrowLeft, Shield, Mail } from 'lucide-react';
 
 const PrivacyPolicy = () => {
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div data-legal-page className="min-h-screen bg-slate-50 text-slate-900 [&_.bg-gray-800]:!bg-white [&_.bg-gray-900]:!bg-slate-50 [&_.border-gray-700]:!border-slate-200 [&_.text-white]:!text-slate-950 [&_.text-gray-300]:!text-slate-700">
       <div className="max-w-4xl mx-auto px-4 py-12">
-        <Link to="/" className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-red-500 mb-6 transition-colors">
+        <Link to="/" className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
           <ArrowLeft size={16} /> Back to Home
         </Link>
 

@@ -59,7 +59,7 @@ const sections = [
 ];
 
 const ReturnPolicy = () => (
-  <div className="min-h-screen bg-slate-50 text-slate-900">
+  <div data-legal-page className="min-h-screen bg-slate-50 text-slate-900">
     <div className="mx-auto max-w-4xl px-4 py-10 sm:py-12">
       <Link to="/" className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
         <ArrowLeft size={16} /> Back to Home
