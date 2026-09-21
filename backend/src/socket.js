@@ -472,6 +472,11 @@ export function emitConversationRead(thread, payload) {
   emitToConversationTargets(thread, 'chat:seen', payload);
 }
 
+export function emitConversationDelivered(thread, payload) {
+  if (!io) return;
+  emitToConversationTargets(thread, 'message:delivered', payload);
+}
+
 export function emitConversationUpdated(thread, conversation = thread) {
   if (!io) return;
   emitToConversationTargets(thread, 'conversation:updated', conversation);

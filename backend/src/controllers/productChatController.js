@@ -2,6 +2,7 @@ import pool from '../config/database.js';
 import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import {
   emitChatMessage,
+  emitConversationDelivered,
   emitConversationRead,
   emitConversationUpdated,
 } from '../socket.js';
@@ -10,6 +11,7 @@ import { sanitizePlainText, sanitizeUrlArray } from '../utils/inputSanitizer.js'
 
 const STAFF_ROLES = STAFF_ROLE_SET;
 const MESSAGE_TYPES = new Set(['text', 'image', 'video', 'file', 'system']);
+const CLIENT_MESSAGE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$/;
 
 const isStaffUser = (user) => STAFF_ROLES.has(String(user?.role || '').toLowerCase());
 
@@ -49,6 +51,11 @@ const resolveMessageType = (value, attachmentUrls = []) => {
   if (MESSAGE_TYPES.has(requested)) return requested;
   if (attachmentUrls.length > 0) return 'image';
   return 'text';
+};
+
+const normalizeClientMessageId = (value) => {
+  const normalized = String(value || '').trim();
+  return CLIENT_MESSAGE_ID_PATTERN.test(normalized) ? normalized : null;
 };
 
 const normalizeProductSnapshot = (row) => {
@@ -191,6 +198,8 @@ const canAccessConversation = (conversation, user) => {
 const mapMessage = (row) => {
   const mediaUrls = parseMediaUrls(row.media_urls);
   const attachmentUrl = row.attachment_url || mediaUrls[0] || null;
+  const isRead = Boolean(row.is_read || row.seen_at || row.read_at);
+  const deliveryStatus = isRead ? 'read' : row.delivered_at ? 'delivered' : 'sent';
 
   return {
     id: row.id,
@@ -206,8 +215,12 @@ const mapMessage = (row) => {
     media_urls: mediaUrls,
     attachment_url: attachmentUrl,
     attachment_type: row.attachment_type || null,
+    client_message_id: row.client_message_id || null,
     metadata: parseJsonValue(row.metadata, {}),
-    is_read: Boolean(row.is_read || row.seen_at || row.read_at),
+    status: deliveryStatus,
+    delivery_status: deliveryStatus,
+    delivered_at: row.delivered_at || null,
+    is_read: isRead,
     read_at: row.read_at || row.seen_at || null,
     created_at: row.created_at,
     updated_at: row.updated_at || row.created_at,
@@ -345,6 +358,7 @@ const createChatMessage = async (db, conversation, user, payload = {}) => {
     ? [attachmentUrl, ...mediaUrls]
     : mediaUrls;
   const messageType = resolveMessageType(payload.message_type, allMediaUrls);
+  const clientMessageId = normalizeClientMessageId(payload.client_message_id || payload.metadata?.client_message_id);
 
   if (!messageText && allMediaUrls.length === 0) {
     const error = new Error('Message text or attachment is required');
@@ -361,12 +375,15 @@ const createChatMessage = async (db, conversation, user, payload = {}) => {
     `INSERT INTO chat_messages (
        thread_id, conversation_id, sender_id, receiver_id, sender_role,
        body, message_text, media_urls, message_type, attachment_url, attachment_type,
-       order_id, metadata, is_read, created_at, updated_at
+       order_id, client_message_id, metadata, is_read, created_at, updated_at
      ) VALUES (
        $1, $1, $2, $3, $4,
        $5, $5, $6::jsonb, $7, $8, $9,
-       $10, $11::jsonb, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+       $10, $11, $12::jsonb, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
      )
+     ON CONFLICT (thread_id, sender_id, client_message_id)
+       WHERE client_message_id IS NOT NULL
+       DO NOTHING
      RETURNING *`,
     [
       conversation.id,
@@ -379,11 +396,23 @@ const createChatMessage = async (db, conversation, user, payload = {}) => {
       allMediaUrls[0] || null,
       payload.attachment_type || (messageType === 'text' ? null : messageType),
       conversation.order_id || null,
-      JSON.stringify(payload.metadata || {}),
+      clientMessageId,
+      JSON.stringify(clientMessageId ? { ...(payload.metadata || {}), client_message_id: clientMessageId } : (payload.metadata || {})),
     ]
   );
 
+  if (!result.rows[0] && clientMessageId) {
+    const existing = await db.query(
+      `SELECT * FROM chat_messages
+       WHERE thread_id = $1 AND sender_id = $2 AND client_message_id = $3 AND deleted_at IS NULL
+       LIMIT 1`,
+      [conversation.id, user.id, clientMessageId]
+    );
+    if (existing.rows[0]) return { message: existing.rows[0], created: false };
+  }
+
   const message = result.rows[0];
+  if (!message) throw Object.assign(new Error('Message could not be saved'), { status: 409 });
 
   await db.query(
     `UPDATE chat_threads
@@ -412,8 +441,20 @@ const createChatMessage = async (db, conversation, user, payload = {}) => {
     [conversation.id, user.id]
   );
 
-  return message;
+  return { message, created: true };
 };
+
+const markIncomingMessagesDelivered = async (db, conversationId, viewerId) => db.query(
+  `UPDATE chat_messages
+   SET delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
+       updated_at = CURRENT_TIMESTAMP
+   WHERE thread_id = $1
+     AND sender_id <> $2
+     AND delivered_at IS NULL
+     AND deleted_at IS NULL
+   RETURNING id, delivered_at`,
+  [conversationId, viewerId]
+);
 
 const notifyRecipient = async (db, conversation, sender, message) => {
   const senderIsStaff = isStaffUser(sender);
@@ -529,8 +570,9 @@ export const startProductConversation = async (req, res) => {
     let message = null;
     if (initialMessage && created) {
       const conversation = await getConversationById(client, conversationId, req.user.id);
-      message = await createChatMessage(client, conversation, req.user, { message_text: initialMessage });
-      await notifyRecipient(client, conversation, req.user, message);
+      const creation = await createChatMessage(client, conversation, req.user, { message_text: initialMessage });
+      message = creation.message;
+      if (creation.created) await notifyRecipient(client, conversation, req.user, message);
     }
 
     await client.query('COMMIT');
@@ -567,6 +609,17 @@ export const getConversationMessages = async (req, res) => {
     const conversation = await getConversationById(pool, conversationId, req.user.id);
     if (!conversation) return res.status(404).json({ message: 'Conversation not found' });
     if (!canAccessConversation(conversation, req.user)) return res.status(403).json({ message: 'Access denied' });
+
+    const delivered = await markIncomingMessagesDelivered(pool, conversationId, req.user.id);
+    if (delivered.rows.length > 0) {
+      emitConversationDelivered(conversation, {
+        conversation_id: conversationId,
+        thread_id: conversationId,
+        user_id: req.user.id,
+        message_ids: delivered.rows.map((row) => row.id),
+        delivered_at: delivered.rows[0].delivered_at,
+      });
+    }
 
     const limit = safeLimit(req.query.limit, 100, 200);
     const result = await pool.query(
@@ -625,8 +678,9 @@ export const sendConversationMessage = async (req, res) => {
       return res.status(403).json({ message: 'This conversation is closed.' });
     }
 
-    const message = await createChatMessage(client, conversation, req.user, req.body || {});
-    await notifyRecipient(client, conversation, req.user, message);
+    const creation = await createChatMessage(client, conversation, req.user, req.body || {});
+    const message = creation.message;
+    if (creation.created) await notifyRecipient(client, conversation, req.user, message);
 
     await client.query('COMMIT');
 
@@ -638,10 +692,12 @@ export const sendConversationMessage = async (req, res) => {
     });
     const conversationPayload = mapConversation(updatedConversationRow, req.user);
 
-    emitChatMessage(updatedConversationRow, messagePayload);
-    emitConversationUpdated(updatedConversationRow, conversationPayload);
+    if (creation.created) {
+      emitChatMessage(updatedConversationRow, messagePayload);
+      emitConversationUpdated(updatedConversationRow, conversationPayload);
+    }
 
-    res.status(201).json({ message: messagePayload, conversation: conversationPayload });
+    res.status(creation.created ? 201 : 200).json({ message: messagePayload, conversation: conversationPayload });
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('Send conversation message error:', error);
@@ -677,6 +733,7 @@ export const markConversationRead = async (req, res) => {
     await pool.query(
       `UPDATE chat_messages
        SET is_read = true,
+           delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP),
            read_at = COALESCE(read_at, CURRENT_TIMESTAMP),
            seen_at = COALESCE(seen_at, CURRENT_TIMESTAMP),
            updated_at = CURRENT_TIMESTAMP

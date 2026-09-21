@@ -18,6 +18,12 @@ import {
 import { useSocket } from '../../context/SocketContext';
 import { getCurrentAuthUser } from '../../services/authSession';
 import { handleProductImageError, PRODUCT_IMAGE_FALLBACK, resolveProductImageUrl } from '../../utils/productImages.js';
+import MessageDeliveryStatus from '../../components/chat/MessageDeliveryStatus.jsx';
+import {
+  createClientMessageId,
+  createOptimisticMessage,
+  upsertChatMessage,
+} from '../../utils/chatMessages.js';
 
 const formatTime = (value) => {
   if (!value) return '';
@@ -130,7 +136,7 @@ const ProductContext = ({ conversation }) => {
   );
 };
 
-const MessageBubble = ({ message, currentUserId }) => {
+const MessageBubble = ({ message, currentUserId, onRetry }) => {
   const mine = Number(message.sender_id) === Number(currentUserId);
   const text = message.message_text ?? message.body ?? '';
   const imageUrl = resolveImageUrl(message.attachment_url || message.media_urls?.[0]);
@@ -146,7 +152,10 @@ const MessageBubble = ({ message, currentUserId }) => {
           </a>
         )}
         {text && <p className="whitespace-pre-wrap text-sm leading-6">{text}</p>}
-        <p className={`mt-1 text-right text-[11px] ${mine ? 'text-orange-100' : 'text-slate-400'}`}>{formatTime(message.created_at)}</p>
+        <div className={`mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-[11px] ${mine ? 'text-orange-100' : 'text-slate-400'}`}>
+          <span>{formatTime(message.created_at)}</span>
+          {mine && <MessageDeliveryStatus message={message} onRetry={onRetry} />}
+        </div>
       </div>
     </div>
   );
@@ -170,6 +179,11 @@ const Messages = () => {
   const [typing, setTyping] = useState(false);
   const messagesEndRef = useRef(null);
   const typingTimerRef = useRef(null);
+  const selectedIdRef = useRef(selectedId);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   const selectedConversation = conversations.find((item) => Number(item.id || item.conversation_id) === Number(selectedId)) || null;
 
@@ -260,7 +274,7 @@ const Messages = () => {
       }));
 
       if (Number(selectedId) === conversationId && incoming?.id) {
-        setMessages((prev) => (prev.some((item) => Number(item.id) === Number(incoming.id)) ? prev : [...prev, incoming]));
+        setMessages((prev) => upsertChatMessage(prev, incoming));
         markConversationRead(conversationId).catch(() => null);
       }
     };
@@ -272,7 +286,19 @@ const Messages = () => {
     const handleRead = (payload = {}) => {
       if (Number(payload.conversation_id || payload.thread_id) !== Number(selectedId)) return;
       setMessages((prev) => prev.map((message) => (
-        Number(message.sender_id) === Number(currentUser?.id) ? { ...message, is_read: true, read_at: payload.read_at } : message
+        Number(message.sender_id) === Number(currentUser?.id)
+          ? { ...message, is_read: true, delivered_at: message.delivered_at || payload.read_at, read_at: payload.read_at, delivery_status: 'read', status: 'read' }
+          : message
+      )));
+    };
+
+    const handleDelivered = (payload = {}) => {
+      if (Number(payload.conversation_id || payload.thread_id) !== Number(selectedId)) return;
+      const deliveredIds = new Set((payload.message_ids || []).map(Number));
+      setMessages((prev) => prev.map((message) => (
+        deliveredIds.has(Number(message.id)) && Number(message.sender_id) === Number(currentUser?.id) && !message.is_read
+          ? { ...message, delivered_at: payload.delivered_at, delivery_status: 'delivered', status: 'delivered' }
+          : message
       )));
     };
 
@@ -290,6 +316,7 @@ const Messages = () => {
     on('message:new', handleNewMessage);
     on('conversation:updated', handleConversationUpdated);
     on('message:read', handleRead);
+    on('message:delivered', handleDelivered);
     on('typing:start', handleTypingStart);
     on('typing:stop', handleTypingStop);
 
@@ -297,6 +324,7 @@ const Messages = () => {
       off('message:new', handleNewMessage);
       off('conversation:updated', handleConversationUpdated);
       off('message:read', handleRead);
+      off('message:delivered', handleDelivered);
       off('typing:start', handleTypingStart);
       off('typing:stop', handleTypingStop);
     };
@@ -316,28 +344,62 @@ const Messages = () => {
     }, 800);
   };
 
-  const handleSend = async (event) => {
-    event.preventDefault();
-    const messageText = draft.trim();
-    if (!messageText || !selectedId || sending) return;
+  const transmitMessage = async (pendingMessage) => {
+    const conversationId = Number(pendingMessage.conversation_id || pendingMessage.thread_id);
+    const messageText = String(pendingMessage.message_text || pendingMessage.body || '').trim();
+    if (!messageText || !conversationId || sending) return;
     setSending(true);
-    setDraft('');
-    emit('typing:stop', { conversation_id: selectedId });
+    setMessages((prev) => upsertChatMessage(prev, { ...pendingMessage, client_status: 'sending' }));
     try {
-      const sent = await sendConversationMessage(selectedId, { message_text: messageText });
-      setMessages((prev) => (prev.some((item) => Number(item.id) === Number(sent.id)) ? prev : [...prev, sent]));
+      const sent = await sendConversationMessage(conversationId, {
+        message_text: messageText,
+        client_message_id: pendingMessage.client_message_id,
+      });
+      if (Number(selectedIdRef.current) === conversationId) {
+        setMessages((prev) => upsertChatMessage(prev, sent));
+      }
       setConversations((prev) => mergeConversation(prev, {
         ...(selectedConversation || {}),
-        id: selectedId,
+        id: conversationId,
         last_message_text: sent.message_text || sent.body || messageText,
         last_message_at: sent.created_at || new Date().toISOString(),
       }));
     } catch (err) {
-      setDraft(messageText);
-      setError(err?.message || 'Unable to send message.');
+      if (Number(selectedIdRef.current) === conversationId) {
+        setMessages((prev) => upsertChatMessage(prev, {
+          ...pendingMessage,
+          client_status: 'failed',
+          send_error: err?.message || 'Unable to send message.',
+        }));
+      }
+      setError(err?.message || 'Unable to send message. Use Retry on the failed message.');
     } finally {
       setSending(false);
     }
+  };
+
+  const handleSend = (event) => {
+    event.preventDefault();
+    const messageText = draft.trim();
+    if (!messageText || !selectedId || sending) return;
+    const clientMessageId = createClientMessageId();
+    const optimisticMessage = createOptimisticMessage({
+      clientMessageId,
+      conversationId: selectedId,
+      sender: currentUser,
+      text: messageText,
+    });
+    setDraft('');
+    setError('');
+    emit('typing:stop', { conversation_id: selectedId });
+    setMessages((prev) => upsertChatMessage(prev, optimisticMessage));
+    void transmitMessage(optimisticMessage);
+  };
+
+  const handleRetry = (message) => {
+    if (sending || message.client_status !== 'failed') return;
+    setError('');
+    void transmitMessage(message);
   };
 
   const filteredEmpty = !loadingList && conversations.length === 0;
@@ -452,7 +514,7 @@ const Messages = () => {
                   ) : (
                     <div className="space-y-3">
                       {messages.map((message) => (
-                        <MessageBubble key={message.id} message={message} currentUserId={currentUser?.id} />
+                        <MessageBubble key={message.id} message={message} currentUserId={currentUser?.id} onRetry={handleRetry} />
                       ))}
                       <div ref={messagesEndRef} />
                     </div>
