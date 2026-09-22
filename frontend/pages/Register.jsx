@@ -43,6 +43,7 @@ const Register = () => {
   const [verificationMessage, setVerificationMessage] = useState('');
   const [resending, setResending] = useState(false);
   const [resendStatus, setResendStatus] = useState('');
+  const [resendSucceeded, setResendSucceeded] = useState(false);
   const [oauthProviders, setOauthProviders] = useState({ google: false, facebook: false, loading: true, error: false, googleReason: null, facebookReason: null });
   const errorBannerRef = useRef(null);
   const emailInputRef = useRef(null);
@@ -225,10 +226,12 @@ const Register = () => {
   const handleResend = async () => {
     setResending(true);
     setResendStatus('');
+    setResendSucceeded(false);
 
     try {
-      await resendVerificationEmail(email);
-      setResendStatus('Verification email resent successfully. Please check your inbox.');
+      const result = await resendVerificationEmail(email);
+      setResendSucceeded(true);
+      setResendStatus(result?.message || 'Verification email request accepted.');
     } catch (err) {
       setResendStatus(err.message || 'Failed to resend verification email.');
     } finally {
@@ -430,7 +433,7 @@ const Register = () => {
             </button>
 
             {resendStatus && (
-              <p className={`text-sm ${resendStatus.toLowerCase().includes('success') ? 'text-green-500' : 'text-red-500'}`}>
+              <p className={`text-sm ${resendSucceeded ? 'text-green-500' : 'text-red-500'}`}>
                 {resendStatus}
               </p>
             )}

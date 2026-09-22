@@ -14,6 +14,22 @@ test('registration exposes a loading state and synchronously blocks duplicate su
   assert.match(source, /requiresVerification \|\| err\.code === 'VERIFICATION_EMAIL_FAILED'/);
 });
 
+test('verification resend shows provider-accepted feedback and blocks repeated submissions', async () => {
+  const [register, verifyEmail] = await Promise.all([
+    read('pages/Register.jsx'),
+    read('pages/VerifyEmail.jsx'),
+  ]);
+
+  for (const source of [register, verifyEmail]) {
+    assert.match(source, /Verification email request accepted\./);
+    assert.match(source, /resendSucceeded/);
+  }
+  assert.match(register, /disabled=\{resending\}/);
+  assert.match(register, /Sending\.\.\./);
+  assert.match(verifyEmail, /disabled=\{isResending\}/);
+  assert.match(verifyEmail, /isResending \? 'Sending\.\.\.'/);
+});
+
 test('Philippine mobile input accepts all supported forms and normalizes storage to E.164', () => {
   for (const input of ['09123456789', '+639123456789', '639123456789', '+63 912 345 6789']) {
     assert.equal(isValidPhilippineMobile(input), true, input);
@@ -33,6 +49,13 @@ test('profile clearly separates OAuth password and deletion behavior', async () 
   assert.match(api, /JSON\.stringify\(\{ password, confirmation \}\)/);
 });
 
+test('Google-managed profile email is read-only with an explanatory message', async () => {
+  const profile = await read('pages/customer/Profile.jsx');
+  assert.match(profile, /email_managed_by_google/);
+  assert.match(profile, /readOnly=\{isGoogleManagedEmail\}/);
+  assert.match(profile, /Your email address is linked to your Google account and cannot be changed here\./);
+});
+
 test('account deletion dialog is centered, focused, scroll locked, and keyboard trapped', async () => {
   const profile = await read('pages/customer/Profile.jsx');
   assert.match(profile, /role="dialog" aria-modal="true"/);
@@ -42,6 +65,9 @@ test('account deletion dialog is centered, focused, scroll locked, and keyboard 
   assert.match(profile, /event\.key !== 'Tab'/);
   assert.match(profile, /deleteConfirmRef\.current\?\.focus/);
   assert.match(profile, /z-\[100\]/);
+  assert.match(profile, /Account deleted successfully\. Redirecting/);
+  assert.match(profile, /clearCurrentAuthUser\(\)/);
+  assert.match(profile, /window\.location\.href = '\/#\/login'/);
 });
 
 test('policy editor preserves its DOM selection history and wires native undo and redo', async () => {

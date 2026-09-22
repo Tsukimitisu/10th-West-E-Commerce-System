@@ -129,7 +129,24 @@ const sendEmailChangeVerificationEmail = async ({ email, currentName, token }) =
 export const getProfile = async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, name, email, role, phone, avatar, store_credit, created_at FROM users WHERE id = $1',
+      `SELECT users.id, users.name, users.email, users.role, users.phone, users.avatar,
+              users.store_credit, users.created_at,
+              (
+                EXISTS (
+                  SELECT 1 FROM user_oauth_accounts oauth
+                  WHERE oauth.user_id = users.id
+                    AND oauth.provider = 'google'
+                    AND LOWER(oauth.provider_email) = LOWER(users.email)
+                )
+                OR (
+                  LOWER(COALESCE(users.oauth_provider, '')) = 'google'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM user_oauth_accounts oauth
+                    WHERE oauth.user_id = users.id AND oauth.provider = 'google'
+                  )
+                )
+              ) AS google_email_managed
+       FROM users WHERE users.id = $1`,
       [req.user.id]
     );
 
@@ -140,6 +157,8 @@ export const getProfile = async (req, res) => {
     const user = result.rows[0];
     res.json({
       ...user,
+      email_managed_by_google: Boolean(user.google_email_managed),
+      email_change_allowed: !user.google_email_managed,
       store_credit: parseFloat(user.store_credit || 0),
       phone_verification: getPhoneVerificationState(user.phone),
     });
@@ -194,9 +213,25 @@ export const updateProfile = async (req, res) => {
     await client.query('BEGIN');
 
     const currentUserResult = await client.query(
-      `SELECT id, name, email, role, phone, avatar, store_credit, created_at
+      `SELECT users.id, users.name, users.email, users.role, users.phone, users.avatar,
+              users.store_credit, users.created_at,
+              (
+                EXISTS (
+                  SELECT 1 FROM user_oauth_accounts oauth
+                  WHERE oauth.user_id = users.id
+                    AND oauth.provider = 'google'
+                    AND LOWER(oauth.provider_email) = LOWER(users.email)
+                )
+                OR (
+                  LOWER(COALESCE(users.oauth_provider, '')) = 'google'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM user_oauth_accounts oauth
+                    WHERE oauth.user_id = users.id AND oauth.provider = 'google'
+                  )
+                )
+              ) AS google_email_managed
        FROM users
-       WHERE id = $1
+       WHERE users.id = $1
        FOR UPDATE`,
       [req.user.id]
     );
@@ -209,6 +244,17 @@ export const updateProfile = async (req, res) => {
     const currentUser = currentUserResult.rows[0];
     const currentEmail = String(currentUser.email || '').trim().toLowerCase();
     const emailChanged = rawEmail !== currentEmail;
+
+    if (emailChanged && currentUser.google_email_managed) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        message: 'Your email address is linked to your Google account and cannot be changed here.',
+        code: 'GOOGLE_LINKED_EMAIL_READ_ONLY',
+        fieldErrors: {
+          email: 'Your email address is linked to your Google account and cannot be changed here.',
+        },
+      });
+    }
 
     if (emailChanged) {
       await assertEmailDomainCanReceiveMail(rawEmail);
@@ -252,19 +298,20 @@ export const updateProfile = async (req, res) => {
       result = await client.query(
         `UPDATE users 
          SET name = $1,
-             email = $2,
-             phone = $3,
-             avatar = COALESCE($4, avatar),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5
+              phone = $2,
+              avatar = COALESCE($3, avatar),
+              updated_at = CURRENT_TIMESTAMP
+         WHERE id = $4
          RETURNING id, name, email, role, phone, avatar, store_credit, created_at, pending_email`,
-        [rawName, rawEmail, normalizedPhone || null, avatar, req.user.id]
+        [rawName, normalizedPhone || null, avatar, req.user.id]
       );
     }
 
     await client.query('COMMIT');
 
     const user = result.rows[0];
+    user.email_managed_by_google = Boolean(currentUser.google_email_managed);
+    user.email_change_allowed = !currentUser.google_email_managed;
 
     if (emailChanged && emailChangeToken) {
       try {

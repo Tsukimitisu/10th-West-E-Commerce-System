@@ -47,7 +47,7 @@ test('healthy database wrong password returns exact INVALID_CREDENTIALS contract
   mock.method(pool, 'query', async (sql) => {
     const text = String(sql);
     if (text.includes('SELECT COUNT(*)')) return { rows: [{ cnt: '0' }] };
-    if (text.includes('SELECT * FROM users')) {
+    if (text.includes('FROM users') && text.includes('WHERE users.email = $1')) {
       return {
         rows: [{
           id: 17,
@@ -79,7 +79,7 @@ test('healthy database missing user returns the same INVALID_CREDENTIALS contrac
   mock.method(pool, 'query', async (sql) => {
     const text = String(sql);
     if (text.includes('SELECT COUNT(*)')) return { rows: [{ cnt: '0' }] };
-    if (text.includes('SELECT * FROM users')) return { rows: [] };
+    if (text.includes('FROM users') && text.includes('WHERE users.email = $1')) return { rows: [] };
     if (text.includes('INSERT INTO login_attempts')) return { rows: [], rowCount: 1 };
     throw new Error('Unexpected query in missing-user test');
   });

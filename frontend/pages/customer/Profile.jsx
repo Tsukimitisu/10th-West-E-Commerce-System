@@ -39,6 +39,7 @@ const Profile = () => {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [deleteSuccess, setDeleteSuccess] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState('');
   const [avatarFile, setAvatarFile] = useState(null);
@@ -50,6 +51,7 @@ const Profile = () => {
   const deleteConfirmRef = useRef(null);
   const deleteTriggerRef = useRef(null);
   const hasLocalPassword = user?.has_local_password ?? !user?.oauth_provider;
+  const isGoogleManagedEmail = Boolean(user?.email_managed_by_google);
   const oauthProviderLabel = user?.oauth_provider === 'facebook' ? 'Facebook' : 'Google';
 
   const saveAuthUser = (nextUser) => {
@@ -422,10 +424,14 @@ const Profile = () => {
     }
     setDeleteLoading(true);
     setDeleteError('');
+    setDeleteSuccess('');
     try {
       await deleteAccount({ password: hasLocalPassword ? deletePassword : '', confirmation: deleteConfirmText });
-      clearCurrentAuthUser();
-      window.location.href = '/#/login';
+      setDeleteSuccess('Account deleted successfully. Redirecting to sign in...');
+      window.setTimeout(() => {
+        clearCurrentAuthUser();
+        window.location.href = '/#/login';
+      }, 900);
     } catch (err) {
       setDeleteError(err.message || 'Failed to delete account');
     } finally {
@@ -561,16 +567,21 @@ const Profile = () => {
                     id="profile-email"
                     type="email"
                     value={form.email}
+                    readOnly={isGoogleManagedEmail}
+                    aria-readonly={isGoogleManagedEmail}
                     onChange={(e) => {
                       setForm((prev) => ({ ...prev, email: e.target.value }));
                       setFieldErrors((prev) => ({ ...prev, email: '' }));
                     }}
-                    className={`w-full bg-white text-gray-900 pl-10 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${fieldErrors.email ? 'border-red-400' : 'border-slate-300'}`}
+                    className={`w-full text-gray-900 pl-10 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${isGoogleManagedEmail ? 'cursor-not-allowed bg-slate-100 text-slate-600' : 'bg-white'} ${fieldErrors.email ? 'border-red-400' : 'border-slate-300'}`}
                     placeholder="you@example.com"
                     autoComplete="email"
                   />
                 </div>
                 {fieldErrors.email && <p className="mt-1 text-xs text-red-500">{fieldErrors.email}</p>}
+                {isGoogleManagedEmail && (
+                  <p className="mt-1 text-xs text-gray-500">Your email address is linked to your Google account and cannot be changed here.</p>
+                )}
               </div>
             </div>
             <div>
@@ -820,15 +831,20 @@ const Profile = () => {
               />
             </div> : (
               <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                This {oauthProviderLabel}-only account has no local password. Typing DELETE confirms this request; your {oauthProviderLabel} account itself will not be deleted.
+                This {oauthProviderLabel}-only account has no local password. Typing DELETE confirms this request; if your provider session is no longer recent, you will be asked to sign in again. Your {oauthProviderLabel} account itself will not be deleted.
               </p>
             )}
+            {deleteSuccess && (
+              <div role="status" className="mb-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+                <Check size={16} /> {deleteSuccess}
+              </div>
+            )}
             <div className="flex gap-3">
-              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); setDeletePassword(''); setDeleteError(''); }}
+              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); setDeletePassword(''); setDeleteError(''); setDeleteSuccess(''); }} disabled={Boolean(deleteSuccess)}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-300 ease-in-out">
                 Cancel
               </button>
-              <button onClick={handleDeleteAccount} disabled={deleteConfirmText !== 'DELETE' || (hasLocalPassword && !deletePassword) || deleteLoading}
+              <button onClick={handleDeleteAccount} disabled={deleteConfirmText !== 'DELETE' || (hasLocalPassword && !deletePassword) || deleteLoading || Boolean(deleteSuccess)}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-300 rounded-lg transition-all duration-300 ease-in-out flex items-center justify-center gap-2">
                 {deleteLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Trash2 size={14} />}
                 Delete Forever
