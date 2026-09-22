@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { after, afterEach, mock } from 'node:test';
+import bcrypt from 'bcryptjs';
 import dns from 'node:dns/promises';
 import nodemailer from 'nodemailer';
 
@@ -17,9 +18,10 @@ after(() => pool.end().catch(() => {}));
 const response = () => ({
   statusCode: 200,
   body: null,
+  clearedCookie: null,
   status(code) { this.statusCode = code; return this; },
   json(body) { this.body = body; return this; },
-  clearCookie() {},
+  clearCookie(name, options) { this.clearedCookie = { name, options }; },
 });
 
 test('an active user can request an email change without replacing the primary email early', async () => {
@@ -126,26 +128,151 @@ test('a Google-linked user can update unrelated profile fields without rewriting
   assert.doesNotMatch(updateQuery, /email\s*=/i);
 });
 
-test('OAuth-only account deletion accepts DELETE confirmation without a local password', async () => {
+test('Google-linked account with a correct local password is anonymized transactionally', async () => {
+  const passwordHash = await bcrypt.hash('CorrectPassword123!', 4);
   const queries = [];
-  mock.method(pool, 'query', async (sql) => {
-    const text = String(sql);
-    queries.push(text);
-    if (text.includes('SELECT password_hash, oauth_provider')) {
-      return { rows: [{ password_hash: null, oauth_provider: 'google' }] };
-    }
-    return { rows: [], rowCount: 1 };
-  });
+  const client = {
+    release() {},
+    async query(sql) {
+      const text = String(sql);
+      queries.push(text);
+      if (text.includes('SELECT password_hash, oauth_provider')) {
+        return { rows: [{ password_hash: passwordHash, oauth_provider: 'google', email: 'rider@gmail.com', is_active: true, is_deleted: false }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  };
+  mock.method(pool, 'connect', async () => client);
+  mock.method(pool, 'query', async () => ({ rows: [], rowCount: 1 }));
+  let sessionDestroyed = false;
   const res = response();
 
   await deleteAccountHandler({
-    user: { id: 9 }, body: { confirmation: 'DELETE' }, clientIp: '127.0.0.1', clientUa: 'test',
+    user: { id: 9 },
+    body: { confirmation: 'DELETE', password: 'CorrectPassword123!' },
+    clientIp: '127.0.0.1', clientUa: 'test',
+    session: { destroy(callback) { sessionDestroyed = true; callback(); } },
   }, res);
 
   assert.equal(res.statusCode, 200);
   assert.match(res.body.message, /Account deleted/);
+  assert.equal(queries[0], 'BEGIN');
+  assert.ok(queries.includes('COMMIT'));
   assert.ok(queries.some((sql) => sql.includes("name = 'Deleted User'")));
+  assert.ok(queries.some((sql) => sql.includes('is_deleted = true')));
+  assert.equal(queries.some((sql) => sql.includes('deleted_at')), false);
   assert.ok(queries.some((sql) => sql.includes('UPDATE sessions SET is_active = false')));
+  assert.equal(queries.some((sql) => /DELETE FROM (orders|payments|shipments)/.test(sql)), false);
+  assert.equal(sessionDestroyed, true);
+  assert.equal(res.clearedCookie.name, 'twm.sid');
+});
+
+test('incorrect local password rolls account deletion back without anonymizing the account', async () => {
+  const passwordHash = await bcrypt.hash('CorrectPassword123!', 4);
+  const queries = [];
+  const client = {
+    release() {},
+    async query(sql) {
+      const text = String(sql);
+      queries.push(text);
+      if (text.includes('SELECT password_hash, oauth_provider')) {
+        return { rows: [{ password_hash: passwordHash, oauth_provider: 'google', email: 'rider@gmail.com', is_active: true, is_deleted: false }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  };
+  mock.method(pool, 'connect', async () => client);
+  const res = response();
+
+  await deleteAccountHandler({
+    user: { id: 9 }, body: { confirmation: 'DELETE', password: 'WrongPassword123!' },
+    clientIp: '127.0.0.1', clientUa: 'test',
+  }, res);
+
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.body.message, 'Incorrect password');
+  assert.ok(queries.includes('ROLLBACK'));
+  assert.equal(queries.some((sql) => sql.includes('UPDATE users')), false);
+});
+
+test('wrong confirmation text rejects account deletion before database changes', async () => {
+  const connect = mock.fn(async () => { throw new Error('database must not be reached'); });
+  mock.method(pool, 'connect', connect);
+  const res = response();
+
+  await deleteAccountHandler({
+    user: { id: 9 }, body: { confirmation: 'delete', password: 'CorrectPassword123!' },
+    clientIp: '127.0.0.1', clientUa: 'test',
+  }, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.message, 'Type DELETE to confirm account deletion');
+  assert.equal(connect.mock.callCount(), 0);
+});
+
+test('OAuth-only account deletion requires a recent authenticated provider session', async () => {
+  const run = async (authenticatedAt) => {
+    const queries = [];
+    const client = {
+      release() {},
+      async query(sql) {
+        const text = String(sql);
+        queries.push(text);
+        if (text.includes('SELECT password_hash, oauth_provider')) {
+          return { rows: [{ password_hash: null, oauth_provider: 'google', email: 'rider@gmail.com', is_active: true, is_deleted: false }] };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    };
+    mock.method(pool, 'connect', async () => client);
+    mock.method(pool, 'query', async () => ({ rows: [], rowCount: 1 }));
+    const res = response();
+    await deleteAccountHandler({
+      user: { id: 9 }, body: { confirmation: 'DELETE' }, clientIp: '127.0.0.1', clientUa: 'test',
+      session: { auth: { authenticatedAt }, destroy(callback) { callback(); } },
+    }, res);
+    mock.restoreAll();
+    return { queries, res };
+  };
+
+  const recent = await run(Date.now());
+  assert.equal(recent.res.statusCode, 200);
+  assert.ok(recent.queries.includes('COMMIT'));
+
+  const stale = await run(Date.now() - (20 * 60 * 1000));
+  assert.equal(stale.res.statusCode, 403);
+  assert.equal(stale.res.body.code, 'OAUTH_REAUTH_REQUIRED');
+  assert.ok(stale.queries.includes('ROLLBACK'));
+  assert.equal(stale.queries.some((sql) => sql.includes('UPDATE users')), false);
+});
+
+test('account deletion rolls back all changes when anonymization fails', async () => {
+  const queries = [];
+  const client = {
+    release() {},
+    async query(sql) {
+      const text = String(sql);
+      queries.push(text);
+      if (text.includes('SELECT password_hash, oauth_provider')) {
+        return { rows: [{ password_hash: null, oauth_provider: 'google', email: 'rider@gmail.com', is_active: true, is_deleted: false }] };
+      }
+      if (text.includes('UPDATE users')) throw Object.assign(new Error('forced failure'), { code: '23514' });
+      return { rows: [], rowCount: 1 };
+    },
+  };
+  mock.method(pool, 'connect', async () => client);
+  mock.method(console, 'error', () => {});
+  const res = response();
+
+  await deleteAccountHandler({
+    user: { id: 9 }, body: { confirmation: 'DELETE' }, clientIp: '127.0.0.1', clientUa: 'test',
+    session: { auth: { authenticatedAt: Date.now() } },
+  }, res);
+
+  assert.equal(res.statusCode, 500);
+  assert.equal(res.body.code, 'ACCOUNT_DELETION_FAILED');
+  assert.ok(queries.includes('ROLLBACK'));
+  assert.equal(queries.includes('COMMIT'), false);
 });
 
 test('account deletion route keeps authentication, CSRF middleware coverage, and optional OAuth password confirmation', async () => {

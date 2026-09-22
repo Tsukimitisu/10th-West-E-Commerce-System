@@ -49,6 +49,9 @@ test('account deletion dialog is centered, focused, scroll locked, and keyboard 
   assert.match(profile, /event\.key !== 'Tab'/);
   assert.match(profile, /deleteConfirmRef\.current\?\.focus/);
   assert.match(profile, /z-\[100\]/);
+  assert.match(profile, /Account deleted successfully\. Redirecting/);
+  assert.match(profile, /clearCurrentAuthUser\(\)/);
+  assert.match(profile, /window\.location\.href = '\/#\/login'/);
 });
 
 test('policy editor preserves its DOM selection history and wires native undo and redo', async () => {

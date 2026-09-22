@@ -180,6 +180,7 @@ const VERIFICATION_DELIVERY_TIMEOUT_MS = Math.min(
   8000,
   Math.max(500, Number.parseInt(process.env.VERIFICATION_DELIVERY_TIMEOUT_MS || '2500', 10) || 2500)
 );
+const OAUTH_DELETION_REAUTH_WINDOW_MS = 15 * 60 * 1000;
 
 const hashToken = (value) =>
   crypto.createHash('sha256').update(value).digest('hex');
@@ -1799,58 +1800,137 @@ export const deleteAccountHandler = async (req, res) => {
   const { password, confirmation } = req.body;
   const ip = req.clientIp;
   const ua = req.clientUa;
+  let client = null;
 
   try {
     if (confirmation !== 'DELETE') {
       return res.status(400).json({ message: 'Type DELETE to confirm account deletion' });
     }
     // Security: Require password confirmation before account deletion
-    const userResult = await pool.query('SELECT password_hash, oauth_provider FROM users WHERE id = $1', [userId]);
-    if (userResult.rows.length === 0) return res.status(404).json({ message: 'User not found' });
-
-    const user = userResult.rows[0];
-    // Password-based accounts must confirm password; OAuth-only accounts skip
-    if (user.password_hash && user.password_hash !== 'DELETED') {
-      if (!password) return res.status(400).json({ message: 'Password is required to delete your account' });
-      const isValid = await bcrypt.compare(password, user.password_hash);
-      if (!isValid) return res.status(401).json({ message: 'Incorrect password' });
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const userResult = await client.query(
+      `SELECT password_hash, oauth_provider, email, is_active, is_deleted
+       FROM users
+       WHERE id = $1
+       FOR UPDATE`,
+      [userId]
+    );
+    if (userResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    // Anonymize personal data — retain transaction records for BIR compliance
-    await pool.query(
+    const user = userResult.rows[0];
+    if (!user.is_active || user.is_deleted) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'This account is already unavailable.' });
+    }
+    // Password-based accounts must confirm password; OAuth-only accounts skip
+    if (user.password_hash && user.password_hash !== 'DELETED') {
+      if (!password) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Password is required to delete your account' });
+      }
+      const isValid = await bcrypt.compare(password, user.password_hash);
+      if (!isValid) {
+        await client.query('ROLLBACK');
+        return res.status(401).json({ message: 'Incorrect password' });
+      }
+    } else {
+      const authenticatedAt = Number(req.session?.auth?.authenticatedAt || 0);
+      const hasRecentProviderSession = authenticatedAt > 0
+        && Date.now() - authenticatedAt <= OAUTH_DELETION_REAUTH_WINDOW_MS;
+
+      if (!user.oauth_provider || !hasRecentProviderSession) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          message: 'Sign in again with your linked provider before deleting this account.',
+          code: 'OAUTH_REAUTH_REQUIRED',
+        });
+      }
+    }
+
+    // Anonymize account data while retaining records covered by the approved
+    // transaction-retention policy.
+    // Remove non-transactional personal/authentication data while retaining
+    // financial and operational records against the anonymized user row.
+    await client.query('DELETE FROM user_oauth_accounts WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM oauth_codes WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM phone_verifications WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM addresses WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM carts WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM wishlists WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM device_history WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM user_permissions WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM login_attempts WHERE LOWER(email) = LOWER($1)', [user.email]);
+    await client.query(
+      `UPDATE support_tickets
+       SET name = 'Deleted User',
+           email = CONCAT('deleted_', $1::text, '@removed.local'),
+           updated_at = NOW()
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    await client.query(
       `UPDATE users SET
          name = 'Deleted User',
          email = CONCAT('deleted_', id, '@removed.local'),
          phone = NULL,
          avatar = NULL,
          password_hash = 'DELETED',
+         oauth_provider = NULL,
+         oauth_id = NULL,
          is_active = false,
+         is_deleted = true,
+         email_verified = false,
          two_factor_enabled = false,
          two_factor_secret = NULL,
-         deleted_at = NOW()
+         two_factor_recovery_hashes = '[]'::jsonb,
+         password_reset_token = NULL,
+         password_reset_expires = NULL,
+         email_verification_token = NULL,
+         email_verification_expires = NULL,
+         pending_email = NULL,
+         email_change_token = NULL,
+         email_change_expires = NULL,
+         failed_login_attempts = 0,
+         locked_until = NULL,
+         updated_at = NOW()
        WHERE id = $1`,
       [userId]
     );
 
-    // Invalidate all sessions
-    await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [userId]);
+    await client.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [userId]);
+    await client.query('COMMIT');
 
     await logActivity({ userId, action: 'account_deleted', entityType: 'user', entityId: userId, ipAddress: ip, userAgent: ua });
 
     if (req.session) {
       await new Promise((resolve) => req.session.destroy(() => resolve()));
-      res.clearCookie('twm.sid', {
-        httpOnly: true,
-        sameSite: getSessionCookieSameSite(),
-        secure: isSessionCookieSecure(),
-        path: '/',
-      });
     }
+
+    res.clearCookie('twm.sid', {
+      httpOnly: true,
+      sameSite: getSessionCookieSameSite(),
+      secure: isSessionCookieSecure(),
+      path: '/',
+    });
 
     res.json({ message: 'Account deleted and personal data anonymized per RA 10173' });
   } catch (error) {
+    try {
+      await client?.query('ROLLBACK');
+    } catch {}
     console.error('Delete account error:', sanitizeDatabaseError(error));
-    res.status(500).json({ message: 'Failed to delete account' });
+    res.status(500).json({
+      message: 'We could not delete your account. No account changes were saved.',
+      code: 'ACCOUNT_DELETION_FAILED',
+    });
+  } finally {
+    client?.release();
   }
 };
 
