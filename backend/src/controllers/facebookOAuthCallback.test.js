@@ -76,6 +76,9 @@ test('Facebook callback creates a complete customer and saves the normal app ses
   mock.method(pool, 'connect', async () => client);
   mock.method(pool, 'query', async (sql) => {
     if (String(sql).includes('SELECT id') && String(sql).includes('FROM sessions')) return { rows: [{ id: 901 }] };
+    if (String(sql).includes('FROM users WHERE users.id = $1')) {
+      return { rows: [{ ...customer, google_email_managed: false }] };
+    }
     if (String(sql).includes('SELECT id, name, email, role')) return { rows: [{ ...customer }] };
     if (String(sql).includes('FROM users WHERE id = $1')) return { rows: [{ ...customer }] };
     if (String(sql).includes('FROM carts') && String(sql).includes('WHERE user_id = $1')) return { rows: [] };

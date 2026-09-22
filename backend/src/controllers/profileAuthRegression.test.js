@@ -60,6 +60,72 @@ test('an active user can request an email change without replacing the primary e
   assert.equal(sendMail.mock.callCount(), 1);
 });
 
+test('a Google-managed primary email cannot be changed through the profile API', async () => {
+  const current = {
+    id: 8, name: 'Google Rider', email: 'rider@gmail.com', role: 'customer', phone: null,
+    avatar: null, store_credit: 0, created_at: new Date(), google_email_managed: true,
+  };
+  const queries = [];
+  const client = {
+    release() {},
+    async query(sql) {
+      const text = String(sql);
+      queries.push(text);
+      if (text === 'BEGIN' || text === 'ROLLBACK') return { rows: [] };
+      if (text.includes('FROM users') && text.includes('FOR UPDATE')) return { rows: [current] };
+      throw new Error(`Unexpected profile query: ${text}`);
+    },
+  };
+  mock.method(pool, 'connect', async () => client);
+  const res = response();
+
+  await updateProfile({
+    user: { id: 8 },
+    body: { name: 'Google Rider', email: 'bypass@example.net', phone: '' },
+  }, res);
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.code, 'GOOGLE_LINKED_EMAIL_READ_ONLY');
+  assert.equal(res.body.fieldErrors.email, 'Your email address is linked to your Google account and cannot be changed here.');
+  assert.ok(queries.includes('ROLLBACK'));
+  assert.equal(queries.some((sql) => sql.includes('UPDATE users')), false);
+});
+
+test('a Google-linked user can update unrelated profile fields without rewriting email', async () => {
+  const current = {
+    id: 8, name: 'Google Rider', email: 'rider@gmail.com', role: 'customer', phone: null,
+    avatar: null, store_credit: 0, created_at: new Date(), google_email_managed: true,
+  };
+  const queries = [];
+  const client = {
+    release() {},
+    async query(sql, params = []) {
+      const text = String(sql);
+      queries.push(text);
+      if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows: [] };
+      if (text.includes('FROM users') && text.includes('FOR UPDATE')) return { rows: [current] };
+      if (text.includes('UPDATE users')) {
+        return { rows: [{ ...current, name: params[0], phone: params[1] }] };
+      }
+      throw new Error(`Unexpected profile query: ${text}`);
+    },
+  };
+  mock.method(pool, 'connect', async () => client);
+  const res = response();
+
+  await updateProfile({
+    user: { id: 8 },
+    body: { name: 'Updated Google Rider', email: 'rider@gmail.com', phone: '09123456789' },
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.user.name, 'Updated Google Rider');
+  assert.equal(res.body.user.phone, '+639123456789');
+  const updateQuery = queries.find((sql) => sql.includes('UPDATE users'));
+  assert.ok(updateQuery);
+  assert.doesNotMatch(updateQuery, /email\s*=/i);
+});
+
 test('OAuth-only account deletion accepts DELETE confirmation without a local password', async () => {
   const queries = [];
   mock.method(pool, 'query', async (sql) => {

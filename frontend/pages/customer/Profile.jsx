@@ -50,6 +50,7 @@ const Profile = () => {
   const deleteConfirmRef = useRef(null);
   const deleteTriggerRef = useRef(null);
   const hasLocalPassword = user?.has_local_password ?? !user?.oauth_provider;
+  const isGoogleManagedEmail = Boolean(user?.email_managed_by_google);
   const oauthProviderLabel = user?.oauth_provider === 'facebook' ? 'Facebook' : 'Google';
 
   const saveAuthUser = (nextUser) => {
@@ -561,16 +562,21 @@ const Profile = () => {
                     id="profile-email"
                     type="email"
                     value={form.email}
+                    readOnly={isGoogleManagedEmail}
+                    aria-readonly={isGoogleManagedEmail}
                     onChange={(e) => {
                       setForm((prev) => ({ ...prev, email: e.target.value }));
                       setFieldErrors((prev) => ({ ...prev, email: '' }));
                     }}
-                    className={`w-full bg-white text-gray-900 pl-10 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${fieldErrors.email ? 'border-red-400' : 'border-slate-300'}`}
+                    className={`w-full text-gray-900 pl-10 pr-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${isGoogleManagedEmail ? 'cursor-not-allowed bg-slate-100 text-slate-600' : 'bg-white'} ${fieldErrors.email ? 'border-red-400' : 'border-slate-300'}`}
                     placeholder="you@example.com"
                     autoComplete="email"
                   />
                 </div>
                 {fieldErrors.email && <p className="mt-1 text-xs text-red-500">{fieldErrors.email}</p>}
+                {isGoogleManagedEmail && (
+                  <p className="mt-1 text-xs text-gray-500">Your email address is linked to your Google account and cannot be changed here.</p>
+                )}
               </div>
             </div>
             <div>

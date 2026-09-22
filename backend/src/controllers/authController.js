@@ -45,6 +45,12 @@ const signToken = (user) =>
     }
   );
 
+const isGoogleManagedEmail = (row) => (
+  row.google_email_managed === undefined
+    ? String(row.oauth_provider || '').toLowerCase() === 'google'
+    : Boolean(row.google_email_managed)
+);
+
 const sanitizeUser = (row) => ({
   id: row.id,
   name: String(row.name || '').trim() || String(row.email || '').split('@')[0] || 'Customer',
@@ -57,6 +63,8 @@ const sanitizeUser = (row) => ({
   is_active: row.is_active,
   two_factor_enabled: row.two_factor_enabled || false,
   oauth_provider: row.oauth_provider || null,
+  email_managed_by_google: isGoogleManagedEmail(row),
+  email_change_allowed: !isGoogleManagedEmail(row),
   has_local_password: Boolean(row.password_hash && row.password_hash !== 'DELETED'),
   last_login: row.last_login,
   email_verified: row.email_verified || false,
@@ -79,7 +87,25 @@ const getUserFromSupabaseRestById = async (id) => {
     limit: 1,
   });
 
-  return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  const user = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!user) return null;
+
+  const oauthAccounts = await supabaseRestFetch('user_oauth_accounts', {
+    select: 'provider,provider_email',
+    user_id: `eq.${id}`,
+  });
+  const googleAccount = Array.isArray(oauthAccounts)
+    ? oauthAccounts.find((account) => String(account.provider || '').toLowerCase() === 'google')
+    : null;
+  const currentEmail = String(user.email || '').trim().toLowerCase();
+  const providerEmail = String(googleAccount?.provider_email || '').trim().toLowerCase();
+
+  return {
+    ...user,
+    google_email_managed: googleAccount
+      ? Boolean(providerEmail && providerEmail === currentEmail)
+      : String(user.oauth_provider || '').toLowerCase() === 'google',
+  };
 };
 
 const updateUserViaSupabaseRest = async (id, patch) => {
@@ -779,7 +805,27 @@ export const login = async (req, res) => {
       });
     }
 
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const result = await pool.query(
+      `SELECT users.*,
+              (
+                EXISTS (
+                  SELECT 1 FROM user_oauth_accounts oauth
+                  WHERE oauth.user_id = users.id
+                    AND oauth.provider = 'google'
+                    AND LOWER(oauth.provider_email) = LOWER(users.email)
+                )
+                OR (
+                  LOWER(COALESCE(users.oauth_provider, '')) = 'google'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM user_oauth_accounts oauth
+                    WHERE oauth.user_id = users.id AND oauth.provider = 'google'
+                  )
+                )
+              ) AS google_email_managed
+       FROM users
+       WHERE users.email = $1`,
+      [email]
+    );
 
     if (result.rows.length === 0) {
       await recordLoginAttempt(email, ipAddress, false);
@@ -966,9 +1012,25 @@ export const getProfile = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, name, email, role, phone, avatar, store_credit, is_active,
-              two_factor_enabled, oauth_provider, last_login, email_verified, created_at, password_hash
-       FROM users WHERE id = $1`,
+      `SELECT users.id, users.name, users.email, users.role, users.phone, users.avatar,
+              users.store_credit, users.is_active, users.two_factor_enabled, users.oauth_provider,
+              users.last_login, users.email_verified, users.created_at, users.password_hash,
+              (
+                EXISTS (
+                  SELECT 1 FROM user_oauth_accounts oauth
+                  WHERE oauth.user_id = users.id
+                    AND oauth.provider = 'google'
+                    AND LOWER(oauth.provider_email) = LOWER(users.email)
+                )
+                OR (
+                  LOWER(COALESCE(users.oauth_provider, '')) = 'google'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM user_oauth_accounts oauth
+                    WHERE oauth.user_id = users.id AND oauth.provider = 'google'
+                  )
+                )
+              ) AS google_email_managed
+       FROM users WHERE users.id = $1`,
       [req.user.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });

@@ -33,6 +33,13 @@ test('profile clearly separates OAuth password and deletion behavior', async () 
   assert.match(api, /JSON\.stringify\(\{ password, confirmation \}\)/);
 });
 
+test('Google-managed profile email is read-only with an explanatory message', async () => {
+  const profile = await read('pages/customer/Profile.jsx');
+  assert.match(profile, /email_managed_by_google/);
+  assert.match(profile, /readOnly=\{isGoogleManagedEmail\}/);
+  assert.match(profile, /Your email address is linked to your Google account and cannot be changed here\./);
+});
+
 test('account deletion dialog is centered, focused, scroll locked, and keyboard trapped', async () => {
   const profile = await read('pages/customer/Profile.jsx');
   assert.match(profile, /role="dialog" aria-modal="true"/);

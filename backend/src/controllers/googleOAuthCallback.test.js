@@ -111,6 +111,9 @@ test('Google callback creates the normal cookie session; protected routes and lo
     const source = String(sql);
     runtimeQueries.push({ sql: source, params });
     if (source.includes('SELECT id') && source.includes('FROM sessions')) return { rows: [{ id: 700 }] };
+    if (source.includes('FROM users WHERE users.id = $1')) {
+      return { rows: [{ ...customer, google_email_managed: true }] };
+    }
     if (source.includes('SELECT id, name, email, role')) return { rows: [{ ...customer }] };
     return { rows: [], rowCount: 1 };
   });
@@ -145,6 +148,7 @@ test('Google callback creates the normal cookie session; protected routes and lo
   assert.equal(profileResponse.statusCode, 200);
   assert.equal(profileResponse.body.id, customer.id);
   assert.equal(profileResponse.body.role, 'customer');
+  assert.equal(profileResponse.body.email_managed_by_google, true);
   assert.equal('password_hash' in profileResponse.body, false);
 
   const logoutResponse = makeResponse();
