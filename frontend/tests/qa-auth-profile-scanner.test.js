@@ -14,6 +14,22 @@ test('registration exposes a loading state and synchronously blocks duplicate su
   assert.match(source, /requiresVerification \|\| err\.code === 'VERIFICATION_EMAIL_FAILED'/);
 });
 
+test('verification resend shows provider-accepted feedback and blocks repeated submissions', async () => {
+  const [register, verifyEmail] = await Promise.all([
+    read('pages/Register.jsx'),
+    read('pages/VerifyEmail.jsx'),
+  ]);
+
+  for (const source of [register, verifyEmail]) {
+    assert.match(source, /Verification email request accepted\./);
+    assert.match(source, /resendSucceeded/);
+  }
+  assert.match(register, /disabled=\{resending\}/);
+  assert.match(register, /Sending\.\.\./);
+  assert.match(verifyEmail, /disabled=\{isResending\}/);
+  assert.match(verifyEmail, /isResending \? 'Sending\.\.\.'/);
+});
+
 test('Philippine mobile input accepts all supported forms and normalizes storage to E.164', () => {
   for (const input of ['09123456789', '+639123456789', '639123456789', '+63 912 345 6789']) {
     assert.equal(isValidPhilippineMobile(input), true, input);

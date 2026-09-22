@@ -15,22 +15,37 @@ import { resolveFrontendOrigin } from '../config/frontend.js';
 import { getPhoneVerificationState } from '../utils/phone.js';
 import { linkOrCreateOAuthUser } from '../services/oauthAccounts.js';
 import { redirectOAuthResult } from '../services/oauthRedirect.js';
+import { getEmailConfigurationStatus } from '../services/integrationReadiness.js';
 
 const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
 const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-const createTransporter = () =>
-  nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: parseInt(process.env.EMAIL_PORT || '587') === 465,
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
-    connectionTimeout: 2500,
-    greetingTimeout: 2500,
-    socketTimeout: 3000,
+const createTransporter = () => {
+  const emailConfiguration = getEmailConfigurationStatus();
+  if (!emailConfiguration.ready) {
+    const error = new Error('Email delivery is not configured.');
+    error.code = 'EMAIL_CONFIG_MISSING';
+    throw error;
+  }
+
+  const port = emailConfiguration.transport.port || 587;
+  return nodemailer.createTransport({
+    host: emailConfiguration.transport.host,
+    port,
+    secure: port === 465,
+    requireTLS: port !== 465,
+    auth: {
+      user: emailConfiguration.transport.user,
+      pass: emailConfiguration.transport.pass,
+    },
+    tls: { minVersion: 'TLSv1.2' },
+    connectionTimeout: Number.parseInt(process.env.SMTP_CONNECTION_TIMEOUT_MS || '10000', 10),
+    greetingTimeout: Number.parseInt(process.env.SMTP_GREETING_TIMEOUT_MS || '10000', 10),
+    socketTimeout: Number.parseInt(process.env.SMTP_SOCKET_TIMEOUT_MS || '15000', 10),
   });
+};
 
 const signToken = (user) =>
   jwt.sign(
@@ -72,7 +87,7 @@ const sanitizeUser = (row) => ({
 
 const getUserFromSupabaseRestByEmail = async (email) => {
   const rows = await supabaseRestFetch('users', {
-    select: 'id,name,email,role,phone,avatar,store_credit,is_active,is_deleted,two_factor_enabled,two_factor_secret,oauth_provider,last_login,email_verified,password_hash',
+    select: 'id,name,email,role,phone,avatar,store_credit,is_active,is_deleted,two_factor_enabled,two_factor_secret,oauth_provider,last_login,email_verified,password_hash,email_verification_token,email_verification_expires,email_verification_sent_at',
     email: `eq.${email}`,
     limit: 1,
   });
@@ -177,8 +192,12 @@ const VERIFICATION_RESPONSE_TIMEOUT_MS = 8000;
 const VERIFIED_TOKEN_LOOKBACK_HOURS = 24;
 const SESSION_PERSIST_TIMEOUT_MS = 1000;
 const VERIFICATION_DELIVERY_TIMEOUT_MS = Math.min(
-  8000,
-  Math.max(500, Number.parseInt(process.env.VERIFICATION_DELIVERY_TIMEOUT_MS || '2500', 10) || 2500)
+  30000,
+  Math.max(5000, Number.parseInt(process.env.VERIFICATION_DELIVERY_TIMEOUT_MS || '20000', 10) || 20000)
+);
+const VERIFICATION_RESEND_COOLDOWN_SECONDS = Math.min(
+  900,
+  Math.max(30, Number.parseInt(process.env.VERIFICATION_RESEND_COOLDOWN_SECONDS || '60', 10) || 60)
 );
 const OAUTH_DELETION_REAUTH_WINDOW_MS = 15 * 60 * 1000;
 
@@ -449,6 +468,34 @@ const deliverAccountVerificationEmail = async ({ email, name, token, userId, req
   }
 };
 
+const recordVerificationEmailSubmitted = async ({ userId, client = null }) => {
+  try {
+    if (client) {
+      await client.query(
+        'UPDATE users SET email_verification_sent_at = NOW() WHERE id = $1',
+        [userId]
+      );
+      return;
+    }
+
+    if (shouldUseDatabaseReadFallback()) {
+      await updateUserViaSupabaseRest(userId, {
+        email_verification_sent_at: new Date().toISOString(),
+      });
+      return;
+    }
+
+    await pool.query(
+      'UPDATE users SET email_verification_sent_at = NOW() WHERE id = $1',
+      [userId]
+    );
+  } catch (error) {
+    // Delivery already succeeded and the token remains valid. A missing cooldown
+    // timestamp must not turn a successful registration into a failed one.
+    console.warn('Unable to record verification email submission:', sanitizeDatabaseError(error));
+  }
+};
+
 const registrationDeliveryResponse = ({ deliveryStatus, existing = false }) => {
   if (deliveryStatus === 'sent') {
     return existing
@@ -600,11 +647,6 @@ export const register = async (req, res) => {
           });
         }
 
-        await updateUserViaSupabaseRest(existingUser.id, {
-          email_verification_token: verificationToken.tokenHash,
-          email_verification_expires: verificationToken.expiresAt.toISOString(),
-        });
-
         const deliveryStatus = await deliverAccountVerificationEmail({
           email: existingUser.email,
           name: existingUser.name,
@@ -612,6 +654,14 @@ export const register = async (req, res) => {
           userId: existingUser.id,
           requestId,
         });
+
+        if (deliveryStatus === 'sent') {
+          await updateUserViaSupabaseRest(existingUser.id, {
+            email_verification_token: verificationToken.tokenHash,
+            email_verification_expires: verificationToken.expiresAt.toISOString(),
+            email_verification_sent_at: new Date().toISOString(),
+          });
+        }
 
         console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, user_id: existingUser.id, delivery_status: deliveryStatus, existing: true });
         return res.json({
@@ -651,6 +701,10 @@ export const register = async (req, res) => {
         userId: newUser.id,
         requestId,
       });
+
+      if (deliveryStatus === 'sent') {
+        await recordVerificationEmailSubmitted({ userId: newUser.id });
+      }
 
       console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, user_id: newUser.id, delivery_status: deliveryStatus, existing: false });
       return res.status(201).json({
@@ -692,16 +746,6 @@ export const register = async (req, res) => {
         });
       }
 
-      await client.query(
-        `UPDATE users
-         SET email_verification_token = $1,
-             email_verification_expires = $2
-         WHERE id = $3`,
-        [verificationToken.tokenHash, verificationToken.expiresAt, existingUser.id]
-      );
-
-      await client.query('COMMIT');
-
       const deliveryStatus = await deliverAccountVerificationEmail({
         email: existingUser.email,
         name: existingUser.name,
@@ -709,6 +753,20 @@ export const register = async (req, res) => {
         userId: existingUser.id,
         requestId,
       });
+
+      if (deliveryStatus === 'sent') {
+        await client.query(
+          `UPDATE users
+           SET email_verification_token = $1,
+               email_verification_expires = $2,
+               email_verification_sent_at = NOW()
+           WHERE id = $3`,
+          [verificationToken.tokenHash, verificationToken.expiresAt, existingUser.id]
+        );
+        await client.query('COMMIT');
+      } else {
+        await client.query('ROLLBACK');
+      }
 
       console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, user_id: existingUser.id, delivery_status: deliveryStatus, existing: true });
       return res.json({
@@ -749,6 +807,10 @@ export const register = async (req, res) => {
       userId: createdUser.id,
       requestId,
     });
+
+    if (deliveryStatus === 'sent') {
+      await recordVerificationEmailSubmitted({ userId: createdUser.id, client });
+    }
 
     console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, user_id: createdUser.id, delivery_status: deliveryStatus, existing: false });
     res.status(201).json({
@@ -2212,59 +2274,107 @@ export const exportUserData = async (req, res) => {
 
 export const resendVerification = async (req, res) => {
   const { email } = req.validatedData || req.body;
+  const genericMessage = 'Verification email request accepted.';
+  let client = null;
 
   try {
-    const user = shouldUseDatabaseReadFallback()
-      ? await getUserFromSupabaseRestByEmail(email)
-      : (await pool.query(
-        'SELECT id, name, email, email_verified FROM users WHERE email = $1',
+    const useRestFallback = shouldUseDatabaseReadFallback();
+    let user;
+
+    if (useRestFallback) {
+      user = await getUserFromSupabaseRestByEmail(email);
+    } else {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      user = (await client.query(
+        `SELECT id, name, email, email_verified, email_verification_sent_at
+         FROM users
+         WHERE email = $1
+         FOR UPDATE`,
         [email]
       )).rows[0];
-
-    if (!user) {
-      return res.json({ message: 'If an unverified account exists for this email, a verification email has been sent.' });
     }
 
-    if (user.email_verified) {
-      return res.status(400).json({ message: 'This account is already verified. You can log in.' });
+    if (!user || user.email_verified) {
+      if (client) await client.query('ROLLBACK');
+      return res.status(202).json({ message: genericMessage });
+    }
+
+    const lastSubmittedAt = user.email_verification_sent_at
+      ? new Date(user.email_verification_sent_at).getTime()
+      : 0;
+    const secondsSinceSubmission = lastSubmittedAt
+      ? Math.floor((Date.now() - lastSubmittedAt) / 1000)
+      : Number.POSITIVE_INFINITY;
+    if (secondsSinceSubmission < VERIFICATION_RESEND_COOLDOWN_SECONDS) {
+      const retryAfter = Math.max(1, VERIFICATION_RESEND_COOLDOWN_SECONDS - secondsSinceSubmission);
+      if (client) await client.query('ROLLBACK');
+      res.set?.('Retry-After', String(retryAfter));
+      return res.status(429).json({
+        message: `Please wait ${retryAfter} seconds before requesting another verification email.`,
+        code: 'VERIFICATION_RESEND_COOLDOWN',
+        retryAfter,
+      });
     }
 
     const verificationToken = createVerificationToken();
+    try {
+      await withTimeout(
+        sendVerificationEmail({
+          email: user.email,
+          name: user.name,
+          token: verificationToken.token,
+        }),
+        VERIFICATION_DELIVERY_TIMEOUT_MS,
+        'verification email delivery'
+      );
+    } catch (emailError) {
+      if (client) await client.query('ROLLBACK');
+      console.warn('Resend verification email submission failed:', sanitizeDatabaseError(emailError));
+      return res.status(503).json({
+        message: 'We could not send the verification email right now. Please try again shortly.',
+        code: 'VERIFICATION_EMAIL_FAILED',
+      });
+    }
 
-    if (shouldUseDatabaseReadFallback()) {
+    if (useRestFallback) {
       await updateUserViaSupabaseRest(user.id, {
         email_verification_token: verificationToken.tokenHash,
         email_verification_expires: verificationToken.expiresAt.toISOString(),
+        email_verification_sent_at: new Date().toISOString(),
       });
     } else {
-      await pool.query(
-        'UPDATE users SET email_verification_token = $1, email_verification_expires = $2 WHERE id = $3',
+      await client.query(
+        `UPDATE users
+         SET email_verification_token = $1,
+             email_verification_expires = $2,
+             email_verification_sent_at = NOW()
+         WHERE id = $3`,
         [verificationToken.tokenHash, verificationToken.expiresAt, user.id]
       );
+      await client.query('COMMIT');
     }
 
-    try {
-      await sendVerificationEmail({
-        email: user.email,
-        name: user.name,
-        token: verificationToken.token,
-      });
-    } catch (emailError) {
-      console.error('Resend verification email error:', sanitizeDatabaseError(emailError));
-      return res.status(503).json({
-        message: 'We could not send the verification email right now. Please try again shortly.',
-      });
-    }
-
-    res.json({
-      message: 'Verification email resent successfully.',
+    return res.status(202).json({
+      message: genericMessage,
       expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
     });
   } catch (err) {
+    try {
+      if (client) await client.query('ROLLBACK');
+    } catch {}
     console.error('Resend verification error:', sanitizeDatabaseError(err));
-    if (isDatabaseConnectivityError(err) || err?.status) {
-      return res.json({ message: 'If an unverified account exists for this email, a verification email has been sent.' });
+    if (isDatabaseConnectivityError(err)) {
+      return res.status(503).json({
+        message: DATABASE_UNAVAILABLE_MESSAGE,
+        code: 'DATABASE_UNAVAILABLE',
+      });
     }
-    res.status(500).json({ message: 'Failed to resend verification email' });
+    return res.status(500).json({
+      message: 'We could not prepare a new verification email. Your previous link remains valid.',
+      code: 'VERIFICATION_PREPARATION_FAILED',
+    });
+  } finally {
+    client?.release();
   }
 };

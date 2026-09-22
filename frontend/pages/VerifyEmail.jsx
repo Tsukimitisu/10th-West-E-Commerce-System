@@ -134,6 +134,7 @@ const VerifyEmail = ({ onLogin }) => {
   const [resendStatus, setResendStatus] = useState('');
   const [resendError, setResendError] = useState('');
   const [isResending, setIsResending] = useState(false);
+  const [resendSucceeded, setResendSucceeded] = useState(false);
   const redirectTimeoutRef = useRef(null);
   const hasAttemptedVerificationRef = useRef(false);
   const onLoginRef = useRef(onLogin);
@@ -354,11 +355,13 @@ const VerifyEmail = ({ onLogin }) => {
     setIsResending(true);
     setResendStatus('');
     setResendError('');
+    setResendSucceeded(false);
 
     try {
       const result = await resendVerificationEmail(normalizedEmail);
       setEmail(normalizedEmail);
-      setResendStatus(`Verification email resent successfully. It expires in ${formatExpiryMinutes(result?.expiresInMinutes)}.`);
+      setResendSucceeded(true);
+      setResendStatus(`${result?.message || 'Verification email request accepted.'} The link expires in ${formatExpiryMinutes(result?.expiresInMinutes)}.`);
     } catch (err) {
       setResendStatus(err.message || 'Failed to resend verification email.');
     } finally {
@@ -431,7 +434,7 @@ const VerifyEmail = ({ onLogin }) => {
                     <p id="resend-email-error" className="text-xs text-red-400">{resendError}</p>
                   )}
                   {resendStatus && (
-                    <p className={`text-xs ${resendStatus.toLowerCase().includes('success') ? 'text-green-400' : 'text-red-400'}`}>
+                    <p className={`text-xs ${resendSucceeded ? 'text-green-400' : 'text-red-400'}`}>
                       {resendStatus}
                     </p>
                   )}
