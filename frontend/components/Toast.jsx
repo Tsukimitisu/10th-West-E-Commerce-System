@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, AlertCircle, Info, Bell } from 'lucide-react';
 
 const Toast = ({ message, type = 'info', duration = 5000, onClose }) => {
@@ -9,14 +9,14 @@ const Toast = ({ message, type = 'info', duration = 5000, onClose }) => {
 
     const icons = {
         success: <CheckCircle className="text-green-500" size={18} />,
-        error: <AlertCircle className="text-orange-500" size={18} />,
+        error: <AlertCircle className="text-red-500" size={18} />,
         info: <Info className="text-blue-500" size={18} />,
         order: <Bell className="text-purple-500" size={18} />,
     };
 
     const bgColors = {
         success: 'bg-green-50 border-green-100',
-        error: 'bg-orange-50 border-orange-100',
+        error: 'bg-red-500/10 border-red-100',
         info: 'bg-blue-50 border-blue-100',
         order: 'bg-purple-50 border-purple-100',
     };
@@ -25,7 +25,7 @@ const Toast = ({ message, type = 'info', duration = 5000, onClose }) => {
         <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-lg backdrop-blur-md bg-white/80 animate-in fade-in slide-in-from-top-4 duration-300 ${bgColors[type] || bgColors.info}`}>
             <div className="flex-shrink-0">{icons[type] || icons.info}</div>
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-900 leading-tight">{message}</p>
+                <p className="text-sm font-bold text-white leading-tight">{message}</p>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
                 <X size={14} />
@@ -47,3 +47,5 @@ export const ToastContainer = ({ toasts, removeToast }) => {
 };
 
 export default Toast;
+
+

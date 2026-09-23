@@ -1,35 +1,20 @@
 ﻿import React from 'react';
 
-// Simple barcode visualization using CSS gradient to simulate bars
-const BarcodePattern = () => (
-  <div 
-    className="h-12 w-full mt-2"
-    style={{
-      background: `repeating-linear-gradient(
-        90deg,
-        #000 0px,
-        #000 2px,
-        #fff 2px,
-        #fff 4px,
-        #000 4px,
-        #000 5px,
-        #fff 5px,
-        #fff 7px
-      )`
-    }}
-  />
-);
-
 const BarcodeLabel = ({ product }) => {
+  const identifier = product.barcode || product.sku || product.id;
+
   return (
-    <div className="border-2 border-black p-4 w-[300px] bg-white text-center break-inside-avoid mb-4">
-      <h3 className="font-bold text-lg truncate">{product.name}</h3>
-      <p className="text-xs text-gray-600">{product.partNumber}</p>
-      <BarcodePattern />
-      <p className="font-mono text-sm mt-1 tracking-widest">{product.barcode || product.sku || product.id}</p>
-      <p className="font-bold text-xl mt-1">${product.price.toFixed(2)}</p>
+    <div className="mb-4 w-[300px] break-inside-avoid border-2 border-black bg-white p-4 text-center text-black">
+      <h3 className="truncate text-lg font-bold">{product.name}</h3>
+      <p className="text-xs text-slate-600">{product.partNumber}</p>
+      <div className="mt-3 rounded border border-dashed border-slate-400 bg-slate-50 p-3">
+        <p className="font-mono text-sm tracking-widest">{identifier}</p>
+        <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">Barcode field/search only</p>
+      </div>
+      <p className="mt-1 text-xl font-bold">₱{Number(product.price || 0).toFixed(2)}</p>
     </div>
   );
 };
 
 export default BarcodeLabel;
+

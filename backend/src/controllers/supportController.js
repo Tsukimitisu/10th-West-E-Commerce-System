@@ -1,9 +1,15 @@
 import pool from '../config/database.js';
 import nodemailer from 'nodemailer';
+import {
+  isDatabaseConnectivityError,
+  shouldUseDatabaseReadFallback,
+  supabaseRestFetch,
+  supabaseRestRequest,
+} from '../services/supabaseRest.js';
 
 // Create email transporter
 const createTransporter = () => {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.EMAIL_PORT || '587'),
     secure: false,
@@ -14,48 +20,91 @@ const createTransporter = () => {
   });
 };
 
+const cleanText = (value, maxLength = 1000) => String(value || '')
+  .replace(/<[^>]*>/g, ' ')
+  .replace(/[\u0000-\u001f\u007f]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .slice(0, maxLength);
+
+const escapeHtml = (value) => String(value || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const createTicketViaRest = async ({ userId, name, email, subject, message }) => {
+  const rows = await supabaseRestRequest('support_tickets', {
+    method: 'POST',
+    prefer: 'return=representation',
+    body: {
+      user_id: userId,
+      name,
+      email,
+      subject,
+      message,
+      status: 'open',
+    },
+  });
+
+  return Array.isArray(rows) ? rows[0] : rows;
+};
+
+const sendTicketNotification = async (ticket, { name, email, subject, message }) => {
+  try {
+    const transporter = createTransporter();
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || '10th West Moto <noreply@10thwest.com>',
+      to: process.env.SUPPORT_EMAIL || process.env.EMAIL_USER,
+      subject: `New Support Ticket #${ticket.id}: ${subject}`,
+      html: `
+        <h2>New Support Ticket</h2>
+        <p><strong>Ticket ID:</strong> ${ticket.id}</p>
+        <p><strong>From:</strong> ${escapeHtml(name)} (${escapeHtml(email)})</p>
+        <p><strong>Subject:</strong> ${escapeHtml(subject)}</p>
+        <p><strong>Message:</strong></p>
+        <p>${escapeHtml(message)}</p>
+        <hr>
+        <p><small>Submitted: ${new Date(ticket.created_at || Date.now()).toLocaleString()}</small></p>
+      `,
+    });
+  } catch (emailError) {
+    console.error('Failed to send ticket notification email:', emailError);
+  }
+};
+
 // Create support ticket
 export const createTicket = async (req, res) => {
-  const { name, email, subject, message } = req.body;
+  const name = cleanText(req.body?.name, 120);
+  const email = cleanText(req.body?.email, 255).toLowerCase();
+  const subject = cleanText(req.body?.subject, 160);
+  const message = cleanText(req.body?.message, 5000);
 
   if (!name || !email || !subject || !message) {
     return res.status(400).json({ message: 'All fields are required' });
   }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ message: 'A valid email address is required' });
+  }
 
   try {
     const userId = req.user?.id || null;
+    let ticket = null;
 
-    const result = await pool.query(
-      `INSERT INTO support_tickets (user_id, name, email, subject, message, status)
-       VALUES ($1, $2, $3, $4, $5, 'open')
-       RETURNING *`,
-      [userId, name, email, subject, message]
-    );
-
-    const ticket = result.rows[0];
-
-    // Send email notification to support team
-    try {
-      const transporter = createTransporter();
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || '10th West Moto <noreply@10thwest.com>',
-        to: process.env.SUPPORT_EMAIL || process.env.EMAIL_USER,
-        subject: `New Support Ticket #${ticket.id}: ${subject}`,
-        html: `
-          <h2>New Support Ticket</h2>
-          <p><strong>Ticket ID:</strong> ${ticket.id}</p>
-          <p><strong>From:</strong> ${name} (${email})</p>
-          <p><strong>Subject:</strong> ${subject}</p>
-          <p><strong>Message:</strong></p>
-          <p>${message}</p>
-          <hr>
-          <p><small>Submitted: ${new Date(ticket.created_at).toLocaleString()}</small></p>
-        `
-      });
-    } catch (emailError) {
-      console.error('Failed to send ticket notification email:', emailError);
-      // Don't fail the ticket creation if email fails
+    if (shouldUseDatabaseReadFallback()) {
+      ticket = await createTicketViaRest({ userId, name, email, subject, message });
+    } else {
+      const result = await pool.query(
+        `INSERT INTO support_tickets (user_id, name, email, subject, message, status)
+         VALUES ($1, $2, $3, $4, $5, 'open')
+         RETURNING *`,
+        [userId, name, email, subject, message]
+      );
+      ticket = result.rows[0];
     }
+
+    await sendTicketNotification(ticket, { name, email, subject, message });
 
     res.status(201).json({
       message: 'Support ticket created successfully',
@@ -63,6 +112,20 @@ export const createTicket = async (req, res) => {
     });
   } catch (error) {
     console.error('Create ticket error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      try {
+        const userId = req.user?.id || null;
+        const ticket = await createTicketViaRest({ userId, name, email, subject, message });
+        await sendTicketNotification(ticket, { name, email, subject, message });
+        return res.status(201).json({
+          message: 'Support ticket created successfully',
+          ticket,
+          degraded: true,
+        });
+      } catch (fallbackError) {
+        console.error('Create ticket Supabase REST fallback error:', fallbackError);
+      }
+    }
     res.status(500).json({ message: 'Failed to create support ticket' });
   }
 };
@@ -70,6 +133,15 @@ export const createTicket = async (req, res) => {
 // Get user's tickets
 export const getUserTickets = async (req, res) => {
   try {
+    if (shouldUseDatabaseReadFallback()) {
+      const tickets = await supabaseRestFetch('support_tickets', {
+        select: '*',
+        user_id: `eq.${req.user.id}`,
+        order: 'created_at.desc',
+      });
+      return res.json(Array.isArray(tickets) ? tickets : []);
+    }
+
     const result = await pool.query(
       `SELECT * FROM support_tickets 
        WHERE user_id = $1 
@@ -80,6 +152,9 @@ export const getUserTickets = async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Get user tickets error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json([]);
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -88,6 +163,15 @@ export const getUserTickets = async (req, res) => {
 export const getAllTickets = async (req, res) => {
   try {
     const { status } = req.query;
+    if (shouldUseDatabaseReadFallback()) {
+      const params = {
+        select: '*',
+        order: 'created_at.desc',
+      };
+      if (status) params.status = `eq.${status}`;
+      const tickets = await supabaseRestFetch('support_tickets', params);
+      return res.json(Array.isArray(tickets) ? tickets : []);
+    }
 
     let query = `
       SELECT st.*, u.name as user_name
@@ -109,6 +193,9 @@ export const getAllTickets = async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     console.error('Get all tickets error:', error);
+    if (isDatabaseConnectivityError(error)) {
+      return res.json([]);
+    }
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -132,8 +219,10 @@ export const getTicketById = async (req, res) => {
 
     const ticket = result.rows[0];
 
+    const isStaff = ['admin', 'super_admin', 'owner', 'store_staff'].includes(req.user?.role);
+
     // Check authorization
-    if (req.user.role !== 'admin' && ticket.user_id !== req.user.id) {
+    if (!isStaff && ticket.user_id !== req.user?.id) {
       return res.status(403).json({ message: 'Access denied' });
     }
 

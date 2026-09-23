@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" role="img" aria-labelledby="title desc">
+  <title id="title">10th West Moto product image fallback</title>
+  <desc id="desc">A simple local placeholder for products without uploaded photos.</desc>
+  <rect width="600" height="400" fill="#f3f4f6"/>
+  <path d="M120 255h360" stroke="#9ca3af" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="205" cy="270" r="42" fill="none" stroke="#374151" stroke-width="16"/>
+  <circle cx="405" cy="270" r="42" fill="none" stroke="#374151" stroke-width="16"/>
+  <path d="M215 245l55-75h75l50 75M270 170l-18 75M345 170l-35 75" fill="none" stroke="#374151" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M362 170h52l24 36" fill="none" stroke="#ef4444" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="300" y="105" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#111827">10th West Moto</text>
+</svg>
