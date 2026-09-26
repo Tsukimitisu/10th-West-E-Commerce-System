@@ -64,7 +64,7 @@ test('production verifier accepts complete deployment settings and reports names
     PHONE_VERIFICATION_PROVIDER: 'semaphore', PHONE_VERIFICATION_ENABLED: 'true',
     SEMAPHORE_API_KEY: 'unit-sms', SEMAPHORE_SENDER_NAME: '10THWEST',
     CLOUDINARY_CLOUD_NAME: 'unit-cloud', CLOUDINARY_API_KEY: 'unit-key', CLOUDINARY_API_SECRET: 'unit-media',
-    SMTP_HOST: 'mail.example.test', SMTP_USER: 'unit-mail', SMTP_PASS: 'unit-mail-pass', EMAIL_FROM: 'store@example.test',
+    EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_unit_secret', RESEND_FROM: '10th West Moto <onboarding@resend.dev>',
   };
   for (const key of ['JWT_SECRET', 'SESSION_SECRET', 'CSRF_SECRET', 'TWO_FACTOR_ENCRYPTION_KEY']) {
     env[key] = crypto.randomBytes(32).toString('hex');
