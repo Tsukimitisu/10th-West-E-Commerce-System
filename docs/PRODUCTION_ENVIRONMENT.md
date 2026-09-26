@@ -178,6 +178,23 @@ Manual J&T does not require an external shipping API contract. Do not select eit
 shipping or mock tracking in production. Email, OAuth, and Cloudinary are also
 optional and remain unavailable while their respective values are empty.
 
+### Transactional email
+
+Render production should use the Resend HTTPS API so verification and password
+reset delivery does not depend on outbound SMTP ports:
+
+```env
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=<Render secret>
+RESEND_FROM=10th West Moto <onboarding@resend.dev>
+EMAIL_PROVIDER_TIMEOUT_MS=15000
+```
+
+Keep `RESEND_API_KEY` only in Render's encrypted environment. For local SMTP,
+set `EMAIL_PROVIDER=smtp` and configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+`SMTP_PASS`, and `EMAIL_FROM`. The backend never falls back from a selected
+Resend provider to SMTP.
+
 The public `/api/ready` response reports safe readiness categories and never
 secret names or values. `integrations_ready=false` is expected while the
 provider rows above are blocked.

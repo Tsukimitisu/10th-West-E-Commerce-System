@@ -33,8 +33,15 @@ export const inspectProductionConfig = (env) => {
     SHIPPING_PROVIDER: 'internal', SHIPPING_FEE_PROVIDER: 'internal', COURIER_PROVIDER: 'jnt',
     WAYBILL_PROVIDER: 'manual', TRACKING_PROVIDER: 'manual',
   })) { if (env[name] !== expected) failures.push(`${name} must be ${expected}`); }
-  if (!(env.SMTP_HOST || env.EMAIL_HOST) || !(env.SMTP_USER || env.EMAIL_USER)
-    || !(env.SMTP_PASS || env.EMAIL_PASSWORD) || !env.EMAIL_FROM) failures.push('SMTP settings required for email account verification/reset');
+  const emailProvider = String(env.EMAIL_PROVIDER || 'smtp').trim().toLowerCase();
+  if (emailProvider === 'resend') {
+    if (!env.RESEND_API_KEY || !env.RESEND_FROM) failures.push('Resend settings required for email account verification/reset');
+  } else if (emailProvider === 'smtp') {
+    if (!(env.SMTP_HOST || env.EMAIL_HOST) || !(env.SMTP_USER || env.EMAIL_USER)
+      || !(env.SMTP_PASS || env.EMAIL_PASSWORD) || !env.EMAIL_FROM) failures.push('SMTP settings required for email account verification/reset');
+  } else {
+    failures.push('EMAIL_PROVIDER must be resend or smtp');
+  }
   return { ready: failures.length === 0, failures };
 };
 
