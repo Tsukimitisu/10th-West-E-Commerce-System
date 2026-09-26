@@ -3,7 +3,6 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import dns from 'dns/promises';
-import nodemailer from 'nodemailer';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { logActivity } from '../middleware/activityLogger.js';
@@ -15,37 +14,16 @@ import { resolveFrontendOrigin } from '../config/frontend.js';
 import { getPhoneVerificationState } from '../utils/phone.js';
 import { linkOrCreateOAuthUser } from '../services/oauthAccounts.js';
 import { redirectOAuthResult } from '../services/oauthRedirect.js';
-import { getEmailConfigurationStatus } from '../services/integrationReadiness.js';
+import {
+  sendPasswordResetEmail,
+  sendTransactionalEmail,
+  sendVerificationEmail,
+} from '../services/transactionalEmail.js';
 
 const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
 const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
 
 // ─── Helpers ───────────────────────────────────────────────────────
-
-const createTransporter = () => {
-  const emailConfiguration = getEmailConfigurationStatus();
-  if (!emailConfiguration.ready) {
-    const error = new Error('Email delivery is not configured.');
-    error.code = 'EMAIL_CONFIG_MISSING';
-    throw error;
-  }
-
-  const port = emailConfiguration.transport.port || 587;
-  return nodemailer.createTransport({
-    host: emailConfiguration.transport.host,
-    port,
-    secure: port === 465,
-    requireTLS: port !== 465,
-    auth: {
-      user: emailConfiguration.transport.user,
-      pass: emailConfiguration.transport.pass,
-    },
-    tls: { minVersion: 'TLSv1.2' },
-    connectionTimeout: Number.parseInt(process.env.SMTP_CONNECTION_TIMEOUT_MS || '10000', 10),
-    greetingTimeout: Number.parseInt(process.env.SMTP_GREETING_TIMEOUT_MS || '10000', 10),
-    socketTimeout: Number.parseInt(process.env.SMTP_SOCKET_TIMEOUT_MS || '15000', 10),
-  });
-};
 
 const signToken = (user) =>
   jwt.sign(
@@ -191,10 +169,6 @@ const VERIFICATION_STATEMENT_TIMEOUT_MS = 7000;
 const VERIFICATION_RESPONSE_TIMEOUT_MS = 8000;
 const VERIFIED_TOKEN_LOOKBACK_HOURS = 24;
 const SESSION_PERSIST_TIMEOUT_MS = 1000;
-const VERIFICATION_DELIVERY_TIMEOUT_MS = Math.min(
-  30000,
-  Math.max(5000, Number.parseInt(process.env.VERIFICATION_DELIVERY_TIMEOUT_MS || '20000', 10) || 20000)
-);
 const VERIFICATION_RESEND_COOLDOWN_SECONDS = Math.min(
   900,
   Math.max(30, Number.parseInt(process.env.VERIFICATION_RESEND_COOLDOWN_SECONDS || '60', 10) || 60)
@@ -414,58 +388,30 @@ const persistSession = async (client, user, ipAddress, userAgent) => {
   return token;
 };
 
-const sendVerificationEmail = async ({ email, name, token }) => {
-  const transporter = createTransporter();
-  const verificationUrl = buildVerificationUrl(token);
-
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
-    to: email,
-    subject: 'Verify your account - 10th West Moto',
-    html: `
-<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; background: #fff; border: 1px solid #eee; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-  <div style="text-align: center; margin-bottom: 25px;">
-    <h2 style="color: #1a1a1a; margin: 0; font-size: 24px;">Verify Your Email</h2>
-  </div>
-  <p style="color: #444; font-size: 16px; line-height: 1.5; text-align: center;">
-    Hi ${name || 'there'},<br>Please verify your email address to activate your account.
-  </p>
-  <div style="text-align: center; margin: 35px 0;">
-    <a href="${verificationUrl}" style="background-color: #dc2626; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);">Verify My Account</a>
-  </div>
-  <p style="color: #666; font-size: 14px; line-height: 1.6; text-align: center;">
-    This verification link will expire in ${EMAIL_VERIFICATION_WINDOW_MINUTES} minutes.
-  </p>
-  <hr style="border: none; border-top: 1px solid #eaeaea; margin: 25px 0;">
-  <p style="color: #888; font-size: 12px; text-align: center; line-height: 1.5;">
-    If the button does not work, copy and paste this link into your browser:<br><br>
-    <a href="${verificationUrl}" style="color: #2563eb; word-break: break-all;">${verificationUrl}</a>
-  </p>
-</div>
-`,
-  });
-};
-
 const deliverAccountVerificationEmail = async ({ email, name, token, userId, requestId }) => {
   console.info('ACCOUNT_CREATE_VERIFICATION_SEND_START', { request_id: requestId, user_id: userId });
 
-  try {
-    await withTimeout(
-      sendVerificationEmail({ email, name, token }),
-      VERIFICATION_DELIVERY_TIMEOUT_MS,
-      'verification email delivery'
-    );
+  const result = await sendVerificationEmail({
+    email,
+    name,
+    verificationUrl: buildVerificationUrl(token),
+    expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
+    requestId,
+    userId,
+  });
+
+  if (result.accepted) {
     console.info('ACCOUNT_CREATE_VERIFICATION_SEND_SUCCESS', { request_id: requestId, user_id: userId });
     return 'sent';
-  } catch (error) {
-    const pending = error?.code === 'ASYNC_OPERATION_TIMEOUT';
-    console.warn('ACCOUNT_CREATE_VERIFICATION_SEND_FAILED', {
-      request_id: requestId,
-      user_id: userId,
-      reason: pending ? 'timeout' : String(error?.code || error?.name || 'delivery_failed').slice(0, 80),
-    });
-    return pending ? 'pending' : 'failed';
   }
+
+  const pending = result.code === 'EMAIL_PROVIDER_TIMEOUT';
+  console.warn('ACCOUNT_CREATE_VERIFICATION_SEND_FAILED', {
+    request_id: requestId,
+    user_id: userId,
+    reason: pending ? 'timeout' : result.code,
+  });
+  return pending ? 'pending' : 'failed';
 };
 
 const recordVerificationEmailSubmitted = async ({ userId, client = null }) => {
@@ -565,11 +511,10 @@ export const sendRegistrationOtp = async (req, res) => {
       );
     }
 
-    const transporter = createTransporter();
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
+    const otpEmailResult = await sendTransactionalEmail({
       to: email,
       subject: 'Your Registration Code - 10th West Moto',
+      text: `Hi ${name || 'there'},\n\nYour registration code is ${otp}. It expires in 15 minutes.\n\nIf you did not request this, you may ignore this email.`,
       html: `
         <!DOCTYPE html><html><head><style>
           body{font-family:Arial,sans-serif;line-height:1.6;color:#333}
@@ -591,7 +536,14 @@ export const sendRegistrationOtp = async (req, res) => {
           </div>
         </body></html>
       `,
+      requestId: crypto.randomUUID(),
     });
+
+    if (!otpEmailResult.accepted) {
+      const error = new Error('Registration code delivery was not accepted.');
+      error.code = otpEmailResult.code;
+      throw error;
+    }
 
     res.json({ message: 'Verification code sent to your email.' });
   } catch (error) {
@@ -669,6 +621,7 @@ export const register = async (req, res) => {
           requiresVerification: true,
           email,
           verificationDelivery: deliveryStatus,
+          verification_email_submitted: deliveryStatus === 'sent',
           degraded: deliveryStatus !== 'sent',
         });
       }
@@ -712,6 +665,7 @@ export const register = async (req, res) => {
         requiresVerification: true,
         email,
         verificationDelivery: deliveryStatus,
+        verification_email_submitted: deliveryStatus === 'sent',
         degraded: deliveryStatus !== 'sent',
       });
     }
@@ -738,6 +692,8 @@ export const register = async (req, res) => {
 
       if (existingUser.email_verified) {
         await client.query('ROLLBACK');
+        client.release();
+        client = null;
         return res.status(409).json({
           message: 'Email already in use.',
           fieldErrors: {
@@ -745,6 +701,11 @@ export const register = async (req, res) => {
           },
         });
       }
+
+      // Release the row lock and pool connection before contacting the email provider.
+      await client.query('ROLLBACK');
+      client.release();
+      client = null;
 
       const deliveryStatus = await deliverAccountVerificationEmail({
         email: existingUser.email,
@@ -755,7 +716,7 @@ export const register = async (req, res) => {
       });
 
       if (deliveryStatus === 'sent') {
-        await client.query(
+        await pool.query(
           `UPDATE users
            SET email_verification_token = $1,
                email_verification_expires = $2,
@@ -763,9 +724,6 @@ export const register = async (req, res) => {
            WHERE id = $3`,
           [verificationToken.tokenHash, verificationToken.expiresAt, existingUser.id]
         );
-        await client.query('COMMIT');
-      } else {
-        await client.query('ROLLBACK');
       }
 
       console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, user_id: existingUser.id, delivery_status: deliveryStatus, existing: true });
@@ -774,6 +732,7 @@ export const register = async (req, res) => {
         requiresVerification: true,
         email,
         verificationDelivery: deliveryStatus,
+        verification_email_submitted: deliveryStatus === 'sent',
         degraded: deliveryStatus !== 'sent',
       });
     }
@@ -797,6 +756,8 @@ export const register = async (req, res) => {
     );
 
     await client.query('COMMIT');
+    client.release();
+    client = null;
     const createdUser = newUserResult.rows[0];
     console.info('ACCOUNT_CREATE_USER_CREATED', { request_id: requestId, user_id: createdUser.id });
 
@@ -809,7 +770,7 @@ export const register = async (req, res) => {
     });
 
     if (deliveryStatus === 'sent') {
-      await recordVerificationEmailSubmitted({ userId: createdUser.id, client });
+      await recordVerificationEmailSubmitted({ userId: createdUser.id });
     }
 
     console.info('ACCOUNT_CREATE_DONE', { request_id: requestId, user_id: createdUser.id, delivery_status: deliveryStatus, existing: false });
@@ -818,6 +779,7 @@ export const register = async (req, res) => {
       requiresVerification: true,
       email,
       verificationDelivery: deliveryStatus,
+      verification_email_submitted: deliveryStatus === 'sent',
       degraded: deliveryStatus !== 'sent',
     });
   } catch (error) {
@@ -1152,35 +1114,18 @@ export const forgotPassword = async (req, res) => {
     frontendUrl.hash = `/reset-password?token=${encodeURIComponent(resetToken)}`;
     const resetUrl = frontendUrl.toString();
 
-    const transporter = createTransporter();
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM || '10th West Moto <noreply@10thwest.com>',
-      to: email,
-      subject: 'Password Reset - 10th West Moto',
-      html: `
-        <!DOCTYPE html><html><head><style>
-          body{font-family:Arial,sans-serif;line-height:1.6;color:#333}
-          .container{max-width:600px;margin:0 auto;padding:20px}
-          .header{background:linear-gradient(135deg,#1e293b,#334155);color:white;padding:30px;text-align:center;border-radius:12px 12px 0 0}
-          .content{padding:30px;background:#f8fafc}
-          .btn{display:inline-block;padding:14px 32px;background:#ea580c;color:white!important;text-decoration:none;border-radius:8px;font-weight:bold;margin:20px 0}
-          .footer{text-align:center;padding:20px;color:#94a3b8;font-size:12px}
-          .warning{background:#fef3c7;border-left:4px solid #f59e0b;padding:12px 16px;margin:16px 0;border-radius:4px}
-        </style></head><body>
-          <div class="container">
-            <div class="header"><h1 style="margin:0">🔐 Password Reset</h1><p style="margin:8px 0 0">10th West Moto Parts</p></div>
-            <div class="content">
-              <h2>Hi ${user.name},</h2>
-              <p>We received a request to reset your password. Click the button below:</p>
-              <div style="text-align:center"><a href="${resetUrl}" class="btn">Reset My Password</a></div>
-              <div class="warning"><strong>⏰ This link expires in 1 hour.</strong><br>If you didn't request this, ignore this email.</div>
-              <p style="font-size:12px;color:#64748b">Or copy this link: ${resetUrl}</p>
-            </div>
-            <div class="footer"><p>10th West Moto - Motorcycle Parts & Accessories</p></div>
-          </div>
-        </body></html>
-      `,
+    const emailResult = await sendPasswordResetEmail({
+      email,
+      name: user.name,
+      resetUrl,
+      requestId: crypto.randomUUID(),
+      userId: user.id,
     });
+    if (!emailResult.accepted) {
+      const error = new Error('Password reset email was not accepted.');
+      error.code = emailResult.code;
+      throw error;
+    }
 
     await logActivity({ userId: user.id, action: 'password_reset_requested', ipAddress: req.clientIp, userAgent: req.clientUa });
     res.json({ message: genericResponse });
@@ -2275,41 +2220,59 @@ export const exportUserData = async (req, res) => {
 export const resendVerification = async (req, res) => {
   const { email } = req.validatedData || req.body;
   const genericMessage = 'Verification email request accepted.';
-  let client = null;
+  const requestId = crypto.randomUUID();
+  const startedAt = Date.now();
+  let user = null;
+  let reservationAt = null;
+  let previousSentAt = null;
+
+  console.info('RESEND_VERIFICATION_START', { request_id: requestId });
 
   try {
     const useRestFallback = shouldUseDatabaseReadFallback();
-    let user;
+    const readStartedAt = Date.now();
 
     if (useRestFallback) {
       user = await getUserFromSupabaseRestByEmail(email);
     } else {
-      client = await pool.connect();
-      await client.query('BEGIN');
-      user = (await client.query(
+      user = (await pool.query(
         `SELECT id, name, email, email_verified, email_verification_sent_at
          FROM users
-         WHERE email = $1
-         FOR UPDATE`,
+         WHERE email = $1`,
         [email]
       )).rows[0];
     }
+    console.info('RESEND_VERIFICATION_DB_READ_DONE', {
+      request_id: requestId,
+      user_id: user?.id || null,
+      duration_ms: Date.now() - readStartedAt,
+    });
 
     if (!user || user.email_verified) {
-      if (client) await client.query('ROLLBACK');
+      console.info('RESEND_VERIFICATION_DONE', {
+        request_id: requestId,
+        outcome: 'generic_accepted',
+        duration_ms: Date.now() - startedAt,
+      });
       return res.status(202).json({ message: genericMessage });
     }
 
-    const lastSubmittedAt = user.email_verification_sent_at
-      ? new Date(user.email_verification_sent_at).getTime()
+    previousSentAt = user.email_verification_sent_at || null;
+    const lastSubmittedAt = previousSentAt
+      ? new Date(previousSentAt).getTime()
       : 0;
     const secondsSinceSubmission = lastSubmittedAt
       ? Math.floor((Date.now() - lastSubmittedAt) / 1000)
       : Number.POSITIVE_INFINITY;
     if (secondsSinceSubmission < VERIFICATION_RESEND_COOLDOWN_SECONDS) {
       const retryAfter = Math.max(1, VERIFICATION_RESEND_COOLDOWN_SECONDS - secondsSinceSubmission);
-      if (client) await client.query('ROLLBACK');
       res.set?.('Retry-After', String(retryAfter));
+      console.info('RESEND_VERIFICATION_DONE', {
+        request_id: requestId,
+        user_id: user.id,
+        outcome: 'cooldown',
+        duration_ms: Date.now() - startedAt,
+      });
       return res.status(429).json({
         message: `Please wait ${retryAfter} seconds before requesting another verification email.`,
         code: 'VERIFICATION_RESEND_COOLDOWN',
@@ -2317,25 +2280,85 @@ export const resendVerification = async (req, res) => {
       });
     }
 
-    const verificationToken = createVerificationToken();
-    try {
-      await withTimeout(
-        sendVerificationEmail({
-          email: user.email,
-          name: user.name,
-          token: verificationToken.token,
-        }),
-        VERIFICATION_DELIVERY_TIMEOUT_MS,
-        'verification email delivery'
+    // Atomically reserve the cooldown without opening a transaction. The previous
+    // verification token remains valid while the provider request is in flight.
+    reservationAt = new Date();
+    if (!useRestFallback) {
+      const reservation = await pool.query(
+        `UPDATE users
+         SET email_verification_sent_at = $1
+         WHERE id = $2
+           AND email_verified = false
+           AND (
+             email_verification_sent_at IS NULL
+             OR email_verification_sent_at <= NOW() - ($3 * INTERVAL '1 second')
+           )
+         RETURNING id`,
+        [reservationAt, user.id, VERIFICATION_RESEND_COOLDOWN_SECONDS]
       );
-    } catch (emailError) {
-      if (client) await client.query('ROLLBACK');
-      console.warn('Resend verification email submission failed:', sanitizeDatabaseError(emailError));
+
+      if (reservation.rows.length === 0) {
+        res.set?.('Retry-After', String(VERIFICATION_RESEND_COOLDOWN_SECONDS));
+        console.info('RESEND_VERIFICATION_DONE', {
+          request_id: requestId,
+          user_id: user.id,
+          outcome: 'concurrent_cooldown',
+          duration_ms: Date.now() - startedAt,
+        });
+        return res.status(429).json({
+          message: `Please wait ${VERIFICATION_RESEND_COOLDOWN_SECONDS} seconds before requesting another verification email.`,
+          code: 'VERIFICATION_RESEND_COOLDOWN',
+          retryAfter: VERIFICATION_RESEND_COOLDOWN_SECONDS,
+        });
+      }
+    }
+
+    const verificationToken = createVerificationToken();
+    console.info('RESEND_VERIFICATION_PROVIDER_START', {
+      request_id: requestId,
+      user_id: user.id,
+    });
+    const emailResult = await sendVerificationEmail({
+      email: user.email,
+      name: user.name,
+      verificationUrl: buildVerificationUrl(verificationToken.token),
+      expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
+      requestId,
+      userId: user.id,
+    });
+
+    if (!emailResult.accepted) {
+      if (!useRestFallback && reservationAt) {
+        await pool.query(
+          `UPDATE users
+           SET email_verification_sent_at = $1
+           WHERE id = $2 AND email_verification_sent_at = $3`,
+          [previousSentAt, user.id, reservationAt]
+        );
+      }
+      console.warn('RESEND_VERIFICATION_PROVIDER_FAILED', {
+        request_id: requestId,
+        user_id: user.id,
+        provider: emailResult.provider,
+        code: emailResult.code,
+      });
+      console.info('RESEND_VERIFICATION_DONE', {
+        request_id: requestId,
+        user_id: user.id,
+        outcome: 'provider_failed',
+        duration_ms: Date.now() - startedAt,
+      });
       return res.status(503).json({
         message: 'We could not send the verification email right now. Please try again shortly.',
         code: 'VERIFICATION_EMAIL_FAILED',
       });
     }
+    console.info('RESEND_VERIFICATION_PROVIDER_SUCCESS', {
+      request_id: requestId,
+      user_id: user.id,
+      provider: emailResult.provider,
+      message_id_present: Boolean(emailResult.messageId),
+    });
 
     if (useRestFallback) {
       await updateUserViaSupabaseRest(user.id, {
@@ -2344,26 +2367,40 @@ export const resendVerification = async (req, res) => {
         email_verification_sent_at: new Date().toISOString(),
       });
     } else {
-      await client.query(
+      await pool.query(
         `UPDATE users
          SET email_verification_token = $1,
-             email_verification_expires = $2,
-             email_verification_sent_at = NOW()
-         WHERE id = $3`,
-        [verificationToken.tokenHash, verificationToken.expiresAt, user.id]
+             email_verification_expires = $2
+         WHERE id = $3
+           AND email_verified = false
+           AND email_verification_sent_at = $4`,
+        [verificationToken.tokenHash, verificationToken.expiresAt, user.id, reservationAt]
       );
-      await client.query('COMMIT');
     }
 
+    console.info('RESEND_VERIFICATION_DONE', {
+      request_id: requestId,
+      user_id: user.id,
+      outcome: 'submitted',
+      duration_ms: Date.now() - startedAt,
+    });
     return res.status(202).json({
       message: genericMessage,
       expiresInMinutes: EMAIL_VERIFICATION_WINDOW_MINUTES,
+      verification_email_submitted: true,
     });
   } catch (err) {
-    try {
-      if (client) await client.query('ROLLBACK');
-    } catch {}
-    console.error('Resend verification error:', sanitizeDatabaseError(err));
+    console.error('Resend verification error:', {
+      request_id: requestId,
+      user_id: user?.id || null,
+      error: sanitizeDatabaseError(err),
+    });
+    console.info('RESEND_VERIFICATION_DONE', {
+      request_id: requestId,
+      user_id: user?.id || null,
+      outcome: 'database_failed',
+      duration_ms: Date.now() - startedAt,
+    });
     if (isDatabaseConnectivityError(err)) {
       return res.status(503).json({
         message: DATABASE_UNAVAILABLE_MESSAGE,
@@ -2374,7 +2411,5 @@ export const resendVerification = async (req, res) => {
       message: 'We could not prepare a new verification email. Your previous link remains valid.',
       code: 'VERIFICATION_PREPARATION_FAILED',
     });
-  } finally {
-    client?.release();
   }
 };
