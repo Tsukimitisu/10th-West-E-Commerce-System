@@ -39,12 +39,6 @@ const buildLoginRedirect = (message, extraParams = {}) => {
   return query ? `/login?${query}` : '/login';
 };
 
-const formatExpiryMinutes = (value) => {
-  const minutes = Number.parseInt(value, 10);
-  if (!Number.isFinite(minutes) || minutes <= 0) return 'a few minutes';
-  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
-};
-
 const publishAuthVerifiedSignal = (user = null) => {
   if (typeof window === 'undefined') return;
 
@@ -138,6 +132,7 @@ const VerifyEmail = ({ onLogin }) => {
   const redirectTimeoutRef = useRef(null);
   const hasAttemptedVerificationRef = useRef(false);
   const onLoginRef = useRef(onLogin);
+  const resendInFlightRef = useRef(false);
 
   useEffect(() => {
     navigateRef.current = navigate;
@@ -343,6 +338,7 @@ const VerifyEmail = ({ onLogin }) => {
 
   const handleResend = async (e) => {
     e.preventDefault();
+    if (resendInFlightRef.current) return;
     const normalizedEmail = String(email || '').trim().toLowerCase();
 
     const nextResendError = validateResendEmail(normalizedEmail);
@@ -352,19 +348,21 @@ const VerifyEmail = ({ onLogin }) => {
       return;
     }
 
+    resendInFlightRef.current = true;
     setIsResending(true);
     setResendStatus('');
     setResendError('');
     setResendSucceeded(false);
 
     try {
-      const result = await resendVerificationEmail(normalizedEmail);
+      await resendVerificationEmail(normalizedEmail);
       setEmail(normalizedEmail);
       setResendSucceeded(true);
-      setResendStatus(`${result?.message || 'Verification email request accepted.'} The link expires in ${formatExpiryMinutes(result?.expiresInMinutes)}.`);
-    } catch (err) {
-      setResendStatus(err.message || 'Failed to resend verification email.');
+      setResendStatus('Verification email request accepted. Check your inbox and spam folder.');
+    } catch {
+      setResendStatus('We could not send the verification email right now. Please try again shortly.');
     } finally {
+      resendInFlightRef.current = false;
       setIsResending(false);
     }
   };
