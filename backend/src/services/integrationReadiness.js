@@ -33,10 +33,20 @@ export const getEmailConfigurationStatus = () => {
     || (hostName ? 'smtp' : 'smtp');
   const selected = Boolean(provider || hostName || userName || passName);
   const missing = [];
-  if (!hostName) missing.push('host');
-  if (!portName) missing.push('port');
-  if (!userName) missing.push('username');
-  if (!passName) missing.push('password');
+  const resendApiKeyPresent = present('RESEND_API_KEY');
+  const resendFromPresent = present('RESEND_FROM');
+
+  if (provider === 'resend') {
+    if (!resendApiKeyPresent) missing.push('api_key');
+    if (!resendFromPresent) missing.push('from');
+  } else if (provider === 'smtp') {
+    if (!hostName) missing.push('host');
+    if (!portName) missing.push('port');
+    if (!userName) missing.push('username');
+    if (!passName) missing.push('password');
+  } else {
+    missing.push('provider');
+  }
 
   return {
     provider,
@@ -45,6 +55,8 @@ export const getEmailConfigurationStatus = () => {
     configured: missing.length === 0,
     status: providerStatus({ ready: missing.length === 0, selected }),
     missing_categories: missing,
+    api_key_present: provider === 'resend' ? resendApiKeyPresent : undefined,
+    from_present: provider === 'resend' ? resendFromPresent : undefined,
     transport: {
       host: hostName ? process.env[hostName] : '',
       port: Number.parseInt(process.env[portName] || '587', 10),
@@ -194,6 +206,11 @@ export const buildAdminIntegrationReadiness = ({ paymongo, shipping, tracking })
       provider: email.provider,
       status: email.status,
       ready: email.ready,
+      configured: email.configured,
+      ...(email.provider === 'resend' ? {
+        api_key_present: email.api_key_present,
+        from_present: email.from_present,
+      } : {}),
       missing_categories: email.missing_categories,
     },
     oauth,
