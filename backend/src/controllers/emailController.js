@@ -1,30 +1,6 @@
-import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 import pool from '../config/database.js';
-import { getEmailConfigurationStatus } from '../services/integrationReadiness.js';
-
-// Create email transporter
-const createTransporter = () => {
-  const status = getEmailConfigurationStatus();
-  if (!status.ready) {
-    const error = new Error('Email delivery is blocked by credentials/configuration.');
-    error.code = 'EMAIL_CONFIG_MISSING';
-    error.status = 503;
-    error.missing_categories = status.missing_categories;
-    throw error;
-  }
-
-  console.log('Creating email transporter:', status.provider);
-  
-  return nodemailer.createTransport({
-    host: status.transport.host,
-    port: status.transport.port || 587,
-    secure: false, // TLS for port 587
-    auth: {
-      user: status.transport.user,
-      pass: status.transport.pass,
-    }
-  });
-};
+import { sendTransactionalEmail } from '../services/transactionalEmail.js';
 
 const emailFailureResponse = (res, error) => {
   if (error.code === 'EMAIL_CONFIG_MISSING') {
@@ -41,13 +17,18 @@ const emailFailureResponse = (res, error) => {
   });
 };
 
+const assertDeliveryAccepted = (result) => {
+  if (result.accepted) return;
+  const error = new Error('Email provider rejected the delivery attempt.');
+  error.code = result.code;
+  throw error;
+};
+
 // Send order confirmation email
 export const sendOrderConfirmation = async (req, res) => {
   const { order_id, email, customer_name } = req.body;
 
   try {
-    console.log('📨 Sending order confirmation email to:', email);
-    
     // Get order details
     const orderResult = await pool.query(
       'SELECT * FROM orders WHERE id = $1',
@@ -132,29 +113,19 @@ export const sendOrderConfirmation = async (req, res) => {
       </html>
     `;
 
-    // Send email
-    const transporter = createTransporter();
-    
-    console.log('📝 Email details:');
-    console.log('   FROM:', process.env.EMAIL_FROM);
-    console.log('   TO:', email);
-    console.log('   SUBJECT: Order Confirmation #' + order.id);
-    
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || '10th West Moto <noreply@10thwest.com>',
+    const result = await sendTransactionalEmail({
       to: email,
       subject: `Order Confirmation #${order.id} - 10th West Moto`,
-      html: htmlContent
-    };
-
-    console.log('📤 Attempting to send email...');
-    const result = await transporter.sendMail(mailOptions);
-    console.log('✅ Email sent successfully:', result.messageId);
+      text: `Your order #${order.id} has been confirmed. Total: ${parseFloat(order.total_amount).toFixed(2)}.`,
+      html: htmlContent,
+      requestId: crypto.randomUUID(),
+      userId: order.user_id || null,
+    });
+    assertDeliveryAccepted(result);
 
     res.json({ message: 'Order confirmation email sent successfully', messageId: result.messageId });
   } catch (error) {
-    console.error('❌ Email error:', error.message);
-    console.error('Full error:', error);
+    console.error('Order confirmation email failed.', { code: error?.code || 'EMAIL_DELIVERY_FAILED' });
     return emailFailureResponse(res, error);
   }
 };
@@ -163,8 +134,6 @@ export const sendOrderStatusUpdate = async (req, res) => {
   const { order_id, email, customer_name, status } = req.body;
 
   try {
-    console.log('📨 Sending order status update email to:', email);
-    
     // Get order details
     const orderResult = await pool.query(
       'SELECT * FROM orders WHERE id = $1',
@@ -255,28 +224,19 @@ export const sendOrderStatusUpdate = async (req, res) => {
       </html>
     `;
 
-    // Send email
-    const transporter = createTransporter();
-    
-    console.log('📝 Status update email details:');
-    console.log('   FROM:', process.env.EMAIL_FROM);
-    console.log('   TO:', email);
-    console.log('   STATUS:', status);
-    
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || '10th West Moto <noreply@10thwest.com>',
+    const result = await sendTransactionalEmail({
       to: email,
       subject: `${statusInfo.title} - Order #${order.id}`,
-      html: htmlContent
-    };
-
-    console.log('📤 Attempting to send status update email...');
-    const result = await transporter.sendMail(mailOptions);
-    console.log('✅ Status update email sent successfully:', result.messageId);
+      text: `${statusInfo.title}. ${statusInfo.message} Order #${order.id}.`,
+      html: htmlContent,
+      requestId: crypto.randomUUID(),
+      userId: order.user_id || null,
+    });
+    assertDeliveryAccepted(result);
 
     res.json({ message: 'Order status update email sent successfully', messageId: result.messageId });
   } catch (error) {
-    console.error('❌ Status update email error:', error.message);
+    console.error('Order status update email failed.', { code: error?.code || 'EMAIL_DELIVERY_FAILED' });
     return emailFailureResponse(res, error);
   }
 };

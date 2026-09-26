@@ -2,11 +2,11 @@ import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { getMissingCloudinaryVars, isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
 import { assertValidFileSignature } from '../services/fileSignature.js';
-import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import dns from 'dns/promises';
 import { resolveFrontendOrigin } from '../config/frontend.js';
 import { getPhoneVerificationState, normalizePhilippineMobile, PHILIPPINE_MOBILE_REGEX } from '../utils/phone.js';
+import { sendTransactionalEmail } from '../services/transactionalEmail.js';
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MIME_EXTENSION_MAP = {
   'image/jpeg': 'jpg',
@@ -58,17 +58,6 @@ const assertEmailDomainCanReceiveMail = async (email) => {
   throw error;
 };
 
-const createTransporter = () =>
-  nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587', 10),
-    secure: parseInt(process.env.EMAIL_PORT || '587', 10) === 465,
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
-    connectionTimeout: 4000,
-    greetingTimeout: 4000,
-    socketTimeout: 5000,
-  });
-
 const isLocalUrl = (hostname) =>
   ['localhost', '127.0.0.1'].includes(hostname) ||
   hostname.startsWith('192.168.') ||
@@ -101,14 +90,13 @@ const buildEmailChangeVerificationUrl = (token) => {
   return url.toString();
 };
 
-const sendEmailChangeVerificationEmail = async ({ email, currentName, token }) => {
-  const transporter = createTransporter();
+const sendEmailChangeVerificationEmail = async ({ email, currentName, token, userId }) => {
   const verificationUrl = buildEmailChangeVerificationUrl(token);
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM || '"10th West Moto" <noreply@10thwestmoto.com>',
+  const result = await sendTransactionalEmail({
     to: email,
     subject: 'Confirm your new email address - 10th West Moto',
+    text: `Hi ${currentName || 'there'},\n\nConfirm your new 10th West Moto email address: ${verificationUrl}\n\nThis link expires in ${EMAIL_CHANGE_WINDOW_MINUTES} minutes. If you did not request this change, you may ignore this email.`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e5e7eb; border-radius: 12px;">
         <h2 style="margin-top: 0; color: #111827;">Confirm Your New Email Address</h2>
@@ -122,7 +110,15 @@ const sendEmailChangeVerificationEmail = async ({ email, currentName, token }) =
         <p style="color: #6b7280; font-size: 12px; word-break: break-all;">${verificationUrl}</p>
       </div>
     `,
+    requestId: crypto.randomUUID(),
+    userId,
   });
+
+  if (!result.accepted) {
+    const error = new Error('Email change verification delivery was not accepted.');
+    error.code = result.code;
+    throw error;
+  }
 };
 
 // Get user profile
@@ -319,6 +315,7 @@ export const updateProfile = async (req, res) => {
           email: rawEmail,
           currentName: user.name,
           token: emailChangeToken.token,
+          userId: req.user.id,
         });
       } catch (mailError) {
         await pool.query(

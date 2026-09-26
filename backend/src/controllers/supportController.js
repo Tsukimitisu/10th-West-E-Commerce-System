@@ -1,24 +1,12 @@
 import pool from '../config/database.js';
-import nodemailer from 'nodemailer';
+import crypto from 'crypto';
+import { sendTransactionalEmail } from '../services/transactionalEmail.js';
 import {
   isDatabaseConnectivityError,
   shouldUseDatabaseReadFallback,
   supabaseRestFetch,
   supabaseRestRequest,
 } from '../services/supabaseRest.js';
-
-// Create email transporter
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD
-    }
-  });
-};
 
 const cleanText = (value, maxLength = 1000) => String(value || '')
   .replace(/<[^>]*>/g, ' ')
@@ -53,11 +41,10 @@ const createTicketViaRest = async ({ userId, name, email, subject, message }) =>
 
 const sendTicketNotification = async (ticket, { name, email, subject, message }) => {
   try {
-    const transporter = createTransporter();
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM || '10th West Moto <noreply@10thwest.com>',
+    const result = await sendTransactionalEmail({
       to: process.env.SUPPORT_EMAIL || process.env.EMAIL_USER,
       subject: `New Support Ticket #${ticket.id}: ${subject}`,
+      text: `New support ticket #${ticket.id}\nFrom: ${name} (${email})\nSubject: ${subject}\n\n${message}`,
       html: `
         <h2>New Support Ticket</h2>
         <p><strong>Ticket ID:</strong> ${ticket.id}</p>
@@ -68,9 +55,14 @@ const sendTicketNotification = async (ticket, { name, email, subject, message })
         <hr>
         <p><small>Submitted: ${new Date(ticket.created_at || Date.now()).toLocaleString()}</small></p>
       `,
+      requestId: crypto.randomUUID(),
+      userId: ticket.user_id || null,
     });
+    if (!result.accepted) {
+      console.warn('Support ticket notification email was not accepted.', { code: result.code });
+    }
   } catch (emailError) {
-    console.error('Failed to send ticket notification email:', emailError);
+    console.error('Failed to prepare ticket notification email.', { code: emailError?.code || 'EMAIL_PREPARATION_FAILED' });
   }
 };
 
