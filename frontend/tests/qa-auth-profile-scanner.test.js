@@ -22,12 +22,25 @@ test('verification resend shows provider-accepted feedback and blocks repeated s
 
   for (const source of [register, verifyEmail]) {
     assert.match(source, /Verification email request accepted\./);
+    assert.match(source, /Check your inbox and spam folder\./);
+    assert.match(source, /We could not send the verification email right now\. Please try again shortly\./);
     assert.match(source, /resendSucceeded/);
   }
   assert.match(register, /disabled=\{resending\}/);
+  assert.match(register, /if \(resendInFlightRef\.current\) return/);
   assert.match(register, /Sending\.\.\./);
   assert.match(verifyEmail, /disabled=\{isResending\}/);
+  assert.match(verifyEmail, /if \(resendInFlightRef\.current\) return/);
   assert.match(verifyEmail, /isResending \? 'Sending\.\.\.'/);
+});
+
+test('registration modal renders mutually exclusive provider success and failure states', async () => {
+  const register = await read('pages/Register.jsx');
+  assert.match(register, /verification_email_submitted === true/);
+  assert.match(register, /We sent a verification link to \$\{normalizedEmail\}\. Check your inbox and spam folder, then open the link to activate your account\./);
+  assert.match(register, /Your account was created, but we could not send the verification email\. Use Resend Verification Email to try again\./);
+  assert.match(register, /\{verificationEmailSubmitted && \(/);
+  assert.doesNotMatch(register, /We sent a verification link to <strong>/);
 });
 
 test('Philippine mobile input accepts all supported forms and normalizes storage to E.164', () => {

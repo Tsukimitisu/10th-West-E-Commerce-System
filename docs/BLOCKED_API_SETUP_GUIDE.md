@@ -180,21 +180,22 @@ Account and dashboard:
 3. Open **App passwords**, create one for this deployment, and copy the
    generated 16-character password once.
 
-Render variables (the existing mail controllers use the `EMAIL_*` names):
+Local/development fallback variables:
 
 ```env
-EMAIL_PROVIDER=gmail
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=<mailbox address>
-EMAIL_PASSWORD=<app password, not the account password>
+EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=<mailbox address>
+SMTP_PASS=<app password, not the account password>
 EMAIL_FROM="10th West Moto <mailbox@example.com>"
 SUPPORT_EMAIL=<support destination>
 ```
 
-`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS` are supported by the
-readiness classifier, but populate the `EMAIL_*` names above because the
-current registration, password, profile, and support mailers read them.
+The legacy `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, and `EMAIL_PASSWORD`
+aliases remain supported. Production on Render should prefer the Resend HTTPS
+configuration documented in `PRODUCTION_ENVIRONMENT.md`; Gmail SMTP remains a
+local/development fallback.
 
 Gmail does not provide an SMTP sandbox. Use a non-customer test recipient and
 then trigger a verification/password-reset email; confirm delivery and that no

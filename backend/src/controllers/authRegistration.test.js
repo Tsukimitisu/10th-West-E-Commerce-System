@@ -11,10 +11,11 @@ import { registerValidation } from '../routes/auth.js';
 import { register, resendVerification, verifyEmailToken } from './authController.js';
 
 const originalSmtpEnvironment = Object.fromEntries(
-  ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM']
+  ['EMAIL_PROVIDER', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM']
     .map((name) => [name, process.env[name]])
 );
 process.env.SMTP_HOST = process.env.SMTP_HOST || 'smtp.unit.test';
+process.env.EMAIL_PROVIDER = 'smtp';
 process.env.SMTP_PORT = process.env.SMTP_PORT || '587';
 process.env.SMTP_USER = process.env.SMTP_USER || 'unit-user';
 process.env.SMTP_PASS = process.env.SMTP_PASS || 'unit-password';
@@ -116,6 +117,10 @@ const makeRegisterClient = ({ existingRows = [] } = {}) => {
 
 const installRegisterMocks = (client) => {
   mock.method(pool, 'connect', async () => client);
+  mock.method(pool, 'query', async (sql) => {
+    if (String(sql).includes('email_verification_sent_at')) return { rows: [], rowCount: 1 };
+    throw new Error(`Unexpected pool query in registration test: ${sql}`);
+  });
   mock.method(dns, 'resolveMx', async () => [{ exchange: 'mail.gmail.com', priority: 1 }]);
   const sendMail = mock.fn(async () => ({ messageId: 'registration-test' }));
   mock.method(nodemailer, 'createTransport', () => ({ sendMail }));
@@ -179,6 +184,7 @@ test('register creates a customer account without exposing password hashes', asy
 
   assert.equal(res.statusCode, 201);
   assert.equal(res.body.requiresVerification, true);
+  assert.equal(res.body.verification_email_submitted, true);
   assert.equal(res.body.email, 'jane.rider@gmail.com');
   assert.doesNotMatch(JSON.stringify(res.body), /password(?:_hash|Hash)?/i);
   assert.equal(sendMail.mock.callCount(), 1);
@@ -210,6 +216,7 @@ test('registration mailer uses the documented SMTP environment variables', async
   try {
     const { client } = makeRegisterClient();
     mock.method(pool, 'connect', async () => client);
+    mock.method(pool, 'query', async () => ({ rows: [], rowCount: 1 }));
     mock.method(dns, 'resolveMx', async () => [{ exchange: 'mail.gmail.com', priority: 1 }]);
     let transportOptions;
     mock.method(nodemailer, 'createTransport', (options) => {
@@ -268,18 +275,23 @@ test('registration keeps the created account and returns resendable status when 
   assert.equal(res.statusCode, 201);
   assert.equal(res.body.requiresVerification, true);
   assert.equal(res.body.verificationDelivery, 'failed');
+  assert.equal(res.body.verification_email_submitted, false);
   assert.match(res.body.message, /Account created.*resend verification/i);
   assert.ok(calls.some((call) => call.sql.includes('COMMIT')));
+  assert.equal(calls.filter((call) => call.sql.includes('INSERT INTO users')).length, 1);
 });
 
 test('registration has bounded delivery and safe lifecycle logging', async () => {
-  const source = await readFile(new URL('./authController.js', import.meta.url), 'utf8');
+  const [source, emailSource] = await Promise.all([
+    readFile(new URL('./authController.js', import.meta.url), 'utf8'),
+    readFile(new URL('../services/transactionalEmail.js', import.meta.url), 'utf8'),
+  ]);
   for (const event of [
     'ACCOUNT_CREATE_START', 'ACCOUNT_CREATE_USER_CREATED', 'ACCOUNT_CREATE_VERIFICATION_SEND_START',
     'ACCOUNT_CREATE_VERIFICATION_SEND_SUCCESS', 'ACCOUNT_CREATE_VERIFICATION_SEND_FAILED', 'ACCOUNT_CREATE_DONE',
   ]) assert.match(source, new RegExp(event));
-  assert.match(source, /VERIFICATION_DELIVERY_TIMEOUT_MS/);
-  assert.match(source, /withTimeout\([\s\S]*sendVerificationEmail/);
+  assert.match(emailSource, /EMAIL_PROVIDER_TIMEOUT_MS/);
+  assert.match(emailSource, /withTimeout\([\s\S]*resend\.emails\.send/);
   assert.doesNotMatch(source, /ACCOUNT_CREATE[^\n]*(password|token|otp)/i);
 });
 
@@ -313,6 +325,13 @@ test('registration retry reuses the unverified account and replaces its token on
   });
   const events = [];
   mock.method(pool, 'connect', async () => client);
+  mock.method(pool, 'query', async (sql, params = []) => {
+    if (String(sql).includes('SET email_verification_token')) {
+      events.push('token-updated');
+      return { rows: [], rowCount: 1 };
+    }
+    throw new Error(`Unexpected registration retry pool query: ${sql} ${params.length}`);
+  });
   mock.method(dns, 'resolveMx', async () => [{ exchange: 'mail.gmail.com', priority: 1 }]);
   mock.method(nodemailer, 'createTransport', () => ({
     sendMail: async () => {
@@ -320,11 +339,6 @@ test('registration retry reuses the unverified account and replaces its token on
       return { messageId: 'registration-retry' };
     },
   }));
-  const originalQuery = client.query.bind(client);
-  client.query = async (sql, params = []) => {
-    if (String(sql).includes('SET email_verification_token')) events.push('token-updated');
-    return originalQuery(sql, params);
-  };
   const res = makeResponse();
 
   await register({ validatedData: validRegistrationBody }, res);
@@ -335,45 +349,41 @@ test('registration retry reuses the unverified account and replaces its token on
   assert.equal(calls.some((call) => call.sql.includes('INSERT INTO users')), false);
 });
 
-const makeResendClient = ({ user, updateError = null } = {}) => {
+const installResendDatabaseMock = ({ user, updateError = null, events = [] } = {}) => {
   const calls = [];
-  return {
-    calls,
-    client: {
-      async query(sql, params = []) {
-        const text = String(sql);
-        calls.push({ sql: text, params });
-        if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(text.trim())) return { rows: [], rowCount: 0 };
-        if (text.includes('FROM users') && text.includes('FOR UPDATE')) {
-          return { rows: user ? [user] : [], rowCount: user ? 1 : 0 };
-        }
-        if (text.includes('SET email_verification_token')) {
-          if (updateError) throw updateError;
-          return { rows: [], rowCount: 1 };
-        }
-        throw new Error(`Unexpected resend query: ${text}`);
-      },
-      release() {
-        calls.push({ sql: 'release', params: [] });
-      },
-    },
-  };
+  mock.method(pool, 'query', async (sql, params = []) => {
+    const text = String(sql);
+    calls.push({ sql: text, params });
+    if (text.includes('SELECT id, name, email, email_verified')) {
+      return { rows: user ? [user] : [], rowCount: user ? 1 : 0 };
+    }
+    if (text.includes('SET email_verification_sent_at = $1') && text.includes('RETURNING id')) {
+      events.push('cooldown-reserved');
+      return { rows: user ? [{ id: user.id }] : [], rowCount: user ? 1 : 0 };
+    }
+    if (text.includes('SET email_verification_sent_at = $1')) {
+      events.push('cooldown-restored');
+      return { rows: [], rowCount: 1 };
+    }
+    if (text.includes('SET email_verification_token')) {
+      events.push('token-updated');
+      if (updateError) throw updateError;
+      return { rows: [], rowCount: 1 };
+    }
+    throw new Error(`Unexpected resend query: ${text}`);
+  });
+  return calls;
 };
 
-test('resend submits the email before replacing the previous verification token', async () => {
+test('resend reserves cooldown, submits the email outside a transaction, then replaces the token', async () => {
   const events = [];
-  const { client, calls } = makeResendClient({
+  const calls = installResendDatabaseMock({
     user: {
       id: 17, name: 'Unverified Rider', email: 'rider@gmail.com', email_verified: false,
       email_verification_sent_at: new Date(Date.now() - 120_000),
     },
+    events,
   });
-  const originalQuery = client.query.bind(client);
-  client.query = async (sql, params = []) => {
-    if (String(sql).includes('SET email_verification_token')) events.push('token-updated');
-    return originalQuery(sql, params);
-  };
-  mock.method(pool, 'connect', async () => client);
   mock.method(nodemailer, 'createTransport', () => ({
     sendMail: async (message) => {
       events.push('submitted');
@@ -388,18 +398,20 @@ test('resend submits the email before replacing the previous verification token'
 
   assert.equal(res.statusCode, 202);
   assert.equal(res.body.message, 'Verification email request accepted.');
-  assert.deepEqual(events, ['submitted', 'token-updated']);
-  assert.ok(calls.some((call) => call.sql.trim() === 'COMMIT'));
+  assert.equal(res.body.verification_email_submitted, true);
+  assert.deepEqual(events, ['cooldown-reserved', 'submitted', 'token-updated']);
+  assert.equal(calls.some((call) => /BEGIN|COMMIT|ROLLBACK/.test(call.sql)), false);
 });
 
 test('resend provider failure preserves the previous verification token', async () => {
-  const { client, calls } = makeResendClient({
+  const events = [];
+  const calls = installResendDatabaseMock({
     user: {
       id: 18, name: 'Unverified Rider', email: 'rider@gmail.com', email_verified: false,
       email_verification_sent_at: null,
     },
+    events,
   });
-  mock.method(pool, 'connect', async () => client);
   mock.method(nodemailer, 'createTransport', () => ({
     sendMail: async () => {
       const error = new Error('authentication failed for smtp-password');
@@ -415,17 +427,16 @@ test('resend provider failure preserves the previous verification token', async 
   assert.equal(res.body.code, 'VERIFICATION_EMAIL_FAILED');
   assert.doesNotMatch(JSON.stringify(res.body), /smtp-password|EAUTH/);
   assert.equal(calls.some((call) => call.sql.includes('SET email_verification_token')), false);
-  assert.ok(calls.some((call) => call.sql.trim() === 'ROLLBACK'));
+  assert.deepEqual(events, ['cooldown-reserved', 'cooldown-restored']);
 });
 
 test('resend enforces the account cooldown without contacting the provider', async () => {
-  const { client } = makeResendClient({
+  installResendDatabaseMock({
     user: {
       id: 19, name: 'Unverified Rider', email: 'rider@gmail.com', email_verified: false,
       email_verification_sent_at: new Date(),
     },
   });
-  mock.method(pool, 'connect', async () => client);
   const createTransport = mock.method(nodemailer, 'createTransport', () => ({ sendMail: async () => ({}) }));
   const res = makeResponse();
 
@@ -443,13 +454,60 @@ test('resend does not reveal whether an account is missing or already verified',
     email_verification_sent_at: null,
   }]) {
     mock.restoreAll();
-    const { client } = makeResendClient({ user });
-    mock.method(pool, 'connect', async () => client);
+    installResendDatabaseMock({ user });
     const res = makeResponse();
     await resendVerification({ validatedData: { email: 'rider@gmail.com' } }, res);
     assert.equal(res.statusCode, 202);
     assert.equal(res.body.message, 'Verification email request accepted.');
   }
+});
+
+test('resend database failure returns a safe response without contacting the provider', async () => {
+  mock.method(pool, 'query', async () => {
+    const error = new Error('connection timeout with private database details');
+    error.code = 'ETIMEDOUT';
+    throw error;
+  });
+  const createTransport = mock.method(nodemailer, 'createTransport', () => ({ sendMail: async () => ({}) }));
+  const res = makeResponse();
+
+  await resendVerification({ validatedData: { email: 'rider@gmail.com' } }, res);
+
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.body.code, 'DATABASE_UNAVAILABLE');
+  assert.doesNotMatch(JSON.stringify(res.body), /private database details|ETIMEDOUT/);
+  assert.equal(createTransport.mock.callCount(), 0);
+});
+
+test('resend never holds a database transaction while the provider request waits', async () => {
+  const events = [];
+  const calls = installResendDatabaseMock({
+    user: {
+      id: 21, name: 'Waiting Rider', email: 'rider@gmail.com', email_verified: false,
+      email_verification_sent_at: null,
+    },
+    events,
+  });
+  let releaseProvider;
+  const providerWaiting = new Promise((resolve) => { releaseProvider = resolve; });
+  mock.method(nodemailer, 'createTransport', () => ({
+    sendMail: async () => {
+      events.push('provider-waiting');
+      await providerWaiting;
+      events.push('provider-finished');
+      return { messageId: 'waited-message' };
+    },
+  }));
+  const res = makeResponse();
+  const request = resendVerification({ validatedData: { email: 'rider@gmail.com' } }, res);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(events, ['cooldown-reserved', 'provider-waiting']);
+  assert.equal(calls.some((call) => /BEGIN|COMMIT|ROLLBACK|FOR UPDATE/.test(call.sql)), false);
+
+  releaseProvider();
+  await request;
+  assert.equal(res.statusCode, 202);
 });
 
 const makeVerificationResponse = () => ({

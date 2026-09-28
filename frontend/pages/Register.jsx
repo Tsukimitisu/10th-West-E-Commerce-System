@@ -41,6 +41,7 @@ const Register = () => {
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState('');
+  const [verificationEmailSubmitted, setVerificationEmailSubmitted] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendStatus, setResendStatus] = useState('');
   const [resendSucceeded, setResendSucceeded] = useState(false);
@@ -48,6 +49,7 @@ const Register = () => {
   const errorBannerRef = useRef(null);
   const emailInputRef = useRef(null);
   const submittingRef = useRef(false);
+  const resendInFlightRef = useRef(false);
 
   React.useEffect(() => {
     fetch(`${API_ORIGIN}/api/auth/providers`, { credentials: 'include' })
@@ -158,7 +160,12 @@ const Register = () => {
       );
 
       setFieldErrors({});
-      setVerificationMessage(result?.message || 'Registration successful. Please check your email to verify your account.');
+      const emailSubmitted = result?.verification_email_submitted === true
+        || result?.verificationDelivery === 'sent';
+      setVerificationEmailSubmitted(emailSubmitted);
+      setVerificationMessage(emailSubmitted
+        ? `We sent a verification link to ${normalizedEmail}. Check your inbox and spam folder, then open the link to activate your account.`
+        : 'Your account was created, but we could not send the verification email. Use Resend Verification Email to try again.');
       setShowVerificationModal(true);
       setEmail(normalizedEmail);
       setPassword('');
@@ -170,7 +177,8 @@ const Register = () => {
       setFieldErrors(nextFieldErrors);
 
       if (err.requiresVerification || err.code === 'VERIFICATION_EMAIL_FAILED') {
-        setVerificationMessage(err.message || 'Please check your email to verify your account.');
+        setVerificationEmailSubmitted(false);
+        setVerificationMessage('Your account was created, but we could not send the verification email. Use Resend Verification Email to try again.');
         setShowVerificationModal(true);
         return;
       }
@@ -224,17 +232,21 @@ const Register = () => {
   };
 
   const handleResend = async () => {
+    if (resendInFlightRef.current) return;
+    resendInFlightRef.current = true;
     setResending(true);
     setResendStatus('');
     setResendSucceeded(false);
 
     try {
-      const result = await resendVerificationEmail(email);
+      await resendVerificationEmail(email);
       setResendSucceeded(true);
-      setResendStatus(result?.message || 'Verification email request accepted.');
-    } catch (err) {
-      setResendStatus(err.message || 'Failed to resend verification email.');
+      setVerificationEmailSubmitted(true);
+      setResendStatus('Verification email request accepted. Check your inbox and spam folder.');
+    } catch {
+      setResendStatus('We could not send the verification email right now. Please try again shortly.');
     } finally {
+      resendInFlightRef.current = false;
       setResending(false);
     }
   };
@@ -415,14 +427,14 @@ const Register = () => {
             </div>
             <h2 className="mb-2 text-2xl font-bold text-slate-950">Registration successful</h2>
             <p className="mb-6 text-slate-600">
-              {verificationMessage || 'Registration successful. Please check your email to verify your account.'}
+              {verificationMessage}
             </p>
 
-            <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm text-slate-600">
-                We sent a verification link to <strong>{email}</strong>. Check your inbox and spam folder, then open the link to activate your account.
-              </p>
-            </div>
+            {verificationEmailSubmitted && (
+              <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
+                <p className="text-sm text-green-800">Email submission accepted by the delivery provider.</p>
+              </div>
+            )}
 
             <button
               onClick={handleResend}

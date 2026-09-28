@@ -9,6 +9,8 @@ import {
 
 const ENV_NAMES = [
   'EMAIL_PROVIDER',
+  'RESEND_API_KEY',
+  'RESEND_FROM',
   'SMTP_HOST',
   'SMTP_PORT',
   'SMTP_USER',
@@ -82,7 +84,7 @@ test('public integration readiness reports internal and manual J&T logistics wit
 });
 
 test('admin integration readiness exposes categories but not secret variable names', async () => {
-  await withEnvironment({ EMAIL_PROVIDER: 'gmail' }, async () => {
+  await withEnvironment({ EMAIL_PROVIDER: 'smtp' }, async () => {
     const readiness = buildAdminIntegrationReadiness(sampleProviders);
     assert.equal(readiness.email.status, 'blocked_by_credentials');
     assert.deepEqual(readiness.email.missing_categories, ['host', 'port', 'username', 'password']);
@@ -111,6 +113,32 @@ test('configured SMTP aliases make email readiness explicit', async () => {
     assert.equal(status.ready, true);
     assert.equal(status.status, 'configured');
     assert.equal(status.transport.host, 'smtp.test.local');
+  });
+});
+
+test('configured Resend readiness reports presence flags without exposing credentials', async () => {
+  await withEnvironment({
+    EMAIL_PROVIDER: 'resend',
+    RESEND_API_KEY: 're_unit_secret',
+    RESEND_FROM: '10th West Moto <onboarding@resend.dev>',
+  }, async () => {
+    const status = getEmailConfigurationStatus();
+    assert.equal(status.provider, 'resend');
+    assert.equal(status.ready, true);
+    assert.equal(status.api_key_present, true);
+    assert.equal(status.from_present, true);
+
+    const readiness = buildAdminIntegrationReadiness(sampleProviders);
+    assert.deepEqual(readiness.email, {
+      provider: 'resend',
+      status: 'configured',
+      ready: true,
+      configured: true,
+      api_key_present: true,
+      from_present: true,
+      missing_categories: [],
+    });
+    assert.doesNotMatch(JSON.stringify(readiness), /re_unit_secret/);
   });
 });
 
