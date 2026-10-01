@@ -1,16 +1,25 @@
 import express from 'express';
 import {
-  createPaymentIntent,
-  verifyPayment,
-  getPublishableKey
-} from '../controllers/checkoutController.js';
-import { authenticateToken } from '../middleware/auth.js';
+  cancelCheckout,
+  cleanupExpiredReservations,
+  confirmCheckout,
+  createCheckout,
+  getCheckout,
+} from '../controllers/secureCheckoutController.js';
+import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Payment routes - can be used by authenticated or guest users
-router.get('/config', getPublishableKey);
-router.post('/create-payment-intent', createPaymentIntent);
-router.post('/verify-payment', verifyPayment);
+router.post('/', authenticateToken, createCheckout);
+router.post('/confirm', authenticateToken, confirmCheckout);
+router.post(
+  '/cleanup-expired',
+  authenticateToken,
+  requireRole('admin', 'super_admin', 'owner', 'store_staff'),
+  requirePermission('inventory.adjust'),
+  cleanupExpiredReservations,
+);
+router.get('/:checkoutId', authenticateToken, getCheckout);
+router.post('/:checkoutId/cancel', authenticateToken, cancelCheckout);
 
 export default router;

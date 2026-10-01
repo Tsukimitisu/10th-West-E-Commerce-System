@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 .env
+.env.local
+.env.*.local
+!.env.example
+frontend/playwright-report/
+frontend/test-results/
+backend/.test-credentials.local
 
 # Editor directories and files
 .vscode/*

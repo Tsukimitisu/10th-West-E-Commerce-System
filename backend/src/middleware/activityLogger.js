@@ -37,7 +37,10 @@ export const logActivity = async ({
  * `req.logActivity(action, entityType?, entityId?, details?)` to the request.
  */
 export const activityLogger = (req, res, next) => {
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const forwardedFor = req.headers['x-forwarded-for'];
+  const ip = typeof forwardedFor === 'string'
+    ? forwardedFor.split(',')[0].trim()
+    : (req.socket.remoteAddress || null);
   const ua = req.headers['user-agent'] || '';
 
   req.clientIp = ip;

@@ -1,136 +1,168 @@
-﻿import React from 'react';
-import { X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import React from 'react';
+import { Check, ChevronDown, SlidersHorizontal, X } from 'lucide-react';
+
+const INITIAL_VISIBLE_OPTIONS = 6;
 
 const FilterSidebar = ({
-  categories, selectedCategory, onCategoryChange,
-  selectedBrand, onBrandChange, brands,
-  priceRange, onPriceChange,
-  inStockOnly, onStockChange,
-  onClearAll, activeFilterCount,
-  isMobileOpen, onMobileClose,
+  selectedBrand,
+  onBrandChange,
+  brands,
+  selectedModel,
+  onModelChange,
+  models,
+  selectedColor,
+  onColorChange,
+  colors,
+  selectedYear,
+  onYearChange,
+  priceRange,
+  onPriceChange,
+  inStockOnly,
+  onStockChange,
+  onClearAll,
+  activeFilterCount,
+  isMobileOpen,
+  onMobileClose,
   showDesktop = true,
+  resultCount,
 }) => {
-  const [openSections, setOpenSections] = React.useState({ category: true, brand: true, price: true, stock: true });
+  const [openSections, setOpenSections] = React.useState({
+    model: true,
+    brand: true,
+    color: true,
+    fitment: true,
+    price: true,
+    stock: true,
+  });
+  const [showAllModels, setShowAllModels] = React.useState(false);
+  const [showAllBrands, setShowAllBrands] = React.useState(false);
+  const [showAllColors, setShowAllColors] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isMobileOpen === undefined) return undefined;
+    document.body.style.overflow = isMobileOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileOpen]);
 
   const toggleSection = (section) => {
-    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+    setOpenSections((current) => ({ ...current, [section]: !current[section] }));
   };
 
+  const visibleModels = showAllModels ? (models || []) : (models || []).slice(0, INITIAL_VISIBLE_OPTIONS);
+  const visibleBrands = showAllBrands ? brands : brands.slice(0, INITIAL_VISIBLE_OPTIONS);
+  const visibleColors = showAllColors ? (colors || []) : (colors || []).slice(0, INITIAL_VISIBLE_OPTIONS);
+
   const content = (
-    <div className="space-y-1">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-3">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal size={18} className="text-gray-600" />
-          <span className="font-display font-semibold text-gray-900">Filters</span>
+    <div className="flex min-h-full flex-col">
+      <div className="flex items-start justify-between gap-3 pb-5">
+        <div>
+          <div className="flex items-center gap-2 text-slate-950">
+            <SlidersHorizontal size={17} aria-hidden="true" />
+            <h2 className="font-display text-base font-bold">Filters</h2>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            {activeFilterCount ? `${activeFilterCount} active` : 'Refine your results'}
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
           {activeFilterCount > 0 && (
-            <span className="bg-orange-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>
+            <button type="button" onClick={onClearAll} className="rounded-md px-2 py-1 text-xs font-semibold text-orange-700 transition-colors hover:bg-orange-50 hover:text-orange-800">
+              Clear all
+            </button>
+          )}
+          {onMobileClose && (
+            <button type="button" onClick={onMobileClose} className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 lg:hidden" aria-label="Close filters">
+              <X size={18} />
+            </button>
           )}
         </div>
-        {activeFilterCount > 0 && (
-          <button onClick={onClearAll} className="text-xs text-orange-500 hover:text-orange-600 font-medium">Clear All</button>
-        )}
-        {onMobileClose && (
-          <button onClick={onMobileClose} className="p-1 text-gray-400 hover:text-gray-600 lg:hidden">
-            <X size={20} />
-          </button>
-        )}
       </div>
 
-      {/* Category */}
-      <FilterSection title="Category" open={openSections.category} onToggle={() => toggleSection('category')}>
-        <div className="space-y-1">
-          <button
-            onClick={() => onCategoryChange('')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!selectedCategory ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-          >
-            All Categories
-          </button>
-          {categories.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => onCategoryChange(String(cat.id))}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedCategory === String(cat.id) ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
+      <FilterSection title="Motorcycle Model" open={openSections.model} onToggle={() => toggleSection('model')}>
+        <OptionButton selected={!selectedModel} onClick={() => onModelChange?.('')}>All models</OptionButton>
+        {visibleModels.map((model) => (
+          <OptionButton key={model} selected={selectedModel === model} onClick={() => onModelChange?.(model)}>
+            {model}
+          </OptionButton>
+        ))}
+        {(models || []).length > INITIAL_VISIBLE_OPTIONS && (
+          <ShowMoreButton expanded={showAllModels} onClick={() => setShowAllModels((current) => !current)} />
+        )}
       </FilterSection>
 
-      {/* Brand */}
       {brands.length > 0 && (
-        <FilterSection title="Brand" open={openSections.brand} onToggle={() => toggleSection('brand')}>
-          <div className="space-y-1">
-            <button
-              onClick={() => onBrandChange('')}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${!selectedBrand ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-            >
-              All Brands
-            </button>
-            {brands.map(brand => (
-              <button
-                key={brand}
-                onClick={() => onBrandChange(brand)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedBrand === brand ? 'bg-orange-50 text-orange-500 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-              >
-                {brand}
-              </button>
-            ))}
-          </div>
+        <FilterSection title="Brand" open={openSections.brand} onToggle={() => toggleSection('brand')} sectionId="brand-filter-section">
+          <OptionButton selected={!selectedBrand} onClick={() => onBrandChange('')}>All brands</OptionButton>
+          {visibleBrands.map((brand) => (
+            <OptionButton key={brand} selected={selectedBrand === brand} onClick={() => onBrandChange(brand)}>
+              {brand}
+            </OptionButton>
+          ))}
+          {brands.length > INITIAL_VISIBLE_OPTIONS && (
+            <ShowMoreButton expanded={showAllBrands} onClick={() => setShowAllBrands((current) => !current)} />
+          )}
         </FilterSection>
       )}
 
-      {/* Price Range */}
-      <FilterSection title="Price Range" open={openSections.price} onToggle={() => toggleSection('price')}>
-        <div className="px-2 space-y-3">
-          <div className="flex gap-3">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Min (₱)</label>
-              <input
-                type="number" min={0} value={priceRange[0]}
-                onChange={e => onPriceChange([Number(e.target.value), priceRange[1]])}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Max (₱)</label>
-              <input
-                type="number" min={0} value={priceRange[1]}
-                onChange={e => onPriceChange([priceRange[0], Number(e.target.value)])}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              />
-            </div>
+      {(colors || []).length > 0 && (
+        <FilterSection title="Color" open={openSections.color} onToggle={() => toggleSection('color')}>
+          <OptionButton selected={!selectedColor} onClick={() => onColorChange?.('')}>All colors</OptionButton>
+          {visibleColors.map((color) => <OptionButton key={color} selected={selectedColor === color} onClick={() => onColorChange?.(color)}>{color}</OptionButton>)}
+          {(colors || []).length > INITIAL_VISIBLE_OPTIONS && <ShowMoreButton expanded={showAllColors} onClick={() => setShowAllColors((current) => !current)} />}
+        </FilterSection>
+      )}
+
+      <FilterSection title="Fitment year" open={openSections.fitment} onToggle={() => toggleSection('fitment')}>
+          <div>
+            <label className="block">
+              <span className="sr-only">Model year</span>
+              <input type="number" min="1950" max={new Date().getFullYear() + 1} value={selectedYear || ''} onChange={(event) => onYearChange?.(event.target.value)} placeholder="Model year" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-3 focus:ring-orange-500/10" />
+            </label>
           </div>
+      </FilterSection>
+
+      <FilterSection title="Price" open={openSections.price} onToggle={() => toggleSection('price')}>
+        <div className="grid grid-cols-2 gap-2">
+          <PriceInput label="Minimum" value={priceRange[0]} onChange={(value) => onPriceChange([value, priceRange[1]])} />
+          <PriceInput label="Maximum" value={priceRange[1]} onChange={(value) => onPriceChange([priceRange[0], value])} />
         </div>
       </FilterSection>
 
-      {/* Stock */}
       <FilterSection title="Availability" open={openSections.stock} onToggle={() => toggleSection('stock')}>
-        <label className="flex items-center gap-3 px-2 cursor-pointer">
-          <input
-            type="checkbox" checked={inStockOnly} onChange={e => onStockChange(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-          />
-          <span className="text-sm text-gray-600">In stock only</span>
+        <label className="flex cursor-pointer items-center gap-3 py-1 text-sm text-slate-700">
+          <span className={`grid h-5 w-5 place-items-center rounded border transition-colors ${inStockOnly ? 'border-orange-600 bg-orange-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}>
+            <Check size={13} />
+          </span>
+          <input type="checkbox" checked={inStockOnly} onChange={(event) => onStockChange(event.target.checked)} className="sr-only" />
+          In-stock items only
         </label>
       </FilterSection>
+
+      {onMobileClose && (
+        <div className="sticky bottom-0 -mx-5 mt-auto border-t border-slate-200 bg-white/95 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 backdrop-blur lg:hidden">
+          <button type="button" onClick={onMobileClose} className="h-11 w-full rounded-lg bg-slate-950 px-4 text-sm font-bold text-white transition-colors hover:bg-orange-600">
+            Show {resultCount ?? 0} results
+          </button>
+        </div>
+      )}
     </div>
   );
 
-  // Mobile overlay
   if (isMobileOpen !== undefined) {
     return (
       <>
-        {/* Desktop sidebar */}
-        <div className={`${showDesktop ? 'hidden lg:block' : 'hidden'} w-64 flex-shrink-0`}>
-          <div className="bg-white border border-gray-100 rounded-xl p-4 sticky top-24">{content}</div>
-        </div>
-        {/* Mobile overlay */}
+        <aside className={`${showDesktop ? 'hidden lg:block' : 'hidden'} w-[280px] shrink-0 xl:w-[300px]`} aria-label="Shop filters">
+          <div className="shop-filter-scroll sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain border-r border-slate-200 bg-white py-1 pr-5 [scrollbar-gutter:stable]" data-testid="shop-filter-scroll">
+            {content}
+          </div>
+        </aside>
+
         {isMobileOpen && (
-          <div className="fixed inset-0 z-[100] lg:hidden">
-            <div className="absolute inset-0 bg-black/40" onClick={onMobileClose} />
-            <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white shadow-2xl p-4 overflow-y-auto animate-fade-in">
+          <div className="fixed inset-0 z-[100] lg:hidden" role="dialog" aria-modal="true" aria-label="Product filters">
+            <button type="button" className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px] animate-fade-in" onClick={onMobileClose} aria-label="Close filters" />
+            <div className="shop-filter-scroll absolute inset-y-0 left-0 max-h-[88vh] w-[min(88vw,360px)] overflow-y-auto bg-white p-5 shadow-2xl animate-drawer-in">
               {content}
             </div>
           </div>
@@ -140,20 +172,53 @@ const FilterSidebar = ({
   }
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl p-4">
+    <aside className="shop-filter-scroll max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain border-r border-slate-200 bg-white p-5 [scrollbar-gutter:stable]" data-testid="shop-filter-scroll" aria-label="Shop filters">
       {content}
-    </div>
+    </aside>
   );
 };
 
-const FilterSection = ({ title, open, onToggle, children }) => (
-  <div className="border-b border-gray-50 pb-3">
-    <button onClick={onToggle} className="flex items-center justify-between w-full py-2.5 text-sm font-semibold text-gray-900">
+const FilterSection = ({ title, open, onToggle, children, sectionId }) => (
+  <section id={sectionId} className="border-t border-slate-200 py-4 first:border-t-0">
+    <button type="button" onClick={onToggle} className="flex w-full items-center justify-between py-1 text-left text-sm font-bold text-slate-900 transition-colors hover:text-orange-700" aria-expanded={open}>
       {title}
-      {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+      <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
     </button>
-    {open && <div className="pb-1">{children}</div>}
-  </div>
+    <div className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${open ? 'mt-3 grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+      <div className="min-h-0 space-y-1 overflow-hidden">{children}</div>
+    </div>
+  </section>
+);
+
+const OptionButton = ({ selected, onClick, children }) => (
+  <button type="button" onClick={onClick} className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${selected ? 'bg-orange-50 font-semibold text-orange-800' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'}`} aria-pressed={selected}>
+    <span className="truncate">{children}</span>
+    {selected && <Check size={14} className="shrink-0 text-orange-600" />}
+  </button>
+);
+
+const ShowMoreButton = ({ expanded, onClick }) => (
+  <button type="button" onClick={onClick} className="px-2.5 py-2 text-xs font-semibold text-slate-500 transition-colors hover:text-orange-700">
+    {expanded ? 'Show less' : 'Show more'}
+  </button>
+);
+
+const PriceInput = ({ label, value, onChange }) => (
+  <label className="block">
+    <span className="mb-1.5 block text-[11px] font-medium text-slate-500">{label}</span>
+    <span className="relative block">
+      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">₱</span>
+      <input
+        type="number"
+        min="0"
+        step="1"
+        value={value}
+        onKeyDown={(event) => { if (['.', ',', 'e', 'E', '-', '+'].includes(event.key)) event.preventDefault(); }}
+        onChange={(event) => onChange(event.target.value === '' ? 0 : Number.parseInt(event.target.value, 10))}
+        className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-7 pr-2 text-sm text-slate-800 outline-none transition focus:border-orange-500 focus:ring-3 focus:ring-orange-500/10"
+      />
+    </span>
+  </label>
 );
 
 export default FilterSidebar;
