@@ -41,6 +41,9 @@ const Navbar = ({ user, onLogout }) => {
   const supportMenuRef = useRef(null);
   const searchRequestRef = useRef(0);
   const searchCacheRef = useRef(new Map());
+  // Suggestions only open after the shopper types; a search restored from the URL
+  // (e.g. /shop?search=…) must not pop a dropdown over the results it already shows.
+  const searchTypedRef = useRef(false);
 
   const formatNotificationTime = (notification) => (
     notification.created_at || notification.published_at
@@ -169,6 +172,8 @@ const Navbar = ({ user, onLogout }) => {
       setIsSearching(false);
       return;
     }
+
+    if (!searchTypedRef.current) return;
 
     if (shouldReturnEmptyProductSearch(query)) {
       searchRequestRef.current += 1;
@@ -398,8 +403,15 @@ const Navbar = ({ user, onLogout }) => {
 
   useEffect(() => {
     if (isShopRoute) {
-      setGlobalSearch(searchParams.get('search') || '');
+      const urlSearch = searchParams.get('search') || '';
+      setGlobalSearch((current) => {
+        // Same query (ignoring the trailing space being typed): keep the input as-is.
+        if (current.trim() === urlSearch.trim()) return current;
+        searchTypedRef.current = false;
+        return urlSearch;
+      });
     } else if (isHomeRoute) {
+      searchTypedRef.current = false;
       setGlobalSearch('');
     }
   }, [isShopRoute, isHomeRoute, searchParams]);
@@ -415,6 +427,7 @@ const Navbar = ({ user, onLogout }) => {
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
+    searchTypedRef.current = true;
     setGlobalSearch(value);
     
     if (isShopRoute) {
@@ -424,6 +437,8 @@ const Navbar = ({ user, onLogout }) => {
 
   const handleGlobalSearchSubmit = (e) => {
     e.preventDefault();
+    searchTypedRef.current = false;
+    setShowDropdown(false);
     const value = globalSearch.trim();
 
     if (isShopRoute) {
@@ -453,7 +468,7 @@ const Navbar = ({ user, onLogout }) => {
         <div className="mx-auto max-w-[1600px] px-4 lg:px-6">
           <div className="flex items-center justify-between h-16">
             {/* Mobile menu button */}
-            <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 -ml-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+            <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" className="lg:hidden p-2.5 -ml-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
               <Menu size={22} />
             </button>
 
@@ -497,6 +512,7 @@ const Navbar = ({ user, onLogout }) => {
                 <div className="relative flex-1">
                   <button
                     type="submit"
+                    aria-label="Search"
                     className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors duration-200 cursor-pointer"
                   >
                     <Search size={18} />
@@ -504,14 +520,17 @@ const Navbar = ({ user, onLogout }) => {
                   <input
                     value={globalSearch}
                     onChange={handleSearchChange}
-                    onFocus={() => { if(globalSearch.length >= 2) setShowDropdown(true); }}
-                    placeholder={isShopRoute ? 'Search product names...' : 'Search parts, brands...'}
+                    onFocus={() => { if (searchTypedRef.current && globalSearch.trim().length >= 2) setShowDropdown(true); }}
+                    aria-label="Search products"
+                    type="search"
+                    autoComplete="off"
+                    placeholder={isShopRoute ? 'Search product names…' : 'Search parts, brands…'}
                     className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-700 bg-zinc-900 text-sm text-white placeholder-gray-400 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-all duration-200"
                   />
                   {showDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[400px] flex flex-col overflow-hidden">
                       {isSearching ? (
-                        <div className="p-4 text-center text-sm text-gray-400">Searching...</div>
+                        <div className="p-4 text-center text-sm text-gray-400">Searching…</div>
                       ) : searchError ? (
                         <div className="p-4 text-center text-sm text-red-400">{searchError}</div>
                       ) : searchResults.length === 0 ? (
@@ -541,7 +560,7 @@ const Navbar = ({ user, onLogout }) => {
                               </Link>
                             ))}
                           </div>
-                          <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
+                          <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { searchTypedRef.current = false; setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
                             View All Results
                           </Link>
                         </>
@@ -557,7 +576,7 @@ const Navbar = ({ user, onLogout }) => {
               {/* Notifications */}
               {user && (
                 <div ref={notifRef} className="relative">
-                  <button onClick={() => setNotifOpen(!notifOpen)} aria-label="Notifications" className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
+                  <button onClick={() => setNotifOpen(!notifOpen)} aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'} className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
                     <Bell size={20} />
                     {unreadCount > 0 && (
                       <span className="absolute top-1 right-1 bg-gradient-to-br from-red-500 to-red-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
@@ -740,6 +759,7 @@ const Navbar = ({ user, onLogout }) => {
               <div className="relative flex-1">
                 <button
                   type="submit"
+                  aria-label="Search"
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors duration-200 cursor-pointer"
                 >
                   <Search size={18} />
@@ -747,14 +767,17 @@ const Navbar = ({ user, onLogout }) => {
                 <input
                   value={globalSearch}
                   onChange={handleSearchChange}
-                  onFocus={() => { if(globalSearch.length >= 2) setShowDropdown(true); }}
-                  placeholder={isShopRoute ? 'Search product names...' : 'Search parts...'}
+                  onFocus={() => { if (searchTypedRef.current && globalSearch.trim().length >= 2) setShowDropdown(true); }}
+                  aria-label="Search products"
+                  type="search"
+                  autoComplete="off"
+                  placeholder={isShopRoute ? 'Search product names…' : 'Search parts…'}
                   className="w-full h-10 pl-9 pr-3 rounded-lg border border-zinc-750 bg-zinc-900 text-sm text-white placeholder-zinc-500 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-all duration-200"
                 />
                 {showDropdown && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[350px] flex flex-col overflow-hidden">
                     {isSearching ? (
-                      <div className="p-4 text-center text-sm text-gray-400">Searching...</div>
+                      <div className="p-4 text-center text-sm text-gray-400">Searching…</div>
                     ) : searchError ? (
                       <div className="p-4 text-center text-sm text-red-400">{searchError}</div>
                     ) : searchResults.length === 0 ? (
@@ -784,7 +807,7 @@ const Navbar = ({ user, onLogout }) => {
                             </Link>
                           ))}
                         </div>
-                        <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
+                        <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { searchTypedRef.current = false; setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
                           View All Results
                         </Link>
                       </>

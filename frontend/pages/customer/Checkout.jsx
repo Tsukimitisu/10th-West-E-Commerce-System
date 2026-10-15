@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield, Wallet } from 'lucide-react';
+import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield, Wallet, ShoppingBag } from 'lucide-react';
+import EmptyState from '../../components/ui/EmptyState';
 import { useCart } from '../../context/CartContext';
 import { getAddresses, createGcashCheckout, createOrder, getAuthAvailability, getProductById, getShippingConfig, getShippingQuote, validateDiscountCode } from '../../services/api';
 import AddressDropdowns from '../../components/AddressDropdowns';
@@ -715,29 +716,48 @@ const Checkout = () => {
   };
 
   if (!isBuyNow && (checkingCart || !cartInitialized || cartLoadError || cartSyncError)) {
-    return <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-      <div className="text-center">
-        <p className="text-gray-900 mb-3">{checkingCart || !cartInitialized ? 'Refreshing your cart...' : 'Unable to refresh your cart. Please check your connection and try again.'}</p>
-        {!checkingCart && <button type="button" onClick={refreshCheckoutCart} className="rounded-lg bg-red-600 px-5 py-2 text-white">Retry</button>}
-      </div>
-    </div>;
+    const refreshing = checkingCart || !cartInitialized;
+    return (
+      <main className="min-h-[70vh] bg-slate-50 px-4 py-16 sm:py-24">
+        <div className="mx-auto max-w-xl">
+          {refreshing ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm" role="status">
+              <span className="mx-auto block h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-orange-600" aria-hidden="true" />
+              <p className="mt-4 text-sm font-semibold text-slate-900">Checking prices and stock…</p>
+              <p className="mt-1 text-xs text-slate-500">We confirm your cart against current inventory before checkout.</p>
+            </div>
+          ) : (
+            <EmptyState
+              tone="error"
+              title="We couldn't refresh your cart"
+              description="Check your connection and try again. Nothing has been charged."
+              action={<button type="button" onClick={refreshCheckoutCart} className="inline-flex min-h-11 items-center rounded-lg bg-orange-600 px-5 text-sm font-semibold text-white hover:bg-orange-700">Retry</button>}
+            />
+          )}
+        </div>
+      </main>
+    );
   }
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="font-display font-semibold text-xl text-gray-900 mb-2">
-            {isBuyNow ? 'Buy Now session expired' : 'Your cart is empty'}
-          </h2>
-          <Link
-            to={isBuyNow ? (buyNowSessionStore?.returnPath || '/shop') : '/shop'}
-            className="text-red-500 hover:text-red-600 text-sm font-medium"
-          >
-            {isBuyNow ? 'Return to Product' : 'Continue Shopping'}
-          </Link>
+      <main className="min-h-[70vh] bg-slate-50 px-4 py-16 sm:py-24">
+        <div className="mx-auto max-w-xl">
+          <EmptyState
+            icon={ShoppingBag}
+            title={isBuyNow ? 'Buy Now session expired' : 'Your cart is empty'}
+            description={isBuyNow ? 'Return to the product to choose your options again.' : 'Add parts to your cart, then come back here to choose delivery and payment.'}
+            action={(
+              <Link
+                to={isBuyNow ? (buyNowSessionStore?.returnPath || '/shop') : '/shop'}
+                className="inline-flex min-h-11 items-center rounded-lg bg-orange-600 px-5 text-sm font-semibold text-white hover:bg-orange-700"
+              >
+                {isBuyNow ? 'Return to Product' : 'Continue Shopping'}
+              </Link>
+            )}
+          />
         </div>
-      </div>
+      </main>
     );
   }
 

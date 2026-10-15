@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowRight,
@@ -8,8 +8,8 @@ import {
   CreditCard,
   Headphones,
   PackageCheck,
+  Search,
   ShieldCheck,
-  Sparkles,
   Truck,
   Wrench,
 } from 'lucide-react';
@@ -32,15 +32,14 @@ const sectionMotion = {
   visible: { opacity: 1, y: 0 },
 };
 
-const ProductSection = ({ eyebrow, title, description, products, wishlistedIds, onWishlistToggle, light = true }) => {
+const ProductSection = ({ title, description, products, wishlistedIds, onWishlistToggle, light = true }) => {
   if (!products.length) return null;
   return (
-    <section className={`py-12 sm:py-16 ${light ? 'bg-white' : 'bg-slate-50'}`}>
+    <section className={`py-10 sm:py-14 ${light ? 'bg-white' : 'bg-slate-50'}`}>
       <div className="mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8">
-        <div className="mb-7 flex items-end justify-between gap-6">
+        <div className="mb-6 flex items-end justify-between gap-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-600">{eyebrow}</p>
-            <h2 className="mt-2 font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{title}</h2>
+            <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{title}</h2>
             {description && <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{description}</p>}
           </div>
           <Link to="/shop" className="hidden shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-orange-200 hover:text-orange-700 sm:flex">
@@ -64,6 +63,8 @@ const ProductSection = ({ eyebrow, title, description, products, wishlistedIds, 
 
 const Home = () => {
   const reduceMotion = useReducedMotion();
+  const navigate = useNavigate();
+  const [heroSearch, setHeroSearch] = useState('');
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [banners, setBanners] = useState([]);
@@ -164,9 +165,14 @@ const Home = () => {
   const hero = activeBanners[currentBanner];
   const heroLink = hero?.link_url || '/shop';
 
+  const submitHeroSearch = (event) => {
+    event.preventDefault();
+    navigate(`/shop?search=${encodeURIComponent(heroSearch.trim())}`);
+  };
+
   return (
     <main className="min-h-screen bg-white text-slate-950">
-      <section className="relative isolate min-h-[560px] overflow-hidden bg-[#0b1020] sm:min-h-[620px]">
+      <section className="relative isolate overflow-hidden bg-[#0b1020]">
         {hero?.image_url && (
           <motion.img
             key={hero.image_url}
@@ -181,7 +187,7 @@ const Home = () => {
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,13,25,0.98)_0%,rgba(11,16,32,0.88)_45%,rgba(11,16,32,0.35)_100%)]" />
         <div className="absolute -right-24 top-0 h-full w-2/5 -skew-x-12 bg-gradient-to-b from-red-600/15 to-orange-500/5" aria-hidden="true" />
 
-        <div className="relative mx-auto flex min-h-[560px] max-w-[1500px] items-center px-4 py-20 sm:min-h-[620px] sm:px-6 lg:px-8">
+        <div className="relative mx-auto flex min-h-[440px] max-w-[1500px] items-center px-4 pb-16 pt-12 sm:min-h-[500px] sm:px-6 sm:py-16 lg:px-8">
           <motion.div
             className="max-w-3xl"
             initial={reduceMotion ? false : 'hidden'}
@@ -189,17 +195,32 @@ const Home = () => {
             variants={sectionMotion}
             transition={{ duration: 0.45 }}
           >
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-semibold text-slate-200">
-              <Sparkles size={14} className="text-orange-400" />
-              Parts selected for Philippine riders
-            </div>
-            <h1 className="font-display text-4xl font-black leading-[1.06] tracking-[-0.04em] text-white sm:text-6xl lg:text-7xl">
-              {hero?.title || <>Build a better ride. <span className="brand-gradient-text">Start here.</span></>}
+            <p className="mb-4 text-sm font-semibold text-orange-300">Motorcycle parts for Philippine riders</p>
+            <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl">
+              {hero?.title || <>Build a better ride. <span className="text-orange-400">Start here.</span></>}
             </h1>
-            <p className="mt-6 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
               {hero?.subtitle || 'Shop dependable motorcycle parts, riding gear, and accessories with clear stock status and support from people who know motorcycles.'}
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <form onSubmit={submitHeroSearch} role="search" className="mt-7 flex max-w-xl gap-2 rounded-xl bg-white p-1.5 shadow-lg">
+              <label htmlFor="home-part-search" className="sr-only">Search parts</label>
+              <div className="relative min-w-0 flex-1">
+                <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                <input
+                  id="home-part-search"
+                  type="search"
+                  value={heroSearch}
+                  onChange={(event) => setHeroSearch(event.target.value)}
+                  placeholder="Part name, number, or model…"
+                  autoComplete="off"
+                  className="h-11 w-full rounded-lg bg-transparent pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-500 focus:outline-none"
+                />
+              </div>
+              <button type="submit" className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-800">
+                Search
+              </button>
+            </form>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
               <BrandButton to={heroLink} size="lg">
                 {hero?.button_text || 'Shop motorcycle parts'} <ArrowRight size={18} />
               </BrandButton>
@@ -291,12 +312,11 @@ const Home = () => {
             </section>
           )}
           {categories.length > 0 && (
-            <section className="bg-slate-50 py-12 sm:py-16">
+            <section className="bg-slate-50 py-10 sm:py-14">
               <div className="mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8">
-                <div className="mb-7 flex items-end justify-between gap-6">
+                <div className="mb-6 flex items-end justify-between gap-6">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-600">Browse faster</p>
-                    <h2 className="mt-2 font-display text-2xl font-extrabold text-slate-950 sm:text-3xl">Shop by category</h2>
+                    <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Shop by category</h2>
                   </div>
                   <Link to="/shop" className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-orange-200 hover:text-orange-700 sm:flex">
                     All categories <ArrowRight size={16} />
@@ -324,7 +344,6 @@ const Home = () => {
           )}
 
           <ProductSection
-            eyebrow="Recommended"
             title="Featured products"
             description="Popular, highly rated, and currently discounted items from the live catalog."
             products={featured}
@@ -332,7 +351,6 @@ const Home = () => {
             onWishlistToggle={toggleWishlist}
           />
           <ProductSection
-            eyebrow="Proven choices"
             title="Best sellers"
             description="Products riders are buying most, based on completed order data."
             products={bestSellers}
@@ -341,14 +359,12 @@ const Home = () => {
             light={false}
           />
           <ProductSection
-            eyebrow="Just added"
             title="New arrivals"
             products={newArrivals}
             wishlistedIds={wishlistedIds}
             onWishlistToggle={toggleWishlist}
           />
           <ProductSection
-            eyebrow="Pick up where you left off"
             title="Recently viewed"
             products={recentlyViewed}
             wishlistedIds={wishlistedIds}
