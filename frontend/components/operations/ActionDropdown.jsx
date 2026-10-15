@@ -25,10 +25,17 @@ const ActionDropdown = ({ items, label = 'Row actions' }) => {
       if (!menuRef.current?.contains(event.target) && !triggerRef.current?.contains(event.target)) setOpen(false);
     };
     const closeForViewportChange = () => setOpen(false);
+    const closeOnEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener('keydown', closeOnEscape);
     document.addEventListener('mousedown', close);
     window.addEventListener('resize', closeForViewportChange);
     window.addEventListener('scroll', closeForViewportChange, true);
     return () => {
+      document.removeEventListener('keydown', closeOnEscape);
       document.removeEventListener('mousedown', close);
       window.removeEventListener('resize', closeForViewportChange);
       window.removeEventListener('scroll', closeForViewportChange, true);
@@ -41,7 +48,7 @@ const ActionDropdown = ({ items, label = 'Row actions' }) => {
         ref={triggerRef}
         type="button"
         onClick={toggle}
-        className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+        className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -53,7 +60,7 @@ const ActionDropdown = ({ items, label = 'Row actions' }) => {
           ref={menuRef}
           role="menu"
           style={position}
-          className="fixed z-[150] w-52 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl"
+          className="fixed z-[150] w-52 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-[var(--shadow-overlay)]"
         >
           {items.map((item) => {
             const Icon = item.icon;
