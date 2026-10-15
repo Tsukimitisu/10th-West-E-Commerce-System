@@ -1,28 +1,40 @@
-/* 10th West Moto design system */
+/* 10th West Moto design system — see design-system/MASTER.md */
 :root {
   color-scheme: light;
   font-synthesis: none;
+  /* Primitives */
   --brand-950: #080d19;
   --brand-900: #0b1020;
   --brand-800: #162044;
   --brand-700: #1b2754;
   --accent-red: #e53935;
   --accent-orange: #f97316;
+  /* Semantic */
+  --accent: #ea580c;
+  --accent-hover: #c2410c;
+  --accent-soft: #fff7ed;
   --surface: #ffffff;
   --surface-muted: #f8fafc;
   --surface-subtle: #f1f5f9;
   --border: #e2e8f0;
-  --text: #111827;
+  --border-strong: #cbd5e1;
+  --text: #0f172a;
+  --text-secondary: #475569;
   --text-muted: #64748b;
-  --success: #15803d;
+  --success: #047857;
   --warning: #b45309;
   --danger: #dc2626;
+  --info: #1d4ed8;
+  --focus-ring: rgba(234, 88, 12, 0.55);
   --brand-gradient: linear-gradient(135deg, var(--accent-red), var(--accent-orange));
-  --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.08);
-  --shadow-elevated: 0 24px 60px rgba(8, 13, 25, 0.16);
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
+  /* Elevation: one soft offset shadow per level, no coloured halos */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.04);
+  --shadow-elevated: 0 12px 32px rgba(15, 23, 42, 0.12);
+  --shadow-overlay: 0 20px 48px rgba(8, 13, 25, 0.18);
+  /* Radius: controls 8px, cards 12px, dialogs 16px */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
 }
 
 * {
@@ -58,6 +70,15 @@ textarea {
 button,
 a {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+:is(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 button:not(:disabled),
@@ -79,8 +100,8 @@ input[type="password"]::-ms-clear {
 }
 
 *:focus-visible {
-  outline: 3px solid rgba(249, 115, 22, 0.65);
-  outline-offset: 3px;
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 ::selection {
@@ -118,11 +139,9 @@ input[type="password"]::-ms-clear {
   background: var(--brand-gradient);
 }
 
+/* Retained for compatibility; emphasis now uses solid accent color (no gradient text). */
 .brand-gradient-text {
-  background: var(--brand-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--accent-orange);
 }
 
 .surface-card {
@@ -139,8 +158,8 @@ input[type="password"]::-ms-clear {
 @media (hover: hover) {
   .interactive-card:hover {
     transform: translateY(-2px);
-    border-color: rgba(249, 115, 22, 0.3);
-    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.1);
+    border-color: #cbd5e1;
+    box-shadow: var(--shadow-elevated);
   }
 }
 
@@ -235,11 +254,40 @@ input[type="password"]::-ms-clear {
   to { background-position: -200% 0; }
 }
 
-@media (max-width: 480px) {
-  .surface-card {
-    border-radius: 14px;
-  }
+.overscroll-contain {
+  overscroll-behavior: contain;
 }
+
+/* Rich text rendered from owner-authored HTML (product descriptions, policies). */
+.rich-text {
+  color: var(--text-secondary);
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.rich-text > * + * {
+  margin-top: 0.75em;
+}
+
+.rich-text :is(h2, h3, h4) {
+  margin-top: 1.25em;
+  color: var(--text);
+  font-family: "Poppins", "Inter", sans-serif;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.rich-text h2 { font-size: 1.125rem; }
+.rich-text h3 { font-size: 1rem; }
+.rich-text h4 { font-size: 0.9375rem; }
+.rich-text :is(strong, b) { color: var(--text); font-weight: 600; }
+.rich-text :is(em, i) { font-style: italic; }
+.rich-text u { text-decoration: underline; text-underline-offset: 2px; }
+.rich-text ul { list-style: disc; padding-left: 1.25rem; }
+.rich-text ol { list-style: decimal; padding-left: 1.25rem; }
+.rich-text li + li { margin-top: 0.25em; }
+.rich-text blockquote { border-left: 1px solid var(--border-strong); padding-left: 1rem; color: var(--text-muted); }
+.rich-text a { color: var(--accent-hover); text-decoration: underline; text-underline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   html {
@@ -378,7 +426,12 @@ input[type="password"]::-ms-clear {
 }
 
 .operations-content :is(.shadow-xl, .shadow-2xl) {
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.1) !important;
+  box-shadow: var(--shadow-elevated) !important;
+}
+
+/* Legacy views still use rounded-2xl/3xl on business panels; cap them at the card radius. */
+.operations-content :is(.rounded-2xl, .rounded-3xl):not([role="dialog"] *) {
+  border-radius: var(--radius-md);
 }
 
 @media (max-width: 640px) {
