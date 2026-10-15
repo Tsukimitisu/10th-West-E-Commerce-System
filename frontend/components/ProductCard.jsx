@@ -7,6 +7,7 @@ import { useCart } from '../context/CartContext';
 import PriceDisplay from './ui/PriceDisplay';
 import StatusBadge from './ui/StatusBadge';
 import { handleProductImageError, resolveProductImageUrl } from '../utils/productImages.js';
+import { richTextToPlainText } from '../utils/richText.js';
 
 const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }) => {
   const navigate = useNavigate();
@@ -115,7 +116,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
               <Heart size={18} className={wishlisted ? 'fill-orange-500 text-orange-500' : ''} />
             </button>
           </div>
-          {product.description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{product.description}</p>}
+          {product.description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{richTextToPlainText(product.description)}</p>}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {stockBadge}
             {Number(product.rating) > 0 && (

@@ -8,6 +8,10 @@ import ProductCard from '../components/ProductCard';
 import StarRating from '../components/StarRating';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
 import ReviewCard from '../components/ReviewCard';
+import RichText from '../components/ui/RichText';
+import EmptyState from '../components/ui/EmptyState';
+import BrandButton from '../components/ui/BrandButton';
+import { richTextToPlainText } from '../utils/richText.js';
 import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
 import { handleProductImageError, PRODUCT_IMAGE_FALLBACK, resolveProductImageUrl } from '../utils/productImages.js';
 
@@ -493,7 +497,7 @@ const ProductDetail = () => {
   const shareTitle = product ? `${product.name} | 10th West Moto` : DEFAULT_SHARE_METADATA.title;
   const shareDescription = product
     ? truncateText(
-      product.description || `${product.category_name || 'Motorcycle part'} available now at 10th West Moto.`,
+      richTextToPlainText(product.description) || `${product.category_name || 'Motorcycle part'} available now at 10th West Moto.`,
       160,
     )
     : DEFAULT_SHARE_METADATA.description;
@@ -911,7 +915,18 @@ const ProductDetail = () => {
     );
   }
 
-  if (!product) return <div className="text-center py-20 text-gray-600">Product not found.</div>;
+  if (!product) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-16 sm:py-24">
+        <EmptyState
+          icon={Package}
+          title="Product not found"
+          description="This part may have been removed from the catalog or the link is incorrect. Search the shop for the part number or browse current stock."
+          action={<><BrandButton to="/shop">Browse the shop</BrandButton><BrandButton to="/contact" variant="secondary">Ask about a part</BrandButton></>}
+        />
+      </main>
+    );
+  }
 
   const mediaItems = extractProductMedia(product);
   const selectedMedia = mediaItems[Math.min(selectedImage, mediaItems.length - 1)] || mediaItems[0];
@@ -1279,18 +1294,18 @@ const ProductDetail = () => {
         </div>
 
         {/* Tabs */}
-        <div className="mt-8 bg-white border border-slate-200/80 rounded-3xl p-5 md:p-8 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.35)]">
-          <div className="inline-flex gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-8">
+        <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-8">
+          <div className="mb-8 inline-flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Product information">
             {(['description', 'specs', 'reviews']).map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`px-4 md:px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors capitalize ${activeTab === tab ? 'bg-white text-red-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)}
+                className={`min-h-10 whitespace-nowrap rounded-md px-4 py-2 text-sm font-semibold capitalize transition-colors md:px-5 ${activeTab === tab ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
               >{tab === 'reviews' ? `Reviews (${reviews.length || product.reviewCount || 0})` : tab}</button>
             ))}
           </div>
 
           {activeTab === 'description' && (
-            <div className="prose prose-sm max-w-none text-slate-600 leading-relaxed animate-fade-in">
-              <p>{product.description || 'No description available for this product.'}</p>
+            <div className="max-w-3xl animate-fade-in text-sm sm:text-base">
+              <RichText value={product.description} fallback={<p className="text-slate-500">No description available for this product.</p>} />
               {(product.fitments?.length > 0 || product.category_name) && (
                 <div className="mt-6 p-5 bg-slate-50 border border-slate-200 rounded-2xl">
                   <h4 className="font-display font-semibold text-slate-900 mb-2 flex items-center gap-2"><Package size={16} /> Motorcycle Compatibility</h4>
