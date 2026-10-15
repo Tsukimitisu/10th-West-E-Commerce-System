@@ -6,6 +6,7 @@ import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 import { getCurrentAuthUser } from '../../services/authSession';
 import PageHeader from '../../components/operations/PageHeader';
+import EmptyState from '../../components/ui/EmptyState';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import { API_URL } from '../../services/apiConfig.js';
 
@@ -279,7 +280,7 @@ const OrdersView = () => {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Sales operations" title="Order management" description={`${orders.length} orders · Review payment, fulfillment, courier, delivery, and refund state.`} />
+      <PageHeader title="Order management" description={`${orders.length} orders · Review payment, fulfillment, courier, delivery, and refund state.`} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -301,13 +302,13 @@ const OrdersView = () => {
       <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)] lg:items-start" data-testid="staff-orders-filters">
         <div className="relative w-full min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search orders..." value={search} onChange={e => setSearch(e.target.value)}
+          <input type="search" aria-label="Search orders" placeholder="Search orders…" value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
         </div>
-        <div className="flex min-w-0 flex-wrap gap-1.5">
-          <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
+        <div className="-mx-1 flex min-w-0 snap-x gap-1.5 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0" role="group" aria-label="Filter orders by status">
+          <button type="button" aria-pressed={!statusFilter} onClick={() => setStatusFilter('')} className={`shrink-0 snap-start whitespace-nowrap min-h-9 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
           {statuses.map(s => (
-            <button key={s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} title={s === 'failed' ? PAYMENT_FAILED_HELP : undefined} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${statusFilter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>{getOrderStatusLabel(s)}</button>
+            <button key={s} type="button" aria-pressed={statusFilter === s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} title={s === 'failed' ? PAYMENT_FAILED_HELP : undefined} className={`shrink-0 snap-start whitespace-nowrap min-h-9 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${statusFilter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>{getOrderStatusLabel(s)}</button>
           ))}
         </div>
       </div>
@@ -317,9 +318,13 @@ const OrdersView = () => {
         {loading ? (
           <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <ShoppingCart size={40} className="mx-auto text-gray-300 mb-3" />
-            <p className="text-sm text-gray-400">No orders found</p>
+          <div className="p-4 sm:p-6">
+            <EmptyState
+              icon={ShoppingCart}
+              title={orders.length === 0 ? 'No orders yet' : 'No orders match these filters'}
+              description={orders.length === 0 ? 'Online and in-store orders will appear here as soon as they are placed.' : 'Try another status or clear the search to see more orders.'}
+              action={orders.length > 0 && (search || statusFilter) ? <button type="button" onClick={() => { setSearch(''); setStatusFilter(''); }} className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Clear filters</button> : null}
+            />
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -337,7 +342,7 @@ const OrdersView = () => {
                 <tr key={o.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-4 py-3">
                     <p className="font-medium text-white">#{o.id.toString().padStart(4, '0')}</p>
-                    <p className="text-[10px] text-gray-400">{o.items?.length || '-'} items</p>
+                    {(() => { const count = Number(o.item_count ?? o.items?.length ?? 0); return count > 0 ? <p className="text-xs text-gray-400">{count} {count === 1 ? 'item' : 'items'}</p> : null; })()}
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
                     <p className="text-sm text-gray-700">{o.customer_display_name || 'Customer unavailable'}</p>
@@ -349,7 +354,7 @@ const OrdersView = () => {
                       onClick={() => openStatusChange(o)}
                       disabled={isInStoreOrder(o)}
                       title={isInStoreOrder(o) ? POS_STATUS_LOCK_HELP : o.status === 'failed' ? PAYMENT_FAILED_HELP : undefined}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${isInStoreOrder(o) ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:opacity-80'} ${statusColors[o.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}
+                      className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-semibold border ${isInStoreOrder(o) ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:opacity-80'} ${statusColors[o.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}
                     >
                       {statusIcons[o.status]} {getOrderStatusLabel(o.status)}
                     </button>
@@ -357,7 +362,7 @@ const OrdersView = () => {
                   <td className="px-4 py-3 hidden sm:table-cell">
                     <span className="block text-xs font-medium text-gray-200">{String(o.payment_method || '-').toLowerCase() === 'gcash' ? 'GCash' : 'Cash on Delivery'}</span>
                     <span
-                      className={`mt-0.5 block text-[10px] ${o.payment_status === 'paid' ? 'text-green-400' : o.payment_status === 'failed' ? 'text-red-400' : 'text-amber-300'}`}
+                      className={`mt-0.5 block text-xs ${o.payment_status === 'paid' ? 'text-green-400' : o.payment_status === 'failed' ? 'text-red-400' : 'text-amber-300'}`}
                       title={o.payment_method === 'gcash' && !['paid', 'failed'].includes(o.payment_status) ? 'Waiting for PayMongo confirmation.' : undefined}
                     >
                       {getPaymentStatusLabel(o.payment_status)}
@@ -366,7 +371,7 @@ const OrdersView = () => {
                   <td className="px-4 py-3 text-right font-bold text-white">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openDetail(o)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="View"><Eye size={14} /></button>
+                      <button type="button" onClick={() => openDetail(o)} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50" aria-label={`View order #${o.id.toString().padStart(4, '0')}`}><Eye size={14} aria-hidden="true" /> <span className="hidden lg:inline">View</span></button>
                     </div>
                   </td>
                 </tr>

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronRight,
+  ChevronUp,
   Clock3,
   History,
   Loader2,
@@ -40,6 +41,9 @@ import PaymentModal from './PaymentModal';
 import ReceiptModal from './ReceiptModal';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import CameraScannerModal from '../../components/staff/CameraScannerModal.jsx';
+import { roleLandingPath } from '../../utils/roleLanding.js';
+
+const DESKTOP_QUERY = '(min-width: 1024px)';
 
 const MAX_POS_QUANTITY = 100;
 const MAX_POS_QUANTITY_MESSAGE = 'Maximum POS quantity per item is 100.';
@@ -91,6 +95,17 @@ const PosTerminal = () => {
   const [voidReason, setVoidReason] = useState('');
   const [voidProcessing, setVoidProcessing] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  const [saleExpanded, setSaleExpanded] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia(DESKTOP_QUERY).matches);
+  const workspacePath = roleLandingPath(user?.role);
+  const backPath = workspacePath && workspacePath !== '/pos' ? workspacePath : null;
+
+  useEffect(() => {
+    const query = window.matchMedia(DESKTOP_QUERY);
+    const sync = (event) => setIsDesktop(event.matches);
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -417,7 +432,7 @@ const PosTerminal = () => {
           <AlertCircle className="mx-auto text-red-600" size={36} />
           <h1 className="mt-4 font-display text-2xl font-bold text-slate-950">POS access is not enabled</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">Your account is signed in, but it does not have the POS permission. Ask an owner or administrator to update your role permissions.</p>
-          <button onClick={() => navigate('/admin')} className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white"><ArrowLeft size={16} /> Back to dashboard</button>
+          <button onClick={() => navigate(backPath || '/')} className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white"><ArrowLeft size={16} /> Back to dashboard</button>
         </div>
       </main>
     );
@@ -427,7 +442,7 @@ const PosTerminal = () => {
     <div className="flex h-screen flex-col overflow-hidden bg-slate-100 text-slate-950">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 shadow-sm sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
-          <button onClick={() => navigate('/admin')} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-slate-600 hover:bg-slate-100" aria-label="Back to dashboard"><ArrowLeft size={19} /></button>
+          {backPath && <button type="button" onClick={() => navigate(backPath)} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100" aria-label="Back to dashboard"><ArrowLeft size={19} /></button>}
           <BrandMark link={false} className="hidden sm:inline-flex" />
           <div className="border-l border-slate-200 pl-3">
             <p className="font-display text-sm font-bold">Point of Sale</p>
@@ -444,15 +459,18 @@ const PosTerminal = () => {
         </div>
       </header>
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px]">
+      <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_400px] lg:grid-rows-1">
         <section className="flex min-h-0 flex-col overflow-hidden">
           <div className="border-b border-slate-200 bg-white px-3 py-3 sm:px-5">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="relative flex-1">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:gap-3">
+              <div className="relative col-span-2 flex-1">
+                <label htmlFor="pos-search" className="sr-only">Search products or scan a barcode</label>
                 <Search size={19} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   ref={searchRef}
+                  id="pos-search"
                   type="search"
+                  autoComplete="off"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search name, SKU, barcode, part number…"
@@ -461,15 +479,15 @@ const PosTerminal = () => {
                 />
                 {catalogLoading && <Loader2 size={17} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-red-600" />}
               </div>
-              <button type="button" onClick={() => setScannerOpen(true)} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-orange-400 bg-orange-50 px-4 text-sm font-bold text-orange-800 hover:bg-orange-100">
-                <ScanLine size={18} /> Scan with Camera
+              <button type="button" onClick={() => setScannerOpen(true)} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-orange-400 bg-orange-50 px-3 text-sm font-bold text-orange-800 hover:bg-orange-100 sm:px-4">
+                <ScanLine size={18} aria-hidden="true" /> <span className="sm:hidden">Scan</span><span className="hidden sm:inline">Scan with Camera</span>
               </button>
-              <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold focus:border-orange-500 focus:outline-none">
+              <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} aria-label="Filter by category" className="h-12 min-w-0 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold focus:border-orange-500 focus:outline-none">
                 <option value="">All categories</option>
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </select>
             </div>
-            <p className="mt-2 text-xs text-slate-500">Use the phone camera, type manually, or keep using a physical barcode scanner.</p>
+            <p className="mt-2 hidden text-xs text-slate-500 sm:block">Use the phone camera, type manually, or keep using a physical barcode scanner.</p>
             {dailySummary && (
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
                 <span><strong className="text-slate-950">{dailySummary.transaction_count}</strong> sales today</span>
@@ -491,13 +509,23 @@ const PosTerminal = () => {
           </div>
         </section>
 
-        <aside className="flex min-h-0 flex-col border-l border-slate-200 bg-white">
-          <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-4">
-            <div className="flex items-center gap-2"><ShoppingCart size={19} /><h2 className="font-display text-base font-bold">Current sale</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold">{cartCount}</span></div>
-            {cart.length > 0 && <button onClick={() => { setCart([]); setPromotionCode(''); setPromotionInput(''); }} className="text-xs font-semibold text-red-600 hover:underline">Clear</button>}
+        <aside className={`flex min-h-0 flex-col border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)] lg:border-l lg:border-t-0 lg:shadow-none ${saleExpanded && !isDesktop ? 'max-h-[78dvh]' : ''}`} aria-label="Current sale">
+          <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 lg:h-16">
+            {isDesktop ? (
+              <div className="flex items-center gap-2"><ShoppingCart size={19} aria-hidden="true" /><h2 className="font-display text-base font-bold">Current sale</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums">{cartCount}</span></div>
+            ) : (
+              <button type="button" onClick={() => setSaleExpanded((value) => !value)} aria-expanded={saleExpanded} aria-controls="pos-sale-lines" className="-ml-2 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left">
+                <ShoppingCart size={19} aria-hidden="true" />
+                <h2 className="font-display text-base font-bold">Current sale</h2>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums">{cartCount}</span>
+                <span className="ml-auto text-xs font-semibold text-slate-500">{saleExpanded ? 'Hide items' : 'Show items'}</span>
+                <ChevronUp size={18} className={`shrink-0 text-slate-500 transition-transform ${saleExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+              </button>
+            )}
+            {cart.length > 0 && <button type="button" onClick={() => { setCart([]); setPromotionCode(''); setPromotionInput(''); }} className="min-h-11 shrink-0 px-2 text-xs font-semibold text-red-600 hover:underline">Clear</button>}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div id="pos-sale-lines" className={`min-h-0 flex-1 overflow-y-auto p-3 ${isDesktop || saleExpanded ? '' : 'hidden'}`}>
             {cart.length === 0 ? (
               <div className="grid h-full min-h-56 place-items-center text-center">
                 <div><ShoppingCart className="mx-auto text-slate-300" size={36} /><p className="mt-3 text-sm font-semibold text-slate-700">Cart is empty</p><p className="mt-1 text-xs text-slate-500">Select a product to begin.</p></div>
@@ -529,8 +557,8 @@ const PosTerminal = () => {
             )}
           </div>
 
-          <div className="shrink-0 border-t border-slate-200 bg-slate-50 p-4">
-            {capabilities?.can_discount && (
+          <div className="shrink-0 border-t border-slate-200 bg-slate-50 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:p-4">
+            {capabilities?.can_discount && (isDesktop || saleExpanded) && (
               <div className="mb-3">
                 <label htmlFor="promotion-code" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><Tag size={13} /> Promotion code</label>
                 <div className="flex gap-2">
@@ -541,12 +569,12 @@ const PosTerminal = () => {
             )}
 
             <dl className="space-y-2 text-sm">
-              <div className="flex justify-between text-slate-600"><dt>Subtotal</dt><dd>{quoteLoading ? 'Validating…' : formatCurrency(quote?.subtotal_amount || 0)}</dd></div>
+              <div className="hidden justify-between text-slate-600 lg:flex"><dt>Subtotal</dt><dd>{quoteLoading ? 'Validating…' : formatCurrency(quote?.subtotal_amount || 0)}</dd></div>
               {Number(quote?.discount_amount) > 0 && <div className="flex justify-between text-emerald-700"><dt>Discount {quote?.promotion?.code && `(${quote.promotion.code})`}</dt><dd>-{formatCurrency(quote.discount_amount)}</dd></div>}
-              <div className="flex items-end justify-between border-t border-slate-200 pt-3"><dt className="font-display text-base font-bold">Total</dt><dd className="font-display text-2xl font-black">{formatCurrency(displayTotal)}</dd></div>
+              <div className="flex items-end justify-between lg:border-t lg:border-slate-200 lg:pt-3"><dt className="font-display text-base font-bold">Total</dt><dd className="font-display text-xl font-black tabular-nums lg:text-2xl">{formatCurrency(displayTotal)}</dd></div>
             </dl>
             {cartError && <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{cartError}</div>}
-            <button onClick={openPayment} disabled={!cart.length || !quote?.valid || quoteLoading || Boolean(cartError)} className="mt-4 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 text-base font-bold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">
+            <button onClick={openPayment} disabled={!cart.length || !quote?.valid || quoteLoading || Boolean(cartError)} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 lg:mt-4 lg:min-h-14 px-5 text-base font-bold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">
               <ReceiptText size={19} /> Pay {formatCurrency(displayTotal)}
             </button>
           </div>
