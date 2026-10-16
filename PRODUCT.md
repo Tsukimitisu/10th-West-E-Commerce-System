@@ -36,3 +36,7 @@ The explicit user brief, official logo, existing routes, catalog imagery and con
 ## Accessibility & Inclusion
 
 Keyboard navigation, visible focus, meaningful labels, non-color status, reduced motion, WCAG-conscious contrast and practical 44px touch targets. Phone, tablet and desktop verification.
+
+## Premium redesign commitments (17 October 2026)
+
+The customer experience uses a true 460–560px desktop commerce banner, a compact header and merchandise-led light catalog. Authentication is one centered 420–480px surface: no split layout. Orange owns interaction; red is restrained to danger/sale/critical state. Business workspaces prioritize neutral data surfaces, compact toolbars and readable Inter text. Existing banners, product records and permissions remain editable through their original workflows; unsuitable supplied game/anime imagery is excluded from the primary hero treatment. The user's detailed composition is pinned and supersedes concept-workflow alternates.

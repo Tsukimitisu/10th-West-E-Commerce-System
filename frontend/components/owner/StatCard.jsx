@@ -1,10 +1,10 @@
 ﻿import React from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
-const StatCard = ({ icon, label, value, change, changeLabel, color = 'bg-orange-50 text-orange-800' }) => (
-  <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+const StatCard = ({ icon, label, value, change, changeLabel }) => (
+  <div className="rounded-xl border border-slate-200 bg-white p-5">
     <div className="flex items-start justify-between mb-3">
-      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}>
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 text-slate-700`}>
         {icon}
       </div>
       {change !== undefined && (
@@ -18,7 +18,7 @@ const StatCard = ({ icon, label, value, change, changeLabel, color = 'bg-orange-
     </div>
     <p className="font-sans tabular-nums text-2xl font-bold text-slate-950">{value}</p>
     <p className="mt-1 text-xs text-slate-600">{label}</p>
-    {changeLabel && <p className="mt-0.5 text-[10px] text-slate-500">{changeLabel}</p>}
+    {changeLabel && <p className="mt-0.5 text-xs text-slate-500">{changeLabel}</p>}
   </div>
 );
 

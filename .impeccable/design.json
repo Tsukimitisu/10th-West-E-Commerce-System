@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-16T17:42:05.244637Z",
+  "generatedAt": "2026-10-16T19:01:19.848517+00:00",
   "title": "Design System: 10th West Moto",
   "extensions": {
     "colorMeta": {
@@ -8,103 +8,103 @@
         "role": "neutral",
         "displayName": "Obsidian",
         "tonalRamp": [
-          "oklch(0.150 0.0108 259.64)",
-          "oklch(0.260 0.0108 259.64)",
-          "oklch(0.380 0.0108 259.64)",
-          "oklch(0.490 0.0108 259.64)",
-          "oklch(0.610 0.0108 259.64)",
-          "oklch(0.720 0.0108 259.64)",
-          "oklch(0.840 0.0108 259.64)",
-          "oklch(0.950 0.0108 259.64)"
+          "oklch(0.150 0.0094 262.99)",
+          "oklch(0.260 0.0094 262.99)",
+          "oklch(0.380 0.0094 262.99)",
+          "oklch(0.490 0.0094 262.99)",
+          "oklch(0.610 0.0094 262.99)",
+          "oklch(0.720 0.0094 262.99)",
+          "oklch(0.840 0.0094 262.99)",
+          "oklch(0.950 0.0094 262.99)"
         ]
       },
       "racing-navy": {
         "role": "neutral",
         "displayName": "Racing Navy",
         "tonalRamp": [
-          "oklch(0.150 0.0869 267.34)",
-          "oklch(0.260 0.0869 267.34)",
-          "oklch(0.380 0.0869 267.34)",
-          "oklch(0.490 0.0869 267.34)",
-          "oklch(0.610 0.0869 267.34)",
-          "oklch(0.720 0.0869 267.34)",
-          "oklch(0.840 0.0869 267.34)",
-          "oklch(0.950 0.0869 267.34)"
+          "oklch(0.150 0.0650 267.44)",
+          "oklch(0.260 0.0650 267.44)",
+          "oklch(0.380 0.0650 267.44)",
+          "oklch(0.490 0.0650 267.44)",
+          "oklch(0.610 0.0650 267.44)",
+          "oklch(0.720 0.0650 267.44)",
+          "oklch(0.840 0.0650 267.44)",
+          "oklch(0.950 0.0650 267.44)"
         ]
       },
       "navy-secondary": {
         "role": "neutral",
-        "displayName": "Navy Secondary",
+        "displayName": "Secondary Navy",
         "tonalRamp": [
-          "oklch(0.150 0.0984 267.25)",
-          "oklch(0.260 0.0984 267.25)",
-          "oklch(0.380 0.0984 267.25)",
-          "oklch(0.490 0.0984 267.25)",
-          "oklch(0.610 0.0984 267.25)",
-          "oklch(0.720 0.0984 267.25)",
-          "oklch(0.840 0.0984 267.25)",
-          "oklch(0.950 0.0984 267.25)"
+          "oklch(0.150 0.0891 266.42)",
+          "oklch(0.260 0.0891 266.42)",
+          "oklch(0.380 0.0891 266.42)",
+          "oklch(0.490 0.0891 266.42)",
+          "oklch(0.610 0.0891 266.42)",
+          "oklch(0.720 0.0891 266.42)",
+          "oklch(0.840 0.0891 266.42)",
+          "oklch(0.950 0.0891 266.42)"
         ]
       },
       "performance-orange": {
         "role": "primary",
         "displayName": "Performance Orange",
         "tonalRamp": [
-          "oklch(0.150 0.1870 42.35)",
-          "oklch(0.260 0.1870 42.35)",
-          "oklch(0.380 0.1870 42.35)",
-          "oklch(0.490 0.1870 42.35)",
-          "oklch(0.610 0.1870 42.35)",
-          "oklch(0.720 0.1870 42.35)",
-          "oklch(0.840 0.1870 42.35)",
-          "oklch(0.950 0.1870 42.35)"
+          "oklch(0.150 0.1858 43.87)",
+          "oklch(0.260 0.1858 43.87)",
+          "oklch(0.380 0.1858 43.87)",
+          "oklch(0.490 0.1858 43.87)",
+          "oklch(0.610 0.1858 43.87)",
+          "oklch(0.720 0.1858 43.87)",
+          "oklch(0.840 0.1858 43.87)",
+          "oklch(0.950 0.1858 43.87)"
         ]
       },
       "hot-orange": {
         "role": "primary",
         "displayName": "Hot Orange",
         "tonalRamp": [
-          "oklch(0.150 0.1753 50.43)",
-          "oklch(0.260 0.1753 50.43)",
-          "oklch(0.380 0.1753 50.43)",
-          "oklch(0.490 0.1753 50.43)",
-          "oklch(0.610 0.1753 50.43)",
-          "oklch(0.720 0.1753 50.43)",
-          "oklch(0.840 0.1753 50.43)",
-          "oklch(0.950 0.1753 50.43)"
+          "oklch(0.150 0.1758 55.37)",
+          "oklch(0.260 0.1758 55.37)",
+          "oklch(0.380 0.1758 55.37)",
+          "oklch(0.490 0.1758 55.37)",
+          "oklch(0.610 0.1758 55.37)",
+          "oklch(0.720 0.1758 55.37)",
+          "oklch(0.840 0.1758 55.37)",
+          "oklch(0.950 0.1758 55.37)"
         ]
       },
       "racing-red": {
         "role": "secondary",
         "displayName": "Racing Red",
         "tonalRamp": [
-          "oklch(0.150 0.2102 24.00)",
-          "oklch(0.260 0.2102 24.00)",
-          "oklch(0.380 0.2102 24.00)",
-          "oklch(0.490 0.2102 24.00)",
-          "oklch(0.610 0.2102 24.00)",
-          "oklch(0.720 0.2102 24.00)",
-          "oklch(0.840 0.2102 24.00)",
-          "oklch(0.950 0.2102 24.00)"
+          "oklch(0.150 0.2110 23.78)",
+          "oklch(0.260 0.2110 23.78)",
+          "oklch(0.380 0.2110 23.78)",
+          "oklch(0.490 0.2110 23.78)",
+          "oklch(0.610 0.2110 23.78)",
+          "oklch(0.720 0.2110 23.78)",
+          "oklch(0.840 0.2110 23.78)",
+          "oklch(0.950 0.2110 23.78)"
         ]
       },
       "orange-ink": {
         "role": "primary",
         "displayName": "Orange Ink",
         "tonalRamp": [
-          "oklch(0.150 0.1524 39.34)",
-          "oklch(0.260 0.1524 39.34)",
-          "oklch(0.380 0.1524 39.34)",
-          "oklch(0.490 0.1524 39.34)",
-          "oklch(0.610 0.1524 39.34)",
-          "oklch(0.720 0.1524 39.34)",
-          "oklch(0.840 0.1524 39.34)",
-          "oklch(0.950 0.1524 39.34)"
+          "oklch(0.150 0.1415 42.42)",
+          "oklch(0.260 0.1415 42.42)",
+          "oklch(0.380 0.1415 42.42)",
+          "oklch(0.490 0.1415 42.42)",
+          "oklch(0.610 0.1415 42.42)",
+          "oklch(0.720 0.1415 42.42)",
+          "oklch(0.840 0.1415 42.42)",
+          "oklch(0.950 0.1415 42.42)"
         ]
       },
       "surface": {
         "role": "neutral",
-        "displayName": "Surface",
+        "displayName": "White",
         "tonalRamp": [
           "oklch(0.150 0.0000 89.88)",
           "oklch(0.260 0.0000 89.88)",
@@ -118,7 +118,7 @@
       },
       "surface-muted": {
         "role": "neutral",
-        "displayName": "Surface Muted",
+        "displayName": "Off White",
         "tonalRamp": [
           "oklch(0.150 0.0029 264.54)",
           "oklch(0.260 0.0029 264.54)",
@@ -132,7 +132,7 @@
       },
       "surface-subtle": {
         "role": "neutral",
-        "displayName": "Surface Subtle",
+        "displayName": "Subtle Gray",
         "tonalRamp": [
           "oklch(0.150 0.0058 264.53)",
           "oklch(0.260 0.0058 264.53)",
@@ -144,23 +144,65 @@
           "oklch(0.950 0.0058 264.53)"
         ]
       },
+      "text": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "tonalRamp": [
+          "oklch(0.150 0.0194 267.98)",
+          "oklch(0.260 0.0194 267.98)",
+          "oklch(0.380 0.0194 267.98)",
+          "oklch(0.490 0.0194 267.98)",
+          "oklch(0.610 0.0194 267.98)",
+          "oklch(0.720 0.0194 267.98)",
+          "oklch(0.840 0.0194 267.98)",
+          "oklch(0.950 0.0194 267.98)"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary Text",
+        "tonalRamp": [
+          "oklch(0.150 0.0232 260.14)",
+          "oklch(0.260 0.0232 260.14)",
+          "oklch(0.380 0.0232 260.14)",
+          "oklch(0.490 0.0232 260.14)",
+          "oklch(0.610 0.0232 260.14)",
+          "oklch(0.720 0.0232 260.14)",
+          "oklch(0.840 0.0232 260.14)",
+          "oklch(0.950 0.0232 260.14)"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Muted Text",
+        "tonalRamp": [
+          "oklch(0.150 0.0233 257.51)",
+          "oklch(0.260 0.0233 257.51)",
+          "oklch(0.380 0.0233 257.51)",
+          "oklch(0.490 0.0233 257.51)",
+          "oklch(0.610 0.0233 257.51)",
+          "oklch(0.720 0.0233 257.51)",
+          "oklch(0.840 0.0233 257.51)",
+          "oklch(0.950 0.0233 257.51)"
+        ]
+      },
       "border": {
         "role": "neutral",
-        "displayName": "Border",
+        "displayName": "Light Border",
         "tonalRamp": [
-          "oklch(0.150 0.0151 260.73)",
-          "oklch(0.260 0.0151 260.73)",
-          "oklch(0.380 0.0151 260.73)",
-          "oklch(0.490 0.0151 260.73)",
-          "oklch(0.610 0.0151 260.73)",
-          "oklch(0.720 0.0151 260.73)",
-          "oklch(0.840 0.0151 260.73)",
-          "oklch(0.950 0.0151 260.73)"
+          "oklch(0.150 0.0105 261.79)",
+          "oklch(0.260 0.0105 261.79)",
+          "oklch(0.380 0.0105 261.79)",
+          "oklch(0.490 0.0105 261.79)",
+          "oklch(0.610 0.0105 261.79)",
+          "oklch(0.720 0.0105 261.79)",
+          "oklch(0.840 0.0105 261.79)",
+          "oklch(0.950 0.0105 261.79)"
         ]
       },
       "border-strong": {
         "role": "neutral",
-        "displayName": "Border Strong",
+        "displayName": "Strong Border",
         "tonalRamp": [
           "oklch(0.150 0.0235 260.72)",
           "oklch(0.260 0.0235 260.72)",
@@ -174,7 +216,7 @@
       },
       "input-border": {
         "role": "neutral",
-        "displayName": "Input Border",
+        "displayName": "Control Border",
         "tonalRamp": [
           "oklch(0.150 0.0277 261.12)",
           "oklch(0.260 0.0277 261.12)",
@@ -186,136 +228,122 @@
           "oklch(0.950 0.0277 261.12)"
         ]
       },
-      "dark-border": {
-        "role": "neutral",
-        "displayName": "Dark Border",
+      "success": {
+        "role": "secondary",
+        "displayName": "Success Ink",
         "tonalRamp": [
-          "oklch(0.150 0.0507 266.65)",
-          "oklch(0.260 0.0507 266.65)",
-          "oklch(0.380 0.0507 266.65)",
-          "oklch(0.490 0.0507 266.65)",
-          "oklch(0.610 0.0507 266.65)",
-          "oklch(0.720 0.0507 266.65)",
-          "oklch(0.840 0.0507 266.65)",
-          "oklch(0.950 0.0507 266.65)"
+          "oklch(0.150 0.0849 163.03)",
+          "oklch(0.260 0.0849 163.03)",
+          "oklch(0.380 0.0849 163.03)",
+          "oklch(0.490 0.0849 163.03)",
+          "oklch(0.610 0.0849 163.03)",
+          "oklch(0.720 0.0849 163.03)",
+          "oklch(0.840 0.0849 163.03)",
+          "oklch(0.950 0.0849 163.03)"
         ]
       },
-      "text-secondary": {
-        "role": "neutral",
-        "displayName": "Text Secondary",
+      "warning": {
+        "role": "secondary",
+        "displayName": "Warning Ink",
         "tonalRamp": [
-          "oklch(0.150 0.0319 262.19)",
-          "oklch(0.260 0.0319 262.19)",
-          "oklch(0.380 0.0319 262.19)",
-          "oklch(0.490 0.0319 262.19)",
-          "oklch(0.610 0.0319 262.19)",
-          "oklch(0.720 0.0319 262.19)",
-          "oklch(0.840 0.0319 262.19)",
-          "oklch(0.950 0.0319 262.19)"
+          "oklch(0.150 0.0992 62.90)",
+          "oklch(0.260 0.0992 62.90)",
+          "oklch(0.380 0.0992 62.90)",
+          "oklch(0.490 0.0992 62.90)",
+          "oklch(0.610 0.0992 62.90)",
+          "oklch(0.720 0.0992 62.90)",
+          "oklch(0.840 0.0992 62.90)",
+          "oklch(0.950 0.0992 62.90)"
         ]
       },
-      "text-muted": {
-        "role": "neutral",
-        "displayName": "Text Muted",
+      "danger": {
+        "role": "secondary",
+        "displayName": "Danger Ink",
         "tonalRamp": [
-          "oklch(0.150 0.0275 262.01)",
-          "oklch(0.260 0.0275 262.01)",
-          "oklch(0.380 0.0275 262.01)",
-          "oklch(0.490 0.0275 262.01)",
-          "oklch(0.610 0.0275 262.01)",
-          "oklch(0.720 0.0275 262.01)",
-          "oklch(0.840 0.0275 262.01)",
-          "oklch(0.950 0.0275 262.01)"
-        ]
-      },
-      "steel": {
-        "role": "neutral",
-        "displayName": "Steel",
-        "tonalRamp": [
-          "oklch(0.150 0.0287 263.21)",
-          "oklch(0.260 0.0287 263.21)",
-          "oklch(0.380 0.0287 263.21)",
-          "oklch(0.490 0.0287 263.21)",
-          "oklch(0.610 0.0287 263.21)",
-          "oklch(0.720 0.0287 263.21)",
-          "oklch(0.840 0.0287 263.21)",
-          "oklch(0.950 0.0287 263.21)"
+          "oklch(0.150 0.1771 22.56)",
+          "oklch(0.260 0.1771 22.56)",
+          "oklch(0.380 0.1771 22.56)",
+          "oklch(0.490 0.1771 22.56)",
+          "oklch(0.610 0.1771 22.56)",
+          "oklch(0.720 0.1771 22.56)",
+          "oklch(0.840 0.1771 22.56)",
+          "oklch(0.950 0.1771 22.56)"
         ]
       }
     },
     "typographyMeta": {
       "display": {
-        "displayName": "Display",
-        "purpose": "Short brand headlines; 42px phone, 56px tablet, 64px desktop."
+        "displayName": "Retail Display",
+        "purpose": "Home hero: Barlow 44px phone, 60px at 640px, 68px at 1024px."
       },
       "headline": {
-        "displayName": "Headline",
-        "purpose": "Operations titles; 34px desktop and 30px phone."
+        "displayName": "Page Headline",
+        "purpose": "Barlow 32px auth and owner/staff page titles; owner/staff grows to 36px. Commerce titles grow to 40px. PDP and Super Admin use contextual Inter."
       },
       "section": {
-        "displayName": "Section",
-        "purpose": "Shared section headings."
+        "displayName": "Retail Section",
+        "purpose": "Barlow 28px home sections, 32px from 640px. Shared SectionHeader uses 30px."
       },
       "title": {
-        "displayName": "Title",
-        "purpose": "Operations sections and dialog headings."
+        "displayName": "Operations Section",
+        "purpose": "Inter 18px sections. PDP title is 30/36px; Super Admin page title is 26/28px."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Reading text; operations commonly uses 14px."
+        "purpose": "Global Inter 15px/1.6; operations supporting text 14px and table text 13px."
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Field labels and default action text."
+        "purpose": "Shared buttons and fields use Inter 14px semibold. Phone fields become 16px."
       }
     },
     "shadows": [
       {
-        "name": "shadow-card",
-        "value": "0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.04)",
-        "purpose": "Generic surface cards."
-      },
-      {
         "name": "shadow-elevated",
         "value": "0 12px 32px rgba(15, 23, 42, 0.12)",
-        "purpose": "Floating menus and supported elevated UI."
+        "purpose": "Floating workspace UI."
       },
       {
         "name": "shadow-overlay",
         "value": "0 20px 48px rgba(8, 13, 25, 0.18)",
-        "purpose": "Existing overlay token; the shared Modal currently uses the dialog shadow below."
+        "purpose": "Retained overlay token; Modal uses its own dialog shadow."
       },
       {
         "name": "dialog",
         "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)",
-        "purpose": "Shared Modal Tailwind shadow-2xl."
+        "purpose": "Shared Modal shadow-2xl."
       },
       {
-        "name": "product-hover",
-        "value": "0 4px 14px rgba(18,32,78,.07)",
-        "purpose": "Product-card hover without translation."
+        "name": "shadow-card",
+        "value": "0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.04)",
+        "purpose": "Compatibility token, not the default for flat brand/product/operations cards."
       }
     ],
     "motion": [
       {
         "name": "control-transition",
         "value": "200ms cubic-bezier(0.4, 0, 0.2, 1)",
-        "purpose": "BrandButton state changes using Tailwind default timing."
+        "purpose": "BrandButton background, border and text changes."
       },
       {
-        "name": "interactive-card",
-        "value": "200ms ease-out",
-        "purpose": "Generic interactive card state; product cards override translation."
+        "name": "product-border",
+        "value": "180ms ease",
+        "purpose": "ProductCard border-only hover; no lift or hover shadow."
+      },
+      {
+        "name": "operations-row",
+        "value": "150ms ease",
+        "purpose": "Quiet operations table row hover."
       },
       {
         "name": "dialog-entry",
         "value": "200ms ease-out",
-        "purpose": "Shared modal scale-in from 0.97 to 1."
+        "purpose": "Shared modal entry scales from 0.97 to 1."
       },
       {
         "name": "reduced-motion",
         "value": "0.01ms",
-        "purpose": "Reduced-motion overrides for transitions and animations; smooth scroll becomes auto."
+        "purpose": "Animation and transition override; smooth scrolling becomes auto."
       }
     ],
     "breakpoints": [
@@ -342,130 +370,132 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "BrandButton primary variant at the default size.",
+      "description": "BrandButton primary variant at its default size.",
       "html": "<button type=\"button\" class=\"ds-button-primary\">Shop Parts</button>",
-      "css": ".ds-button-primary {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms,transform 200ms;background:var(--button-bg, #ed621d);color:var(--button-text, #05070b);} .ds-button-primary:hover:not(:disabled) {background:var(--hot-orange, #f47a20);} .ds-button-primary:focus-visible { outline:3px solid var(--focus-ring, #a83b0d); outline-offset:3px; } .ds-button-primary:active:not(:disabled) {transform:translateY(1px);} .ds-button-primary:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+      "css": ".ds-button-primary {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms;background:var(--button-bg,#f36a21);color:var(--button-text,#080a0e);} .ds-button-primary:hover:not(:disabled) {background:var(--hot-orange,#ff8a1f);} .ds-button-primary:focus-visible {outline:3px solid var(--focus-ring,#a34110);outline-offset:3px;} .ds-button-primary:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce){[class^=\"ds-\"]{transition-duration:.01ms!important;animation-duration:.01ms!important;}}"
     },
     {
       "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "BrandButton secondary variant at the default size.",
+      "description": "BrandButton secondary variant at its default size.",
       "html": "<button type=\"button\" class=\"ds-button-secondary\">Cancel</button>",
-      "css": ".ds-button-secondary {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms,transform 200ms;border-color:var(--border-strong, #b4bdcc);background:var(--surface, #fff);color:var(--racing-navy, #12204e);} .ds-button-secondary:hover:not(:disabled) {border-color:#626b7b;background:var(--surface-muted, #f5f6f8);} .ds-button-secondary:focus-visible { outline:3px solid var(--focus-ring, #a83b0d); outline-offset:3px; } .ds-button-secondary:active:not(:disabled) {transform:translateY(1px);} .ds-button-secondary:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+      "css": ".ds-button-secondary {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms;border-color:var(--border-strong,#b4bdcc);background:var(--surface,#fff);color:var(--obsidian,#080a0e);} .ds-button-secondary:hover:not(:disabled) {border-color:#626b78;background:var(--surface-muted,#f6f7f9);} .ds-button-secondary:focus-visible {outline:3px solid var(--focus-ring,#a34110);outline-offset:3px;} .ds-button-secondary:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce){[class^=\"ds-\"]{transition-duration:.01ms!important;animation-duration:.01ms!important;}}"
     },
     {
       "name": "Dark Button",
       "kind": "button",
       "refersTo": "button-dark",
-      "description": "BrandButton dark variant at the default size.",
-      "html": "<div class=\"ds-dark-frame\"><button type=\"button\" class=\"ds-button-dark\">Browse models</button></div>",
-      "css": ".ds-button-dark {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms,transform 200ms;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff;} .ds-button-dark:hover:not(:disabled) {background:rgba(255,255,255,.15);} .ds-button-dark:focus-visible { outline:3px solid var(--focus-ring, #a83b0d); outline-offset:3px; } .ds-button-dark:active:not(:disabled) {transform:translateY(1px);} .ds-button-dark:disabled {opacity:.5;pointer-events:none;}.ds-dark-frame {padding:20px;background:var(--racing-navy, #12204e);border-radius:12px;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+      "description": "BrandButton dark variant at its default size.",
+      "html": "<button type=\"button\" class=\"ds-button-dark\">Search</button>",
+      "css": ".ds-button-dark {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms;background:var(--racing-navy,#111c3d);color:#fff;} .ds-button-dark:hover:not(:disabled) {background:var(--navy-secondary,#192a5a);} .ds-button-dark:focus-visible {outline:3px solid var(--focus-ring,#a34110);outline-offset:3px;} .ds-button-dark:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce){[class^=\"ds-\"]{transition-duration:.01ms!important;animation-duration:.01ms!important;}}"
     },
     {
       "name": "Danger Button",
       "kind": "button",
       "refersTo": "button-danger",
-      "description": "BrandButton danger variant at the default size.",
+      "description": "BrandButton danger variant at its default size.",
       "html": "<button type=\"button\" class=\"ds-button-danger\">Delete</button>",
-      "css": ".ds-button-danger {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms,transform 200ms;background:var(--racing-red, #d52231);color:#fff;} .ds-button-danger:hover:not(:disabled) {background:#a51726;} .ds-button-danger:focus-visible { outline:3px solid var(--focus-ring, #a83b0d); outline-offset:3px; } .ds-button-danger:active:not(:disabled) {transform:translateY(1px);} .ds-button-danger:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+      "css": ".ds-button-danger {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms;background:var(--racing-red,#d62232);color:#fff;} .ds-button-danger:hover:not(:disabled) {background:var(--danger,#ac1c2b);} .ds-button-danger:focus-visible {outline:3px solid var(--focus-ring,#a34110);outline-offset:3px;} .ds-button-danger:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce){[class^=\"ds-\"]{transition-duration:.01ms!important;animation-duration:.01ms!important;}}"
     },
     {
       "name": "Ghost Button",
       "kind": "button",
       "refersTo": "button-ghost",
-      "description": "BrandButton ghost variant at the default size.",
+      "description": "BrandButton ghost variant at its default size.",
       "html": "<button type=\"button\" class=\"ds-button-ghost\">View details</button>",
-      "css": ".ds-button-ghost {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms,transform 200ms;background:transparent;color:#35415b;} .ds-button-ghost:hover:not(:disabled) {background:var(--surface-subtle, #eef0f4);} .ds-button-ghost:focus-visible { outline:3px solid var(--focus-ring, #a83b0d); outline-offset:3px; } .ds-button-ghost:active:not(:disabled) {transform:translateY(1px);} .ds-button-ghost:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+      "css": ".ds-button-ghost {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms;background:transparent;color:#35415b;} .ds-button-ghost:hover:not(:disabled) {background:var(--surface-subtle,#eef0f4);} .ds-button-ghost:focus-visible {outline:3px solid var(--focus-ring,#a34110);outline-offset:3px;} .ds-button-ghost:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce){[class^=\"ds-\"]{transition-duration:.01ms!important;animation-duration:.01ms!important;}}"
     },
     {
       "name": "Search Field",
       "kind": "input",
       "refersTo": "field",
-      "description": "Labeled search with the shared field treatment and a real SVG icon.",
+      "description": "BrandPrimitives labeled search with its 46px field and real SVG icon.",
       "html": "<div class=\"ds-field\"><label for=\"ds-parts-search\">Search parts</label><div class=\"ds-search\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg><input id=\"ds-parts-search\" type=\"search\" placeholder=\"Part name or model\"></div></div>",
-      "css": ".ds-field {font:400 16px/1.5 Inter,sans-serif;} .ds-field label {display:block;margin-bottom:6px;color:var(--text, #12204e);font-size:14px;font-weight:600;} .ds-search {position:relative;} .ds-search svg {position:absolute;left:12px;bottom:14px;color:var(--text-secondary, #515b6d);} .ds-search input {width:100%;min-height:44px;padding:10px 12px 10px 40px;border:1px solid var(--input-border, #8b95a6);border-radius:8px;background:var(--surface, #fff);color:var(--text, #12204e);font:inherit;} .ds-search input::placeholder {color:#687182;opacity:1;} .ds-search input:hover {border-color:var(--input-border, #8b95a6);} .ds-search input:focus-visible {border-color:var(--accent-hover, #a83b0d);outline:3px solid var(--focus-ring, #a83b0d);outline-offset:3px;} .ds-search input[aria-invalid=true] {border-color:var(--danger, #dc2626);} @media(max-width:639px) {.ds-search input {font-size:16px;}} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+      "css": ".ds-field{font:400 15px/1.6 Inter,sans-serif}.ds-field label{display:block;margin-bottom:6px;color:var(--text,#242832);font-size:14px;font-weight:600}.ds-search{position:relative}.ds-search svg{position:absolute;left:12px;bottom:14px;color:var(--text-secondary,#565e6b)}.ds-search input{box-sizing:border-box;width:100%;min-height:46px;padding:10px 12px 10px 40px;border:1px solid var(--input-border,#8b95a6);border-radius:8px;background:var(--surface,#fff);color:var(--text,#242832);font:inherit}.ds-search input:focus-visible{border-color:var(--accent-hover,#a34110);outline:3px solid var(--focus-ring,#a34110);outline-offset:3px}.ds-search input[aria-invalid=true]{border-color:var(--danger,#ac1c2b)}@media(max-width:639px){.ds-search input{font-size:16px}}@media(prefers-reduced-motion:reduce){[class^=\"ds-\"]{transition-duration:.01ms!important;animation-duration:.01ms!important;}}"
     },
     {
       "name": "Operations Navigation",
       "kind": "nav",
       "refersTo": "navigation",
-      "description": "Dark navigation with a navy selected row and orange inset marker.",
+      "description": "Navy workspace navigation with translucent selected row and orange inset marker.",
       "html": "<nav class=\"ds-nav\" aria-label=\"Operations\"><button type=\"button\" aria-current=\"page\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg>Dashboard</button><button type=\"button\">Inventory</button></nav>",
-      "css": ".ds-nav {padding:16px 12px;background:var(--racing-navy, #12204e);font:500 13px/1.5 Inter,sans-serif;} .ds-nav button {display:flex;align-items:center;gap:12px;width:100%;min-height:44px;margin:4px 0;padding:0 12px;border:0;border-radius:8px;background:transparent;color:#b4bdcc;text-align:left;font:inherit;cursor:pointer;transition:background-color 200ms,color 200ms;} .ds-nav button:hover {background:rgba(255,255,255,.06);color:#fff;} .ds-nav button[aria-current=page] {background:var(--navy-secondary, #1a2b61);color:#fff;box-shadow:inset 3px 0 var(--performance-orange, #ed621d);} .ds-nav button[aria-current=page] svg {color:var(--hot-orange, #f47a20);} .ds-nav button:focus-visible {outline:3px solid var(--focus-ring, #a83b0d);outline-offset:3px;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+      "css": ".ds-nav{--focus-ring:var(--hot-orange,#ff8a1f);padding:16px 12px;background:var(--racing-navy,#111c3d);font:500 14px/1.5 Inter,sans-serif}.ds-nav button{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:42px;margin:4px 0;padding:0 12px;border:0;border-radius:6px;background:transparent;color:#b4bdcc;text-align:left;font:inherit;cursor:pointer;transition:background-color 200ms,color 200ms}.ds-nav button:hover{background:rgba(255,255,255,.06);color:#fff}.ds-nav button[aria-current=page]{background:#ffffff0d;color:#fff}.ds-nav button[aria-current=page]::before{content:\"\";position:absolute;inset:8px auto 8px 0;width:2px;border-radius:0 999px 999px 0;background:var(--performance-orange,#f36a21)}.ds-nav button[aria-current=page] svg{color:var(--hot-orange,#ff8a1f)}.ds-nav button:focus-visible {outline:3px solid var(--focus-ring,#a34110);outline-offset:3px;}@media(pointer:coarse){.ds-nav button{min-height:44px}}@media(prefers-reduced-motion:reduce){[class^=\"ds-\"]{transition-duration:.01ms!important;animation-duration:.01ms!important;}}"
     },
     {
       "name": "Stock Status",
       "kind": "chip",
       "refersTo": "status-badge",
-      "description": "Shared StatusBadge success tone with visible stock wording.",
+      "description": "StatusBadge success tone with explicit stock wording.",
       "html": "<span class=\"ds-badge\"><span class=\"ds-badge-dot\" aria-hidden=\"true\"></span>In stock</span>",
-      "css": ".ds-badge {display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:2px 10px;border:1px solid #a7f3d0;border-radius:9999px;background:#ecfdf5;color:#065f46;font:600 12px/16px Inter,sans-serif;} .ds-badge-dot {width:6px;height:6px;border-radius:9999px;background:currentColor;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+      "css": ".ds-badge{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:2px 10px;border:1px solid #c3d8cb;border-radius:9999px;background:#f2f7f4;color:#114c35;font:600 12px/16px Inter,sans-serif}.ds-badge-dot{width:6px;height:6px;border-radius:9999px;background:currentColor}"
     },
     {
       "name": "Content Card",
       "kind": "card",
       "refersTo": "card",
-      "description": "The shared flat, bordered Card; internal spacing is supplied by its content.",
+      "description": "Flat BrandPrimitives Card; content supplies its padding and contextual typography.",
       "html": "<section class=\"ds-card\"><div class=\"ds-card-content\"><h2>Part information</h2><p>Inspect the part number, fitment and availability.</p></div></section>",
-      "css": ".ds-card {border:1px solid var(--border, #d8dee8);border-radius:12px;background:var(--surface, #fff);color:var(--text, #12204e);} .ds-card-content {padding:20px;} .ds-card h2 {margin:0;font:600 24px/1.2 \"Barlow Condensed\",sans-serif;} .ds-card p {margin:8px 0 0;color:var(--text-secondary, #515b6d);font:400 14px/1.5 Inter,sans-serif;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+      "css": ".ds-card{border:1px solid var(--border,#dde1e8);border-radius:10px;background:var(--surface,#fff);color:var(--text,#242832);box-shadow:none}.ds-card-content{padding:20px}.ds-card h2{margin:0;font:600 18px/1.4 Inter,sans-serif}.ds-card p{margin:8px 0 0;color:var(--text-secondary,#565e6b);font:400 14px/1.6 Inter,sans-serif}"
     },
     {
       "name": "Data Table",
       "kind": "custom",
       "refersTo": "data-table",
-      "description": "Contained horizontal scrolling, sticky header and tabular numeric data.",
-      "html": "<div class=\"ds-table-scroll\" role=\"region\" aria-label=\"Part information\" tabindex=\"0\"><table><thead><tr><th>Part number</th><th>Stock</th><th>Price</th></tr></thead><tbody><tr><td>?</td><td>?</td><td>?</td></tr></tbody></table></div>",
-      "css": ".ds-table-scroll {max-width:100%;overflow:auto;border:1px solid var(--border, #d8dee8);border-radius:12px;background:var(--surface, #fff);color:var(--text, #12204e);} .ds-table-scroll table {width:100%;border-collapse:collapse;text-align:left;font:400 14px/1.5 Inter,sans-serif;} .ds-table-scroll th {position:sticky;top:0;padding:12px 16px;background:var(--surface-muted, #f5f6f8);color:var(--text-secondary, #515b6d);font-size:12px;font-weight:700;} .ds-table-scroll td {padding:12px 16px;border-top:1px solid var(--border, #d8dee8);font-variant-numeric:tabular-nums;} .ds-table-scroll:focus-visible {outline:3px solid var(--focus-ring, #a83b0d);outline-offset:3px;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+      "description": "Shared scrolling table with subdued sticky headers and tabular data.",
+      "html": "<div class=\"ds-table-scroll\" role=\"region\" aria-label=\"Part information\" tabindex=\"0\"><table><thead><tr><th>Part number</th><th>Stock</th><th>Price</th></tr></thead><tbody><tr><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr></tbody></table></div>",
+      "css": ".ds-table-scroll{max-width:100%;overflow:auto;border:1px solid var(--border,#dde1e8);border-radius:10px;background:var(--surface,#fff);color:var(--text-secondary,#565e6b)}.ds-table-scroll table{width:100%;border-collapse:collapse;text-align:left;font:400 14px/1.5 Inter,sans-serif}.ds-table-scroll th{position:sticky;top:0;padding:12px 16px;background:var(--surface-muted,#f6f7f9);color:var(--text-secondary,#565e6b);font-size:13px;font-weight:600}.ds-table-scroll td{padding:12px 16px;border-top:1px solid var(--border,#dde1e8);font-variant-numeric:tabular-nums}.ds-table-scroll:focus-visible {outline:3px solid var(--focus-ring,#a34110);outline-offset:3px;}@media(prefers-reduced-motion:reduce){[class^=\"ds-\"]{transition-duration:.01ms!important;animation-duration:.01ms!important;}}"
     }
   ],
   "narrative": {
     "northStar": "The Premium Motorcycle Parts Counter",
-    "overview": "The interface pairs confident automotive headings with practical, readable shopping and store operations. Merchandise, part identity, fitment, stock and prices carry the visual weight. Black and navy frame the experience; white content surfaces keep inspection and decisions clear.\n\nRetail allows more space for product imagery and discovery. Operations compress the same identity around legible data and fast actions. This document records the implemented system; [design-system/MASTER.md](design-system/MASTER.md) remains the primary project source of truth. [PRODUCT.md](PRODUCT.md) supplies the durable brand commitments. Frontmatter is normative for this document's extracted tokens; it does not supersede MASTER.",
+    "overview": "A serious motorcycle retailer with merchandise and readable tasks at the center. Light neutral content dominates; obsidian and navy frame navigation and selected brand regions. Orange identifies the main interaction, while red remains selective. The complete official logo anchors the identity.\n\nRetail gives photography and part identification room to work. Store operations use the same identity with denser Inter text, compact tools and neutral tables. This records the implemented premium world, not the discarded treatment. [design-system/MASTER.md](design-system/MASTER.md) remains the primary authority; [PRODUCT.md](PRODUCT.md) supplies durable product constraints. Runtime values come from `frontend/index.css`, `frontend/styles/*.css` and Tailwind aliases in `frontend/index.html`. The user's pinned composition is the visual reference; no generated composition was approved.",
     "keyCharacteristics": [
-      "Complete official logo on a black plate.",
-      "Navy and black structure, orange interaction, selective red.",
-      "Barlow Condensed headings with Inter controls, prices and data.",
-      "Flat white surfaces, quiet borders and restrained angular accents.",
-      "Product-led retail and compact, readable operations."
+      "Complete unchanged official logo on its black plate.",
+      "Light neutral majority, navy framing, orange interaction and selective red.",
+      "Barlow Condensed retail headings; Inter product information, controls and business data.",
+      "Photographic commerce banner and image-led merchandise cards.",
+      "One centered authentication surface and compact professional workspaces."
     ],
     "rules": [
       {
         "name": "The Action Contrast Rule",
-        "body": "Orange action fills carry obsidian text. Use Orange Ink for orange text on light surfaces; a fill color is not automatically a readable text color.",
+        "body": "Pair orange action fills with dark text; use Orange Ink for orange text on light backgrounds.",
         "section": "colors"
       },
       {
         "name": "The Purposeful Accent Rule",
-        "body": "Orange identifies interaction; red identifies selective sale, destructive or brand detail. Status combines color with readable text or icons.",
+        "body": "Orange identifies interaction; red identifies sale, danger or critical state. Status must also be named in text or an accessible label.",
         "section": "colors"
       },
       {
         "name": "The Readable Data Rule",
-        "body": "Keep controls, prices, metric values and table data in Inter. Use tabular figures for financial and operational numbers; condensed type belongs to headings and brand lockups.",
+        "body": "Keep product names, prices, controls, metric values and table data in Inter. Use tabular figures for financial and operational numbers. Preserve the deliberate Inter headings in PDP and Super Admin.",
         "section": "typography"
       },
       {
         "name": "The Flat Workspace Rule",
-        "body": "Separate business data with tone and borders; reserve visible depth for hover and floating UI.",
+        "body": "Separate business data with tone and borders; reserve visible depth for floating UI rather than ordinary panels or metrics.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "Do reuse the official complete logo, shared components and established semantic tokens.",
-      "Do pair orange action fills with dark text and use Orange Ink for light-background links.",
-      "Do keep real merchandise, part identity, fitment, stock and prices easy to inspect.",
-      "Do use Inter and tabular numbers for prices, controls and business data.",
-      "Do preserve visible focus, labeled actions, non-color status and reduced-motion behavior.",
-      "Do retain compact operations, contained table scrolling and usable phone controls."
+      "Do follow MASTER and the runtime semantic tokens when extending this recorded system.",
+      "Do preserve the complete official logo and use shared components.",
+      "Do keep light content dominant, navy framing restrained and orange actions readable with dark text.",
+      "Do preserve the single photographic home banner and the single centered auth surface.",
+      "Do use context-specific Inter and Barlow headings, Inter data and tabular financial figures.",
+      "Do keep tables scrolling inside their containers, visible focus, labeled status and reduced-motion behavior.",
+      "Do show real prices, stock, fitment and ratings, with honest image fallbacks."
     ],
     "donts": [
-      "Don't crop, recolor, filter, stretch or replace the official logo with initials or text.",
-      "Don't introduce gaming imagery, neon, skulls, flames, simulated metal or decorative bevels.",
+      "Don't crop, recolor, filter, stretch or replace the official logo.",
+      "Don't reintroduce split authentication, a product-card hero or a logo billboard.",
+      "Don't turn red into the main interaction color or use orange fill colors as small text on white.",
+      "Don't add gaming imagery, neon, glow, decorative glass, rainbow dashboards or heavy panel shadows.",
+      "Don't replace readable product names or technical headings with condensed display typography.",
       "Don't invent ratings, fitment, stock, prices or unsupported marketing claims.",
-      "Don't turn red into the default primary-action color or use orange fill colors as small text on white.",
-      "Don't add rainbow charts, heavy panel shadows or decorative motion to operations.",
-      "Don't treat legacy utility exceptions, incidental micro-labels or content defects as new visual rules."
+      "Don't promote test-like product records, missing or unrelated merchant photos, incidental old link/red classes, or tiny legacy labels into design-system rules."
     ]
   }
 }

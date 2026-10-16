@@ -1,12 +1,12 @@
 import React from 'react';
 
 const SectionCard = ({ title, description, action, children, className = '', padded = true }) => (
-  <section className={`ops-section overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>
+  <section className={`ops-section overflow-hidden rounded-xl border border-slate-200 bg-white ${className}`}>
     {(title || description || action) && (
       <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-5">
         <div>
-          {title && <h2 className="font-display text-base font-semibold text-slate-950">{title}</h2>}
-          {description && <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>}
+          {title && <h2 className="font-sans text-lg font-semibold text-slate-950">{title}</h2>}
+          {description && <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>}
         </div>
         {action}
       </header>

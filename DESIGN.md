@@ -1,50 +1,52 @@
 ---
 name: 10th West Moto
-description: Premium motorcycle parts retail with precise, readable operations.
+description: Premium motorcycle parts retail and precise, compact store operations.
 colors:
-  obsidian: "#05070b"
-  racing-navy: "#12204e"
-  navy-secondary: "#1a2b61"
-  performance-orange: "#ed621d"
-  hot-orange: "#f47a20"
-  racing-red: "#d52231"
-  orange-ink: "#a83b0d"
+  obsidian: "#080a0e"
+  racing-navy: "#111c3d"
+  navy-secondary: "#192a5a"
+  performance-orange: "#f36a21"
+  hot-orange: "#ff8a1f"
+  racing-red: "#d62232"
+  orange-ink: "#a34110"
   surface: "#ffffff"
-  surface-muted: "#f5f6f8"
+  surface-muted: "#f6f7f9"
   surface-subtle: "#eef0f4"
-  border: "#d8dee8"
+  text: "#242832"
+  text-secondary: "#565e6b"
+  text-muted: "#626b78"
+  border: "#dde1e8"
   border-strong: "#b4bdcc"
   input-border: "#8b95a6"
-  dark-border: "#27324d"
-  text-secondary: "#515b6d"
-  text-muted: "#626b7b"
-  steel: "#687182"
+  success: "#166044"
+  warning: "#855016"
+  danger: "#ac1c2b"
 typography:
   display:
     fontFamily: "Barlow Condensed, sans-serif"
-    fontSize: "42px"
+    fontSize: "44px"
     fontWeight: 700
     lineHeight: 0.98
     letterSpacing: "-0.015em"
   headline:
     fontFamily: "Barlow Condensed, sans-serif"
-    fontSize: "34px"
+    fontSize: "32px"
     fontWeight: 600
-    letterSpacing: "0"
+    lineHeight: 1.1
   section:
     fontFamily: "Barlow Condensed, sans-serif"
-    fontSize: "30px"
+    fontSize: "28px"
     fontWeight: 600
-    lineHeight: 1.15
+    lineHeight: 1.1
   title:
-    fontFamily: "Barlow Condensed, sans-serif"
-    fontSize: "24px"
+    fontFamily: "Inter, sans-serif"
+    fontSize: "18px"
     fontWeight: 600
-    lineHeight: 1.2
+    lineHeight: 1.4
   body:
     fontFamily: "Inter, sans-serif"
-    fontSize: "16px"
-    lineHeight: 1.5
+    fontSize: "15px"
+    lineHeight: 1.6
   label:
     fontFamily: "Inter, sans-serif"
     fontSize: "14px"
@@ -52,8 +54,10 @@ typography:
     lineHeight: 1.5
 rounded:
   control: "8px"
-  compact-card: "10px"
-  card: "12px"
+  card: "10px"
+  dialog: "14px"
+  auth: "12px"
+  compact: "6px"
   pill: "9999px"
 spacing:
   base: "4px"
@@ -64,7 +68,6 @@ spacing:
   lg: "24px"
   xl: "32px"
   section-mobile: "40px"
-  spacious: "48px"
   section-desktop: "56px"
 components:
   button-primary:
@@ -73,15 +76,16 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.control}"
     padding: "10px 20px"
+    height: "44px"
   button-primary-hover:
     backgroundColor: "{colors.hot-orange}"
   button-secondary:
     backgroundColor: "{colors.surface}"
-    textColor: "{colors.racing-navy}"
+    textColor: "{colors.obsidian}"
     rounded: "{rounded.control}"
     padding: "10px 20px"
   button-dark:
-    backgroundColor: "rgba(255, 255, 255, 0.1)"
+    backgroundColor: "{colors.racing-navy}"
     textColor: "{colors.surface}"
     rounded: "{rounded.control}"
     padding: "10px 20px"
@@ -97,21 +101,23 @@ components:
     padding: "10px 20px"
   field:
     backgroundColor: "{colors.surface}"
-    textColor: "{colors.racing-navy}"
+    textColor: "{colors.text}"
     rounded: "{rounded.control}"
     padding: "10px 12px"
   navigation:
     backgroundColor: "{colors.racing-navy}"
     textColor: "{colors.surface}"
+    rounded: "{rounded.compact}"
   status-badge:
     rounded: "{rounded.pill}"
     padding: "2px 10px"
   card:
     backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
     rounded: "{rounded.card}"
   data-table:
     backgroundColor: "{colors.surface}"
-    textColor: "{colors.racing-navy}"
+    textColor: "{colors.text-secondary}"
     rounded: "{rounded.card}"
 ---
 
@@ -121,138 +127,152 @@ components:
 
 **Creative North Star: "The Premium Motorcycle Parts Counter"**
 
-The interface pairs confident automotive headings with practical, readable shopping and store operations. Merchandise, part identity, fitment, stock and prices carry the visual weight. Black and navy frame the experience; white content surfaces keep inspection and decisions clear.
+A serious motorcycle retailer with merchandise and readable tasks at the center. Light neutral content dominates; obsidian and navy frame navigation and selected brand regions. Orange identifies the main interaction, while red remains selective. The complete official logo anchors the identity.
 
-Retail allows more space for product imagery and discovery. Operations compress the same identity around legible data and fast actions. This document records the implemented system; [design-system/MASTER.md](design-system/MASTER.md) remains the primary project source of truth. [PRODUCT.md](PRODUCT.md) supplies the durable brand commitments. Frontmatter is normative for this document's extracted tokens; it does not supersede MASTER.
+Retail gives photography and part identification room to work. Store operations use the same identity with denser Inter text, compact tools and neutral tables. This records the implemented premium world, not the discarded treatment. [design-system/MASTER.md](design-system/MASTER.md) remains the primary authority; [PRODUCT.md](PRODUCT.md) supplies durable product constraints. Runtime values come from `frontend/index.css`, `frontend/styles/*.css` and Tailwind aliases in `frontend/index.html`. The user's pinned composition is the visual reference; no generated composition was approved.
 
 **Key Characteristics:**
-- Complete official logo on a black plate.
-- Navy and black structure, orange interaction, selective red.
-- Barlow Condensed headings with Inter controls, prices and data.
-- Flat white surfaces, quiet borders and restrained angular accents.
-- Product-led retail and compact, readable operations.
+
+- Complete unchanged official logo on its black plate.
+- Light neutral majority, navy framing, orange interaction and selective red.
+- Barlow Condensed retail headings; Inter product information, controls and business data.
+- Photographic commerce banner and image-led merchandise cards.
+- One centered authentication surface and compact professional workspaces.
 
 ## Colors
 
-Deep racing neutrals anchor the palette; warm interaction colors stay purposeful against clear light content.
+Warm orange interaction stands against clear light content and deep automotive framing. Palette values in the frontmatter are extracted runtime tokens, not a replacement for MASTER.
 
 ### Primary
-- **Performance Orange:** primary purchase, search, scan and payment action fills.
-- **Hot Orange:** primary hover fill and emphasis on dark brand regions.
-- **Orange Ink:** links and focus indicators on light backgrounds.
+
+- **Performance Orange:** main purchase, search, scan and payment fills, with Obsidian text.
+- **Hot Orange:** primary hover fill and restrained emphasis on dark regions.
+- **Orange Ink:** readable links and keyboard focus on light surfaces.
 
 ### Secondary
-- **Racing Red:** selective sale emphasis, destructive action fills and narrow brand detail; error text uses the contextual dark semantic ink of its component.
+
+- **Racing Red:** sale labels and destructive fills. **Danger Ink** supports explanatory error text and danger hover states. Red is not the general navigation or primary-action accent.
+- **Success / Warning:** semantic state inks; subdued tonal backgrounds and explicit status wording convey meaning alongside color.
 
 ### Neutral
-- **Obsidian:** storefront shell and footer.
-- **Racing Navy:** operations navigation, strong text and brand panels.
-- **Secondary Navy:** selected dark surfaces and merchandise framing.
-- **White / Off White / Subtle Gray:** content, page canvas and table/header layering respectively.
-- **Light Border / Strong Border / Control Border / Dark Border:** quiet panel separation, interactive boundaries and shell dividers.
-- **Secondary Text / Muted Text / Steel:** supporting copy with contextual contrast. Dark-shell supplementary copy uses Strong Border; small light-surface operations copy uses Secondary Text.
 
-**The Action Contrast Rule.** Orange action fills carry obsidian text. Use Orange Ink for orange text on light surfaces; a fill color is not automatically a readable text color.
+- **Obsidian:** storefront header and footer.
+- **Racing Navy / Secondary Navy:** operations navigation and selected brand regions. Ordinary product copy uses Graphite rather than making all text navy.
+- **White / Off White / Subtle Gray:** merchandise and forms, page canvas, and quiet secondary layers.
+- **Graphite / Secondary Text / Muted Text:** primary UI copy and supporting information.
+- **Light Border / Strong Border / Control Border:** content grouping and visible control boundaries.
 
-**The Purposeful Accent Rule.** Orange identifies interaction; red identifies selective sale, destructive or brand detail. Status combines color with readable text or icons.
+**The Action Contrast Rule.** Pair orange action fills with dark text; use Orange Ink for orange text on light backgrounds.
+
+**The Purposeful Accent Rule.** Orange identifies interaction; red identifies sale, danger or critical state. Status must also be named in text or an accessible label.
 
 ## Typography
 
-**Display Font:** Barlow Condensed, sans-serif; self-hosted weights 600 and 700.
+**Display Font:** self-hosted Barlow Condensed, weights 600 and 700, sans-serif fallback.
 
-**Body Font:** Inter, sans-serif; self-hosted weights 400–700.
+**Body Font:** self-hosted Inter, weights 400-700, sans-serif fallback. The global stylesheet adds system UI fallbacks.
 
-**Character:** Compressed headings recall automotive packaging. Inter gives forms, amounts and dense records a stable reading rhythm.
+**Character:** condensed brand headings carry the automotive voice; Inter keeps product identities, financial amounts and operational tasks easy to scan. Typography is contextual, not one display face applied to every heading.
 
 ### Hierarchy
-- **Display:** the implemented home heading starts at the frontmatter size, expands to (56px) at (640px), and reaches (64px) at (1024px). Its compact line height belongs to short brand headlines.
-- **Headline:** operations titles use the frontmatter role and reduce to (30px) below (640px). Product titles use (32px), then (38px) on desktop; authentication titles use (32px). Contextual title sizes are deliberate rather than one universal heading size.
-- **Section / Title:** shared section headers use the Section role; operations section headings and dialog titles use the Title role. Storefront section headings vary with the existing surface, typically (24–32px).
-- **Body:** the Body role is the general reading baseline. Operations and supporting retail copy commonly use (14px); long rich text uses (1.75) line height.
-- **Label:** the Label role defines shared field labels and default buttons. Table headers use Inter (12px, 600); phone fields use (16px).
 
-**The Readable Data Rule.** Keep controls, prices, metric values and table data in Inter. Use tabular figures for financial and operational numbers; condensed type belongs to headings and brand lockups.
+- **Display:** the home hero begins at the frontmatter size, becomes (60px) at (640px), then (68px) at (1024px). This compact line height is for the short retail headline.
+- **Headline:** authentication uses the frontmatter role. Owner/staff PageHeader uses (32px), growing to (36px) at (1024px). Cart and checkout page titles use Barlow (32px/1.15), growing to (40px) at (640px).
+- **Section:** home sections use the frontmatter role, growing to (32px) at (640px); the shared SectionHeader uses Barlow (30px/1.15). Auth secondary headings use Barlow (24px/1.2).
+- **Title:** operations sections use the Inter title role. PDP titles deliberately use Inter (30px/1.12), becoming (36px) at (1024px); Super Admin titles use Inter (28px), or (26px) below (640px). PDP secondary headings use Inter (20px), and OrderSummary uses Inter (20px/1.3).
+- **Body:** the frontmatter role describes the global baseline. Operations and much supporting retail copy use (14px). Product names use Inter (15px/1.45), becoming (16px) at (640px); product prices use (19px, 700). Operations table cells and headers use (13px). RichText uses (1.75) line height.
+- **Label:** the frontmatter role describes default BrandButton and field labels. Mobile fields become (16px) below (640px). Compact part metadata and status badges may use (12px); that size is not the ordinary paragraph baseline.
+
+**The Readable Data Rule.** Keep product names, prices, controls, metric values and table data in Inter. Use tabular figures for financial and operational numbers. Preserve the deliberate Inter headings in PDP and Super Admin.
 
 ## Layout
 
-Spacing follows a (4px) rhythm. Storefront content uses a centered maximum width of (1500px), with gutters increasing from (16px) to (24px) at (640px) and (32px) at (1024px). Product sections use (40px) vertical spacing, increasing to (56px). Retail product grids progress from two columns to three at (768px) and four at (1024px).
+Spacing uses a (4px) rhythm. Main home sections use a centered (1500px) maximum width with (16/24/32px) responsive gutters. The header uses a (1600px) maximum width; several commerce detail pages use the existing (1280px) container. Section spacing grows from (40px) to (56px) at (640px). Retail grids commonly progress from two columns to three at (768px) and four at (1024px).
 
-Operations use a (1600px) maximum content width and (16/20/24px) responsive padding. The desktop sidebar is (260px), collapses to (76px), and becomes a drawer below (1024px). Header height is at least (68px); the workspace occupies the dynamic viewport with its own scrolling content region.
+The public header is (72px) plus its border. Desktop navigation is compact; mobile keeps the logo, search, cart and menu. The home hero is one wide photographic banner with a (470px) minimum height, increasing to (500px) at (1024px). Its controlled dark image overlay protects left-aligned short copy and the Shop Parts / Browse by motorcycle actions. Merchant announcements remain a separate editable content area; they do not define the primary visual identity. PDP places a large gallery beside purchasing information at (768px), with information tabs and separators below. Cart uses approximately a (65/35) items-to-summary split on wide screens. Checkout uses five numbered sections with separators; OrderSummary is sticky at (96px) and remains presentation only.
 
-Authentication presents the form alone on smaller screens, adding a navy brand panel from (1024px). Dialogs and drawers manage their own scroll regions; tables scroll inside a bounded container. Operations tables retain a minimum width of (680px), reduced to (620px) on phone layouts, so columns remain readable.
+Authentication uses one centered white surface with a (460px) maximum width at every breakpoint. An off-white canvas and a narrow navy top border frame it. Phone padding is (28px 24px), becoming (32px) at (768px). The complete logo sits above the welcome heading, followed by provider controls and the email form where available. Recovery, verification and 2FA retain this same composition. There is no split panel.
 
-Wide tables scroll within their own region. Keep the page width within the viewport and preserve usable phone fields and (44px) action targets.
+Operations use a (1600px) maximum content width and (16/20/24px) responsive padding inside a dynamic-viewport shell. The desktop sidebar is (260px), collapses to (76px), and becomes a focus-managed drawer below (1024px). Its white top bar is (64px). The content area owns vertical scrolling. Owner dashboard groups primary sales with an action queue, then charts, inventory and orders. Staff shares the shell and only receives authorized destinations. Super Admin is a restrained technical workspace, without retail photography.
+
+POS fills the dynamic viewport with search, scan, image-led product tiles and a dense cart. Its navy header is (72px), reducing to (64px) below (640px); the large orange payment action remains prominent. General operations tables retain (680px) minimum width, or (620px) on phones, inside horizontal scroll regions. The inventory stock table intentionally retains (1080px) for its columns. Keep that overflow inside the table container, never at page level.
 
 ## Elevation & Depth
 
-The system is predominantly flat. White surfaces, muted canvases and fine borders establish grouping. Operations sections, metrics and POS tiles have no resting shadow. Generic surface cards retain a small ambient shadow; product cards use a restrained hover shadow without lifting. Elevated menus and overlays receive soft shadows, never a colored halo.
+White surfaces, muted canvases and fine borders establish hierarchy. Product cards, ordinary brand cards, metrics and POS tiles have no resting shadow. Product hover changes the border without lifting. Floating menus and dialogs carry soft neutral depth. The photographic hero uses its own single controlled overlay; this is not a general license for gradients or glass panels.
 
 ### Shadow Vocabulary
-- **Card:** `--shadow-card`; small ambient separation for generic surface cards.
-- **Elevated:** `--shadow-elevated`; floating UI and supported interactive surfaces.
-- **Overlay:** `--shadow-overlay`; available overlay token. The shared Modal currently carries Tailwind's larger neutral dialog shadow rather than this alias.
 
-Exact shadow values and motion live in the sidecar. State transitions commonly last (200ms). Reduced-motion preferences disable animation and smooth scrolling.
+- **Elevated:** `--shadow-elevated`, used for floating workspace UI.
+- **Overlay:** `--shadow-overlay`, retained for supported overlays; shared Modal currently uses Tailwind's neutral `shadow-2xl`.
+- **Card:** `--shadow-card` remains a compatibility token; it does not prescribe a shadow on the flat card system.
 
-**The Flat Workspace Rule.** Separate business data with tone and borders; reserve visible depth for hover and floating UI.
+Exact shadows and motion values live in the sidecar. BrandButton changes color over (200ms), product cards change their border over (180ms), operations rows over (150ms), and dialog entry uses (200ms). Reduced-motion preferences reduce animations/transitions and disable smooth scrolling.
+
+**The Flat Workspace Rule.** Separate business data with tone and borders; reserve visible depth for floating UI rather than ordinary panels or metrics.
 
 ## Shapes
 
-Controls use the Control radius; panels and dialogs use the Card radius. Compact merchandise panels, model entries, metrics and POS tiles use Compact Card. Status badges are pills. The official logo plate is a small-cornered black rectangle with the complete image contained inside; its responsive size changes without cropping or stretching the asset.
+Controls use Control corners, ordinary brand cards use Card corners, and dialogs use Dialog corners. Product cards and POS tiles use (8px); product action buttons and navigation rows use Compact corners. The centered auth surface has its own Auth radius. Some retained SectionCard/FilterBar wrappers still use (12px) utility corners; this is an existing component detail, not a new global radius. Small status badges are pills, without turning ordinary buttons into pills.
 
-Narrow skewed orange separators, with selective red accompaniment, provide the automotive signature on major brand regions. They decorate the frame rather than cutting text, controls or the logo. Fine (1px) borders keep light panels distinct.
+The complete logo is contained in a black rectangular plate with (4px) corners. A narrow skewed orange edge on the hero supplies a restrained angular accent. Do not clip text, controls, product imagery or the logo into decorative shapes. Fine (1px) borders define light content groups.
 
 ## Components
 
 ### Buttons
 
-Confident, readable actions with a modest corner and no resting shadow.
+Reuse BrandButton's primary, secondary, dark, danger and ghost variants. Primary uses orange with dark text and a warm hover. Secondary is white with a visible border and dark text. Dark is a solid navy surface with white text, changing to Secondary Navy on hover. Danger is Racing Red with white text and Danger Ink hover. Ghost uses strong neutral text and a subtle gray hover.
 
-- **Primary:** Performance Orange with Obsidian text; Hot Orange on hover.
-- **Secondary:** white, navy text and Strong Border; muted background on hover.
-- **Dark:** translucent white surface and border with white text, for dark frames.
-- **Danger:** Racing Red and white, deepening to the implemented dark red hover.
-- **Ghost:** transparent with strong neutral text and a subtle gray hover surface.
-- **Sizing and state:** default minimum height (44px); large (48px). Small/default/large horizontal padding is (16/20/24px). Active press moves down (1px); disabled actions reduce opacity and stop pointer interaction. Visible keyboard focus uses the shared ring.
+Default size is at least (44px) high with (10px 20px) padding; large is at least (48px), with (12px 24px). Disabled actions reduce opacity and stop pointer interaction. The shared component uses color transitions, without an invented press translation. Product-card actions use their separate compact full-width treatment. Preserve clear labels and visible focus.
 
 ### Chips
 
-Compact status indicators use a pill shape, thin tonal border, (12px) semibold Inter, and optional dot or SVG icon. Use the shared StatusBadge/StockBadge tone mapping; keep text such as In stock, Low stock or Out of stock visible. Labels and icons carry meaning alongside color.
+StatusBadge uses compact semibold Inter, a thin tonal border, pill corners and an optional dot or SVG icon. Reuse its success, warning, danger, info, brand and neutral mappings. Keep explicit status wording. Product cards use one stock line rather than stacking badges.
 
 ### Cards / Containers
 
-Light, bordered content surfaces keep merchandise and data easy to inspect. Reuse Card, SectionCard and MetricCard rather than introducing new wrappers. Generic Card has no prescribed padding; its consumer supplies the relevant spacing. Product images use contain against white, preserving the complete item. Metrics stay flat and use Inter tabular values.
+Reuse BrandPrimitives Card, SectionCard and MetricCard. Light surfaces and borders define groups; content determines padding. Shared operations sections pair a compact header with (16/20px) padding. Metrics stay neutral and flat; primary sales receive visual priority rather than making every metric equally prominent.
+
+ProductCard uses a square contained photograph, two-line Inter name, optional part number, one stock line, a strong price and one purchase action. Product photo space should carry the card's visual weight. Its list layout changes at (640px). Sale and rating treatments only appear when supported by real data. Use the established product-image fallback for unavailable images; never disguise content defects as a photography direction.
 
 ### Inputs / Fields
 
-White fields have a Control radius, visible Control Border, (44px) minimum height and (10px 12px) internal padding. Labels sit above; hints and errors sit below. Search fields reserve space for a real SVG search icon. The global keyboard ring is (3px) Orange Ink with a (3px) offset; focused shared fields also change their border. Invalid fields add danger ink and explanatory text. Preserve native select, checkbox and radio semantics.
+Brand fields use white, a visible Control Border, Control corners and (46px) minimum height. Operations SearchField is (44px); auth inputs are at least (46px), with (48px) submit buttons. Labels are above and hints/errors below; native select, checkbox and radio semantics remain. Search fields reserve space for a real SVG icon.
+
+The global keyboard outline is (3px) with a (3px) offset: Orange Ink on light surfaces and Hot Orange on dark headers, footers, sidebars, POS headers, navy drawers and mobile search. Dark containers override the inherited focus token, preserving visible focus against their framing. Shared focus styles also change the field border; some retained controls use a local orange ring. Invalid fields show danger treatment and explanatory text. Practical touch targets are (44px), including coarse-pointer operations overrides.
 
 ### Navigation
 
-The public header and footer are Obsidian; operations use Racing Navy. Selected operations destinations use Secondary Navy and an inset orange left marker. Text and SVG icons remain readable on dark surfaces; mobile menus use the shared focus-managed drawer. Shared content tabs use an orange underline and Orange Ink selected text. Do not apply the dark navigation treatment to the data canvas.
+The public shell is Obsidian; its active destination has a restrained orange underline. The footer is dark with grouped columns and an orange top edge. Operations use Racing Navy and (6px) navigation corners; active rows have a translucent white fill, narrow orange inset marker and warm orange SVG icon. Preserve permission-filtered destinations. Account navigation becomes a horizontally scrolling row below (1024px). Mobile navigation uses the shared dialog/drawer behavior.
 
 ### Official Logo
 
-BrandLogo is the only logo renderer; BrandMark delegates to it. Use the complete supplied `frontend/public/brand/10th-west-logo.png`, unchanged, on its black plate. The companion name may hide in compact layouts while the complete image remains. Preserve the clear-space requirement in MASTER; contextual plate sizing is not a license to alter the asset.
+BrandLogo renders `frontend/public/brand/10th-west-logo.png` complete and unchanged. BrandMark delegates to it. The image uses contain without cropping, filtering, recoloring or stretching. The header plate is (52x54px), compact mobile (48x50px), auth (80x84px); contextual plate sizing does not authorize changing the asset. The companion name can hide when space is tight while the actual logo remains.
 
-### Tables and Dialogs
+### Tables, Dialogs and Order Summary
 
-DataTable provides a white bordered scrolling region, Card radius, sticky subdued headers, (12px 16px) cells and tabular figures. Hover rows change tone quietly. Modal owns focus trapping, Escape dismissal, scroll locking and opener restoration. It becomes a bottom-aligned panel on phone layouts; drawer and sheet variants reuse the same behavior. Keep cancel and destructive confirmation actions distinct.
+DataTable uses a white bordered scroll container, subdued sticky headers, tabular figures and (12px 16px) cells; inventory has a denser (10px 8px) cell override. Existing scoped operations styles normalize older utility classes. Extend shared components rather than copying those legacy classes into new screens.
+
+Modal owns focus trapping, Escape dismissal, scroll locking and opener restoration. Drawer/sheet variants reuse that behavior; phone dialogs are bottom-aligned with bounded height. OrderSummary provides consistent light framing and a sticky desktop position, while callers retain prices, shipping and payment state. Stored descriptions and policy HTML always render through RichText; previews use richTextToPlainText.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** reuse the official complete logo, shared components and established semantic tokens.
-- **Do** pair orange action fills with dark text and use Orange Ink for light-background links.
-- **Do** keep real merchandise, part identity, fitment, stock and prices easy to inspect.
-- **Do** use Inter and tabular numbers for prices, controls and business data.
-- **Do** preserve visible focus, labeled actions, non-color status and reduced-motion behavior.
-- **Do** retain compact operations, contained table scrolling and usable phone controls.
+
+- **Do** follow MASTER and the runtime semantic tokens when extending this recorded system.
+- **Do** preserve the complete official logo and use shared components.
+- **Do** keep light content dominant, navy framing restrained and orange actions readable with dark text.
+- **Do** preserve the single photographic home banner and the single centered auth surface.
+- **Do** use context-specific Inter and Barlow headings, Inter data and tabular financial figures.
+- **Do** keep tables scrolling inside their containers, visible focus, labeled status and reduced-motion behavior.
+- **Do** show real prices, stock, fitment and ratings, with honest image fallbacks.
 
 ### Don't:
-- **Don't** crop, recolor, filter, stretch or replace the official logo with initials or text.
-- **Don't** introduce gaming imagery, neon, skulls, flames, simulated metal or decorative bevels.
+
+- **Don't** crop, recolor, filter, stretch or replace the official logo.
+- **Don't** reintroduce split authentication, a product-card hero or a logo billboard.
+- **Don't** turn red into the main interaction color or use orange fill colors as small text on white.
+- **Don't** add gaming imagery, neon, glow, decorative glass, rainbow dashboards or heavy panel shadows.
+- **Don't** replace readable product names or technical headings with condensed display typography.
 - **Don't** invent ratings, fitment, stock, prices or unsupported marketing claims.
-- **Don't** turn red into the default primary-action color or use orange fill colors as small text on white.
-- **Don't** add rainbow charts, heavy panel shadows or decorative motion to operations.
-- **Don't** treat legacy utility exceptions, incidental micro-labels or content defects as new visual rules.
+- **Don't** promote test-like product records, missing or unrelated merchant photos, incidental old link/red classes, or tiny legacy labels into design-system rules.

@@ -29,17 +29,18 @@
     }
   },
   "interface": {
-    "obsidian": "#05070B",
-    "racingNavy": "#12204E",
-    "navySecondary": "#1A2B61",
-    "racingRed": "#D52231",
-    "performanceOrange": "#ED621D",
-    "hotOrange": "#F47A20",
+    "obsidian": "#080A0E",
+    "racingNavy": "#111C3D",
+    "navySecondary": "#192A5A",
+    "racingRed": "#D62232",
+    "performanceOrange": "#F36A21",
+    "hotOrange": "#FF8A1F",
     "white": "#FFFFFF",
-    "offWhite": "#F5F6F8",
-    "steel": "#687182",
-    "lightBorder": "#D8DEE8",
-    "darkBorder": "#27324D",
-    "orangeInk": "#A83B0D"
+    "offWhite": "#F6F7F9",
+    "steel": "#697180",
+    "lightBorder": "#DDE1E8",
+    "darkBorder": "#28324A",
+    "orangeInk": "#A34110",
+    "graphite": "#242832"
   }
 }

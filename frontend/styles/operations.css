@@ -1,0 +1,220 @@
+/* Operations workspace normalization
+   Legacy management views still use older utility combinations. These scoped
+   rules keep them on the same light, restrained system while they are migrated
+   to the shared operations components. */
+.operations-shell {
+  --ops-bg: #f6f7f9;
+  --ops-surface: #ffffff;
+  --ops-surface-muted: #eef0f4;
+  --ops-sidebar: #111c3d;
+  --ops-text: #111c3d;
+  --ops-muted: #565e6b;
+  --ops-border: #dde1e8;
+  --ops-accent: #f36a21;
+}
+
+.operations-content {
+  color: var(--ops-text);
+  font-size: 14px;
+}
+
+.operations-content h1 {
+  color: var(--ops-text);
+  letter-spacing: -0.02em;
+}
+
+.operations-content :is(.bg-gray-800, .bg-gray-900) {
+  background-color: var(--ops-surface) !important;
+}
+
+.operations-content [class*="from-[#1a1d23]"],
+.operations-content [class*="from-[#111a31]"] {
+  background: var(--ops-surface) !important;
+}
+
+.operations-content :is(.border-gray-700, .border-gray-600) {
+  border-color: var(--ops-border) !important;
+}
+
+.operations-content :is(.divide-gray-50, .divide-gray-700) > :not([hidden]) ~ :not([hidden]) {
+  border-color: #eef0f4 !important;
+}
+
+.operations-content .text-white {
+  color: var(--ops-text) !important;
+}
+
+.operations-content :is(.text-gray-100, .text-gray-200, .text-gray-300) {
+  color: #565e6b !important;
+}
+
+.operations-content .text-gray-400 {
+  color: var(--ops-muted) !important;
+}
+
+.operations-content :is(
+  [class*="bg-red-"],
+  [class*="bg-orange-"],
+  [class*="bg-blue-"],
+  [class*="bg-green-"],
+  [class*="bg-emerald-"],
+  [class*="bg-indigo-"],
+  [class*="bg-purple-"],
+  [class*="bg-slate-9"],
+  [class*="from-red-"],
+  [class*="from-orange-"]
+).text-white {
+  color: #ffffff !important;
+}
+
+.operations-content input:not([type="checkbox"]):not([type="radio"]),
+.operations-content select,
+.operations-content textarea {
+  border-color: #b4bdcc !important;
+  background-color: #ffffff !important;
+  color: #111c3d !important;
+}
+
+.operations-content input::placeholder,
+.operations-content textarea::placeholder {
+  color: var(--text-secondary) !important;
+}
+
+.operations-content table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 680px;
+}
+
+.operations-content thead {
+  background: #f6f7f9 !important;
+}
+
+.operations-content th {
+  color: #565e6b !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em;
+}
+
+.operations-content td {
+  color: #565e6b;
+  vertical-align: middle;
+}
+
+.operations-content tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.operations-content tbody tr:hover {
+  background: rgba(248, 250, 252, 0.9) !important;
+}
+
+.operations-content [class*="overflow-hidden"]:has(> table) {
+  overflow-x: auto !important;
+}
+
+.operations-content button,
+.operations-content a {
+  transition-duration: 160ms;
+}
+
+.operations-content :is(.shadow-xl, .shadow-2xl) {
+  box-shadow: var(--shadow-elevated) !important;
+}
+
+/* Legacy views still use rounded-2xl/3xl on business panels; cap them at the card radius. */
+.operations-content :is(.rounded-2xl, .rounded-3xl):not([role="dialog"] *) {
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 640px) {
+  .operations-content table {
+    min-width: 620px;
+  }
+}
+
+
+/* Cohesive owner/staff/system workspaces. Branding stays in the frame. */
+.operations-sidebar { background:var(--racing-navy) !important; }
+.operations-brand-header { min-height:112px; padding-top:16px; padding-bottom:16px; }
+.operations-brand-header .brand-logo-description { display:none; }
+.operations-brand-header .brand-logo-title { font-size:26px; }
+.operations-role { display:block; margin-top:12px; font-size:11px; font-weight:600; letter-spacing:.08em; color:#c7cedb; }
+.operations-sidebar nav button { min-height:42px; }
+.operations-sidebar nav [aria-current=page] { background:#ffffff0d !important; border-radius:6px; }
+.operations-sidebar :is(.text-slate-500,.text-slate-400) { color:#aeb8ca; }
+.operations-mobile-logo .brand-logo-plate { width:40px; height:42px; }
+.operations-content { background:var(--surface-muted); }
+.ops-page-header { padding-bottom:20px; border-bottom:1px solid var(--border); }
+.ops-page-header h1 { font:600 32px/1.1 'Barlow Condensed',sans-serif; color:var(--racing-navy); }
+.ops-page-header p { max-width:70ch; font-size:14px; }
+.operations-content h2:not(.ops-page-header h2) { font-family:Inter,sans-serif; font-size:18px; font-weight:600; line-height:1.4; }
+.operations-content h3 { font-family:Inter,sans-serif; }
+.operations-content th { font-size:13px !important; }
+.operations-content td { font-size:13px; }
+.operations-content table thead th { position:sticky; top:0; z-index:1; background:var(--surface-muted); }
+.operations-content :is(button,a).text-white[class~="bg-orange-600"],.operations-content :is(button,a).text-white[class~="bg-orange-500"] { color:var(--obsidian) !important; }
+.operations-content :is(button,a)[class~="bg-orange-600"]:hover { background:var(--hot-orange) !important; }
+.operations-content :is(.text-gray-400,.text-slate-400) { color:var(--text-secondary) !important; }
+.operations-content .ops-metric { border-radius:8px; box-shadow:none; }
+.ops-metric > div > span { background:var(--surface-muted); color:var(--racing-navy); }
+.ops-metric p:last-child { font-size:13px; }
+.dashboard-overview { display:grid; gap:20px; }
+.dashboard-trading { padding:24px; border:1px solid var(--border); border-radius:10px; background:white; }
+.dashboard-sales > p { font-size:15px; color:var(--text-secondary); }
+.dashboard-sales > strong { display:block; margin-top:8px; color:var(--racing-navy); font:600 40px/1.1 Inter,sans-serif; font-variant-numeric:tabular-nums; }
+.dashboard-sales > span { display:block; margin-top:12px; font-size:13px; color:var(--text-secondary); }
+.dashboard-totals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:24px; border-top:1px solid var(--border); padding-top:20px; }
+.dashboard-totals .ops-metric { padding:0; border:0; background:transparent; }
+.dashboard-totals .ops-metric p:first-child { font-size:13px; }
+.dashboard-totals .ops-metric p:nth-child(2) { font-size:24px; }
+.dashboard-totals .ops-metric p:last-child { font-size:12px; }
+.dashboard-action-queue { padding:20px 24px; border:1px solid var(--border); border-radius:10px; background:white; }
+.dashboard-action-queue h2 { margin-bottom:12px; }
+.dashboard-action-queue button { display:flex; align-items:center; gap:12px; width:100%; min-height:44px; border-top:1px solid var(--border); text-align:left; font-size:13px; color:var(--text-secondary); }
+.dashboard-action-queue button span { flex:1; }
+.dashboard-action-queue button strong { color:var(--text); }
+.dashboard-action-queue button:hover { color:var(--accent-hover); }
+.dashboard-orders-grid { display:grid; gap:20px; align-items:start; }
+.dashboard-orders-grid .ops-section { min-width:0; }
+.pos-shell { height:100dvh; background:var(--surface-muted); }
+.pos-header { min-height:72px; height:72px; background:var(--racing-navy) !important; border-color:var(--dark-border,#28324a) !important; color:white; box-shadow:none !important; }
+.pos-header .brand-logo { color:white; }
+.pos-header .brand-logo-plate { width:46px; height:48px; }
+.pos-header .brand-logo-description { display:none; }
+.pos-header > div:first-child > button { color:white; }
+.pos-header > div:first-child p:last-child { color:#c7cedb; }
+.pos-product-tile { border-radius:8px; box-shadow:none !important; transform:none !important; }
+.pos-product-tile img { object-fit:contain; }
+.pos-shell input:not([type=checkbox]):not([type=radio]),.pos-shell select { min-height:44px; border-radius:8px; }
+.pos-shell > main > aside { box-shadow:none; }
+@media (min-width:1024px) {
+ .ops-page-header h1 { font-size:36px; }
+ .dashboard-overview { grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr); }
+ .dashboard-orders-grid:has(>section:nth-child(2)) { grid-template-columns:minmax(0,1fr) 320px; }
+}
+@media (max-width:639px) {
+ .pos-header .brand-logo-name { display:none; }
+ .pos-header { height:64px; min-height:64px; }
+ .dashboard-trading { padding:20px; }
+ .dashboard-sales > strong { font-size:36px; }
+ .dashboard-totals { gap:8px; }
+ .dashboard-totals .ops-metric p:last-child { display:none; }
+}
+@media (pointer:coarse) {
+ .operations-content :is(button,a):not([role=switch]),.shop-filter-scroll button { min-height:44px; }
+ .operations-content button[title] { min-width:44px; }
+}
+
+.inventory-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px; border-bottom:1px solid var(--border); }
+.inventory-toolbar > label { flex:1 1 260px; max-width:none; }
+.inventory-toolbar > select { flex:0 1 auto; }
+[data-workspace=system] .ops-page-header h1 { font-family:Inter,sans-serif; font-size:28px; letter-spacing:-.025em; }
+[data-workspace=system] .ops-metric { border-top:0; border-bottom:0; border-radius:0; background:transparent; }
+[data-workspace=system] .ops-metric:first-child { border-left:0; }
+@media (max-width:639px) { [data-workspace=system] .ops-page-header h1 { font-size:26px; } }
+
+.inventory-stock-table :is(th,td) { padding:10px 8px; }
+.inventory-stock-table td:nth-child(2) span { max-width:180px; }
+.inventory-stock-table { min-width:1080px !important; }
