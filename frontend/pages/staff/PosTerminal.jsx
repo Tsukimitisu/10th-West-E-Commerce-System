@@ -400,21 +400,21 @@ const PosTerminal = () => {
         type="button"
         onClick={() => chooseProduct(product)}
         disabled={available <= 0}
-        className="pos-product-tile group flex min-h-[245px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition-colors hover:-translate-y-0.5 hover:border-red-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-55"
+        className="pos-product-tile group flex min-h-[205px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white text-left transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-55"
       >
-        <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
-          <img src={resolveProductImageUrl(product.image)} alt="" onError={handleProductImageError} className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.025]" />
+        <div className="relative h-28 w-full overflow-hidden bg-slate-50">
+          <img src={resolveProductImageUrl(product.image)} alt="" onError={handleProductImageError} className="h-full w-full object-contain p-3" />
           {product.variants?.length > 0 && <span className="absolute left-2 top-2 rounded-lg bg-slate-950/88 px-2 py-1 text-[10px] font-bold text-white">{product.variants.length} variants</span>}
           {available <= 0 && <span className="absolute inset-0 grid place-items-center bg-white/75 text-xs font-black text-red-700">OUT OF STOCK</span>}
         </div>
         <div className="flex flex-1 flex-col p-3">
-          <p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-red-600">{product.motorcycle_model || 'Motorcycle part'}</p>
+          <p className="truncate text-xs font-medium text-slate-600">{product.motorcycle_model || 'Motorcycle part'}</p>
           <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-5 text-slate-950">{product.name}</h3>
-          <p className="mt-1 truncate font-mono text-[11px] text-slate-500">{product.sku || product.part_number || 'No SKU'}</p>
-          {product.color && <p className="mt-0.5 truncate text-[11px] text-slate-500">Color: {product.color}</p>}
+          <p className="mt-1 truncate font-mono text-xs text-slate-500">{product.sku || product.part_number || 'No SKU'}</p>
+          {product.color && <p className="mt-0.5 truncate text-xs text-slate-500">Color: {product.color}</p>}
           <div className="mt-auto flex items-end justify-between gap-2 pt-3">
             <strong className="text-sm text-slate-950">{formatCurrency(productPrice(product))}</strong>
-            <span className={`text-[11px] font-semibold ${available > 0 ? 'text-emerald-700' : 'text-red-700'}`}>{available} available</span>
+            <span className={`text-xs font-semibold ${available > 0 ? 'text-emerald-700' : 'text-red-700'}`}>{available} available</span>
           </div>
         </div>
       </button>
@@ -422,7 +422,7 @@ const PosTerminal = () => {
   }), [products]);
 
   if (loading) {
-    return <div className="grid h-screen place-items-center bg-slate-100"><div className="text-center"><Loader2 className="mx-auto h-10 w-10 animate-spin text-red-600" /><p className="mt-3 text-sm text-slate-600">Opening POS…</p></div></div>;
+    return <div className="grid h-screen place-items-center bg-slate-100"><div className="text-center"><Loader2 className="mx-auto h-10 w-10 animate-spin text-slate-700" /><p className="mt-3 text-sm text-slate-600">Opening POS…</p></div></div>;
   }
 
   if (accessDenied) {
@@ -446,11 +446,11 @@ const PosTerminal = () => {
           <BrandMark link={false} className="" />
           <div className="border-l border-slate-200 pl-3">
             <h1 className="font-display text-xl font-semibold">Point of Sale</h1>
-            <p className="flex items-center gap-1.5 text-[11px] text-slate-500"><Clock3 size={12} /> {now.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+            <p className="flex items-center gap-1.5 text-xs text-slate-500"><Clock3 size={12} /> {now.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
-          <span className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold sm:inline-flex ${connected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}><Wifi size={12} /> {connected ? 'Live inventory' : 'Reconnecting'}</span>
+          <span className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold sm:inline-flex ${connected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}><Wifi size={12} /> {connected ? 'Live inventory' : 'Reconnecting'}</span>
           <button aria-label="Recent sales" onClick={openRecentSales} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"><History size={16} /><span className="hidden sm:inline">Recent sales</span></button>
           <div className="hidden items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 lg:flex">
             <UserRound size={16} className="text-slate-500" />
@@ -459,7 +459,7 @@ const PosTerminal = () => {
         </div>
       </header>
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_400px] lg:grid-rows-1">
+      <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-1">
         <section className="flex min-h-0 flex-col overflow-hidden">
           <div className="border-b border-slate-200 bg-white px-3 py-3 sm:px-5">
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:gap-3">
@@ -512,11 +512,11 @@ const PosTerminal = () => {
         <aside className={`flex min-h-0 flex-col border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)] lg:border-l lg:border-t-0 lg:shadow-none ${saleExpanded && !isDesktop ? 'max-h-[78dvh]' : ''}`} aria-label="Current sale">
           <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 lg:h-16">
             {isDesktop ? (
-              <div className="flex items-center gap-2"><ShoppingCart size={19} aria-hidden="true" /><h2 className="font-display text-base font-bold">Current sale</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums">{cartCount}</span></div>
+              <div className="flex items-center gap-2"><ShoppingCart size={19} aria-hidden="true" /><h2 className="font-sans text-base font-semibold">Current sale</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums">{cartCount}</span></div>
             ) : (
               <button type="button" onClick={() => setSaleExpanded((value) => !value)} aria-expanded={saleExpanded} aria-controls="pos-sale-lines" className="-ml-2 flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left">
                 <ShoppingCart size={19} aria-hidden="true" />
-                <h2 className="font-display text-base font-bold">Current sale</h2>
+                <h2 className="font-sans text-base font-semibold">Current sale</h2>
                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums">{cartCount}</span>
                 <span className="ml-auto text-xs font-semibold text-slate-500">{saleExpanded ? 'Hide items' : 'Show items'}</span>
                 <ChevronUp size={18} className={`shrink-0 text-slate-500 transition-transform ${saleExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
@@ -571,7 +571,7 @@ const PosTerminal = () => {
             <dl className="space-y-2 text-sm">
               <div className="hidden justify-between text-slate-600 lg:flex"><dt>Subtotal</dt><dd>{quoteLoading ? 'Validating…' : formatCurrency(quote?.subtotal_amount || 0)}</dd></div>
               {Number(quote?.discount_amount) > 0 && <div className="flex justify-between text-emerald-700"><dt>Discount {quote?.promotion?.code && `(${quote.promotion.code})`}</dt><dd>-{formatCurrency(quote.discount_amount)}</dd></div>}
-              <div className="flex items-end justify-between lg:border-t lg:border-slate-200 lg:pt-3"><dt className="font-display text-base font-bold">Total</dt><dd className="font-sans text-xl font-bold tabular-nums lg:text-2xl">{formatCurrency(displayTotal)}</dd></div>
+              <div className="flex items-end justify-between lg:border-t lg:border-slate-200 lg:pt-3"><dt className="font-sans text-base font-semibold">Total</dt><dd className="font-sans text-xl font-bold tabular-nums lg:text-2xl">{formatCurrency(displayTotal)}</dd></div>
             </dl>
             {cartError && <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{cartError}</div>}
             <button onClick={openPayment} disabled={!cart.length || !quote?.valid || quoteLoading || Boolean(cartError)} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 lg:mt-4 lg:min-h-14 px-5 text-base font-bold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">
