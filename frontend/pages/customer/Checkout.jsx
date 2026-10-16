@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useId } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield, Wallet, ShoppingBag } from 'lucide-react';
 import EmptyState from '../../components/ui/EmptyState';
@@ -187,7 +187,7 @@ const Checkout = () => {
 
   const getEffectiveItemUnitPrice = (item) => {
     const regularPrice = toFiniteNumber(item?.product?.price, 0);
-    const salePrice = toFiniteNumber(item?.product?.sale_price, NaN);
+    const salePrice = item?.product?.sale_price == null ? NaN : toFiniteNumber(item.product.sale_price, NaN);
     const isOnSale = Boolean(item?.product?.is_on_sale);
 
     if (isOnSale && Number.isFinite(salePrice)) {
@@ -577,12 +577,12 @@ const Checkout = () => {
       return;
     }
 
-    setProcessing(true);
-    setError('');
     if (paymentMethod === 'gcash' && !gcashAvailability.available) {
       setError('GCash is not configured yet. Please use Cash on Delivery.');
       return;
     }
+    setProcessing(true);
+    setError('');
 
     try {
       const u = getCurrentAuthUser();
@@ -786,7 +786,7 @@ const Checkout = () => {
         <form onSubmit={handleSubmit}>
           <div className="flex flex-col lg:flex-row gap-8">
             <div className="flex-1 space-y-6">
-              <Section title="Contact Information" icon={<MapPin size={18} />}>
+              <Section step="1" title="Contact" icon={<MapPin size={18} />}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input label="Full Name" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} required />
                   <Input label="Email" type="email" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} required />
@@ -802,7 +802,7 @@ const Checkout = () => {
                 </div>
               </Section>
 
-              <Section title="Shipping Address" icon={<MapPin size={18} />}>
+              <Section step="2" title="Delivery address" icon={<MapPin size={18} />}>
                 {addresses.length > 0 && (
                   <div className="space-y-2 mb-4">
                     {addresses.map((addr) => (
@@ -963,7 +963,7 @@ const Checkout = () => {
                 )}
               </Section>
 
-              <Section title="Shipping Method" icon={<Truck size={18} />}>
+              <Section step="3" title="Shipping" icon={<Truck size={18} />}>
                 <div className="rounded-xl border border-red-200 bg-red-50 p-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
@@ -1007,11 +1007,12 @@ const Checkout = () => {
                 )}
               </Section>
 
-              <Section title="Payment Method" icon={<CreditCard size={18} />}>
+              <Section step="4" title="Payment" icon={<CreditCard size={18} />}>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('cod')}
+                    aria-pressed={paymentMethod === 'cod'}
                     className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'cod' ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
                   >
                     <Wallet size={18} className={paymentMethod === 'cod' ? 'text-red-600' : 'text-slate-500'} />
@@ -1023,6 +1024,7 @@ const Checkout = () => {
                   <button
                     type="button"
                     onClick={() => gcashAvailability.available && setPaymentMethod('gcash')}
+                    aria-pressed={paymentMethod === 'gcash'}
                     disabled={gcashAvailability.loading || !gcashAvailability.available}
                     aria-describedby="gcash-availability-message"
                     className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'gcash' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'} disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:opacity-80`}
@@ -1056,7 +1058,7 @@ const Checkout = () => {
 
             <div className="lg:w-96">
               <div className="bg-white rounded-xl border border-slate-200 p-6 sticky top-24 shadow-sm">
-                <h2 className="font-display font-semibold text-lg text-gray-900 mb-4">Order Summary</h2>
+                <h2 className="font-display font-semibold text-lg text-gray-900 mb-4"><span className="mr-2 inline-grid h-7 w-7 place-items-center rounded-md bg-slate-100 text-sm text-slate-700">5</span>Review order</h2>
 
                 <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
                   {items.map((item) => (
@@ -1237,17 +1239,20 @@ const Checkout = () => {
   );
 };
 
-const Section = ({ title, icon, children }) => (
-  <div className="bg-white rounded-xl border border-slate-200 p-6">
-    <h2 className="font-display font-semibold text-gray-900 mb-4 flex items-center gap-2">{icon} {title}</h2>
+const Section = ({ step, title, icon, children }) => (
+  <section className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+    <h2 className="font-display font-semibold text-gray-900 mb-4 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-md bg-slate-100 text-sm text-slate-700">{step}</span>{icon} {title}</h2>
     {children}
-  </div>
+  </section>
 );
 
-const Input = ({ label, value, onChange, type = 'text', required, placeholder, className = '', inputMode, pattern, error }) => (
+const Input = ({ label, value, onChange, type = 'text', required, placeholder, className = '', inputMode, pattern, error }) => {
+  const id = useId();
+  return (
   <div className={className}>
-    <label className="block text-sm font-medium text-gray-600 mb-1">{label} {required && <span className="text-red-500">*</span>}</label>
+    <label htmlFor={id} className="block text-sm font-medium text-gray-600 mb-1">{label} {required && <span className="text-red-500">*</span>}</label>
     <input
+      id={id}
       type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -1257,9 +1262,10 @@ const Input = ({ label, value, onChange, type = 'text', required, placeholder, c
       pattern={pattern}
       className={`w-full px-3 py-2.5 border rounded-lg text-sm text-gray-900 bg-gray-50 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-transparent ${error ? 'border-red-400 focus:ring-red-400' : 'border-slate-200 focus:ring-red-500'}`}
     />
-    {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    {error && <p role="alert" className="text-xs text-red-700 mt-1">{error}</p>}
   </div>
-);
+  );
+};
 
 export default Checkout;
 

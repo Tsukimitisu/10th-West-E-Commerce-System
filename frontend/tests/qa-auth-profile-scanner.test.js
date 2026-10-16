@@ -69,15 +69,18 @@ test('Google-managed profile email is read-only with an explanatory message', as
   assert.match(profile, /Your email address is linked to your Google account and cannot be changed here\./);
 });
 
-test('account deletion dialog is centered, focused, scroll locked, and keyboard trapped', async () => {
+test('account deletion uses the shared viewport-safe, focus-managed dialog', async () => {
   const profile = await read('pages/customer/Profile.jsx');
-  assert.match(profile, /role="dialog" aria-modal="true"/);
-  assert.match(profile, /deleteDialogRef\.current\?\.scrollIntoView\(\{ behavior: 'smooth', block: 'center' \}\)/);
-  assert.match(profile, /document\.body\.style\.overflow = 'hidden'/);
-  assert.match(profile, /event\.key === 'Escape'/);
-  assert.match(profile, /event\.key !== 'Tab'/);
-  assert.match(profile, /deleteConfirmRef\.current\?\.focus/);
-  assert.match(profile, /z-\[100\]/);
+  const modal = await read('components/owner/Modal.jsx');
+  assert.match(profile, /<Modal isOpen=\{showDeleteModal\}/);
+  assert.match(profile, /id="delete-account-confirm" autoFocus/);
+  assert.match(profile, /sticky bottom-0/);
+  assert.match(modal, /role="dialog"/);
+  assert.match(modal, /aria-modal="true"/);
+  assert.match(modal, /document\.body\.style\.overflow = 'hidden'/);
+  assert.match(modal, /event\.key === 'Escape'/);
+  assert.match(modal, /event\.key !== 'Tab'/);
+  assert.match(modal, /max-h-\[92dvh\]/);
   assert.match(profile, /Account deleted successfully\. Redirecting/);
   assert.match(profile, /clearCurrentAuthUser\(\)/);
   assert.match(profile, /window\.location\.href = '\/#\/login'/);

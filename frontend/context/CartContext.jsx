@@ -4,6 +4,7 @@ import { supabase } from '../services/supabase.js';
 import { getCurrentAuthUser } from '../services/authSession.js';
 import { API_URL } from '../services/apiConfig.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
+import { detectCartPriceChanges } from '../utils/cartPriceChanges.js';
 
 const USE_SUPABASE = false;
 const GUEST_CART_KEY = 'shopCoreGuestCart';
@@ -22,6 +23,7 @@ export const CartProvider = ({ children }) => {
   const [updatingItemIds, setUpdatingItemIds] = useState(() => new Set());
   const [initialized, setInitialized] = useState(false);
   const [cartSyncError, setCartSyncError] = useState(null);
+  const [cartPriceChanges, setCartPriceChanges] = useState([]);
   const cartSyncRequestRef = React.useRef(0);
   const itemsRef = React.useRef(items);
   const quantityUpdatesRef = React.useRef(new Set());
@@ -52,6 +54,7 @@ export const CartProvider = ({ children }) => {
   useEffect(() => {
     cartScopeKeyRef.current = cartScopeKey;
     lastSelectedSnapshotRef.current = null;
+    setCartPriceChanges([]);
   }, [cartScopeKey]);
 
   useEffect(() => {
@@ -327,6 +330,11 @@ export const CartProvider = ({ children }) => {
         }
         const mappedItems = mapCartItemsFromBackend(data.items || []);
         const stableItems = orderCartItems(mappedItems);
+        try {
+          const cachedItems = JSON.parse(sessionStorage.getItem(requestedScope) || '[]');
+          const changes = detectCartPriceChanges(cachedItems, stableItems);
+          if (changes.length) setCartPriceChanges(changes);
+        } catch { /* Invalid tab cache is ignored; the server cart remains authoritative. */ }
         setItems(stableItems);
         setCartSyncError(null);
         // Save to tab-scoped storage as backup
@@ -910,6 +918,7 @@ export const CartProvider = ({ children }) => {
   };
 
   const clearCart = async () => {
+    setCartPriceChanges([]);
     const cachedUser = getCurrentAuthUser();
     if (USE_SUPABASE && !cachedUser?.id) {
       clearCartLocal();
@@ -1078,6 +1087,7 @@ export const CartProvider = ({ children }) => {
 
   const clearCartLocal = () => {
     setItems([]);
+    setCartPriceChanges([]);
     setSelectedItemIds([]);
     setDiscount(null);
     setError(null);
@@ -1189,6 +1199,7 @@ export const CartProvider = ({ children }) => {
         syncCart,
         initialized,
         cartSyncError,
+        cartPriceChanges,
     }}>
       {children}
     </CartContext.Provider>

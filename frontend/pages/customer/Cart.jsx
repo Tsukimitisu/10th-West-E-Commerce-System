@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft, LogIn, X } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
@@ -39,6 +39,7 @@ const Cart = () => {
     updatingItemIds,
     syncCart,
     cartSyncError,
+    cartPriceChanges,
   } = useCart();
 
   const navigate = useNavigate();
@@ -46,6 +47,9 @@ const Cart = () => {
   const [quantityErrors, setQuantityErrors] = useState({});
   const [localQuantities, setLocalQuantities] = useState({});
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(DEFAULT_FREE_SHIPPING_THRESHOLD);
+  const [cartChanges, setCartChanges] = useState([]);
+  const [checkoutError, setCheckoutError] = useState('');
+  const previousPrices = useRef(new Map());
 
   useEffect(() => {
     if (getCurrentAuthUser()) syncCart();
@@ -72,10 +76,14 @@ const Cart = () => {
   const grandTotal = roundCurrency(vatBase + vatAmount);
 
   const formatPrice = (price) => `\u20B1${roundCurrency(price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  const priceNotices = [...new Set([
+    ...cartPriceChanges.map((change) => `${change.name}: price updated to ${formatPrice(change.currentPrice)}.`),
+    ...cartChanges,
+  ])];
 
   const getEffectiveItemUnitPrice = (item) => {
     const regularPrice = toFiniteNumber(item?.product?.price, 0);
-    const salePrice = toFiniteNumber(item?.product?.sale_price, NaN);
+    const salePrice = item?.product?.sale_price == null ? NaN : toFiniteNumber(item.product.sale_price, NaN);
     const isOnSale = Boolean(item?.product?.is_on_sale);
 
     if (isOnSale && Number.isFinite(salePrice)) {
@@ -85,7 +93,28 @@ const Cart = () => {
     return roundCurrency(regularPrice);
   };
 
+  useEffect(() => {
+    const nextPrices = new Map();
+    const changes = [];
+    for (const item of items) {
+      const price = getEffectiveItemUnitPrice(item);
+      const prior = previousPrices.current.get(item.productId);
+      if (prior !== undefined && prior !== price) changes.push(`${item.product.name}: price updated to ${formatPrice(price)}.`);
+      nextPrices.set(item.productId, price);
+    }
+    previousPrices.current = nextPrices;
+    if (changes.length) setCartChanges(changes);
+  }, [items]);
+
   const handleCheckout = () => {
+    const invalid = items.find((item) => selectedItemIds.includes(item.productId)
+      && item.product.stock_quantity != null
+      && Number(item.product.stock_quantity) < Number(item.quantity));
+    if (invalid) {
+      setCheckoutError(`${invalid.product.name} has ${invalid.product.stock_quantity} available. Adjust the quantity before checkout.`);
+      return;
+    }
+    setCheckoutError('');
     const checkoutSelectionIds = persistCheckoutSelection();
     if (checkoutSelectionIds.length === 0) return;
 
@@ -197,6 +226,11 @@ const Cart = () => {
         {cartSyncError && <div role="alert" className="mb-5 rounded-lg bg-amber-50 px-4 py-3 text-amber-900">
           {cartSyncError} <button type="button" onClick={() => syncCart()} className="ml-2 font-semibold underline">Retry</button>
         </div>}
+        {priceNotices.length > 0 && <div role="status" className="mb-5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <p className="font-semibold">Cart prices were refreshed</p>
+          {priceNotices.map((change) => <p key={change}>{change} Checkout will use this current price.</p>)}
+        </div>}
+        {checkoutError && <p role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{checkoutError}</p>}
 
         {items.length === 0 && !cartSyncError ? (
           <div className="text-center py-20 bg-white rounded-2xl border border-slate-200 shadow-sm">
@@ -248,10 +282,12 @@ const Cart = () => {
                             <Link to={`/products/${item.productId}`} className="font-semibold text-slate-900 hover:text-red-600 transition-colors text-sm line-clamp-2">{item.product.name}</Link>
                             {item.product.category_name && <p className="text-xs text-slate-500 mt-1">{item.product.category_name}</p>}
                             {item.product.stock_quantity != null && (
-                              <p className="text-xs text-slate-500 mt-1">Stock: {item.product.stock_quantity}</p>
+                              <p className={`text-xs mt-1 ${Number(item.product.stock_quantity) < Number(item.quantity) ? 'font-semibold text-red-700' : 'text-slate-600'}`}>
+                                {Number(item.product.stock_quantity) <= 0 ? 'Unavailable' : `${item.product.stock_quantity} available`}
+                              </p>
                             )}
                             <div className="flex gap-3 mt-2 md:hidden">
-                              <button onClick={() => handleRemoveItem(item.productId)} className="text-xs text-slate-500 hover:text-red-600 transition-colors flex items-center gap-1"><Trash2 size={12} /> Remove</button>
+                              <button onClick={() => handleRemoveItem(item.productId)} className="inline-flex min-h-11 items-center gap-1 text-sm text-red-700"><Trash2 size={16} aria-hidden="true" /> Remove</button>
                             </div>
                           </div>
                         </div>
@@ -265,10 +301,11 @@ const Cart = () => {
 
                         <div data-testid="cart-quantity" className="flex w-[7.75rem] justify-center mt-3 md:mt-0">
                           <div className="flex shrink-0 items-center border border-slate-200 rounded-lg bg-slate-50">
-                            <button onClick={() => handleDecreaseQty(item)} className="px-2.5 py-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-50" disabled={item.quantity <= 1 || isUpdating}>
+                            <button aria-label={`Decrease quantity of ${item.product.name}`} onClick={() => handleDecreaseQty(item)} className="min-h-11 min-w-11 px-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-50" disabled={item.quantity <= 1 || isUpdating}>
                               <Minus size={14} />
                             </button>
                             <input
+                              aria-label={`Quantity of ${item.product.name}`}
                               type="text"
                               inputMode="numeric"
                               pattern="[0-9]*"
@@ -278,7 +315,7 @@ const Cart = () => {
                               disabled={isUpdating}
                               className="w-12 py-1 text-sm font-semibold text-center bg-transparent text-slate-900 focus:outline-none focus:bg-white transition-colors disabled:opacity-50"
                             />
-                            <button onClick={() => handleIncreaseQty(item)} disabled={isUpdating} className="px-2.5 py-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-50">
+                            <button aria-label={`Increase quantity of ${item.product.name}`} onClick={() => handleIncreaseQty(item)} disabled={isUpdating} className="min-h-11 min-w-11 px-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors disabled:opacity-50">
                               <Plus size={14} />
                             </button>
                           </div>
@@ -286,7 +323,7 @@ const Cart = () => {
 
                         <div data-testid="cart-line-total" className="flex min-w-[7.5rem] items-center justify-between gap-3 mt-3 md:mt-0 md:justify-end">
                           <span className="whitespace-nowrap text-sm font-bold text-slate-900 md:mr-2">{formatPrice(price * Math.max(0, toFiniteNumber(item.quantity, 0)))}</span>
-                          <button onClick={() => handleRemoveItem(item.productId)} disabled={isUpdating} className="hidden md:block p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
+                          <button aria-label={`Remove ${item.product.name}`} onClick={() => handleRemoveItem(item.productId)} disabled={isUpdating} className="hidden md:block p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -334,7 +371,7 @@ const Cart = () => {
                     </div>
                   )}
                   <div className="flex justify-between text-slate-600">
-                    <span>Shipping</span>
+                    <span>Estimated shipping</span>
                     <span className="text-emerald-600 font-semibold">{shippingFee === 0 ? 'Free' : formatPrice(shippingFee)}</span>
                   </div>
                   <div className="flex justify-between text-slate-500">
@@ -342,10 +379,11 @@ const Cart = () => {
                     <span className="font-semibold text-slate-900">{formatPrice(vatAmount)}</span>
                   </div>
                   <div className="border-t border-slate-200 pt-3 flex justify-between">
-                    <span className="font-semibold text-slate-900">Total</span>
+                    <span className="font-semibold text-slate-900">Estimated total</span>
                     <span className="font-bold text-2xl text-slate-900">{formatPrice(grandTotal)}</span>
                   </div>
                 </div>
+                <p className="mt-3 text-xs leading-5 text-slate-600">Your final delivery fee and total are calculated from your address at checkout before you place the order.</p>
 
                 <button
                   disabled={selectedItemIds.length === 0}

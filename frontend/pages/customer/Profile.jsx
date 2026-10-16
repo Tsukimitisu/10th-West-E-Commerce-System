@@ -1,7 +1,9 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { User, Mail, Phone, Lock, Eye, EyeOff, Save, Check, AlertCircle, Shield, Camera, Trash2, AlertTriangle, Download } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { updateProfile, uploadProfileAvatar, changePassword, setLocalPassword, setup2FA, verify2FA, disable2FA, deleteAccount, exportMyData, getAuthAvailability } from '../../services/api';
 import AccountLayout from '../../components/customer/AccountLayout';
+import Modal from '../../components/owner/Modal';
 import PhoneVerification from '../../components/customer/PhoneVerification';
 import { clearCurrentAuthUser, getCurrentAuthUser, setCurrentAuthUser, subscribeAuthChanges } from '../../services/authSession';
 import { isValidPhilippineMobile, normalizePhilippineMobile } from '../../utils/phone.js';
@@ -47,8 +49,6 @@ const Profile = () => {
   const [avatarError, setAvatarError] = useState('');
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef(null);
-  const deleteDialogRef = useRef(null);
-  const deleteConfirmRef = useRef(null);
   const deleteTriggerRef = useRef(null);
   const hasLocalPassword = user?.has_local_password ?? !user?.oauth_provider;
   const isGoogleManagedEmail = Boolean(user?.email_managed_by_google);
@@ -92,44 +92,13 @@ const Profile = () => {
     }
   }, [avatarPreview]);
 
-  useEffect(() => {
-    if (!showDeleteModal) return undefined;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const frame = requestAnimationFrame(() => {
-      deleteDialogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      deleteConfirmRef.current?.focus({ preventScroll: true });
-    });
-
-    const handleDialogKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setShowDeleteModal(false);
-        return;
-      }
-      if (event.key !== 'Tab' || !deleteDialogRef.current) return;
-      const focusable = [...deleteDialogRef.current.querySelectorAll('button:not([disabled]), input:not([disabled])')];
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', handleDialogKeyDown);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleDialogKeyDown);
-      deleteTriggerRef.current?.focus({ preventScroll: true });
-    };
-  }, [showDeleteModal]);
+  const closeDeleteModal = () => {
+    if (deleteLoading || deleteSuccess) return;
+    setShowDeleteModal(false);
+    setDeleteConfirmText('');
+    setDeletePassword('');
+    setDeleteError('');
+  };
 
   const validateProfileForm = () => {
     const nextErrors = {};
@@ -469,6 +438,11 @@ const Profile = () => {
   return (
     <AccountLayout>
       <div className="space-y-6">
+        <header>
+          <h1 className="font-display text-2xl font-bold text-slate-950">My profile</h1>
+          <p className="mt-1 text-sm text-slate-600">Manage your account, sign-in security, and privacy choices.</p>
+        </header>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Account</p>
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <h2 className="font-display font-semibold text-lg text-gray-900 mb-6 flex items-center gap-2"><User size={20} className="text-red-500" /> Personal Information</h2>
 
@@ -488,10 +462,10 @@ const Profile = () => {
               <button
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}
-                className="absolute -bottom-1 -right-1 w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors duration-500"
+                className="absolute -bottom-2 -right-2 flex h-11 w-11 items-center justify-center rounded-full bg-gray-900 text-white shadow-sm transition-colors hover:bg-gray-700"
                 aria-label="Upload profile picture"
               >
-                <Camera size={12} />
+                <Camera size={18} />
               </button>
               <input
                 ref={avatarInputRef}
@@ -619,6 +593,7 @@ const Profile = () => {
           </form>
         </div>
 
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Security</p>
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <h2 className="font-display font-semibold text-lg text-gray-900 mb-3 flex items-center gap-2"><Lock size={20} className="text-red-500" /> {hasLocalPassword ? 'Change Password' : 'Set Local Password'}</h2>
           {user?.oauth_provider && (
@@ -635,33 +610,33 @@ const Profile = () => {
           )}
           <form onSubmit={handlePasswordChange} className="space-y-4">
             {hasLocalPassword && <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+              <label htmlFor="profile-current-password" className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
               <div className="relative">
-                <input type={passwordVisibility.current ? 'text' : 'password'} value={passData.current} onChange={e => setPassData(p => ({ ...p, current: e.target.value }))} required autoComplete="current-password"
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 pr-10" />
-                <button type="button" onClick={() => togglePasswordVisibility('current')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" aria-label={passwordVisibility.current ? 'Hide current password' : 'Show current password'}>
+                <input id="profile-current-password" type={passwordVisibility.current ? 'text' : 'password'} value={passData.current} onChange={e => setPassData(p => ({ ...p, current: e.target.value }))} required autoComplete="current-password"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 pr-12" />
+                <button type="button" onClick={() => togglePasswordVisibility('current')} className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center text-gray-500" aria-label={passwordVisibility.current ? 'Hide current password' : 'Show current password'}>
                   {passwordVisibility.current ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                <label htmlFor="profile-new-password" className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
                 <div className="relative">
-                  <input type={passwordVisibility.new ? 'text' : 'password'} value={passData.new} onChange={e => setPassData(p => ({ ...p, new: e.target.value }))} required autoComplete="new-password"
-                    className="w-full px-3 py-2.5 pr-10 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
-                  <button type="button" onClick={() => togglePasswordVisibility('new')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" aria-label={passwordVisibility.new ? 'Hide new password' : 'Show new password'}>
+                  <input id="profile-new-password" type={passwordVisibility.new ? 'text' : 'password'} value={passData.new} onChange={e => setPassData(p => ({ ...p, new: e.target.value }))} required autoComplete="new-password"
+                    className="w-full px-3 py-2.5 pr-12 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <button type="button" onClick={() => togglePasswordVisibility('new')} className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center text-gray-500" aria-label={passwordVisibility.new ? 'Hide new password' : 'Show new password'}>
                     {passwordVisibility.new ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
                 <p className="mt-1 text-xs text-gray-500">Use at least 8 characters with uppercase, lowercase, number, and special character.</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                <label htmlFor="profile-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
                 <div className="relative">
-                  <input type={passwordVisibility.confirm ? 'text' : 'password'} value={passData.confirm} onChange={e => setPassData(p => ({ ...p, confirm: e.target.value }))} required autoComplete="new-password"
-                    className={`w-full px-3 py-2.5 pr-10 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${passData.confirm && passData.new !== passData.confirm ? 'border-red-400' : 'border-slate-300'}`} />
-                  <button type="button" onClick={() => togglePasswordVisibility('confirm')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" aria-label={passwordVisibility.confirm ? 'Hide password confirmation' : 'Show password confirmation'}>
+                  <input id="profile-confirm-password" type={passwordVisibility.confirm ? 'text' : 'password'} value={passData.confirm} onChange={e => setPassData(p => ({ ...p, confirm: e.target.value }))} required autoComplete="new-password"
+                    className={`w-full px-3 py-2.5 pr-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 ${passData.confirm && passData.new !== passData.confirm ? 'border-red-400' : 'border-slate-300'}`} />
+                  <button type="button" onClick={() => togglePasswordVisibility('confirm')} className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center text-gray-500" aria-label={passwordVisibility.confirm ? 'Hide password confirmation' : 'Show password confirmation'}>
                     {passwordVisibility.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
@@ -757,6 +732,13 @@ const Profile = () => {
           )}
         </div>
 
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm" aria-labelledby="profile-addresses-heading">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Addresses</p>
+          <h2 id="profile-addresses-heading" className="mt-2 font-display text-lg font-semibold text-slate-950">Saved delivery addresses</h2>
+          <p className="mt-1 text-sm text-slate-600">Choose or update the addresses used at checkout.</p>
+          <Link to="/addresses" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-red-700 underline underline-offset-2">Manage saved addresses</Link>
+        </section>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Privacy & account</p>
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <h2 className="font-display font-semibold text-lg text-gray-900 mb-4 flex items-center gap-2"><Download size={20} className="text-red-500" /> Download My Data</h2>
           <p className="text-sm text-gray-600 mb-3">
@@ -796,14 +778,12 @@ const Profile = () => {
         </div>
       </div>
 
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/45 p-4 backdrop-blur-sm animate-fadeIn">
-          <div ref={deleteDialogRef} role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-scaleIn">
+      <Modal isOpen={showDeleteModal} onClose={closeDeleteModal} title="Delete your account?" size="md">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
                 <AlertTriangle size={20} className="text-red-600" />
               </div>
-              <h3 id="delete-account-title" className="font-display font-bold text-lg text-gray-900">Delete Your Account?</h3>
+              <p className="font-semibold text-sm text-red-700">Permanent account deletion</p>
             </div>
             <p className="text-sm text-gray-600 mb-4">
               This will permanently remove your personal data. Transaction records will be retained per BIR regulations.
@@ -815,14 +795,15 @@ const Profile = () => {
               </div>
             )}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type <strong>DELETE</strong> to confirm:</label>
-              <input ref={deleteConfirmRef} type="text" value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)}
+              <label htmlFor="delete-account-confirm" className="block text-sm font-medium text-gray-700 mb-1">Type <strong>DELETE</strong> to confirm:</label>
+              <input id="delete-account-confirm" autoFocus type="text" value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)}
                 className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="DELETE" />
             </div>
             {hasLocalPassword ? <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Enter your password:</label>
+              <label htmlFor="delete-account-password" className="block text-sm font-medium text-gray-700 mb-1">Enter your password:</label>
               <input
+                id="delete-account-password"
                 type="password"
                 value={deletePassword}
                 onChange={e => setDeletePassword(e.target.value)}
@@ -839,8 +820,8 @@ const Profile = () => {
                 <Check size={16} /> {deleteSuccess}
               </div>
             )}
-            <div className="flex gap-3">
-              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); setDeletePassword(''); setDeleteError(''); setDeleteSuccess(''); }} disabled={Boolean(deleteSuccess)}
+            <div className="sticky bottom-0 -mx-5 -mb-5 flex gap-3 border-t border-slate-200 bg-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <button onClick={closeDeleteModal} disabled={Boolean(deleteSuccess)}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-300 ease-in-out">
                 Cancel
               </button>
@@ -850,9 +831,7 @@ const Profile = () => {
                 Delete Forever
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </AccountLayout>
   );
 };
