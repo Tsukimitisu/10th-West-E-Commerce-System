@@ -125,9 +125,9 @@ const ReportsView = () => {
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-2 sm:px-4">
-        <div className="flex max-w-full gap-1 overflow-x-auto" role="tablist" aria-label="Report type">
+        <div className="flex max-w-full gap-1 overflow-x-auto" role="group" aria-label="Report type">
           {tabs.map(t => (
-            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={`flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium ${tab === t.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+            <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)} className={`flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium ${tab === t.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
               <t.icon size={15} aria-hidden="true" /> {t.label}
             </button>
           ))}

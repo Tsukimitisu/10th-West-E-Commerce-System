@@ -131,14 +131,13 @@ const SystemConfigView = () => {
       />
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="tablist" aria-label="Configuration category">
+      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="Configuration category">
         {tabs.map((tabOption) => {
           const Icon = tabOption.icon;
           return (
             <button
               key={tabOption.id}
-              role="tab"
-              aria-selected={tab === tabOption.id}
+              aria-pressed={tab === tabOption.id}
               onClick={() => setTab(tabOption.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${tab === tabOption.id ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'}`}
             >

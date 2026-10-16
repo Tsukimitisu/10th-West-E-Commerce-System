@@ -108,11 +108,11 @@ const SystemSecurityView = () => {
       />
 
       {/* Tabs */}
-      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="tablist" aria-label="Security category">
+      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="Security category">
         {tabs.map(t => {
           const Icon = t.icon;
           return (
-            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
                 tab === t.id ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
               }`}>

@@ -116,11 +116,11 @@ const MonitoringView = () => {
 
       {/* Tabs + Search */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-1 bg-white border border-slate-200 p-1 rounded-lg flex-1 overflow-x-auto" role="tablist" aria-label="Log type">
+        <div className="flex gap-1 bg-white border border-slate-200 p-1 rounded-lg flex-1 overflow-x-auto" role="group" aria-label="Log type">
           {tabs.map(t => {
             const Icon = t.icon;
             return (
-              <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+              <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
                   tab === t.id ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
                 }`}>
