@@ -119,7 +119,7 @@ const ReportsView = () => {
             <Printer size={16} aria-hidden="true" /> PDF
           </button>
           <button onClick={handleExportCsv} disabled={loading || Boolean(error) || Boolean(warning)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            <FileText size={16} aria-hidden="true" /> CSV <span className="sr-only">Excel compatible</span>
+            <FileText size={16} aria-hidden="true" /> CSV for Excel
           </button>
         </>}
       />
