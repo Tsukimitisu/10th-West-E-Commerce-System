@@ -114,7 +114,7 @@ const ResetPassword = () => {
         setError('This reset link has expired. Please request a new one.');
         setTokenValid(false);
       } else {
-        setError(err.message || `Failed to reset password. ${5 - newAttempts} attempt(s) remaining.`);
+        setError(`Password reset could not be completed. ${5 - newAttempts} attempt(s) remaining.`);
       }
     } finally {
       setLoading(false);
@@ -226,10 +226,11 @@ const ResetPassword = () => {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                  <label htmlFor="reset-new-password" className="block text-sm font-medium text-gray-700 mb-1">New password</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
+                      id="reset-new-password"
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
@@ -266,10 +267,11 @@ const ResetPassword = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                  <label htmlFor="reset-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">Confirm new password</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
+                      id="reset-confirm-password"
                         type={showConfirmPassword ? 'text' : 'password'}
                         value={confirmPassword}
                         onChange={e => setConfirmPassword(e.target.value)}

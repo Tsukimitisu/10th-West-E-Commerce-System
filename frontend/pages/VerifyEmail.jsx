@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Check, X, Loader, Mail } from 'lucide-react';
+import { Check, X, Loader } from 'lucide-react';
 import { verifyEmailToken, resendVerificationEmail, confirmEmailChangeToken } from '../services/api';
 import { getCurrentAuthUser, requestAuthRefresh, setCurrentAuthUser } from '../services/authSession';
 
@@ -256,7 +256,7 @@ const VerifyEmail = ({ onLogin }) => {
         }
 
         if (result?.alreadyVerified) {
-          redirectToLoginWithMessage(result?.message || VERIFICATION_ALREADY_VERIFIED_MESSAGE, { verified: '1' }, 1200, cancelled);
+          redirectToLoginWithMessage(VERIFICATION_ALREADY_VERIFIED_MESSAGE, { verified: '1' }, 1200, cancelled);
           return;
         }
 
@@ -368,13 +368,13 @@ const VerifyEmail = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md bg-gray-800 rounded-2xl border border-gray-700 shadow-sm p-8 text-center flex flex-col items-center">
+    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8" role="status" aria-live="polite">
         {status === 'loading' && (
           <>
             <Loader className="w-12 h-12 text-orange-500 animate-spin mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">{VERIFICATION_LOADING_MESSAGE}</h2>
-            <p className="text-gray-400">{message}</p>
+            <h1 className="font-display text-xl font-bold text-slate-950 mb-2">{VERIFICATION_LOADING_MESSAGE}</h1>
+            <p className="text-sm text-slate-600">{message}</p>
           </>
         )}
 
@@ -383,8 +383,8 @@ const VerifyEmail = ({ onLogin }) => {
             <div className="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-4">
               <Check size={32} />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Success</h2>
-            <p className="text-gray-400 mb-4">{message}</p>
+            <h1 className="font-display text-xl font-bold text-slate-950 mb-2">Email verified</h1>
+            <p className="text-sm text-slate-600 mb-4">{message}</p>
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Loader className="w-4 h-4 animate-spin" />
               <span>Redirecting...</span>
@@ -397,17 +397,18 @@ const VerifyEmail = ({ onLogin }) => {
             <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mb-4">
               <X size={32} />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Verification failed</h2>
-            <p className="text-gray-400 mb-6">{message}</p>
+            <h1 className="font-display text-xl font-bold text-slate-950 mb-2">Verification failed</h1>
+            <p className="text-sm text-slate-600 mb-6">{message}</p>
 
             {!isEmailChangeFlow && (
-              <div className="w-full bg-gray-900 border border-gray-700 rounded-lg p-5 mb-6 text-left">
-                <h3 className="text-sm font-bold text-white mb-3">Need a new verification email?</h3>
+              <div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-4 mb-6 text-left">
+                <h2 className="text-sm font-bold text-slate-950 mb-3">Need a new verification email?</h2>
                 <p className="text-xs text-gray-400 mb-3">Verification links expire in 1 to 3 minutes. Enter your email to send a fresh link.</p>
                 <form onSubmit={handleResend} noValidate className="flex flex-col gap-3">
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <label htmlFor="verification-resend-email" className="mb-1 block text-sm font-medium text-slate-700">Email address</label>
                     <input
+                      id="verification-resend-email"
                       type="email"
                       value={email}
                       onChange={(e) => {
@@ -418,18 +419,18 @@ const VerifyEmail = ({ onLogin }) => {
                       placeholder="Enter your registered email"
                       aria-invalid={resendError ? 'true' : 'false'}
                       aria-describedby={resendError ? 'resend-email-error' : undefined}
-                      className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white text-sm"
+                      className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950 focus:outline-none focus:ring-2 focus:ring-orange-500"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={isResending}
-                    className="w-full py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-medium rounded-lg transition-colors text-sm"
+                    className="min-h-11 w-full rounded-lg bg-orange-600 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
                   >
                     {isResending ? 'Sending...' : 'Resend Verification Email'}
                   </button>
                   {resendError && (
-                    <p id="resend-email-error" className="text-xs text-red-400">{resendError}</p>
+                    <p id="resend-email-error" role="alert" className="text-xs text-red-700">{resendError}</p>
                   )}
                   {resendStatus && (
                     <p className={`text-xs ${resendSucceeded ? 'text-green-400' : 'text-red-400'}`}>
@@ -442,14 +443,14 @@ const VerifyEmail = ({ onLogin }) => {
 
             <Link
               to="/login"
-              className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors flex items-center justify-center"
+              className="flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-300 bg-white py-2.5 font-semibold text-slate-700 hover:bg-slate-50"
             >
               Return to Login
             </Link>
           </>
         )}
       </div>
-    </div>
+    </main>
   );
 };
 

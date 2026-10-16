@@ -127,10 +127,11 @@ const ForgotPassword = () => {
 
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <label htmlFor="forgot-email" className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                   <div className="relative">
                     <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
+                      id="forgot-email"
                       type="email"
                       inputMode="email"
                       autoComplete="email"

@@ -14,7 +14,7 @@ test('customer login and registration expose Google only when backend readiness 
   for (const source of [login, register]) {
     assert.match(source, /Continue with Google/);
     assert.match(source, /Google login is not configured yet\./);
-    assert.match(source, /Google login status is unavailable\. Please start or restart the backend/);
+    assert.match(source, /Google sign in is temporarily unavailable\. Please try again shortly/);
     assert.match(source, /\/api\/auth\/providers/);
     assert.match(source, /disabled=\{loading \|\| oauthProviders\.loading \|\| !oauthProviders\.google\}/);
     assert.match(source, /oauthProviders\.error/);

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, Check, X } from 'lucide-react';
 import { register, resendVerificationEmail, API_ORIGIN } from '../services/api';
 import BrandMark from '../components/ui/BrandMark';
+import Modal from '../components/owner/Modal';
 
 const EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
 const GMAIL_TYPO_DOMAINS = new Set([
@@ -14,6 +15,15 @@ const GMAIL_TYPO_DOMAINS = new Set([
   'gnail.com',
   'gmailcom',
 ]);
+
+const safeRegistrationFieldMessages = {
+  name: 'Please check your full name.',
+  email: 'Please check your email address.',
+  password: 'Please check your password.',
+  confirmPassword: 'Please check your password confirmation.',
+  consent_given: 'Please agree to the terms and privacy policy.',
+  age_confirmed: 'Please confirm you are at least 18 years old.',
+};
 
 const getEmailValidationError = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
@@ -171,9 +181,10 @@ const Register = () => {
       setPassword('');
       setConfirmPassword('');
     } catch (err) {
-      const nextFieldErrors = err.fieldErrors || {};
-      const firstFieldError = Object.values(nextFieldErrors).find(Boolean);
-      const backendMessage = err.message || firstFieldError || 'Registration failed.';
+      const rawFieldErrors = err.fieldErrors || {};
+      const nextFieldErrors = Object.fromEntries(Object.keys(rawFieldErrors)
+        .filter((field) => safeRegistrationFieldMessages[field])
+        .map((field) => [field, safeRegistrationFieldMessages[field]]));
       setFieldErrors(nextFieldErrors);
 
       if (err.requiresVerification || err.code === 'VERIFICATION_EMAIL_FAILED') {
@@ -184,7 +195,7 @@ const Register = () => {
       }
 
       const hasDuplicateEmailError =
-        Boolean(nextFieldErrors.email && /already|in use|registered/i.test(nextFieldErrors.email)) ||
+        Boolean(rawFieldErrors.email && /already|in use|registered/i.test(rawFieldErrors.email)) ||
         err.status === 409 ||
         /already.*(registered|in use)|duplicate/.test(String(err.message || '').toLowerCase());
 
@@ -195,20 +206,22 @@ const Register = () => {
             email: 'This email is already in use.',
           }));
         }
-        setError(nextFieldErrors.email || 'This email is already in use. Please sign in or use a different email.');
+        setError('This email is already in use. Please sign in or use a different email.');
         scrollToErrorBanner();
         focusEmailField({ scroll: false });
         return;
       }
 
       if (Object.keys(nextFieldErrors).length > 0) {
-        setError(backendMessage);
+        setError('Please check the highlighted fields and try again.');
         if (nextFieldErrors.email) focusEmailField();
         else scrollToErrorBanner();
         return;
       }
 
-      setError(backendMessage);
+      setError(err.status === 429
+        ? 'Too many registration attempts. Please try again later.'
+        : 'Registration could not be completed. Please try again.');
       scrollToErrorBanner();
     } finally {
       submittingRef.current = false;
@@ -220,7 +233,7 @@ const Register = () => {
     if (!oauthProviders[provider]) {
       const label = provider === 'google' ? 'Google' : 'Facebook';
       setError(oauthProviders.error
-        ? `${label} login status is unavailable. Please start or restart the backend and try again.`
+        ? `${label} sign in is temporarily unavailable. Please try again shortly.`
         : `${label} login is not configured yet.`);
       scrollToErrorBanner();
       return;
@@ -273,13 +286,13 @@ const Register = () => {
               <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
               {oauthProviders.loading ? 'Checking Google login...' : 'Continue with Google'}
             </button>
-            {!oauthProviders.loading && !oauthProviders.google && <p className="text-xs text-slate-500">{oauthProviders.error ? 'Google login status is unavailable. Please start or restart the backend.' : 'Google login is not configured yet.'}</p>}
+            {!oauthProviders.loading && !oauthProviders.google && <p className="text-xs text-slate-500">{oauthProviders.error ? 'Google sign in is temporarily unavailable. Please try again shortly.' : 'Google login is not configured yet.'}</p>}
             {oauthProviders.google && !oauthProviders.loading && <p className="text-xs text-slate-500">To switch Google accounts, choose another account on the Google screen.</p>}
             <button type="button" onClick={() => handleOAuth('facebook')} disabled={loading || oauthProviders.loading || !oauthProviders.facebook} className="flex min-h-11 w-full items-center justify-center gap-3 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-80">
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
               {oauthProviders.loading ? 'Checking Facebook login...' : 'Continue with Facebook'}
             </button>
-            {!oauthProviders.loading && !oauthProviders.facebook && <p className="text-xs text-slate-500">{oauthProviders.error ? 'Facebook login status is unavailable. Please start or restart the backend.' : 'Facebook login is not configured yet.'}</p>}
+            {!oauthProviders.loading && !oauthProviders.facebook && <p className="text-xs text-slate-500">{oauthProviders.error ? 'Facebook sign in is temporarily unavailable. Please try again shortly.' : 'Facebook login is not configured yet.'}</p>}
           </div>
 
           <div className="relative mb-6">
@@ -289,11 +302,13 @@ const Register = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <label htmlFor="register-name" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
               <div className="relative">
                 <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
+                  id="register-name"
                   type="text"
+                  autoComplete="name"
                   value={name}
                   onChange={(e) => { setName(e.target.value); clearFieldError('name'); }}
                   placeholder="John Doe"
@@ -304,12 +319,14 @@ const Register = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <div className="relative">
                 <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   ref={emailInputRef}
+                  id="register-email"
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
@@ -326,17 +343,19 @@ const Register = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label htmlFor="register-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <div className="relative">
                 <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
+                  id="register-password"
                   type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
                   placeholder="Create a strong password"
-                  className={`${getInputClassName('password')} pr-10`}
+                  className={`${getInputClassName('password')} pr-12`}
                 />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center text-gray-500 hover:text-gray-800">
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
@@ -360,17 +379,19 @@ const Register = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+              <label htmlFor="register-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
               <div className="relative">
                 <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
+                  id="register-confirm-password"
                   type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => { setConfirmPassword(e.target.value); clearFieldError('confirmPassword'); }}
                   placeholder="Confirm your password"
-                  className={`${getInputClassName('confirmPassword')} pr-10`}
+                  className={`${getInputClassName('confirmPassword')} pr-12`}
                 />
-                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? 'Hide password confirmation' : 'Show password confirmation'} className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center text-gray-500 hover:text-gray-800">
                   {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
@@ -419,14 +440,12 @@ const Register = () => {
         </p>
       </div>
 
-      {showVerificationModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xl">
+      <Modal isOpen={showVerificationModal} onClose={() => setShowVerificationModal(false)} title="Registration successful" size="md">
+          <div className="text-center">
             <div className="w-16 h-16 bg-blue-500/20 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <Mail size={32} />
             </div>
-            <h2 className="mb-2 text-2xl font-bold text-slate-950">Registration successful</h2>
-            <p className="mb-6 text-slate-600">
+            <p className="mb-6 text-sm leading-6 text-slate-700">
               {verificationMessage}
             </p>
 
@@ -445,13 +464,13 @@ const Register = () => {
             </button>
 
             {resendStatus && (
-              <p className={`text-sm ${resendSucceeded ? 'text-green-500' : 'text-red-500'}`}>
+              <p role="status" className={`text-sm ${resendSucceeded ? 'text-green-700' : 'text-red-700'}`}>
                 {resendStatus}
               </p>
             )}
+            <Link to="/login" className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-red-700 underline underline-offset-2">Continue to sign in</Link>
           </div>
-        </div>
-      )}
+      </Modal>
     </main>
   );
 };
