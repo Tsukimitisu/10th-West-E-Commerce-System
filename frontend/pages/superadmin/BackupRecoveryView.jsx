@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { createBackup, getBackupHistory } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
+import EmptyState from '../../components/ui/EmptyState';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
 const BackupRecoveryView = () => {
   const backupProviderConfigured = false;
@@ -45,7 +47,6 @@ const BackupRecoveryView = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Platform continuity"
         title="Backup & recovery"
         description="Review legacy backup metadata. Recoverable in-app backups are not configured."
         actions={<button onClick={handleCreateBackup} disabled={creating || !backupProviderConfigured}
@@ -55,6 +56,8 @@ const BackupRecoveryView = () => {
           {creating ? 'Creating backup…' : 'Backup not configured'}
         </button>}
       />
+
+      <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">In-app records below are metadata only. Verify recoverable backups and retention in Supabase before a recovery plan depends on them.</div>
 
       {/* Toast */}
       {message.text && (
@@ -121,16 +124,12 @@ const BackupRecoveryView = () => {
       <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
         <div className="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2"><FileText size={16} className="text-gray-400" /> Backup History</h3>
-          <button onClick={loadBackups} className="text-gray-400 hover:text-gray-700"><RefreshCw size={14} /></button>
+          <button onClick={loadBackups} aria-label="Refresh backup history" className="grid min-h-10 min-w-10 place-items-center rounded-lg text-slate-700 hover:bg-slate-100"><RefreshCw size={16} /></button>
         </div>
         {loading ? (
-          <div className="flex items-center justify-center py-16"><Loader2 size={24} className="text-red-500 animate-spin" /></div>
+          <div className="space-y-3 p-4" role="status" aria-label="Loading backup history">{Array.from({ length: 3 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>
         ) : backups.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <Database size={40} className="mb-3 opacity-30" />
-            <p className="text-sm">No backups yet</p>
-            <p className="text-xs text-gray-400 mt-1">Create your first backup to get started</p>
-          </div>
+          <div className="p-6"><EmptyState icon={Database} title="No backup metadata" description="Recoverable in-app backups are not configured. Check your Supabase backup plan directly." /></div>
         ) : (
           <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
             {backups.map((backup) => (

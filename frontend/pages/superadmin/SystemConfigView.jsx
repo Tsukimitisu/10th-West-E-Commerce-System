@@ -1,19 +1,40 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import {
   Settings, Store, CreditCard, Truck, Mail,
   Save, Loader2, CheckCircle2, Percent, RotateCcw
 } from 'lucide-react';
 import { getSystemHealth, getSystemSettings, updateSystemSettings } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
 const formatOperationalTimestamp = (value) => (
   value ? new Date(value).toLocaleString('en-PH') : 'No activity recorded'
 );
 
+const Toggle = ({ value, onChange, label }) => (
+  <button type="button" role="switch" aria-checked={value === 'true'} onClick={onChange} className="group flex min-h-11 items-center gap-3 text-left">
+    <span className={`relative h-6 w-11 rounded-full transition-colors ${value === 'true' ? 'bg-orange-600' : 'bg-slate-300'}`}>
+      <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${value === 'true' ? 'translate-x-6' : 'translate-x-1'}`} />
+    </span>
+    <span className="text-sm text-slate-700 group-hover:text-slate-950">{label}</span>
+  </button>
+);
+
+const Input = ({ label, value, onChange, placeholder, type = 'text', hint }) => {
+  const id = useId();
+  return <div>
+    <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-slate-700">{label}</label>
+    <input id={id} type={type} value={value} onChange={onChange} placeholder={placeholder}
+      className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder-slate-400 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10" />
+    {hint && <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p>}
+  </div>;
+};
+
 const SystemConfigView = () => {
   const [tab, setTab] = useState('store');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [providerHealth, setProviderHealth] = useState(null);
 
@@ -73,10 +94,12 @@ const SystemConfigView = () => {
     try {
       const map = { store, tax, shipping, payment, email, returns: returnsConfig };
       await updateSystemSettings(tab, map[tab]);
+      setError('');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
       console.error(error);
+      setError('Changes could not be saved. Review the fields and try again.');
     }
     setSaving(false);
   };
@@ -90,35 +113,11 @@ const SystemConfigView = () => {
     { id: 'returns', label: 'Returns', icon: RotateCcw },
   ];
 
-  const Toggle = ({ value, onChange, label }) => (
-    <button type="button" role="switch" aria-checked={value === 'true'} onClick={onChange} className="group flex items-center gap-3 text-left">
-      <span className={`relative h-6 w-11 rounded-full transition-colors ${value === 'true' ? 'bg-orange-600' : 'bg-slate-300'}`}>
-        <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${value === 'true' ? 'translate-x-6' : 'translate-x-1'}`} />
-      </span>
-      <span className="text-sm text-slate-700 group-hover:text-slate-950">{label}</span>
-    </button>
-  );
-
-  const Input = ({ label, value, onChange, placeholder, type = 'text', hint }) => (
-    <div>
-      <label className="mb-1.5 block text-[13px] font-medium text-slate-700">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder-slate-400 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
-      />
-      {hint && <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p>}
-    </div>
-  );
-
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={24} className="text-red-500 animate-spin" /></div>;
+  if (loading) return <div className="space-y-4" role="status" aria-label="Loading system configuration"><PageHeader title="System configuration" description="Loading store and integration settings…" />{Array.from({ length: 4 }, (_, index) => <LoadingSkeleton key={index} className="h-16 w-full" />)}</div>;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Platform"
         title="System configuration"
         description="Manage store identity, tax, payments, shipping, email delivery, and return policy."
         actions={<button
@@ -130,13 +129,16 @@ const SystemConfigView = () => {
           {saved ? 'Saved' : 'Save changes'}
         </button>}
       />
+      {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-      <div className="flex gap-1 bg-gray-800 border border-gray-700 p-1 rounded-xl overflow-x-auto shadow-sm">
+      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="tablist" aria-label="Configuration category">
         {tabs.map((tabOption) => {
           const Icon = tabOption.icon;
           return (
             <button
               key={tabOption.id}
+              role="tab"
+              aria-selected={tab === tabOption.id}
               onClick={() => setTab(tabOption.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${tab === tabOption.id ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'}`}
             >

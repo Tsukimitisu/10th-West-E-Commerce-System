@@ -99,9 +99,9 @@ const SuperAdminOverview = ({ onNavigate }) => {
 
   if (loading) {
     return (
-      <div className="space-y-5 animate-pulse">
-        <div className="h-16 max-w-2xl rounded-xl bg-slate-200" />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="space-y-5" role="status" aria-label="Loading system overview">
+        <PageHeader title="System overview" description="Loading platform health and administration activity…" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 animate-pulse">
           {[0, 1, 2, 3].map((item) => <div key={item} className="h-32 rounded-xl bg-slate-200" />)}
         </div>
       </div>

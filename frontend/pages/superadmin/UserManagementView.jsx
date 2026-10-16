@@ -164,6 +164,15 @@ const UserManagementView = () => {
   };
 
   const isLocked = (user) => user.locked_until && new Date(user.locked_until) > new Date();
+  const userActions = (user) => [
+    { label: 'View account', icon: Eye, onClick: () => openView(user) },
+    { label: 'Edit user', icon: Edit3, onClick: () => openEdit(user) },
+    { label: 'Reset password', icon: Key, onClick: () => openResetPw(user) },
+    isLocked(user)
+      ? { label: 'Unlock account', icon: Unlock, onClick: () => handleUnlock(user), disabled: actionLoading === `unlock-${user.id}` }
+      : { label: 'Lock account', icon: Lock, onClick: () => handleLock(user), disabled: user.id === currentUser.id || actionLoading === `lock-${user.id}` },
+    { label: 'Delete user', icon: Trash2, onClick: () => handleDeleteUser(user), disabled: user.id === currentUser.id || actionLoading === `del-${user.id}`, destructive: true },
+  ];
 
   const totalPages = Math.ceil(total / 20);
 
@@ -182,7 +191,6 @@ const UserManagementView = () => {
       )}
 
       <PageHeader
-        eyebrow="Access control"
         title="Users & roles"
         description="Create and maintain accounts, role assignments, security state, and access recovery."
         actions={<button onClick={() => { setForm({ name: '', email: '', phone: '', role: 'store_staff', password: '' }); setShowModal('add'); }} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700"><Plus size={16} /> Add user</button>}
@@ -191,23 +199,26 @@ const UserManagementView = () => {
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
+          <label htmlFor="superadmin-user-search" className="sr-only">Search users by name or email</label>
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search by name or email..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          <input id="superadmin-user-search" type="search" placeholder="Search by name or email..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-red-400" />
         </div>
-        <select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+        <label className="sr-only" htmlFor="superadmin-role-filter">Filter by role</label>
+        <select id="superadmin-role-filter" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
           className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/30">
           <option value="">All Roles</option>
           {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
-        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+        <label className="sr-only" htmlFor="superadmin-status-filter">Filter by status</label>
+        <select id="superadmin-status-filter" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/30">
           <option value="">All Status</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
           <option value="locked">Locked</option>
         </select>
-        <button onClick={loadUsers} className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-400 rounded-lg transition-colors"><RefreshCw size={16} /></button>
+        <button onClick={loadUsers} aria-label="Refresh users" className="min-h-11 min-w-11 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-slate-700 rounded-lg transition-colors"><RefreshCw size={16} /></button>
       </div>
 
       {/* Users Table */}
@@ -221,7 +232,18 @@ const UserManagementView = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <div className="divide-y divide-slate-200 md:hidden">
+              {users.map((user) => <article key={user.id} className="flex items-start justify-between gap-3 p-4">
+                <div className="min-w-0 space-y-1">
+                  <p className="truncate text-sm font-semibold text-slate-950">{user.name}</p>
+                  <p className="break-all text-xs text-slate-600">{user.email}</p>
+                  <div className="flex flex-wrap items-center gap-2">{getRoleBadge(user.role)}<span className={`text-xs font-medium ${isLocked(user) ? 'text-red-700' : user.is_active ? 'text-emerald-700' : 'text-slate-600'}`}>{isLocked(user) ? 'Locked' : user.is_active ? 'Active' : 'Inactive'}</span></div>
+                  <p className="text-xs text-slate-600">Last login: {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'} · 2FA {user.two_factor_enabled ? 'on' : 'off'}</p>
+                </div>
+                <ActionDropdown label={`Actions for ${user.name}`} items={userActions(user)} />
+              </article>)}
+            </div>
+            <table className="hidden w-full text-left md:table">
               <thead className="bg-gray-900">
                 <tr>
                   <th className="px-4 py-3 text-xs font-semibold text-gray-400">User</th>
@@ -272,15 +294,7 @@ const UserManagementView = () => {
                       <div className="flex justify-end">
                         <ActionDropdown
                           label={`Actions for ${user.name}`}
-                          items={[
-                            { label: 'View account', icon: Eye, onClick: () => openView(user) },
-                            { label: 'Edit user', icon: Edit3, onClick: () => openEdit(user) },
-                            { label: 'Reset password', icon: Key, onClick: () => openResetPw(user) },
-                            isLocked(user)
-                              ? { label: 'Unlock account', icon: Unlock, onClick: () => handleUnlock(user), disabled: actionLoading === `unlock-${user.id}` }
-                              : { label: 'Lock account', icon: Lock, onClick: () => handleLock(user), disabled: user.id === currentUser.id || actionLoading === `lock-${user.id}` },
-                            { label: 'Delete user', icon: Trash2, onClick: () => handleDeleteUser(user), disabled: user.id === currentUser.id || actionLoading === `del-${user.id}`, destructive: true },
-                          ]}
+                          items={userActions(user)}
                         />
                       </div>
                     </td>

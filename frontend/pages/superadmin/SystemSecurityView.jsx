@@ -9,6 +9,7 @@ import {
   getLoginAttempts, getSuspiciousActivity
 } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
 const SystemSecurityView = () => {
   const [tab, setTab] = useState('lockout');
@@ -89,13 +90,12 @@ const SystemSecurityView = () => {
   });
 
   if (loading) return (
-    <div className="flex items-center justify-center py-20"><Loader2 size={24} className="text-red-500 animate-spin" /></div>
+    <div className="space-y-4" role="status" aria-label="Loading security controls"><PageHeader title="Security controls" description="Loading authentication settings and recent activity…" />{Array.from({ length: 4 }, (_, index) => <LoadingSkeleton key={index} className="h-16 w-full" />)}</div>
   );
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Access control"
         title="Security controls"
         description="Configure account lockout, password policy, two-factor enforcement, and authentication monitoring."
         actions={(tab === 'lockout' || tab === 'password' || tab === '2fa') && (
@@ -108,11 +108,11 @@ const SystemSecurityView = () => {
       />
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-800 border border-gray-700 p-1 rounded-xl overflow-x-auto shadow-sm">
+      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="tablist" aria-label="Security category">
         {tabs.map(t => {
           const Icon = t.icon;
           return (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
                 tab === t.id ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
               }`}>

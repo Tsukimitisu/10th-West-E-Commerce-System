@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Activity,
   Database,
+  Wrench,
   LayoutDashboard,
   PackageSearch,
   Settings,
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { id: 'config', label: 'Configuration', icon: Settings, group: 'Platform' },
   { id: 'logs', label: 'Monitoring & audit', icon: Activity, group: 'Platform' },
   { id: 'backup', label: 'Backup & recovery', icon: Database, group: 'Platform' },
+  { id: 'maintenance', label: 'Maintenance', icon: Wrench, group: 'Platform' },
 ];
 
 const SuperAdminLayout = ({ activeView, onNavigate, user, children }) => {

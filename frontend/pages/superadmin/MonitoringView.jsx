@@ -8,6 +8,7 @@ import {
   getActivityLogs, getErrorLogs, getTransactionLogs, getSuspiciousActivity
 } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
 const MonitoringView = () => {
   const [tab, setTab] = useState('activity');
@@ -87,12 +88,11 @@ const MonitoringView = () => {
     return 'text-gray-400';
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={24} className="text-red-500 animate-spin" /></div>;
+  if (loading) return <div className="space-y-4" role="status" aria-label="Loading audit events"><PageHeader title="Monitoring & logs" description="Loading platform activity…" />{Array.from({ length: 5 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Audit"
         title="Monitoring & logs"
         description="Review platform activity, application errors, and auditable transaction history."
         actions={<button onClick={loadData} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"><RefreshCw size={14} /> Refresh</button>}
@@ -116,11 +116,11 @@ const MonitoringView = () => {
 
       {/* Tabs + Search */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-1 bg-gray-800 border border-gray-700 p-1 rounded-xl flex-1 overflow-x-auto shadow-sm">
+        <div className="flex gap-1 bg-white border border-slate-200 p-1 rounded-lg flex-1 overflow-x-auto" role="tablist" aria-label="Log type">
           {tabs.map(t => {
             const Icon = t.icon;
             return (
-              <button key={t.id} onClick={() => setTab(t.id)}
+              <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
                   tab === t.id ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
                 }`}>
@@ -131,8 +131,9 @@ const MonitoringView = () => {
           })}
         </div>
         <div className="relative">
+          <label htmlFor="monitoring-search" className="sr-only">Search logs</label>
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search logs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+          <input id="monitoring-search" type="search" placeholder="Search logs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 w-full sm:w-56" />
         </div>
       </div>
@@ -147,7 +148,13 @@ const MonitoringView = () => {
                 <p className="text-sm">No activity logs found</p>
               </div>
             ) : (
-              <table className="w-full text-left">
+              <><div className="divide-y divide-slate-200 md:hidden">
+                {filterLogs(activityLogs).map((log, idx) => <article key={log.id || idx} className="space-y-1 p-4 text-sm">
+                  <div className="flex items-start justify-between gap-3"><strong className="text-slate-900">{formatAction(log.action)}</strong><time className="shrink-0 text-xs text-slate-600">{timeAgo(log.created_at)}</time></div>
+                  <p className="text-slate-600">{log.user_name || 'System'}{log.ip_address ? ` · ${log.ip_address}` : ''}</p>
+                  {log.details && <p className="break-words text-xs text-slate-600">{formatLogDetails(log.details)}</p>}
+                </article>)}
+              </div><table className="hidden w-full text-left md:table">
                 <thead className="bg-gray-900 sticky top-0">
                   <tr>
                     <th className="px-4 py-3 text-xs font-semibold text-gray-400">Action</th>
@@ -172,7 +179,7 @@ const MonitoringView = () => {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></>
             )}
           </div>
         </div>
@@ -188,7 +195,13 @@ const MonitoringView = () => {
                 <p className="text-sm">No errors logged</p>
               </div>
             ) : (
-              <table className="w-full text-left">
+              <><div className="divide-y divide-slate-200 md:hidden">
+                {filterLogs(errorLogs).map((log, idx) => <article key={log.id || idx} className="space-y-1 p-4 text-sm">
+                  <div className="flex items-start justify-between gap-3"><strong className="text-red-700">{log.error_type || 'Error'}</strong><time className="shrink-0 text-xs text-slate-600">{timeAgo(log.created_at)}</time></div>
+                  <p className="break-words text-slate-900">{log.message}</p>
+                  <p className="text-xs text-slate-600">{log.endpoint || 'Unknown endpoint'} · {log.user_name || 'System'}</p>
+                </article>)}
+              </div><table className="hidden w-full text-left md:table">
                 <thead className="bg-gray-900 sticky top-0">
                   <tr>
                     <th className="px-4 py-3 text-xs font-semibold text-gray-400">Type</th>
@@ -211,7 +224,7 @@ const MonitoringView = () => {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></>
             )}
           </div>
         </div>
@@ -227,7 +240,13 @@ const MonitoringView = () => {
                 <p className="text-sm">No transaction logs found</p>
               </div>
             ) : (
-              <table className="w-full text-left">
+              <><div className="divide-y divide-slate-200 md:hidden">
+                {filterLogs(transactionLogs).map((log, idx) => <article key={log.id || idx} className="space-y-1 p-4 text-sm">
+                  <div className="flex items-start justify-between gap-3"><strong className="text-slate-900">{formatAction(log.action)}</strong><time className="shrink-0 text-xs text-slate-600">{timeAgo(log.created_at)}</time></div>
+                  <p className="text-slate-600">{log.user_name || 'System'}</p>
+                  {log.details && <p className="break-words text-xs text-slate-600">{formatLogDetails(log.details)}</p>}
+                </article>)}
+              </div><table className="hidden w-full text-left md:table">
                 <thead className="bg-gray-900 sticky top-0">
                   <tr>
                     <th className="px-4 py-3 text-xs font-semibold text-gray-400">Action</th>
@@ -250,7 +269,7 @@ const MonitoringView = () => {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></>
             )}
           </div>
         </div>
