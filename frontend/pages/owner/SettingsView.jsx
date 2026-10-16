@@ -177,7 +177,7 @@ const SettingsView = () => {
           <h1 className="font-display font-bold text-xl text-white">System Settings</h1>
           <p className="text-sm text-gray-400">Configure store preferences and integrations</p>
         </div>
-        <button onClick={handleSave} disabled={saving} className={`px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 ${saved ? 'bg-green-600 text-white' : 'bg-red-500/100 hover:bg-red-600 text-white'}`}>
+        <button onClick={handleSave} disabled={saving} className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 ${saved ? 'bg-green-600 text-white' : 'bg-red-500/100 hover:bg-red-600 text-white'}`}>
           {saving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : saved ? <><Save size={14} /> Saved!</> : <><Save size={14} /> Save Changes</>}
         </button>
       </div>
@@ -190,7 +190,7 @@ const SettingsView = () => {
 
       <div className="flex gap-1 bg-gray-800 rounded-lg border border-gray-700 p-1 w-fit flex-wrap">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
             <t.icon size={14} /> {t.label}
           </button>
         ))}
@@ -375,7 +375,7 @@ const SettingsView = () => {
                 { key: 'cash', label: 'Cash on Delivery / POS Cash' },
                 { key: 'gcash', label: 'GCash' },
               ].map(m => (
-                <label key={m.key} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${payment[m.key] ? 'border-red-200 bg-red-500/10' : 'border-gray-700 bg-gray-800'}`}>
+                <label key={m.key} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${payment[m.key] ? 'border-red-200 bg-red-500/10' : 'border-gray-700 bg-gray-800'}`}>
                   <span className="text-sm font-medium text-white">{m.label}</span>
                   <input type="checkbox" checked={payment[m.key]} onChange={e => setPayment(p => ({...p, [m.key]: e.target.checked}))} className="w-4 h-4 text-red-500 rounded" />
                 </label>
@@ -400,7 +400,7 @@ const SettingsView = () => {
                 { key: 'returnApproval', label: 'Return Approval', desc: 'Notify when return request is updated' },
                 { key: 'promotions', label: 'Promotional Emails', desc: 'Send marketing and promotion emails' },
               ].map(n => (
-                <label key={n.key} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${email[n.key] ? 'border-green-200 bg-green-50' : 'border-gray-700 bg-gray-800'}`}>
+                <label key={n.key} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${email[n.key] ? 'border-green-200 bg-green-50' : 'border-gray-700 bg-gray-800'}`}>
                   <div><p className="text-sm font-medium text-white">{n.label}</p><p className="text-[10px] text-gray-400">{n.desc}</p></div>
                   <input type="checkbox" checked={email[n.key]} onChange={e => setEmail(em => ({...em, [n.key]: e.target.checked}))} className="w-4 h-4 text-green-600 rounded" />
                 </label>

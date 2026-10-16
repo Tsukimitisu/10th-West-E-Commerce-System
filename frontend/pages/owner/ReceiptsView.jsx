@@ -79,7 +79,7 @@ const ReceiptsView = () => {
           { id: 'history', label: 'Receipt History', icon: FileText },
           { id: 'template', label: 'Template Editor', icon: Receipt },
         ].map(t => (
-          <button key={t.id} onClick={() => setTabt.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
+          <button key={t.id} onClick={() => setTabt.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
             <t.icon size={14} /> {t.label}
           </button>
         ))}
@@ -168,7 +168,7 @@ const ReceiptsView = () => {
                 <option value="A4">A4 (Full Page)</option>
               </select>
             </div>
-            <button className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors w-full">Save Template</button>
+            <button className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium rounded-lg transition-colors w-full">Save Template</button>
           </div>
 
           {/* Preview */}
@@ -220,7 +220,7 @@ const ReceiptsView = () => {
               <p className="text-center text-gray-400">{template.footer}</p>
             </div>
             <div className="flex justify-center gap-2">
-              <button onClick={() => { handlePrint(previewOrder); setPreviewOrder(null); }} className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"><Printer size={12} /> Print</button>
+              <button onClick={() => { handlePrint(previewOrder); setPreviewOrder(null); }} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"><Printer size={12} /> Print</button>
               <button onClick={() => setPreviewOrder(null)} className="px-4 py-2 bg-gray-800 border border-gray-700 hover:bg-gray-900 text-gray-700 text-xs font-medium rounded-lg transition-colors">Close</button>
             </div>
           </div>

@@ -279,7 +279,7 @@ const StaffManagement = () => {
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-bold text-slate-900">{selected.name}</h2>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${selected.is_active ? 'bg-green-100 text-green-700' : 'bg-red-500/20 text-orange-600'}`}>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${selected.is_active ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-800'}`}>
                   {selected.is_active ? 'Active' : 'Inactive'}
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 capitalize">{selected.role}</span>
@@ -304,7 +304,7 @@ const StaffManagement = () => {
               {selected.locked_until && new Date(selected.locked_until) > new Date() ? <><Unlock size={14} /> Unlock</> : <><Lock size={14} /> Lock</>}
             </button>
             <button onClick={() => setShowResetModal(true)}
-              className="px-3 py-1.5 bg-red-500/10 text-orange-600 hover:bg-red-500/20 rounded-lg text-sm font-medium flex items-center gap-1">
+              className="px-3 py-1.5 bg-orange-50 text-orange-800 hover:bg-red-500/20 rounded-lg text-sm font-medium flex items-center gap-1">
               <Key size={14} /> Reset Password
             </button>
           </div>
@@ -533,7 +533,7 @@ const StaffManagement = () => {
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'} capitalize`}>{s.role}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-red-500/20 text-orange-600'}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-800'}`}>
                       {s.is_active ? 'Active' : 'Inactive'}
                     </span>
                     {s.locked_until && new Date(s.locked_until) > new Date() && (

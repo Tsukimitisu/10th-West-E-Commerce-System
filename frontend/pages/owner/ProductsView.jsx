@@ -2189,7 +2189,7 @@ const ProductsView = () => {
             <p className="text-sm text-gray-400">No products found</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div tabIndex={0} className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-slate-200 bg-slate-100">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Product</th>
@@ -2253,7 +2253,7 @@ const ProductsView = () => {
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => { setSelectedProductVariants(p); setVariantsModalOpen(true); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-500 hover:text-green-400 transition-colors" title="Manage Variants"><Layers size={14} /></button>
                           <button onClick={() => openEdit(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-500 hover:text-blue-400 transition-colors" title="Edit"><Pencil size={14} /></button>
-                          <button onClick={() => handleDuplicate(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-500 hover:text-purple-400 transition-colors" title="Duplicate"><Copy size={14} /></button>
+                          <button onClick={() => handleDuplicate(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-500 hover:text-slate-700 transition-colors" title="Duplicate"><Copy size={14} /></button>
                           <button onClick={() => handleDelete(p)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#202430] text-gray-500 hover:text-red-400 transition-colors" title="Delete"><Trash2 size={14} /></button>
                         </div>
                       </td>
@@ -2294,7 +2294,7 @@ const ProductsView = () => {
                 <button
                   type="button"
                   onClick={handleAddAnotherProduct}
-                  className="px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-colors"
+                  className="px-4 py-2.5 bg-red-500 hover:bg-orange-500 text-white text-sm font-semibold rounded-lg transition-colors"
                 >
                   Add another product
                 </button>
@@ -2317,13 +2317,13 @@ const ProductsView = () => {
               <div className="space-y-1.5">
                 <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-red-500 to-amber-400 transition-all duration-300"
+                    className="h-full bg-gradient-to-r from-red-500 to-amber-400 transition-colors duration-300"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
                 <p className="text-[11px] text-gray-500 text-right">{progressPercent}% complete</p>
               </div>
-              <div className="overflow-x-auto pb-1">
+              <div tabIndex={0} className="overflow-x-auto pb-1">
                 <div className="flex min-w-max gap-2">
                   {PRODUCT_FORM_STEPS.map((step, index) => (
                     <button
@@ -2413,7 +2413,7 @@ const ProductsView = () => {
                         <button
                           type="button"
                           onClick={() => galleryUploadInputRef.current?.click()}
-                          className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                          className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold rounded-lg transition-colors"
                         >
                           Select Images
                         </button>
@@ -2449,7 +2449,7 @@ const ProductsView = () => {
                           onDragOver={(event) => handleMediaItemDragOver(event, item.id)}
                           onDrop={(event) => handleMediaItemDrop(event, item.id)}
                           onDragEnd={handleMediaItemDragEnd}
-                          className={`relative group rounded-xl overflow-hidden border bg-[#202430] transition-all ${
+                          className={`relative group rounded-xl overflow-hidden border bg-[#202430] transition-colors ${
                             draggingMediaId === item.id
                               ? 'border-red-400/70 ring-2 ring-red-400/40 opacity-80 scale-[0.98]'
                               : 'border-white/10 hover:border-white/25'
@@ -3175,7 +3175,7 @@ const ProductsView = () => {
                             setSelectedProductVariants(editing);
                             setVariantsModalOpen(true);
                           }}
-                          className="mt-3 px-4 py-2 bg-red-500/90 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                          className="mt-3 px-4 py-2 bg-red-500/90 hover:bg-orange-500 text-white text-sm font-medium rounded-lg transition-colors"
                         >
                           Open Variant Manager
                         </button>

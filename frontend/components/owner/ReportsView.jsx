@@ -32,7 +32,7 @@ const ReportsView = ({ stats }) => {
     <div className="space-y-6">
         {/* Controls */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-800 p-4 rounded-lg shadow-sm">
-            <div className="flex space-x-2 overflow-x-auto pb-2 sm:pb-0 w-full sm:w-auto">
+            <div tabIndex={0} className="flex space-x-2 overflow-x-auto pb-2 sm:pb-0 w-full sm:w-auto">
                 {['overview', 'sales', 'inventory', 'financial', 'customers'].map(tab => (
                     <button
                         key={tab}
@@ -144,7 +144,7 @@ const ReportsView = ({ stats }) => {
                     </div>
                     <div className="bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-700">
                         <h3 className="font-bold text-white mb-6">Top Selling Products</h3>
-                        <div className="overflow-x-auto">
+                        <div tabIndex={0} className="overflow-x-auto">
                             <table className="min-w-full text-sm">
                                 <thead className="bg-gray-900 text-gray-400">
                                     <tr>

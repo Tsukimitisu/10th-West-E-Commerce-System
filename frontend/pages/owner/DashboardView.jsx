@@ -47,9 +47,9 @@ const statusStyle = {
   payment_pending: 'bg-amber-50 text-amber-700',
   paid: 'bg-blue-50 text-blue-700',
   processing: 'bg-orange-50 text-orange-700',
-  packed: 'bg-cyan-50 text-cyan-700',
-  ready_for_pickup: 'bg-teal-50 text-teal-700',
-  shipped: 'bg-violet-50 text-violet-700',
+  packed: 'bg-slate-100 text-slate-700',
+  ready_for_pickup: 'bg-slate-100 text-slate-700',
+  shipped: 'bg-slate-100 text-slate-700',
   out_for_delivery: 'bg-indigo-50 text-indigo-700',
   delivered: 'bg-emerald-50 text-emerald-700',
   cancelled: 'bg-slate-100 text-slate-600',
@@ -133,9 +133,9 @@ const DashboardView = ({ onNavigate }) => {
       <PageHeader
         eyebrow="Commerce overview"
         title="Operations dashboard"
-        description="Current sales, fulfillment work, inventory risk, and customer-service queues from live store data."
+        description="Your 10th West operations overview: sales, fulfillment and inventory."
         actions={(
-          <button type="button" onClick={() => onNavigate('orders')} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800">
+          <button type="button" onClick={() => onNavigate('orders')} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-slate-800">
             View orders <ArrowRight size={15} />
           </button>
         )}
@@ -150,7 +150,7 @@ const DashboardView = ({ onNavigate }) => {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: 'Return requests', value: operational.pendingReturns.length, icon: RotateCcw, tone: 'text-violet-700 bg-violet-50', view: 'returns' },
+          { label: 'Return requests', value: operational.pendingReturns.length, icon: RotateCcw, tone: 'text-slate-700 bg-slate-100', view: 'returns' },
           { label: 'Unread conversations', value: data.unreadChats, icon: MessageCircle, tone: 'text-blue-700 bg-blue-50', view: 'chat' },
           { label: 'Payment issues', value: operational.paymentIssues.length, icon: CircleDollarSign, tone: 'text-red-700 bg-red-50', view: 'orders' },
           { label: 'Shipment issues', value: operational.shipmentIssues.length, icon: Truck, tone: 'text-amber-700 bg-amber-50', view: 'orders' },
@@ -173,15 +173,15 @@ const DashboardView = ({ onNavigate }) => {
                 <AreaChart data={data.stats.salesTrend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                   <defs>
                     <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#ea580c" stopOpacity={0.24} />
-                      <stop offset="100%" stopColor="#ea580c" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor="#ed621d" stopOpacity={0.24} />
+                      <stop offset="100%" stopColor="#ed621d" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(date) => new Date(date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(value) => currency(value, true)} />
                   <Tooltip formatter={(value) => currency(value)} labelFormatter={(date) => new Date(date).toLocaleDateString('en-PH', { dateStyle: 'medium' })} />
-                  <Area type="monotone" dataKey="amount" stroke="#ea580c" strokeWidth={2.25} fill="url(#salesFill)" />
+                  <Area type="monotone" dataKey="amount" stroke="#ed621d" strokeWidth={2.25} fill="url(#salesFill)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -210,7 +210,7 @@ const DashboardView = ({ onNavigate }) => {
 
       <SectionCard title="Recent orders" description="Latest transactions across online and point-of-sale channels." action={<button type="button" onClick={() => onNavigate('orders')} className="text-xs font-semibold text-orange-700 hover:text-orange-800">View all</button>} padded={false}>
         {recentOrders.length ? (
-          <div className="overflow-x-auto">
+          <div tabIndex={0} className="overflow-x-auto">
             <table className="min-w-[720px] w-full text-left">
               <thead className="bg-slate-50">
                 <tr>

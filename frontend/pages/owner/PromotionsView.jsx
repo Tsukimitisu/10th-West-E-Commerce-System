@@ -144,7 +144,7 @@ const PromotionsView = () => {
         {[
           { label: 'Total Campaigns', value: totalCampaigns.toString(), icon: <Gift size={18} />, color: 'bg-blue-50 text-blue-600' },
           { label: 'Active Campaigns', value: activeCampaigns.toString(), icon: <CheckCircle2 size={18} />, color: 'bg-green-50 text-green-600' },
-          { label: 'Total Redemptions', value: totalRedemptions.toString(), icon: <Percent size={18} />, color: 'bg-red-500/10 text-orange-600' },
+          { label: 'Total Redemptions', value: totalRedemptions.toString(), icon: <Percent size={18} />, color: 'bg-orange-50 text-orange-800' },
         ].map((stat, i) => (
           <div key={i} className="bg-gray-800 rounded-xl shadow-sm border border-gray-700 p-4">
             <div className={`w-8 h-8 ${stat.color} rounded-lg flex items-center justify-center mb-2`}>{stat.icon}</div>
@@ -161,7 +161,7 @@ const PromotionsView = () => {
         ) : discounts.length === 0 ? (
           <div className="p-6"><EmptyState icon={Tag} title="No promotions yet" description="Create a code to set its value, eligibility, and schedule." action={<button type="button" onClick={openCreate} className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white">Create promotion</button>} /></div>
         ) : (
-          <div className="overflow-x-auto">
+          <div tabIndex={0} className="overflow-x-auto">
             <div className="divide-y divide-slate-200 md:hidden">{discounts.map((d) => { const status = getStatus(d); return <article key={d.id} className="flex items-start justify-between gap-3 p-4">
               <div className="min-w-0 space-y-1 text-sm"><p className="font-semibold text-slate-950">{d.code}</p><p className="text-slate-700">{d.type === 'percentage' ? `${d.value}% off` : `₱${Number(d.value).toLocaleString()} off`} · {d.min_purchase ? `Min ₱${Number(d.min_purchase).toLocaleString()}` : 'No minimum'}</p><StatusBadge tone={status.label === 'Active' ? 'success' : status.label === 'Upcoming' ? 'info' : status.label === 'Expired' ? 'warning' : 'neutral'}>{status.label}</StatusBadge><p className="text-xs text-slate-600">{d.used_count || 0} used · {d.starts_at ? new Date(d.starts_at).toLocaleDateString() : 'Any start'} – {d.expires_at ? new Date(d.expires_at).toLocaleDateString() : 'No end'}</p></div>
               <div className="flex shrink-0 gap-1"><button type="button" onClick={() => openEdit(d)} aria-label={`Edit ${d.code}`} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-slate-700 hover:bg-slate-100"><Edit3 size={16} aria-hidden="true" /></button><button type="button" onClick={() => handleDelete(d)} aria-label={`Delete ${d.code}`} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-red-700 hover:bg-red-50"><Trash2 size={16} aria-hidden="true" /></button></div>

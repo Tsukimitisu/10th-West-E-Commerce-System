@@ -180,7 +180,7 @@ const MessageBubble = ({ message, currentUserId, onRetry }) => {
           </a>
         )}
         {text && <p className="whitespace-pre-wrap text-sm leading-6">{text}</p>}
-        <div className={`mt-1 flex items-center justify-end gap-1 text-[11px] ${isStaff ? 'text-orange-100' : 'text-slate-400'}`}>
+        <div className={`mt-1 flex items-center justify-end gap-1 text-[11px] ${isStaff ? 'text-white' : 'text-slate-400'}`}>
           <span>{formatTime(message.created_at)}</span>
           {mine && <MessageDeliveryStatus message={message} onRetry={onRetry} />}
         </div>

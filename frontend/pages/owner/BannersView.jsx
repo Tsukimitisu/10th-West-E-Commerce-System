@@ -225,7 +225,7 @@ const BannersView = () => {
       <PageHeader title="Banners & announcements" description="Preview storefront visuals and manage their visibility and order." actions={tab !== 'carousel' && <button type="button" onClick={() => { resetForm(); setModalType(tab === 'announcements' ? 'announcement' : 'banner'); setShowModal(true); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700"><Plus size={16} aria-hidden="true" /> Add {tab === 'banners' ? 'banner' : 'announcement'}</button>} />
 
       {/* Tabs */}
-      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Content type">
+      <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Content type">
         <button role="tab" aria-selected={tab === 'banners'} onClick={() => setTab('banners')}
           className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${tab === 'banners' ? 'bg-gray-800 text-red-500 shadow-sm' : 'text-gray-600 hover:text-white'}`}>
           <Image size={14} /> Banners ({banners.length})
@@ -353,7 +353,7 @@ const BannersView = () => {
                   setModalType('banner');
                   setShowModal(true);
                 }}
-                className="px-3 py-2 bg-red-500/100 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5"
+                className="px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5"
               >
                 <Plus size={14} /> Add Slide
               </button>
@@ -537,11 +537,11 @@ const BannersView = () => {
                   <span className="block text-xs font-medium text-gray-600 mb-1">Link Destination</span>
                   <div className="flex gap-1 mb-2">
                     <button type="button" onClick={() => { setLinkMode('page'); setBannerForm({ ...bannerForm, link_url: LINK_OPTIONS[0].value }); }}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${linkMode === 'page' ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 bg-gray-900'}`}>
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${linkMode === 'page' ? 'bg-orange-50 text-orange-800' : 'text-gray-400 hover:text-gray-700 bg-gray-900'}`}>
                       <LinkIcon size={10} className="inline mr-1" />Store Page
                     </button>
                     <button type="button" onClick={() => { setLinkMode('custom'); setBannerForm({ ...bannerForm, link_url: '' }); }}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${linkMode === 'custom' ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 bg-gray-900'}`}>
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${linkMode === 'custom' ? 'bg-orange-50 text-orange-800' : 'text-gray-400 hover:text-gray-700 bg-gray-900'}`}>
                       Custom URL
                     </button>
                   </div>

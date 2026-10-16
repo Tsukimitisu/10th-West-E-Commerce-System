@@ -211,7 +211,7 @@ const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, o
           </div>
         </div>
         {cart.length > 0 && (
-          <div className="bg-red-500/10 text-orange-600 px-3 py-1.5 rounded-full text-sm font-medium">
+          <div className="bg-orange-50 text-orange-800 px-3 py-1.5 rounded-full text-sm font-medium">
             {cart.length} product{cart.length !== 1 ? 's' : ''} · {totalItems} unit{totalItems !== 1 ? 's' : ''}
           </div>
         )}
@@ -232,7 +232,7 @@ const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, o
               autoComplete="off"
             />
           </div>
-          <button type="submit" className="px-4 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+          <button type="submit" className="px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
             <Search size={14} /> Lookup
           </button>
           <button type="button" onClick={() => setScannerOpen(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-orange-400 bg-orange-50 px-4 text-sm font-semibold text-orange-800 hover:bg-orange-100">

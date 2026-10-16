@@ -81,7 +81,7 @@ const SecurityView = () => {
   }, []);
 
   const roles = [
-    { name: 'Admin', color: 'bg-red-500/10 text-orange-600 border-red-200', desc: 'Full system access', permsCount: 'All' },
+    { name: 'Admin', color: 'bg-orange-50 text-orange-800 border-red-200', desc: 'Full system access', permsCount: 'All' },
     { name: 'Manager', color: 'bg-blue-50 text-blue-700 border-blue-200', desc: 'Manage orders, inventory, storefront listings and staff', permsCount: '15' },
     { name: 'Cashier', color: 'bg-green-50 text-green-700 border-green-200', desc: 'POS access, order processing', permsCount: '8' },
     { name: 'Viewer', color: 'bg-gray-900 text-gray-700 border-gray-700', desc: 'Read-only access to reports', permsCount: '3' },
@@ -166,7 +166,7 @@ const SecurityView = () => {
 
       <div className="flex gap-1 bg-gray-800 rounded-lg border border-gray-700 p-1 w-fit flex-wrap">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
             <t.icon size={14} /> {t.label}
           </button>
         ))}
@@ -204,7 +204,7 @@ const SecurityView = () => {
           {/* Permissions Matrix Tab */}
           {tab === 'permissions' && (
             <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-              <div className="overflow-x-auto">
+              <div tabIndex={0} className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="bg-gray-50/80 border-b border-gray-700">
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 sticky left-0 bg-gray-900 min-w-[180px]">Permission</th>
@@ -298,7 +298,7 @@ const SecurityView = () => {
                     <p className="text-sm text-gray-400">No device login history available</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div tabIndex={0} className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-gray-50/80 border-b border-gray-700">
@@ -484,7 +484,7 @@ const SecurityView = () => {
                     <p className="text-sm text-gray-400">No login attempts found</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div tabIndex={0} className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-gray-50/80 border-b border-gray-700">

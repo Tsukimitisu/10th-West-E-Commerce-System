@@ -76,7 +76,10 @@ export const openDataReportPdf = ({ title, rangeLabel, sections }) => {
       @page { size: A4 landscape; margin: 14mm 10mm 16mm; }
       * { box-sizing: border-box; }
       body { margin: 0; color: #172033; font: 10px/1.35 Arial, sans-serif; }
-      header { border-bottom: 2px solid #f97316; margin-bottom: 16px; padding-bottom: 10px; }
+      header { border-bottom: 2px solid #ed621d; margin-bottom: 16px; padding-bottom: 10px; }
+      .report-brand { display:flex; align-items:center; gap:14px; margin-bottom:12px; color:#12204e; }
+      .report-brand img { width:64px; height:68px; object-fit:contain; background:#000; print-color-adjust:exact; }
+      .report-brand strong { font-size:16px; }
       h1 { font-size: 21px; margin: 0 0 4px; }
       h2 { break-after: avoid; font-size: 14px; margin: 18px 0 6px; }
       p { color: #526078; margin: 2px 0; }
@@ -84,18 +87,19 @@ export const openDataReportPdf = ({ title, rangeLabel, sections }) => {
       thead { display: table-header-group; }
       tr { break-inside: avoid; page-break-inside: avoid; }
       th, td { border: 1px solid #d8dee9; padding: 5px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-      th { background: #182235; color: #fff; font-size: 9px; text-transform: uppercase; }
+      th { background: #12204e; color: #fff; font-size: 9px; text-transform: uppercase; }
       tbody tr:nth-child(even) { background: #f6f8fb; }
       section { break-inside: auto; }
       .page-footer { bottom: 4mm; color: #6b7280; font-size: 8px; left: 10mm; position: fixed; right: 10mm; text-align: right; }
       .page-footer::after { content: 'Page ' counter(page); }
     </style></head><body>
-      <header><h1>${escapeHtml(title)}</h1><p>Reporting period: ${escapeHtml(rangeLabel)}</p><p>Generated: ${escapeHtml(generatedAt)}</p></header>
+      <header><div class="report-brand"><img src="${escapeHtml(new URL('/brand/10th-west-logo.png', window.location.origin).href)}" alt="10th West Motorcycle Parts & Accessories" width="64" height="68"><div><strong>10TH WEST</strong><p>Motorcycle Parts & Accessories</p></div></div><h1>${escapeHtml(title)}</h1><p>Reporting period: ${escapeHtml(rangeLabel)}</p><p>Generated: ${escapeHtml(generatedAt)}</p></header>
       ${printableSections.map(tableHtml).join('')}
       <div class="page-footer"></div>
     </body></html>`);
   printWindow.document.close();
-  window.setTimeout(() => printWindow.print(), 250);
+  Promise.all(Array.from(printWindow.document.images).map((image) => image.decode().catch(() => {})))
+    .then(() => { if (!printWindow.closed) printWindow.print(); });
   return true;
 };
 

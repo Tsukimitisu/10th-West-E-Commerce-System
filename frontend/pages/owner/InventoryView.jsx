@@ -9,6 +9,7 @@ import PageHeader from '../../components/operations/PageHeader';
 import MetricCard from '../../components/operations/MetricCard';
 import { SearchField } from '../../components/operations/FilterBar';
 import StatusBadge from '../../components/ui/StatusBadge';
+import { Pagination } from '../../components/ui/BrandPrimitives';
 import EmptyState from '../../components/ui/EmptyState';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import InventoryItemForm from '../../components/owner/InventoryItemForm';
@@ -64,6 +65,10 @@ const InventoryView = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('stock');
+  const [stockFilter, setStockFilter] = useState('all');
+  const [sortField, setSortField] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [page, setPage] = useState(1);
   const [adjustModal, setAdjustModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [adjForm, setAdjForm] = useState({ type: 'add', quantity: '', reason: 'restocking', notes: '' });
@@ -147,6 +152,21 @@ const InventoryView = () => {
       || String(p.box_location || '').toLowerCase().includes(term);
   });
 
+  // Presentation-only sorting/paging; stock values and mutation handlers stay intact.
+  const stockRows = filtered.filter((item) => stockFilter === 'all' || stockStatus(item).tone === stockFilter);
+  const sortedRows = [...stockRows].sort((a, b) => {
+    const left = sortField === 'name' ? a.product_name || a.name : a[sortField];
+    const right = sortField === 'name' ? b.product_name || b.name : b[sortField];
+    const result = ['stock_quantity', 'store_selling_price'].includes(sortField)
+      ? Number(left || 0) - Number(right || 0)
+      : String(left || '').localeCompare(String(right || ''), 'en', { numeric: true, sensitivity: 'base' });
+    return sortDirection === 'asc' ? result : -result;
+  });
+  const pageSize = 20;
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visibleRows = sortedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   const saveInventoryItem = async (payload) => {
     const wasEditing = Boolean(editingItem);
     const saved = wasEditing
@@ -209,14 +229,14 @@ const InventoryView = () => {
         </div>
       )}
 
-      <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-4 [&>*]:min-w-[13rem] [&>*]:shrink-0 [&>*]:snap-start sm:[&>*]:min-w-0">
+      <div tabIndex={0} className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-4 [&>*]:min-w-[13rem] [&>*]:shrink-0 [&>*]:snap-start sm:[&>*]:min-w-0">
         <MetricCard icon={Boxes} label="Units on hand" value={totalStock.toLocaleString('en-PH')} detail={`${products.length.toLocaleString('en-PH')} inventory items`} tone="neutral" />
         <MetricCard icon={TrendingUp} label="Inventory value" value={formatPeso(totalValue, 0)} detail="At cost price" tone="neutral" />
         <MetricCard icon={Package} label="Reserved / damaged" value={`${reservedStock} / ${damagedStock}`} detail="Units not sellable" tone="neutral" />
         <MetricCard icon={AlertTriangle} label="Low / out of stock" value={`${lowStock.length} / ${outOfStock}`} detail="Open restock list" tone={lowStock.length || outOfStock ? 'warning' : 'success'} onClick={() => setTab('alerts')} />
       </div>
 
-      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1 sm:w-fit" role="tablist" aria-label="Inventory views">
+      <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1 sm:w-fit" role="tablist" aria-label="Inventory views">
         {tabs.map(t => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={`flex min-h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors ${tab === t.id ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
             <t.icon size={15} aria-hidden="true" />
@@ -243,7 +263,7 @@ const InventoryView = () => {
           <div className="flex flex-col gap-2 border-b border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between">
             <SearchField
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search part number, name, model, brand, color, or Box"
               className="w-full sm:max-w-md"
             />
@@ -251,53 +271,62 @@ const InventoryView = () => {
               <span className="font-semibold tabular-nums text-slate-700">{filtered.length}</span> of {products.length} items · type or scan a part number or barcode
             </p>
           </div>
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-3">
+            <select aria-label="Filter inventory by stock" value={stockFilter} onChange={(event) => { setStockFilter(event.target.value); setPage(1); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm sm:flex-none">
+              <option value="all">All stock</option><option value="success">In stock</option><option value="warning">Low stock</option><option value="danger">Out of stock</option>
+            </select>
+            <select aria-label="Sort inventory" value={sortField} onChange={(event) => { setSortField(event.target.value); setPage(1); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm sm:flex-none">
+              <option value="name">Item name</option><option value="part_number">Part number</option><option value="motorcycle_model">Model</option><option value="box_location">Box location</option><option value="stock_quantity">Available stock</option><option value="store_selling_price">Store price</option>
+            </select>
+            <button type="button" onClick={() => setSortDirection((value) => value === 'asc' ? 'desc' : 'asc')} className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-medium" aria-label={`Sort ${sortDirection === 'asc' ? 'descending' : 'ascending'}`}>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</button>
+            <button type="button" onClick={() => setTab('receive')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold sm:ml-auto"><ScanBarcode size={17} aria-hidden="true" />Barcode Scan</button>
+          </div>
           {loading ? (
             <div className="space-y-2 p-3" role="status" aria-label="Loading inventory">
               {Array.from({ length: 6 }).map((_, index) => <div key={index} className="skeleton h-12 w-full rounded-lg" />)}
             </div>
-          ) : filtered.length === 0 ? (
+          ) : stockRows.length === 0 ? (
             <div className="p-4">
               <EmptyState
                 icon={Boxes}
                 title={products.length === 0 ? 'No inventory items yet' : 'No items match your search'}
                 description={products.length === 0 ? 'Add an inventory item or receive stock to start tracking parts.' : 'Check the part number or try a model, brand, color, or Box location.'}
-                action={search ? <button type="button" onClick={() => setSearch('')} className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Clear search</button> : null}
+                action={search || stockFilter !== 'all' ? <button type="button" onClick={() => { setSearch(''); setStockFilter('all'); setPage(1); }} className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Clear search</button> : null}
               />
             </div>
           ) : (
             <>
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full text-sm">
+              <div tabIndex={0} role="region" aria-label="Inventory stock table" className="hidden max-h-[70vh] overflow-auto md:block">
+                <table className="w-full min-w-[1220px] text-sm">
                   <thead><tr className="border-b border-slate-200 bg-slate-100">
-                    <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold text-slate-700">Part</th>
-                    <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold text-slate-700">Box</th>
-                    <th scope="col" className="px-4 py-2.5 text-right text-xs font-semibold text-slate-700">Available</th>
-                    <th scope="col" className="hidden px-4 py-2.5 text-right text-xs font-semibold text-slate-700 lg:table-cell">Store price</th>
-                    <th scope="col" className="hidden px-4 py-2.5 text-right text-xs font-semibold text-slate-700 2xl:table-cell">Online price</th>
+                    <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold text-slate-700">Part number</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Item name</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Model</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Color</th>
+                    <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold text-slate-700">Box location</th>
+                    <th scope="col" className="px-4 py-2.5 text-right text-xs font-semibold text-slate-700">Available stock</th>
+                    <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-700">Minimum stock</th>
+                    <th scope="col" className="px-4 py-2.5 text-right text-xs font-semibold text-slate-700">Store price</th>
+                    <th scope="col" className="px-4 py-2.5 text-right text-xs font-semibold text-slate-700">Online price</th>
                     <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold text-slate-700">Status</th>
                     <th scope="col" className="relative px-4 py-2.5 text-right text-xs font-semibold text-slate-700"><span className="sr-only">Actions</span></th>
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filtered.map(p => {
+                    {visibleRows.map(p => {
                       const status = stockStatus(p);
                       return (
                         <tr key={p.id} className="hover:bg-slate-50">
-                          <td className="px-4 py-2.5">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <ItemThumb product={p} />
-                              <div className="min-w-0 max-w-[16rem] lg:max-w-xs xl:max-w-sm">
-                                <p className="truncate font-medium text-slate-950">{p.product_name || p.name}</p>
-                                <p className="truncate text-xs text-slate-500"><span className="font-mono text-slate-600">{p.part_number || '—'}</span>{` · ${p.motorcycle_model || 'Model not set'}`}{p.color ? ` · ${p.color}` : ''}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-2.5 text-slate-700">{p.box_location || <span className="text-slate-400">Not assigned</span>}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-700">{p.part_number || '—'}</td>
+                          <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-3"><ItemThumb product={p} /><span className="max-w-[240px] truncate font-semibold text-slate-950">{p.product_name || p.name}</span></div></td>
+                          <td className="whitespace-nowrap px-4 py-3 text-slate-700">{p.motorcycle_model || '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-slate-700">{p.color || '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-slate-700"><span className="inline-flex rounded border border-slate-200 bg-slate-50 px-2 py-1 font-semibold text-slate-800">{p.box_location || 'Not assigned'}</span></td>
                           <td className="px-4 py-2.5 text-right">
                             <span className={`font-semibold tabular-nums ${quantityTone[status.tone]}`}>{p.stock_quantity}</span>
-                            <span className="block text-[11px] text-slate-500">min {p.low_stock_threshold}</span>
                           </td>
-                          <td className="hidden whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-700 lg:table-cell">{formatPeso(p.store_selling_price)}</td>
-                          <td className="hidden whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-700 2xl:table-cell">{formatPeso(p.ecommerce_price)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-600">{p.low_stock_threshold}</td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-700">{formatPeso(p.store_selling_price)}</td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-slate-700">{formatPeso(p.ecommerce_price)}</td>
                           <td className="px-4 py-2.5"><StatusBadge tone={status.tone} icon={status.icon}>{status.label}</StatusBadge></td>
                           <td className="px-4 py-2.5 text-right">
                             <div className="flex justify-end gap-1.5">
@@ -313,7 +342,7 @@ const InventoryView = () => {
               </div>
 
               <ul className="divide-y divide-slate-100 md:hidden">
-                {filtered.map(p => {
+                {visibleRows.map(p => {
                   const status = stockStatus(p);
                   return (
                     <li key={p.id} className="p-3">
@@ -340,6 +369,7 @@ const InventoryView = () => {
                   );
                 })}
               </ul>
+              <div className="border-t border-slate-200 px-3"><Pagination page={currentPage} totalPages={pageCount} onChange={setPage} /></div>
             </>
           )}
         </section>
@@ -405,7 +435,7 @@ const InventoryView = () => {
                       <p className="text-xs text-gray-400">Threshold: {p.low_stock_threshold} · Current: <span className={`font-bold ${p.stock_quantity === 0 ? 'text-red-500' : 'text-amber-600'}`}>{p.stock_quantity}</span></p>
                     </div>
                   </div>
-                  <button onClick={() => openAdjust(p)} className="px-3 py-1.5 bg-red-500/100 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1">
+                  <button onClick={() => openAdjust(p)} className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1">
                     <Plus size={12} /> Restock
                   </button>
                 </div>
@@ -430,11 +460,11 @@ const InventoryView = () => {
 
           <div className="flex gap-2">
             <button type="button" onClick={() => setAdjForm(f => ({...f, type: 'add', reason: STOCK_ADJUSTMENT_REASONS.add[0][0]}))}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${adjForm.type === 'add' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-900'}`}>
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${adjForm.type === 'add' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-900'}`}>
               <ArrowUpCircle size={16} /> Add Stock
             </button>
             <button type="button" onClick={() => setAdjForm(f => ({...f, type: 'remove', reason: STOCK_ADJUSTMENT_REASONS.remove[0][0]}))}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${adjForm.type === 'remove' ? 'bg-red-500/10 border-red-200 text-orange-600' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-900'}`}>
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border transition-colors ${adjForm.type === 'remove' ? 'bg-red-500/10 border-red-200 text-orange-600' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-900'}`}>
               <ArrowDownCircle size={16} /> Remove Stock
             </button>
           </div>
@@ -460,7 +490,7 @@ const InventoryView = () => {
           </div>
 
           {adjForm.quantity && (
-            <div className={`p-3 rounded-lg text-sm font-medium ${adjForm.type === 'add' ? 'bg-green-50 text-green-700' : 'bg-red-500/10 text-orange-600'}`}>
+            <div className={`p-3 rounded-lg text-sm font-medium ${adjForm.type === 'add' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-800'}`}>
               New stock: {selectedProduct?.stock_quantity || 0} → <span className="font-bold">
                 {adjForm.type === 'add' ? (selectedProduct?.stock_quantity || 0) + parseInt(adjForm.quantity || '0') : Math.max(0, (selectedProduct?.stock_quantity || 0) - parseInt(adjForm.quantity || '0'))}
               </span>

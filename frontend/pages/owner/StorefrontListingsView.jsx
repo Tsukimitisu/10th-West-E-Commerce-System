@@ -146,7 +146,7 @@ const StorefrontListingsView = () => {
         {loading ? <div className="p-12 text-center text-sm text-slate-500">Loading storefront listings…</div> : filtered.length === 0 ? (
           <div className="p-12 text-center"><Package className="mx-auto text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">No storefront listings found</p><p className="mt-1 text-xs text-slate-500">Create one by selecting an existing inventory item.</p></div>
         ) : (
-          <div className="overflow-x-auto">
+          <div tabIndex={0} className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-xs font-semibold text-slate-600"><tr>
                 <th className="px-4 py-3 text-left">Listing</th><th className="px-4 py-3 text-left">Inventory</th><th className="px-4 py-3 text-right">Store Selling Price</th><th className="px-4 py-3 text-right">E-commerce Price</th><th className="px-4 py-3 text-left">Visibility</th><th className="px-4 py-3 text-right">Action</th>

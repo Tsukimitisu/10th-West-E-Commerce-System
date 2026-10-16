@@ -125,7 +125,7 @@ const BackupView = () => {
             <p className="text-sm text-gray-400">Create your first backup to get started.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div tabIndex={0} className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-700">

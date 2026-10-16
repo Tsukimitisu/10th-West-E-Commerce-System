@@ -111,7 +111,7 @@ const InventoryProductItemsView = () => {
         ) : items.length === 0 ? (
           <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center"><PackageSearch size={34} className="text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">No product items found.</p></div>
         ) : (
-          <div className="overflow-x-auto">
+          <div tabIndex={0} className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600"><tr>
                 <th scope="col" className="px-4 py-3">Part Number</th><th scope="col" className="px-4 py-3">Item Name</th>

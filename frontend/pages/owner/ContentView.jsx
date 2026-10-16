@@ -192,7 +192,7 @@ const ContentView = () => {
 
       {mainTab === 'policies' && (
         <div className="space-y-4">
-          <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1 sm:w-fit" role="tablist" aria-label="Policy">
+          <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1 sm:w-fit" role="tablist" aria-label="Policy">
             {POLICY_TYPES.map((pt) => (
               <button
                 key={pt.key}

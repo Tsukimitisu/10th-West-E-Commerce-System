@@ -76,7 +76,7 @@ const ReportsView = () => {
 
   useEffect(() => { fetchData(); }, [dateRange]);
 
-  const COLORS = ['#f97316', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#ec4899', '#0891b2', '#65a30d'];
+  const COLORS = ['#12204e', '#ed621d', '#687182', '#d52231', '#b4bdcc'];
 
   const tabs = [
     { id: 'sales', label: 'Sales', icon: TrendingUp },
@@ -125,7 +125,7 @@ const ReportsView = () => {
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-2 sm:px-4">
-        <div className="flex max-w-full gap-1 overflow-x-auto" role="group" aria-label="Report type">
+        <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto" role="group" aria-label="Report type">
           {tabs.map(t => (
             <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)} className={`flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium ${tab === t.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
               <t.icon size={15} aria-hidden="true" /> {t.label}
@@ -155,7 +155,7 @@ const ReportsView = () => {
                 {[
                   { label: 'Total Sales', value: `₱${(salesReport?.total_revenue || 0).toLocaleString()}`, color: 'bg-green-50 text-green-600' },
                   { label: 'Orders', value: (salesReport?.total_orders || 0).toString(), color: 'bg-blue-50 text-blue-600' },
-                  { label: 'Avg Order', value: `₱${(salesReport?.average_order_value || 0).toFixed(0)}`, color: 'bg-purple-50 text-purple-600' },
+                  { label: 'Avg Order', value: `₱${(salesReport?.average_order_value || 0).toFixed(0)}`, color: 'bg-slate-100 text-slate-700' },
                   { label: 'POS Orders', value: (salesReport?.pos_orders || 0).toString(), color: 'bg-amber-50 text-amber-600' },
                 ].map((kpi, i) => (
                   <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
@@ -170,12 +170,12 @@ const ReportsView = () => {
                   <ChartCard title="Sales Trend" action={<button onClick={() => handleExport('sales')} disabled={Boolean(warning)} className="flex items-center gap-1 text-xs text-slate-600 disabled:opacity-50"><Download size={12} /> CSV</button>}>
                     {salesTrend.length ? <ResponsiveContainer width="100%" height={280}>
                       <AreaChart data={salesTrend}>
-                        <defs><linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.1} /><stop offset="95%" stopColor="#f97316" stopOpacity={0} /></linearGradient></defs>
+                        <defs><linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ed621d" stopOpacity={0.1} /><stop offset="95%" stopColor="#ed621d" stopOpacity={0} /></linearGradient></defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                         <XAxis dataKey="date" tickFormatter={formatReportDate} tick={{ fontSize: 10 }} stroke="#9ca3af" />
                         <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
                         <Tooltip labelFormatter={formatReportDate} formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
-                        <Area type="monotone" dataKey="revenue" stroke="#f97316" fill="url(#salesGrad)" strokeWidth={2} />
+                        <Area type="monotone" dataKey="revenue" stroke="#ed621d" fill="url(#salesGrad)" strokeWidth={2} />
                       </AreaChart>
                     </ResponsiveContainer> : <div className="grid h-[220px] place-items-center text-sm text-slate-600">No sales trend for this period.</div>}
                   </ChartCard>
@@ -209,7 +209,7 @@ const ReportsView = () => {
                       <XAxis type="number" tick={{ fontSize: 10 }} stroke="#9ca3af" />
                       <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} stroke="#9ca3af" width={120} />
                       <Tooltip formatter={(v) => [v, 'Units Sold']} />
-                      <Bar dataKey="quantity_sold" fill="#f97316" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="quantity_sold" fill="#ed621d" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <EmptyState title="No product sales in this period" description="Try a longer date range to see product performance." />}
@@ -228,7 +228,7 @@ const ReportsView = () => {
                       <XAxis dataKey="category" tick={{ fontSize: 9 }} stroke="#9ca3af" angle={-45} textAnchor="end" height={80} />
                       <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
                       <Tooltip />
-                      <Bar dataKey="total_stock" fill="#2563eb" radius={[4, 4, 0, 0]} name="Stock" />
+                      <Bar dataKey="total_stock" fill="#12204e" radius={[4, 4, 0, 0]} name="Stock" />
                       <Bar dataKey="low_stock_items" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Low-stock items" />
                     </BarChart>
                   </ResponsiveContainer>
@@ -293,7 +293,7 @@ const ReportsView = () => {
                     <XAxis dataKey="date" tickFormatter={formatReportDate} tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <Tooltip labelFormatter={formatReportDate} formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
-                    <Bar dataKey="revenue" fill="#f97316" name="Revenue" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="revenue" fill="#ed621d" name="Revenue" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -310,7 +310,7 @@ const ReportsView = () => {
                 ].map(([label, value]) => <div key={label} className="rounded-xl border border-gray-700 bg-gray-800 p-4"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p></div>)}
               </div>
               <ChartCard title="POS transactions">
-                <div className="overflow-x-auto">
+                <div tabIndex={0} className="overflow-x-auto">
                   <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b border-gray-700 text-left text-xs text-gray-400"><th className="p-3">Receipt</th><th className="p-3">Status</th><th className="p-3">Payment</th><th className="p-3">Date</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{(posReport?.sales || []).map((sale) => <tr key={sale.id} className="border-b border-gray-700/60"><td className="p-3 text-white">{sale.receipt_number}</td><td className="p-3 text-gray-300">{sale.voided_at ? 'voided' : sale.status}</td><td className="p-3 text-gray-300">{sale.payment_status}</td><td className="p-3 text-gray-300">{new Date(sale.created_at).toLocaleDateString()}</td><td className="p-3 text-right font-semibold text-white">₱{Number(sale.total_amount).toLocaleString()}</td></tr>)}</tbody></table>
                   {!posReport?.sales?.length && <p className="p-8 text-center text-sm text-gray-400">No valid POS transactions in this period.</p>}
                 </div>
@@ -329,7 +329,7 @@ const ReportsView = () => {
                 ].map(([label, value]) => <div key={label} className="rounded-xl border border-gray-700 bg-gray-800 p-4"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p></div>)}
               </div>
               <ChartCard title="Return and refund activity">
-                <div className="overflow-x-auto">
+                <div tabIndex={0} className="overflow-x-auto">
                   <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b border-gray-700 text-left text-xs text-gray-400"><th className="p-3">Return</th><th className="p-3">Order</th><th className="p-3">Return status</th><th className="p-3">Refund status</th><th className="p-3 text-right">Amount</th></tr></thead><tbody>{(returnReport?.returns || []).map((item) => <tr key={item.id} className="border-b border-gray-700/60"><td className="p-3 text-white">#{item.id}</td><td className="p-3 text-gray-300">#{item.order_id}</td><td className="p-3 text-gray-300">{item.status}</td><td className="p-3 text-gray-300">{item.refund_status || 'Not processed'}</td><td className="p-3 text-right font-semibold text-white">₱{Number(item.processed_refund || item.refund_amount || 0).toLocaleString()}</td></tr>)}</tbody></table>
                   {!returnReport?.returns?.length && <p className="p-8 text-center text-sm text-gray-400">No return or refund activity in this period.</p>}
                 </div>
@@ -383,7 +383,7 @@ const ReportsView = () => {
                     <p className="text-sm text-gray-400">No customer data available</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div tabIndex={0} className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-gray-50/80 border-b border-gray-700">
@@ -406,7 +406,7 @@ const ReportsView = () => {
                               </div>
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <span className="px-2 py-0.5 bg-red-500/10 text-orange-600 text-xs font-semibold rounded-full">{customer.orders}</span>
+                              <span className="px-2 py-0.5 bg-orange-50 text-orange-800 text-xs font-semibold rounded-full">{customer.orders}</span>
                             </td>
                             <td className="px-4 py-3 text-right font-semibold text-white">₱{customer.total.toLocaleString()}</td>
                           </tr>

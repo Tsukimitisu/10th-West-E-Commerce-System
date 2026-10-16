@@ -11,7 +11,7 @@ import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   approved: 'bg-blue-50 text-blue-700 border-blue-200',
-  rejected: 'bg-red-500/10 text-orange-600 border-red-200',
+  rejected: 'bg-orange-50 text-orange-800 border-red-200',
 };
 
 const ReturnsView = () => {
@@ -94,7 +94,7 @@ const ReturnsView = () => {
         {[
           { label: 'Pending', value: pending.toString(), icon: <Clock size={18} />, color: 'bg-yellow-50 text-yellow-600' },
           { label: 'Approved', value: approved.toString(), icon: <CheckCircle2 size={18} />, color: 'bg-blue-50 text-blue-600' },
-          { label: 'Rejected', value: rejected.toString(), icon: <XCircle size={18} />, color: 'bg-red-500/10 text-orange-600' },
+          { label: 'Rejected', value: rejected.toString(), icon: <XCircle size={18} />, color: 'bg-orange-50 text-orange-800' },
           { label: 'Total', value: returns.length.toString(), icon: <RotateCcw size={18} />, color: 'bg-gray-900 text-gray-600' },
         ].map((kpi, index) => (
           <div key={index} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
@@ -119,12 +119,12 @@ const ReturnsView = () => {
           />
         </div>
         <div className="flex gap-1 flex-wrap">
-          <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
+          <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
           {allStatuses.map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(statusFilter === status ? '' : status)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all capitalize ${statusFilter === status ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors capitalize ${statusFilter === status ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}
             >
               {status}
             </button>

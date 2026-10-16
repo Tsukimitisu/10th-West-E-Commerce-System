@@ -99,7 +99,7 @@ const CustomersView = () => {
         {[
           { label: 'Total Customers', value: totalCustomers.toString(), icon: <Users size={18} />, color: 'bg-blue-50 text-blue-600' },
           { label: 'Total Revenue', value: `₱${totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
-          { label: 'Avg Order Value', value: `₱${avgOrderValue.toFixed(0)}`, icon: <ShoppingBag size={18} />, color: 'bg-purple-50 text-purple-600' },
+          { label: 'Avg Order Value', value: `₱${avgOrderValue.toFixed(0)}`, icon: <ShoppingBag size={18} />, color: 'bg-slate-100 text-slate-700' },
           { label: 'Repeat Customers', value: repeatCustomers.toString(), icon: <Star size={18} />, color: 'bg-amber-50 text-amber-600' },
         ].map((kpi, i) => (
           <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
@@ -219,9 +219,9 @@ const CustomersView = () => {
                 <p className="text-lg font-bold text-green-700">₱{selectedCustomer.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 0 })}</p>
                 <p className="text-[10px] text-green-500 font-medium">Total Spent</p>
               </div>
-              <div className="text-center p-3 bg-purple-50 rounded-lg">
-                <p className="text-lg font-bold text-purple-700">₱{(selectedCustomer.orderCount ? selectedCustomer.totalSpent / selectedCustomer.orderCount : 0).toFixed(0)}</p>
-                <p className="text-[10px] text-purple-500 font-medium">Avg Order</p>
+              <div className="text-center p-3 bg-slate-100 rounded-lg">
+                <p className="text-lg font-bold text-slate-700">₱{(selectedCustomer.orderCount ? selectedCustomer.totalSpent / selectedCustomer.orderCount : 0).toFixed(0)}</p>
+                <p className="text-[10px] text-slate-700 font-medium">Avg Order</p>
               </div>
             </div>
 

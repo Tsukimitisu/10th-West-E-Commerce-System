@@ -15,9 +15,9 @@ const statusColors = {
   payment_pending: 'bg-amber-50 text-amber-700 border-amber-200',
   paid: 'bg-blue-50 text-blue-700 border-blue-200',
   processing: 'bg-red-500/10 text-orange-700 border-red-200',
-  packed: 'bg-cyan-50 text-cyan-700 border-cyan-200',
-  ready_for_pickup: 'bg-teal-50 text-teal-700 border-teal-200',
-  shipped: 'bg-purple-50 text-purple-700 border-purple-200',
+  packed: 'bg-slate-100 text-slate-700 border-cyan-200',
+  ready_for_pickup: 'bg-slate-100 text-slate-700 border-teal-200',
+  shipped: 'bg-slate-100 text-slate-700 border-purple-200',
   out_for_delivery: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   delivered: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   cancelled: 'bg-red-50 text-red-600 border-red-200',
@@ -287,8 +287,8 @@ const OrdersView = () => {
         {[
           { label: 'Total Revenue', value: `₱${totalRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Pending', value: pending.toString(), icon: <Clock size={18} />, color: 'bg-yellow-50 text-yellow-600' },
-          { label: 'Processing', value: processing.toString(), icon: <Package size={18} />, color: 'bg-red-500/10 text-orange-600' },
-          { label: 'Shipped', value: shipped.toString(), icon: <Truck size={18} />, color: 'bg-purple-50 text-purple-600' },
+          { label: 'Processing', value: processing.toString(), icon: <Package size={18} />, color: 'bg-orange-50 text-orange-800' },
+          { label: 'Shipped', value: shipped.toString(), icon: <Truck size={18} />, color: 'bg-slate-100 text-slate-700' },
         ].map((kpi, i) => (
           <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
             <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
@@ -305,7 +305,7 @@ const OrdersView = () => {
           <input type="search" aria-label="Search orders" placeholder="Search orders…" value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
         </div>
-        <div className="-mx-1 flex min-w-0 snap-x gap-1.5 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0" role="group" aria-label="Filter orders by status">
+        <div tabIndex={0} className="-mx-1 flex min-w-0 snap-x gap-1.5 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0" role="group" aria-label="Filter orders by status">
           <button type="button" aria-pressed={!statusFilter} onClick={() => setStatusFilter('')} className={`shrink-0 snap-start whitespace-nowrap min-h-9 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
           {statuses.map(s => (
             <button key={s} type="button" aria-pressed={statusFilter === s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} title={s === 'failed' ? PAYMENT_FAILED_HELP : undefined} className={`shrink-0 snap-start whitespace-nowrap min-h-9 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${statusFilter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>{getOrderStatusLabel(s)}</button>
@@ -362,7 +362,7 @@ const OrdersView = () => {
                   <td className="px-4 py-3 hidden sm:table-cell">
                     <span className="block text-xs font-medium text-gray-200">{String(o.payment_method || '-').toLowerCase() === 'gcash' ? 'GCash' : 'Cash on Delivery'}</span>
                     <span
-                      className={`mt-0.5 block text-xs ${o.payment_status === 'paid' ? 'text-green-400' : o.payment_status === 'failed' ? 'text-red-400' : 'text-amber-300'}`}
+                      className={`mt-0.5 block text-xs ${o.payment_status === 'paid' ? 'text-green-400' : o.payment_status === 'failed' ? 'text-red-700' : 'text-amber-800'}`}
                       title={o.payment_method === 'gcash' && !['paid', 'failed'].includes(o.payment_status) ? 'Waiting for PayMongo confirmation.' : undefined}
                     >
                       {getPaymentStatusLabel(o.payment_status)}
@@ -451,11 +451,11 @@ const OrdersView = () => {
               <div className="mt-3 grid gap-3 text-sm sm:grid-cols-4">
                 <div><p className="text-xs text-gray-500">Method</p><p className="font-medium text-white">{detailOrder.payment_method === 'gcash' ? 'GCash' : 'Cash on Delivery'}</p></div>
                 <div><p className="text-xs text-gray-500">Provider</p><p className="font-medium text-white capitalize">{detailOrder.payment_provider || (detailOrder.payment_method === 'gcash' ? 'PayMongo' : 'COD')}</p></div>
-                <div><p className="text-xs text-gray-500">Status</p><p className={`font-medium ${detailOrder.payment_status === 'paid' ? 'text-green-400' : detailOrder.payment_status === 'failed' ? 'text-red-400' : 'text-amber-300'}`}>{getPaymentStatusLabel(detailOrder.payment_status)}</p></div>
+                <div><p className="text-xs text-gray-500">Status</p><p className={`font-medium ${detailOrder.payment_status === 'paid' ? 'text-green-400' : detailOrder.payment_status === 'failed' ? 'text-red-700' : 'text-amber-800'}`}>{getPaymentStatusLabel(detailOrder.payment_status)}</p></div>
                 <div><p className="text-xs text-gray-500">Paid At</p><p className="font-medium text-white">{detailOrder.paid_at ? new Date(detailOrder.paid_at).toLocaleString('en-PH') : '-'}</p></div>
               </div>
               {detailOrder.payment_method === 'gcash' && !['paid', 'failed'].includes(detailOrder.payment_status) && (
-                <p className="mt-3 text-xs text-amber-300">Waiting for PayMongo confirmation.</p>
+                <p className="mt-3 text-xs text-amber-800">Waiting for PayMongo confirmation.</p>
               )}
             </div>
 
@@ -551,20 +551,20 @@ const OrdersView = () => {
                 onClick={() => { setDetailOpen(false); openStatusChange(detailOrder); }}
                 disabled={isInStoreOrder(detailOrder)}
                 title={isInStoreOrder(detailOrder) ? POS_STATUS_LOCK_HELP : undefined}
-                className="flex-1 min-w-[140px] px-4 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
+                className="flex-1 min-w-[140px] px-4 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-colors shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
               >
                 {isInStoreOrder(detailOrder) ? 'Status Locked' : 'Update Status'}
               </button>
               <button
                 onClick={() => window.open(`${API_URL}/orders/${detailOrder.id}/invoice`, '_blank')}
-                className="flex-1 min-w-[140px] px-4 py-2.5 bg-gray-800 border border-gray-700 hover:bg-gray-900 text-gray-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                className="flex-1 min-w-[140px] px-4 py-2.5 bg-gray-800 border border-gray-700 hover:bg-gray-900 text-gray-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
               >
                 <Printer size={14} /> Print Invoice
               </button>
               {canCreateWaybill && (
                 <button
                   onClick={() => { setStatusError(''); setWaybillModalOpen(true); }}
-                  className="flex-1 min-w-[140px] px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                  className="flex-1 min-w-[140px] px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   <Truck size={14} /> Create J&T Waybill
                 </button>
@@ -654,7 +654,7 @@ const OrdersView = () => {
             <div className="space-y-1.5">
               {nextStatusOptions.map((s) => (
                 <button key={s} onClick={() => setNewStatus(s)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium border transition-all capitalize ${newStatus === s ? 'bg-red-500/10 border-red-200 text-orange-600' : 'bg-gray-800 border-gray-700 text-gray-600 hover:bg-gray-900'}`}>
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium border transition-colors capitalize ${newStatus === s ? 'bg-red-500/10 border-red-200 text-orange-600' : 'bg-gray-800 border-gray-700 text-gray-600 hover:bg-gray-900'}`}>
                   {statusIcons[s]} {getOrderStatusLabel(s)}
                 </button>
               ))}
