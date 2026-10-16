@@ -96,7 +96,7 @@ const BackupRecoveryView = () => {
         </div>
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-purple-50 rounded-lg"><Server size={18} className="text-purple-500" /></div>
+            <div className="p-2 bg-slate-100 rounded-lg"><Server size={18} className="text-slate-700" /></div>
             <span className="text-xs text-gray-400">Backup provider</span>
           </div>
           <p className="text-lg font-bold text-red-500">
@@ -149,7 +149,7 @@ const BackupRecoveryView = () => {
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                   backup.status === 'completed' ? 'bg-green-50 text-green-600 border-green-200' :
                   backup.status === 'failed' ? 'bg-red-50 text-red-600 border-red-200' :
-                  'bg-red-500/10 text-orange-600 border-red-200'
+                  'bg-orange-50 text-orange-800 border-red-200'
                 }`}>{backup.status}</span>
               </div>
             ))}

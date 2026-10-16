@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Activity,
+  ClipboardList,
   Database,
   Wrench,
   LayoutDashboard,
@@ -20,7 +21,8 @@ const NAV_ITEMS = [
   { id: 'users', label: 'Users & roles', icon: Users, group: 'Access control' },
   { id: 'security', label: 'Security controls', icon: Shield, group: 'Access control' },
   { id: 'config', label: 'Configuration', icon: Settings, group: 'Platform' },
-  { id: 'logs', label: 'Monitoring & audit', icon: Activity, group: 'Platform' },
+  { id: 'monitoring', label: 'Monitoring', icon: Activity, group: 'Platform' },
+  { id: 'logs', label: 'Audit trail', icon: ClipboardList, group: 'Platform' },
   { id: 'backup', label: 'Backup & recovery', icon: Database, group: 'Platform' },
   { id: 'maintenance', label: 'Maintenance', icon: Wrench, group: 'Platform' },
 ];

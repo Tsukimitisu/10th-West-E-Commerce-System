@@ -10,8 +10,8 @@ import {
 import PageHeader from '../../components/operations/PageHeader';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
-const MonitoringView = () => {
-  const [tab, setTab] = useState('activity');
+const MonitoringView = ({ initialTab = 'activity' }) => {
+  const [tab, setTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
 
   const formatLogDetails = (details) => {
@@ -83,7 +83,7 @@ const MonitoringView = () => {
     if (action.includes('delete') || action.includes('lock') || action.includes('reject')) return 'text-red-500';
     if (action.includes('create') || action.includes('add') || action.includes('approve') || action.includes('unlock')) return 'text-green-500';
     if (action.includes('update') || action.includes('edit') || action.includes('change') || action.includes('reset')) return 'text-blue-500';
-    if (action.includes('login') || action.includes('logout')) return 'text-purple-500';
+    if (action.includes('login') || action.includes('logout')) return 'text-slate-700';
     if (action.includes('order') || action.includes('checkout') || action.includes('payment')) return 'text-red-500';
     return 'text-gray-400';
   };
@@ -116,16 +116,16 @@ const MonitoringView = () => {
 
       {/* Tabs + Search */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-1 bg-white border border-slate-200 p-1 rounded-lg flex-1 overflow-x-auto" role="group" aria-label="Log type">
+        <div tabIndex={0} className="flex gap-1 bg-white border border-slate-200 p-1 rounded-lg flex-1 overflow-x-auto" role="group" aria-label="Log type">
           {tabs.map(t => {
             const Icon = t.icon;
             return (
               <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                  tab === t.id ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+                  tab === t.id ? 'bg-orange-50 text-orange-800' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
                 }`}>
                 <Icon size={14} /> {t.label}
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${tab === t.id ? 'bg-red-500/20 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>{t.count}</span>
+                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${tab === t.id ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-400'}`}>{t.count}</span>
               </button>
             );
           })}
@@ -141,7 +141,7 @@ const MonitoringView = () => {
       {/* Activity Logs */}
       {tab === 'activity' && (
         <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
-          <div className="max-h-[520px] overflow-y-auto">
+          <div tabIndex={0} className="max-h-[520px] overflow-y-auto">
             {filterLogs(activityLogs).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                 <Activity size={36} className="mb-3 opacity-30" />
@@ -188,7 +188,7 @@ const MonitoringView = () => {
       {/* Error Logs */}
       {tab === 'errors' && (
         <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
-          <div className="max-h-[520px] overflow-y-auto">
+          <div tabIndex={0} className="max-h-[520px] overflow-y-auto">
             {filterLogs(errorLogs).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-green-500">
                 <CheckCircle2 size={36} className="mb-3 opacity-50" />
@@ -233,7 +233,7 @@ const MonitoringView = () => {
       {/* Transaction Logs */}
       {tab === 'transactions' && (
         <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
-          <div className="max-h-[520px] overflow-y-auto">
+          <div tabIndex={0} className="max-h-[520px] overflow-y-auto">
             {filterLogs(transactionLogs).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                 <FileText size={36} className="mb-3 opacity-30" />

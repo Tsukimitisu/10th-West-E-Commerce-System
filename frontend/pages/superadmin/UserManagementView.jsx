@@ -15,7 +15,7 @@ import ActionDropdown from '../../components/operations/ActionDropdown';
 
 const ROLES = [
   { value: 'super_admin', label: 'Super Admin', color: 'bg-red-50 text-red-600 border-red-200' },
-  { value: 'owner', label: 'Owner', color: 'bg-purple-50 text-purple-600 border-purple-200' },
+  { value: 'owner', label: 'Owner', color: 'bg-slate-100 text-slate-700 border-purple-200' },
   { value: 'store_staff', label: 'Store Staff', color: 'bg-blue-50 text-blue-600 border-blue-200' },
   { value: 'customer', label: 'Customer', color: 'bg-green-50 text-green-600 border-green-200' },
 ];
@@ -231,7 +231,7 @@ const UserManagementView = () => {
             <p className="text-sm">No users found</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div tabIndex={0} className="overflow-x-auto">
             <div className="divide-y divide-slate-200 md:hidden">
               {users.map((user) => <article key={user.id} className="flex items-start justify-between gap-3 p-4">
                 <div className="min-w-0 space-y-1">
@@ -259,7 +259,7 @@ const UserManagementView = () => {
                   <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-red-500/20 text-orange-600 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        <div className="w-8 h-8 bg-orange-100 text-orange-800 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
                           {user.name?.charAt(0)?.toUpperCase() || '?'}
                         </div>
                         <div>
@@ -312,7 +312,7 @@ const UserManagementView = () => {
             <div className="flex gap-1">
               {Array.from({ length: totalPages }, (_, i) => (
                 <button key={i} onClick={() => setPage(i + 1)}
-                  className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${page === i + 1 ? 'bg-red-500/100 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
+                  className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${page === i + 1 ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
                   {i + 1}
                 </button>
               ))}
@@ -334,7 +334,7 @@ const UserManagementView = () => {
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 pb-4 border-b border-gray-700">
-                    <div className="w-14 h-14 bg-red-500/20 text-orange-600 rounded-full flex items-center justify-center text-xl font-bold">
+                    <div className="w-14 h-14 bg-orange-100 text-orange-800 rounded-full flex items-center justify-center text-xl font-bold">
                       {selectedUser.name?.charAt(0)?.toUpperCase()}
                     </div>
                     <div>

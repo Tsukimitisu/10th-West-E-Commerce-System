@@ -17,11 +17,11 @@ const SuperAdminDashboard = ({ user }) => {
   const segment = location.pathname.split('/').filter(Boolean)[1] || 'dashboard';
   const activeView = segment === 'inventory' && location.pathname.endsWith('/inventory/product-items')
     ? 'product-items' : aliases[segment] || segment;
-  const routes = { overview: 'dashboard', users: 'users', security: 'security', config: 'settings', logs: 'audit-logs', backup: 'backup', maintenance: 'maintenance', 'product-items': 'inventory/product-items' };
+  const routes = { overview: 'dashboard', users: 'users', security: 'security', config: 'settings', monitoring: 'monitoring', logs: 'audit-logs', backup: 'backup', maintenance: 'maintenance', 'product-items': 'inventory/product-items' };
   const setActiveView = (view) => navigate(`/superadmin/${routes[view] || 'dashboard'}`);
   const views = {
     overview: <SuperAdminOverview onNavigate={setActiveView} />, users: <UserManagementView />,
-    security: <SystemSecurityView />, config: <SystemConfigView />, logs: <MonitoringView />,
+    security: <SystemSecurityView />, config: <SystemConfigView />, monitoring: <MonitoringView key="monitoring" initialTab="errors" />, logs: <MonitoringView key="audit" />,
     backup: <BackupRecoveryView />, maintenance: <MaintenanceView onNavigate={setActiveView} />, 'product-items': <InventoryProductItemsView />,
   };
   return <SuperAdminLayout activeView={activeView} onNavigate={setActiveView} user={user}>{views[activeView] || views.overview}</SuperAdminLayout>;

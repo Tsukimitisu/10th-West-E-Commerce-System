@@ -108,13 +108,13 @@ const SystemSecurityView = () => {
       />
 
       {/* Tabs */}
-      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="Security category">
+      <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="Security category">
         {tabs.map(t => {
           const Icon = t.icon;
           return (
             <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                tab === t.id ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+                tab === t.id ? 'bg-orange-50 text-orange-800' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
               }`}>
               <Icon size={14} /> {t.label}
             </button>
@@ -170,7 +170,7 @@ const SystemSecurityView = () => {
               <label key={rule.key} className="flex items-center gap-3 cursor-pointer group">
                 <div className={`w-10 h-5 rounded-full transition-colors relative ${config[rule.key] === 'true' ? 'bg-red-500/100' : 'bg-gray-300'}`}
                   onClick={() => setConfig({ ...config, [rule.key]: config[rule.key] === 'true' ? 'false' : 'true' })}>
-                  <div className={`absolute top-0.5 w-4 h-4 bg-gray-800 rounded-full transition-all shadow-sm ${config[rule.key] === 'true' ? 'left-5' : 'left-0.5'}`} />
+                  <div className={`absolute top-0.5 w-4 h-4 bg-gray-800 rounded-full transition-colors shadow-sm ${config[rule.key] === 'true' ? 'left-5' : 'left-0.5'}`} />
                 </div>
                 <span className="text-sm text-gray-600 group-hover:text-white transition-colors">{rule.label}</span>
               </label>
@@ -203,7 +203,7 @@ const SystemSecurityView = () => {
               { value: 'required_all', label: 'Required for Everyone', desc: 'All users must set up 2FA to log in' },
             ].map(opt => (
               <label key={opt.value}
-                className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${
                   config['2fa_enforcement'] === opt.value ? 'border-red-300 bg-red-500/10' : 'border-gray-700 hover:border-gray-700 bg-gray-800'
                 }`}
                 onClick={() => setConfig({ ...config, '2fa_enforcement': opt.value })}>

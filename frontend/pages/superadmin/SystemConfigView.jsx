@@ -131,7 +131,7 @@ const SystemConfigView = () => {
       />
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="Configuration category">
+      <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="Configuration category">
         {tabs.map((tabOption) => {
           const Icon = tabOption.icon;
           return (
@@ -139,7 +139,7 @@ const SystemConfigView = () => {
               key={tabOption.id}
               aria-pressed={tab === tabOption.id}
               onClick={() => setTab(tabOption.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${tab === tabOption.id ? 'bg-red-500/10 text-orange-600' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${tab === tabOption.id ? 'bg-orange-50 text-orange-800' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'}`}
             >
               <Icon size={14} /> {tabOption.label}
             </button>
@@ -266,7 +266,7 @@ const SystemConfigView = () => {
               { key: 'cash_enabled', label: 'Cash Payment', desc: 'Accept cash for POS and COD' },
               { key: 'gcash_enabled', label: 'GCash', desc: 'Accept GCash mobile payments' },
             ].map((method) => (
-              <div key={method.key} className={`p-4 rounded-xl border transition-all ${payment[method.key] === 'true' ? 'border-red-300 bg-red-500/10' : 'border-gray-700 bg-gray-900'}`}>
+              <div key={method.key} className={`p-4 rounded-xl border transition-colors ${payment[method.key] === 'true' ? 'border-red-300 bg-red-500/10' : 'border-gray-700 bg-gray-900'}`}>
                 <Toggle value={payment[method.key]} onChange={() => setPayment({ ...payment, [method.key]: payment[method.key] === 'true' ? 'false' : 'true' })} label={method.label} />
                 <p className="text-[10px] text-gray-400 mt-1 ml-13">{method.desc}</p>
               </div>
@@ -297,7 +297,7 @@ const SystemConfigView = () => {
                     <p className="text-[10px] text-gray-400">{notification.desc}</p>
                   </div>
                   <div className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${email[notification.key] === 'true' ? 'bg-red-500/100' : 'bg-gray-300'}`} onClick={() => setEmail({ ...email, [notification.key]: email[notification.key] === 'true' ? 'false' : 'true' })}>
-                    <div className={`absolute top-0.5 w-4 h-4 bg-gray-800 rounded-full transition-all shadow-sm ${email[notification.key] === 'true' ? 'left-5' : 'left-0.5'}`} />
+                    <div className={`absolute top-0.5 w-4 h-4 bg-gray-800 rounded-full transition-colors shadow-sm ${email[notification.key] === 'true' ? 'left-5' : 'left-0.5'}`} />
                   </div>
                 </div>
               ))}
