@@ -265,16 +265,15 @@ const Register = () => {
   };
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 px-4 py-12">
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#e53935] to-[#f97316]" aria-hidden="true" />
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <BrandMark className="justify-center" />
+    <main className="auth-page">
+            <div className="auth-content">
+        <div className="auth-header">
+          <BrandMark compact className="justify-center" />
           <h1 className="mt-6 font-display text-2xl font-bold text-slate-950">Create your account</h1>
           <p className="mt-2 text-sm text-slate-600">Save addresses, track orders, and message support.</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.09)] sm:p-8">
+        <div className="auth-form-body">
           {error && (
             <div ref={errorBannerRef} role="alert" aria-live="assertive" className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex items-center gap-2">
               <AlertCircle size={16} /> {error}
@@ -407,8 +406,8 @@ const Register = () => {
                   className={checkboxClass}
                 />
                 <span className="text-xs leading-relaxed text-slate-700">
-                  I agree to the <Link to="/terms" className="text-red-500 hover:underline font-medium">Terms of Service</Link> and{' '}
-                  <Link to="/privacy" className="text-red-500 hover:underline font-medium">Privacy Policy</Link>.
+                  I agree to the <Link to="/terms" className="text-orange-700 hover:underline font-medium">Terms of Service</Link> and{' '}
+                  <Link to="/privacy" className="text-orange-700 hover:underline font-medium">Privacy Policy</Link>.
                   I consent to the collection and processing of my personal data as described in the Privacy Policy,
                   in accordance with RA 10173 (Data Privacy Act of 2012). <span className="text-red-500">*</span>
                 </span>
@@ -436,7 +435,7 @@ const Register = () => {
         </div>
 
         <p className="mt-6 text-center text-sm text-slate-600">
-          Already have an account? <Link to="/login" className="text-red-500 hover:text-orange-600 font-medium">Sign in</Link>
+          Already have an account? <Link to="/login" className="text-orange-700 hover:text-orange-600 font-medium">Sign in</Link>
         </p>
       </div>
 
@@ -468,7 +467,7 @@ const Register = () => {
                 {resendStatus}
               </p>
             )}
-            <Link to="/login" className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-red-700 underline underline-offset-2">Continue to sign in</Link>
+            <Link to="/login" className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-orange-700 underline underline-offset-2">Continue to sign in</Link>
           </div>
       </Modal>
     </main>

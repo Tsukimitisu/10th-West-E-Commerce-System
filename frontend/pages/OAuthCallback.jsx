@@ -145,10 +145,10 @@ const OAuthCallback = ({ onLogin }) => {
   }, [searchParams, navigate]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+    <main className="auth-page">
       <h1 className="sr-only">Complete secure sign in</h1>
-      <div className="text-center" role="status" aria-live="polite">
-        <BrandMark className="mb-6 justify-center" />
+      <div className="auth-content text-center" role="status" aria-live="polite">
+        <BrandMark compact className="mb-6 justify-center" />
         {!displayError && <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-3 border-red-500 border-t-transparent" />}
         {!displayError && <p className="text-sm text-slate-600">Completing secure {searchParams.get('provider') === 'facebook' ? 'Facebook' : 'Google'} sign in...</p>}
         {displayError && <p className="mt-3 text-sm text-red-600">{displayError}</p>}

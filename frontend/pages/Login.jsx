@@ -181,18 +181,16 @@ const Login = ({ onLogin }) => {
   };
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 px-4 py-12">
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#e53935] to-[#f97316]" aria-hidden="true" />
-      <div className="absolute -right-40 -top-40 h-96 w-96 rounded-full bg-orange-100/60 blur-3xl" aria-hidden="true" />
-      <div className="w-full max-w-md">
+    <main className="auth-page">
+                  <div className="auth-content">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <BrandMark className="justify-center" />
+        <div className="auth-header">
+          <BrandMark compact className="justify-center" />
           <h1 className="mt-6 font-display text-2xl font-bold text-slate-950">Welcome back</h1>
-          <p className="mt-2 text-sm text-slate-600">Sign in to manage orders, addresses, and messages.</p>
+          <p className="mt-2 text-sm text-slate-600">Sign in to continue to 10th West.</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.09)] sm:p-8">
+        <div className="auth-form-body">
           {pageMessage && (
             <div role="status" className="mb-4 p-3 bg-green-500/10 border border-green-200 rounded-lg text-sm text-green-700 flex items-center gap-2">
               <Check size={16} /> {pageMessage}
@@ -214,7 +212,7 @@ const Login = ({ onLogin }) => {
                 <button 
                   onClick={handleResendVerification}
                   disabled={loading}
-                  className="px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition-colors self-start mt-1"
+                  className="px-3 py-1.5 bg-orange-600 text-white rounded text-xs font-medium hover:bg-orange-500 transition-colors self-start mt-1"
                 >
                   Resend Verification Email
                 </button>
@@ -262,7 +260,7 @@ const Login = ({ onLogin }) => {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label htmlFor="login-password" className="text-sm font-medium text-gray-700">Password</label>
-                    <Link to="/forgot-password" className="text-xs text-red-500 hover:text-orange-600">Forgot password?</Link>
+                    <Link to="/forgot-password" className="text-xs text-orange-700 hover:text-orange-600">Forgot password?</Link>
                   </div>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -307,7 +305,7 @@ const Login = ({ onLogin }) => {
         </div>
 
         <p className="mt-6 text-center text-sm text-slate-600">
-          Don't have an account? <Link to="/register" className="text-red-500 hover:text-orange-600 font-medium">Create one</Link>
+          Don't have an account? <Link to="/register" className="text-orange-700 hover:text-orange-600 font-medium">Create one</Link>
         </p>
       </div>
     </main>

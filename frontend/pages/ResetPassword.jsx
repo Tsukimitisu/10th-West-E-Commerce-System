@@ -125,10 +125,10 @@ const ResetPassword = () => {
   // Loading state while checking token
   if (tokenChecking) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
+      <div className="auth-page">
+        <div className="auth-content">
           <BrandMark link={false} className="mb-6 w-full justify-center" />
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="auth-form-body">
             <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
               <Lock size={24} className="text-red-500" />
             </div>
@@ -142,12 +142,12 @@ const ResetPassword = () => {
   // Invalid or expired token
   if (tokenValid === false) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <BrandMark className="justify-center" />
+      <div className="auth-page">
+        <div className="auth-content">
+          <div className="auth-header">
+            <BrandMark compact className="justify-center" />
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="auth-form-body">
               <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Clock size={32} className="text-red-500" />
               </div>
@@ -167,13 +167,13 @@ const ResetPassword = () => {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <BrandMark className="justify-center" />
+    <main className="auth-page">
+      <div className="auth-content">
+        <div className="auth-header">
+          <BrandMark compact className="justify-center" />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_18px_50px_rgba(15,23,42,0.09)]">
+        <div className="auth-form-body">
           {success ? (
             <div className="text-center animate-fade-in">
               <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">

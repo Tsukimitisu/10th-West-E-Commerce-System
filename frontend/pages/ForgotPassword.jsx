@@ -89,14 +89,13 @@ const ForgotPassword = () => {
   };
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#e53935] to-[#f97316]" aria-hidden="true" />
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <BrandMark className="justify-center" />
+    <main className="auth-page">
+            <div className="auth-content">
+        <div className="auth-header">
+          <BrandMark compact className="justify-center" />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_18px_50px_rgba(15,23,42,0.09)]">
+        <div className="auth-form-body">
           {sent ? (
             <div className="text-center animate-fade-in">
               <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -105,7 +104,7 @@ const ForgotPassword = () => {
               <h1 className="mb-2 font-display text-xl font-semibold text-slate-950">Check your email</h1>
               <p className="mb-2 text-sm leading-6 text-slate-600">If an account exists for this email, password reset instructions have been sent.</p>
               <p className="mb-6 text-xs leading-5 text-slate-500">Check the inbox and spam folder for <strong>{email}</strong>.</p>
-              <Link to="/login" className="inline-flex items-center gap-2 text-sm text-red-500 hover:text-orange-600 font-medium">
+              <Link to="/login" className="inline-flex items-center gap-2 text-sm text-orange-700 hover:text-orange-600 font-medium">
                 <ArrowLeft size={16} /> Back to Sign In
               </Link>
             </div>
