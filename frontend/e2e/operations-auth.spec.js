@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const accounts = [
-  { env: 'OWNER', email: process.env.E2E_OWNER_EMAIL, password: process.env.E2E_OWNER_PASSWORD, route: '/#/admin/dashboard', heading: /operations dashboard/i },
+  { env: 'OWNER', email: process.env.E2E_OWNER_EMAIL, password: process.env.E2E_OWNER_PASSWORD, route: '/#/admin/dashboard', heading: /business overview/i },
   { env: 'STAFF', email: process.env.E2E_STAFF_EMAIL, password: process.env.E2E_STAFF_PASSWORD, route: '/#/staff/dashboard', heading: /good day/i },
   { env: 'SUPERADMIN', email: process.env.E2E_SUPERADMIN_EMAIL, password: process.env.E2E_SUPERADMIN_PASSWORD, route: '/#/superadmin/dashboard', heading: /system overview/i },
 ];
@@ -66,7 +66,7 @@ test.describe('owner root landing after browser reopen', () => {
     const reopened = await context.newPage();
     await reopened.goto('/#/');
     await expect(reopened).toHaveURL(/#\/admin\/dashboard/);
-    await expect(reopened.getByRole('heading', { name: /operations dashboard/i })).toBeVisible();
+    await expect(reopened.getByRole('heading', { name: /business overview/i })).toBeVisible();
   });
 
   test('owner can open and leave a conversation in the mobile workspace', async ({ page }) => {

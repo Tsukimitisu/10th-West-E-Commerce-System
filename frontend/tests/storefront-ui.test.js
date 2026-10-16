@@ -64,7 +64,9 @@ test('motorcycle model, brand, color, fitment year, price, and availability cont
 test('product cards preserve core shopping actions with polished responsive presentation', async () => {
   const card = await read('components/ProductCard.jsx');
 
-  assert.match(card, /aspect-\[4\/3\]/);
+  assert.match(card, /product-photo/);
+  const styles = await read('styles/storefront.css');
+  assert.match(styles, /aspect-ratio:1\/1/);
   assert.match(card, /line-clamp-2/);
   assert.match(card, /PriceDisplay/);
   assert.match(card, /In stock/);

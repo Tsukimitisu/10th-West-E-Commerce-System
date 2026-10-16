@@ -56,7 +56,9 @@ test('customer notification panel fits a phone with long content', async ({ page
   await page.getByPlaceholder('Enter your password').fill(customerPassword);
   await page.getByRole('button', { name: /sign in/i }).click();
   await expect(page).not.toHaveURL(/#\/login/);
-  await page.getByRole('button', { name: 'Notifications' }).click();
+  await page.getByRole('button', { name: 'Open menu' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Notifications/ }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('Shipping update for your motorcycle parts order')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
 });

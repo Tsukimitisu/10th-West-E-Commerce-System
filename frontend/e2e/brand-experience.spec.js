@@ -68,7 +68,7 @@ test('cart drawer has a name and restores keyboard focus on dismissal', async ({
 test('primary retail action meets text contrast and reduced-motion preferences', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/#/');
-  const action = page.getByRole('link', { name: /^Shop Parts/ });
+  const action = page.getByRole('link', { name: /^Shop Parts/i });
   await expect(action).toBeVisible();
   const contrast = await action.evaluate(element => {
     const luminance = color => {
@@ -84,6 +84,9 @@ test('primary retail action meets text contrast and reduced-motion preferences',
   });
   expect(contrast).toBeGreaterThanOrEqual(4.5);
   expect(await action.evaluate(element => parseFloat(getComputedStyle(element).transitionDuration))).toBeLessThan(0.01);
+  const logo = page.getByRole('banner').getByRole('link', { name: '10th West Moto home' });
+  await logo.focus();
+  await expect(logo).toHaveCSS('outline-color', 'rgb(255, 138, 31)');
 });
 
 test('owner inventory exposes complete part metadata and presentation-only paging', async ({ page }) => {
@@ -98,6 +101,10 @@ test('owner inventory exposes complete part metadata and presentation-only pagin
   await page.goto('/#/admin/inventory');
   const table = page.getByRole('region', { name: 'Inventory stock table' });
   await expect(table).toBeVisible({ timeout: 30000 });
+  const navigationAction = page.getByRole('navigation', { name: 'Operations navigation' }).getByRole('button').first();
+  await page.keyboard.press('Tab');
+  await navigationAction.focus();
+  await expect(navigationAction).toHaveCSS('outline-color', 'rgb(255, 138, 31)');
   for (const name of ['Part number', 'Item name', 'Model', 'Color', 'Box location', 'Available stock', 'Minimum stock', 'Store price', 'Online price', 'Status', 'Actions']) {
     await expect(table.getByRole('columnheader', { name, exact: true })).toHaveCount(1);
   }
@@ -109,4 +116,39 @@ test('owner inventory exposes complete part metadata and presentation-only pagin
   await expect(page.getByRole('button', { name: 'Barcode Scan', exact: true })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   expect(overflow).toBe(false);
+});
+
+
+test('commerce banner and centered authentication use the premium composition', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/#/');
+  const hero = page.getByRole('region', { name: /BUILT FOR/ });
+  await expect(hero).toBeVisible();
+  const heroBox = await hero.boundingBox();
+  expect(heroBox.height).toBeGreaterThanOrEqual(460);
+  expect(heroBox.height).toBeLessThanOrEqual(560);
+  await expect(hero.locator('img')).toHaveJSProperty('complete', true);
+  expect(await hero.locator('img').evaluate(image => image.naturalWidth)).toBeGreaterThan(0);
+  for (const route of ['/login', '/register', '/forgot-password']) {
+    await page.goto(`/#${route}`);
+    const surface = page.locator('.auth-content');
+    await expect(surface).toBeVisible();
+    const box = await surface.boundingBox();
+    expect(box.width).toBeLessThanOrEqual(480);
+    expect(Math.abs(box.x + box.width / 2 - 720)).toBeLessThan(16);
+    await expect(page.locator('.auth-brand-panel')).toHaveCount(0);
+    await expect(surface.locator('img[src="/brand/10th-west-logo.png"]')).toHaveCount(1);
+  }
+});
+
+test('phone header reveals search without expanding the navigation drawer', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#/');
+  const search = page.getByRole('button', { name: 'Open product search' });
+  await search.click();
+  await expect(search).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#mobile-product-search').getByRole('searchbox')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await search.click();
+  await expect(page.locator('#mobile-product-search')).toHaveCount(0);
 });
