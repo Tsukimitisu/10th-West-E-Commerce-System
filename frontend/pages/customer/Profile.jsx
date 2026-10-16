@@ -444,7 +444,7 @@ const Profile = () => {
         </header>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Account</p>
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <h2 className="font-display font-semibold text-lg text-gray-900 mb-6 flex items-center gap-2"><User size={20} className="text-red-500" /> Personal Information</h2>
+          <h2 className="font-display font-semibold text-lg text-gray-900 mb-6 flex items-center gap-2"><User size={20} className="text-slate-700" /> Personal Information</h2>
 
           <div className="flex items-start gap-4 mb-6 pb-6 border-b border-slate-200">
             <div className="relative shrink-0">
@@ -455,7 +455,7 @@ const Profile = () => {
                   className="w-16 h-16 rounded-full object-cover border border-slate-200 bg-gray-100"
                 />
               ) : (
-                <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-2xl font-bold font-display">
+                <div className="w-16 h-16 bg-slate-100 text-slate-900 rounded-full flex items-center justify-center text-2xl font-bold font-display">
                   {displayName.charAt(0).toUpperCase()}
                 </div>
               )}
@@ -595,7 +595,7 @@ const Profile = () => {
 
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Security</p>
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <h2 className="font-display font-semibold text-lg text-gray-900 mb-3 flex items-center gap-2"><Lock size={20} className="text-red-500" /> {hasLocalPassword ? 'Change Password' : 'Set Local Password'}</h2>
+          <h2 className="font-display font-semibold text-lg text-gray-900 mb-3 flex items-center gap-2"><Lock size={20} className="text-slate-700" /> {hasLocalPassword ? 'Change Password' : 'Set Local Password'}</h2>
           {user?.oauth_provider && (
             <p className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-800">
               This account uses {oauthProviderLabel} sign-in. {hasLocalPassword
@@ -651,7 +651,7 @@ const Profile = () => {
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <h2 className="font-display font-semibold text-lg text-gray-900 mb-4 flex items-center gap-2"><Shield size={20} className="text-red-500" /> Two-Factor Authentication</h2>
+          <h2 className="font-display font-semibold text-lg text-gray-900 mb-4 flex items-center gap-2"><Shield size={20} className="text-slate-700" /> Two-Factor Authentication</h2>
           {twoFAMessage && (
             <div role="status" className={`mb-4 rounded-lg border p-3 text-sm ${twoFAMessage.toLowerCase().includes('success') || twoFAMessage.toLowerCase().includes('scan') || twoFAMessage.toLowerCase().includes('disabled') ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
               {twoFAMessage}
@@ -740,7 +740,7 @@ const Profile = () => {
         </section>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Privacy & account</p>
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <h2 className="font-display font-semibold text-lg text-gray-900 mb-4 flex items-center gap-2"><Download size={20} className="text-red-500" /> Download My Data</h2>
+          <h2 className="font-display font-semibold text-lg text-gray-900 mb-4 flex items-center gap-2"><Download size={20} className="text-slate-700" /> Download My Data</h2>
           <p className="text-sm text-gray-600 mb-3">
             Under the Data Privacy Act of 2012 (RA 10173 §18), you have the right to obtain a copy of your personal data in a portable format.
           </p>
@@ -754,7 +754,7 @@ const Profile = () => {
             {exportLoading ? 'Preparing...' : 'Download My Data'}
           </button>
           {exportError && (
-            <div className="mt-3 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+            <div className="mt-3 p-3 bg-slate-100 text-slate-900 text-sm rounded-lg border border-red-200 flex items-center gap-2">
               <AlertCircle size={14} /> {exportError}
             </div>
           )}
@@ -790,7 +790,7 @@ const Profile = () => {
               This action <strong>cannot be undone</strong>.
             </p>
             {deleteError && (
-              <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+              <div className="mb-4 p-3 bg-slate-100 text-slate-900 text-sm rounded-lg border border-red-200 flex items-center gap-2">
                 <AlertCircle size={16} /> {deleteError}
               </div>
             )}

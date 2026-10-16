@@ -133,7 +133,7 @@ const OrderConfirmation = () => {
       {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
         <Link to={order ? `/orders/${order.id}` : '/orders'}
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-red-500/100 hover:bg-red-600 text-white font-medium rounded-lg transition-colors">
+          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-lg transition-colors">
           <Package size={16} /> Track Order
         </Link>
         {order && (

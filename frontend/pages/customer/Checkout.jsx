@@ -1,3 +1,4 @@
+import OrderSummary from '../../components/customer/OrderSummary';
 import React, { useState, useEffect, useMemo, useId } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { ChevronRight, CreditCard, MapPin, Truck, Tag, X, Shield, Wallet, ShoppingBag } from 'lucide-react';
@@ -765,16 +766,16 @@ const Checkout = () => {
     <div className="commerce-page min-h-screen bg-slate-50 text-gray-900">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-          <Link to="/" className="hover:text-red-500">Home</Link>
+          <Link to="/" className="hover:text-orange-700">Home</Link>
           <ChevronRight size={14} />
           {isBuyNow && items.length > 0 ? (
             <>
-              <Link to={buyNowSession?.returnPath || `/products/${items[0].productId}`} className="hover:text-red-500">Product</Link>
+              <Link to={buyNowSession?.returnPath || `/products/${items[0].productId}`} className="hover:text-orange-700">Product</Link>
               <ChevronRight size={14} />
             </>
           ) : (
             <>
-              <Link to="/cart" className="hover:text-red-500">Cart</Link>
+              <Link to="/cart" className="hover:text-orange-700">Cart</Link>
               <ChevronRight size={14} />
             </>
           )}
@@ -785,7 +786,7 @@ const Checkout = () => {
 
         <form onSubmit={handleSubmit}>
           <div className="flex flex-col lg:flex-row gap-8">
-            <div className="flex-1 space-y-6">
+            <div className="min-w-0 flex-1">
               <Section step="1" title="Contact" icon={<MapPin size={18} />}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input label="Full Name" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} required />
@@ -844,7 +845,7 @@ const Checkout = () => {
                           phone: profile?.phone || f.phone
                         }));
                       }}
-                      className="text-sm text-red-500 hover:text-red-600 font-medium"
+                      className="text-sm text-orange-700 hover:text-orange-800 font-medium"
                     >
                       + Use a different address
                     </button>
@@ -965,10 +966,10 @@ const Checkout = () => {
               </Section>
 
               <Section step="3" title="Shipping" icon={<Truck size={18} />}>
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                      <Truck size={18} className="text-red-600" />
+                      <Truck size={18} className="text-slate-700" />
                       <div>
                         <p className="text-sm font-semibold text-gray-900">Standard Delivery</p>
                         <p className="text-xs text-gray-600">Manual J&T waybill is created by authorized store staff after order processing.</p>
@@ -1014,9 +1015,9 @@ const Checkout = () => {
                     type="button"
                     onClick={() => setPaymentMethod('cod')}
                     aria-pressed={paymentMethod === 'cod'}
-                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'cod' ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'cod' ? 'border-orange-600 bg-orange-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
                   >
-                    <Wallet size={18} className={paymentMethod === 'cod' ? 'text-red-600' : 'text-slate-500'} />
+                    <Wallet size={18} className={paymentMethod === 'cod' ? 'text-orange-700' : 'text-slate-500'} />
                     <span>
                       <span className="block text-sm font-semibold text-gray-900">Cash on Delivery</span>
                       <span className="block text-xs text-gray-600">Pay the courier when your delivery arrives.</span>
@@ -1057,9 +1058,8 @@ const Checkout = () => {
               </Section>
             </div>
 
-            <div className="lg:w-96">
-              <div className="bg-white rounded-xl border border-slate-200 p-6 sticky top-24 shadow-sm">
-                <h2 className="font-display font-semibold text-lg text-gray-900 mb-4"><span className="mr-2 inline-grid h-7 w-7 place-items-center rounded-md bg-slate-100 text-sm text-slate-700">5</span>Review order</h2>
+            <div className="min-w-0 lg:w-[35%] lg:max-w-[440px]">
+              <OrderSummary title="05 Review order">
 
                 <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
                   {items.map((item) => (
@@ -1212,7 +1212,7 @@ const Checkout = () => {
                       className="mt-0.5 h-4 w-4 shrink-0 rounded border border-slate-300 bg-white accent-red-500 focus:ring-2 focus:ring-red-500 focus:ring-offset-0"
                     />
                     <span className="text-xs leading-relaxed text-gray-700">
-                      I agree to the <Link to="/terms" className="text-red-500 hover:underline">Terms & Conditions</Link> and <Link to="/privacy" className="text-red-500 hover:underline">Privacy Policy</Link>
+                      I agree to the <Link to="/terms" className="text-orange-700 hover:underline">Terms & Conditions</Link> and <Link to="/privacy" className="text-orange-700 hover:underline">Privacy Policy</Link>
                     </span>
                   </label>
 
@@ -1232,7 +1232,7 @@ const Checkout = () => {
                     </span>
                   )}
                 </button>
-              </div>
+              </OrderSummary>
             </div>
           </div>
         </form>
@@ -1241,9 +1241,9 @@ const Checkout = () => {
   );
 };
 
-const Section = ({ step, title, icon, children }) => (
-  <section className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-    <h2 className="font-display font-semibold text-gray-900 mb-4 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-md bg-slate-100 text-sm text-slate-700">{step}</span>{icon} {title}</h2>
+const Section = ({ step, title, children }) => (
+  <section className="checkout-section">
+    <div className="checkout-section-heading"><span className="checkout-section-number">{String(step).padStart(2, '0')}</span><h2>{title}</h2></div>
     {children}
   </section>
 );

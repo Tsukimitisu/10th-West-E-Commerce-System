@@ -103,7 +103,7 @@ const RequestReturn = () => {
         <h2 className="font-display font-bold text-xl text-white mb-2">Return Request Submitted</h2>
         <p className="text-gray-400 text-sm mb-6">Your request is now pending review.</p>
         <div className="flex gap-3 justify-center">
-          <Link to="/my-returns" className="px-5 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">View My Returns</Link>
+          <Link to="/my-returns" className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium rounded-lg transition-colors">View My Returns</Link>
           <Link to={`/orders/${id}`} className="px-5 py-2.5 border border-gray-700 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-900 transition-colors">Back to Order</Link>
         </div>
       </div>
@@ -157,7 +157,7 @@ const RequestReturn = () => {
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 space-y-3">
           <p className="text-sm text-gray-400">You can review any submitted return request from your returns page.</p>
           <div className="flex gap-3">
-            <Link to="/my-returns" className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">Go to My Returns</Link>
+            <Link to="/my-returns" className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium rounded-lg transition-colors">Go to My Returns</Link>
             <Link to={`/orders/${order.id}`} className="px-4 py-2 border border-gray-700 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-900 transition-colors">Back to Order</Link>
           </div>
         </div>
@@ -218,7 +218,7 @@ const RequestReturn = () => {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             {submitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <RotateCcw size={16} />}
             Submit Return Request

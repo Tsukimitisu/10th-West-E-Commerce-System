@@ -39,7 +39,7 @@ const OrderTracker = ({ status }) => {
           <div className="absolute top-5 left-0 right-0 mx-[60px] h-1 bg-gray-200 rounded-full" />
           {/* Filled track */}
           <div
-            className="absolute top-5 left-0 mx-[60px] h-1 bg-gradient-to-r from-orange-500 to-green-500 rounded-full transition-all duration-700"
+            className="absolute top-5 left-0 mx-[60px] h-1 bg-slate-700 rounded-full transition-all duration-700"
             style={{ width: `${(currentStep / (steps.length - 1)) * (100 - 10)}%` }}
           />
 

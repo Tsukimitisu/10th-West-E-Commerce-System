@@ -126,7 +126,7 @@ const PaymentResult = () => {
           </button>
           <Link
             to={order?.payment_status === 'paid' ? `/orders/${orderId}` : '/shop'}
-            className="inline-flex flex-1 items-center justify-center rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-700"
+            className="inline-flex flex-1 items-center justify-center rounded-lg bg-orange-600 px-4 py-3 text-sm font-semibold text-white hover:bg-orange-500"
           >
             {order?.payment_status === 'paid' ? 'View Order' : 'Continue Shopping'}
           </Link>

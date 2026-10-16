@@ -54,7 +54,7 @@ const AccountLayout = ({ children }) => {
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
               {/* Profile header */}
               {user && (
-                <div className="p-5 border-b border-slate-200">
+                <div className="account-navigation-header p-5 border-b border-slate-200">
                   <div className="flex items-center gap-3">
                     {user.avatar ? (
                       <img
@@ -63,7 +63,7 @@ const AccountLayout = ({ children }) => {
                         className="w-12 h-12 rounded-full object-cover border border-slate-200"
                       />
                     ) : (
-                      <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center font-bold text-lg font-display">
+                      <div className="w-12 h-12 bg-slate-100 text-slate-900 rounded-full flex items-center justify-center font-bold text-lg font-display">
                         {(user.name || user.email || 'Customer').charAt(0).toUpperCase()}
                       </div>
                     )}

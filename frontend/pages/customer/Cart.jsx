@@ -1,3 +1,4 @@
+import OrderSummary from '../../components/customer/OrderSummary';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft, LogIn, X } from 'lucide-react';
@@ -234,11 +235,11 @@ const Cart = () => {
 
         {items.length === 0 && !cartSyncError ? (
           <div className="text-center py-20 bg-white rounded-2xl border border-slate-200 shadow-sm">
-            <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ShoppingBag size={40} className="text-red-500" />
+            <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <ShoppingBag size={24} className="text-slate-700" />
             </div>
             <h2 className="font-display font-semibold text-xl text-slate-900 mb-2">Your cart is empty</h2>
-            <p className="text-slate-500 mb-8">Discover amazing motorcycle parts and accessories.</p>
+            <p className="text-slate-500 mb-8">Find the parts you need for your next ride.</p>
             <Link to="/shop" className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-lg transition-colors">
               Start Shopping <ArrowRight size={18} />
             </Link>
@@ -267,7 +268,7 @@ const Cart = () => {
                   const price = getEffectiveItemUnitPrice(item);
                   const isUpdating = updatingItemIds?.has(item.productId);
                   return (
-                    <div key={item.productId} className={`p-4 md:px-6 md:py-5 hover:bg-red-50/30 transition-colors ${i < items.length - 1 ? 'border-b border-slate-200' : ''}`}>
+                    <div key={item.productId} className={`p-4 md:px-6 md:py-5 hover:bg-slate-50/50 transition-colors ${i < items.length - 1 ? 'border-b border-slate-200' : ''}`}>
                       <div data-testid={`cart-row-${item.productId}`} className="md:grid md:grid-cols-[minmax(0,1fr)_minmax(7rem,auto)_7.75rem_minmax(7.5rem,auto)] md:gap-4 md:items-center">
                         <div className="min-w-0 flex gap-4 items-center">
                           <input
@@ -282,7 +283,8 @@ const Cart = () => {
                           </Link>
                           <div className="min-w-0">
                             <Link to={`/products/${item.productId}`} className="font-semibold text-slate-900 hover:text-red-600 transition-colors text-sm line-clamp-2">{item.product.name}</Link>
-                            {item.product.category_name && <p className="text-xs text-slate-500 mt-1">{item.product.category_name}</p>}
+                            {(item.product.part_number || item.product.sku) && <p className="text-xs text-slate-600 mt-1">Part # {item.product.part_number || item.product.sku}</p>}
+                            {(item.product.motorcycle_model || item.product.category_name) && <p className="text-sm text-slate-600 mt-1">{item.product.motorcycle_model || item.product.category_name}</p>}
                             {item.product.stock_quantity != null && (
                               <p className={`text-xs mt-1 ${Number(item.product.stock_quantity) < Number(item.quantity) ? 'font-semibold text-red-700' : 'text-slate-600'}`}>
                                 {Number(item.product.stock_quantity) <= 0 ? 'Unavailable' : `${item.product.stock_quantity} available`}
@@ -350,9 +352,8 @@ const Cart = () => {
             </div>
 
             <div className="lg:col-span-4">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 sticky top-24 shadow-sm">
-                <h2 className="font-display font-semibold text-lg text-slate-900 mb-4">Order Summary</h2>
-                <div className="mb-4 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700 font-medium" role="status">
+              <OrderSummary>
+                <div className="mb-4 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-700 font-medium" role="status">
                   <p>Free shipping applies when your order subtotal reaches {formatPrice(freeShippingThreshold)} before shipping fees.</p>
                   <p className="mt-1">
                     {freeShippingApplied
@@ -399,7 +400,7 @@ const Cart = () => {
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
                   Secure checkout
                 </div>
-              </div>
+              </OrderSummary>
             </div>
           </div>
         ) : null}

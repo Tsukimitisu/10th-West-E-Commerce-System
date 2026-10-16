@@ -98,7 +98,7 @@ const ReturnModal = ({ isOpen, onClose, order, onSuccess }) => {
       {/* Modal */}
       <div className="relative bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 bg-gradient-to-r from-orange-50 to-orange-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 bg-white">
           <div className="flex items-center gap-2">
             <RotateCcw className="w-5 h-5 text-orange-600" />
             <h2 className="text-lg font-bold text-white">Return Items</h2>
