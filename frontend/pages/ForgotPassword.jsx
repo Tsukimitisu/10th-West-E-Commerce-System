@@ -159,7 +159,7 @@ const ForgotPassword = () => {
                   {emailError && <p id="forgot-email-error" className="mt-1 text-xs text-red-500">{emailError}</p>}
                 </div>
                 <button type="submit" disabled={loading}
-                  className="w-full py-3 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors text-sm">
+                  className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors text-sm">
                   {loading ? 'Sending...' : 'Send Reset Link'}
                 </button>
               </form>

@@ -17,6 +17,7 @@ import { redirectOAuthResult } from '../services/oauthRedirect.js';
 import {
   sendPasswordResetEmail,
   sendTransactionalEmail,
+  emailBrandHeader,
   sendVerificationEmail,
 } from '../services/transactionalEmail.js';
 
@@ -519,13 +520,13 @@ export const sendRegistrationOtp = async (req, res) => {
         <!DOCTYPE html><html><head><style>
           body{font-family:Arial,sans-serif;line-height:1.6;color:#333}
           .container{max-width:600px;margin:0 auto;padding:20px}
-          .header{background:linear-gradient(135deg,#1e293b,#334155);color:white;padding:30px;text-align:center;border-radius:12px 12px 0 0}
+          .header{background:#12204e;color:white;padding:30px;text-align:center;border-radius:12px 12px 0 0}
           .content{padding:30px;background:#f8fafc}
-          .otp{display:inline-block;padding:12px 24px;background:#ea580c;color:white;text-decoration:none;border-radius:8px;font-size:24px;font-weight:bold;letter-spacing:4px;margin:20px 0}
+          .otp{display:inline-block;padding:12px 24px;background:#ed621d;color:#05070b;text-decoration:none;border-radius:8px;font-size:24px;font-weight:bold;letter-spacing:4px;margin:20px 0}
           .footer{text-align:center;padding:20px;color:#94a3b8;font-size:12px}
         </style></head><body>
           <div class="container">
-            <div class="header"><h1 style="margin:0">🔐 Verify Your Email</h1><p style="margin:8px 0 0">10th West Moto Parts</p></div>
+            ${emailBrandHeader(process.env.FRONTEND_URL)}
             <div class="content">
               <h2>Hi ${name || 'there'},</h2>
               <p>Please use the verification code below to complete your registration:</p>

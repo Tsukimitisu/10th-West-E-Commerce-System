@@ -1,3 +1,4 @@
+import BrandMark from '../components/ui/BrandMark';
 ﻿import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowLeft, Check, X, Clock, ShieldAlert } from 'lucide-react';
@@ -75,7 +76,7 @@ const ResetPassword = () => {
     { label: 'One special character', pass: /[!@#$%^&*()_\-+=]/.test(password) },
   ];
   const passwordStrength = checks.filter(c => c.pass).length;
-  const strengthColor = passwordStrength <= 1 ? 'bg-red-500/100' : passwordStrength <= 3 ? 'bg-amber-500' : 'bg-green-500';
+  const strengthColor = passwordStrength <= 1 ? 'bg-orange-500' : passwordStrength <= 3 ? 'bg-amber-500' : 'bg-green-500';
 
   const isLocked = lockedUntil && Date.now() < lockedUntil;
   const lockRemainingSeconds = isLocked ? Math.ceil((lockedUntil - Date.now()) / 1000) : 0;
@@ -126,6 +127,7 @@ const ResetPassword = () => {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
+          <BrandMark link={false} className="mb-6 w-full justify-center" />
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
             <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
               <Lock size={24} className="text-red-500" />
@@ -143,11 +145,7 @@ const ResetPassword = () => {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <Link to="/" className="inline-flex">
-              <div className="w-10 h-10 bg-red-500/100 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold font-display">10</span>
-              </div>
-            </Link>
+            <BrandMark className="justify-center" />
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
               <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -156,7 +154,7 @@ const ResetPassword = () => {
               <h1 className="font-display font-semibold text-xl text-slate-950 mb-2">Link expired or invalid</h1>
               <p className="text-sm text-slate-600 mb-2">{error || 'This password reset link is invalid or has expired.'}</p>
               <p className="text-xs text-gray-400 mb-6">Reset links expire after 1 hour for your security (RA 10173 §20).</p>
-            <Link to="/forgot-password" className="inline-flex items-center gap-2 px-6 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">
+            <Link to="/forgot-password" className="inline-flex items-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-medium rounded-lg transition-colors">
               Request New Link
             </Link>
             <div className="mt-4">
@@ -172,11 +170,7 @@ const ResetPassword = () => {
     <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex">
-            <div className="w-10 h-10 bg-red-500/100 rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold font-display">10</span>
-            </div>
-          </Link>
+          <BrandMark className="justify-center" />
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_18px_50px_rgba(15,23,42,0.09)]">
@@ -188,7 +182,7 @@ const ResetPassword = () => {
               <h1 className="font-display font-semibold text-xl text-slate-950 mb-2">Password reset</h1>
               <p className="text-sm text-slate-600 mb-1">Your password has been successfully reset.</p>
               <p className="text-xs text-gray-400 mb-6">All other active sessions have been terminated for your security.</p>
-              <Link to="/login" className="inline-flex items-center gap-2 px-6 py-2.5 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">
+              <Link to="/login" className="inline-flex items-center gap-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-medium rounded-lg transition-colors">
                 Sign In with New Password
               </Link>
             </div>
@@ -301,7 +295,7 @@ const ResetPassword = () => {
                 <button
                   type="submit"
                   disabled={loading || isLocked}
-                  className="w-full py-3 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
+                  className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
                 >
                   {loading ? 'Resetting...' : isLocked ? 'Temporarily Locked' : 'Reset Password'}
                 </button>

@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import pool from '../config/database.js';
-import { sendTransactionalEmail } from '../services/transactionalEmail.js';
+import { sendTransactionalEmail, emailBrandHeader } from '../services/transactionalEmail.js';
 
 const emailFailureResponse = (res, error) => {
   if (error.code === 'EMAIL_CONFIG_MISSING') {
@@ -60,7 +60,7 @@ export const sendOrderConfirmation = async (req, res) => {
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
+          .header { background-color: #12204E; color: white; padding: 0; text-align: center; }
           .content { padding: 20px; background-color: #f9f9f9; }
           .order-details { background-color: white; padding: 15px; margin: 20px 0; border-radius: 5px; }
           .item { padding: 10px 0; border-bottom: 1px solid #eee; }
@@ -71,7 +71,8 @@ export const sendOrderConfirmation = async (req, res) => {
       <body>
         <div class="container">
           <div class="header">
-            <h1>Order Confirmation</h1>
+            ${emailBrandHeader(process.env.FRONTEND_URL)}
+            <h1 style="padding:16px 20px;margin:0">Order Confirmation</h1>
             <p>Thank you for your order!</p>
           </div>
           
@@ -187,17 +188,18 @@ export const sendOrderStatusUpdate = async (req, res) => {
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
+          .header { background-color: #12204E; color: white; padding: 0; text-align: center; }
           .content { padding: 20px; background-color: #f9f9f9; }
           .order-details { background-color: white; padding: 15px; margin: 20px 0; border-radius: 5px; }
-          .status { font-size: 18px; font-weight: bold; color: #4F46E5; padding: 10px; text-align: center; }
+          .status { font-size: 18px; font-weight: bold; color: #12204E; padding: 10px; text-align: center; }
           .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>${statusInfo.title}</h1>
+            ${emailBrandHeader(process.env.FRONTEND_URL)}
+            <h1 style="padding:16px 20px;margin:0">${statusInfo.title}</h1>
           </div>
           
           <div class="content">

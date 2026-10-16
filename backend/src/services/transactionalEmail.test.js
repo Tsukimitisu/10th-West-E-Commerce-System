@@ -1,10 +1,20 @@
 import assert from 'node:assert/strict';
 import test, { afterEach, mock } from 'node:test';
 import {
+  emailBrandHeader,
   sendPasswordResetEmail,
   sendTransactionalEmail,
   sendVerificationEmail,
 } from './transactionalEmail.js';
+
+test('email branding uses the official asset without leaking action tokens or URL credentials', () => {
+  const html = emailBrandHeader('https://user:secret@shop.example.test/?token=private#/verify-email');
+  assert.match(html, /src="https:\/\/shop\.example\.test\/brand\/10th-west-logo\.png"/);
+  assert.match(html, /Motorcycle Parts &amp; Accessories/);
+  assert.doesNotMatch(html, /private|secret|user:|token=/);
+  assert.doesNotMatch(emailBrandHeader('javascript:alert(1)'), /<img/);
+  assert.doesNotMatch(emailBrandHeader('invalid URL'), /<img/);
+});
 
 const EMAIL_ENV_NAMES = [
   'EMAIL_PROVIDER', 'RESEND_API_KEY', 'RESEND_FROM', 'EMAIL_FROM',

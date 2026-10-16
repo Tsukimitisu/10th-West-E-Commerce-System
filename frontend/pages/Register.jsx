@@ -84,7 +84,7 @@ const Register = () => {
   ];
 
   const passwordStrength = checks.filter((check) => check.pass).length;
-  const strengthColor = passwordStrength <= 2 ? 'bg-red-500/100' : passwordStrength <= 4 ? 'bg-amber-500' : 'bg-green-500';
+  const strengthColor = passwordStrength <= 2 ? 'bg-orange-500' : passwordStrength <= 4 ? 'bg-amber-500' : 'bg-green-500';
   const checkboxClass = 'mt-0.5 h-4 w-4 shrink-0 rounded border border-slate-400 bg-white accent-red-600 focus:ring-2 focus:ring-orange-500';
 
   const getInputClassName = (field) =>
@@ -429,7 +429,7 @@ const Register = () => {
               {fieldErrors.age_confirmed && <p className="text-xs text-red-500">{fieldErrors.age_confirmed}</p>}
             </div>
 
-            <button type="submit" disabled={loading} className="w-full py-3 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
+            <button type="submit" disabled={loading} className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
               {loading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Creating account...</> : <>Create Account <ArrowRight size={16} /></>}
             </button>
           </form>
@@ -458,7 +458,7 @@ const Register = () => {
             <button
               onClick={handleResend}
               disabled={resending}
-              className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:bg-red-500/50 text-white font-medium rounded-lg transition-colors flex items-center justify-center mb-4"
+              className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-red-500/50 text-white font-medium rounded-lg transition-colors flex items-center justify-center mb-4"
             >
               {resending ? 'Sending...' : 'Resend Verification Email'}
             </button>

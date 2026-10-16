@@ -1,3 +1,4 @@
+import BrandMark from '../components/ui/BrandMark';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, X, Loader } from 'lucide-react';
@@ -370,6 +371,7 @@ const VerifyEmail = ({ onLogin }) => {
   return (
     <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8" role="status" aria-live="polite">
+        <BrandMark className="mb-6 justify-center" />
         {status === 'loading' && (
           <>
             <Loader className="w-12 h-12 text-orange-500 animate-spin mb-4" />

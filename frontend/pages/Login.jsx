@@ -274,7 +274,7 @@ const Login = ({ onLogin }) => {
                   </div>
                 </div>
                 <button type="submit" disabled={loading}
-                  className="w-full py-3 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
+                  className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
                   {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>Sign In <ArrowRight size={16} /></>}
                 </button>
               </form>
@@ -295,7 +295,7 @@ const Login = ({ onLogin }) => {
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 text-center font-mono text-2xl tracking-[0.5em] text-slate-950 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
                 />
                 <button type="submit" disabled={loading || totpCode.length !== 6}
-                  className="w-full py-3 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors text-sm">
+                  className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors text-sm">
                   {loading ? 'Verifying...' : 'Verify Code'}
                 </button>
                 <button type="button" onClick={() => { setNeeds2FA(false); setTotpCode(''); }} className="text-sm text-gray-400 hover:text-gray-700">
