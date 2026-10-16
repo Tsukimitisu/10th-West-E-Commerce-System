@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { sanitizePolicyContent, sanitizePolicyRow } from '../utils/sanitizePolicy.js';
 
 const VALID_POLICY_TYPES = ['return_policy', 'privacy_policy', 'terms_of_service', 'shipping_policy'];
 const POLICY_TYPE_ALIASES = {
@@ -29,7 +30,7 @@ export const getPolicyByType = async (req, res) => {
       return res.status(404).json({ message: 'Policy not found' });
     }
 
-    res.json(result.rows[0]);
+    res.json(sanitizePolicyRow(result.rows[0]));
   } catch (error) {
     console.error('Get policy error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -43,7 +44,7 @@ export const getAllPolicies = async (req, res) => {
       'SELECT * FROM policies ORDER BY type ASC'
     );
 
-    res.json(result.rows);
+    res.json(result.rows.map(sanitizePolicyRow));
   } catch (error) {
     console.error('Get all policies error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -73,12 +74,12 @@ export const upsertPolicy = async (req, res) => {
          content = EXCLUDED.content,
          updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
-      [type, title, content]
+      [type, String(title).trim(), sanitizePolicyContent(content)]
     );
 
     res.json({
       message: 'Policy saved successfully',
-      policy: result.rows[0]
+      policy: sanitizePolicyRow(result.rows[0])
     });
   } catch (error) {
     console.error('Upsert policy error:', error);

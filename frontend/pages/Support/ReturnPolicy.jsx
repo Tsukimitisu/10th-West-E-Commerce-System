@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Undo2 } from 'lucide-react';
+import RichText from '../../components/ui/RichText';
+import usePolicyDocument from '../../hooks/usePolicyDocument';
 
 const sections = [
   {
@@ -58,7 +60,9 @@ const sections = [
   },
 ];
 
-const ReturnPolicy = () => (
+const ReturnPolicy = () => {
+  const { policy, loading, error } = usePolicyDocument('return_policy');
+  return (
   <div data-legal-page className="min-h-screen bg-slate-50 text-slate-900">
     <div className="mx-auto max-w-4xl px-4 py-10 sm:py-12">
       <Link to="/" className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
@@ -71,11 +75,15 @@ const ReturnPolicy = () => (
             <Undo2 size={21} />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-bold text-slate-950 sm:text-3xl">Return &amp; Refund Policy</h1>
+            <h1 className="font-display text-2xl font-bold text-slate-950 sm:text-3xl">{policy?.title || 'Return & Refund Policy'}</h1>
             <p className="mt-1 text-sm text-slate-600">A simple guide for return, exchange, and refund requests.</p>
           </div>
         </header>
 
+        {loading ? <p role="status" className="text-sm text-slate-600">Loading policy…</p> : policy?.content ? (
+          <RichText value={policy.content} className="text-sm leading-7 text-slate-700 sm:text-base" />
+        ) : <>
+        {error && <p role="status" className="mb-4 text-sm text-amber-800">Current policy could not be loaded. Showing the store guide below.</p>}
         <ol className="list-decimal space-y-7 pl-6 marker:font-bold marker:text-red-700">
           {sections.map((section) => (
             <li key={section.title} className="pl-2">
@@ -84,9 +92,11 @@ const ReturnPolicy = () => (
             </li>
           ))}
         </ol>
+        </>}
       </article>
     </div>
   </div>
-);
+  );
+};
 
 export default ReturnPolicy;

@@ -1,8 +1,11 @@
 ﻿import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Shield, Mail } from 'lucide-react';
+import RichText from '../../components/ui/RichText';
+import usePolicyDocument from '../../hooks/usePolicyDocument';
 
 const PrivacyPolicy = () => {
+  const { policy, loading, error } = usePolicyDocument('privacy_policy');
   return (
     <div data-legal-page className="min-h-screen bg-slate-50 text-slate-900 [&_.bg-gray-800]:!bg-white [&_.bg-gray-900]:!bg-slate-50 [&_.border-gray-700]:!border-slate-200 [&_.text-white]:!text-slate-950 [&_.text-gray-300]:!text-slate-700">
       <div className="max-w-4xl mx-auto px-4 py-12">
@@ -16,11 +19,15 @@ const PrivacyPolicy = () => {
               <Shield size={20} className="text-red-500" />
             </div>
             <div>
-              <h1 className="font-display font-bold text-2xl text-white">Privacy Policy</h1>
-              <p className="text-sm text-gray-400">Last updated: March 1, 2026</p>
+              <h1 className="font-display font-bold text-2xl text-white">{policy?.title || 'Privacy Policy'}</h1>
+              {policy?.updated_at && <p className="text-sm text-slate-600">Last updated: {new Date(policy.updated_at).toLocaleDateString()}</p>}
             </div>
           </div>
 
+          {loading ? <p role="status" className="text-sm text-slate-600">Loading policy…</p> : policy?.content ? (
+            <RichText value={policy.content} className="text-sm leading-7 text-slate-700 sm:text-base" />
+          ) : <>
+          {error && <p role="status" className="mb-4 text-sm text-amber-800">Current policy could not be loaded. Showing the store guide below.</p>}
           <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-6">
             <p>
               10th West Moto Parts ("we", "our", "us") is committed to protecting your personal data in compliance
@@ -153,6 +160,7 @@ const PrivacyPolicy = () => {
               </p>
             </div>
           </div>
+          </>}
         </div>
       </div>
     </div>

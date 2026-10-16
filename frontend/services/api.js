@@ -3547,21 +3547,6 @@ export const getPolicy = async (type) => {
 };
 
 export const updatePolicy = async (type, title, content) => {
-  if (USE_SUPABASE) {
-    const { data: existing } = await supabase.from('policies').select('id').eq('type', type).single();
-    let result;
-    if (existing) {
-      const { data, error } = await supabase.from('policies').update({ title, content, updated_at: new Date().toISOString() }).eq('type', type).select().single();
-      if (error) throw new Error(error.message);
-      result = data;
-    } else {
-      const { data, error } = await supabase.from('policies').insert({ type, title, content }).select().single();
-      if (error) throw new Error(error.message);
-      result = data;
-    }
-    await logSupabaseActivity('policy.update', 'policy', result.id, { type, title });
-    return result;
-  }
   const data = await authenticatedFetch(`${API_URL}/policies/${type}`, {
     method: 'PUT',
     body: JSON.stringify({ title, content }),
