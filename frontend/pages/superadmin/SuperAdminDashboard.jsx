@@ -21,7 +21,7 @@ const SuperAdminDashboard = ({ user }) => {
   const setActiveView = (view) => navigate(`/superadmin/${routes[view] || 'dashboard'}`);
   const views = {
     overview: <SuperAdminOverview onNavigate={setActiveView} />, users: <UserManagementView />,
-    security: <SystemSecurityView />, config: <SystemConfigView />, monitoring: <MonitoringView key="monitoring" initialTab="errors" />, logs: <MonitoringView key="audit" />,
+    security: <SystemSecurityView />, config: <SystemConfigView />, monitoring: <MonitoringView key="monitoring" initialTab="errors" />, logs: <MonitoringView key="audit" title="Audit trail" />,
     backup: <BackupRecoveryView />, maintenance: <MaintenanceView onNavigate={setActiveView} />, 'product-items': <InventoryProductItemsView />,
   };
   return <SuperAdminLayout activeView={activeView} onNavigate={setActiveView} user={user}>{views[activeView] || views.overview}</SuperAdminLayout>;

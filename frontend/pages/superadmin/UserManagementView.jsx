@@ -407,7 +407,7 @@ const UserManagementView = () => {
                     <button onClick={() => setShowModal(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl transition-colors">Cancel</button>
                     <button onClick={showModal === 'add' ? handleAddUser : handleEditUser}
                       disabled={actionLoading === 'add' || actionLoading === 'edit'}
-                      className="flex-1 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
+                      className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
                       {(actionLoading === 'add' || actionLoading === 'edit') && <Loader2 size={14} className="animate-spin" />}
                       {showModal === 'add' ? 'Create User' : 'Save Changes'}
                     </button>
@@ -444,7 +444,7 @@ const UserManagementView = () => {
                   <div className="flex gap-3">
                     <button onClick={() => setShowModal(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
                     <button onClick={handleResetPassword} disabled={actionLoading === 'resetPw'}
-                      className="flex-1 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2">
+                      className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2">
                       {actionLoading === 'resetPw' && <Loader2 size={14} className="animate-spin" />}
                       Reset Password
                     </button>

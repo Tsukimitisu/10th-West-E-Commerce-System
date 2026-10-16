@@ -10,7 +10,7 @@ import {
 import PageHeader from '../../components/operations/PageHeader';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
-const MonitoringView = ({ initialTab = 'activity' }) => {
+const MonitoringView = ({ initialTab = 'activity', title = 'Monitoring & logs' }) => {
   const [tab, setTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
 
@@ -88,12 +88,12 @@ const MonitoringView = ({ initialTab = 'activity' }) => {
     return 'text-gray-400';
   };
 
-  if (loading) return <div className="space-y-4" role="status" aria-label="Loading audit events"><PageHeader title="Monitoring & logs" description="Loading platform activity…" />{Array.from({ length: 5 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>;
+  if (loading) return <div className="space-y-4" role="status" aria-label="Loading audit events"><PageHeader title={title} description="Loading platform activity…" />{Array.from({ length: 5 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Monitoring & logs"
+        title={title}
         description="Review platform activity, application errors, and auditable transaction history."
         actions={<button onClick={loadData} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"><RefreshCw size={14} /> Refresh</button>}
       />
@@ -105,11 +105,11 @@ const MonitoringView = ({ initialTab = 'activity' }) => {
           <div><p className="text-xs text-gray-400">Activity Logs</p><p className="text-lg font-bold text-white">{activityLogs.length}</p></div>
         </div>
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 flex items-center gap-3 shadow-sm">
-          <div className="p-2 bg-red-50 rounded-lg"><AlertTriangle size={18} className="text-red-500" /></div>
+          <div className="p-2 bg-slate-100 rounded-lg"><AlertTriangle size={18} className="text-red-500" /></div>
           <div><p className="text-xs text-gray-400">Error Logs</p><p className="text-lg font-bold text-white">{errorLogs.length}</p></div>
         </div>
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 flex items-center gap-3 shadow-sm">
-          <div className="p-2 bg-red-500/10 rounded-lg"><FileText size={18} className="text-red-500" /></div>
+          <div className="p-2 bg-slate-100 rounded-lg"><FileText size={18} className="text-slate-700" /></div>
           <div><p className="text-xs text-gray-400">Transaction Logs</p><p className="text-lg font-bold text-white">{transactionLogs.length}</p></div>
         </div>
       </div>
