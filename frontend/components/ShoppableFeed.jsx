@@ -194,7 +194,7 @@ const ShoppableFeed = ({ products = [], wishlistedIds = [], onWishlistToggle }) 
               type="button"
               onClick={handleBuyNow}
               disabled={isOutOfStock}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-red-600 text-sm font-semibold hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-600 text-sm font-semibold hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ShoppingBag size={17} /> Buy Now
             </button>

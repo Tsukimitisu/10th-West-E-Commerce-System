@@ -14,9 +14,10 @@ import { shouldReturnEmptyProductSearch } from '../utils/productSearchSafety.js'
 
 const Navbar = ({ user, onLogout }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [, setScrolled] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -465,11 +466,11 @@ const Navbar = ({ user, onLogout }) => {
   return (
     <>
       {/* Main navbar */}
-      <header className={`storefront-header sticky top-0 z-50 border-b border-white/10 bg-[#080d19]/95 backdrop-blur-xl transition-shadow duration-300 ${scrolled ? 'shadow-lg shadow-black/15' : 'shadow-none'}`}>
+      <header className="storefront-header sticky top-0 z-50 border-b border-white/10">
         <div className="mx-auto max-w-[1600px] px-4 lg:px-6">
-          <div className="flex items-center justify-between h-[76px]">
+          <div className="flex items-center justify-between h-[72px]">
             {/* Mobile menu button */}
-            <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" aria-expanded={mobileOpen} className="lg:hidden p-2.5 -ml-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+            <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" aria-expanded={mobileOpen} className="order-3 lg:hidden p-2.5 -mr-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
               <Menu size={22} />
             </button>
 
@@ -478,10 +479,10 @@ const Navbar = ({ user, onLogout }) => {
 
             {/* Desktop navigation - Center */}
             <nav className="ml-6 hidden min-w-0 flex-1 items-center gap-0.5 lg:flex xl:ml-8" aria-label="Primary navigation">
-              <Link to="/" className={navLinkClass(location.pathname === '/')}>
+              <Link to="/" aria-current={location.pathname === '/' ? 'page' : undefined} className={navLinkClass(location.pathname === '/')}>
                 Home
               </Link>
-              <Link to="/shop" className={navLinkClass(location.pathname === '/shop')}>
+              <Link to="/shop" aria-current={location.pathname === '/shop' ? 'page' : undefined} className={navLinkClass(location.pathname === '/shop')}>
                 Shop
               </Link>
               <div ref={supportMenuRef} className="relative">
@@ -514,7 +515,7 @@ const Navbar = ({ user, onLogout }) => {
                   <button
                     type="submit"
                     aria-label="Search"
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors duration-200 cursor-pointer"
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-400 transition-colors duration-200 cursor-pointer"
                   >
                     <Search size={18} />
                   </button>
@@ -526,14 +527,14 @@ const Navbar = ({ user, onLogout }) => {
                     type="search"
                     autoComplete="off"
                     placeholder={isShopRoute ? 'Search product names…' : 'Search parts, brands…'}
-                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-700 bg-zinc-900 text-sm text-white placeholder-gray-400 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-300 transition-colors duration-200"
+                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-700 bg-zinc-900 text-sm text-white placeholder-gray-400 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-orange-500/30 focus:border-red-300 transition-colors duration-200"
                   />
                   {showDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[400px] flex flex-col overflow-hidden">
                       {isSearching ? (
                         <div className="p-4 text-center text-sm text-gray-400">Searching…</div>
                       ) : searchError ? (
-                        <div className="p-4 text-center text-sm text-red-400">{searchError}</div>
+                        <div className="p-4 text-center text-sm text-slate-300">{searchError}</div>
                       ) : searchResults.length === 0 ? (
                         <div className="p-4 text-center text-sm text-gray-400">No products found</div>
                       ) : (
@@ -561,7 +562,7 @@ const Navbar = ({ user, onLogout }) => {
                               </Link>
                             ))}
                           </div>
-                          <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { searchTypedRef.current = false; setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
+                          <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { searchTypedRef.current = false; setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-orange-300 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
                             View All Results
                           </Link>
                         </>
@@ -573,30 +574,31 @@ const Navbar = ({ user, onLogout }) => {
             )}
 
             {/* Right actions */}
-            <div className="flex items-center gap-1">
+            <div className="header-tools ml-auto flex items-center gap-1">
+              <button type="button" aria-label="Open product search" aria-expanded={mobileSearchOpen} aria-controls="mobile-product-search" onClick={() => { if (!shouldShowGlobalSearch) navigate('/shop'); setMobileSearchOpen(open => !open); }} className="grid h-11 w-11 place-items-center text-slate-300 lg:hidden"><Search size={21} aria-hidden="true" /></button>
               {/* Notifications */}
               {user && (
                 <div ref={notifRef} className="relative">
-                  <button onClick={() => setNotifOpen(!notifOpen)} aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'} className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
+                  <button onClick={() => setNotifOpen(!notifOpen)} aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'} className="hidden lg:block p-2.5 text-zinc-400 hover:text-orange-400 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
                     <Bell size={20} />
                     {unreadCount > 0 && (
-                      <span className="absolute top-1 right-1 bg-red-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
+                      <span className="absolute top-1 right-1 bg-orange-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
                     )}
                   </button>
                   {notifOpen && (
-                    <div className="fixed left-4 right-4 top-[77px] z-50 max-h-[calc(100dvh-5rem)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0f141e] shadow-[0_18px_45px_rgba(0,0,0,0.45)] animate-fade-in sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem] sm:max-w-[calc(100vw-2rem)]">
-                      <div className="px-4 py-3.5 border-b border-white/10 bg-gradient-to-r from-[#141b2a] to-[#101725]">
+                    <div className="fixed left-4 right-4 top-[73px] z-50 max-h-[calc(100dvh-5rem)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0f141e] shadow-[0_18px_45px_rgba(0,0,0,0.45)] animate-fade-in sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem] sm:max-w-[calc(100vw-2rem)]">
+                      <div className="px-4 py-3.5 border-b border-white/10 bg-[#111C3D]">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h3 className="font-bold text-white text-sm">Notifications</h3>
                           {unreadCount > 0 && (
-                            <button onClick={handleMarkAllRead} className="text-xs text-red-400 hover:text-red-300 font-semibold transition-colors">
+                            <button onClick={handleMarkAllRead} className="text-xs text-slate-300 hover:text-red-300 font-semibold transition-colors">
                               Mark all read
                             </button>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-1">
+                        <p className="text-xs text-slate-400 mt-1">
                           {unreadCount > 0 ? `${unreadCount} unread update${unreadCount > 1 ? 's' : ''}` : 'You are all caught up'}
                         </p>
                       </div>
@@ -622,14 +624,14 @@ const Navbar = ({ user, onLogout }) => {
                               <button
                                 key={`${n.id || n.title}-${i}`}
                                 onClick={() => handleNotificationClick(n)}
-                                className={`w-full min-w-0 max-w-full break-words px-4 py-3.5 text-left transition-colors border-b border-white/10 last:border-b-0 hover:bg-white/5 [overflow-wrap:anywhere] ${!n.is_read ? 'bg-red-500/10' : 'bg-transparent'}`}
+                                className={`w-full min-w-0 max-w-full break-words px-4 py-3.5 text-left transition-colors border-b border-white/10 last:border-b-0 hover:bg-white/5 [overflow-wrap:anywhere] ${!n.is_read ? 'bg-white/5' : 'bg-transparent'}`}
                               >
                                 <div className="flex items-start gap-3.5">
                                   <div className="mt-0.5 shrink-0">
                                     {n.thumbnail_url ? (
                                       <img src={resolveProductImageUrl(n.thumbnail_url)} alt="" onError={handleProductImageError} className="h-11 w-11 rounded-xl object-cover bg-[#0b111a] border border-white/10 shadow-sm" />
                                     ) : (
-                                      <div className="h-10 w-10 rounded-xl bg-red-500/15 text-red-300 border border-red-400/30 flex items-center justify-center">
+                                      <div className="h-10 w-10 rounded-xl bg-white/5 text-slate-300 border border-white/10 flex items-center justify-center">
                                         {getNotificationIcon(n)}
                                       </div>
                                     )}
@@ -640,7 +642,7 @@ const Navbar = ({ user, onLogout }) => {
                                       <div className="min-w-0 flex-1">
                                         <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-white' : 'font-medium text-slate-100'}`}>{title}</p>
                                         {summary && <p className="mt-1 text-xs leading-5 text-slate-300 line-clamp-2">{summary}</p>}
-                                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                                           <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 font-medium text-slate-300">{typeLabel}</span>
                                           <span>{formatNotificationTime(n)}</span>
                                         </div>
@@ -661,16 +663,16 @@ const Navbar = ({ user, onLogout }) => {
 
               {/* Wishlist */}
               {user && (
-                <Link to="/wishlist" aria-label="Wishlist" className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors hidden sm:flex">
+                <Link to="/wishlist" aria-label="Wishlist" className="p-2.5 text-zinc-400 hover:text-orange-400 hover:bg-zinc-800/50 rounded-lg transition-colors hidden sm:flex">
                   <Heart size={20} />
                 </Link>
               )}
 
               {user?.role === Role.CUSTOMER && (
-                <Link to="/messages" aria-label="Messages" className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors hidden sm:flex relative">
+                <Link to="/messages" aria-label="Messages" className="p-2.5 text-zinc-400 hover:text-orange-400 hover:bg-zinc-800/50 rounded-lg transition-colors hidden sm:flex relative">
                   <MessageCircle size={20} />
                   {messageUnreadCount > 0 && (
-                    <span className="absolute top-1 right-1 bg-red-600 text-white text-[10px] font-bold rounded-full min-w-5 h-5 px-1 flex items-center justify-center shadow-md">
+                    <span className="absolute top-1 right-1 bg-orange-600 text-white text-[10px] font-bold rounded-full min-w-5 h-5 px-1 flex items-center justify-center shadow-md">
                       {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
                     </span>
                   )}
@@ -678,10 +680,10 @@ const Navbar = ({ user, onLogout }) => {
               )}
 
               {/* Cart */}
-              <button aria-label={`Open cart, ${itemCount} items`} onClick={() => setCartOpen(true)} className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
+              <button aria-label={`Open cart, ${itemCount} items`} onClick={() => setCartOpen(true)} className="p-2.5 text-zinc-400 hover:text-orange-400 hover:bg-zinc-800/50 rounded-lg transition-colors relative">
                 <ShoppingCart size={20} />
                 {itemCount > 0 && (
-                  <span className="absolute top-1 right-1 bg-red-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
+                  <span className="absolute top-1 right-1 bg-orange-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
                     {itemCount > 99 ? '99+' : itemCount}
                   </span>
                 )}
@@ -689,8 +691,8 @@ const Navbar = ({ user, onLogout }) => {
 
               {/* User menu */}
               {user ? (
-                <div ref={userMenuRef} className="relative">
-                  <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="p-2 text-red-500 hover:text-red-400 ml-2 flex items-center gap-2 hover:bg-zinc-800 rounded-lg transition-colors">
+                <div ref={userMenuRef} className="relative header-secondary-action">
+                  <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="p-2 text-red-500 hover:text-orange-300 ml-2 flex items-center gap-2 hover:bg-zinc-800 rounded-lg transition-colors">
                     {user.avatar ? (
                       <img
                         src={user.avatar}
@@ -698,7 +700,7 @@ const Navbar = ({ user, onLogout }) => {
                         className="w-8 h-8 rounded-lg object-cover border border-zinc-700 shadow-sm"
                       />
                     ) : (
-                      <div className="w-8 h-8 bg-gradient-to-br from-red-100 to-red-200 text-red-600 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm">
+                      <div className="w-8 h-8 bg-slate-100 text-slate-900 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm">
                         {(user.name || user.email || 'Customer').charAt(0).toUpperCase()}
                       </div>
                     )}
@@ -711,38 +713,38 @@ const Navbar = ({ user, onLogout }) => {
                         <p className="text-sm font-bold text-white truncate">{user.name || user.email || 'Customer'}</p>
                         <p className="text-xs text-gray-300 truncate">{user.email}</p>
                       </div>
-                      <Link to="/profile" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><User size={16} className="text-red-400" /> My Profile</Link>
-                      <Link to="/orders" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Package size={16} className="text-red-400" /> My Orders</Link>
+                      <Link to="/profile" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><User size={16} className="text-slate-300" /> My Profile</Link>
+                      <Link to="/orders" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Package size={16} className="text-slate-300" /> My Orders</Link>
                       {user?.role === Role.CUSTOMER && (
                         <Link to="/messages" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}>
-                          <MessageCircle size={16} className="text-red-400" /> Messages
+                          <MessageCircle size={16} className="text-slate-300" /> Messages
                           {messageUnreadCount > 0 && (
-                            <span className="ml-auto rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                            <span className="ml-auto rounded-full bg-orange-600 px-2 py-0.5 text-[10px] font-bold text-white">
                               {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
                             </span>
                           )}
                         </Link>
                       )}
-                      <Link to="/wishlist" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Heart size={16} className="text-red-400" /> Wishlist</Link>
-                      <Link to="/addresses" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><MapPin size={16} className="text-red-400" /> Address Book</Link>
-                      <Link to="/my-returns" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><RotateCcw size={16} className="text-red-400" /> Returns</Link>
+                      <Link to="/wishlist" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Heart size={16} className="text-slate-300" /> Wishlist</Link>
+                      <Link to="/addresses" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><MapPin size={16} className="text-slate-300" /> Address Book</Link>
+                      <Link to="/my-returns" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><RotateCcw size={16} className="text-slate-300" /> Returns</Link>
                       {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
                         <>
                           <div className="border-t border-zinc-700 mt-1 pt-1" />
-                          <Link to="/admin" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Shield size={16} className="text-red-400" /> Admin Panel</Link>
-                          <Link to="/pos" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Monitor size={16} className="text-red-400" /> POS Terminal</Link>
+                          <Link to="/admin" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Shield size={16} className="text-slate-300" /> Admin Panel</Link>
+                          <Link to="/pos" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Monitor size={16} className="text-slate-300" /> POS Terminal</Link>
                         </>
                       )}
                       <div className="border-t border-zinc-700 mt-1 pt-1">
                         <button onClick={() => setShowLogoutConfirm(true)} className={`${userMenuItemClass} w-full`}>
-                          <LogOut size={16} className="text-red-400" /> Sign Out
+                          <LogOut size={16} className="text-slate-300" /> Sign Out
                         </button>
                       </div>
                     </div>
                   )}
                 </div>
               ) : (
-                <Link to="/login" className="ml-3 px-5 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-sm font-semibold rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg">
+                <Link to="/login" className="ml-3 hidden min-h-11 items-center px-5 py-2 bg-orange-600 text-slate-950 text-sm font-semibold rounded-lg transition-colors duration-200 lg:inline-flex">
                   Sign In
                 </Link>
               )}
@@ -753,15 +755,15 @@ const Navbar = ({ user, onLogout }) => {
       </header>
 
       {/* Mobile search bar */}
-      {shouldShowGlobalSearch && (
-        <div className="sticky top-16 z-40 border-b border-white/10 bg-[#080d19]/95 backdrop-blur-xl lg:hidden">
+      {shouldShowGlobalSearch && mobileSearchOpen && (
+        <div id="mobile-product-search" className="sticky top-[73px] z-40 border-b border-white/10 bg-[#080A0E] lg:hidden">
           <div className="max-w-7xl mx-auto px-4 py-2 flex justify-center">
             <form onSubmit={handleGlobalSearchSubmit} className="flex items-center gap-2 w-full" ref={mobileSearchDropdownRef}>
               <div className="relative flex-1">
                 <button
                   type="submit"
                   aria-label="Search"
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors duration-200 cursor-pointer"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-400 transition-colors duration-200 cursor-pointer"
                 >
                   <Search size={18} />
                 </button>
@@ -773,14 +775,14 @@ const Navbar = ({ user, onLogout }) => {
                   type="search"
                   autoComplete="off"
                   placeholder={isShopRoute ? 'Search product names…' : 'Search parts…'}
-                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-zinc-750 bg-zinc-900 text-sm text-white placeholder-zinc-500 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors duration-200"
+                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-zinc-750 bg-zinc-900 text-sm text-white placeholder-zinc-500 focus:outline-none focus:bg-zinc-800 focus:ring-2 focus:ring-orange-500/30 focus:border-red-500 transition-colors duration-200"
                 />
                 {showDropdown && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-gray-700 rounded-xl shadow-2xl z-[100] max-h-[350px] flex flex-col overflow-hidden">
                     {isSearching ? (
                       <div className="p-4 text-center text-sm text-gray-400">Searching…</div>
                     ) : searchError ? (
-                      <div className="p-4 text-center text-sm text-red-400">{searchError}</div>
+                      <div className="p-4 text-center text-sm text-slate-300">{searchError}</div>
                     ) : searchResults.length === 0 ? (
                       <div className="p-4 text-center text-sm text-gray-400">No products found</div>
                     ) : (
@@ -808,7 +810,7 @@ const Navbar = ({ user, onLogout }) => {
                             </Link>
                           ))}
                         </div>
-                        <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { searchTypedRef.current = false; setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-red-400 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
+                        <Link to={`/shop?search=${encodeURIComponent(globalSearch.trim())}`} onClick={() => { searchTypedRef.current = false; setShowDropdown(false); updateShopParams({ search: globalSearch.trim() || null }); }} className="block w-full text-center text-xs font-bold text-red-500 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-orange-300 transition-colors uppercase tracking-wider shrink-0 border-t border-gray-700">
                           View All Results
                         </Link>
                       </>
@@ -831,7 +833,7 @@ const Navbar = ({ user, onLogout }) => {
             {user && (
               <div className="p-4 border-b border-zinc-800 bg-zinc-950/40">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-red-500/10 text-red-500 rounded-lg flex items-center justify-center font-bold">{(user.name || user.email || 'Customer').charAt(0).toUpperCase()}</div>
+                  <div className="w-10 h-10 bg-white/5 text-red-500 rounded-lg flex items-center justify-center font-bold">{(user.name || user.email || 'Customer').charAt(0).toUpperCase()}</div>
                   <div>
                     <p className="font-semibold text-white text-sm">{user.name || user.email || 'Customer'}</p>
                     <p className="text-xs text-zinc-400">{user.email}</p>
@@ -849,13 +851,14 @@ const Navbar = ({ user, onLogout }) => {
               {user && (
                 <>
                   <div className="border-t border-zinc-800 my-2" />
+                  <button type="button" onClick={() => { setMobileOpen(false); setNotifOpen(true); }} className="flex min-h-11 w-full items-center justify-between px-3 text-sm text-slate-300">Notifications <span>{unreadCount > 0 ? unreadCount : ''}</span></button>
                   <Link to="/profile" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/profile' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Profile</Link>
                   <Link to="/orders" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/orders' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Orders</Link>
                   {user?.role === Role.CUSTOMER && (
                     <Link to="/messages" onClick={() => setMobileOpen(false)} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/messages' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>
                       <span>Messages</span>
                       {messageUnreadCount > 0 && (
-                        <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                        <span className="rounded-full bg-orange-600 px-2 py-0.5 text-[10px] font-bold text-white">
                           {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
                         </span>
                       )}

@@ -74,7 +74,7 @@ const FAQ = () => {
 
         <div className="mb-6 flex flex-wrap gap-2">
           {categories.map((category) => (
-            <button key={category} type="button" onClick={() => { setActiveCategory(category); setOpenIndex(null); }} className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${activeCategory === category ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+            <button key={category} type="button" onClick={() => { setActiveCategory(category); setOpenIndex(null); }} className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${activeCategory === category ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
               {category}
             </button>
           ))}
@@ -108,7 +108,7 @@ const FAQ = () => {
         <div className="mt-10 rounded-xl border border-gray-200 bg-gray-50 p-6 text-center">
           <h3 className="mb-1 font-semibold text-gray-900">Still need help?</h3>
           <p className="mb-4 text-sm text-gray-600">Our support team is ready to assist you.</p>
-          <Link to="/contact" className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-700">
+          <Link to="/contact" className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-orange-500">
             <MessageSquare size={16} /> Contact Support
           </Link>
         </div>

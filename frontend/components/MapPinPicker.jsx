@@ -395,7 +395,7 @@ const MapPinPicker = ({
             type="button"
             onClick={locateCurrentPosition}
             disabled={disabled || locating}
-            className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-md bg-orange-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <LocateFixed size={13} className={locating ? 'animate-pulse' : ''} />
             {locating ? 'Locating' : 'Use exact location'}

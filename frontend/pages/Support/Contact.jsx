@@ -104,7 +104,7 @@ const Contact = () => {
                   className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none" />
               </div>
               <button type="submit" disabled={loading}
-                className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+                className="w-full py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
                 {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send size={16} />}
                 Send Message
               </button>

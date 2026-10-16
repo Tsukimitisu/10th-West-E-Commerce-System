@@ -73,7 +73,7 @@ const FloatingChatButton = ({ user }) => {
           <button
             type="submit"
             disabled={sending}
-            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 text-sm font-semibold text-white hover:bg-orange-500 disabled:opacity-60"
           >
             <Send size={16} /> {sending ? 'Sending...' : 'Send Message'}
           </button>
@@ -82,7 +82,7 @@ const FloatingChatButton = ({ user }) => {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-600 text-white shadow-2xl hover:bg-red-700"
+        className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-orange-600 text-white shadow-2xl hover:bg-orange-500"
         aria-label="Chat seller"
       >
         <MessageCircle size={24} />
