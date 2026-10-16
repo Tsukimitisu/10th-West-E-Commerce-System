@@ -94,9 +94,9 @@ const StaffDashboardView = ({ user, onNavigate }) => {
 
   if (loading) {
     return (
-      <div className="space-y-5 animate-pulse">
-        <div className="h-16 max-w-xl rounded-xl bg-slate-200" />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="space-y-5" role="status" aria-label="Loading staff workspace">
+        <PageHeader title={`Good day${user?.name ? `, ${user.name.split(' ')[0]}` : ''}`} description="Loading your operational queue…" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 animate-pulse">
           {[0, 1, 2, 3].map((item) => <div key={item} className="h-32 rounded-xl bg-slate-200" />)}
         </div>
       </div>

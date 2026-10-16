@@ -116,12 +116,14 @@ const DashboardView = ({ onNavigate }) => {
 
   if (loading) {
     return (
-      <div className="space-y-5 animate-pulse">
-        <div className="h-16 max-w-2xl rounded-xl bg-slate-200" />
+      <div className="space-y-5" role="status" aria-label="Loading operations dashboard">
+        <PageHeader title="Operations dashboard" description="Loading sales, fulfillment, and inventory activity…" />
+        <div className="animate-pulse">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((item) => <div key={item} className="h-32 rounded-xl bg-slate-200" />)}
         </div>
-        <div className="h-80 rounded-xl bg-slate-200" />
+        <div className="mt-5 h-80 rounded-xl bg-slate-200" />
+        </div>
       </div>
     );
   }

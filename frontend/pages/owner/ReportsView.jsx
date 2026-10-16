@@ -4,7 +4,14 @@ import { BarChart3, Download, Calendar, TrendingUp, Package, DollarSign, Shoppin
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
 import ChartCard from '../../components/owner/ChartCard';
 import PageHeader from '../../components/operations/PageHeader';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
+import EmptyState from '../../components/ui/EmptyState';
 import { buildOwnerReportSections, downloadCsv, openDataReportPdf } from '../../utils/reportExports.js';
+
+const formatReportDate = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value ?? '') : date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
+};
 
 const ReportsView = () => {
   const [tab, setTab] = useState('sales');
@@ -20,22 +27,34 @@ const ReportsView = () => {
   const [customerActivity, setCustomerActivity] = useState({ total: 0, newThisMonth: 0, mostActive: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
 
   const fetchData = async () => {
     setLoading(true);
     setError('');
+    setWarning('');
     try {
-      const [sales, channels, top, trend, stock, profit, pos, returnsAndRefunds, customers] = await Promise.all([
-        getSalesReport(dateRange).catch(() => null),
-        getSalesByChannel(dateRange).catch(() => []),
-        getTopProducts(10, dateRange).catch(() => []),
-        getDailySalesTrend(dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90).catch(() => []),
-        getStockLevelsReport().catch(() => []),
-        getProfitReport(dateRange).catch(() => null),
-        getPosSalesReport(dateRange).catch(() => null),
-        getReturnRefundReport(dateRange).catch(() => null),
-        getCustomerAnalytics().catch(() => ({ total: 0, new_this_month: 0, average_order_count: 0, most_active: [] })),
+      const results = await Promise.allSettled([
+        getSalesReport(dateRange),
+        getSalesByChannel(dateRange),
+        getTopProducts(10, dateRange),
+        getDailySalesTrend(dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90),
+        getStockLevelsReport(),
+        getProfitReport(dateRange),
+        getPosSalesReport(dateRange),
+        getReturnRefundReport(dateRange),
+        getCustomerAnalytics(),
       ]);
+      if (results.every((result) => result.status === 'rejected')) {
+        setError('Reports could not be loaded. Please try again.');
+        return;
+      }
+      if (results.some((result) => result.status === 'rejected')) {
+        setWarning('Some report sections could not be loaded. Values shown as zero may be incomplete. Retry to refresh the full report.');
+      }
+      const [sales, channels, top, trend, stock, profit, pos, returnsAndRefunds, customers] = results.map((result, index) => (
+        result.status === 'fulfilled' ? result.value : [null, [], [], [], [], null, null, null, {}][index]
+      ));
       setSalesReport(sales); setChannelData(Array.isArray(channels) ? channels.map((row) => ({
         name: row.channel || 'unknown',
         value: Number(row.total_revenue || 0),
@@ -52,7 +71,7 @@ const ReportsView = () => {
         mostActive: Array.isArray(customers?.most_active) ? customers.most_active : [],
       });
     } catch (e) { console.error(e); setError('Reports could not be loaded. Please try again.'); }
-    setLoading(false);
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, [dateRange]);
@@ -83,7 +102,7 @@ const ReportsView = () => {
     });
   };
 
-  const handleExportExcel = () => {
+  const handleExportCsv = () => {
     downloadCsv({
       filename: `owner-report_${dateRange}`,
       sections: buildOwnerReportSections({ salesReport, salesTrend, topProducts, stockLevels, profitReport, posReport, returnReport, customerActivity }),
@@ -93,37 +112,39 @@ const ReportsView = () => {
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Insights"
         title="Reports & analytics"
         description="Real sales, product, inventory, customer, and profitability reporting."
         actions={<>
-          <button onClick={handleExportPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs font-medium text-gray-600 hover:bg-red-500/10 hover:text-orange-600 hover:border-red-200 transition-all">
-            <Printer size={13} /> Export PDF
+          <button onClick={handleExportPDF} disabled={loading || Boolean(error) || Boolean(warning)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            <Printer size={16} aria-hidden="true" /> PDF
           </button>
-          <button onClick={handleExportExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/100 rounded-lg text-xs font-medium text-white hover:bg-red-600 transition-all">
-            <FileText size={13} /> Export CSV
+          <button onClick={handleExportCsv} disabled={loading || Boolean(error) || Boolean(warning)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            <FileText size={16} aria-hidden="true" /> CSV <span className="sr-only">Excel compatible</span>
           </button>
-          <div className="flex bg-gray-800 rounded-lg border border-gray-700 p-0.5">
-            {['7d', '30d', '90d'].map(r => (
-              <button key={r} onClick={() => setDateRange(r)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${dateRange === r ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>{r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}</button>
-            ))}
-          </div>
         </>}
       />
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-gray-800 rounded-lg border border-gray-700 p-1 w-fit">
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-red-500/10 text-red-500' : 'text-gray-400 hover:text-gray-700'}`}>
-            <t.icon size={14} /> {t.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-2 sm:px-4">
+        <div className="flex max-w-full gap-1 overflow-x-auto" role="tablist" aria-label="Report type">
+          {tabs.map(t => (
+            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={`flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium ${tab === t.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+              <t.icon size={15} aria-hidden="true" /> {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Date range">
+            {['7d', '30d', '90d'].map(r => (
+              <button key={r} aria-pressed={dateRange === r} onClick={() => setDateRange(r)} className={`min-h-9 rounded-md px-3 text-xs font-semibold ${dateRange === r ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>{r === '7d' ? '7 days' : r === '30d' ? '30 days' : '90 days'}</button>
+            ))}
+        </div>
       </div>
 
+      {warning && !loading && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{warning} Exports are paused until the full report is available. <button type="button" onClick={fetchData} className="font-semibold underline">Retry</button></p>}
+
       {loading ? (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
+        <div className="space-y-3" role="status" aria-label="Loading reports">{Array.from({ length: 3 }, (_, index) => <LoadingSkeleton key={index} className="h-24 w-full" />)}</div>
       ) : error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-700">{error}</div>
+        <EmptyState tone="error" title="Reports could not be loaded" description={error} action={<button type="button" onClick={fetchData} className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white">Retry</button>} />
       ) : (
         <>
           {/* Sales Tab */}
@@ -146,17 +167,17 @@ const ReportsView = () => {
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="lg:col-span-2">
-                  <ChartCard title="Sales Trend" action={<button onClick={() => handleExport('sales')} className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
-                    <ResponsiveContainer width="100%" height={280}>
+                  <ChartCard title="Sales Trend" action={<button onClick={() => handleExport('sales')} disabled={Boolean(warning)} className="flex items-center gap-1 text-xs text-slate-600 disabled:opacity-50"><Download size={12} /> CSV</button>}>
+                    {salesTrend.length ? <ResponsiveContainer width="100%" height={280}>
                       <AreaChart data={salesTrend}>
                         <defs><linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.1} /><stop offset="95%" stopColor="#f97316" stopOpacity={0} /></linearGradient></defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                        <XAxis dataKey="date" tickFormatter={formatReportDate} tick={{ fontSize: 10 }} stroke="#9ca3af" />
                         <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                        <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
+                        <Tooltip labelFormatter={formatReportDate} formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
                         <Area type="monotone" dataKey="revenue" stroke="#f97316" fill="url(#salesGrad)" strokeWidth={2} />
                       </AreaChart>
-                    </ResponsiveContainer>
+                    </ResponsiveContainer> : <div className="grid h-[220px] place-items-center text-sm text-slate-600">No sales trend for this period.</div>}
                   </ChartCard>
                 </div>
                 <ChartCard title="Sales by Channel">
@@ -180,7 +201,7 @@ const ReportsView = () => {
           {/* Products Tab */}
           {tab === 'products' && (
             <div className="space-y-4">
-              <ChartCard title="Top Selling Products" action={<button onClick={() => handleExport('products')} className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
+              <ChartCard title="Top Selling Products" action={<button onClick={() => handleExport('products')} disabled={Boolean(warning)} className="flex items-center gap-1 text-xs text-slate-600 disabled:opacity-50"><Download size={12} /> CSV</button>}>
                 {topProducts.length > 0 ? (
                   <ResponsiveContainer width="100%" height={350}>
                     <BarChart data={topProducts.slice(0, 10)} layout="vertical">
@@ -191,28 +212,7 @@ const ReportsView = () => {
                       <Bar dataKey="quantity_sold" fill="#f97316" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                ) : (
-                  <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead><tr className="bg-gray-50/80 border-b border-gray-700">
-                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">#</th>
-                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Product</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Price</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Rating</th>
-                      </tr></thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {topProducts.map((p, i) => (
-                          <tr key={i} className="hover:bg-gray-50/50">
-                            <td className="px-4 py-3 font-bold text-gray-400">{i + 1}</td>
-                            <td className="px-4 py-3 font-medium text-white">{p.name}</td>
-                            <td className="px-4 py-3 text-right text-white">₱{(p.price || 0).toLocaleString()}</td>
-                            <td className="px-4 py-3 text-right text-amber-600">★ {(p.rating || 0).toFixed(1)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                ) : <EmptyState title="No product sales in this period" description="Try a longer date range to see product performance." />}
               </ChartCard>
             </div>
           )}
@@ -220,7 +220,7 @@ const ReportsView = () => {
           {/* Inventory Tab */}
           {tab === 'inventory' && (
             <div className="space-y-4">
-              <ChartCard title="Stock Level Distribution" action={<button onClick={() => handleExport('inventory')} className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
+              <ChartCard title="Stock Level Distribution" action={<button onClick={() => handleExport('inventory')} disabled={Boolean(warning)} className="flex items-center gap-1 text-xs text-slate-600 disabled:opacity-50"><Download size={12} /> CSV</button>}>
                 {stockLevels.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={stockLevels.slice(0, 20)}>
@@ -290,9 +290,9 @@ const ReportsView = () => {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={salesTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                    <XAxis dataKey="date" tickFormatter={formatReportDate} tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                    <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
+                    <Tooltip labelFormatter={formatReportDate} formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
                     <Bar dataKey="revenue" fill="#f97316" name="Revenue" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
