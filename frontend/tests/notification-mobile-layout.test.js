@@ -7,7 +7,7 @@ test('customer and operations notification panels fit the mobile viewport', asyn
     readFile(new URL('../components/Navbar.jsx', import.meta.url), 'utf8'),
     readFile(new URL('../components/owner/AdminLayout.jsx', import.meta.url), 'utf8'),
   ]);
-  assert.match(navbar, /fixed left-4 right-4 top-16/);
+  assert.match(navbar, /fixed left-4 right-4 top-\[77px\]/);
   assert.match(navbar, /sm:w-\[26rem\]/);
   assert.match(navbar, /overflow-x-hidden overflow-y-auto/);
   assert.match(navbar, /flex flex-wrap items-center gap-2 text-\[11px\]/);

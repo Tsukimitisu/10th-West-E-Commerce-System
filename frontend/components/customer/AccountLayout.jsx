@@ -39,7 +39,7 @@ const AccountLayout = ({ children }) => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="account-workspace min-h-screen bg-slate-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
@@ -81,7 +81,7 @@ const AccountLayout = ({ children }) => {
                 </div>
               )}
               {/* Navigation */}
-              <nav className="p-2">
+              <nav className="p-2" aria-label="Account navigation">
                 {menuItems.map(item => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path;
@@ -89,7 +89,8 @@ const AccountLayout = ({ children }) => {
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium mb-0.5 ${isActive ? 'bg-red-50 text-red-600' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium mb-0.5 ${isActive ? 'bg-orange-50 text-orange-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
                     >
                       <Icon size={18} />
                       {item.label}

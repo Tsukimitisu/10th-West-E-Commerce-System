@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check, ChevronDown, SlidersHorizontal, X } from 'lucide-react';
+import Modal from './owner/Modal';
 
 const INITIAL_VISIBLE_OPTIONS = 6;
 
@@ -37,14 +38,6 @@ const FilterSidebar = ({
   const [showAllModels, setShowAllModels] = React.useState(false);
   const [showAllBrands, setShowAllBrands] = React.useState(false);
   const [showAllColors, setShowAllColors] = React.useState(false);
-
-  React.useEffect(() => {
-    if (isMobileOpen === undefined) return undefined;
-    document.body.style.overflow = isMobileOpen ? 'hidden' : '';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isMobileOpen]);
 
   const toggleSection = (section) => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));
@@ -159,14 +152,9 @@ const FilterSidebar = ({
           </div>
         </aside>
 
-        {isMobileOpen && (
-          <div className="fixed inset-0 z-[100] lg:hidden" role="dialog" aria-modal="true" aria-label="Product filters">
-            <button type="button" className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px] animate-fade-in" onClick={onMobileClose} aria-label="Close filters" />
-            <div className="shop-filter-scroll absolute inset-y-0 left-0 max-h-[88vh] w-[min(88vw,360px)] overflow-y-auto bg-white p-5 shadow-2xl animate-drawer-in">
-              {content}
-            </div>
-          </div>
-        )}
+        <Modal isOpen={isMobileOpen} onClose={onMobileClose} title="Product filters" presentation="drawer">
+          <div className="shop-filter-scroll min-h-full bg-white p-5">{content}</div>
+        </Modal>
       </>
     );
   }

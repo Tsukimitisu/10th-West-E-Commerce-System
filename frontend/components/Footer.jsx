@@ -21,13 +21,13 @@ const Footer = () => {
     .filter((item) => item.href);
 
   return (
-    <footer className="border-t border-white/10 bg-[#080d19] text-slate-300">
+    <footer className="storefront-footer border-t border-white/10 bg-[#080d19] text-slate-300">
       <div className="mx-auto max-w-[1500px] px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.35fr_1fr_1fr_1fr]">
           <div>
             <BrandMark dark link className="mb-5" />
             <p className="max-w-sm text-sm leading-6 text-slate-400">
-              Motorcycle parts, riding gear, and practical support for riders across the Philippines.
+              Motorcycle Parts & Accessories. Dependable parts and practical support for your next ride.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold">

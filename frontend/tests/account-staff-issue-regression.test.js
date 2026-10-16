@@ -93,7 +93,7 @@ test('shop filters have independent viewport scrolling on desktop and a mobile d
   assert.match(filters, /overflow-y-auto/);
   assert.match(filters, /overscroll-contain/);
   assert.match(filters, /scrollbar-gutter:stable/);
-  assert.match(filters, /max-h-\[88vh\]/);
+  assert.match(filters, /presentation="drawer"/);
 });
 
 test('FAQ and return policy use accurate payment wording, readable colors, and ordered sections', async () => {

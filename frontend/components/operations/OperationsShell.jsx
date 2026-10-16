@@ -6,9 +6,10 @@ import {
   Menu,
   Wifi,
   WifiOff,
-  X,
 } from 'lucide-react';
 import BrandMark from '../ui/BrandMark';
+import Modal from '../owner/Modal';
+import { ConfirmationDialog } from '../ui/BrandPrimitives';
 
 const roleName = (role) => ({
   owner: 'Store owner',
@@ -50,24 +51,12 @@ const OperationsShell = ({
   };
 
   const Sidebar = ({ mobile = false }) => (
-    <div className="flex h-full min-h-0 flex-col bg-slate-950 text-white">
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-4">
-        <BrandMark
-          dark
-          compact={collapsed && !mobile}
-          link={false}
-          className="[&>span:first-child]:h-9 [&>span:first-child]:w-9"
-        />
-        {mobile && (
-          <button
-            type="button"
-            onClick={() => setMobileOpen(false)}
-            className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white"
-            aria-label="Close navigation"
-          >
-            <X size={19} />
-          </button>
-        )}
+    <div className="flex h-full min-h-0 flex-col operations-sidebar bg-slate-900 text-white">
+      <div className="operations-brand-header flex shrink-0 items-center gap-2 border-b border-white/10 px-4">
+        <div className="min-w-0">
+          <BrandMark dark compact={collapsed && !mobile} link={false} />
+          {(!collapsed || mobile) && <span className="operations-role">{user?.role === 'super_admin' ? 'SYSTEM ADMINISTRATION' : ['owner', 'admin'].includes(user?.role) ? 'OWNER PORTAL' : 'STAFF PORTAL'}</span>}
+        </div>
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4" aria-label="Operations navigation">
@@ -87,6 +76,7 @@ const OperationsShell = ({
                     key={item.id}
                     type="button"
                     onClick={() => navigateTo(item)}
+                    aria-current={active ? 'page' : undefined}
                     title={collapsed && !mobile ? item.label : undefined}
                     className={`relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-[13px] font-medium transition-colors ${
                       active
@@ -154,19 +144,9 @@ const OperationsShell = ({
         <Sidebar />
       </aside>
 
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
-            onClick={() => setMobileOpen(false)}
-            aria-label="Close navigation overlay"
-          />
-          <aside className="absolute inset-y-0 left-0 w-[min(88vw,288px)] shadow-2xl">
-            <Sidebar mobile />
-          </aside>
-        </div>
-      )}
+      <Modal isOpen={mobileOpen} onClose={() => setMobileOpen(false)} title="Workspace navigation" presentation="drawer" tone="navy">
+        <Sidebar mobile />
+      </Modal>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 lg:px-6">
@@ -187,6 +167,7 @@ const OperationsShell = ({
             >
               <Menu size={20} />
             </button>
+            <BrandMark compact link={false} className="operations-mobile-logo lg:hidden" />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-950">{title}</p>
               <p className="hidden truncate text-[11px] text-slate-500 sm:block">{contextLabel}</p>
@@ -211,19 +192,8 @@ const OperationsShell = ({
         </main>
       </div>
 
-      {confirmingLogout && (
-        <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="operations-logout-title">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <span className="grid h-11 w-11 place-items-center rounded-xl bg-red-50 text-red-600"><LogOut size={21} /></span>
-            <h2 id="operations-logout-title" className="mt-4 font-display text-xl font-bold text-slate-950">Sign out?</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">You will need to authenticate again to return to this workspace.</p>
-            <div className="mt-6 flex gap-3">
-              <button type="button" onClick={() => setConfirmingLogout(false)} className="min-h-11 flex-1 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
-              <button type="button" onClick={onLogout} className="min-h-11 flex-1 rounded-lg bg-red-600 text-sm font-semibold text-white hover:bg-red-700">Sign out</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationDialog isOpen={confirmingLogout} onClose={() => setConfirmingLogout(false)} onConfirm={onLogout} title="Sign out?" description="You will need to sign in again to return to this workspace." confirmLabel="Sign out" />
+
     </div>
   );
 };

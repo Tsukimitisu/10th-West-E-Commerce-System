@@ -152,7 +152,7 @@ const MessageBubble = ({ message, currentUserId, onRetry }) => {
           </a>
         )}
         {text && <p className="whitespace-pre-wrap text-sm leading-6">{text}</p>}
-        <div className={`mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-[11px] ${mine ? 'text-orange-100' : 'text-slate-400'}`}>
+        <div className={`mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-[11px] ${mine ? 'text-white' : 'text-slate-400'}`}>
           <span>{formatTime(message.created_at)}</span>
           {mine && <MessageDeliveryStatus message={message} onRetry={onRetry} />}
         </div>
@@ -405,7 +405,7 @@ const Messages = () => {
   const filteredEmpty = !loadingList && conversations.length === 0;
 
   return (
-    <main className="h-[calc(100dvh-4rem)] min-h-0 max-w-full overflow-x-hidden bg-slate-100 text-slate-950">
+    <main className="h-[calc(100dvh-77px)] min-h-0 max-w-full overflow-x-hidden bg-slate-100 text-slate-950">
       <div className="mx-auto flex h-full min-h-0 max-w-7xl flex-col px-0 md:px-4 md:py-4">
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden border border-slate-200 bg-white shadow-sm md:rounded-lg">
           <aside className={`${selectedConversation ? 'hidden md:flex' : 'flex'} min-h-0 min-w-0 w-full flex-col border-r border-slate-200 bg-white md:w-96`}>

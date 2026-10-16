@@ -1,3 +1,5 @@
+import AuthShell from './components/AuthShell';
+import BrandLogo from './components/ui/BrandLogo';
 import React, { lazy, Suspense, useCallback, useState, useEffect, useLayoutEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -69,7 +71,8 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
 
   const isSuperAdmin = user?.role === Role.SUPER_ADMIN;
   const hideChrome = location.pathname === '/pos' || ['/admin', '/staff', '/superadmin', '/super-admin'].some((path) => location.pathname.startsWith(path));
-  const hideFooter = hideChrome || location.pathname === '/messages';
+  const isAuthRoute = ['/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/oauth-callback', '/oauth/callback', '/auth/callback'].includes(location.pathname);
+  const hideFooter = hideChrome || isAuthRoute || location.pathname === '/messages';
   const isAccountRoute = (
     location.pathname === '/profile' ||
     location.pathname === '/orders' ||
@@ -87,10 +90,11 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-950">
+      <a href="#main-content" className="skip-link" onClick={(event) => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>Skip to main content</a>
       <IdleSessionGuard user={user} onLogout={onLogout} />
-      {!hideChrome && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
+      {!hideChrome && !isAuthRoute && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
       {!hideChrome && !isSuperAdmin && user && <EmailVerificationBanner user={user} />}
-      <div className="flex-1">
+      <div className="flex-1 min-w-0" id="main-content" tabIndex={-1}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={`${location.pathname}${location.search}`}
@@ -100,6 +104,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
             transition={{ duration: shouldReduceMotion || isAccountRoute ? 0 : 0.18, ease: 'easeOut' }}
             className="h-full bg-slate-50"
           >
+            <AuthShell active={isAuthRoute}>
             <AppErrorBoundary resetKey={`${location.pathname}${location.search}`}>
               <Suspense fallback={<RouteFallback />}>
               <Routes location={location}>
@@ -182,6 +187,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
               </Routes>
               </Suspense>
             </AppErrorBoundary>
+            </AuthShell>
           </motion.div>
         </AnimatePresence>
       </div>
@@ -321,8 +327,9 @@ const App = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-800 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      <div className="min-h-screen bg-slate-950 flex flex-col gap-6 items-center justify-center" role="status" aria-label="Loading 10th West">
+        <BrandLogo dark link={false} />
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-600 border-t-orange-400" />
       </div>
     );
   }
