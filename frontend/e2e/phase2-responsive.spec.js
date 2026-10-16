@@ -93,6 +93,31 @@ test('populated checkout sections fit phone and desktop without placing an order
   }
 });
 
+test('account deletion sheet opens visibly with focus and scroll lock', async ({ page }) => {
+  test.skip(!process.env.E2E_CUSTOMER_EMAIL || !process.env.E2E_CUSTOMER_PASSWORD, 'Customer fixture credentials are required.');
+  test.setTimeout(60_000);
+  await login(page, process.env.E2E_CUSTOMER_EMAIL, process.env.E2E_CUSTOMER_PASSWORD);
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.goto('/#/profile');
+  const trigger = page.getByRole('button', { name: 'Request Account Deletion' });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Delete your account?' });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('#delete-account-confirm')).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Delete Forever' })).toBeInViewport();
+  expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden');
+  const bounds = await dialog.boundingBox();
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(780);
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
 test('owner operations layouts fit phone and desktop widths', async ({ page }) => {
   test.skip(!process.env.E2E_OWNER_EMAIL || !process.env.E2E_OWNER_PASSWORD, 'Owner fixture credentials are required.');
   test.setTimeout(180_000);
