@@ -29,8 +29,8 @@ test('receipt confirmation is transactionally idempotent and creates one notific
   assert.match(handler, /COMMIT/);
 });
 
-test('customer payment status endpoint relies on controller ownership instead of staff-only permission', async () => {
+test('customer payment status keeps controller ownership and checks staff permission first', async () => {
   const source = await readFile(new URL('../routes/payments.js', import.meta.url), 'utf8');
-  assert.match(source, /router\.get\('\/orders\/:orderId\/status', authenticateToken, getPaymentStatus\)/);
-  assert.doesNotMatch(source, /router\.get\('\/orders\/:orderId\/status', authenticateToken, staffPermission/);
+  assert.match(source, /router\.get\('\/orders\/:orderId\/status', authenticateToken, staffPermission\('payments\.view'\), getPaymentStatus\)/);
+  assert.match(source, /router\.get\('\/:orderId\/status', authenticateToken, staffPermission\('payments\.view'\), getPaymentStatus\)/);
 });
