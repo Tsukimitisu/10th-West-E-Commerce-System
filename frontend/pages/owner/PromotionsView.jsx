@@ -380,7 +380,7 @@ const PromotionsView = () => {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   {saving ? 'Saving…' : editing ? 'Save changes' : 'Create promotion'}
                 </button>

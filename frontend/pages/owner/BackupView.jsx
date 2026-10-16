@@ -45,7 +45,7 @@ const BackupView = () => {
         </div>
         <button onClick={handleCreateBackup} disabled={creating || !backupProviderConfigured}
           title="Real backup provider is not configured"
-          className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
+          className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
           {creating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <RefreshCw size={16} />}
           {creating ? 'Creating Backup...' : 'Backup Not Configured'}
         </button>

@@ -291,7 +291,7 @@ const OrdersView = () => {
           { label: 'Shipped', value: shipped.toString(), icon: <Truck size={18} />, color: 'bg-slate-100 text-slate-700' },
         ].map((kpi, i) => (
           <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-            <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
+            <div className={`w-8 h-8 bg-slate-100 text-slate-700 rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
             <p className="text-lg font-bold text-white">{kpi.value}</p>
             <p className="text-xs text-gray-400">{kpi.label}</p>
           </div>
@@ -305,11 +305,13 @@ const OrdersView = () => {
           <input type="search" aria-label="Search orders" placeholder="Search orders…" value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
         </div>
-        <div tabIndex={0} className="-mx-1 flex min-w-0 snap-x gap-1.5 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0" role="group" aria-label="Filter orders by status">
-          <button type="button" aria-pressed={!statusFilter} onClick={() => setStatusFilter('')} className={`shrink-0 snap-start whitespace-nowrap min-h-9 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
-          {statuses.map(s => (
-            <button key={s} type="button" aria-pressed={statusFilter === s} onClick={() => setStatusFilter(statusFilter === s ? '' : s)} title={s === 'failed' ? PAYMENT_FAILED_HELP : undefined} className={`shrink-0 snap-start whitespace-nowrap min-h-9 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${statusFilter === s ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>{getOrderStatusLabel(s)}</button>
-          ))}
+        <div className="flex min-w-0 flex-wrap items-center gap-2" role="group" aria-label="Filter orders by status">
+          <label className="sr-only" htmlFor="order-status-filter">Order status</label>
+          <select id="order-status-filter" aria-label="Order status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm sm:w-56">
+            <option value="">All statuses</option>
+            {statuses.map(status => <option key={status} value={status}>{getOrderStatusLabel(status)}</option>)}
+          </select>
+          {statusFilter && <button type="button" onClick={() => setStatusFilter('')} className="min-h-11 px-3 text-sm text-slate-700 hover:text-orange-700">Clear status</button>}
         </div>
       </div>
 
@@ -492,7 +494,7 @@ const OrdersView = () => {
                       type="button"
                       onClick={handleShipmentStatusUpdate}
                       disabled={shipmentStatusBusy}
-                      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:bg-gray-500"
+                      className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-500 disabled:bg-gray-500"
                     >
                       {shipmentStatusBusy ? 'Updating...' : 'Update Shipment Status'}
                     </button>
@@ -551,7 +553,7 @@ const OrdersView = () => {
                 onClick={() => { setDetailOpen(false); openStatusChange(detailOrder); }}
                 disabled={isInStoreOrder(detailOrder)}
                 title={isInStoreOrder(detailOrder) ? POS_STATUS_LOCK_HELP : undefined}
-                className="flex-1 min-w-[140px] px-4 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-colors shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
+                className="flex-1 min-w-[140px] px-4 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-colors shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
               >
                 {isInStoreOrder(detailOrder) ? 'Status Locked' : 'Update Status'}
               </button>
@@ -715,7 +717,7 @@ const OrdersView = () => {
             <button
               onClick={handleStatusUpdate}
               disabled={!newStatus || (newStatus === 'cancelled' && !cancelReason.trim())}
-              className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
             >
               Update Status
             </button>

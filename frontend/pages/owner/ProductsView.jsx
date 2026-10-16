@@ -2180,7 +2180,7 @@ const ProductsView = () => {
       )}
 
       {/* Table */}
-      <div className="bg-gradient-to-b from-[#1a1d23] to-[#111318] rounded-xl border border-white/5 overflow-hidden">
+      <div className="bg-white rounded-xl border border-white/5 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-white/10 border-t-red-500 rounded-full animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
@@ -2317,7 +2317,7 @@ const ProductsView = () => {
               <div className="space-y-1.5">
                 <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-red-500 to-amber-400 transition-colors duration-300"
+                    className="h-full bg-orange-500 transition-colors duration-300"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
@@ -3468,7 +3468,7 @@ const ProductsView = () => {
                     type="button"
                     onClick={() => saveProduct({ forcedStatus: PRODUCT_STATUS_PUBLISHED })}
                     disabled={submitting}
-                    className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:opacity-70 text-white text-sm font-semibold rounded-lg transition-colors"
+                    className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-70 text-white text-sm font-semibold rounded-lg transition-colors"
                   >
                     {submitting ? 'Publishing...' : 'Publish'}
                   </button>
@@ -3502,7 +3502,7 @@ const ProductsView = () => {
                   <button
                     type="submit"
                     disabled={categorySubmitting}
-                    className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                    className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-70 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
                   >
                     {categorySubmitting ? 'Adding...' : 'Add'}
                   </button>
@@ -3530,7 +3530,7 @@ const ProductsView = () => {
                             type="button"
                             onClick={() => handleUpdateCategory(category.id)}
                             disabled={categorySubmitting}
-                            className="px-2.5 py-1.5 text-xs bg-red-500/100 hover:bg-red-600 text-white rounded-md disabled:opacity-70"
+                            className="px-2.5 py-1.5 text-xs bg-orange-600 hover:bg-orange-500 text-white rounded-md disabled:opacity-70"
                           >
                             Save
                           </button>
@@ -3607,7 +3607,7 @@ const ProductsView = () => {
               <button
                 type="submit"
                 disabled={!newSubcategoryName.trim() || categorySubmitting}
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1"
               >
                 <Plus size={16} /> Add
               </button>
@@ -3634,7 +3634,7 @@ const ProductsView = () => {
                             type="button"
                             onClick={() => handleUpdateSubcategory(subcat.id)}
                             disabled={categorySubmitting}
-                            className="px-2.5 py-1.5 text-xs bg-red-500 hover:bg-red-600 text-white rounded-md disabled:opacity-70"
+                            className="px-2.5 py-1.5 text-xs bg-orange-600 hover:bg-orange-500 text-white rounded-md disabled:opacity-70"
                           >
                             Save
                           </button>

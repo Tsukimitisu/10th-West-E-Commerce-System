@@ -709,7 +709,7 @@ const SecurityView = () => {
                 <button
                   onClick={handleSaveConfig}
                   disabled={savingConfig}
-                  className="px-6 py-2.5 bg-red-500/100 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-6 py-2.5 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {savingConfig ? (
                     <>

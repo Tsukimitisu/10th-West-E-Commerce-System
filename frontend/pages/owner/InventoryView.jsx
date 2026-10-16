@@ -260,18 +260,13 @@ const InventoryView = () => {
       {/* Stock Levels Tab */}
       {tab === 'stock' && (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-label="Stock levels">
-          <div className="flex flex-col gap-2 border-b border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="inventory-toolbar">
             <SearchField
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search part number, name, model, brand, color, or Box"
               className="w-full sm:max-w-md"
             />
-            <p className="text-xs text-slate-500">
-              <span className="font-semibold tabular-nums text-slate-700">{filtered.length}</span> of {products.length} items · type or scan a part number or barcode
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-3">
             <select aria-label="Filter inventory by stock" value={stockFilter} onChange={(event) => { setStockFilter(event.target.value); setPage(1); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm sm:flex-none">
               <option value="all">All stock</option><option value="success">In stock</option><option value="warning">Low stock</option><option value="danger">Out of stock</option>
             </select>
@@ -280,6 +275,11 @@ const InventoryView = () => {
             </select>
             <button type="button" onClick={() => setSortDirection((value) => value === 'asc' ? 'desc' : 'asc')} className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-medium" aria-label={`Sort ${sortDirection === 'asc' ? 'descending' : 'ascending'}`}>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</button>
             <button type="button" onClick={() => setTab('receive')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold sm:ml-auto"><ScanBarcode size={17} aria-hidden="true" />Barcode Scan</button>
+          </div>
+          <div className="border-b border-slate-200 px-3 py-2">
+            <p className="text-xs text-slate-500">
+              <span className="font-semibold tabular-nums text-slate-700">{filtered.length}</span> of {products.length} items · type or scan a part number or barcode
+            </p>
           </div>
           {loading ? (
             <div className="space-y-2 p-3" role="status" aria-label="Loading inventory">
@@ -297,7 +297,7 @@ const InventoryView = () => {
           ) : (
             <>
               <div tabIndex={0} role="region" aria-label="Inventory stock table" className="hidden max-h-[70vh] overflow-auto md:block">
-                <table className="w-full min-w-[1220px] text-sm">
+                <table className="inventory-stock-table w-full min-w-[1080px] text-sm">
                   <thead><tr className="border-b border-slate-200 bg-slate-100">
                     <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold text-slate-700">Part number</th>
                     <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-700">Item name</th>

@@ -465,7 +465,7 @@ const BannersView = () => {
             <button
               onClick={handleSaveCarouselConfig}
               disabled={savingCarousel}
-              className="px-4 py-2 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-2"
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-2"
             >
               <Save size={14} /> {savingCarousel ? 'Saving...' : (carouselSaved ? 'Saved!' : 'Save Carousel Settings')}
             </button>
@@ -576,7 +576,7 @@ const BannersView = () => {
                 </div>
                 <div className="flex gap-2 pt-2">
                   <button type="submit" disabled={saving || uploading}
-                    className="flex-1 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+                    className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
                     {uploading ? (<><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Uploading image...</>) :
                      saving ? 'Saving...' : (editing ? 'Update Banner' : 'Create Banner')}
                   </button>
@@ -602,7 +602,7 @@ const BannersView = () => {
                 </label>
                 <div className="flex gap-2 pt-2">
                   <button type="submit" disabled={saving}
-                    className="flex-1 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors">
+                    className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors">
                     {saving ? 'Saving...' : (editing ? 'Update' : 'Create')}
                   </button>
                   <button type="button" onClick={resetForm} className="px-4 py-2.5 border border-gray-700 text-gray-600 text-sm rounded-lg hover:bg-gray-900">Cancel</button>

@@ -177,7 +177,7 @@ const SettingsView = () => {
           <h1 className="font-display font-bold text-xl text-white">System Settings</h1>
           <p className="text-sm text-gray-400">Configure store preferences and integrations</p>
         </div>
-        <button onClick={handleSave} disabled={saving} className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 ${saved ? 'bg-green-600 text-white' : 'bg-red-500/100 hover:bg-red-600 text-white'}`}>
+        <button onClick={handleSave} disabled={saving} className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 ${saved ? 'bg-green-600 text-white' : 'bg-orange-600 hover:bg-orange-500 text-white'}`}>
           {saving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : saved ? <><Save size={14} /> Saved!</> : <><Save size={14} /> Save Changes</>}
         </button>
       </div>

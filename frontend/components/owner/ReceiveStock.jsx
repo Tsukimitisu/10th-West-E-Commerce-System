@@ -178,7 +178,7 @@ const ReceiveStock = ({ products, motorcycleModels = [], onAddMotorcycleModel, o
           )}
 
           <div className="flex justify-center gap-3">
-            <button onClick={resetForm} className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors">
+            <button onClick={resetForm} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium rounded-lg transition-colors">
               Receive More Items
             </button>
             {onBack && (

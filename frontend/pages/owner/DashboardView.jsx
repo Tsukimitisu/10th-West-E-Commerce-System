@@ -1,12 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle,
   ArrowRight,
   CircleDollarSign,
   MessageCircle,
   PackageCheck,
   RotateCcw,
-  ShoppingCart,
   Truck,
 } from 'lucide-react';
 import {
@@ -129,11 +127,11 @@ const DashboardView = ({ onNavigate }) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="owner-dashboard space-y-6">
       <PageHeader
         eyebrow="Commerce overview"
-        title="Operations dashboard"
-        description="Your 10th West operations overview: sales, fulfillment and inventory."
+        title="Business overview"
+        description={`${new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}. ${new Intl.DateTimeFormat('en-PH', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())} · Sales, orders and inventory at a glance.`}
         actions={(
           <button type="button" onClick={() => onNavigate('orders')} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-slate-800">
             View orders <ArrowRight size={15} />
@@ -141,28 +139,24 @@ const DashboardView = ({ onNavigate }) => {
         )}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard icon={CircleDollarSign} label="Sales today" value={currency(operational.todaySales)} detail="Paid and active orders created today" tone="success" />
-        <MetricCard icon={ShoppingCart} label="Total orders" value={data.stats?.totalOrders ?? data.orders.length} detail={`${operational.pending.length} awaiting action`} tone="info" onClick={() => onNavigate('orders')} />
-        <MetricCard icon={PackageCheck} label="Orders to process" value={operational.toProcess.length} detail="Paid, packing, or ready for dispatch" tone="brand" onClick={() => onNavigate('orders')} />
-        <MetricCard icon={AlertTriangle} label="Low-stock items" value={operational.lowStock.length} detail="At or below reorder threshold" tone={operational.lowStock.length ? 'warning' : 'success'} onClick={() => onNavigate('inventory')} />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: 'Return requests', value: operational.pendingReturns.length, icon: RotateCcw, tone: 'text-slate-700 bg-slate-100', view: 'returns' },
-          { label: 'Unread conversations', value: data.unreadChats, icon: MessageCircle, tone: 'text-blue-700 bg-blue-50', view: 'chat' },
-          { label: 'Payment issues', value: operational.paymentIssues.length, icon: CircleDollarSign, tone: 'text-red-700 bg-red-50', view: 'orders' },
-          { label: 'Shipment issues', value: operational.shipmentIssues.length, icon: Truck, tone: 'text-amber-700 bg-amber-50', view: 'orders' },
-        ].map((item) => {
-          const Icon = item.icon;
-          return (
-            <button key={item.label} type="button" onClick={() => onNavigate(item.view)} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm hover:border-slate-300">
-              <span className={`grid h-9 w-9 place-items-center rounded-lg ${item.tone}`}><Icon size={17} /></span>
-              <span><span className="block text-lg font-bold text-slate-950">{item.value}</span><span className="block text-xs text-slate-500">{item.label}</span></span>
-            </button>
-          );
-        })}
+      <div className="dashboard-overview">
+        <section className="dashboard-trading" aria-label="Business overview">
+          <div className="dashboard-sales"><p>Today's sales</p><strong>{currency(operational.todaySales)}</strong><span>Paid and active orders created today</span></div>
+          <div className="dashboard-totals">
+            <MetricCard label="Total orders" value={data.stats?.totalOrders ?? data.orders.length} detail={`${operational.pending.length} pending`} onClick={() => onNavigate('orders')} />
+            <MetricCard label="To process" value={operational.toProcess.length} detail="Packing or dispatch" onClick={() => onNavigate('orders')} />
+            <MetricCard label="Low stock" value={operational.lowStock.length} detail="Reorder attention" onClick={() => onNavigate('inventory')} />
+          </div>
+        </section>
+        <section className="dashboard-action-queue" aria-label="Needs attention">
+          <h2>Needs attention</h2>
+          {[
+            { label: 'Return requests', value: operational.pendingReturns.length, icon: RotateCcw, view: 'returns' },
+            { label: 'Unread conversations', value: data.unreadChats, icon: MessageCircle, view: 'chat' },
+            { label: 'Payment issues', value: operational.paymentIssues.length, icon: CircleDollarSign, view: 'orders' },
+            { label: 'Shipment issues', value: operational.shipmentIssues.length, icon: Truck, view: 'orders' },
+          ].map(({label,value,icon:Icon,view}) => <button key={label} type="button" onClick={() => onNavigate(view)}><Icon size={17} aria-hidden="true" /><span>{label}</span><strong>{value}</strong><ArrowRight size={15} aria-hidden="true" /></button>)}
+        </section>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
@@ -173,15 +167,15 @@ const DashboardView = ({ onNavigate }) => {
                 <AreaChart data={data.stats.salesTrend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                   <defs>
                     <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#ed621d" stopOpacity={0.24} />
-                      <stop offset="100%" stopColor="#ed621d" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor="#f36a21" stopOpacity={0.24} />
+                      <stop offset="100%" stopColor="#f36a21" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(date) => new Date(date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(value) => currency(value, true)} />
                   <Tooltip formatter={(value) => currency(value)} labelFormatter={(date) => new Date(date).toLocaleDateString('en-PH', { dateStyle: 'medium' })} />
-                  <Area type="monotone" dataKey="amount" stroke="#ed621d" strokeWidth={2.25} fill="url(#salesFill)" />
+                  <Area type="monotone" dataKey="amount" stroke="#f36a21" strokeWidth={2.25} fill="url(#salesFill)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -208,6 +202,7 @@ const DashboardView = ({ onNavigate }) => {
         </SectionCard>
       </div>
 
+      <div className="dashboard-orders-grid">
       <SectionCard title="Recent orders" description="Latest transactions across online and point-of-sale channels." action={<button type="button" onClick={() => onNavigate('orders')} className="text-xs font-semibold text-orange-700 hover:text-orange-800">View all</button>} padded={false}>
         {recentOrders.length ? (
           <div tabIndex={0} className="overflow-x-auto">
@@ -235,6 +230,8 @@ const DashboardView = ({ onNavigate }) => {
           <div className="px-5 py-12 text-center text-sm text-slate-500">No orders have been recorded.</div>
         )}
       </SectionCard>
+      {data.stats?.topProducts?.length > 0 && <SectionCard title="Best sellers" description="By completed sales" padded={false}><ol className="divide-y divide-slate-100">{data.stats.topProducts.slice(0, 5).map((product, index) => <li key={product.id || product.product_id || index} className="flex items-start justify-between gap-4 px-5 py-4"><div className="min-w-0"><p className="text-sm font-semibold text-slate-900">{product.name || product.product_name}</p><p className="mt-1 text-xs text-slate-600">{product.quantity_sold} sold</p></div><span className="shrink-0 text-sm font-semibold text-slate-900">{currency(product.revenue)}</span></li>)}</ol></SectionCard>}
+      </div>
     </div>
   );
 };

@@ -76,7 +76,7 @@ const ReportsView = () => {
 
   useEffect(() => { fetchData(); }, [dateRange]);
 
-  const COLORS = ['#12204e', '#ed621d', '#687182', '#d52231', '#b4bdcc'];
+  const COLORS = ['#111c3d', '#f36a21', '#697180', '#d62232', '#b4bdcc'];
 
   const tabs = [
     { id: 'sales', label: 'Sales', icon: TrendingUp },
@@ -170,12 +170,12 @@ const ReportsView = () => {
                   <ChartCard title="Sales Trend" action={<button onClick={() => handleExport('sales')} disabled={Boolean(warning)} className="flex items-center gap-1 text-xs text-slate-600 disabled:opacity-50"><Download size={12} /> CSV</button>}>
                     {salesTrend.length ? <ResponsiveContainer width="100%" height={280}>
                       <AreaChart data={salesTrend}>
-                        <defs><linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ed621d" stopOpacity={0.1} /><stop offset="95%" stopColor="#ed621d" stopOpacity={0} /></linearGradient></defs>
+                        <defs><linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f36a21" stopOpacity={0.1} /><stop offset="95%" stopColor="#f36a21" stopOpacity={0} /></linearGradient></defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                         <XAxis dataKey="date" tickFormatter={formatReportDate} tick={{ fontSize: 10 }} stroke="#9ca3af" />
                         <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
                         <Tooltip labelFormatter={formatReportDate} formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
-                        <Area type="monotone" dataKey="revenue" stroke="#ed621d" fill="url(#salesGrad)" strokeWidth={2} />
+                        <Area type="monotone" dataKey="revenue" stroke="#f36a21" fill="url(#salesGrad)" strokeWidth={2} />
                       </AreaChart>
                     </ResponsiveContainer> : <div className="grid h-[220px] place-items-center text-sm text-slate-600">No sales trend for this period.</div>}
                   </ChartCard>
@@ -209,7 +209,7 @@ const ReportsView = () => {
                       <XAxis type="number" tick={{ fontSize: 10 }} stroke="#9ca3af" />
                       <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} stroke="#9ca3af" width={120} />
                       <Tooltip formatter={(v) => [v, 'Units Sold']} />
-                      <Bar dataKey="quantity_sold" fill="#ed621d" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="quantity_sold" fill="#f36a21" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <EmptyState title="No product sales in this period" description="Try a longer date range to see product performance." />}
@@ -228,7 +228,7 @@ const ReportsView = () => {
                       <XAxis dataKey="category" tick={{ fontSize: 9 }} stroke="#9ca3af" angle={-45} textAnchor="end" height={80} />
                       <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
                       <Tooltip />
-                      <Bar dataKey="total_stock" fill="#12204e" radius={[4, 4, 0, 0]} name="Stock" />
+                      <Bar dataKey="total_stock" fill="#111c3d" radius={[4, 4, 0, 0]} name="Stock" />
                       <Bar dataKey="low_stock_items" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Low-stock items" />
                     </BarChart>
                   </ResponsiveContainer>
@@ -293,7 +293,7 @@ const ReportsView = () => {
                     <XAxis dataKey="date" tickFormatter={formatReportDate} tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <Tooltip labelFormatter={formatReportDate} formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
-                    <Bar dataKey="revenue" fill="#ed621d" name="Revenue" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="revenue" fill="#f36a21" name="Revenue" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>

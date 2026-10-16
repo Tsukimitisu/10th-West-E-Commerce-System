@@ -206,7 +206,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
       >
         <Bell size={18} />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-orange-600 px-1 text-[9px] font-bold text-white">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}

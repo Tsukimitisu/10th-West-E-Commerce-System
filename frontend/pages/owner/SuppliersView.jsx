@@ -91,7 +91,7 @@ const SuppliersView = () => {
           <p className="text-sm text-gray-400 mt-1">{suppliers.length} total suppliers</p>
         </div>
         <button onClick={() => { resetForm(); setShowModal(true); }}
-          className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
+          className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
           <Plus size={16} /> Add Supplier
         </button>
       </div>
@@ -218,7 +218,7 @@ const SuppliersView = () => {
               </div>
               <div className="flex gap-2 pt-2">
                 <button type="submit" disabled={saving}
-                  className="flex-1 py-2.5 bg-red-500/100 hover:bg-red-600 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5">
+                  className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5">
                   {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check size={16} />}
                   {editing ? 'Update' : 'Add Supplier'}
                 </button>

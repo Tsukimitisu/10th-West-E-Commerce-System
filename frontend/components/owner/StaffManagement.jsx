@@ -273,7 +273,7 @@ const StaffManagement = () => {
         {/* Profile Card */}
         <div className="bg-gray-800 rounded-xl shadow p-6">
           <div className="flex items-start gap-4">
-            <div className="h-16 w-16 rounded-full bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center text-white text-xl font-bold">
+            <div className="h-16 w-16 rounded-full bg-slate-100 text-slate-900 flex items-center justify-center text-white text-xl font-bold">
               {selected.name.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1">
@@ -403,7 +403,7 @@ const StaffManagement = () => {
                 <button onClick={() => { setShowResetModal(false); setResetPassword(''); setResetConfirm(''); }}
                   className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button>
                 <button onClick={handleResetPassword} disabled={resetting}
-                  className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white rounded-lg text-sm disabled:opacity-50">
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm disabled:opacity-50">
                   {resetting ? 'Resetting...' : 'Reset Password'}
                 </button>
               </div>
@@ -520,7 +520,7 @@ const StaffManagement = () => {
                 <tr key={s.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center text-white font-bold text-sm">
+                      <div className="h-10 w-10 rounded-full bg-slate-100 text-slate-900 flex items-center justify-center text-white font-bold text-sm">
                         {s.name.charAt(0).toUpperCase()}
                       </div>
                       <div>

@@ -63,7 +63,7 @@ const OperationsShell = ({
         {groups.map((group, groupIndex) => (
           <div key={group.label} className={groupIndex ? 'mt-6' : ''}>
             {(!collapsed || mobile) && (
-              <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                 {group.label}
               </p>
             )}
@@ -78,7 +78,7 @@ const OperationsShell = ({
                     onClick={() => navigateTo(item)}
                     aria-current={active ? 'page' : undefined}
                     title={collapsed && !mobile ? item.label : undefined}
-                    className={`relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-[13px] font-medium transition-colors ${
+                    className={`relative flex min-h-10 w-full items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors ${
                       active
                         ? 'bg-white/10 text-white'
                         : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
@@ -113,7 +113,7 @@ const OperationsShell = ({
           {(!collapsed || mobile) && (
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-white">{user?.name || 'Team member'}</p>
-              <p className="truncate text-[11px] text-slate-400">{roleName(user?.role)}</p>
+              <p className="truncate text-xs text-slate-400">{roleName(user?.role)}</p>
             </div>
           )}
           </button>
@@ -139,7 +139,7 @@ const OperationsShell = ({
   );
 
   return (
-    <div className="operations-shell flex h-screen overflow-hidden bg-slate-50">
+    <div className="operations-shell flex h-[100dvh] overflow-hidden bg-slate-50" data-workspace={user?.role === 'super_admin' ? 'system' : 'retail'}>
       <aside className={`${collapsed ? 'w-[76px]' : 'w-[260px]'} hidden shrink-0 border-r border-slate-800 bg-slate-950 transition-[width] duration-200 lg:block`}>
         <Sidebar />
       </aside>
@@ -170,12 +170,12 @@ const OperationsShell = ({
             <BrandMark compact link={false} className="operations-mobile-logo lg:hidden" />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-950">{title}</p>
-              <p className="hidden truncate text-[11px] text-slate-500 sm:block">{contextLabel}</p>
+              <p className="hidden truncate text-xs text-slate-500 sm:block">{contextLabel}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium sm:inline-flex ${
+            <span className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium sm:inline-flex ${
               connected
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                 : 'border-amber-200 bg-amber-50 text-amber-800'
