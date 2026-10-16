@@ -32,8 +32,9 @@ const assertEmailDomainCanReceiveMail = async (email) => {
   }
 
   const lookup = dns.resolveMx(domain);
+  let timer;
   const timeout = new Promise((_, reject) => {
-    setTimeout(() => {
+    timer = setTimeout(() => {
       const error = new Error('Email validation timed out. Please try again.');
       error.code = 'EMAIL_DNS_TIMEOUT';
       reject(error);
@@ -50,6 +51,8 @@ const assertEmailDomainCanReceiveMail = async (email) => {
       console.warn('Email change MX validation timed out; continuing with verification delivery.');
       return;
     }
+  } finally {
+    clearTimeout(timer);
   }
 
   const error = new Error('Use a real email address that can receive verification emails.');
@@ -165,7 +168,7 @@ export const getProfile = async (req, res) => {
 };
 
 // Update user profile
-export const updateProfile = async (req, res) => {
+export const updateProfile = async (req, res, { sendVerificationEmail = sendEmailChangeVerificationEmail } = {}) => {
   const rawName = typeof req.body.name === 'string' ? req.body.name.trim() : '';
   const rawEmail = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const rawPhone = typeof req.body.phone === 'string' ? req.body.phone.trim() : '';
@@ -311,7 +314,7 @@ export const updateProfile = async (req, res) => {
 
     if (emailChanged && emailChangeToken) {
       try {
-        await sendEmailChangeVerificationEmail({
+        await sendVerificationEmail({
           email: rawEmail,
           currentName: user.name,
           token: emailChangeToken.token,

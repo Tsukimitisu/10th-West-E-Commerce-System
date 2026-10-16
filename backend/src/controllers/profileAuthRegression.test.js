@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test, { after, afterEach, mock } from 'node:test';
 import bcrypt from 'bcryptjs';
 import dns from 'node:dns/promises';
-import nodemailer from 'nodemailer';
 
 process.env.NODE_ENV = 'test';
 process.env.TEST_DATABASE_URL = 'postgresql://unit:unit@127.0.0.1:1/profile_auth_test';
@@ -44,14 +43,13 @@ test('an active user can request an email change without replacing the primary e
   };
   mock.method(pool, 'connect', async () => client);
   mock.method(dns, 'resolveMx', async () => [{ exchange: 'gmail-smtp-in.l.google.com' }]);
-  const sendMail = mock.fn(async () => ({ messageId: 'email-change' }));
-  mock.method(nodemailer, 'createTransport', () => ({ sendMail }));
+  const sendVerificationEmail = mock.fn(async () => {});
   const res = response();
 
   await updateProfile({
     user: { id: 7 },
     body: { name: 'Active Rider', email: 'new@gmail.com', phone: '639123456789' },
-  }, res);
+  }, res, { sendVerificationEmail });
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.requiresEmailVerification, true);
@@ -59,7 +57,7 @@ test('an active user can request an email change without replacing the primary e
   assert.equal(res.body.user.email, 'old@gmail.com');
   assert.equal(res.body.user.phone, '+639123456789');
   assert.equal(res.body.message, 'Email change request sent. Please verify your new email.');
-  assert.equal(sendMail.mock.callCount(), 1);
+  assert.equal(sendVerificationEmail.mock.callCount(), 1);
 });
 
 test('a Google-managed primary email cannot be changed through the profile API', async () => {
