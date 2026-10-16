@@ -30,3 +30,6 @@ backend/.test-credentials.local
 *.njsproj
 *.sln
 *.sw?
+
+# Local visual rebrand QA artifacts
+qa/rebrand/

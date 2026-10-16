@@ -1,0 +1,45 @@
+{
+  "source": "frontend/public/brand/10th-west-logo.png",
+  "dimensions": {
+    "width": 1230,
+    "height": 1278
+  },
+  "sha256": "a3780265dd8946bd2395164b81d20615d4362187b9638282e6944e34fd91624d",
+  "method": "Median RGB samples from hue families in a 256px analysis copy; source PNG remains byte-for-byte unchanged. Interface colors flatten gradients and adjust contrast.",
+  "observed": {
+    "navy": {
+      "representativeMedian": "#001844",
+      "samplePixels": 8884
+    },
+    "red": {
+      "representativeMedian": "#FC0D18",
+      "samplePixels": 1903
+    },
+    "orange": {
+      "representativeMedian": "#FE760A",
+      "samplePixels": 2094
+    },
+    "white": {
+      "representativeMedian": "#FFFFFF",
+      "samplePixels": 4470
+    },
+    "black": {
+      "representativeMedian": "#000000",
+      "samplePixels": 43140
+    }
+  },
+  "interface": {
+    "obsidian": "#05070B",
+    "racingNavy": "#12204E",
+    "navySecondary": "#1A2B61",
+    "racingRed": "#D52231",
+    "performanceOrange": "#ED621D",
+    "hotOrange": "#F47A20",
+    "white": "#FFFFFF",
+    "offWhite": "#F5F6F8",
+    "steel": "#687182",
+    "lightBorder": "#D8DEE8",
+    "darkBorder": "#27324D",
+    "orangeInk": "#A83B0D"
+  }
+}

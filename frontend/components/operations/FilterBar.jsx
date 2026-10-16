@@ -10,13 +10,13 @@ export const SearchField = ({ value, onChange, placeholder = 'Search…', classN
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
+      className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
     />
   </label>
 );
 
 const FilterBar = ({ children, search, onSearchChange, searchPlaceholder, actions }) => (
-  <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm md:flex-row md:items-center">
+  <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 md:flex-row md:items-center">
     {onSearchChange && (
       <SearchField
         value={search}

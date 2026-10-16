@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 const sizeMap = { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-lg', xl: 'sm:max-w-xl', '2xl': 'sm:max-w-2xl', '3xl': 'sm:max-w-5xl' };
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
 
-const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, children }) => {
+const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentation = 'modal', tone = 'default', children }) => {
   const panelRef = useRef(null);
   const titleId = useId();
 
@@ -53,7 +53,7 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, children }
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center sm:items-start sm:overflow-y-auto sm:px-4 sm:py-[8vh]"
+      className={`brand-overlay brand-overlay-${presentation} brand-overlay-tone-${tone} fixed inset-0 z-[90] flex items-end justify-center sm:items-start sm:overflow-y-auto sm:px-4 sm:py-[8vh]`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -63,11 +63,11 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, children }
       <div
         ref={panelRef}
         tabIndex={-1}
-        className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl outline-none animate-scaleIn sm:max-h-[84vh] sm:rounded-2xl ${sizeMap[size] || sizeMap.lg}`}
+        className={`brand-dialog-panel relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl outline-none animate-scaleIn sm:max-h-[84vh] sm:rounded-xl ${sizeMap[size] || sizeMap.lg}`}
       >
         <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-          <h2 id={titleId} className="min-w-0 truncate font-display text-base font-semibold text-slate-950">{title}</h2>
-          <button type="button" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900" aria-label="Close">
+          <h2 id={titleId} className="min-w-0 truncate font-display text-2xl font-semibold text-slate-950">{title}</h2>
+          <button type="button" onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900" aria-label="Close">
             <X size={18} />
           </button>
         </div>

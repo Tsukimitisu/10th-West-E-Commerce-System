@@ -1,142 +1,83 @@
-# 10th West Moto — Design System (MASTER)
+# 10TH WEST — Visual identity and interface system
 
-Source of truth for every frontend surface. Page files in `design-system/pages/` may
-override a rule only when a page genuinely needs it; otherwise this file wins.
+Source of truth for storefront, authentication, owner, staff, POS and system administration. Intentional replacement of the previous identity, based on the official logo. Product truth: `PRODUCT.md`.
 
-## 1. Direction
+## Direction and research
 
-10th West Moto is a working motorcycle-parts retailer: a storefront, a POS counter, and
-a back office that share one inventory. The interface should feel like dependable shop
-equipment — precise, legible, fast — not a SaaS template.
+Premium motorcycle parts counter: precise part identification, product-first merchandising and practical operations. Barlow Condensed headings draw from automotive packaging; Inter keeps forms, checkout and data readable. Real merchandise supplies imagery. Navy/black framing and a restrained angular orange/red signature unite all surfaces.
 
-| Surface | Mode | Variance | Motion | Density |
-|---|---|---|---|---|
-| Storefront (home, shop, product, cart, checkout) | Persuade → Operate at checkout | 5 | 3 | 4 |
-| Account (orders, wishlist, profile, messages) | Operate | 4 | 2 | 5 |
-| Owner / Staff / Super Admin workspaces | Operate | 3 | 2 | 7 |
-| POS and Inventory | Operate (speed first) | 2 | 1 | 8 |
+ui-ux-pro-max was run for motorcycle e-commerce, automotive retail, inventory, POS and operations: variance 6, motion 3, storefront density 5. The generic red CTA and Rubik/Nunito results are intentionally superseded by the explicit logo-based brief. Operations density 7; inventory/POS 8. Generated research is archived in `research/`, not a competing master.
 
-Generated baseline: `ui-ux-pro-max --design-system "motorcycle parts automotive e-commerce
-retail inventory POS operations dashboard professional high-trust" --variance 5 --motion 3
---density 7`. Its teal palette and Rubik/Nunito pairing were **overridden** by the brief's
-"preserve the existing brand" rule; its checklist (SVG icons, 150–300 ms states, 4.5:1
-contrast, visible focus, reduced motion, 375/768/1024/1440 checks) is adopted as-is.
+## Official logo
 
-## 2. Color tokens (`frontend/index.css :root`)
+`frontend/public/brand/10th-west-logo.png` is the only mark. Use `ui/BrandLogo.jsx`; existing `BrandMark` delegates to it. Preserve the complete image, color and aspect ratio with contain. No crop, filters, fake initials or stretched lockup. The supplied logo includes a black canvas: use a black plate with 8px clear space. Navigation pairs a compact complete image with a readable companion name. Auth/footer may use a larger image. Never substitute text for the image.
 
-Primitive → semantic. Components use the semantic names (or the matching Tailwind
-slate/orange/red utilities listed) — never new hex values.
+## Palette: primitive → semantic → component
 
-| Token | Value | Tailwind equivalent | Use |
-|---|---|---|---|
-| `--brand-950` | `#080d19` | `bg-[#080d19]` | Storefront navbar, footer, dark bands |
-| `--brand-900` | `#0b1020` | `bg-[#0b1020]` | Hero, dark sections |
-| `--ops-sidebar` | `#020617` | `bg-slate-950` | Operations sidebar |
-| `--accent` | `#ea580c` | `orange-600` | Primary action, active nav, focus ring hue |
-| `--accent-hover` | `#c2410c` | `orange-700` | Primary hover / pressed |
-| `--accent-soft` | `#fff7ed` | `orange-50` | Selected rows, active filters, unread |
-| `--accent-red` | `#e53935` | `red-600` | Brand mark, sale price, destructive |
-| `--surface` | `#ffffff` | `white` | Cards, tables, dialogs |
-| `--surface-muted` | `#f8fafc` | `slate-50` | Page background |
-| `--surface-subtle` | `#f1f5f9` | `slate-100` | Table header, inset panels |
-| `--border` | `#e2e8f0` | `slate-200` | Default dividers / card borders |
-| `--border-strong` | `#cbd5e1` | `slate-300` | Inputs, secondary buttons |
-| `--text` | `#0f172a` | `slate-900/950` | Primary text |
-| `--text-secondary` | `#475569` | `slate-600` | Descriptions, table cells |
-| `--text-muted` | `#64748b` | `slate-500` | Helper / meta (≥ 4.5:1 on white) |
-| `--success` | `#047857` | `emerald-700` on `emerald-50` | Paid, delivered, in stock |
-| `--warning` | `#b45309` | `amber-700/800` on `amber-50` | Pending, low stock |
-| `--danger` | `#dc2626` | `red-700` on `red-50` | Failed, cancelled, out of stock |
-| `--info` | `#1d4ed8` | `blue-700` on `blue-50` | Processing, shipped, informational |
+- Obsidian `#05070B`: shell and footer.
+- Racing navy `#12204E`: operations navigation and strong headers.
+- Secondary navy `#1A2B61`: selected dark surfaces.
+- Racing red `#D52231`: sales, destructive actions and narrow signature detail.
+- Performance orange `#ED621D`: primary interaction fill with obsidian text.
+- Hot orange `#F47A20`: hover fill and highlights on dark surfaces.
+- White `#FFFFFF`: cards, forms and tables.
+- Off white `#F5F6F8`: workspace/catalog canvas.
+- Steel `#687182`: supplementary text; `#515B6D` for small secondary text.
+- Light border `#D8DEE8`; control border `#8B95A6`; dark border `#27324D`.
+- Accessible orange ink `#A83B0D`: links on light backgrounds.
+- Success `#166534`, warning `#92400E`, danger ink `#B91C2C`, information navy. Status includes text/icon.
 
-Rules
-- Red/orange is reserved for the **one** primary action per context, the active nav item,
-  sale prices, and status accents. Never fill large surfaces with it.
-- The red→orange gradient exists only inside the BrandMark tile. No gradient text, no
-  gradient buttons, no coloured glows.
-- Status is never color-only: every badge carries a text label, and an icon where the row
-  is scanned quickly (orders, stock).
+Pixel samples and source SHA-256 are recorded in `brand-palette.json`: deep navy, red, orange, white and black are normalized to flat, accessible interface colors. The logo remains unchanged. Primitives live in `frontend/index.css`; semantic aliases include `--accent`, `--surface`, `--text`, `--border`; component aliases include `--button-bg`, `--button-text`, `--sidebar-bg`, `--input-border`.
 
-## 3. Typography
+## Typography and geometry
 
-- Body / UI / data: **Inter** 400–700. Tabular figures (`tabular-nums`) for prices,
-  quantities, totals, dates in tables.
-- Display: **Poppins** 600–800 for page titles, section headings, prices on product pages.
-  Never for labels, buttons, or table data.
+Self-host Barlow Condensed 600/700 and Inter 400–700, font-display swap. Hero 42px phone / 56px tablet / 64px desktop; operations page title 30px phone / 34px desktop, product title 32/38; section 26–32; card heading 18–20. Body 14–16; labels 13–14. Controls, prices and table data use Inter. Phone inputs use 16px; numbers use tabular figures. Condensed typography is reserved for headings and brand lockups.
 
-| Role | Classes |
-|---|---|
-| Page title (ops) | `font-display text-2xl sm:text-[28px] font-bold tracking-tight text-slate-950` |
-| Page title (storefront) | `font-display text-3xl sm:text-4xl font-extrabold tracking-tight` |
-| Section heading | `font-display text-lg sm:text-xl font-bold text-slate-950` |
-| Card heading | `text-base font-semibold text-slate-950` |
-| Body | `text-sm sm:text-base leading-6 text-slate-600` (max 70ch) |
-| Label | `text-sm font-medium text-slate-700` |
-| Helper | `text-xs leading-5 text-slate-500` |
-| Caption / meta | `text-xs text-slate-500` (11px is the floor; never 9–10px for meaning) |
+4px spacing grid. Storefront gutters 16/24/32px, section gaps 40/56px. Operations gutters 16/20/24px and 44px controls. POS 12/20px gutters. Control radius 8px; cards and modals 10–12px. 1px borders, minimal elevation. One angular separator per major brand region; never cut text, buttons or the logo.
 
-Eyebrows (uppercase tracked kicker above a heading) are retired in operations pages and
-limited to at most one per three storefront sections. Tracking floor −0.03em.
+## Shared primitives
 
-## 4. Spacing, radius, elevation
+- BrandLogo / BrandMark: the complete official mark.
+- BrandButton / Button: primary, secondary, dark, danger, ghost.
+- IconButton: named action, 44px target.
+- FormControls: Input, SearchInput, Select, Checkbox, Radio, Textarea; native semantics, labels, helpers/errors.
+- operations/PageHeader and SectionHeader; SectionCard and MetricCard.
+- operations/FilterBar and SearchField; DataToolbar alias.
+- Card: flat bordered surface. Existing ProductCard: intact product image, genuine ratings only, part number/model, stock, price, orange purchase action.
+- StatusBadge, StockBadge, PriceDisplay / Price.
+- DataTable: sticky header, contained horizontal scrolling; inventory retains phone cards.
+- Pagination and Tabs: labeled navigation/selection.
+- owner/Modal: focus-managed. Drawer/BottomSheet share its focus and restoration behavior.
+- ConfirmationDialog: Modal with distinct cancel/danger actions.
+- Toast: live region. LoadingSkeleton / Skeleton, EmptyState / ErrorState.
+- RichText: safe descriptions and policies; never raw HTML.
 
-- Spacing: 4px base (`1`=4px). Ops pages use `space-y-4/5`, card padding `p-4 sm:p-5`,
-  storefront sections `py-10 sm:py-14`.
-- Radius (`--radius-*`): controls `6–8px` (`rounded-md`/`rounded-lg`), cards `12px`
-  (`rounded-xl`), dialogs `16px` (`rounded-2xl`). Pills only for badges and counts.
-- Elevation: declare it once — a 1px `slate-200` border **or** a shadow, not a ghost card.
-  `shadow-sm` for resting cards, `--shadow-overlay` for menus/dialogs. No coloured halos.
+Reuse primitives where needed; retain field-specific native controls when replacement risks handlers. Shared form/surface styles normalize legacy controls. No additional UI framework or state library.
 
-## 5. Interaction states
+## Surface rules
 
-| State | Treatment |
-|---|---|
-| Hover | Background shift one step (`slate-50`/`orange-700`), 150–200 ms, guarded by `@media (hover:hover)` for lift effects |
-| Focus | `outline: 3px solid rgb(234 88 12 / .55)` + 2px offset via `:focus-visible` (global) |
-| Active | `translate-y-px` on buttons |
-| Disabled | `opacity-50`, `cursor-not-allowed`, no hover change |
-| Loading | Inline spinner inside the triggering button + "…" label; skeletons for data regions |
-| Error | Inline next to the field (`role="alert"`), page-level `ErrorState` with retry |
+Storefront: black header, official logo, Home / Shop / Support, contextual search, account/cart. Mobile logo, cart/menu and search; focus-managed navigation drawer. Dark footer stays out of immersive chat and operations.
 
-Touch targets ≥ 44px on touch layouts (`min-h-11`), 36–40px allowed for dense desktop
-table actions.
+Home: Parts Built for the Ride, prominent search, Shop Parts, motorcycle-model entry. Branded product panel uses actual catalog imagery; configured banners remain supported. Models, featured items, new arrivals, genuine best sellers, maintenance/accessories and shop support use real data.
 
-## 6. Shared components (`frontend/components`)
+Shop: light catalog, 280px desktop filters, phone filter drawer, count/sort/view controls and removable chips. Product imagery dominates. Preserve search safeguards, including symbols-only empty results.
 
-| Need | Use |
-|---|---|
-| Primary/secondary button | `ui/BrandButton` (`primary`, `secondary`, `dark`, `danger`) |
-| Page title + actions | `operations/PageHeader` |
-| Grouped panel | `operations/SectionCard` |
-| KPI | `operations/MetricCard` (only where the number drives a decision) |
-| Search + filters | `operations/FilterBar`, `SearchField` |
-| Row actions | `operations/ActionDropdown` |
-| Status | `ui/StatusBadge` (tone + text, optional icon) |
-| Empty / error | `ui/EmptyState` (`tone="error"` for failures, with retry action) |
-| Skeleton | `ui/LoadingSkeleton` |
-| Dialog | `owner/Modal` (focus-managed, Esc to close, bottom sheet on phones) |
-| Rich text display | `ui/RichText` (allow-listed render of stored HTML) |
+Product: gallery then purchase information, prominent part number/model, supported variants, stock, quantity, wishlist/reviews and safe rich text. Cart/checkout: content left, summary right on desktop; stack on phone; orange actions and numbered checkout steps.
 
-Do not add near-duplicates; extend these.
+Auth: centered light form with complete official logo on black plate and a navy brand panel on desktop. Form first on mobile. Reset, verification, OAuth and 2FA share the identity. Provider icons retain original colors.
 
-## 7. Layout rules
+Operations: navy sidebar, official logo and role label; orange selection, off-white workspace and white data. Owner and staff share geometry while retaining permission filtering. Four useful dashboard metrics, real charts, clear stock/orders. Super admin is the quieter technical version. Chart sequence navy, orange, steel, selective red; no rainbow.
 
-- Ops pages: `PageHeader` → (notice) → filters → primary data → secondary data.
-  Tables for tabular data on `md+`; structured cards on phones that keep **stock,
-  location, price and status visible**.
-- Storefront: hero fits the first viewport with search, one primary CTA, one secondary.
-- Chat: list + pane on `lg+`, one pane at a time on phones; footer hidden on `/messages`.
-- POS: catalog takes the screen on phones; the sale collapses to a sticky summary bar
-  with total and Pay always reachable.
+POS: navy header, orange scan/pay, compact white catalog and sale pane. Phone catalog fills available height; sale collapses to sticky summary. No decorative motion.
 
-## 8. Motion
+Print/email: conservative inline email CSS, existing public logo URL where supported, compact complete mark. Preserve every financial value and receipt/report field.
 
-150–250 ms ease-out on state changes only; no page-load choreography in operations.
-Everything honours `prefers-reduced-motion` (global rule in `index.css`).
+## Accessibility and motion
 
-## 9. Anti-patterns (reject in review)
+3px visible solid focus ring, 3px offset. Orange ink for light-background text, obsidian on orange buttons. Name icon actions, label fields, announce async status. Dialogs trap focus, close with Escape, restore opener. Danger uses confirmation. No auth secrets in customer lists. 200ms state transitions; reduced-motion disables animation/smooth scrolling. Manual banner controls avoid forced rotation. Retain route lazy loading, below-fold lazy images and intrinsic image dimensions.
 
-Gradient text or buttons · coloured glow shadows · nested cards · eyebrow on every
-section · 24px+ radii on business UI · emoji as icons · color-only status · `transition:
-all` · `outline: none` without replacement · placeholder-as-label · spinners in the middle
-of tables when a skeleton fits · five equal-weight actions in one header.
+## Responsive and verification
+
+Test 375, 390, 430, 768, 1024, 1280, 1440px. No page overflow; tables scroll in their own region. Phone fields 16px, safe-area padding, inventory phone cards, chat one pane at a time.
+
+Bounded QA: build fully, capture desktop/mobile in one batch, collect defects, fix once, confirm once. Screenshots in ignored `qa/rebrand/`. Frontend lint/test/build, backend lint/test (60s test timeout), read-only integrity audit and safe E2E. No checkout, payment, inventory, maintenance or order mutation against shared data. Report inaccessible routes, pre-existing failures and manual UAT honestly.

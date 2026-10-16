@@ -15,7 +15,7 @@ const MetricCard = ({ icon: Icon, label, value, detail, tone = 'neutral', onClic
     <Component
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm ${
+      className={`ops-metric w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm ${
         onClick ? 'transition hover:border-slate-300 hover:shadow-md' : ''
       }`}
     >

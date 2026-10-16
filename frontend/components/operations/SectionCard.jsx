@@ -1,7 +1,7 @@
 import React from 'react';
 
 const SectionCard = ({ title, description, action, children, className = '', padded = true }) => (
-  <section className={`overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>
+  <section className={`ops-section overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>
     {(title || description || action) && (
       <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-5">
         <div>

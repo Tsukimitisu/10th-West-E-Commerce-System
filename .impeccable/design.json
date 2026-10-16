@@ -1,0 +1,471 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-16T17:42:05.244637Z",
+  "title": "Design System: 10th West Moto",
+  "extensions": {
+    "colorMeta": {
+      "obsidian": {
+        "role": "neutral",
+        "displayName": "Obsidian",
+        "tonalRamp": [
+          "oklch(0.150 0.0108 259.64)",
+          "oklch(0.260 0.0108 259.64)",
+          "oklch(0.380 0.0108 259.64)",
+          "oklch(0.490 0.0108 259.64)",
+          "oklch(0.610 0.0108 259.64)",
+          "oklch(0.720 0.0108 259.64)",
+          "oklch(0.840 0.0108 259.64)",
+          "oklch(0.950 0.0108 259.64)"
+        ]
+      },
+      "racing-navy": {
+        "role": "neutral",
+        "displayName": "Racing Navy",
+        "tonalRamp": [
+          "oklch(0.150 0.0869 267.34)",
+          "oklch(0.260 0.0869 267.34)",
+          "oklch(0.380 0.0869 267.34)",
+          "oklch(0.490 0.0869 267.34)",
+          "oklch(0.610 0.0869 267.34)",
+          "oklch(0.720 0.0869 267.34)",
+          "oklch(0.840 0.0869 267.34)",
+          "oklch(0.950 0.0869 267.34)"
+        ]
+      },
+      "navy-secondary": {
+        "role": "neutral",
+        "displayName": "Navy Secondary",
+        "tonalRamp": [
+          "oklch(0.150 0.0984 267.25)",
+          "oklch(0.260 0.0984 267.25)",
+          "oklch(0.380 0.0984 267.25)",
+          "oklch(0.490 0.0984 267.25)",
+          "oklch(0.610 0.0984 267.25)",
+          "oklch(0.720 0.0984 267.25)",
+          "oklch(0.840 0.0984 267.25)",
+          "oklch(0.950 0.0984 267.25)"
+        ]
+      },
+      "performance-orange": {
+        "role": "primary",
+        "displayName": "Performance Orange",
+        "tonalRamp": [
+          "oklch(0.150 0.1870 42.35)",
+          "oklch(0.260 0.1870 42.35)",
+          "oklch(0.380 0.1870 42.35)",
+          "oklch(0.490 0.1870 42.35)",
+          "oklch(0.610 0.1870 42.35)",
+          "oklch(0.720 0.1870 42.35)",
+          "oklch(0.840 0.1870 42.35)",
+          "oklch(0.950 0.1870 42.35)"
+        ]
+      },
+      "hot-orange": {
+        "role": "primary",
+        "displayName": "Hot Orange",
+        "tonalRamp": [
+          "oklch(0.150 0.1753 50.43)",
+          "oklch(0.260 0.1753 50.43)",
+          "oklch(0.380 0.1753 50.43)",
+          "oklch(0.490 0.1753 50.43)",
+          "oklch(0.610 0.1753 50.43)",
+          "oklch(0.720 0.1753 50.43)",
+          "oklch(0.840 0.1753 50.43)",
+          "oklch(0.950 0.1753 50.43)"
+        ]
+      },
+      "racing-red": {
+        "role": "secondary",
+        "displayName": "Racing Red",
+        "tonalRamp": [
+          "oklch(0.150 0.2102 24.00)",
+          "oklch(0.260 0.2102 24.00)",
+          "oklch(0.380 0.2102 24.00)",
+          "oklch(0.490 0.2102 24.00)",
+          "oklch(0.610 0.2102 24.00)",
+          "oklch(0.720 0.2102 24.00)",
+          "oklch(0.840 0.2102 24.00)",
+          "oklch(0.950 0.2102 24.00)"
+        ]
+      },
+      "orange-ink": {
+        "role": "primary",
+        "displayName": "Orange Ink",
+        "tonalRamp": [
+          "oklch(0.150 0.1524 39.34)",
+          "oklch(0.260 0.1524 39.34)",
+          "oklch(0.380 0.1524 39.34)",
+          "oklch(0.490 0.1524 39.34)",
+          "oklch(0.610 0.1524 39.34)",
+          "oklch(0.720 0.1524 39.34)",
+          "oklch(0.840 0.1524 39.34)",
+          "oklch(0.950 0.1524 39.34)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "tonalRamp": [
+          "oklch(0.150 0.0000 89.88)",
+          "oklch(0.260 0.0000 89.88)",
+          "oklch(0.380 0.0000 89.88)",
+          "oklch(0.490 0.0000 89.88)",
+          "oklch(0.610 0.0000 89.88)",
+          "oklch(0.720 0.0000 89.88)",
+          "oklch(0.840 0.0000 89.88)",
+          "oklch(0.950 0.0000 89.88)"
+        ]
+      },
+      "surface-muted": {
+        "role": "neutral",
+        "displayName": "Surface Muted",
+        "tonalRamp": [
+          "oklch(0.150 0.0029 264.54)",
+          "oklch(0.260 0.0029 264.54)",
+          "oklch(0.380 0.0029 264.54)",
+          "oklch(0.490 0.0029 264.54)",
+          "oklch(0.610 0.0029 264.54)",
+          "oklch(0.720 0.0029 264.54)",
+          "oklch(0.840 0.0029 264.54)",
+          "oklch(0.950 0.0029 264.54)"
+        ]
+      },
+      "surface-subtle": {
+        "role": "neutral",
+        "displayName": "Surface Subtle",
+        "tonalRamp": [
+          "oklch(0.150 0.0058 264.53)",
+          "oklch(0.260 0.0058 264.53)",
+          "oklch(0.380 0.0058 264.53)",
+          "oklch(0.490 0.0058 264.53)",
+          "oklch(0.610 0.0058 264.53)",
+          "oklch(0.720 0.0058 264.53)",
+          "oklch(0.840 0.0058 264.53)",
+          "oklch(0.950 0.0058 264.53)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "tonalRamp": [
+          "oklch(0.150 0.0151 260.73)",
+          "oklch(0.260 0.0151 260.73)",
+          "oklch(0.380 0.0151 260.73)",
+          "oklch(0.490 0.0151 260.73)",
+          "oklch(0.610 0.0151 260.73)",
+          "oklch(0.720 0.0151 260.73)",
+          "oklch(0.840 0.0151 260.73)",
+          "oklch(0.950 0.0151 260.73)"
+        ]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Border Strong",
+        "tonalRamp": [
+          "oklch(0.150 0.0235 260.72)",
+          "oklch(0.260 0.0235 260.72)",
+          "oklch(0.380 0.0235 260.72)",
+          "oklch(0.490 0.0235 260.72)",
+          "oklch(0.610 0.0235 260.72)",
+          "oklch(0.720 0.0235 260.72)",
+          "oklch(0.840 0.0235 260.72)",
+          "oklch(0.950 0.0235 260.72)"
+        ]
+      },
+      "input-border": {
+        "role": "neutral",
+        "displayName": "Input Border",
+        "tonalRamp": [
+          "oklch(0.150 0.0277 261.12)",
+          "oklch(0.260 0.0277 261.12)",
+          "oklch(0.380 0.0277 261.12)",
+          "oklch(0.490 0.0277 261.12)",
+          "oklch(0.610 0.0277 261.12)",
+          "oklch(0.720 0.0277 261.12)",
+          "oklch(0.840 0.0277 261.12)",
+          "oklch(0.950 0.0277 261.12)"
+        ]
+      },
+      "dark-border": {
+        "role": "neutral",
+        "displayName": "Dark Border",
+        "tonalRamp": [
+          "oklch(0.150 0.0507 266.65)",
+          "oklch(0.260 0.0507 266.65)",
+          "oklch(0.380 0.0507 266.65)",
+          "oklch(0.490 0.0507 266.65)",
+          "oklch(0.610 0.0507 266.65)",
+          "oklch(0.720 0.0507 266.65)",
+          "oklch(0.840 0.0507 266.65)",
+          "oklch(0.950 0.0507 266.65)"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Text Secondary",
+        "tonalRamp": [
+          "oklch(0.150 0.0319 262.19)",
+          "oklch(0.260 0.0319 262.19)",
+          "oklch(0.380 0.0319 262.19)",
+          "oklch(0.490 0.0319 262.19)",
+          "oklch(0.610 0.0319 262.19)",
+          "oklch(0.720 0.0319 262.19)",
+          "oklch(0.840 0.0319 262.19)",
+          "oklch(0.950 0.0319 262.19)"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Text Muted",
+        "tonalRamp": [
+          "oklch(0.150 0.0275 262.01)",
+          "oklch(0.260 0.0275 262.01)",
+          "oklch(0.380 0.0275 262.01)",
+          "oklch(0.490 0.0275 262.01)",
+          "oklch(0.610 0.0275 262.01)",
+          "oklch(0.720 0.0275 262.01)",
+          "oklch(0.840 0.0275 262.01)",
+          "oklch(0.950 0.0275 262.01)"
+        ]
+      },
+      "steel": {
+        "role": "neutral",
+        "displayName": "Steel",
+        "tonalRamp": [
+          "oklch(0.150 0.0287 263.21)",
+          "oklch(0.260 0.0287 263.21)",
+          "oklch(0.380 0.0287 263.21)",
+          "oklch(0.490 0.0287 263.21)",
+          "oklch(0.610 0.0287 263.21)",
+          "oklch(0.720 0.0287 263.21)",
+          "oklch(0.840 0.0287 263.21)",
+          "oklch(0.950 0.0287 263.21)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Short brand headlines; 42px phone, 56px tablet, 64px desktop."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Operations titles; 34px desktop and 30px phone."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Shared section headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Operations sections and dialog headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Reading text; operations commonly uses 14px."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels and default action text."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shadow-card",
+        "value": "0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.04)",
+        "purpose": "Generic surface cards."
+      },
+      {
+        "name": "shadow-elevated",
+        "value": "0 12px 32px rgba(15, 23, 42, 0.12)",
+        "purpose": "Floating menus and supported elevated UI."
+      },
+      {
+        "name": "shadow-overlay",
+        "value": "0 20px 48px rgba(8, 13, 25, 0.18)",
+        "purpose": "Existing overlay token; the shared Modal currently uses the dialog shadow below."
+      },
+      {
+        "name": "dialog",
+        "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)",
+        "purpose": "Shared Modal Tailwind shadow-2xl."
+      },
+      {
+        "name": "product-hover",
+        "value": "0 4px 14px rgba(18,32,78,.07)",
+        "purpose": "Product-card hover without translation."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "200ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "BrandButton state changes using Tailwind default timing."
+      },
+      {
+        "name": "interactive-card",
+        "value": "200ms ease-out",
+        "purpose": "Generic interactive card state; product cards override translation."
+      },
+      {
+        "name": "dialog-entry",
+        "value": "200ms ease-out",
+        "purpose": "Shared modal scale-in from 0.97 to 1."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Reduced-motion overrides for transitions and animations; smooth scroll becomes auto."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "BrandButton primary variant at the default size.",
+      "html": "<button type=\"button\" class=\"ds-button-primary\">Shop Parts</button>",
+      "css": ".ds-button-primary {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms,transform 200ms;background:var(--button-bg, #ed621d);color:var(--button-text, #05070b);} .ds-button-primary:hover:not(:disabled) {background:var(--hot-orange, #f47a20);} .ds-button-primary:focus-visible { outline:3px solid var(--focus-ring, #a83b0d); outline-offset:3px; } .ds-button-primary:active:not(:disabled) {transform:translateY(1px);} .ds-button-primary:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "BrandButton secondary variant at the default size.",
+      "html": "<button type=\"button\" class=\"ds-button-secondary\">Cancel</button>",
+      "css": ".ds-button-secondary {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms,transform 200ms;border-color:var(--border-strong, #b4bdcc);background:var(--surface, #fff);color:var(--racing-navy, #12204e);} .ds-button-secondary:hover:not(:disabled) {border-color:#626b7b;background:var(--surface-muted, #f5f6f8);} .ds-button-secondary:focus-visible { outline:3px solid var(--focus-ring, #a83b0d); outline-offset:3px; } .ds-button-secondary:active:not(:disabled) {transform:translateY(1px);} .ds-button-secondary:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+    },
+    {
+      "name": "Dark Button",
+      "kind": "button",
+      "refersTo": "button-dark",
+      "description": "BrandButton dark variant at the default size.",
+      "html": "<div class=\"ds-dark-frame\"><button type=\"button\" class=\"ds-button-dark\">Browse models</button></div>",
+      "css": ".ds-button-dark {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms,transform 200ms;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff;} .ds-button-dark:hover:not(:disabled) {background:rgba(255,255,255,.15);} .ds-button-dark:focus-visible { outline:3px solid var(--focus-ring, #a83b0d); outline-offset:3px; } .ds-button-dark:active:not(:disabled) {transform:translateY(1px);} .ds-button-dark:disabled {opacity:.5;pointer-events:none;}.ds-dark-frame {padding:20px;background:var(--racing-navy, #12204e);border-radius:12px;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "BrandButton danger variant at the default size.",
+      "html": "<button type=\"button\" class=\"ds-button-danger\">Delete</button>",
+      "css": ".ds-button-danger {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms,transform 200ms;background:var(--racing-red, #d52231);color:#fff;} .ds-button-danger:hover:not(:disabled) {background:#a51726;} .ds-button-danger:focus-visible { outline:3px solid var(--focus-ring, #a83b0d); outline-offset:3px; } .ds-button-danger:active:not(:disabled) {transform:translateY(1px);} .ds-button-danger:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "BrandButton ghost variant at the default size.",
+      "html": "<button type=\"button\" class=\"ds-button-ghost\">View details</button>",
+      "css": ".ds-button-ghost {display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 20px;border:1px solid transparent;border-radius:8px;font:600 14px/1.5 Inter,sans-serif;cursor:pointer;box-shadow:none;transition:background-color 200ms,border-color 200ms,color 200ms,transform 200ms;background:transparent;color:#35415b;} .ds-button-ghost:hover:not(:disabled) {background:var(--surface-subtle, #eef0f4);} .ds-button-ghost:focus-visible { outline:3px solid var(--focus-ring, #a83b0d); outline-offset:3px; } .ds-button-ghost:active:not(:disabled) {transform:translateY(1px);} .ds-button-ghost:disabled {opacity:.5;pointer-events:none;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Labeled search with the shared field treatment and a real SVG icon.",
+      "html": "<div class=\"ds-field\"><label for=\"ds-parts-search\">Search parts</label><div class=\"ds-search\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg><input id=\"ds-parts-search\" type=\"search\" placeholder=\"Part name or model\"></div></div>",
+      "css": ".ds-field {font:400 16px/1.5 Inter,sans-serif;} .ds-field label {display:block;margin-bottom:6px;color:var(--text, #12204e);font-size:14px;font-weight:600;} .ds-search {position:relative;} .ds-search svg {position:absolute;left:12px;bottom:14px;color:var(--text-secondary, #515b6d);} .ds-search input {width:100%;min-height:44px;padding:10px 12px 10px 40px;border:1px solid var(--input-border, #8b95a6);border-radius:8px;background:var(--surface, #fff);color:var(--text, #12204e);font:inherit;} .ds-search input::placeholder {color:#687182;opacity:1;} .ds-search input:hover {border-color:var(--input-border, #8b95a6);} .ds-search input:focus-visible {border-color:var(--accent-hover, #a83b0d);outline:3px solid var(--focus-ring, #a83b0d);outline-offset:3px;} .ds-search input[aria-invalid=true] {border-color:var(--danger, #dc2626);} @media(max-width:639px) {.ds-search input {font-size:16px;}} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+    },
+    {
+      "name": "Operations Navigation",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Dark navigation with a navy selected row and orange inset marker.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Operations\"><button type=\"button\" aria-current=\"page\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg>Dashboard</button><button type=\"button\">Inventory</button></nav>",
+      "css": ".ds-nav {padding:16px 12px;background:var(--racing-navy, #12204e);font:500 13px/1.5 Inter,sans-serif;} .ds-nav button {display:flex;align-items:center;gap:12px;width:100%;min-height:44px;margin:4px 0;padding:0 12px;border:0;border-radius:8px;background:transparent;color:#b4bdcc;text-align:left;font:inherit;cursor:pointer;transition:background-color 200ms,color 200ms;} .ds-nav button:hover {background:rgba(255,255,255,.06);color:#fff;} .ds-nav button[aria-current=page] {background:var(--navy-secondary, #1a2b61);color:#fff;box-shadow:inset 3px 0 var(--performance-orange, #ed621d);} .ds-nav button[aria-current=page] svg {color:var(--hot-orange, #f47a20);} .ds-nav button:focus-visible {outline:3px solid var(--focus-ring, #a83b0d);outline-offset:3px;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+    },
+    {
+      "name": "Stock Status",
+      "kind": "chip",
+      "refersTo": "status-badge",
+      "description": "Shared StatusBadge success tone with visible stock wording.",
+      "html": "<span class=\"ds-badge\"><span class=\"ds-badge-dot\" aria-hidden=\"true\"></span>In stock</span>",
+      "css": ".ds-badge {display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:2px 10px;border:1px solid #a7f3d0;border-radius:9999px;background:#ecfdf5;color:#065f46;font:600 12px/16px Inter,sans-serif;} .ds-badge-dot {width:6px;height:6px;border-radius:9999px;background:currentColor;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+    },
+    {
+      "name": "Content Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The shared flat, bordered Card; internal spacing is supplied by its content.",
+      "html": "<section class=\"ds-card\"><div class=\"ds-card-content\"><h2>Part information</h2><p>Inspect the part number, fitment and availability.</p></div></section>",
+      "css": ".ds-card {border:1px solid var(--border, #d8dee8);border-radius:12px;background:var(--surface, #fff);color:var(--text, #12204e);} .ds-card-content {padding:20px;} .ds-card h2 {margin:0;font:600 24px/1.2 \"Barlow Condensed\",sans-serif;} .ds-card p {margin:8px 0 0;color:var(--text-secondary, #515b6d);font:400 14px/1.5 Inter,sans-serif;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+    },
+    {
+      "name": "Data Table",
+      "kind": "custom",
+      "refersTo": "data-table",
+      "description": "Contained horizontal scrolling, sticky header and tabular numeric data.",
+      "html": "<div class=\"ds-table-scroll\" role=\"region\" aria-label=\"Part information\" tabindex=\"0\"><table><thead><tr><th>Part number</th><th>Stock</th><th>Price</th></tr></thead><tbody><tr><td>?</td><td>?</td><td>?</td></tr></tbody></table></div>",
+      "css": ".ds-table-scroll {max-width:100%;overflow:auto;border:1px solid var(--border, #d8dee8);border-radius:12px;background:var(--surface, #fff);color:var(--text, #12204e);} .ds-table-scroll table {width:100%;border-collapse:collapse;text-align:left;font:400 14px/1.5 Inter,sans-serif;} .ds-table-scroll th {position:sticky;top:0;padding:12px 16px;background:var(--surface-muted, #f5f6f8);color:var(--text-secondary, #515b6d);font-size:12px;font-weight:700;} .ds-table-scroll td {padding:12px 16px;border-top:1px solid var(--border, #d8dee8);font-variant-numeric:tabular-nums;} .ds-table-scroll:focus-visible {outline:3px solid var(--focus-ring, #a83b0d);outline-offset:3px;} @media(prefers-reduced-motion:reduce) {[class^=\"ds-\"] {transition-duration:.01ms !important;animation-duration:.01ms !important;}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Premium Motorcycle Parts Counter",
+    "overview": "The interface pairs confident automotive headings with practical, readable shopping and store operations. Merchandise, part identity, fitment, stock and prices carry the visual weight. Black and navy frame the experience; white content surfaces keep inspection and decisions clear.\n\nRetail allows more space for product imagery and discovery. Operations compress the same identity around legible data and fast actions. This document records the implemented system; [design-system/MASTER.md](design-system/MASTER.md) remains the primary project source of truth. [PRODUCT.md](PRODUCT.md) supplies the durable brand commitments. Frontmatter is normative for this document's extracted tokens; it does not supersede MASTER.",
+    "keyCharacteristics": [
+      "Complete official logo on a black plate.",
+      "Navy and black structure, orange interaction, selective red.",
+      "Barlow Condensed headings with Inter controls, prices and data.",
+      "Flat white surfaces, quiet borders and restrained angular accents.",
+      "Product-led retail and compact, readable operations."
+    ],
+    "rules": [
+      {
+        "name": "The Action Contrast Rule",
+        "body": "Orange action fills carry obsidian text. Use Orange Ink for orange text on light surfaces; a fill color is not automatically a readable text color.",
+        "section": "colors"
+      },
+      {
+        "name": "The Purposeful Accent Rule",
+        "body": "Orange identifies interaction; red identifies selective sale, destructive or brand detail. Status combines color with readable text or icons.",
+        "section": "colors"
+      },
+      {
+        "name": "The Readable Data Rule",
+        "body": "Keep controls, prices, metric values and table data in Inter. Use tabular figures for financial and operational numbers; condensed type belongs to headings and brand lockups.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Workspace Rule",
+        "body": "Separate business data with tone and borders; reserve visible depth for hover and floating UI.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do reuse the official complete logo, shared components and established semantic tokens.",
+      "Do pair orange action fills with dark text and use Orange Ink for light-background links.",
+      "Do keep real merchandise, part identity, fitment, stock and prices easy to inspect.",
+      "Do use Inter and tabular numbers for prices, controls and business data.",
+      "Do preserve visible focus, labeled actions, non-color status and reduced-motion behavior.",
+      "Do retain compact operations, contained table scrolling and usable phone controls."
+    ],
+    "donts": [
+      "Don't crop, recolor, filter, stretch or replace the official logo with initials or text.",
+      "Don't introduce gaming imagery, neon, skulls, flames, simulated metal or decorative bevels.",
+      "Don't invent ratings, fitment, stock, prices or unsupported marketing claims.",
+      "Don't turn red into the default primary-action color or use orange fill colors as small text on white.",
+      "Don't add rainbow charts, heavy panel shadows or decorative motion to operations.",
+      "Don't treat legacy utility exceptions, incidental micro-labels or content defects as new visual rules."
+    ]
+  }
+}
