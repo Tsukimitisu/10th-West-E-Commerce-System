@@ -91,7 +91,7 @@ const OrderConfirmation = () => {
                 return (
                   <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-3">
                     {productId ? (
-                      <Link to={`/products/${productId}`} className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700 hover:ring-2 hover:ring-red-500/40 transition-all" title="View product">
+                      <Link to={`/products/${productId}`} className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700 hover:ring-2 hover:ring-red-500/40 transition-colors" title="View product">
                         {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" />
                           : <div className="w-full h-full flex items-center justify-center"><Package size={16} className="text-gray-400" /></div>}
                       </Link>

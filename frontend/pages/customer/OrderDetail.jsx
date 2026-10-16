@@ -314,12 +314,12 @@ const OrderDetail = () => {
           <div className="flex items-center justify-between relative">
             <div className="absolute left-0 right-0 top-4 h-0.5 bg-gray-200 z-0" />
             <div
-              className="absolute left-0 top-4 h-0.5 bg-red-500/100 z-0 transition-all duration-500"
+              className="absolute left-0 top-4 h-0.5 bg-red-500/100 z-0 transition-colors duration-500"
               style={{ width: `${(step / (stepLabels.length - 1)) * 100}%` }}
             />
             {stepLabels.map((label, i) => (
               <div key={label} className="relative z-10 flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${i <= step ? 'bg-red-500/100 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${i <= step ? 'bg-red-500/100 text-white' : 'bg-gray-200 text-gray-400'}`}>
                   {i < step ? <CheckCircle2 size={16} /> : i + 1}
                 </div>
                 <span className={`text-xs mt-2 ${i <= step ? 'text-white font-medium' : 'text-gray-400'}`}>{label}</span>
@@ -397,7 +397,7 @@ const OrderDetail = () => {
               return (
                 <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-4 p-4">
                   {productId ? (
-                    <Link to={`/products/${productId}`} className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-red-500/40 transition-all" title="View product">
+                    <Link to={`/products/${productId}`} className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-red-500/40 transition-colors" title="View product">
                       {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" /> :
                         <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
                     </Link>

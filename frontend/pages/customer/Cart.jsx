@@ -212,7 +212,7 @@ const Cart = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#f8fafc] via-white to-[#f9fafb]">
+    <div className="commerce-page min-h-screen bg-slate-50">
       <div className="max-w-7xl mx-auto px-4 py-8 md:py-10">
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-5">
           <Link to="/" className="hover:text-red-600 transition-colors">Home</Link>
@@ -239,7 +239,7 @@ const Cart = () => {
             </div>
             <h2 className="font-display font-semibold text-xl text-slate-900 mb-2">Your cart is empty</h2>
             <p className="text-slate-500 mb-8">Discover amazing motorcycle parts and accessories.</p>
-            <Link to="/shop" className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors">
+            <Link to="/shop" className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-lg transition-colors">
               Start Shopping <ArrowRight size={18} />
             </Link>
           </div>
@@ -251,7 +251,8 @@ const Cart = () => {
                   <div className="min-w-0 flex items-center gap-3">
                     <input
                       type="checkbox"
-                      checked={selectedItemIds.length === items.length && items.length > 0}
+                      aria-label="Select all cart items"
+                  checked={selectedItemIds.length === items.length && items.length > 0}
                       onChange={(e) => toggleAllSelection(e.target.checked)}
                       className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-400 cursor-pointer"
                     />
@@ -271,6 +272,7 @@ const Cart = () => {
                         <div className="min-w-0 flex gap-4 items-center">
                           <input
                             type="checkbox"
+                            aria-label={`Select ${item.product.name}`}
                             checked={selectedItemIds.includes(item.productId)}
                             onChange={() => toggleSelection(item.productId)}
                             className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-400 cursor-pointer flex-shrink-0"
@@ -365,14 +367,14 @@ const Cart = () => {
                     <span className="font-semibold text-slate-900">{formatPrice(subtotal)}</span>
                   </div>
                   {discountAmount > 0 && (
-                    <div className="flex justify-between text-emerald-600">
+                    <div className="flex justify-between text-emerald-700">
                       <span>Discount {discount?.code && `(${discount.code})`}</span>
                       <span className="font-semibold">-{formatPrice(discountAmount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-slate-600">
                     <span>Estimated shipping</span>
-                    <span className="text-emerald-600 font-semibold">{shippingFee === 0 ? 'Free' : formatPrice(shippingFee)}</span>
+                    <span className="text-emerald-700 font-semibold">{shippingFee === 0 ? 'Free' : formatPrice(shippingFee)}</span>
                   </div>
                   <div className="flex justify-between text-slate-500">
                     <span>VAT (12%)</span>
@@ -388,7 +390,7 @@ const Cart = () => {
                 <button
                   disabled={selectedItemIds.length === 0}
                   onClick={handleCheckout}
-                  className={`w-full mt-6 py-3.5 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 text-sm ${selectedItemIds.length === 0 ? 'bg-red-200 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 shadow-sm'}`}
+                  className={`w-full mt-6 py-3.5 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 text-sm ${selectedItemIds.length === 0 ? 'bg-slate-200 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-500 shadow-sm'}`}
                 >
                   Proceed to Checkout <ArrowRight size={16} />
                 </button>
@@ -434,7 +436,7 @@ const LoginRequiredModal = ({ isOpen, onClose, onLogin }) => {
           <div className="space-y-3">
             <button
               onClick={onLogin}
-              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+              className="w-full py-3 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
             >
               <LogIn size={16} /> Sign In
             </button>

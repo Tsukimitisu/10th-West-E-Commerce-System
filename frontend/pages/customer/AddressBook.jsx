@@ -214,7 +214,7 @@ const AddressBook = () => {
           <h2 className="font-display font-semibold text-lg text-gray-900 flex items-center gap-2"><MapPin size={20} className="text-red-500" /> Address Book</h2>
           {!showForm && (
             <button onClick={openCreateForm}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-all duration-300 ease-in-out flex items-center gap-1.5">
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium rounded-lg transition-colors duration-300 ease-in-out flex items-center gap-1.5">
               <Plus size={16} /> Add Address
             </button>
           )}
@@ -229,7 +229,7 @@ const AddressBook = () => {
               <div className="flex gap-2">
                 {['Home', 'Office', 'Other'].map(l => (
                   <button key={l} type="button" onClick={() => setForm(f => ({...f, label: l}))}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all duration-300 ease-in-out flex items-center gap-1.5 ${form.label === l ? 'bg-red-50 border-red-200 text-red-600' : 'border-slate-300 text-gray-700 hover:bg-gray-100'}`}>
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors duration-300 ease-in-out flex items-center gap-1.5 ${form.label === l ? 'bg-red-50 border-red-200 text-red-600' : 'border-slate-300 text-gray-700 hover:bg-gray-100'}`}>
                     {l === 'Home' ? <Home size={14} /> : l === 'Office' ? <Building2 size={14} /> : <MapPin size={14} />} {l}
                   </button>
                 ))}
@@ -343,10 +343,10 @@ const AddressBook = () => {
                 Set as default address
               </label>
               <div className="flex gap-2">
-                <button type="submit" disabled={!!zipError || !validateZip(form.zip)} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-all duration-300 ease-in-out">
+                <button type="submit" disabled={!!zipError || !validateZip(form.zip)} className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-slate-950 text-sm font-medium rounded-lg transition-colors duration-300 ease-in-out">
                   {editing ? 'Update Address' : 'Save Address'}
                 </button>
-                <button type="button" onClick={resetForm} className="px-5 py-2.5 border border-slate-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-all duration-300 ease-in-out">Cancel</button>
+                <button type="button" onClick={resetForm} className="px-5 py-2.5 border border-slate-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors duration-300 ease-in-out">Cancel</button>
               </div>
             </form>
           </div>
@@ -383,8 +383,8 @@ const AddressBook = () => {
                   {addr.phone}
                 </p>
                 <div className="flex gap-2 mt-3 pt-3 border-t border-slate-200">
-                  <button onClick={() => startEdit(addr)} className="text-sm text-gray-700 hover:text-red-700 flex items-center gap-1 transition-all duration-300 ease-in-out"><Edit3 size={13} /> Edit</button>
-                  <button onClick={() => handleDelete(addr)} className="text-sm text-gray-700 hover:text-red-700 flex items-center gap-1 transition-all duration-300 ease-in-out"><Trash2 size={13} /> Delete</button>
+                  <button onClick={() => startEdit(addr)} className="text-sm text-gray-700 hover:text-red-700 flex items-center gap-1 transition-colors duration-300 ease-in-out"><Edit3 size={13} /> Edit</button>
+                  <button onClick={() => handleDelete(addr)} className="text-sm text-gray-700 hover:text-red-700 flex items-center gap-1 transition-colors duration-300 ease-in-out"><Trash2 size={13} /> Delete</button>
                 </div>
               </div>
             ))}

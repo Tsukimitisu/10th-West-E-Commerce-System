@@ -61,7 +61,7 @@ export default function PhoneVerification({ savedPhone, currentPhone }) {
       <div className="flex gap-2">
         <input aria-label="SMS verification code" inputMode="numeric" autoComplete="one-time-code" maxLength={8}
           value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} className="min-w-0 rounded-lg border px-3 py-2" />
-        <button type="button" disabled={busy || unsaved || code.length < 6} onClick={() => act(true)} className="rounded-lg bg-red-600 px-3 py-2 text-white disabled:opacity-50">{busy ? 'Please wait...' : 'Verify'}</button>
+        <button type="button" disabled={busy || unsaved || code.length < 6} onClick={() => act(true)} className="rounded-lg bg-orange-600 px-3 py-2 text-slate-950 disabled:opacity-50">{busy ? 'Please wait...' : 'Verify'}</button>
       </div>
     </>}
     {message && <p role="status">{message}</p>}

@@ -585,7 +585,7 @@ const Profile = () => {
             <button
               type="submit"
               disabled={loading || avatarUploading}
-              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors duration-500 flex items-center gap-2"
+              className="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-slate-950 text-sm font-medium rounded-lg transition-colors duration-500 flex items-center gap-2"
             >
               {loading || avatarUploading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={16} />}
               {avatarUploading ? 'Uploading Image...' : loading ? 'Saving...' : 'Save Changes'}
@@ -704,7 +704,7 @@ const Profile = () => {
                 <input type="text" value={totpCode} onChange={e => setTotpCode(e.target.value.replace(/\D/g, ''))} maxLength={6} placeholder="000000"
                   className="flex-1 px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-center tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-red-500" />
                 <button onClick={handle2FAVerify} disabled={totpCode.length !== 6 || twoFAAction !== ''}
-                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-medium rounded-lg transition-colors duration-500">{twoFAAction === 'verify' ? 'Verifying...' : 'Verify'}</button>
+                  className="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-slate-950 text-sm font-medium rounded-lg transition-colors duration-500">{twoFAAction === 'verify' ? 'Verifying...' : 'Verify'}</button>
               </div>
             </div>
           ) : (
@@ -724,7 +724,7 @@ const Profile = () => {
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 )}
-                <button onClick={handle2FASetup} disabled={twoFAAvailable !== true || twoFAAction !== '' || (!user?.oauth_provider && !twoFAPassword)} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white rounded-lg transition-all duration-300 ease-in-out disabled:cursor-not-allowed">
+                <button onClick={handle2FASetup} disabled={twoFAAvailable !== true || twoFAAction !== '' || (!user?.oauth_provider && !twoFAPassword)} className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-slate-950 rounded-lg transition-colors duration-300 ease-in-out disabled:cursor-not-allowed">
                   {twoFAAction === 'setup' ? 'Preparing...' : 'Enable 2FA'}
                 </button>
               </div>
@@ -749,7 +749,7 @@ const Profile = () => {
             <li>Downloaded as a JSON file you can save or transfer</li>
           </ul>
           <button onClick={handleExportData} disabled={exportLoading}
-            className="px-4 py-2 text-sm text-orange-600 hover:bg-red-500/10 border border-red-300 rounded-lg transition-all duration-300 ease-in-out flex items-center gap-2 disabled:opacity-50">
+            className="px-4 py-2 text-sm text-orange-600 hover:bg-red-500/10 border border-red-300 rounded-lg transition-colors duration-300 ease-in-out flex items-center gap-2 disabled:opacity-50">
             {exportLoading ? <div className="w-4 h-4 border-2 border-red-300 border-t-orange-600 rounded-full animate-spin" /> : <Download size={14} />}
             {exportLoading ? 'Preparing...' : 'Download My Data'}
           </button>
@@ -772,7 +772,7 @@ const Profile = () => {
             <li>Active orders in progress will be completed before data removal</li>
           </ul>
           <button ref={deleteTriggerRef} onClick={() => setShowDeleteModal(true)}
-            className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 border border-red-300 rounded-lg transition-all duration-300 ease-in-out flex items-center gap-2">
+            className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 border border-red-300 rounded-lg transition-colors duration-300 ease-in-out flex items-center gap-2">
             <Trash2 size={14} /> Request Account Deletion
           </button>
         </div>
@@ -822,11 +822,11 @@ const Profile = () => {
             )}
             <div className="sticky bottom-0 -mx-5 -mb-5 flex gap-3 border-t border-slate-200 bg-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
               <button onClick={closeDeleteModal} disabled={Boolean(deleteSuccess)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-300 ease-in-out">
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-300 ease-in-out">
                 Cancel
               </button>
               <button onClick={handleDeleteAccount} disabled={deleteConfirmText !== 'DELETE' || (hasLocalPassword && !deletePassword) || deleteLoading || Boolean(deleteSuccess)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-300 rounded-lg transition-all duration-300 ease-in-out flex items-center justify-center gap-2">
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-300 rounded-lg transition-colors duration-300 ease-in-out flex items-center justify-center gap-2">
                 {deleteLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Trash2 size={14} />}
                 Delete Forever
               </button>

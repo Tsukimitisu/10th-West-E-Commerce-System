@@ -141,7 +141,7 @@ const Wishlist = () => {
             <Heart size={48} className="mx-auto text-gray-300 mb-3" />
             <h3 className="font-semibold text-gray-900 mb-1">Your wishlist is empty</h3>
             <p className="text-sm text-gray-500 mb-4">Save items you love to your wishlist.</p>
-            <Link to="/shop" className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-all duration-300 ease-in-out">
+            <Link to="/shop" className="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-slate-950 text-sm font-medium rounded-lg transition-colors duration-300 ease-in-out">
               Browse Products
             </Link>
           </div>
@@ -167,7 +167,7 @@ const Wishlist = () => {
               const canAdd = inStock && !hasQtyError && selectedQty <= availableQty && !isAdding;
 
               return (
-                <div key={productId} className="bg-white rounded-xl border border-slate-200 overflow-hidden group hover:shadow-md transition-all">
+                <div key={productId} className="bg-white rounded-xl border border-slate-200 overflow-hidden group hover:shadow-md transition-colors">
                   <div className="relative aspect-square bg-gray-100 overflow-hidden">
                     {imageUrl ? (
                       <img src={resolveProductImageUrl(imageUrl)} alt={name} onError={handleProductImageError} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -186,7 +186,7 @@ const Wishlist = () => {
                     )}
                     <button
                       onClick={() => handleRemove(productId)}
-                      className="absolute top-2 right-2 w-8 h-8 bg-white hover:bg-red-50 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 transition-all duration-300 ease-in-out shadow-sm border border-slate-200"
+                      className="absolute top-2 right-2 w-8 h-8 bg-white hover:bg-red-50 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors duration-300 ease-in-out shadow-sm border border-slate-200"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -194,7 +194,7 @@ const Wishlist = () => {
 
                   <div className="p-3 space-y-2">
                     <Link to={`/products/${productId}`} className="block">
-                      <h3 className="text-sm font-medium text-gray-900 hover:text-red-600 line-clamp-2 transition-all duration-300 ease-in-out">{name}</h3>
+                      <h3 className="text-sm font-medium text-gray-900 hover:text-red-600 line-clamp-2 transition-colors duration-300 ease-in-out">{name}</h3>
                     </Link>
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-gray-500">Stock: {stockQuantity}</p>
@@ -246,11 +246,11 @@ const Wishlist = () => {
                       <button
                         onClick={() => handleAddToCart(item, selectedQty)}
                         disabled={!canAdd}
-                        className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-xs font-medium rounded-lg transition-all duration-300 ease-in-out flex items-center justify-center gap-1"
+                        className="flex-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-slate-950 text-xs font-medium rounded-lg transition-colors duration-300 ease-in-out flex items-center justify-center gap-1"
                       >
                         <ShoppingCart size={13} /> {isAdding ? 'Adding…' : 'Add to Cart'}
                       </button>
-                      <Link to={`/products/${productId}`} className="px-3 py-2 border border-slate-300 text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out flex items-center justify-center">
+                      <Link to={`/products/${productId}`} className="px-3 py-2 border border-slate-300 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors duration-300 ease-in-out flex items-center justify-center">
                         <Eye size={14} />
                       </Link>
                     </div>

@@ -762,7 +762,7 @@ const Checkout = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-gray-900">
+    <div className="commerce-page min-h-screen bg-slate-50 text-gray-900">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
           <Link to="/" className="hover:text-red-500">Home</Link>
@@ -806,7 +806,7 @@ const Checkout = () => {
                 {addresses.length > 0 && (
                   <div className="space-y-2 mb-4">
                     {addresses.map((addr) => (
-                      <label key={addr.id} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${selectedAddress === addr.id ? 'border-red-500 bg-red-500/10' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                      <label key={addr.id} className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${selectedAddress === addr.id ? 'border-orange-600 bg-orange-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
                         <input
                           type="radio"
                           name="address"
@@ -1083,6 +1083,7 @@ const Checkout = () => {
                               type="text" 
                               inputMode="numeric" 
                               pattern="[0-9]*"
+                              aria-label="Purchase quantity"
                               value={buyNowQty} 
                               onChange={(e) => {
                                 const rawVal = e.target.value;
@@ -1183,7 +1184,7 @@ const Checkout = () => {
                         className="w-full pl-9 pr-3 py-2 border border-slate-200 bg-gray-50 text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                     </div>
-                    <button type="button" onClick={handleApplyPromo} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors">Apply</button>
+                    <button type="button" onClick={handleApplyPromo} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold rounded-lg transition-colors">Apply</button>
                   </div>
                   {promoError && <p className="text-xs text-red-500 mt-1">{promoError}</p>}
                   {activeDiscount && (
@@ -1220,7 +1221,7 @@ const Checkout = () => {
                 <button
                   type="submit"
                   disabled={processing || !agreeTerms || shippingQuoteLoading || !shippingQuote || shippingBlocked}
-                  className="w-full mt-4 py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"
+                  className="w-full mt-4 py-3.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
                 >
                   {processing ? (
                     <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {paymentMethod === 'gcash' ? 'Redirecting to GCash...' : 'Placing order...'}</span>
