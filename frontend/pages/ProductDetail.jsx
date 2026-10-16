@@ -963,10 +963,10 @@ const ProductDetail = () => {
 
       {/* Product Section */}
       <div className="max-w-7xl mx-auto px-4 pb-28 pt-4 md:pb-16">
-        <div className="grid md:grid-cols-2 gap-8 lg:gap-12 bg-white border border-slate-200/80 rounded-3xl p-5 md:p-8 shadow-[0_20px_55px_-32px_rgba(15,23,42,0.35)]">
+        <div className="product-detail-layout grid md:grid-cols-2 gap-8 lg:gap-16 bg-white">
           {/* Images */}
           <div className="space-y-4">
-            <div className="aspect-square bg-gradient-to-b from-slate-50 to-slate-100 rounded-3xl overflow-hidden zoom-container relative border border-slate-200/90">
+            <div className="aspect-square bg-slate-50 rounded-3xl overflow-hidden zoom-container relative border border-slate-200/90">
               {selectedMedia?.type === 'video' ? (
                 <video
                   src={selectedMedia.src}
@@ -995,7 +995,7 @@ const ProductDetail = () => {
             {mediaItems.length > 1 && (
               <div tabIndex={0} className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
                 {mediaItems.map((media, i) => (
-                  <button key={i} aria-label={`View product ${media.type === 'video' ? 'video' : 'image'} ${i + 1}`} aria-pressed={i === selectedImage} onClick={() => setSelectedImage(i)} className={`w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition-colors ${i === selectedImage ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 hover:border-red-200'}`}>
+                  <button key={i} aria-label={`View product ${media.type === 'video' ? 'video' : 'image'} ${i + 1}`} aria-pressed={i === selectedImage} onClick={() => setSelectedImage(i)} className={`w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition-colors ${i === selectedImage ? 'border-orange-600 ring-2 ring-orange-100' : 'border-slate-200 hover:border-red-200'}`}>
                     {media.type === 'video' ? (
                       <span className="relative block h-full w-full bg-slate-950">
                         <img src={media.poster || PRODUCT_IMAGE_FALLBACK} alt="" onError={handleProductImageError} className="h-full w-full object-cover opacity-70" />
@@ -1014,13 +1014,13 @@ const ProductDetail = () => {
 
           {/* Info */}
           <div className="lg:pt-1">
-            {product.category_name && <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]">{product.category_name}</span>}
+            {product.category_name && <span className="text-sm text-slate-600 mb-2">{product.brand || product.category_name}</span>}
             <h1 className="font-display font-bold text-2xl lg:text-4xl text-slate-950 mt-3 mb-3 leading-tight">{product.name}</h1>
 
             {/* Rating */}
             <div className="flex items-center gap-3 mb-6">
               <StarRating rating={avgRating} count={reviews.length || product.reviewCount} size={18} />
-              <button onClick={() => setActiveTab('reviews')} className="text-sm text-red-600 hover:text-red-700 hover:underline">{reviews.length || product.reviewCount || 0} reviews</button>
+              <button onClick={() => setActiveTab('reviews')} className="text-sm text-slate-700 hover:text-orange-700 hover:underline">{reviews.length || product.reviewCount || 0} reviews</button>
             </div>
 
             {/* Price */}
@@ -1059,8 +1059,9 @@ const ProductDetail = () => {
             {/* SKU / Brand */}
             {(product.sku || product.part_number || product.brand || product.motorcycle_model) && (
               <div className="flex flex-wrap gap-2 text-xs text-slate-600 mb-6 pb-6 border-b border-slate-200">
-                {(product.sku || product.part_number) && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">SKU: <strong className="text-slate-800">{product.part_number || product.sku}</strong></span>}
+                {(product.sku || product.part_number) && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">Part #: <strong className="text-slate-800">{product.part_number || product.sku}</strong></span>}
                 {product.brand && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">Brand: <strong className="text-slate-800">{product.brand}</strong></span>}
+                {product.motorcycle_model && <span className="text-sm text-slate-700">Fits: <strong>{product.motorcycle_model}</strong></span>}
                 {isBundle && <span className="px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700">Bundle / Set</span>}
               </div>
             )}
@@ -1079,7 +1080,7 @@ const ProductDetail = () => {
                           setSelectedVariant((prev) => ({ ...prev, [option.name]: value }));
                           setVariantError('');
                         }}
-                        className={`px-4 py-2 border rounded-xl text-sm transition-colors ${selectedVariant?.[option.name] === value ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' : 'border-slate-300 text-slate-700 hover:border-red-200 bg-white'}`}
+                        className={`px-4 py-2 border rounded-xl text-sm transition-colors ${selectedVariant?.[option.name] === value ? 'border-orange-600 bg-orange-50 text-orange-800' : 'border-slate-300 text-slate-700 hover:border-red-200 bg-white'}`}
                       >
                         {value}
                       </button>
@@ -1093,7 +1094,7 @@ const ProductDetail = () => {
             )}
 
             {/* Quantity & Actions */}
-            <div className="flex flex-wrap gap-3 mb-6">
+            <div className="product-purchase-actions">
               <div className="flex items-center border border-slate-300 rounded-xl bg-slate-50">
                 <button aria-label="Decrease quantity" onClick={() => { setQuantity(q => Math.max(1, q - 1)); setQuantityError(''); }} className="px-3 py-3 text-slate-600 hover:text-slate-900 hover:bg-white transition-colors rounded-l-xl" disabled={quantity <= 1}><Minus size={16} /></button>
                 <input 
@@ -1160,19 +1161,22 @@ const ProductDetail = () => {
               <button
                 onClick={handleAddToCart}
                 disabled={isOutOfStock}
-                className="h-12 w-12 bg-slate-900 hover:bg-slate-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex items-center justify-center shadow-sm"
+                className="h-12 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-slate-950 rounded-lg transition-colors flex items-center justify-center gap-2 px-4 font-semibold text-sm"
                 title="Add to cart"
               >
-                {addedToCart ? <Check size={18} /> : <ShoppingCart size={18} />}
+                {addedToCart ? <Check size={18} aria-hidden="true" /> : <ShoppingCart size={18} aria-hidden="true" />}
+                {addedToCart ? 'Added to cart' : 'Add to Cart'}
               </button>
+            </div>
+            <div className="product-secondary-actions">
               <button
                 onClick={handleBuyNow}
                 disabled={isOutOfStock}
-                className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 disabled:text-gray-100 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors shadow-sm"
+                className="flex-1 py-3 border border-slate-300 bg-white hover:bg-slate-50 disabled:bg-gray-100 disabled:cursor-not-allowed text-slate-900 font-semibold rounded-lg transition-colors"
               >
                 Buy Now
               </button>
-              <button aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'} aria-pressed={isWishlisted} onClick={handleWishlist} className={`p-3 border rounded-xl transition-colors ${isWishlisted ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-300 bg-white text-slate-700 hover:text-red-500 hover:border-red-200'}`}>
+              <button aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'} aria-pressed={isWishlisted} onClick={handleWishlist} className={`p-3 border rounded-xl transition-colors ${isWishlisted ? 'border-orange-200 bg-orange-50 text-orange-800' : 'border-slate-300 bg-white text-slate-700 hover:text-red-500 hover:border-red-200'}`}>
                 <Heart size={20} className={isWishlisted ? 'fill-orange-500' : ''} />
               </button>
               <button
@@ -1187,7 +1191,7 @@ const ProductDetail = () => {
                 <button
                   type="button"
                   onClick={() => setShareOpen((open) => !open)}
-                  className={`p-3 border rounded-xl transition-colors ${shareOpen ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-300 bg-white text-slate-700 hover:text-slate-900 hover:border-red-200'}`}
+                  className={`p-3 border rounded-xl transition-colors ${shareOpen ? 'border-orange-200 bg-orange-50 text-orange-800' : 'border-slate-300 bg-white text-slate-700 hover:text-slate-900 hover:border-red-200'}`}
                   aria-label="Share product"
                   aria-expanded={shareOpen}
                 >
@@ -1236,7 +1240,7 @@ const ProductDetail = () => {
             {quantityError && <p className="text-xs text-red-500 -mt-4 mb-6">{quantityError}</p>}
 
             {/* Benefits */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-200 pt-5">
               <div className="text-center p-2">
                 <span className="inline-flex w-9 h-9 items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm mb-2">
                   <Truck size={18} className="text-slate-700" />
@@ -1259,16 +1263,16 @@ const ProductDetail = () => {
                 <p className="text-[11px] text-slate-500">7-day return</p>
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 sm:grid-cols-2">
+            <div className="mt-4 grid grid-cols-1 gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
               <div className="flex items-start gap-3">
-                <Truck size={18} className="mt-0.5 text-red-600" />
+                <Truck size={18} className="mt-0.5 text-slate-700" />
                 <div>
                   <p className="text-sm font-semibold text-slate-900">Standard delivery</p>
                   <p className="text-xs text-slate-600">Paid online orders can be prepared for provider waybill and tracking.</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <Shield size={18} className="mt-0.5 text-red-600" />
+                <Shield size={18} className="mt-0.5 text-slate-700" />
                 <div>
                   <p className="text-sm font-semibold text-slate-900">GCash checkout</p>
                   <p className="text-xs text-slate-600">
@@ -1285,7 +1289,7 @@ const ProductDetail = () => {
         </div>
 
         {/* Tabs */}
-        <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-8">
+        <div className="product-information-tabs">
           <div tabIndex={0} className="mb-8 inline-flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Product information">
             {(['description', 'specs', 'reviews']).map(tab => (
               <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)}
@@ -1451,7 +1455,7 @@ const ProductDetail = () => {
                   <button
                     type="submit"
                     disabled={!userId || reviewSubmitting}
-                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-500 disabled:cursor-not-allowed disabled:bg-gray-300"
                   >
                     {reviewSubmitting ? 'Submitting...' : 'Submit review'}
                   </button>
@@ -1508,7 +1512,7 @@ const ProductDetail = () => {
 
         {/* Related Productssss */}
         {related.length > 0 && (
-          <div className="mt-8 bg-white border border-slate-200/80 rounded-3xl p-5 md:p-8 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.35)]">
+          <div className="mt-10 border-t border-slate-200 pt-8">
             <h2 className="font-display font-bold text-xl text-slate-900 mb-6">Related Products</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {related.slice(0, 4).map((relatedProduct) => (
@@ -1524,7 +1528,7 @@ const ProductDetail = () => {
         )}
       </div>
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-3 shadow-[0_-10px_35px_-24px_rgba(15,23,42,0.45)] backdrop-blur md:hidden">
-        <div className="mx-auto grid max-w-xl grid-cols-[52px_52px_minmax(0,1fr)] gap-2">
+        <div className="mx-auto grid max-w-xl grid-cols-[48px_minmax(0,1fr)_100px] gap-2">
           <button
             type="button"
             onClick={handleChatSeller}
@@ -1537,16 +1541,16 @@ const ProductDetail = () => {
             type="button"
             onClick={handleAddToCart}
             disabled={isOutOfStock}
-            className="grid h-12 place-items-center rounded-xl bg-slate-900 text-white disabled:bg-slate-300"
+            className="flex h-12 items-center justify-center gap-2 rounded-lg bg-orange-600 text-slate-950 text-sm font-semibold disabled:bg-slate-300"
             aria-label="Add to cart"
           >
-            {addedToCart ? <Check size={19} /> : <ShoppingCart size={19} />}
+            {addedToCart ? <Check size={19} aria-hidden="true" /> : <ShoppingCart size={19} aria-hidden="true" />}<span>{addedToCart ? 'Added' : 'Add to cart'}</span>
           </button>
           <button
             type="button"
             onClick={handleBuyNow}
             disabled={isOutOfStock}
-            className="h-12 rounded-xl bg-orange-600 px-4 text-sm font-semibold text-white disabled:bg-slate-300"
+            className="h-12 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 disabled:bg-slate-300"
           >
             Buy Now
           </button>

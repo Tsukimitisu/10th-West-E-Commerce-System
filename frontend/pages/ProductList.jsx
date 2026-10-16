@@ -366,7 +366,7 @@ const ProductList = () => {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-50">
+      <main className="catalog-page min-h-screen">
         <div className="mx-auto max-w-[1600px] px-4 py-12 sm:px-6 lg:px-8">
           <LoadingSkeleton className="h-10 w-64" />
           <LoadingSkeleton className="mt-4 h-5 w-80 max-w-full" />
@@ -389,7 +389,7 @@ const ProductList = () => {
 
   if (catalogError) {
     return (
-      <main className="min-h-screen bg-slate-50">
+      <main className="catalog-page min-h-screen">
         <div className="mx-auto max-w-[1600px] px-4 py-16 sm:px-6 lg:px-8">
           <EmptyState
             icon={AlertTriangle}
@@ -403,12 +403,12 @@ const ProductList = () => {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="catalog-page min-h-screen">
       <div className="shop-page-header border-b border-slate-200 bg-white">
         <div className="mx-auto grid max-w-[1600px] gap-6 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(24rem,38rem)] lg:items-end lg:px-8">
           <div>
 
-            <h1 className="font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">Motorcycle parts & accessories</h1>
+            <h1 className="font-display text-4xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Motorcycle parts & accessories</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Find dependable parts, riding gear, and accessories with clear fitment and stock information.</p>
           </div>
           <div className="relative">
@@ -419,14 +419,14 @@ const ProductList = () => {
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search products, brands, or part numbers"
               aria-label="Search products"
-              className="h-12 w-full rounded-xl border border-slate-300 bg-slate-50 pl-11 pr-4 text-sm text-slate-950 transition placeholder:text-slate-500 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-orange-500/10"
+              className="h-12 w-full rounded-lg border border-slate-300 bg-white pl-11 pr-4 text-sm text-slate-950 transition placeholder:text-slate-500 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-orange-500/10"
             />
           </div>
         </div>
       </div>
 
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6 border-b border-slate-200 pb-4">
+        <div className="catalog-toolbar mb-6 pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-slate-950" aria-live="polite">{filtered.length} {filtered.length === 1 ? 'product' : 'products'}</p>

@@ -5,7 +5,6 @@ import { addToWishlist, getWishlist, removeFromWishlist } from '../services/api'
 import { getCurrentAuthUser } from '../services/authSession.js';
 import { useCart } from '../context/CartContext';
 import PriceDisplay from './ui/PriceDisplay';
-import StatusBadge from './ui/StatusBadge';
 import { handleProductImageError, resolveProductImageUrl } from '../utils/productImages.js';
 import { richTextToPlainText } from '../utils/richText.js';
 
@@ -81,135 +80,30 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
     if (success) setAdded(true);
   };
 
-  const stockBadge = outOfStock
-    ? <StatusBadge tone="danger" dot>Out of stock</StatusBadge>
-    : lowStock
-      ? <StatusBadge tone="warning" dot>Only {stock} left</StatusBadge>
-      : <StatusBadge tone="success" dot>In stock</StatusBadge>;
-
-  if (view === 'list') {
-    return (
-      <article className="product-card interactive-card flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row">
-        <Link to={productUrl} className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-xl bg-slate-100 sm:h-36 sm:w-40" aria-label={`View ${product.name}`}>
-          <img
-            src={image}
-            alt={product.name}
-            loading="lazy"
-            width="480" height="360"
-            onError={handleProductImageError}
-            className="h-full w-full object-contain transition-transform duration-300 hover:scale-105"
-          />
-          {onSale && <span className="absolute left-2 top-2 rounded-md bg-red-600 px-2 py-1 text-[11px] font-bold text-white">Save {discount}%</span>}
-        </Link>
-        <div className="min-w-0 flex flex-1 flex-col">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              {product.category_name && <p className="text-[11px] font-bold uppercase tracking-wider text-orange-700">{product.category_name}</p>}
-              <Link to={productUrl} className="mt-1 block font-display text-base font-bold text-slate-950 transition-colors hover:text-orange-700">{product.name}</Link>
-            </div>
-            <button
-              type="button"
-              onClick={handleWishlist}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
-              aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
-              aria-pressed={wishlisted}
-            >
-              <Heart size={18} className={wishlisted ? 'fill-orange-500 text-orange-500' : ''} />
-            </button>
-          </div>
-          {product.description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{richTextToPlainText(product.description)}</p>}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {stockBadge}
-            {Number(product.rating) > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700">
-                <Star size={14} className="fill-amber-400 text-amber-400" /> {Number(product.rating).toFixed(1)}
-              </span>
-            )}
-          </div>
-          <div className="mt-auto flex flex-wrap items-end justify-between gap-3 pt-4">
-            <PriceDisplay price={product.price} salePrice={onSale ? product.sale_price : null} />
-            <button
-              type="button"
-              onClick={handleAddToCart}
-              disabled={outOfStock || cartLoading}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600 disabled:bg-slate-300"
-            >
-              {added ? <Check size={16} /> : <ShoppingCart size={16} />}
-              {added ? 'Added' : hasVariants ? 'Choose options' : 'Add to cart'}
-            </button>
-          </div>
-        </div>
-      </article>
-    );
-  }
-
   return (
-    <article className={`product-card interactive-card group flex h-full min-h-[330px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white ${outOfStock ? 'bg-slate-50' : ''}`}>
-      <div className="relative">
-        <Link to={productUrl} className="block aspect-[4/3] overflow-hidden bg-slate-100" aria-label={`View ${product.name}`}>
-          <img
-            src={image}
-            alt={product.name}
-            loading="lazy"
-            width="480" height="360"
-            onError={handleProductImageError}
-            className={`h-full w-full object-contain transition-transform duration-200 ease-out group-hover:scale-[1.025] ${outOfStock ? 'saturate-[0.65]' : ''}`}
-          />
+    <article className={`product-card interactive-card flex ${view === 'list' ? 'flex-col sm:flex-row' : 'h-full flex-col'}`}>
+      <div className={`relative ${view === 'list' ? 'shrink-0 sm:w-56' : ''}`}>
+        <Link to={productUrl} className="product-photo" aria-label={`View ${product.name}`}>
+          <img src={image} alt={product.name} loading="lazy" width="480" height="480" onError={handleProductImageError} />
         </Link>
-        <div className="absolute left-2 top-2 flex flex-col items-start gap-1.5">
-          {onSale && <span className="rounded-md bg-red-600 px-2 py-1 text-[10px] font-bold text-white shadow-sm">SAVE {discount}%</span>}
-          {lowStock && <span className="rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-800 shadow-sm">LOW STOCK</span>}
-        </div>
-        <button
-          type="button"
-          onClick={handleWishlist}
-          className="absolute right-2 top-2 grid h-11 w-11 place-items-center rounded-full border border-white/80 bg-white/95 text-slate-500 shadow-sm backdrop-blur transition-colors duration-200 hover:border-orange-200 hover:text-orange-700"
-          aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
-          aria-pressed={wishlisted}
-        >
-          <Heart size={17} className={wishlisted ? 'fill-orange-500 text-orange-500' : ''} />
+        {onSale && <span className="product-sale-label">Save {discount}%</span>}
+        <button type="button" onClick={handleWishlist} className="product-wishlist" aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`} aria-pressed={wishlisted}>
+          <Heart size={18} className={wishlisted ? 'fill-orange-500 text-orange-700' : ''} aria-hidden="true" />
         </button>
-        {outOfStock && (
-          <div className="absolute inset-0 grid place-items-center bg-white/72 backdrop-blur-[1px]">
-            <span className="rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white">OUT OF STOCK</span>
-          </div>
-        )}
       </div>
-
-      <div className="flex flex-1 flex-col p-3.5 sm:p-4">
-        <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700">
-            {product.category_name || product.brand || 'Moto part'}
-          </p>
-          {Number(product.rating) > 0 && (
-            <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-slate-700">
-              <Star size={12} className="fill-amber-400 text-amber-400" /> {Number(product.rating).toFixed(1)}
-            </span>
-          )}
+      <div className="product-card-info">
+        <p className="product-card-meta">{[product.brand, product.motorcycle_model || product.category_name].filter(Boolean).join(' · ') || 'Motorcycle part'}</p>
+        <Link to={productUrl} className="product-card-name line-clamp-2">{product.name}</Link>
+        {(product.part_number || product.sku) && <p className="product-card-meta mt-1">Part # {product.part_number || product.sku}</p>}
+        {view === 'list' && product.description && <p className="mt-3 line-clamp-2 text-sm text-slate-600">{richTextToPlainText(product.description)}</p>}
+        <div className="product-stock-line flex flex-wrap items-center justify-between gap-1">
+          <span>{outOfStock ? 'Out of stock' : lowStock ? <><AlertTriangle size={13} aria-hidden="true" />Only {stock} left</> : 'In stock'}</span>
+          {Number(product.rating) > 0 && <span className="inline-flex items-center gap-1 text-xs text-slate-700"><Star size={13} className="fill-slate-700" aria-hidden="true" />{Number(product.rating).toFixed(1)}<span className="sr-only"> out of 5</span></span>}
         </div>
-        <Link to={productUrl} className="mt-1.5 line-clamp-2 min-h-11 text-sm font-bold leading-5 text-slate-950 transition-colors duration-150 hover:text-orange-700">
-          {product.name}
-        </Link>
-        {(product.part_number || product.sku) && <p className="product-part-meta">Part # {product.part_number || product.sku}</p>}
-        {product.motorcycle_model && <p className="product-fitment">{product.motorcycle_model}</p>}
-        <div className="mt-2">
-          {outOfStock ? (
-            <span className="text-[11px] font-medium text-red-700">Currently unavailable</span>
-          ) : lowStock ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700"><AlertTriangle size={12} /> {stock} left</span>
-          ) : (
-            <span className="text-[11px] font-medium text-emerald-700">In stock</span>
-          )}
-        </div>
-        <PriceDisplay className="mt-auto pt-3" price={product.price} salePrice={onSale ? product.sale_price : null} />
-        <button
-          type="button"
-          onClick={handleAddToCart}
-          disabled={outOfStock || cartLoading}
-          className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white transition-colors duration-200 hover:bg-orange-600 focus-visible:bg-orange-600 disabled:bg-slate-300"
-        >
-          {added ? <Check size={15} /> : <ShoppingCart size={15} />}
-          {added ? 'Added to cart' : hasVariants ? 'Choose options' : 'Add to cart'}
+        <PriceDisplay className="product-price" price={product.price} salePrice={onSale ? product.sale_price : null} />
+        <button type="button" onClick={handleAddToCart} disabled={outOfStock || cartLoading} className="product-card-button">
+          {added ? <Check size={16} aria-hidden="true" /> : <ShoppingCart size={16} aria-hidden="true" />}
+          {outOfStock ? 'Unavailable' : added ? 'Added to cart' : hasVariants ? 'Choose options' : 'Add to cart'}
         </button>
       </div>
     </article>
