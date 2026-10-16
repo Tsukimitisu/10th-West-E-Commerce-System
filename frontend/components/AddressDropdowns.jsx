@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useId, useState } from 'react';
 
 // Hierarchical Philippines location picker powered by PSGC open API (psgc.gitlab.io).
 // Emits chosen province/city/municipality/barangay names and codes via onChange.
@@ -13,6 +13,7 @@ const AddressDropdowns = ({
   disabled = false,
   labels = { province: 'Province', city: 'City / Municipality', barangay: 'Barangay' },
 }) => {
+  const idPrefix = useId();
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities] = useState([]);
   const [barangays, setBarangays] = useState([]);
@@ -261,8 +262,9 @@ const AddressDropdowns = ({
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-gray-800 mb-1">{labels.province}</label>
+        <label htmlFor={`${idPrefix}-province`} className="block text-sm font-medium text-gray-800 mb-1">{labels.province}</label>
         <select
+          id={`${idPrefix}-province`}
           value={selectedProvince.code}
           onChange={(e) => handleProvinceChange(e.target.value)}
           disabled={disabled || loadingProvince}
@@ -277,8 +279,9 @@ const AddressDropdowns = ({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-800 mb-1">{labels.city}</label>
+        <label htmlFor={`${idPrefix}-city`} className="block text-sm font-medium text-gray-800 mb-1">{labels.city}</label>
         <select
+          id={`${idPrefix}-city`}
           value={selectedCity.code}
           onChange={(e) => handleCityChange(e.target.value)}
           disabled={disabled || !selectedProvince.code || loadingCity}
@@ -293,8 +296,9 @@ const AddressDropdowns = ({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-800 mb-1">{labels.barangay}</label>
+        <label htmlFor={`${idPrefix}-barangay`} className="block text-sm font-medium text-gray-800 mb-1">{labels.barangay}</label>
         <select
+          id={`${idPrefix}-barangay`}
           value={selectedBarangayCode}
           onChange={(e) => handleBarangayChange(e.target.value)}
           disabled={disabled || !selectedCity.code || loadingBarangay}

@@ -895,8 +895,9 @@ const Checkout = () => {
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Street / House No.</label>
+                      <label htmlFor="checkout-street" className="block text-sm font-medium text-gray-600 mb-1">Street / House No.</label>
                       <AddressAutocomplete
+                        id="checkout-street"
                         value={form.street}
                         onInputChange={(val) => setForm((f) => ({ ...f, street: val, lat: null, lng: null }))}
                         onSelect={(selected) => {

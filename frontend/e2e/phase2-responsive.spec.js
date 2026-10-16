@@ -63,6 +63,36 @@ test('customer account and checkout layouts fit phone and desktop widths', async
   }
 });
 
+test('populated checkout sections fit phone and desktop without placing an order', async ({ page }) => {
+  test.skip(!process.env.E2E_CUSTOMER_EMAIL || !process.env.E2E_CUSTOMER_PASSWORD, 'Customer fixture credentials are required.');
+  test.setTimeout(90_000);
+  await login(page, process.env.E2E_CUSTOMER_EMAIL, process.env.E2E_CUSTOMER_PASSWORD);
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.goto('/#/products/41');
+  await page.getByRole('button', { name: 'Buy Now' }).first().click();
+  await expect(page).toHaveURL(/#\/checkout\?buyNow=1/);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: width < 768 ? 780 : 900 });
+    for (const section of ['Contact', 'Delivery address', 'Shipping', 'Payment', 'Review order']) {
+      await expect(page.getByRole('heading', { name: new RegExp(`^\\d\\s+${section}$`, 'i') })).toBeVisible();
+    }
+    const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(pageWidth, `Populated checkout overflows at ${width}px`).toBeLessThanOrEqual(width + 1);
+    if (process.env.E2E_CAPTURE_PHASE2 === 'true') {
+      await page.screenshot({ path: test.info().outputPath(`checkout-populated-${width}.png`), fullPage: true });
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.getByRole('button', { name: /Use a different address/i }).click();
+  await expect(page.getByLabel('Street / House No.')).toBeVisible();
+  await expect(page.getByLabel('Postal Code')).toBeVisible();
+  const newAddressPageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(newAddressPageWidth, 'New address form overflows at 390px').toBeLessThanOrEqual(391);
+  if (process.env.E2E_CAPTURE_PHASE2 === 'true') {
+    await page.screenshot({ path: test.info().outputPath('checkout-new-address-390.png'), fullPage: true });
+  }
+});
+
 test('owner operations layouts fit phone and desktop widths', async ({ page }) => {
   test.skip(!process.env.E2E_OWNER_EMAIL || !process.env.E2E_OWNER_PASSWORD, 'Owner fixture credentials are required.');
   test.setTimeout(180_000);

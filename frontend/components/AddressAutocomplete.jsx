@@ -66,6 +66,7 @@ const AddressAutocomplete = ({
   onSelect,
   onInputChange,
   placeholder = 'Search address (Philippines)',
+  id,
   disabled = false,
   context = {},
   strictContext = false,
@@ -182,6 +183,7 @@ const AddressAutocomplete = ({
   return (
     <div className="relative" ref={containerRef}>
       <input
+        id={id}
         type="text"
         value={query}
         onChange={(e) => {
