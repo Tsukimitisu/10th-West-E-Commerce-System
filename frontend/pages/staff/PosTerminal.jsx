@@ -400,10 +400,10 @@ const PosTerminal = () => {
         type="button"
         onClick={() => chooseProduct(product)}
         disabled={available <= 0}
-        className="group flex min-h-[245px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-red-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-55"
+        className="pos-product-tile group flex min-h-[245px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition-colors hover:-translate-y-0.5 hover:border-red-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-55"
       >
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
-          <img src={resolveProductImageUrl(product.image)} alt="" onError={handleProductImageError} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.025]" />
+          <img src={resolveProductImageUrl(product.image)} alt="" onError={handleProductImageError} className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.025]" />
           {product.variants?.length > 0 && <span className="absolute left-2 top-2 rounded-lg bg-slate-950/88 px-2 py-1 text-[10px] font-bold text-white">{product.variants.length} variants</span>}
           {available <= 0 && <span className="absolute inset-0 grid place-items-center bg-white/75 text-xs font-black text-red-700">OUT OF STOCK</span>}
         </div>
@@ -439,22 +439,22 @@ const PosTerminal = () => {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-100 text-slate-950">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 shadow-sm sm:px-5">
+    <div className="pos-shell flex h-screen flex-col overflow-hidden bg-slate-100 text-slate-950">
+      <header className="pos-header flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 shadow-sm sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           {backPath && <button type="button" onClick={() => navigate(backPath)} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100" aria-label="Back to dashboard"><ArrowLeft size={19} /></button>}
-          <BrandMark link={false} className="hidden sm:inline-flex" />
+          <BrandMark link={false} className="" />
           <div className="border-l border-slate-200 pl-3">
-            <p className="font-display text-sm font-bold">Point of Sale</p>
+            <h1 className="font-display text-xl font-semibold">Point of Sale</h1>
             <p className="flex items-center gap-1.5 text-[11px] text-slate-500"><Clock3 size={12} /> {now.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
           <span className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold sm:inline-flex ${connected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}><Wifi size={12} /> {connected ? 'Live inventory' : 'Reconnecting'}</span>
-          <button onClick={openRecentSales} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"><History size={16} /><span className="hidden sm:inline">Recent sales</span></button>
+          <button aria-label="Recent sales" onClick={openRecentSales} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"><History size={16} /><span className="hidden sm:inline">Recent sales</span></button>
           <div className="hidden items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 lg:flex">
             <UserRound size={16} className="text-slate-500" />
-            <div><p className="text-xs font-semibold">{user?.name || 'Cashier'}</p><p className="text-[10px] capitalize text-slate-500">{user?.role?.replace('_', ' ')}</p></div>
+            <div><p className="text-xs font-semibold text-slate-950">{user?.name || 'Cashier'}</p><p className="text-[10px] capitalize text-slate-500">{user?.role?.replace('_', ' ')}</p></div>
           </div>
         </div>
       </header>
@@ -571,7 +571,7 @@ const PosTerminal = () => {
             <dl className="space-y-2 text-sm">
               <div className="hidden justify-between text-slate-600 lg:flex"><dt>Subtotal</dt><dd>{quoteLoading ? 'Validating…' : formatCurrency(quote?.subtotal_amount || 0)}</dd></div>
               {Number(quote?.discount_amount) > 0 && <div className="flex justify-between text-emerald-700"><dt>Discount {quote?.promotion?.code && `(${quote.promotion.code})`}</dt><dd>-{formatCurrency(quote.discount_amount)}</dd></div>}
-              <div className="flex items-end justify-between lg:border-t lg:border-slate-200 lg:pt-3"><dt className="font-display text-base font-bold">Total</dt><dd className="font-display text-xl font-black tabular-nums lg:text-2xl">{formatCurrency(displayTotal)}</dd></div>
+              <div className="flex items-end justify-between lg:border-t lg:border-slate-200 lg:pt-3"><dt className="font-display text-base font-bold">Total</dt><dd className="font-sans text-xl font-bold tabular-nums lg:text-2xl">{formatCurrency(displayTotal)}</dd></div>
             </dl>
             {cartError && <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{cartError}</div>}
             <button onClick={openPayment} disabled={!cart.length || !quote?.valid || quoteLoading || Boolean(cartError)} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 lg:mt-4 lg:min-h-14 px-5 text-base font-bold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">

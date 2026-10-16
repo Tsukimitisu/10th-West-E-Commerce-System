@@ -55,7 +55,7 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
           <dl className="space-y-2 border-t border-dashed border-slate-300 pt-4 text-sm">
             <div className="flex justify-between"><dt className="text-slate-600">Subtotal</dt><dd>{formatCurrency(order.subtotal_amount)}</dd></div>
             {Number(order.discount_amount) > 0 && <div className="flex justify-between text-emerald-700"><dt>Discount</dt><dd>-{formatCurrency(order.discount_amount)}</dd></div>}
-            <div className="flex justify-between font-display text-lg font-black"><dt>Total</dt><dd>{formatCurrency(order.total_amount)}</dd></div>
+            <div className="flex justify-between font-sans tabular-nums text-lg font-black"><dt>Total</dt><dd>{formatCurrency(order.total_amount)}</dd></div>
             {order.payment_method === 'cash' && (
               <>
                 <div className="flex justify-between"><dt className="text-slate-600">Amount received</dt><dd>{formatCurrency(order.amount_tendered)}</dd></div>
@@ -69,7 +69,7 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
 
         <div className="flex gap-3 border-t border-slate-200 bg-slate-50 px-4 py-4 print:hidden">
           <button onClick={handlePrint} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50"><Printer size={16} /> Print</button>
-          <button onClick={onNewSale} className="min-h-11 flex-1 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white hover:bg-slate-800">New sale</button>
+          <button onClick={onNewSale} className="min-h-11 flex-1 rounded-xl bg-orange-600 px-4 text-sm font-bold text-white hover:bg-slate-800">New sale</button>
         </div>
       </div>
 
