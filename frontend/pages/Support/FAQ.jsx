@@ -88,7 +88,7 @@ const FAQ = () => {
         ) : (
           <div className="space-y-2">
             {filtered.map((faq, index) => (
-              <div key={faq.id || `${faq.question}-${index}`} className={`rounded-xl border bg-gray-50 transition-all ${openIndex === index ? 'border-red-300 shadow-sm' : 'border-gray-200'}`}>
+              <div key={faq.id || `${faq.question}-${index}`} className={`rounded-xl border bg-gray-50 transition-colors ${openIndex === index ? 'border-red-300 shadow-sm' : 'border-gray-200'}`}>
                 <button type="button" onClick={() => setOpenIndex(openIndex === index ? null : index)} className="flex w-full items-center justify-between p-4 text-left" aria-expanded={openIndex === index}>
                   <div className="flex flex-1 items-start gap-3">
                     <HelpCircle size={16} className={`mt-0.5 flex-shrink-0 ${openIndex === index ? 'text-red-600' : 'text-gray-400'}`} />

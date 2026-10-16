@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion, useReducedMotion } from 'framer-motion';
+import { useReducedMotion } from 'framer-motion';
 import {
   ArrowRight,
   ChevronLeft,
@@ -17,6 +17,7 @@ import {
   getBanners,
   getCategories,
   getProducts,
+  getMotorcycleModels,
   getTopSellers,
   getWishlist,
   WISHLIST_SYNC_EVENT,
@@ -26,11 +27,9 @@ import ProductCard from '../components/ProductCard';
 import BrandButton from '../components/ui/BrandButton';
 import EmptyState from '../components/ui/EmptyState';
 import LoadingSkeleton from '../components/ui/LoadingSkeleton';
-
-const sectionMotion = {
-  hidden: { opacity: 0, y: 18 },
-  visible: { opacity: 1, y: 0 },
-};
+import BrandLogo from '../components/ui/BrandLogo';
+import PriceDisplay from '../components/ui/PriceDisplay';
+import { handleProductImageError, resolveProductImageUrl } from '../utils/productImages';
 
 const ProductSection = ({ title, description, products, wishlistedIds, onWishlistToggle, light = true }) => {
   if (!products.length) return null;
@@ -67,6 +66,7 @@ const Home = () => {
   const [heroSearch, setHeroSearch] = useState('');
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [models, setModels] = useState([]);
   const [banners, setBanners] = useState([]);
   const [bestSellers, setBestSellers] = useState([]);
   const [wishlistedIds, setWishlistedIds] = useState([]);
@@ -118,14 +118,15 @@ const Home = () => {
 
   useEffect(() => {
     let active = true;
-    Promise.allSettled([getProducts(), getCategories(), getBanners(), getTopSellers('all')])
-      .then(([productResult, categoryResult, bannerResult, sellerResult]) => {
+    Promise.allSettled([getProducts(), getCategories(), getBanners(), getTopSellers('all'), getMotorcycleModels()])
+      .then(([productResult, categoryResult, bannerResult, sellerResult, modelResult]) => {
         if (!active) return;
         if (productResult.status === 'fulfilled') setProducts(productResult.value || []);
         else setCatalogError(true);
         if (categoryResult.status === 'fulfilled') setCategories(categoryResult.value || []);
         if (bannerResult.status === 'fulfilled') setBanners(bannerResult.value || []);
         if (sellerResult.status === 'fulfilled') setBestSellers(sellerResult.value || []);
+        if (modelResult.status === 'fulfilled') setModels(modelResult.value || []);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -142,15 +143,6 @@ const Home = () => {
   }, [loadWishlist]);
 
   useEffect(() => {
-    if (reduceMotion || activeBanners.length < 2) return undefined;
-    const timer = window.setInterval(
-      () => setCurrentBanner((index) => (index + 1) % activeBanners.length),
-      6500,
-    );
-    return () => window.clearInterval(timer);
-  }, [activeBanners.length, reduceMotion]);
-
-  useEffect(() => {
     if (currentBanner >= activeBanners.length) setCurrentBanner(0);
   }, [activeBanners.length, currentBanner]);
 
@@ -164,6 +156,9 @@ const Home = () => {
 
   const hero = activeBanners[currentBanner];
   const heroLink = hero?.link_url || '/shop';
+  const heroProduct = products.find((product) => Number(product.stock_quantity) > 0 && (product.image || product.image_url));
+  const maintenance = products.filter((product) => /\boil\b|lubricant|maintenance|motul|castrol|chain cleaner|brake cleaner/i.test(`${product.category_name || ''} ${product.name || ''}`));
+  const accessories = products.filter((product) => /accessor|gear|helmet|glove/i.test(`${product.category_name || ''} ${product.name || ''}`));
 
   const submitHeroSearch = (event) => {
     event.preventDefault();
@@ -172,97 +167,49 @@ const Home = () => {
 
   return (
     <main className="min-h-screen bg-white text-slate-950">
-      <section className="relative isolate overflow-hidden bg-[#0b1020]">
-        {hero?.image_url && (
-          <motion.img
-            key={hero.image_url}
-            src={hero.image_url}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            initial={reduceMotion ? false : { opacity: 0, scale: 1.03 }}
-            animate={{ opacity: 0.48, scale: 1 }}
-            transition={{ duration: 0.5 }}
-          />
-        )}
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,13,25,0.98)_0%,rgba(11,16,32,0.88)_45%,rgba(11,16,32,0.35)_100%)]" />
-        <div className="absolute -right-24 top-0 h-full w-2/5 -skew-x-12 bg-gradient-to-b from-red-600/15 to-orange-500/5" aria-hidden="true" />
-
-        <div className="relative mx-auto flex min-h-[440px] max-w-[1500px] items-center px-4 pb-16 pt-12 sm:min-h-[500px] sm:px-6 sm:py-16 lg:px-8">
-          <motion.div
-            className="max-w-3xl"
-            initial={reduceMotion ? false : 'hidden'}
-            animate="visible"
-            variants={sectionMotion}
-            transition={{ duration: 0.45 }}
-          >
-            <p className="mb-4 text-sm font-semibold text-orange-300">Motorcycle parts for Philippine riders</p>
-            <h1 className="font-display text-4xl font-extrabold leading-[1.08] tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl">
-              {hero?.title || <>Build a better ride. <span className="text-orange-400">Start here.</span></>}
-            </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-              {hero?.subtitle || 'Shop dependable motorcycle parts, riding gear, and accessories with clear stock status and support from people who know motorcycles.'}
-            </p>
-            <form onSubmit={submitHeroSearch} role="search" className="mt-7 flex max-w-xl gap-2 rounded-xl bg-white p-1.5 shadow-lg">
+      <section className="home-hero" aria-labelledby="home-title">
+        <div className="home-hero-inner mx-auto max-w-[1500px]">
+          <div className="home-hero-copy">
+            <h1 id="home-title">Parts Built<br />for the <span>Ride.</span></h1>
+            <p>Find dependable motorcycle parts, oils, accessories, and replacement components with clear stock and fitment information.</p>
+            <form onSubmit={submitHeroSearch} role="search" className="home-search">
               <label htmlFor="home-part-search" className="sr-only">Search parts</label>
-              <div className="relative min-w-0 flex-1">
-                <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-                <input
-                  id="home-part-search"
-                  type="search"
-                  value={heroSearch}
-                  onChange={(event) => setHeroSearch(event.target.value)}
-                  placeholder="Part name, number, or model…"
-                  autoComplete="off"
-                  className="h-11 w-full rounded-lg bg-transparent pl-10 pr-3 text-base text-slate-900 placeholder:text-slate-500 focus:outline-none"
-                />
-              </div>
-              <button type="submit" className="inline-flex h-11 shrink-0 items-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-800">
-                Search
-              </button>
+              <Search size={20} aria-hidden="true" />
+              <input id="home-part-search" type="search" value={heroSearch} onChange={(event) => setHeroSearch(event.target.value)} placeholder="Part name, number, or model…" autoComplete="off" />
+              <button type="submit">Search</button>
             </form>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <BrandButton to={heroLink} size="lg">
-                {hero?.button_text || 'Shop motorcycle parts'} <ArrowRight size={18} />
-              </BrandButton>
-              <BrandButton to="/shop?sort=newest" variant="dark" size="lg">
-                View new arrivals
-              </BrandButton>
+            <div className="home-hero-actions">
+              <BrandButton to="/shop" size="lg">Shop Parts <ArrowRight size={18} aria-hidden="true" /></BrandButton>
+              <a href="#motorcycle-models" onClick={(event) => { event.preventDefault(); document.getElementById('motorcycle-models')?.scrollIntoView({ behavior: reduceMotion ? 'instant' : 'smooth' }); }} className="home-model-link">Browse Motorcycle Models <ArrowRight size={16} aria-hidden="true" /></a>
             </div>
-          </motion.div>
-        </div>
-
-        {activeBanners.length > 1 && (
-          <div className="absolute bottom-6 right-4 z-10 flex items-center gap-2 sm:right-8">
-            <button
-              type="button"
-              onClick={() => setCurrentBanner((currentBanner - 1 + activeBanners.length) % activeBanners.length)}
-              className="grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-black/20 text-white transition-colors hover:bg-white/12"
-              aria-label="Previous promotion"
-            >
-              <ChevronLeft size={19} />
-            </button>
-            <span className="px-2 text-xs font-semibold tabular-nums text-slate-300" aria-live="polite">
-              {currentBanner + 1} / {activeBanners.length}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentBanner((currentBanner + 1) % activeBanners.length)}
-              className="grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-black/20 text-white transition-colors hover:bg-white/12"
-              aria-label="Next promotion"
-            >
-              <ChevronRight size={19} />
-            </button>
+            <div className="home-hero-footnote"><PackageCheck size={16} aria-hidden="true" /> Clear stock. Precise fitment. Ready for your next ride.</div>
           </div>
-        )}
+          <div className="home-merch-panel">
+            {hero?.image_url ? <a href={heroLink.startsWith('/') ? `#${heroLink}` : heroLink} className="home-promotion">
+              <img src={hero.image_url} alt={hero.title || '10th West store promotion'} width="640" height="540" fetchPriority="high" />
+              {hero.title && <div className="home-promotion-copy"><h2>{hero.title}</h2>{hero.subtitle && <p>{hero.subtitle}</p>}<span>{hero.button_text || 'Explore parts'} <ArrowRight size={16} aria-hidden="true" /></span></div>}
+            </a> : heroProduct ? <Link to={`/products/${heroProduct.id}`} className="home-hero-product">
+              <div className="home-product-stage"><img src={resolveProductImageUrl(heroProduct.image || heroProduct.image_url)} alt={heroProduct.name} onError={handleProductImageError} width="640" height="480" fetchPriority="high" /></div>
+              <div className="home-product-caption"><div><p>{heroProduct.motorcycle_model || heroProduct.brand || 'From the parts counter'}</p><h2>{heroProduct.name}</h2><span>{heroProduct.part_number || heroProduct.sku}</span></div><PriceDisplay price={heroProduct.price} salePrice={heroProduct.is_on_sale ? heroProduct.sale_price : null} /></div>
+            </Link> : <div className="home-brand-stage"><BrandLogo dark link={false} compact /><p>Motorcycle Parts & Accessories</p></div>}
+            <div className="home-merch-base"><span>10TH WEST</span><span>BUILT AROUND YOUR RIDE</span></div>
+            {activeBanners.length > 1 && <div className="home-banner-controls">
+              <button type="button" onClick={() => setCurrentBanner((currentBanner - 1 + activeBanners.length) % activeBanners.length)} aria-label="Previous promotion"><ChevronLeft size={18} /></button>
+              <span aria-live="polite">{currentBanner + 1} / {activeBanners.length}</span>
+              <button type="button" onClick={() => setCurrentBanner((currentBanner + 1) % activeBanners.length)} aria-label="Next promotion"><ChevronRight size={18} /></button>
+            </div>}
+          </div>
+        </div>
       </section>
 
       <section aria-label="Store benefits" className="border-b border-slate-200 bg-white">
+        <h2 className="mx-auto max-w-[1500px] px-4 pt-8 font-display text-3xl font-semibold text-slate-900 sm:px-6 lg:px-8">Why Shop at 10th West</h2>
         <div className="mx-auto grid max-w-[1500px] grid-cols-2 gap-px bg-slate-200 sm:grid-cols-4">
           {[
-            { icon: Truck, title: 'Fast delivery', copy: 'Tracked local shipping' },
-            { icon: ShieldCheck, title: 'Secure checkout', copy: 'Protected transactions' },
+            { icon: Truck, title: 'Tracked delivery', copy: 'Follow your order' },
+            { icon: ShieldCheck, title: 'Secure checkout', copy: 'Clear payment options' },
             { icon: Wrench, title: 'Parts specialists', copy: 'Fitment guidance' },
-            { icon: CreditCard, title: 'Flexible payment', copy: 'COD and GCash' },
+            { icon: CreditCard, title: 'Payment options', copy: 'Shown at checkout' },
           ].map(({ icon: Icon, title, copy }) => (
             <div key={title} className="flex min-h-28 items-center gap-3 bg-white px-4 py-5 sm:px-6">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-orange-50 text-orange-600">
@@ -274,6 +221,16 @@ const Home = () => {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section id="motorcycle-models" className="home-model-section" aria-labelledby="model-title">
+        <div className="mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8">
+          <div className="home-section-heading"><h2 id="model-title">Shop by Motorcycle Model</h2><Link to="/shop">Browse all parts <ArrowRight size={16} aria-hidden="true" /></Link></div>
+          <p className="mb-5 text-sm text-slate-600">Start with your motorcycle. Check the product details to confirm compatibility.</p>
+          <div className="home-model-grid">
+            {models.length ? models.slice(0, 8).map((model) => <Link key={model.id || model.model_name} to={`/shop?model=${encodeURIComponent(model.model_name || model.name || model.model || '')}`}><Wrench size={20} aria-hidden="true" /><span><small>{model.brand || 'Motorcycle model'}</small><strong>{model.model_name || model.name || model.model}</strong></span><ArrowRight size={17} aria-hidden="true" /></Link>) : <Link to="/shop"><Wrench size={22} aria-hidden="true" /><span><strong>Find parts for your motorcycle</strong><small>Use the model filters in our catalog</small></span><ArrowRight size={17} aria-hidden="true" /></Link>}
+          </div>
         </div>
       </section>
 
@@ -344,8 +301,8 @@ const Home = () => {
           )}
 
           <ProductSection
-            title="Featured products"
-            description="Popular, highly rated, and currently discounted items from the live catalog."
+            title="Featured Parts"
+            description="Explore selected parts and current offers from the catalog."
             products={featured}
             wishlistedIds={wishlistedIds}
             onWishlistToggle={toggleWishlist}
@@ -364,6 +321,8 @@ const Home = () => {
             wishlistedIds={wishlistedIds}
             onWishlistToggle={toggleWishlist}
           />
+          <ProductSection title="Oils & Maintenance" description="Keep the everyday essentials ready." products={maintenance} wishlistedIds={wishlistedIds} onWishlistToggle={toggleWishlist} light={false} />
+          <ProductSection title="Accessories" products={accessories} wishlistedIds={wishlistedIds} onWishlistToggle={toggleWishlist} />
           <ProductSection
             title="Recently viewed"
             products={recentlyViewed}
@@ -374,15 +333,15 @@ const Home = () => {
         </>
       )}
 
-      <section className="bg-[#0b1020] py-14 text-white">
+      <section className="home-shop-support bg-[#12204e] py-14 text-white">
         <div className="mx-auto flex max-w-[1500px] flex-col items-start justify-between gap-6 px-4 sm:px-6 md:flex-row md:items-center lg:px-8">
           <div className="flex items-start gap-4">
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/10 text-orange-400">
               <Headphones size={23} aria-hidden="true" />
             </span>
             <div>
-              <h2 className="font-display text-xl font-bold">Not sure which part fits?</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-300">Send us your motorcycle make, model, and year. Our support team will help you narrow it down.</p>
+              <h2 className="font-display text-xl font-bold">Your shop. Your parts specialists.</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-300">Not sure which part fits? Send your motorcycle make, model and year, or contact us for physical shop support.</p>
             </div>
           </div>
           <BrandButton to="/contact" variant="dark" className="shrink-0">Contact support</BrandButton>

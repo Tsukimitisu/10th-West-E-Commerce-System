@@ -947,18 +947,7 @@ const ProductDetail = () => {
 
   return (
     <div
-      className="min-h-screen text-slate-900"
-      style={{
-        backgroundColor: '#f8fafc',
-        backgroundImage: `
-          radial-gradient(circle at 8% 14%, rgba(239, 68, 68, 0.08) 0%, transparent 34%),
-          radial-gradient(circle at 92% 6%, rgba(15, 23, 42, 0.07) 0%, transparent 28%),
-          linear-gradient(140deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 42%, rgba(241, 245, 249, 0.92) 100%)
-        `,
-        backgroundAttachment: 'fixed',
-        backgroundSize: 'cover',
-        backgroundRepeat: 'no-repeat'
-      }}
+      className="product-detail-page min-h-screen text-slate-900"
     >
       {/* Breadcrumb */}
       <div className="max-w-7xl mx-auto px-4 pt-6">
@@ -1004,9 +993,9 @@ const ProductDetail = () => {
               )}
             </div>
             {mediaItems.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+              <div tabIndex={0} className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
                 {mediaItems.map((media, i) => (
-                  <button key={i} onClick={() => setSelectedImage(i)} className={`w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition-colors ${i === selectedImage ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 hover:border-red-200'}`}>
+                  <button key={i} aria-label={`View product ${media.type === 'video' ? 'video' : 'image'} ${i + 1}`} aria-pressed={i === selectedImage} onClick={() => setSelectedImage(i)} className={`w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition-colors ${i === selectedImage ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 hover:border-red-200'}`}>
                     {media.type === 'video' ? (
                       <span className="relative block h-full w-full bg-slate-950">
                         <img src={media.poster || PRODUCT_IMAGE_FALLBACK} alt="" onError={handleProductImageError} className="h-full w-full object-cover opacity-70" />
@@ -1068,9 +1057,9 @@ const ProductDetail = () => {
             <p className="text-xs text-slate-500 mb-6">Stock level: {maxStock}</p>
 
             {/* SKU / Brand */}
-            {(product.sku || product.brand) && (
+            {(product.sku || product.part_number || product.brand || product.motorcycle_model) && (
               <div className="flex flex-wrap gap-2 text-xs text-slate-600 mb-6 pb-6 border-b border-slate-200">
-                {product.sku && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">SKU: <strong className="text-slate-800">{product.sku}</strong></span>}
+                {(product.sku || product.part_number) && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">SKU: <strong className="text-slate-800">{product.part_number || product.sku}</strong></span>}
                 {product.brand && <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200">Brand: <strong className="text-slate-800">{product.brand}</strong></span>}
                 {isBundle && <span className="px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700">Bundle / Set</span>}
               </div>
@@ -1106,11 +1095,12 @@ const ProductDetail = () => {
             {/* Quantity & Actions */}
             <div className="flex flex-wrap gap-3 mb-6">
               <div className="flex items-center border border-slate-300 rounded-xl bg-slate-50">
-                <button onClick={() => { setQuantity(q => Math.max(1, q - 1)); setQuantityError(''); }} className="px-3 py-3 text-slate-600 hover:text-slate-900 hover:bg-white transition-colors rounded-l-xl" disabled={quantity <= 1}><Minus size={16} /></button>
+                <button aria-label="Decrease quantity" onClick={() => { setQuantity(q => Math.max(1, q - 1)); setQuantityError(''); }} className="px-3 py-3 text-slate-600 hover:text-slate-900 hover:bg-white transition-colors rounded-l-xl" disabled={quantity <= 1}><Minus size={16} /></button>
                 <input 
                   type="text" 
                   inputMode="numeric" 
                   pattern="[0-9]*"
+                  aria-label="Quantity"
                   value={quantity} 
                   onChange={(e) => {
                     const rawVal = e.target.value;
@@ -1146,6 +1136,7 @@ const ProductDetail = () => {
                   className="w-12 text-center font-semibold bg-transparent text-slate-900 focus:outline-none focus:bg-white py-1 transition-colors" 
                 />
                 <button
+                  aria-label="Increase quantity"
                   onClick={() => {
                     setQuantity((q) => {
                       const maxQty = MAX_ITEM_QUANTITY;
@@ -1169,7 +1160,7 @@ const ProductDetail = () => {
               <button
                 onClick={handleAddToCart}
                 disabled={isOutOfStock}
-                className="h-12 w-12 bg-slate-900 hover:bg-slate-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl transition-all flex items-center justify-center shadow-sm"
+                className="h-12 w-12 bg-slate-900 hover:bg-slate-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex items-center justify-center shadow-sm"
                 title="Add to cart"
               >
                 {addedToCart ? <Check size={18} /> : <ShoppingCart size={18} />}
@@ -1177,11 +1168,11 @@ const ProductDetail = () => {
               <button
                 onClick={handleBuyNow}
                 disabled={isOutOfStock}
-                className="flex-1 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:text-gray-100 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all shadow-sm"
+                className="flex-1 py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 disabled:text-gray-100 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors shadow-sm"
               >
                 Buy Now
               </button>
-              <button onClick={handleWishlist} className={`p-3 border rounded-xl transition-colors ${isWishlisted ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-300 bg-white text-slate-700 hover:text-red-500 hover:border-red-200'}`}>
+              <button aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'} aria-pressed={isWishlisted} onClick={handleWishlist} className={`p-3 border rounded-xl transition-colors ${isWishlisted ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-300 bg-white text-slate-700 hover:text-red-500 hover:border-red-200'}`}>
                 <Heart size={20} className={isWishlisted ? 'fill-orange-500' : ''} />
               </button>
               <button
@@ -1295,7 +1286,7 @@ const ProductDetail = () => {
 
         {/* Tabs */}
         <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm md:p-8">
-          <div className="mb-8 inline-flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Product information">
+          <div tabIndex={0} className="mb-8 inline-flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1" role="tablist" aria-label="Product information">
             {(['description', 'specs', 'reviews']).map(tab => (
               <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)}
                 className={`min-h-10 whitespace-nowrap rounded-md px-4 py-2 text-sm font-semibold capitalize transition-colors md:px-5 ${activeTab === tab ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
@@ -1460,7 +1451,7 @@ const ProductDetail = () => {
                   <button
                     type="submit"
                     disabled={!userId || reviewSubmitting}
-                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-300"
                   >
                     {reviewSubmitting ? 'Submitting...' : 'Submit review'}
                   </button>
@@ -1495,7 +1486,7 @@ const ProductDetail = () => {
                     <div key={d.star} className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 w-6">{d.star}★</span>
                       <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-yellow-400 rounded-full transition-all" style={{ width: `${d.pct}%` }} />
+                        <div className="h-full bg-yellow-400 rounded-full transition-colors" style={{ width: `${d.pct}%` }} />
                       </div>
                       <span className="text-xs text-gray-600 w-8">{d.count}</span>
                     </div>
@@ -1555,7 +1546,7 @@ const ProductDetail = () => {
             type="button"
             onClick={handleBuyNow}
             disabled={isOutOfStock}
-            className="h-12 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white disabled:bg-slate-300"
+            className="h-12 rounded-xl bg-orange-600 px-4 text-sm font-semibold text-white disabled:bg-slate-300"
           >
             Buy Now
           </button>

@@ -404,11 +404,11 @@ const ProductList = () => {
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <div className="border-b border-slate-200 bg-white">
+      <div className="shop-page-header border-b border-slate-200 bg-white">
         <div className="mx-auto grid max-w-[1600px] gap-6 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(24rem,38rem)] lg:items-end lg:px-8">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-600">10th West Moto catalog</p>
-            <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">Motorcycle parts & accessories</h1>
+
+            <h1 className="font-display text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">Motorcycle parts & accessories</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Find dependable parts, riding gear, and accessories with clear fitment and stock information.</p>
           </div>
           <div className="relative">

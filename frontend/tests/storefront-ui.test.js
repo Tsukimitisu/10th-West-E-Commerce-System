@@ -29,7 +29,7 @@ test('shop uses a wide catalog shell with desktop filters and a mobile drawer', 
   assert.match(filters, /w-\[280px\]/);
   assert.match(filters, /sticky top-24/);
   assert.match(filters, /overflow-y-auto/);
-  assert.match(filters, /role="dialog"/);
+  assert.match(filters, /presentation="drawer"/);
   assert.match(filters, /Show \{resultCount \?\? 0\} results/);
 });
 
@@ -80,7 +80,7 @@ test('home sections and footer share the wider restrained storefront system', as
   ]);
 
   assert.match(home, /max-w-\[1500px\]/);
-  assert.match(home, /Featured products/);
+  assert.match(home, /Featured Parts/);
   assert.match(home, /Best sellers/);
   assert.match(home, /New arrivals/);
   assert.match(footer, /max-w-\[1500px\]/);
