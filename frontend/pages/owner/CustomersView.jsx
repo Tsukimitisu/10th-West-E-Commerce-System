@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { getOrders, adminDeleteUser, getCustomers } from '../../services/api';
 import { Users, Search, Eye, ShoppingBag, DollarSign, Star, Mail, Phone, MapPin, Calendar, Package, Trash2 } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
+import PageHeader from '../../components/operations/PageHeader';
+import EmptyState from '../../components/ui/EmptyState';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import { getCurrentAuthUser } from '../../services/authSession.js';
 
 const CustomersView = () => {
@@ -10,16 +13,15 @@ const CustomersView = () => {
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [error, setError] = useState('');
   const canDeleteCustomers = getCurrentAuthUser()?.role === 'super_admin';
 
   useEffect(() => {
     (async () => {
       try {
         // First fetch actual customers from DB
-        const usersResp = await getCustomers({ page: 1 });
+        const [usersResp, orders] = await Promise.all([getCustomers({ page: 1 }), getOrders()]);
         const allCust = usersResp.customers || [];
-        
-        const orders = await getOrders();
         const map = new Map();
         
         // Populate map with registered users first
@@ -29,6 +31,7 @@ const CustomersView = () => {
             name: u.name,
             email: u.email,
             phone: u.phone || '',
+            isActive: u.is_active,
             orderCount: 0,
             totalSpent: 0,
             lastOrder: null,
@@ -52,12 +55,13 @@ const CustomersView = () => {
           }
           const c = map.get(uid);
           c.orderCount++;
-          c.totalSpent += o.total_amount || 0;
+          c.totalSpent += Number(o.total_amount || 0);
           if (!c.lastOrder || new Date(o.created_at) > new Date(c.lastOrder)) c.lastOrder = o.created_at;
           c.orders.push(o);
         });
         setCustomers(Array.from(map.values()).sort((a, b) => b.totalSpent - a.totalSpent));
-      } catch (e) { console.error(e); }
+        setError('');
+      } catch (e) { console.error(e); setError('Customers could not be loaded. Please try again.'); }
       setLoading(false);
     })();
   }, []);
@@ -81,18 +85,14 @@ const CustomersView = () => {
 
   const totalCustomers = customers.length;
   const totalRevenue = customers.reduce((s, c) => s + c.totalSpent, 0);
-  const avgOrderValue = customers.length > 0 ? totalRevenue / customers.reduce((s, c) => s + c.orderCount, 0) : 0;
+  const orderCount = customers.reduce((s, c) => s + c.orderCount, 0);
+  const avgOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
   const repeatCustomers = customers.filter(c => c.orderCount > 1).length;
   const customerToDelete = deleteId ? customers.find(c => c.id === deleteId) : null;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display font-bold text-xl text-white">Customers</h1>
-          <p className="text-sm text-gray-400">Customer profiles derived from order data</p>
-        </div>
-      </div>
+      <PageHeader title="Customers" description="Search accounts, contact details, and order activity." />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -104,7 +104,7 @@ const CustomersView = () => {
         ].map((kpi, i) => (
           <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
             <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
-            <p className="text-lg font-bold text-white">{kpi.value}</p>
+            <div className="min-h-7 text-lg font-bold text-white">{loading ? <LoadingSkeleton className="h-6 w-20" /> : error ? '—' : kpi.value}</div>
             <p className="text-xs text-gray-400">{kpi.label}</p>
           </div>
         ))}
@@ -112,22 +112,27 @@ const CustomersView = () => {
 
       {/* Search */}
       <div className="relative max-w-sm">
+        <label htmlFor="owner-customer-search" className="sr-only">Search customers</label>
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input type="text" placeholder="Search customers..." value={search} onChange={e => setSearch(e.target.value)}
+        <input id="owner-customer-search" type="search" placeholder="Search customers..." value={search} onChange={e => setSearch(e.target.value)}
           className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
       </div>
 
       {/* Customers Table */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
+          <div className="space-y-3 p-4" role="status" aria-label="Loading customers">{Array.from({ length: 4 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>
         ) : filtered.length === 0 ? (
-          <div className="p-12 text-center"><Users size={40} className="mx-auto text-gray-300 mb-3" /><p className="text-sm text-gray-400">No customers found</p></div>
+          <div className="p-6"><EmptyState icon={Users} tone={error ? 'error' : undefined} title={error ? 'Customers unavailable' : 'No customers found'} description={error || (search ? 'Try a different name or email.' : 'Customer accounts will appear here.')} /></div>
         ) : (
-          <table className="w-full text-sm">
+          <><div className="divide-y divide-slate-200 md:hidden">{filtered.map((c) => <article key={c.id} className="flex items-start justify-between gap-3 p-4 text-sm">
+            <div className="min-w-0 space-y-1"><p className="font-semibold text-slate-950">{c.name}</p><p className="break-all text-slate-600">{c.email || c.phone || 'No contact on file'}</p><p className="text-slate-600">{c.isActive === false ? 'Inactive' : c.isActive === true ? 'Active' : 'Status unavailable'} · {c.orderCount} orders · ₱{c.totalSpent.toLocaleString('en-PH')}</p><p className="text-xs text-slate-600">Last order: {c.lastOrder ? new Date(c.lastOrder).toLocaleDateString() : 'None'}</p></div>
+            <button type="button" onClick={() => setSelectedCustomer(c)} aria-label={`View ${c.name}`} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-slate-700 hover:bg-slate-100"><Eye size={18} /></button>
+          </article>)}</div><table className="hidden w-full text-sm md:table">
             <thead><tr className="bg-gray-50/80 border-b border-gray-700">
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Customer</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Email</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Contact</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden lg:table-cell">Status</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Orders</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Total Spent</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Last Order</th>
@@ -147,10 +152,11 @@ const CustomersView = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{c.email || '-'}</td>
+                  <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{c.email || c.phone || '-'}</td>
+                  <td className="px-4 py-3 text-xs text-slate-700 hidden lg:table-cell">{c.isActive === false ? 'Inactive' : c.isActive === true ? 'Active' : 'Unknown'}</td>
                   <td className="px-4 py-3 text-right font-medium text-white">{c.orderCount}</td>
                   <td className="px-4 py-3 text-right font-bold text-white">₱{c.totalSpent.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400 hidden sm:table-cell">{new Date(c.lastOrder).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-xs text-gray-400 hidden sm:table-cell">{c.lastOrder ? new Date(c.lastOrder).toLocaleDateString() : 'Never'}</td>
                   <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                           <button onClick={() => setSelectedCustomer(c)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title={`View ${c.name}`}><Eye size={14} /></button>
@@ -160,7 +166,7 @@ const CustomersView = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></>
         )}
       </div>
         {/* Delete Confirmation Modal */}
@@ -198,7 +204,7 @@ const CustomersView = () => {
                 <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-400">
                   {selectedCustomer.email && <span className="flex items-center gap-1"><Mail size={10} /> {selectedCustomer.email}</span>}
                   {selectedCustomer.phone && <span className="flex items-center gap-1"><Phone size={10} /> {selectedCustomer.phone}</span>}
-                  <span className="flex items-center gap-1"><Calendar size={10} /> Member since {new Date(selectedCustomer.orders[selectedCustomer.orders.length - 1]?.created_at).toLocaleDateString()}</span>
+                  <span className="flex items-center gap-1"><Calendar size={12} /> Last order {selectedCustomer.lastOrder ? new Date(selectedCustomer.lastOrder).toLocaleDateString() : 'never'}</span>
                 </div>
               </div>
             </div>
@@ -214,7 +220,7 @@ const CustomersView = () => {
                 <p className="text-[10px] text-green-500 font-medium">Total Spent</p>
               </div>
               <div className="text-center p-3 bg-purple-50 rounded-lg">
-                <p className="text-lg font-bold text-purple-700">₱{(selectedCustomer.totalSpent / selectedCustomer.orderCount).toFixed(0)}</p>
+                <p className="text-lg font-bold text-purple-700">₱{(selectedCustomer.orderCount ? selectedCustomer.totalSpent / selectedCustomer.orderCount : 0).toFixed(0)}</p>
                 <p className="text-[10px] text-purple-500 font-medium">Avg Order</p>
               </div>
             </div>

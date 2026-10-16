@@ -3868,7 +3868,17 @@ export const getDiscounts = async () => {
     const { data } = await supabase.from('discounts').select('*').order('created_at', { ascending: false });
     return data || [];
   }
-  return authenticatedFetch(`${API_URL}/discounts`).catch(() => []);
+  const discounts = [];
+  let page = 1;
+  while (true) {
+    const response = await authenticatedFetch(`${API_URL}/discounts?limit=100&page=${page}`);
+    if (Array.isArray(response)) return response;
+    const batch = Array.isArray(response?.data) ? response.data : [];
+    discounts.push(...batch);
+    const total = Number(response?.pagination?.total);
+    if (!batch.length || !Number.isFinite(total) || discounts.length >= total) return discounts;
+    page += 1;
+  }
 };
 
 export const validateDiscount = async (code, amount, items = []) => {
@@ -3905,6 +3915,16 @@ export const createDiscount = async (discount) => {
     return data;
   }
   return authenticatedFetch(`${API_URL}/discounts`, { method: 'POST', body: JSON.stringify(discount) });
+};
+
+export const updateDiscount = async (id, discount) => {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase.from('discounts').update(discount).eq('id', id).select().single();
+    if (error) throw new Error(error.message);
+    await logSupabaseActivity('discount.update', 'discount', id, { code: discount.code });
+    return data;
+  }
+  return authenticatedFetch(`${API_URL}/discounts/${id}`, { method: 'PATCH', body: JSON.stringify(discount) });
 };
 
 export const deleteDiscount = async (id) => {

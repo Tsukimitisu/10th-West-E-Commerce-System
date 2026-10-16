@@ -5,6 +5,8 @@ import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 import { getCurrentAuthUser } from '../../services/authSession';
 import PageHeader from '../../components/operations/PageHeader';
+import EmptyState from '../../components/ui/EmptyState';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -22,6 +24,8 @@ const ReturnsView = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [detailReturn, setDetailReturn] = useState(null);
   const [error, setError] = useState('');
+  const [decision, setDecision] = useState(null);
+  const [savingDecision, setSavingDecision] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -44,16 +48,19 @@ const ReturnsView = () => {
   useSocketEvent('return:updated', fetchData);
 
   const handleStatusUpdate = async (ret, status) => {
+    setSavingDecision(true);
     try {
       await updateReturnStatus(ret.id, status);
       await fetchData();
       if (detailReturn?.id === ret.id) {
         setDetailReturn((prev) => prev ? { ...prev, status } : prev);
       }
+      setDecision(null);
     } catch (err) {
       console.error(err);
       setError(err.message || 'Failed to update return request.');
     }
+    setSavingDecision(false);
   };
 
   const filtered = returns.filter((ret) => {
@@ -75,7 +82,7 @@ const ReturnsView = () => {
 
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow="Customer operations" title="Returns & refunds" description={`${returns.length} requests · Review eligibility, approval status, and refund progress.`} />
+      <PageHeader title="Returns & refunds" description={loading ? 'Review the reason, decision, and refund progress.' : `${returns.length} requests · Review the reason, decision, and refund progress.`} />
 
       {error && (
         <div className="p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-500 flex items-center gap-2">
@@ -92,7 +99,7 @@ const ReturnsView = () => {
         ].map((kpi, index) => (
           <div key={index} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
             <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
-            <p className="text-lg font-bold text-white">{kpi.value}</p>
+            <div className="min-h-7 text-lg font-bold text-white">{loading ? <LoadingSkeleton className="h-6 w-16" /> : error ? '—' : kpi.value}</div>
             <p className="text-xs text-gray-400">{kpi.label}</p>
           </div>
         ))}
@@ -100,8 +107,10 @@ const ReturnsView = () => {
 
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1 max-w-sm">
+          <label htmlFor="owner-return-search" className="sr-only">Search returns</label>
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
+            id="owner-return-search"
             type="text"
             placeholder="Search returns..."
             value={search}
@@ -125,11 +134,16 @@ const ReturnsView = () => {
 
       <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center"><div className="w-6 h-6 border-2 border-gray-700 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
+          <div className="space-y-3 p-4" role="status" aria-label="Loading returns">{Array.from({ length: 4 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>
         ) : filtered.length === 0 ? (
-          <div className="p-12 text-center"><RotateCcw size={40} className="mx-auto text-gray-300 mb-3" /><p className="text-sm text-gray-400">No return requests found</p></div>
+          <div className="p-6"><EmptyState icon={RotateCcw} title="No return requests found" description={search || statusFilter ? 'Try different filters.' : 'New requests will appear here for review.'} /></div>
         ) : (
-          <table className="w-full text-sm">
+          <><div className="divide-y divide-slate-200 md:hidden">{filtered.map((ret) => <article key={ret.id} className="space-y-2 p-4 text-sm">
+            <div className="flex items-start justify-between gap-3"><strong className="text-slate-950">Return #{ret.id} · Order #{ret.order_id}</strong><span className="capitalize text-slate-700">{ret.status}</span></div>
+            <p className="text-slate-700">{ret.customer_name || `User #${ret.user_id}`}</p><p className="line-clamp-2 text-slate-600">{ret.reason || 'No reason provided'}</p>
+            <p className="text-xs text-slate-600">Refund requested: ₱{Number(ret.refund_amount || 0).toLocaleString('en-PH')} · {ret.created_at ? new Date(ret.created_at).toLocaleDateString() : 'Date unavailable'}</p>
+            <button type="button" onClick={() => setDetailReturn(ret)} className="min-h-11 rounded-lg border border-slate-300 px-3 font-semibold text-slate-700">Review request</button>
+          </article>)}</div><table className="hidden w-full text-sm md:table">
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-700">
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Return ID</th>
@@ -162,8 +176,8 @@ const ReturnsView = () => {
                       <button onClick={() => setDetailReturn(ret)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" title="View"><Eye size={14} /></button>
                       {!isStaff && ret.status === 'pending' && (
                         <>
-                          <button onClick={() => handleStatusUpdate(ret, 'approved')} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-green-50 text-gray-400 hover:text-green-600 transition-colors" title="Approve"><CheckCircle2 size={14} /></button>
-                          <button onClick={() => handleStatusUpdate(ret, 'rejected')} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-gray-400 hover:text-red-500 transition-colors" title="Reject"><XCircle size={14} /></button>
+                          <button aria-label={`Approve return ${ret.id}`} onClick={() => setDecision({ ret, status: 'approved' })} className="grid h-9 w-9 place-items-center rounded-lg text-emerald-700 hover:bg-emerald-50" title="Approve"><CheckCircle2 size={16} /></button>
+                          <button aria-label={`Reject return ${ret.id}`} onClick={() => setDecision({ ret, status: 'rejected' })} className="grid h-9 w-9 place-items-center rounded-lg text-red-700 hover:bg-red-50" title="Reject"><XCircle size={16} /></button>
                         </>
                       )}
                     </div>
@@ -171,11 +185,11 @@ const ReturnsView = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></>
         )}
       </div>
 
-      <Modal isOpen={!!detailReturn} onClose={() => setDetailReturn(null)} title={`Return RET-${detailReturn?.id?.toString().padStart(4, '0') || ''}`} size="lg">
+      <Modal isOpen={!!detailReturn && !decision} onClose={() => setDetailReturn(null)} title={`Return RET-${detailReturn?.id?.toString().padStart(4, '0') || ''}`} size="lg">
         {detailReturn && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -208,6 +222,11 @@ const ReturnsView = () => {
               <p className="text-xs text-gray-400 mb-1">Reason</p>
               <p className="text-sm text-white whitespace-pre-wrap">{detailReturn.reason || 'No reason provided'}</p>
             </div>
+            <dl className="grid gap-3 border-y border-slate-200 py-3 text-sm sm:grid-cols-2">
+              <div><dt className="text-slate-600">Refund amount requested</dt><dd className="font-semibold text-slate-950">₱{Number(detailReturn.refund_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</dd></div>
+              <div><dt className="text-slate-600">Refund payment status</dt><dd className="font-semibold capitalize text-slate-950">{detailReturn.refund_status || 'Not processed'}</dd></div>
+            </dl>
+            <ol className="space-y-1 text-xs text-slate-600" aria-label="Return history"><li>Requested: {detailReturn.created_at ? new Date(detailReturn.created_at).toLocaleString() : 'Date unavailable'}</li>{detailReturn.reviewed_at && <li>Reviewed by {detailReturn.reviewed_by_name || 'staff'}: {new Date(detailReturn.reviewed_at).toLocaleString()}</li>}</ol>
             {detailReturn.items?.length > 0 && (
               <div>
                 <h4 className="text-xs font-medium text-gray-400 mb-2">Returned Items</h4>
@@ -226,12 +245,15 @@ const ReturnsView = () => {
             )}
             {!isStaff && detailReturn.status === 'pending' && (
               <div className="flex gap-2 pt-2">
-                <button onClick={() => { handleStatusUpdate(detailReturn, 'approved'); setDetailReturn(null); }} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors">Approve</button>
-                <button onClick={() => { handleStatusUpdate(detailReturn, 'rejected'); setDetailReturn(null); }} className="px-4 py-2 bg-red-500/100 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors">Reject</button>
+                <button onClick={() => setDecision({ ret: detailReturn, status: 'approved' })} className="min-h-11 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white">Approve</button>
+                <button onClick={() => setDecision({ ret: detailReturn, status: 'rejected' })} className="min-h-11 rounded-lg bg-red-700 px-4 text-sm font-semibold text-white">Reject</button>
               </div>
             )}
           </div>
         )}
+      </Modal>
+      <Modal isOpen={Boolean(decision)} onClose={() => !savingDecision && setDecision(null)} title={`${decision?.status === 'approved' ? 'Approve' : 'Reject'} return request`} size="sm">
+        {decision && <div className="space-y-4 text-sm"><p className="text-slate-700">Confirm {decision.status === 'approved' ? 'approval' : 'rejection'} of return #{decision.ret.id} for order #{decision.ret.order_id}. This decision updates the customer request.</p><div className="flex gap-3"><button type="button" onClick={() => setDecision(null)} disabled={savingDecision} className="min-h-11 flex-1 rounded-lg border border-slate-300 font-semibold text-slate-700">Cancel</button><button type="button" onClick={() => handleStatusUpdate(decision.ret, decision.status)} disabled={savingDecision} className={`min-h-11 flex-1 rounded-lg font-semibold text-white ${decision.status === 'approved' ? 'bg-emerald-700' : 'bg-red-700'}`}>{savingDecision ? 'Saving…' : `Confirm ${decision.status === 'approved' ? 'approval' : 'rejection'}`}</button></div></div>}
       </Modal>
     </div>
   );
