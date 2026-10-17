@@ -12,7 +12,8 @@ export default function OperationsSidebar({ navItems, activeId, user, collapsed,
     else result.push({ label, items: [item] });
     return result;
   }, []), [navItems]);
-  return <div className={`operations-sidebar ${collapsed ? 'is-collapsed' : ''}`}>
+  const isStaff = user?.role === 'store_staff';
+  return <div className={`operations-sidebar ${isStaff ? 'staff-sidebar' : ''} ${collapsed ? 'is-collapsed' : ''}`}>
     <div className="operations-brand-header"><BrandMark dark compact={collapsed} link={false} />{!collapsed && <span className="operations-role">{workspaceRole(user?.role)}</span>}</div>
     <nav className="ops-navigation" aria-label="Operations navigation">
       {groups.map(group => <div className="ops-nav-group" key={group.label}>
@@ -26,6 +27,6 @@ export default function OperationsSidebar({ navItems, activeId, user, collapsed,
         })}
       </div>)}
     </nav>
-    <div className="ops-sidebar-footer">{!collapsed && <span>10th West operations</span>}<button type="button" onClick={onLogout} aria-label="Sign out" title="Sign out"><LogOut size={17} aria-hidden="true" /></button></div>
+    <div className="ops-sidebar-footer">{!collapsed && !isStaff && <span>10th West operations</span>}<button type="button" onClick={onLogout} aria-label="Sign out" title="Sign out"><LogOut size={17} aria-hidden="true" />{isStaff && !collapsed && <span>Sign out</span>}</button></div>
   </div>;
 }

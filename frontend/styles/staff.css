@@ -1,0 +1,68 @@
+/* Staff-only refinement. Customer, Owner and System retain their existing rules. */
+.operations-shell[data-workspace="staff"] {
+  --ops-sidebar: var(--obsidian);
+  --ops-text: var(--graphite, #242832);
+  background: var(--off-white, #f6f7f9);
+}
+.staff-sidebar { background: var(--obsidian); color: white; }
+.staff-sidebar .operations-brand-header { background: var(--obsidian); padding: 18px 18px 14px; }
+.staff-sidebar .operations-role { color: #c6cbd4; font-size: 11px; letter-spacing: .08em; }
+.staff-sidebar .ops-nav-label { color: #aeb5c2; font-size: 11px; letter-spacing: .06em; }
+.staff-sidebar .ops-nav-item { min-height: 44px; color: #d6dae2; }
+.staff-sidebar .ops-nav-item > svg { color: #aeb5c2; }
+.staff-sidebar .ops-nav-item:hover { background: var(--racing-navy); color: white; }
+.staff-sidebar .ops-nav-item[aria-current="page"] { background: #181d28; box-shadow: inset 2px 0 var(--performance-orange); color: white; }
+.staff-sidebar .ops-nav-item[aria-current="page"] > svg { color: var(--performance-orange); }
+.staff-sidebar .ops-sidebar-footer { padding: 10px 12px max(10px, env(safe-area-inset-bottom)); }
+.staff-sidebar .ops-sidebar-footer button { display: flex; width: 100%; gap: 11px; padding: 10px 12px; font-size: 13px; color: #d6dae2; text-align: left; }
+.staff-sidebar.is-collapsed .ops-sidebar-footer button { justify-content: center; padding-inline: 0; }
+.staff-sidebar :focus-visible, .brand-overlay-tone-staff :focus-visible { outline: 2px solid var(--hot-orange); outline-offset: 2px; }
+.brand-overlay-tone-staff .brand-dialog-panel > div { background: var(--obsidian); border-color: var(--dark-border); color: white; }
+.brand-overlay-tone-staff .brand-dialog-panel > div:first-child :is(h2,button) { color: white; }
+.brand-overlay-tone-staff .brand-dialog-panel > div:last-child { display: flex; min-height: 0; padding: 0; }
+.brand-overlay-tone-staff .staff-sidebar { flex: 1; }
+.brand-overlay-staff-confirmation { width: 100vw; align-items: center !important; padding: 20px !important; overflow-y: auto; }
+.brand-overlay-staff-confirmation .brand-dialog-panel { max-width: 384px; max-height: calc(100dvh - 40px); border-radius: 12px; animation: none; }
+.operations-shell[data-workspace="staff"] .operations-topbar { border-top: 2px solid var(--obsidian); }
+.operations-shell[data-workspace="staff"] .ops-user-avatar { background: var(--obsidian); }
+.operations-shell[data-workspace="staff"] :is(.ops-context-caption,.ops-context-title) { color: var(--graphite, #242832); }
+.operations-shell[data-workspace="staff"] .operations-content :is(button,a).bg-orange-600:not(.text-red-600) { background-color: var(--performance-orange); color: var(--obsidian) !important; }
+.operations-shell[data-workspace="staff"] .operations-content :is(button,a).bg-orange-600:hover { background-color: var(--hot-orange); }
+.operations-shell[data-workspace="staff"] .operations-content :is(button,a).bg-orange-600:disabled { background-color: #dde1e8; color: #565e6b !important; }
+.operations-shell[data-workspace="staff"] .inventory-stock-table td:nth-child(1) { font-size: 13px; font-weight: 600; color: var(--racing-navy); }
+.operations-shell[data-workspace="staff"] .inventory-stock-table td:nth-child(5) > span { background: #eef0f4; border-color: #b4bdcc; font-variant-numeric: tabular-nums; }
+.operations-shell[data-workspace="staff"] .inventory-toolbar { gap: 8px; }
+.staff-dialog-content :is(button,a).bg-orange-600 { background: var(--performance-orange); color: var(--obsidian) !important; }
+.staff-dialog-content :is(button,a).bg-orange-600:hover { background: var(--hot-orange); }
+.operations-shell[data-workspace="staff"] .operations-content button:disabled { opacity: .55; cursor: not-allowed; }
+.operations-shell[data-workspace="staff"] .staff-order-row { align-items: start; }
+.operations-shell[data-workspace="staff"] .staff-quick-actions button { flex: 1 1 145px; justify-content: center; }
+.staff-account-grid { display: grid; gap: 20px; align-items: start; }
+.staff-account-form { display: grid; gap: 16px; max-width: 520px; }
+.staff-account-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 500; color: #242832; }
+.staff-account-form input { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid #8b95a6; border-radius: 6px; font-size: 16px; }
+.staff-account-form small { font-size: 13px; line-height: 1.6; color: #565e6b; }
+.staff-account-form button { justify-self: start; }
+.staff-account-feedback { border: 1px solid var(--border); border-radius: 6px; background: #f6f7f9; padding: 10px 12px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.staff-account-feedback[role="alert"] { color: #ac1c2b; background: #fff0f1; }
+.staff-notification-row { display: flex; gap: 14px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.staff-notification-row[data-unread="true"] { background: #fff8f2; }
+.staff-notification-copy { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.staff-notification-copy h2 { font-size: 14px !important; }
+.staff-notification-copy p { margin-top: 4px; font-size: 13px; line-height: 1.6; color: #565e6b; }
+.staff-notification-copy time { display: block; margin-top: 6px; font-size: 12px; color: #565e6b; }
+@media (min-width: 1100px) { .staff-account-grid { grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); } }
+@media (max-width: 767px) {
+  .operations-shell[data-workspace="staff"] .operations-topbar { background: var(--obsidian); color: white; }
+  .operations-shell[data-workspace="staff"] .operations-topbar :is(.ops-icon-control,.ops-context-title,.ops-topbar-actions > div > button) { color: white; }
+  .operations-shell[data-workspace="staff"] .ops-user-avatar { background: #242832; }
+  .operations-shell[data-workspace="staff"] .ops-user-popover { color: var(--racing-navy); }
+  .operations-shell[data-workspace="staff"] .ops-user-menu summary:hover { background: #242832; }
+  .operations-shell[data-workspace="staff"] .ops-topbar-context { flex: 1; }
+  .operations-shell[data-workspace="staff"] .ops-context-title { max-width: 135px; }
+  .operations-shell[data-workspace="staff"] .ops-summary-strip .ops-metric { min-height: 92px; }
+  .operations-shell[data-workspace="staff"] .staff-inventory-summary .ops-metric { padding: 10px 12px; }
+  .operations-shell[data-workspace="staff"] .staff-inventory-summary .ops-metric p:nth-child(2) { margin-top: 4px; font-size: 20px; }
+  .operations-shell[data-workspace="staff"] .operations-content button:not(.ops-metric) { min-height: 44px; }
+  .staff-notification-row { padding: 14px 16px; gap: 10px; }
+}

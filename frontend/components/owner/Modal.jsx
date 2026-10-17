@@ -6,6 +6,20 @@ import { OperationsDialogContext } from '../../context/OperationsDialogContext';
 const sizeMap = { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-lg', xl: 'sm:max-w-xl', '2xl': 'sm:max-w-2xl', '3xl': 'sm:max-w-5xl' };
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
 
+// Staff can sign out from an open drawer. Release their body lock only after
+// the final dialog closes, regardless of nested-dialog unmount order.
+let staffDialogCount = 0;
+let staffPreviousOverflow = '';
+const lockStaffDialogScroll = () => {
+  if (staffDialogCount === 0) staffPreviousOverflow = document.body.style.overflow;
+  staffDialogCount += 1;
+  document.body.style.overflow = 'hidden';
+  return () => {
+    staffDialogCount -= 1;
+    if (staffDialogCount === 0) document.body.style.overflow = staffPreviousOverflow;
+  };
+};
+
 const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentation = 'modal', tone = 'default', children }) => {
   const operations = useContext(OperationsDialogContext);
   const panelRef = useRef(null);
@@ -15,17 +29,19 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentati
     if (!isOpen) return undefined;
     const previouslyFocused = document.activeElement;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const releaseStaffScroll = operations === 'staff' ? lockStaffDialogScroll() : null;
+    if (!releaseStaffScroll) document.body.style.overflow = 'hidden';
     // Respect a child that already took focus (e.g. an autoFocus field); otherwise focus the dialog.
     if (!panelRef.current?.contains(document.activeElement)) panelRef.current?.focus({ preventScroll: true });
     return () => {
-      document.body.style.overflow = previousOverflow;
+      if (releaseStaffScroll) releaseStaffScroll();
+      else document.body.style.overflow = previousOverflow;
       const focusTarget = returnFocusRef?.current ?? previouslyFocused;
       if (focusTarget instanceof HTMLElement && focusTarget.isConnected) {
         focusTarget.focus({ preventScroll: true });
       }
     };
-  }, [isOpen, returnFocusRef]);
+  }, [isOpen, returnFocusRef, operations]);
 
   if (!isOpen) return null;
 
@@ -73,7 +89,7 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentati
             <X size={18} />
           </button>
         </div>
-        <div className={`overscroll-contain flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] ${operations && tone === 'default' ? 'operations-dialog-content operations-content' : ''}`}>{children}</div>
+        <div className={`overscroll-contain flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] ${operations && tone === 'default' ? 'operations-dialog-content operations-content' : ''} ${operations === 'staff' && tone === 'default' ? 'staff-dialog-content' : ''}`}>{children}</div>
       </div>
     </div>,
     document.body
