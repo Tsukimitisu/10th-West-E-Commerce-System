@@ -127,7 +127,6 @@ const ProductList = () => {
   const [selectedBrand, setSelectedBrand] = useState('');
   const [selectedModel, setSelectedModel] = useState(searchParams.get('model') || '');
   const [selectedColor, setSelectedColor] = useState(searchParams.get('color') || '');
-  const [selectedYear, setSelectedYear] = useState('');
   const [priceRange, setPriceRange] = useState([0, 100000]);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [sortBy, setSortBy] = useState(searchParams.get('sort') || (searchParams.get('search') ? 'relevance' : 'newest'));
@@ -200,6 +199,13 @@ const ProductList = () => {
   };
 
   useEffect(() => {
+    const obsolete = ['year', 'year_from', 'year_to', 'fitment_year', 'yearFrom', 'yearTo'];
+    if (obsolete.some(key => searchParams.has(key))) {
+      const next = new URLSearchParams(searchParams);
+      obsolete.forEach(key => next.delete(key));
+      setSearchParams(next, { replace: true });
+      return;
+    }
     const search = searchParams.get('search');
     const sort = searchParams.get('sort');
     const viewMode = searchParams.get('view');
@@ -291,20 +297,6 @@ const ProductList = () => {
     if (selectedBrand) result = result.filter((product) => product.brand === selectedBrand);
     if (selectedModel) result = result.filter((product) => product.motorcycle_model === selectedModel);
     if (selectedColor) result = result.filter((product) => product.color === selectedColor);
-    if (selectedYear) {
-      const yearNumber = selectedYear ? Number(selectedYear) : null;
-      result = result.filter((product) => {
-        const fitments = Array.isArray(product.fitments) ? product.fitments : [];
-        if (fitments.length === 0) return true;
-        return fitments.some((fitment) => {
-          if (Number.isInteger(yearNumber)) {
-            if (fitment.start_year && Number(fitment.start_year) > yearNumber) return false;
-            if (fitment.end_year && Number(fitment.end_year) < yearNumber) return false;
-          }
-          return true;
-        });
-      });
-    }
     if (inStockOnly) result = result.filter(p => p.stock_quantity > 0);
     result = result.filter(p => {
       const price = p.is_on_sale && p.sale_price ? p.sale_price : p.price;
@@ -320,16 +312,15 @@ const ProductList = () => {
       case 'relevance': break;
     }
     return result;
-  }, [products, debouncedSearchQuery, searchParams, selectedBrand, selectedModel, selectedColor, selectedYear, priceRange, inStockOnly, sortBy]);
+  }, [products, debouncedSearchQuery, searchParams, selectedBrand, selectedModel, selectedColor, priceRange, inStockOnly, sortBy]);
 
-  const activeFilterCount = [searchQuery.trim(), selectedBrand, selectedModel, selectedColor, selectedYear, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
+  const activeFilterCount = [searchQuery.trim(), selectedBrand, selectedModel, selectedColor, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
 
   const activeFilters = [
     searchQuery.trim() && { key: 'search', label: `Search: ${searchQuery.trim()}` },
     selectedBrand && { key: 'brand', label: selectedBrand },
     selectedModel && { key: 'model', label: selectedModel },
     selectedColor && { key: 'color', label: selectedColor },
-    selectedYear && { key: 'year', label: `Year ${selectedYear}` },
     inStockOnly && { key: 'stock', label: 'In stock' },
     (priceRange[0] > 0 || priceRange[1] < 100000) && { key: 'price', label: `₱${priceRange[0].toLocaleString()}–₱${priceRange[1].toLocaleString()}` },
   ].filter(Boolean);
@@ -347,7 +338,6 @@ const ProductList = () => {
     if (key === 'brand') setSelectedBrand('');
     if (key === 'model') { setSelectedModel(''); nextParams.delete('model'); }
     if (key === 'color') { setSelectedColor(''); nextParams.delete('color'); }
-    if (key === 'year') setSelectedYear('');
     if (key === 'stock') setInStockOnly(false);
     if (key === 'price') setPriceRange([0, 100000]);
     nextParams.delete('focus');
@@ -355,7 +345,7 @@ const ProductList = () => {
   };
 
   const clearAllFilters = () => {
-    setSelectedBrand(''); setSelectedModel(''); setSelectedColor(''); setSelectedYear(''); setPriceRange([0, 100000]); setInStockOnly(false); setSearchQuery('');
+    setSelectedBrand(''); setSelectedModel(''); setSelectedColor(''); setPriceRange([0, 100000]); setInStockOnly(false); setSearchQuery('');
     const nextSort = sortBy === 'relevance' ? 'newest' : sortBy;
     setSortBy(nextSort);
     const nextParams = new URLSearchParams();
@@ -492,8 +482,6 @@ const ProductList = () => {
             selectedColor={selectedColor}
             onColorChange={setSelectedColor}
             colors={colors}
-            selectedYear={selectedYear}
-            onYearChange={setSelectedYear}
             priceRange={priceRange}
             onPriceChange={setPriceRange}
             inStockOnly={inStockOnly}

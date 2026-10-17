@@ -14,8 +14,6 @@ const FilterSidebar = ({
   selectedColor,
   onColorChange,
   colors,
-  selectedYear,
-  onYearChange,
   priceRange,
   onPriceChange,
   inStockOnly,
@@ -31,7 +29,6 @@ const FilterSidebar = ({
     model: true,
     brand: true,
     color: true,
-    fitment: true,
     price: true,
     stock: true,
   });
@@ -106,15 +103,6 @@ const FilterSidebar = ({
           {(colors || []).length > INITIAL_VISIBLE_OPTIONS && <ShowMoreButton expanded={showAllColors} onClick={() => setShowAllColors((current) => !current)} />}
         </FilterSection>
       )}
-
-      <FilterSection title="Fitment year" open={openSections.fitment} onToggle={() => toggleSection('fitment')}>
-          <div>
-            <label className="block">
-              <span className="sr-only">Model year</span>
-              <input type="number" min="1950" max={new Date().getFullYear() + 1} value={selectedYear || ''} onChange={(event) => onYearChange?.(event.target.value)} placeholder="Model year" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-3 focus:ring-orange-500/10" />
-            </label>
-          </div>
-      </FilterSection>
 
       <FilterSection title="Price" open={openSections.price} onToggle={() => toggleSection('price')}>
         <div className="grid grid-cols-2 gap-2">
