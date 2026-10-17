@@ -149,8 +149,9 @@ test('staff orders use safe names, distinct failed labels, responsive filters, a
   assert.doesNotMatch(orders, /user undefined/i);
   assert.match(orders, /Payment Failed: payment was not completed or was rejected\./);
   assert.match(orders, /Delivery Failed: courier\/store could not complete delivery\./);
-  assert.match(orders, /grid-cols-1[^\n]*lg:grid-cols-\[minmax\(16rem,24rem\)_minmax\(0,1fr\)\]/);
-  assert.match(orders, /aria-label="Order status"/);
+  assert.match(orders, /<DataToolbar[\s\S]*label="Order filters"/);
+  assert.match(orders, /<MobileDataCard/);
+  assert.match(orders, /<FilterSelect label="Order status"/);
   assert.match(orders, /statuses\.map\(status => <option/);
   assert.match(orders, /resolveProductImageUrl\(item\.image_url/);
   assert.match(orders, /item\.name \|\| item\.product_name/);

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const accounts = [
   { env: 'OWNER', email: process.env.E2E_OWNER_EMAIL, password: process.env.E2E_OWNER_PASSWORD, route: '/#/admin/dashboard', heading: /business overview/i },
-  { env: 'STAFF', email: process.env.E2E_STAFF_EMAIL, password: process.env.E2E_STAFF_PASSWORD, route: '/#/staff/dashboard', heading: /good day/i },
+  { env: 'STAFF', email: process.env.E2E_STAFF_EMAIL, password: process.env.E2E_STAFF_PASSWORD, route: '/#/staff/dashboard', heading: /today.s work/i },
   { env: 'SUPERADMIN', email: process.env.E2E_SUPERADMIN_EMAIL, password: process.env.E2E_SUPERADMIN_PASSWORD, route: '/#/superadmin/dashboard', heading: /system overview/i },
 ];
 const apiUrl = (process.env.E2E_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
@@ -47,12 +47,12 @@ for (const account of accounts) {
       await page.reload();
       await expect(page).toHaveURL(new RegExp(account.route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
       await expect(page.getByRole('heading', { name: account.heading })).toBeVisible();
-      const profileMenu = page.getByRole('button', { name: /open profile menu/i });
+      const profileMenu = page.locator('summary[aria-label="Open profile menu"]');
       if (!await profileMenu.isVisible().catch(() => false)) {
         await page.getByRole('button', { name: /open navigation/i }).click();
       }
       await profileMenu.click();
-      await expect(page.getByRole('button', { name: /account & security/i })).toBeVisible();
+      await expect(page.getByRole('link', { name: /account & security/i })).toBeVisible();
     });
   });
 }
