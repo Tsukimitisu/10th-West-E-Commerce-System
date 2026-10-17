@@ -25,7 +25,7 @@ export const staffOrders = ['processing', 'packed', 'pending'].map((status, inde
 
 export async function staffFixture(page, options = {}) {
   await installTailwindRuntime(page);
-  const state = { user: options.loggedOut ? null : { ...staffUser, ...options.user }, calls: [], permissions: options.permissions || staffPermissions };
+  const state = { user: options.loggedOut ? null : { ...staffUser, ...options.user }, calls: [], orders: structuredClone(staffOrders), permissions: options.permissions || staffPermissions };
   await page.addInitScript(() => localStorage.setItem('cookieConsent', 'all'));
   await page.route('**/api/**', async route => {
     const request = route.request();
@@ -46,6 +46,12 @@ export async function staffFixture(page, options = {}) {
     if (path === '/auth/providers') return reply({ google: { available: false }, facebook: { available: false }, two_factor: { available: true } });
     if (path === '/users/profile' && method === 'PUT') { state.user = { ...state.user, ...request.postDataJSON() }; return reply({ user: state.user }); }
     if (path === '/auth/change-password' && method === 'PUT') return reply({ message: 'Password changed' });
+    if (/^\/orders\/\d+\/status$/.test(path) && method === 'PUT') {
+      if (!state.permissions.includes('orders.update')) return reply({ code: 'PERMISSION_DENIED' }, 403);
+      const order = state.orders.find(item => String(item.id) === path.split('/')[2]);
+      order.status = request.postDataJSON().status;
+      return reply({ order });
+    }
     if (path === '/auth/2fa/setup' && method === 'POST') return reply({ qrCode: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a/5kAAAAASUVORK5CYII=' });
     if (path === '/auth/2fa/verify' && method === 'POST') {
       if (request.postDataJSON().totp_code !== '123456') return reply({ message: 'Invalid authenticator code' }, 400);
@@ -62,8 +68,8 @@ export async function staffFixture(page, options = {}) {
       return reply(staffParts.filter(item => !query || Object.values(item).some(value => String(value).toLowerCase().includes(query))));
     }
     if (path.includes('low-stock')) { const products = staffParts.filter(item => item.stock_quantity <= item.low_stock_threshold); return reply({ count: products.length, products }); }
-    if (path === '/orders') return reply(staffOrders);
-    if (path.startsWith('/orders/')) return reply(staffOrders[0]);
+    if (path === '/orders') return reply(state.orders);
+    if (path.startsWith('/orders/')) return reply(state.orders[0]);
     if (path.includes('motorcycle-models')) return reply({ models: [{ id: 1, model_name: 'Click 125', brand: 'Honda', status: 'active' }] });
     if (path === '/notifications') return reply([{ id: 1, title: 'Parts need attention', message: 'Front Brake Pad Set is below minimum stock.', type: 'warning', reference_type: 'inventory', is_read: false, created_at: '2026-10-17T08:00:00Z' }]);
     if (path.includes('unread-count')) return reply({ count: 1 });

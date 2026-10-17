@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { staffFixture } from './staffPhaseFixture.js';
+import { staffFixture, staffPermissions } from './staffPhaseFixture.js';
 
 test('Staff deep link survives staggered session restoration', async ({ page }) => {
   await staffFixture(page, { profileDelays: [1, 1200] });
@@ -78,6 +78,30 @@ test('authorized Cashier POS remains available without a sale', async ({ page })
   await expect(page.getByText('Point of Sale', { exact: true })).toBeVisible();
   await expect(page.getByPlaceholder(/search.*product|search.*part/i)).toBeVisible();
   expect(state.calls.filter(call => !['GET', 'OPTIONS'].includes(call.method))).toEqual([]);
+});
+
+test('Staff with an assigned POS permission can open the permitted terminal', async ({ page }) => {
+  const state = await staffFixture(page, { permissions: [...staffPermissions, 'pos.access'] });
+  await page.goto('/#/staff/dashboard');
+  await page.getByRole('button', { name: 'Open POS', exact: true }).click();
+  await expect(page).toHaveURL(/#\/pos/);
+  await expect(page.getByText('Point of Sale', { exact: true })).toBeVisible();
+  expect(state.calls.some(call => call.path.startsWith('/pos/') && call.method !== 'GET')).toBe(false);
+});
+
+test('permitted Staff fulfillment updates stay within assigned actions using isolated data', async ({ page }) => {
+  const state = await staffFixture(page);
+  await page.goto('/#/staff/orders');
+  const mobile = page.viewportSize().width < 768;
+  await page.getByRole('button', { name: mobile ? 'View order' : 'View order #88001', exact: true }).first().click();
+  const detail = page.getByRole('dialog', { name: 'Order #88001', exact: true });
+  await detail.getByRole('button', { name: 'Update Status', exact: true }).click();
+  const status = page.getByRole('dialog', { name: 'Update Order Status', exact: true });
+  await expect(status.getByRole('button', { name: 'Cancelled', exact: true })).toHaveCount(0);
+  await status.getByRole('button', { name: 'Packed', exact: true }).click();
+  await status.getByRole('button', { name: 'Update Status', exact: true }).click();
+  await expect(status).toHaveCount(0);
+  expect(state.orders[0].status).toBe('packed');
 });
 
 test('Staff drawer navigates and closes; account menu sign-out restores focus and ends the session', async ({ page }) => {
