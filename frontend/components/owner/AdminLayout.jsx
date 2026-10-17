@@ -150,8 +150,12 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   }, []);
 
   const privileged = ['owner', 'admin'].includes(user?.role);
-  const navItems = createNavItems(badges).filter((item) => (
-    (privileged ? ADMIN_NAV.includes(item.id) : (item.id === 'dashboard' || Boolean(item.permission)))
+  const staffSelfService = user?.role === 'store_staff' ? [
+    { id: 'notifications', label: 'Notifications', icon: Bell, group: 'Communication', selfService: true },
+    { id: 'account', label: 'Account & security', icon: UserCog, group: 'Account', selfService: true },
+  ] : [];
+  const navItems = [...createNavItems(badges), ...staffSelfService].filter((item) => (
+    (privileged ? ADMIN_NAV.includes(item.id) : (item.id === 'dashboard' || item.selfService || Boolean(item.permission)))
     && (!item.permission || privileged || permissions?.has(item.permission))
     && !(user?.role === 'store_staff' && item.id === 'customers')
   ));
@@ -194,7 +198,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
     else if (type.includes('product') || type.includes('inventory')) onNavigate('inventory');
   };
 
-  const presentedNav = user?.role === 'store_staff' ? navItems.map(item => ({ ...item, group: item.id === 'dashboard' ? 'Today' : ['orders', 'returns'].includes(item.id) ? 'Fulfillment' : ['inventory', 'product-items', 'storefront'].includes(item.id) ? 'Parts counter' : item.id === 'chat' ? 'Communication' : 'Tools' })) : navItems;
+  const presentedNav = user?.role === 'store_staff' ? navItems.map(item => ({ ...item, group: item.id === 'dashboard' ? 'Workspace' : ['orders', 'returns'].includes(item.id) ? 'Fulfillment' : ['inventory', 'product-items', 'storefront'].includes(item.id) ? 'Parts counter' : ['chat', 'notifications'].includes(item.id) ? 'Communication' : item.id === 'account' ? 'Account' : 'Tools' })) : navItems;
 
   const currentTitle = navItems.find((item) => item.id === activeView)?.label || 'Operations';
   const isStaff = user?.role === 'store_staff';

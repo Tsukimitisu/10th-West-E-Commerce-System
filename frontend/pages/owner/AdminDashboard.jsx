@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/owner/AdminLayout';
 import DashboardView from './DashboardView';
@@ -16,6 +16,8 @@ import ChatView from './ChatView';
 import StaffDashboardView from '../staff/StaffDashboardView';
 import StorefrontListingsView from './StorefrontListingsView';
 import InventoryProductItemsView from './InventoryProductItemsView';
+const StaffAccountView = lazy(() => import('../staff/StaffAccountView'));
+const StaffNotificationsView = lazy(() => import('../staff/StaffNotificationsView'));
 
 const AdminDashboard = ({ user, onLogout }) => {
   const canAccessAdmin = ['owner', 'store_staff', 'admin'].includes(user?.role);
@@ -44,11 +46,15 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const views = {
     dashboard: isStaff ? <StaffDashboardView user={user} onNavigate={setActiveView} /> : <DashboardView user={user} onNavigate={setActiveView} />,
-    storefront: <StorefrontListingsView />, inventory: <InventoryView />,
+    storefront: <StorefrontListingsView />, inventory: <InventoryView user={isStaff ? user : undefined} />,
     'product-items': <InventoryProductItemsView />, orders: <OrdersView />,
     customers: <CustomersView />, returns: <ReturnsView />, staff: <StaffView />,
     reviews: <ReviewsView />, reports: <ReportsView />, promotions: <PromotionsView />,
     banners: <BannersView />, content: <ContentView />, chat: <ChatView />,
+    ...(isStaff ? {
+      account: <Suspense fallback={<p role="status">Loading staff account…</p>}><StaffAccountView user={user} /></Suspense>,
+      notifications: <Suspense fallback={<p role="status">Loading notifications…</p>}><StaffNotificationsView onNavigate={setActiveView} /></Suspense>,
+    } : {}),
   };
   if (isStaff && activeView === 'customers') return <Navigate to="/staff/dashboard" replace />;
   if (!views[activeView]) return <Navigate to={`${basePath}/dashboard`} replace />;
