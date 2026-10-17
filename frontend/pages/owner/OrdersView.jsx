@@ -152,8 +152,9 @@ const OrdersView = () => {
   };
 
   const openStatusChange = (order) => {
+    if (isStaff && !permissions.has('orders.update') && !permissions.has('orders.cancel')) return;
     if (isInStoreOrder(order)) return;
-    const nextOptions = staffStatusTransitions[order.status] || [];
+    const nextOptions = (staffStatusTransitions[order.status] || []).filter(status => !isStaff || permissions.has(status === 'cancelled' ? 'orders.cancel' : 'orders.update'));
     setStatusTarget(order);
     setNewStatus(nextOptions[0] || '');
     setTrackingNumber(order.tracking_number || '');
@@ -164,6 +165,7 @@ const OrdersView = () => {
 
   const handleStatusUpdate = async () => {
     if (!statusTarget || !newStatus) return;
+    if (isStaff && !permissions.has(newStatus === 'cancelled' ? 'orders.cancel' : 'orders.update')) return;
     if (newStatus === 'cancelled' && !cancelReason.trim()) return;
     setStatusError('');
 
@@ -269,7 +271,8 @@ const OrdersView = () => {
   });
 
   const statuses = Object.values(OrderStatus);
-  const nextStatusOptions = statusTarget ? (staffStatusTransitions[statusTarget.status] || []) : [];
+  const nextStatusOptions = statusTarget ? (staffStatusTransitions[statusTarget.status] || []).filter(status => !isStaff || permissions.has(status === 'cancelled' ? 'orders.cancel' : 'orders.update')) : [];
+  const canUpdateStaffOrder = !isStaff || permissions.has('orders.update') || permissions.has('orders.cancel');
   const pending = orders.filter(o => o.status === 'pending').length;
   const processing = orders.filter(o => ['processing', 'packed', 'ready_for_pickup'].includes(o.status)).length;
   const shipped = orders.filter(o => o.status === 'shipped').length;
@@ -327,7 +330,7 @@ const OrdersView = () => {
             />
           </div>
         ) : (
-          <><div className="md:hidden">{filtered.map(o => <MobileDataCard key={o.id} reference={`Order #${String(o.id).padStart(4, '0')}`} title={o.customer_display_name || o.customer_name || 'Customer unavailable'} status={<StatusBadge tone={['failed', 'cancelled'].includes(o.status) ? 'danger' : ['delivered', 'paid'].includes(o.status) ? 'success' : 'neutral'}>{getOrderStatusLabel(o.status)}</StatusBadge>} actions={<><button type="button" onClick={() => openDetail(o)}>View order</button><button type="button" disabled={isInStoreOrder(o)} onClick={() => openStatusChange(o)} title={isInStoreOrder(o) ? POS_STATUS_LOCK_HELP : undefined}>Update status</button></>}>
+          <><div className="md:hidden">{filtered.map(o => <MobileDataCard key={o.id} reference={`Order #${String(o.id).padStart(4, '0')}`} title={o.customer_display_name || o.customer_name || 'Customer unavailable'} status={<StatusBadge tone={['failed', 'cancelled'].includes(o.status) ? 'danger' : ['delivered', 'paid'].includes(o.status) ? 'success' : 'neutral'}>{getOrderStatusLabel(o.status)}</StatusBadge>} actions={<><button type="button" onClick={() => openDetail(o)}>View order</button><button type="button" disabled={isInStoreOrder(o) || !canUpdateStaffOrder} onClick={() => openStatusChange(o)} title={isInStoreOrder(o) ? POS_STATUS_LOCK_HELP : undefined}>Update status</button></>}>
             <dl className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt className="text-slate-600">Payment</dt><dd className="mt-1 font-medium">{o.payment_method === 'gcash' ? 'GCash' : o.payment_method === 'cash' ? 'Cash' : 'COD'} · {getPaymentStatusLabel(o.payment_status)}</dd></div><div><dt className="text-slate-600">Shipping</dt><dd className="mt-1 font-medium">{o.source === 'pos' ? 'In-store sale' : o.shipping_method === 'pickup' ? 'Store pickup' : 'Delivery'}</dd></div><div><dt className="text-slate-600">Date</dt><dd className="mt-1">{new Date(o.created_at).toLocaleDateString('en-PH')}</dd></div><div><dt className="text-slate-600">Total</dt><dd className="mt-1 text-sm font-semibold tabular-nums">₱{Number(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</dd></div></dl>
           </MobileDataCard>)}</div><div tabIndex={0} role="region" aria-label="Order records" className="hidden overflow-x-auto md:block"><table className="w-full text-sm">
             <thead><tr className="bg-gray-50/80 border-b border-gray-700">
@@ -355,7 +358,7 @@ const OrdersView = () => {
                   <td className="px-4 py-3">
                     <button
                       onClick={() => openStatusChange(o)}
-                      disabled={isInStoreOrder(o)}
+                      disabled={isInStoreOrder(o) || !canUpdateStaffOrder}
                       title={isInStoreOrder(o) ? POS_STATUS_LOCK_HELP : o.status === 'failed' ? PAYMENT_FAILED_HELP : undefined}
                       className={`inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-semibold border ${isInStoreOrder(o) ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:opacity-80'} ${statusColors[o.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}
                     >
@@ -553,7 +556,7 @@ const OrdersView = () => {
               )}
               <button
                 onClick={() => { setDetailOpen(false); openStatusChange(detailOrder); }}
-                disabled={isInStoreOrder(detailOrder)}
+                disabled={isInStoreOrder(detailOrder) || !canUpdateStaffOrder}
                 title={isInStoreOrder(detailOrder) ? POS_STATUS_LOCK_HELP : undefined}
                 className="flex-1 min-w-[140px] px-4 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-colors shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
               >

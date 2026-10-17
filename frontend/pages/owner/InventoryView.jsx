@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { createInventoryItem, getInventory, getStockAdjustments, getLowStockProducts, getMotorcycleModels, adjustStock, updateInventoryItem } from '../../services/api';
+import { createInventoryItem, getInventory, getStockAdjustments, getLowStockProducts, getMotorcycleModels, adjustStock, updateInventoryItem, getMyPermissions } from '../../services/api';
 import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Package, TrendingUp, History, Plus, ScanBarcode, Pencil, Bike, CheckCircle2, XCircle } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import ReceiveStock from '../../components/owner/ReceiveStock';
@@ -14,6 +14,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import InventoryItemForm from '../../components/owner/InventoryItemForm';
 import MotorcycleModelManager from '../../components/owner/MotorcycleModelManager';
+import CameraScannerModal from '../../components/staff/CameraScannerModal';
 
 const STOCK_ADJUSTMENT_REASONS = Object.freeze({
   add: [
@@ -55,7 +56,18 @@ const ItemThumb = ({ product }) => (
   </span>
 );
 
-const InventoryView = () => {
+const InventoryView = ({ user }) => {
+  const isStaff = user?.role === 'store_staff';
+  const [staffPermissions, setStaffPermissions] = useState(null);
+  const canManageCatalog = !isStaff || staffPermissions?.has('products.manage');
+  const canAdjustStock = !isStaff || staffPermissions?.has('inventory.adjust');
+  const [lookupScannerOpen, setLookupScannerOpen] = useState(false);
+  useEffect(() => {
+    if (!isStaff) return undefined;
+    let active = true;
+    getMyPermissions().then(items => { if (active) setStaffPermissions(new Set(items)); }).catch(() => { if (active) setStaffPermissions(new Set()); });
+    return () => { active = false; };
+  }, [isStaff, user?.id]);
   const location = useLocation();
   const catalogNotice = location.state?.catalogNotice || '';
   const [products, setProducts] = useState([]);
@@ -65,6 +77,12 @@ const InventoryView = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState(location.state?.inventoryTab === 'receive' ? 'receive' : 'stock');
+  useEffect(() => {
+    if (isStaff && staffPermissions && tab === 'receive' && !canAdjustStock) {
+      setTab('stock');
+      setLookupScannerOpen(true);
+    }
+  }, [isStaff, staffPermissions, tab, canAdjustStock]);
   const [modelFilter, setModelFilter] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
   const [sortField, setSortField] = useState('name');
@@ -214,7 +232,7 @@ const InventoryView = () => {
       <PageHeader
         title="Inventory management"
         description="Manage official part data, Box locations, store pricing and stock used by POS and the online catalog."
-        actions={<div className="flex flex-wrap gap-2"><button type="button" onClick={() => openModelManager()} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Bike size={16} /> Motorcycle Models</button><button type="button" onClick={() => { setEditingItem(null); setItemModal(true); }} className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"><Plus size={16} /> Add Inventory Item</button></div>}
+        actions={canManageCatalog && <div className="flex flex-wrap gap-2"><button type="button" onClick={() => openModelManager()} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Bike size={16} /> Motorcycle Models</button><button type="button" onClick={() => { setEditingItem(null); setItemModal(true); }} className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"><Plus size={16} /> Add Inventory Item</button></div>}
       />
 
       {catalogNotice && (
@@ -230,7 +248,7 @@ const InventoryView = () => {
         </div>
       )}
 
-      <div className="ops-summary-strip">
+      <div className={`ops-summary-strip ${isStaff ? 'staff-inventory-summary' : ''}`}>
         <MetricCard icon={Boxes} label="Units on hand" value={totalStock.toLocaleString('en-PH')} detail={`${products.length.toLocaleString('en-PH')} inventory items`} tone="neutral" />
         <MetricCard icon={TrendingUp} label="Inventory value" value={formatPeso(totalValue, 0)} detail="At cost price" tone="neutral" />
         <MetricCard icon={Package} label="Reserved / damaged" value={`${reservedStock} / ${damagedStock}`} detail="Units not sellable" tone="neutral" />
@@ -238,7 +256,7 @@ const InventoryView = () => {
       </div>
 
       <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1 sm:w-fit" role="tablist" aria-label="Inventory views">
-        {tabs.map(t => (
+        {tabs.filter(t => t.id !== 'receive' || canAdjustStock).map(t => (
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={`flex min-h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors ${tab === t.id ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
             <t.icon size={15} aria-hidden="true" />
             {t.label}
@@ -248,11 +266,11 @@ const InventoryView = () => {
       </div>
 
       {/* Receive Items Tab */}
-      {tab === 'receive' && (
+      {tab === 'receive' && canAdjustStock && (
         <ReceiveStock
           products={products}
           motorcycleModels={motorcycleModels}
-          onAddMotorcycleModel={openModelManager}
+              onAddMotorcycleModel={canManageCatalog ? openModelManager : undefined}
           onComplete={async () => { await fetchData(); setFeedback({ type: 'success', text: 'Stock received successfully.' }); }}
           onBack={() => setTab('stock')}
         />
@@ -276,7 +294,7 @@ const InventoryView = () => {
               <option value="name">Item name</option><option value="part_number">Part number</option><option value="motorcycle_model">Model</option><option value="box_location">Box location</option><option value="stock_quantity">Available stock</option><option value="store_selling_price">Store price</option>
             </select>
             <button type="button" onClick={() => setSortDirection((value) => value === 'asc' ? 'desc' : 'asc')} className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-medium" aria-label={`Sort ${sortDirection === 'asc' ? 'descending' : 'ascending'}`}>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</button>
-            <button type="button" onClick={() => setTab('receive')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold sm:ml-auto"><ScanBarcode size={17} aria-hidden="true" />Barcode Scan</button>
+            <button type="button" onClick={() => canAdjustStock ? setTab('receive') : setLookupScannerOpen(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold sm:ml-auto"><ScanBarcode size={17} aria-hidden="true" />Barcode Scan</button>
           </div>
           <div className="border-b border-slate-200 px-3 py-2">
             <p className="text-xs text-slate-500">
@@ -332,8 +350,8 @@ const InventoryView = () => {
                           <td className="px-4 py-2.5"><StatusBadge tone={status.tone} icon={status.icon}>{status.label}</StatusBadge></td>
                           <td className="px-4 py-2.5 text-right">
                             <div className="flex justify-end gap-1.5">
-                              <button type="button" onClick={() => { setEditingItem(p); setItemModal(true); }} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" aria-label={`Edit ${p.product_name || p.name}`}><Pencil size={13} aria-hidden="true" /> Edit</button>
-                              <button type="button" onClick={() => openAdjust(p)} className="inline-flex min-h-9 items-center rounded-lg bg-slate-900 px-2.5 text-xs font-semibold text-white hover:bg-slate-800" aria-label={`Adjust stock for ${p.product_name || p.name}`}>Adjust</button>
+                              <button type="button" disabled={!canManageCatalog} title={canManageCatalog ? undefined : "Catalog editing is not assigned to this account"} onClick={() => { setEditingItem(p); setItemModal(true); }} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" aria-label={`Edit ${p.product_name || p.name}`}><Pencil size={13} aria-hidden="true" /> Edit</button>
+                              <button type="button" disabled={!canAdjustStock} title={canAdjustStock ? undefined : "Stock adjustment is not assigned to this account"} onClick={() => openAdjust(p)} className="inline-flex min-h-9 items-center rounded-lg bg-slate-900 px-2.5 text-xs font-semibold text-white hover:bg-slate-800" aria-label={`Adjust stock for ${p.product_name || p.name}`}>Adjust</button>
                             </div>
                           </td>
                         </tr>
@@ -364,8 +382,8 @@ const InventoryView = () => {
                         <div><dt className="text-slate-500">Store price</dt><dd className="mt-0.5 text-sm font-semibold tabular-nums text-slate-950">{formatPeso(p.store_selling_price)}</dd></div>
                       </dl>
                       <div className="mt-3 grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => { setEditingItem(p); setItemModal(true); }} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700"><Pencil size={14} aria-hidden="true" /> Edit</button>
-                        <button type="button" onClick={() => openAdjust(p)} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-slate-900 text-sm font-semibold text-white">Adjust stock</button>
+                        <button type="button" disabled={!canManageCatalog} title={canManageCatalog ? undefined : "Catalog editing is not assigned to this account"} onClick={() => { setEditingItem(p); setItemModal(true); }} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700"><Pencil size={14} aria-hidden="true" /> Edit</button>
+                        <button type="button" disabled={!canAdjustStock} title={canAdjustStock ? undefined : "Stock adjustment is not assigned to this account"} onClick={() => openAdjust(p)} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-slate-900 text-sm font-semibold text-white">Adjust stock</button>
                       </div>
                     </li>
                   );
@@ -437,7 +455,7 @@ const InventoryView = () => {
                       <p className="text-xs text-gray-400">Threshold: {p.low_stock_threshold} · Current: <span className={`font-bold ${p.stock_quantity === 0 ? 'text-red-500' : 'text-amber-600'}`}>{p.stock_quantity}</span></p>
                     </div>
                   </div>
-                  <button onClick={() => openAdjust(p)} className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1">
+                  <button disabled={!canAdjustStock} title={canAdjustStock ? undefined : "Stock adjustment is not assigned to this account"} onClick={() => openAdjust(p)} className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1">
                     <Plus size={12} /> Restock
                   </button>
                 </div>
@@ -446,6 +464,8 @@ const InventoryView = () => {
           )}
         </div>
       )}
+
+      <CameraScannerModal open={lookupScannerOpen} onClose={() => setLookupScannerOpen(false)} onScan={value => { setSearch(String(value).trim()); setPage(1); setTab('stock'); setLookupScannerOpen(false); }} title="Find a part by barcode" />
 
       {/* Adjust Stock Modal */}
       <Modal isOpen={adjustModal} onClose={() => setAdjustModal(false)} title={`Adjust Stock - ${selectedProduct?.name || ''}`} size="md">
