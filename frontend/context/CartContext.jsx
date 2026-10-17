@@ -24,6 +24,7 @@ export const CartProvider = ({ children }) => {
   const [initialized, setInitialized] = useState(false);
   const [cartSyncError, setCartSyncError] = useState(null);
   const [cartPriceChanges, setCartPriceChanges] = useState([]);
+  const [cartNotices, setCartNotices] = useState([]);
   const cartSyncRequestRef = React.useRef(0);
   const itemsRef = React.useRef(items);
   const quantityUpdatesRef = React.useRef(new Set());
@@ -91,6 +92,8 @@ export const CartProvider = ({ children }) => {
       variantId: item.variant_id ?? item.variant?.id ?? null,
       variant: item.variant || null,
       quantity: item.quantity,
+      isAvailable: item.is_available !== false,
+      warning: item.warning || null,
       product: {
         ...(item.product || {}),
         id: item.product_id ?? item.product?.id,
@@ -210,7 +213,9 @@ export const CartProvider = ({ children }) => {
 
   const getStoredCartItems = (storageKey) => {
     try {
-      const raw = sessionStorage.getItem(storageKey);
+      const raw = storageKey === GUEST_CART_KEY
+        ? localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey)
+        : sessionStorage.getItem(storageKey);
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed : [];
     } catch {
@@ -218,7 +223,14 @@ export const CartProvider = ({ children }) => {
     }
   };
 
+  const saveCartItems = (scope, nextItems) => {
+    try {
+      (scope === GUEST_CART_KEY ? localStorage : sessionStorage).setItem(scope, JSON.stringify(nextItems));
+    } catch { /* Cookie-backed server carts remain available when storage is blocked. */ }
+  };
+
   const clearGuestCartStorage = () => {
+    localStorage.removeItem(GUEST_CART_KEY);
     sessionStorage.removeItem(GUEST_CART_KEY);
     sessionStorage.removeItem(GUEST_SELECTED_KEY);
     sessionStorage.removeItem(GUEST_CHECKOUT_SELECTION_KEY);
@@ -256,7 +268,7 @@ export const CartProvider = ({ children }) => {
   };
 
   // Sync cart from backend when user logs in
-  const syncCart = async ({ returnItems = false } = {}) => {
+  const syncCart = async ({ returnItems = false, forceGuest = false } = {}) => {
     const requestId = ++cartSyncRequestRef.current;
     const requestedScope = getCartKey();
     if (USE_SUPABASE) {
@@ -301,17 +313,14 @@ export const CartProvider = ({ children }) => {
       }
     }
 
-    // Guest carts are maintained locally until checkout. Avoid probing the
-    // authenticated cart endpoint on login/public pages, where no user
-    // ownership exists and a transient backend outage should not surface as
-    // an application-wide error.
+    // The same cookie-backed endpoint owns guest and account carts. The local
+    // guest snapshot is only a recovery hint, never an ordering authority.
     const currentUser = getCurrentUser();
-    if (!currentUser?.id) {
-      const savedCart = sessionStorage.getItem(getCartKey());
-      setItems(savedCart ? JSON.parse(savedCart) : []);
+    if (!currentUser?.id && !forceGuest && !getStoredCartItems(GUEST_CART_KEY).length) {
+      setItems([]);
       setCartSyncError(null);
       setInitialized(true);
-      return true;
+      return returnItems ? [] : true;
     }
 
     try {
@@ -331,14 +340,29 @@ export const CartProvider = ({ children }) => {
         const mappedItems = mapCartItemsFromBackend(data.items || []);
         const stableItems = orderCartItems(mappedItems);
         try {
-          const cachedItems = JSON.parse(sessionStorage.getItem(requestedScope) || '[]');
+          const cachedItems = getStoredCartItems(requestedScope);
           const changes = detectCartPriceChanges(cachedItems, stableItems);
           if (changes.length) setCartPriceChanges(changes);
         } catch { /* Invalid tab cache is ignored; the server cart remains authoritative. */ }
+        const guestSnapshot = currentUser?.id ? getStoredCartItems(GUEST_CART_KEY) : [];
+        const missingGuestItems = guestSnapshot.filter(guest => !stableItems.some(item =>
+          Number(item.productId) === Number(guest.productId) && Number(item.variantId || 0) === Number(guest.variantId || 0)));
+        const notices = stableItems.filter(item => item.warning).map(item => `${item.product.name}: ${item.warning}.`);
+        if (missingGuestItems.length) {
+          notices.push(...missingGuestItems.map(item => `${item.product?.name || 'A saved item'} could not be restored. It may be unavailable. Your saved guest cart is retained. Review availability before adding it again.`));
+        } else if (guestSnapshot.length && data.guest_merge === 'complete') {
+          for (const guest of guestSnapshot) {
+            const merged = stableItems.find(item => Number(item.productId) === Number(guest.productId) && Number(item.variantId || 0) === Number(guest.variantId || 0));
+            if (merged && Number(merged.quantity) < Number(guest.quantity)) notices.push(`${merged.product.name}: quantity adjusted to ${merged.quantity} after checking stock.`);
+          }
+          clearGuestCartStorage();
+        } else if (guestSnapshot.length) {
+          notices.push('Your guest cart merge has not been confirmed. Your saved items are retained. Refresh your cart to retry before checkout.');
+        }
+        setCartNotices(notices);
         setItems(stableItems);
         setCartSyncError(null);
-        // Save to tab-scoped storage as backup
-        sessionStorage.setItem(getCartKey(), JSON.stringify(stableItems));
+        saveCartItems(requestedScope, stableItems);
         setInitialized(true);
         return returnItems ? stableItems : true;
       } else {
@@ -365,7 +389,7 @@ export const CartProvider = ({ children }) => {
 
   useEffect(() => {
     const refresh = () => {
-      if (getCurrentUser()?.id) syncCart();
+      if (getCurrentUser()?.id || itemsRef.current.length) syncCart({ forceGuest: true });
     };
     const refreshVisible = () => {
       if (document.visibilityState === 'visible') refresh();
@@ -380,41 +404,43 @@ export const CartProvider = ({ children }) => {
 
   // Monitor auth changes that affect cart scope
   useEffect(() => {
-    const handleStorageChange = async () => {
+    const handleStorageChange = () => {
       const previousScopeKey = cartScopeKeyRef.current;
       const currentUser = getCurrentUser();
       const nextScopeKey = currentUser?.id ? `shopCoreCart_${currentUser.id}` : GUEST_CART_KEY;
-
-      setCartScopeKey(nextScopeKey);
+      // Initial optional-profile and repeated profile updates are not logouts.
+      if (previousScopeKey === nextScopeKey) return;
+      cartSyncRequestRef.current += 1;
+      cartScopeKeyRef.current = nextScopeKey;
+      if (previousScopeKey === GUEST_CART_KEY && currentUser?.id) {
+        // An initial optional-profile refresh also crosses this boundary. Only
+        // transfer a real guest selection; an empty guest cache must not erase
+        // the account's saved checkout after a full-page refresh.
+        if (getStoredCartItems(GUEST_CART_KEY).length) {
+          for (const suffix of ['_selected', '_checkout_selection']) {
+            try {
+              const selection = JSON.parse(sessionStorage.getItem(`${GUEST_CART_KEY}${suffix}`) || '[]');
+              if (Array.isArray(selection) && selection.length) {
+                sessionStorage.setItem(`${nextScopeKey}${suffix}`, JSON.stringify(selection));
+              }
+            } catch { /* Ignore invalid selection hints; server ownership is unchanged. */ }
+          }
+        }
+      } else if (!currentUser?.id) {
+        clearCartStorageForScope(previousScopeKey);
+        clearGuestCartStorage();
+      }
+      setItems([]);
+      setDiscount(null);
+      setError(null);
+      setCartSyncError(null);
+      setCartNotices([]);
       setInitialized(false);
       setSelectedItemIds([]);
       setHasLoadedSelection(false);
-
-      if (!currentUser?.id) {
-        cartSyncRequestRef.current += 1;
-        clearCartStorageForScope(previousScopeKey);
-        clearGuestCartStorage();
-        setItems([]);
-        setDiscount(null);
-        setError(null);
-        setCartSyncError(null);
-        setInitialized(true);
-        clearCheckoutSelection();
-        return;
-      }
-
-      if (currentUser?.id && USE_SUPABASE) {
-        try {
-          await mergeGuestCartIntoSupabaseCart();
-        } catch (err) {
-          console.error('Failed to merge guest cart after login:', err);
-        }
-      }
-
-      const synced = await syncCart();
-      if (currentUser?.id && synced) {
-        clearGuestCartStorage();
-      }
+      setCartScopeKey(nextScopeKey);
+      // The scope effect performs one authoritative refresh after login. The
+      // existing backend login transaction has already merged the guest cart.
     };
     window.addEventListener('auth:changed', handleStorageChange);
     return () => {
@@ -444,8 +470,8 @@ export const CartProvider = ({ children }) => {
 
   // Save cart state in tab-scoped storage for guest/offline fallback.
   useEffect(() => {
-    if (initialized && hasLoadedSelection && !cartSyncError) {
-      sessionStorage.setItem(getCartKey(), JSON.stringify(items));
+    if (initialized && hasLoadedSelection && !cartSyncError && cartScopeKey === getCartKey()) {
+      saveCartItems(cartScopeKey, items);
       // cleanup removed items
       const itemIds = new Set(items.map(i => Number(i.productId)));
       const cleanSelected = normalizeSelectionIds(selectedItemIds);
@@ -609,7 +635,7 @@ export const CartProvider = ({ children }) => {
             if (insertError) throw new Error(insertError.message);
           }
 
-          await syncCart();
+          await syncCart({ forceGuest: true });
             setSelectedItemIds(prev => Array.from(new Set([...prev, product.id])));
             return true;
         } catch (err) {
@@ -646,7 +672,7 @@ export const CartProvider = ({ children }) => {
             return fallbackAdded;
           }
 
-          const synced = await syncCart();
+          const synced = await syncCart({ forceGuest: true });
           if (!synced) {
             const fallbackAdded = addToCartLocal(product, requestedQty);
             if (!fallbackAdded) {
@@ -721,7 +747,7 @@ export const CartProvider = ({ children }) => {
       const existing = currentItems.find(item => item.productId === product.id && Number(item.variantId || 0) === Number(variantId || 0));
       if (existing) {
         return currentItems.map(item =>
-          item.productId === product.id
+          item.productId === product.id && Number(item.variantId || 0) === Number(variantId || 0)
             ? { ...item, quantity: item.quantity + requestedQty }
             : item
         );
@@ -766,7 +792,7 @@ export const CartProvider = ({ children }) => {
             if (deleteError) throw new Error(deleteError.message);
           }
 
-          await syncCart();
+          await syncCart({ forceGuest: true });
         } catch (err) {
           console.error('Error removing from cart (Supabase):', err);
           setError('Failed to remove item');
@@ -787,7 +813,7 @@ export const CartProvider = ({ children }) => {
 
         if (response.ok) {
           const payload = await response.clone().json().catch(() => ({}));
-          const synced = payload?.degraded ? false : await syncCart();
+          const synced = payload?.degraded ? false : await syncCart({ forceGuest: true });
           if (!synced) removeFromCartLocal(productId);
         } else {
           throw new Error('Failed to remove item');
@@ -874,13 +900,13 @@ export const CartProvider = ({ children }) => {
         if (payload?.degraded) throw new Error('Cart service is temporarily unavailable.');
       }
 
-      const synced = await syncCart();
+      const synced = await syncCart({ forceGuest: true });
       if (!synced) throw new Error('Unable to confirm the updated quantity.');
       return true;
     } catch (err) {
       console.error('Error updating quantity:', err);
       setError(err.message || 'Failed to update quantity');
-      const synced = await syncCart();
+      const synced = await syncCart({ forceGuest: true });
       if (!synced) {
         setItems((currentItems) => currentItems.map((item) =>
           item.productId === productId ? { ...item, quantity: previousQuantity } : item
@@ -1200,6 +1226,7 @@ export const CartProvider = ({ children }) => {
         initialized,
         cartSyncError,
         cartPriceChanges,
+        cartNotices,
     }}>
       {children}
     </CartContext.Provider>

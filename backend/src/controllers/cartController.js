@@ -82,8 +82,12 @@ export const ensureGuestCartSessionId = async (req) => {
 export const rotateGuestSession = async (req) => {
   if (!req.session) return null;
 
+  // Retain only server-owned anonymous-cart identity through authentication.
+  // No cart/session identifier supplied by the browser is accepted for recovery.
+  const pendingGuestCartSessionId = req.session.auth?.userId ? null : req.session.cartSessionId;
   await regenerateSession(req);
   req.session.cartSessionId = generateGuestCartSessionId();
+  if (pendingGuestCartSessionId) req.session.pendingGuestCartSessionId = pendingGuestCartSessionId;
   await saveSession(req);
 
   return req.session.cartSessionId;
@@ -277,6 +281,15 @@ export const mergeGuestCartIntoUserCart = async (guestSessionId, userId) => {
 // Get cart for current owner
 export const getCart = async (req, res) => {
   try {
+    if (req.user?.role === 'customer' && req.session?.pendingGuestCartSessionId) {
+      // Login may finish while its first merge fails. Retrying the existing
+      // locked transaction is idempotent: success consumes the guest cart in
+      // that same transaction. A failure leaves the server recovery ID intact.
+      await mergeGuestCartIntoUserCart(req.session.pendingGuestCartSessionId, req.user.id);
+      delete req.session.pendingGuestCartSessionId;
+      req.session.guestCartMergeUserId = req.user.id;
+      await saveSession(req);
+    }
     const cart = await getOrCreateCart(req);
 
     const items = await pool.query(
@@ -297,6 +310,8 @@ export const getCart = async (req, res) => {
 
     res.json({
       cart_id: cart.id,
+      ...(req.user?.role === 'customer' && Number(req.session?.guestCartMergeUserId) === Number(req.user.id)
+        ? { guest_merge: 'complete' } : {}),
       items: items.rows.map((item) => ({
         id: item.id,
         product_id: item.product_id,

@@ -72,7 +72,7 @@ test('cart quantity updates are optimistic, per-item, bounded, and reconciled wi
   assert.match(context, /quantityUpdatesRef/);
   assert.match(context, /updatingItemIds/);
   assert.match(context, /updateQuantityLocal\(productId, quantity\)/);
-  assert.match(context, /const synced = await syncCart\(\)/);
+  assert.match(context, /const synced = await syncCart\(\{ forceGuest: true \}\)/);
   assert.match(drawer, /updatingItemIds\?\.has\(item\.productId\)/);
   assert.match(drawer, /Updating…/);
   assert.match(drawer, /item\.quantity >= MAX_ITEM_QUANTITY/);

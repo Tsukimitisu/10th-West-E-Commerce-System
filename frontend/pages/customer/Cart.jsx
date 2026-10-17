@@ -1,7 +1,9 @@
+import Modal from '../../components/owner/Modal';
+import BrandButton from '../../components/ui/BrandButton';
 import OrderSummary from '../../components/customer/OrderSummary';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft, LogIn, X } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, ChevronRight, ArrowLeft, LogIn } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { getCurrentAuthUser } from '../../services/authSession.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
@@ -41,6 +43,7 @@ const Cart = () => {
     syncCart,
     cartSyncError,
     cartPriceChanges,
+    cartNotices,
   } = useCart();
 
   const navigate = useNavigate();
@@ -53,7 +56,7 @@ const Cart = () => {
   const previousPrices = useRef(new Map());
 
   useEffect(() => {
-    if (getCurrentAuthUser()) syncCart();
+    syncCart({ forceGuest: true });
   }, []);
 
   useEffect(() => {
@@ -80,6 +83,7 @@ const Cart = () => {
   const priceNotices = [...new Set([
     ...cartPriceChanges.map((change) => `${change.name}: price updated to ${formatPrice(change.currentPrice)}.`),
     ...cartChanges,
+    ...cartNotices,
   ])];
 
   const getEffectiveItemUnitPrice = (item) => {
@@ -109,10 +113,10 @@ const Cart = () => {
 
   const handleCheckout = () => {
     const invalid = items.find((item) => selectedItemIds.includes(item.productId)
-      && item.product.stock_quantity != null
-      && Number(item.product.stock_quantity) < Number(item.quantity));
+      && (item.isAvailable === false || (item.product.stock_quantity != null
+      && Number(item.product.stock_quantity) < Number(item.quantity))));
     if (invalid) {
-      setCheckoutError(`${invalid.product.name} has ${invalid.product.stock_quantity} available. Adjust the quantity before checkout.`);
+      setCheckoutError(invalid.warning ? `${invalid.product.name}: ${invalid.warning}.` : `${invalid.product.name} has ${invalid.product.stock_quantity} available. Adjust the quantity before checkout.`);
       return;
     }
     setCheckoutError('');
@@ -227,9 +231,9 @@ const Cart = () => {
         {cartSyncError && <div role="alert" className="mb-5 rounded-lg bg-amber-50 px-4 py-3 text-amber-900">
           {cartSyncError} <button type="button" onClick={() => syncCart()} className="ml-2 font-semibold underline">Retry</button>
         </div>}
-        {priceNotices.length > 0 && <div role="status" className="mb-5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        {priceNotices.length > 0 && <div role="status" className="mb-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900">
           <p className="font-semibold">Cart prices were refreshed</p>
-          {priceNotices.map((change) => <p key={change}>{change} Checkout will use this current price.</p>)}
+          {priceNotices.map((change) => <p key={change}>{change}</p>)}
         </div>}
         {checkoutError && <p role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{checkoutError}</p>}
 
@@ -418,40 +422,16 @@ const Cart = () => {
   );
 };
 
-const LoginRequiredModal = ({ isOpen, onClose, onLogin }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6 animate-fade-in border border-slate-200">
-        <button onClick={onClose} className="absolute top-4 right-4 p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
-          <X size={20} />
-        </button>
-        <div className="text-center">
-          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <LogIn size={28} className="text-red-500" />
-          </div>
-          <h3 className="font-display font-bold text-lg text-slate-900 mb-2">Login Required</h3>
-          <p className="text-sm text-slate-600 mb-6">You need to be logged in to proceed to checkout. Please sign in or create an account to continue.</p>
-          <div className="space-y-3">
-            <button
-              onClick={onLogin}
-              className="w-full py-3 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
-            >
-              <LogIn size={16} /> Sign In
-            </button>
-            <button
-              onClick={onClose}
-              className="w-full py-3 border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-100 transition-colors text-sm"
-            >
-              Continue Shopping
-            </button>
-          </div>
-        </div>
+const LoginRequiredModal = ({ isOpen, onClose, onLogin }) => (
+  <Modal isOpen={isOpen} onClose={onClose} title="Sign in to checkout" size="sm">
+    <div className="p-6">
+      <p className="text-sm leading-6 text-slate-600">Your cart is saved. Sign in or create an account to continue to secure checkout.</p>
+      <div className="mt-5 flex flex-col gap-3">
+        <BrandButton onClick={onLogin}><LogIn size={17} aria-hidden="true" />Sign In</BrandButton>
+        <BrandButton variant="secondary" onClick={onClose}>Continue Shopping</BrandButton>
       </div>
     </div>
-  );
-};
+  </Modal>
+);
 
 export default Cart;
