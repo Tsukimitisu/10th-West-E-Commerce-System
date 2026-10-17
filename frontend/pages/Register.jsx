@@ -1,3 +1,4 @@
+import { customerReturnTo } from '../utils/customerReturnTo.js';
 import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, Check, X } from 'lucide-react';
@@ -240,7 +241,7 @@ const Register = () => {
     }
     setError('');
     setLoading(true);
-    sessionStorage.setItem('oauth_return_to', '/');
+    sessionStorage.setItem('oauth_return_to', customerReturnTo(window.location.hash.split('?')[1]));
     window.location.href = `${API_ORIGIN}/api/auth/${provider}`;
   };
 
@@ -435,13 +436,13 @@ const Register = () => {
         </div>
 
         <p className="mt-6 text-center text-sm text-slate-600">
-          Already have an account? <Link to="/login" className="text-orange-700 hover:text-orange-600 font-medium">Sign in</Link>
+          Already have an account? <Link to={`/login?redirect=${encodeURIComponent(customerReturnTo(window.location.hash.split('?')[1]))}`} className="text-orange-700 hover:text-orange-600 font-medium">Sign in</Link>
         </p>
       </div>
 
       <Modal isOpen={showVerificationModal} onClose={() => setShowVerificationModal(false)} title="Registration successful" size="md">
           <div className="text-center">
-            <div className="w-16 h-16 bg-blue-500/20 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-slate-500/20 text-slate-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <Mail size={32} />
             </div>
             <p className="mb-6 text-sm leading-6 text-slate-700">
@@ -457,7 +458,7 @@ const Register = () => {
             <button
               onClick={handleResend}
               disabled={resending}
-              className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-red-500/50 text-white font-medium rounded-lg transition-colors flex items-center justify-center mb-4"
+              className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-slate-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center mb-4"
             >
               {resending ? 'Sending...' : 'Resend Verification Email'}
             </button>
@@ -467,7 +468,7 @@ const Register = () => {
                 {resendStatus}
               </p>
             )}
-            <Link to="/login" className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-orange-700 underline underline-offset-2">Continue to sign in</Link>
+            <Link to={`/login?redirect=${encodeURIComponent(customerReturnTo(window.location.hash.split('?')[1]))}`} className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-orange-700 underline underline-offset-2">Continue to sign in</Link>
           </div>
       </Modal>
     </main>

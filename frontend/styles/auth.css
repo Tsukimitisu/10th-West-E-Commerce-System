@@ -22,3 +22,7 @@
 @media (min-width:768px) { .auth-page { padding:40px 24px; } .auth-content { padding:32px; } }
 
 .auth-content > .brand-logo .brand-logo-plate { width:80px; height:84px; }
+
+.customer-auth-header { padding:8px 0; background:var(--obsidian); border-bottom:1px solid var(--dark-border, #28324a); }
+.customer-auth-header .brand-logo-plate { width:48px; height:50px; }
+.auth-experience { min-height:calc(100dvh - 67px); border-top:0; }

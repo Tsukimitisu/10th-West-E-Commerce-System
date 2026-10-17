@@ -1,3 +1,5 @@
+import { safeCustomerReturnTo } from './customerReturnTo.js';
+
 export const SESSION_REFRESH_MESSAGE = 'OAuth login completed, but session refresh failed. Please sign in again.';
 
 // One bounded recovery attempt; never downgrade a failed profile to a fake login.
@@ -29,7 +31,7 @@ export function oauthDestination(user, requested) {
   if (typeof requested !== 'string' || !requested.startsWith('/') || requested.startsWith('//')
     || /[\\\r\n]/.test(requested) || /^\/(?:login|register|oauth-callback)(?:[/?#]|$)/.test(requested)
     || /[?&](?:google|facebook|error)=/.test(requested)) return '/';
-  return requested;
+  return safeCustomerReturnTo(requested);
 }
 
 export function clearOAuthErrors(storages) {

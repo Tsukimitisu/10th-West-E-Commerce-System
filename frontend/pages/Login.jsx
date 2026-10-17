@@ -1,3 +1,4 @@
+import { customerReturnTo } from '../utils/customerReturnTo.js';
 ﻿import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Shield, Check } from 'lucide-react';
@@ -61,7 +62,7 @@ const Login = ({ onLogin }) => {
   const [oauthProviders, setOauthProviders] = useState({ google: false, facebook: false, loading: true, error: false, googleReason: null, facebookReason: null });
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const defaultRedirect = searchParams.get('redirect') || '/';
+  const defaultRedirect = customerReturnTo(searchParams);
   const pageMessage = searchParams.get('verified') === '1'
     ? 'Email verified successfully. Please sign in to continue.'
     : searchParams.get('message') === 'You were signed out due to inactivity.'
@@ -121,11 +122,6 @@ const Login = ({ onLogin }) => {
       const role = result.user?.role;
       let redirect = defaultRedirect;
       
-      const additionalParams = new URLSearchParams(searchParams);
-      additionalParams.delete('redirect');
-      const paramString = additionalParams.toString();
-      if (paramString) redirect += `?${paramString}`;
-
       if (role === 'super_admin') redirect = '/superadmin/dashboard';
       else if (role === 'owner') redirect = '/admin/dashboard';
       else if (role === 'admin') redirect = '/admin/dashboard';
@@ -279,7 +275,7 @@ const Login = ({ onLogin }) => {
             </>
           ) : (
             <div className="text-center">
-              <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Shield size={24} className="text-red-500" />
               </div>
               <h2 className="mb-1 font-display text-lg font-semibold text-slate-950">Two-factor authentication</h2>
@@ -305,7 +301,7 @@ const Login = ({ onLogin }) => {
         </div>
 
         <p className="mt-6 text-center text-sm text-slate-600">
-          Don't have an account? <Link to="/register" className="text-orange-700 hover:text-orange-600 font-medium">Create one</Link>
+          Don't have an account? <Link to={`/register${defaultRedirect === '/' ? '' : `?redirect=${encodeURIComponent(defaultRedirect)}`}`} className="text-orange-700 hover:text-orange-600 font-medium">Create one</Link>
         </p>
       </div>
     </main>

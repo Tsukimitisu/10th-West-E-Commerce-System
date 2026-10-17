@@ -129,7 +129,7 @@ const ResetPassword = () => {
         <div className="auth-content">
           <BrandMark link={false} className="mb-6 w-full justify-center" />
           <div className="auth-form-body">
-            <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
               <Lock size={24} className="text-red-500" />
             </div>
             <p className="text-sm text-gray-400">Verifying reset link...</p>
@@ -148,7 +148,7 @@ const ResetPassword = () => {
             <BrandMark compact className="justify-center" />
           </div>
           <div className="auth-form-body">
-              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Clock size={32} className="text-red-500" />
               </div>
               <h1 className="font-display font-semibold text-xl text-slate-950 mb-2">Link expired or invalid</h1>
@@ -189,7 +189,7 @@ const ResetPassword = () => {
           ) : (
             <>
               <div className="text-center mb-6">
-                <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Lock size={24} className="text-red-500" />
                 </div>
                 <h1 className="font-display font-semibold text-xl text-slate-950 mb-1">Reset password</h1>
@@ -207,7 +207,7 @@ const ResetPassword = () => {
               )}
 
               {error && !isLocked && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-orange-600 flex items-center gap-2">
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-orange-700 flex items-center gap-2">
                   <AlertCircle size={16} /> {error}
                 </div>
               )}

@@ -1,3 +1,5 @@
+import AuthHeader from './components/customer/AuthHeader';
+import { customerReturnTo } from './utils/customerReturnTo.js';
 import AuthShell from './components/AuthShell';
 import BrandLogo from './components/ui/BrandLogo';
 import React, { lazy, Suspense, useCallback, useState, useEffect, useLayoutEffect } from 'react';
@@ -61,6 +63,11 @@ const RouteFallback = () => (
   </div>
 );
 
+const CustomerAuthRedirect = () => {
+  const location = useLocation();
+  return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+};
+
 const AppLayout = ({ user, onLogout, onLogin }) => {
   const location = useLocation();
   const shouldReduceMotion = useReducedMotion();
@@ -89,9 +96,10 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-950">
+    <div className={`flex min-h-screen flex-col bg-slate-50 text-slate-950 ${!hideChrome && !isSuperAdmin ? 'customer-surface' : ''}`}>
       <a href="#main-content" className="skip-link" onClick={(event) => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>Skip to main content</a>
       <IdleSessionGuard user={user} onLogout={onLogout} />
+      {isAuthRoute && !isSuperAdmin && <AuthHeader />}
       {!hideChrome && !isAuthRoute && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
       {!hideChrome && !isSuperAdmin && user && <EmailVerificationBanner user={user} />}
       <div className="flex-1 min-w-0" id="main-content" tabIndex={-1}>
@@ -120,7 +128,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                     : user && user.role === Role.SUPER_ADMIN
                       ? <Navigate to="/superadmin/dashboard" replace />
                       : user
-                        ? <Navigate to="/" replace />
+                        ? <Navigate to={customerReturnTo(location.search)} replace />
                         : <Login onLogin={onLogin} />
                 } />
                 <Route path="/register" element={
@@ -131,7 +139,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                     : user && user.role === Role.SUPER_ADMIN
                       ? <Navigate to="/superadmin/dashboard" replace />
                       : user
-                        ? <Navigate to="/" replace />
+                        ? <Navigate to={customerReturnTo(location.search)} replace />
                         : <Register onLogin={onLogin} />
                 } />
                 <Route path="/verify-email" element={<VerifyEmail onLogin={onLogin} />} />
@@ -157,27 +165,27 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                   element={
                     user
                       ? <Checkout />
-                      : <Navigate to={`/login?redirect=/checkout${location.search ? `&${location.search.slice(1)}` : ''}`} />
+                      : <CustomerAuthRedirect />
                   }
                 />
                 <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
-                <Route path="/payment-result" element={user ? <PaymentResult /> : <Navigate to="/login" />} />
-                <Route path="/payment/success" element={user ? <PaymentResult /> : <Navigate to="/login" />} />
-                <Route path="/payment/failed" element={user ? <PaymentResult /> : <Navigate to="/login" />} />
-                <Route path="/payment/cancelled" element={user ? <PaymentResult /> : <Navigate to="/login" />} />
+                <Route path="/payment-result" element={user ? <PaymentResult /> : <CustomerAuthRedirect />} />
+                <Route path="/payment/success" element={user ? <PaymentResult /> : <CustomerAuthRedirect />} />
+                <Route path="/payment/failed" element={user ? <PaymentResult /> : <CustomerAuthRedirect />} />
+                <Route path="/payment/cancelled" element={user ? <PaymentResult /> : <CustomerAuthRedirect />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/faq" element={<FAQ />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsOfService />} />
                 <Route path="/return-policy" element={<ReturnPolicy />} />
-                <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
-                <Route path="/orders" element={user ? <OrderHistory /> : <Navigate to="/login" />} />
-                <Route path="/orders/:id" element={user ? <OrderDetail /> : <Navigate to="/login" />} />
-                <Route path="/orders/:id/return" element={user ? <RequestReturn /> : <Navigate to="/login" />} />
-                <Route path="/my-returns" element={user ? <MyReturns /> : <Navigate to="/login" />} />
-                <Route path="/addresses" element={user ? <AddressBook /> : <Navigate to="/login" />} />
-                <Route path="/wishlist" element={user ? <Wishlist /> : <Navigate to="/login" />} />
-                <Route path="/messages" element={user ? <Messages /> : <Navigate to="/login?redirect=/messages" />} />
+                <Route path="/profile" element={user ? <Profile /> : <CustomerAuthRedirect />} />
+                <Route path="/orders" element={user ? <OrderHistory /> : <CustomerAuthRedirect />} />
+                <Route path="/orders/:id" element={user ? <OrderDetail /> : <CustomerAuthRedirect />} />
+                <Route path="/orders/:id/return" element={user ? <RequestReturn /> : <CustomerAuthRedirect />} />
+                <Route path="/my-returns" element={user ? <MyReturns /> : <CustomerAuthRedirect />} />
+                <Route path="/addresses" element={user ? <AddressBook /> : <CustomerAuthRedirect />} />
+                <Route path="/wishlist" element={user ? <Wishlist /> : <CustomerAuthRedirect />} />
+                <Route path="/messages" element={user ? <Messages /> : <CustomerAuthRedirect />} />
                 <Route path="/admin/*" element={user?.role === Role.OWNER || user?.role === Role.ADMIN ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
                 <Route path="/staff/*" element={user?.role === Role.STORE_STAFF ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
                 <Route path="/superadmin/*" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
