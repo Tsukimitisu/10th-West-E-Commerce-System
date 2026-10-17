@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-17T08:46:52.554885+00:00",
+  "generatedAt": "2026-10-17T13:58:35+00:00",
   "title": "Design System: 10th West Moto",
   "extensions": {
     "colorMeta": {
@@ -423,9 +423,16 @@
       "name": "Operations Navigation",
       "kind": "nav",
       "refersTo": "navigation",
-      "description": "OperationsSidebar role-grouped navy navigation; desktop shell is 248px or 76px collapsed, with a focus-managed drawer below 1024px.",
+      "description": "Shared OperationsSidebar role-grouped navy navigation; desktop shell is 248px or 76px collapsed, with a focus-managed drawer below 1024px. Owner uses the scoped Obsidian variant recorded in design-system/pages/owner.md; other role rules remain unchanged.",
       "html": "<nav class=\"ds-ops-nav\" aria-label=\"Operations\"><p>Today</p><button type=\"button\" aria-current=\"page\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg><span>Dashboard</span></button><p>Parts counter</p><button type=\"button\">Inventory</button></nav>",
       "css": ".ds-ops-nav{padding:16px 12px;background:var(--racing-navy,#111c3d);font:400 13px/1.5 Inter,sans-serif}.ds-ops-nav p{padding:0 12px 6px;margin:0;color:#aeb8ca;font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase}.ds-ops-nav button+p{margin-top:18px}.ds-ops-nav button{display:flex;align-items:center;gap:11px;width:100%;min-height:42px;padding:8px 12px;border:0;border-radius:6px;background:transparent;color:#c8d0e0;text-align:left;font:inherit;cursor:pointer;transition:background-color 180ms,color 180ms}.ds-ops-nav button svg{color:#aeb8ca}.ds-ops-nav button:hover{background:#ffffff0a;color:white}.ds-ops-nav button[aria-current=page]{background:#ffffff10;color:white;box-shadow:inset 2px 0 var(--performance-orange,#f36a21);font-weight:600}.ds-ops-nav button[aria-current=page] svg{color:var(--hot-orange,#ff8a1f)}.ds-ops-nav button:focus-visible{outline:3px solid var(--hot-orange,#ff8a1f);outline-offset:3px}@media(pointer:coarse){.ds-ops-nav button{min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-ops-nav button{transition-duration:.01ms!important}}"
+    },
+    {
+      "name": "Owner Navigation",
+      "kind": "nav",
+      "description": "Owner-only OperationsSidebar opt-in: Obsidian framing, a thin orange selected marker and existing grouped business tools. White desktop topbar becomes Obsidian below 768px. See design-system/pages/owner.md for the merged Owner/carousel behavior and prepared, unapplied migration boundary.",
+      "html": "<nav class=\"ds-owner-nav\" aria-label=\"Owner operations\"><p>Overview</p><button type=\"button\">Dashboard</button><p>Marketing</p><button type=\"button\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><circle cx=\"8.5\" cy=\"8.5\" r=\"1.5\"/><path d=\"m21 15-5-5L5 21\"/></svg><span>Hero Carousel</span></button><button type=\"button\">Promotions</button></nav>",
+      "css": ".ds-owner-nav{padding:16px 12px;background:var(--obsidian,#080a0e);color:white;font:400 13px/1.5 Inter,sans-serif}.ds-owner-nav p{margin:0;padding:0 12px 6px;color:#b9bfca;font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase}.ds-owner-nav button+p{margin-top:18px}.ds-owner-nav button{display:flex;align-items:center;gap:11px;width:100%;min-height:44px;padding:8px 12px;border:0;border-radius:6px;background:transparent;color:#d6dae2;text-align:left;font:inherit;cursor:pointer;transition:background-color 180ms,color 180ms}.ds-owner-nav button svg{color:#aeb5c2}.ds-owner-nav button:hover{background:var(--racing-navy,#111c3d);color:white}.ds-owner-nav button[aria-current=page]{background:#181d28;box-shadow:inset 2px 0 var(--performance-orange,#f36a21);color:white;font-weight:600}.ds-owner-nav button[aria-current=page] svg{color:var(--performance-orange,#f36a21)}.ds-owner-nav button:focus-visible{outline:2px solid var(--hot-orange,#ff8a1f);outline-offset:2px}@media(prefers-reduced-motion:reduce){.ds-owner-nav button{transition-duration:.01ms!important}}"
     },
     {
       "name": "Stock Status",

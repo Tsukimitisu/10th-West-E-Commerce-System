@@ -199,6 +199,8 @@ Operations use a (1600px) maximum content width and (16/20/24px) responsive padd
 
 Owner gives sales a dominant Inter figure beside the action queue, followed by revenue, stock and orders. Staff prioritizes order processing, a worklist and stock picking locations, with only permitted shortcuts. Super Admin uses Inter titles and a technical hierarchy of readiness, runtime, security signals and events. Role navigation groups existing authorized destinations; Product Items remains available to Super Admin. These role compositions are scoped to authenticated workspaces.
 
+The narrow Owner extension is recorded in [design-system/pages/owner.md](design-system/pages/owner.md): Obsidian sidebar/drawer and phone topbar, light business surfaces, grouped supported tools, in-shell account/security and notifications. It extends the incumbent system; Customer and Staff remain frozen and System work is deferred.
+
 POS fills the dynamic viewport with search, scan, image-led product tiles and a dense cart. Its navy header is (72px), reducing to (64px) below (640px); the large orange payment action remains prominent. General operations tables retain (680px) minimum width, or (620px) on phones, inside horizontal scroll regions. The inventory stock table intentionally retains (1080px) for its columns. Keep that overflow inside the table container, never at page level.
 
 ## Elevation & Depth
@@ -253,9 +255,15 @@ The public shell is Obsidian; its active destination has a restrained orange und
 
 OperationsSidebar groups destinations under restrained uppercase role/task labels. OperationsTopbar keeps page context, the actual live-update connection, existing notifications and account access compact. Its account menu uses native details/summary disclosure, closes on outside interaction or Escape, and restores summary focus on Escape. Icon controls and account actions use (44px) targets. Phone top bars retain the current page, compact official logo, navigation trigger and account control.
 
+Owner opts into Obsidian navigation with a subdued selected row, thin orange inset marker and orange icon. The desktop topbar stays white with a narrow Obsidian edge; below (768px) it becomes Obsidian. Owner account and security links stay at `/admin/account` and `/admin/account#security` inside the operations shell. These assignments are local to the Owner extension rather than new global tokens.
+
 ### Managed Hero Carousel
 
-Active public banners retain management ordering, image, headline, supporting text and valid supplied CTA destination. Published announcements join the same carousel after banners, with future publication dates excluded. The current public banner model has no schedule fields or exposed autoplay settings; do not imply those controls exist. Announcement records have no image, destination or priority fields. Missing links stay non-actionable.
+Active public banners retain management ordering, optional image, headline, supporting text and valid CTA destination. Numeric display order is ascending, with ID ascending as the tie-breaker. Only active slides within their optional start/end window and with currently available linked targets are public. Published announcements join the same carousel after banners; the server excludes future publication dates and returns a safe public projection. Announcement records have no image, destination or priority fields. Missing links stay non-actionable.
+
+The earlier no-schedule-fields statement is superseded by the Owner extension. The additive migration `backend/migrations/202610170001_hero_carousel_metadata.cjs` is prepared and has **not been applied to the shared remote database**. It adds five metadata columns (`destination_type`, `destination_id`, `starts_at`, `ends_at`, `alt_text`) plus `button_text` when missing for compatibility. Public runtime reads remain compatible with the pre-migration banner schema; management slide saves require migration deployment. Owner manages slides and text announcements at `/admin/hero-carousel`; `/admin/banners` redirects there. There are no autoplay settings.
+
+The editor uses existing listed-product search, real category/model choices, existing global coupon promotions, allowlisted storefront pages, HTTP(S) external links or information-only slides. Promotion links open `/shop?promotion=id` with campaign context and terms; they do not automatically apply a discount. Public coupon terms are exposed only for a currently available campaign linked by a current active slide. Checkout retains eligibility validation. Image upload reuses the existing Cloudinary path; image-free slides, optional alt text and an approximate responsive preview are supported.
 
 Previous/next, slide indicators and arrow-key navigation are explicit, with horizontal swipe on touch screens. Controls use (44px) targets, Hot Orange focus and a polite current-slide count. The carousel is manual, with no timer or focus movement. Long titles and descriptions are bounded to preserve the hero height; Read full details opens the complete plain-text content in the existing focus-managed dialog. Merchant image quality remains a content concern, not a reason to substitute a different hardcoded hero.
 
@@ -274,6 +282,8 @@ DataTable uses a white bordered scroll container, subdued sticky headers, tabula
 Modal owns focus trapping, Escape dismissal, scroll locking and opener restoration. Drawer/sheet variants reuse that behavior; phone dialogs are bottom-aligned with bounded height. OrderSummary provides consistent light framing and a sticky desktop position, while callers retain prices, shipping and payment state. Stored descriptions and policy HTML always render through RichText; previews use richTextToPlainText.
 
 Default-tone dialogs opened inside OperationsShell inherit the light operations presentation through OperationsDialogContext, including when portaled outside the shell. The context scopes legacy color normalization and control sizing to those dialog contents. Navy navigation drawers and customer dialogs keep their existing presentation.
+
+Owner sign-out uses its scoped centered confirmation at every width, with (384px) maximum width, (20px) viewport padding and (12px) corners. Its portal preserves focus trapping, Escape dismissal, opener restoration and counted scroll locking when opened over the mobile drawer. This is an explicit exception to ordinary phone dialogs' bottom alignment; its entry animation is disabled.
 
 ### Operations Data Controls and Technical State
 

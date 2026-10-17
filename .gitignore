@@ -45,3 +45,6 @@ qa/customer-fix/
 
 # Staff-only visual QA screenshots and read-only reports
 qa/staff-phase/
+
+# Owner-only isolated visual QA captures and reports
+qa/owner-phase/
