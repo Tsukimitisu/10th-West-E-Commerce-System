@@ -95,15 +95,15 @@ const CustomersView = () => {
       <PageHeader title="Customers" description="Search accounts, contact details, and order activity." />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="ops-inline-kpis">
         {[
           { label: 'Total Customers', value: totalCustomers.toString(), icon: <Users size={18} />, color: 'bg-blue-50 text-blue-600' },
           { label: 'Total Revenue', value: `₱${totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Avg Order Value', value: `₱${avgOrderValue.toFixed(0)}`, icon: <ShoppingBag size={18} />, color: 'bg-slate-100 text-slate-700' },
           { label: 'Repeat Customers', value: repeatCustomers.toString(), icon: <Star size={18} />, color: 'bg-amber-50 text-amber-600' },
         ].map((kpi, i) => (
-          <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-            <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
+          <div key={i} className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className={`w-8 h-8 bg-slate-100 text-slate-700 rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
             <div className="min-h-7 text-lg font-bold text-white">{loading ? <LoadingSkeleton className="h-6 w-20" /> : error ? '—' : kpi.value}</div>
             <p className="text-xs text-gray-400">{kpi.label}</p>
           </div>
@@ -115,11 +115,11 @@ const CustomersView = () => {
         <label htmlFor="owner-customer-search" className="sr-only">Search customers</label>
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input id="owner-customer-search" type="search" placeholder="Search customers..." value={search} onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
+          className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
       </div>
 
       {/* Customers Table */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {loading ? (
           <div className="space-y-3 p-4" role="status" aria-label="Loading customers">{Array.from({ length: 4 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>
         ) : filtered.length === 0 ? (
@@ -129,7 +129,7 @@ const CustomersView = () => {
             <div className="min-w-0 space-y-1"><p className="font-semibold text-slate-950">{c.name}</p><p className="break-all text-slate-600">{c.email || c.phone || 'No contact on file'}</p><p className="text-slate-600">{c.isActive === false ? 'Inactive' : c.isActive === true ? 'Active' : 'Status unavailable'} · {c.orderCount} orders · ₱{c.totalSpent.toLocaleString('en-PH')}</p><p className="text-xs text-slate-600">Last order: {c.lastOrder ? new Date(c.lastOrder).toLocaleDateString() : 'None'}</p></div>
             <button type="button" onClick={() => setSelectedCustomer(c)} aria-label={`View ${c.name}`} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-slate-700 hover:bg-slate-100"><Eye size={18} /></button>
           </article>)}</div><table className="hidden w-full text-sm md:table">
-            <thead><tr className="bg-gray-50/80 border-b border-gray-700">
+            <thead><tr className="bg-gray-50/80 border-b border-slate-200">
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Customer</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Contact</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden lg:table-cell">Status</th>
@@ -228,7 +228,7 @@ const CustomersView = () => {
             {/* Order History */}
             <div>
               <h4 className="text-xs font-medium text-gray-400 mb-2">Order History</h4>
-              <div className="border border-gray-700 rounded-lg divide-y divide-gray-50 max-h-60 overflow-y-auto">
+              <div className="border border-slate-200 rounded-lg divide-y divide-gray-50 max-h-60 overflow-y-auto">
                 {selectedCustomer.orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(o => (
                   <div key={o.id} className="flex items-center justify-between p-3 hover:bg-gray-50/50">
                     <div className="flex items-center gap-3">
@@ -252,7 +252,7 @@ const CustomersView = () => {
             </div>
 
             {/* Action Buttons */}
-            <div className="pt-4 border-t border-gray-700 flex justify-end">
+            <div className="pt-4 border-t border-slate-200 flex justify-end">
               {canDeleteCustomers && <button
                 onClick={() => {
                   setSelectedCustomer(null);

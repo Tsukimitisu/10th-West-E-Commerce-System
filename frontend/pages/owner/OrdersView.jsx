@@ -6,6 +6,8 @@ import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 import { getCurrentAuthUser } from '../../services/authSession';
 import PageHeader from '../../components/operations/PageHeader';
+import DataToolbar, { FilterSelect, MobileDataCard } from '../../components/operations/DataToolbar';
+import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import { API_URL } from '../../services/apiConfig.js';
@@ -13,13 +15,13 @@ import { API_URL } from '../../services/apiConfig.js';
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   payment_pending: 'bg-amber-50 text-amber-700 border-amber-200',
-  paid: 'bg-blue-50 text-blue-700 border-blue-200',
-  processing: 'bg-red-500/10 text-orange-700 border-red-200',
-  packed: 'bg-slate-100 text-slate-700 border-cyan-200',
-  ready_for_pickup: 'bg-slate-100 text-slate-700 border-teal-200',
-  shipped: 'bg-slate-100 text-slate-700 border-purple-200',
-  out_for_delivery: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  delivered: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  paid: 'bg-slate-100 text-slate-700 border-slate-200',
+  processing: 'bg-orange-50 text-orange-800 border-orange-200',
+  packed: 'bg-slate-100 text-slate-700 border-slate-200',
+  ready_for_pickup: 'bg-slate-100 text-slate-700 border-slate-200',
+  shipped: 'bg-slate-100 text-slate-700 border-slate-200',
+  out_for_delivery: 'bg-slate-100 text-slate-700 border-slate-200',
+  delivered: 'bg-emerald-50 text-emerald-800 border-emerald-200',
   cancelled: 'bg-red-50 text-red-600 border-red-200',
   refund_processing: 'bg-orange-50 text-orange-700 border-orange-200',
   refunded: 'bg-green-50 text-green-700 border-green-200',
@@ -91,6 +93,9 @@ const OrdersView = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [refundError, setRefundError] = useState('');
   const [detailOrder, setDetailOrder] = useState(null);
   const [shipmentData, setShipmentData] = useState(null);
@@ -259,7 +264,8 @@ const OrdersView = () => {
       || o.customer_name?.toLowerCase().includes(term)
       || o.customer_email?.toLowerCase().includes(term);
     const matchStatus = !statusFilter || o.status === statusFilter;
-    return matchSearch && matchStatus;
+    const day = o.created_at ? new Date(o.created_at).toLocaleDateString('en-CA') : '';
+    return matchSearch && matchStatus && (!paymentFilter || o.payment_status === paymentFilter) && (!dateFrom || Boolean(day && day >= dateFrom)) && (!dateTo || Boolean(day && day <= dateTo));
   });
 
   const statuses = Object.values(OrderStatus);
@@ -283,9 +289,9 @@ const OrdersView = () => {
       <PageHeader title="Order management" description={`${orders.length} orders · Review payment, fulfillment, courier, delivery, and refund state.`} />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="ops-inline-kpis">
         {[
-          { label: 'Total Revenue', value: `₱${totalRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
+          { label: isStaff ? 'Loaded orders' : 'Total Revenue', value: isStaff ? String(orders.length) : `₱${totalRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, icon: <DollarSign size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Pending', value: pending.toString(), icon: <Clock size={18} />, color: 'bg-yellow-50 text-yellow-600' },
           { label: 'Processing', value: processing.toString(), icon: <Package size={18} />, color: 'bg-orange-50 text-orange-800' },
           { label: 'Shipped', value: shipped.toString(), icon: <Truck size={18} />, color: 'bg-slate-100 text-slate-700' },
@@ -298,23 +304,15 @@ const OrdersView = () => {
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)] lg:items-start" data-testid="staff-orders-filters">
-        <div className="relative w-full min-w-0">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="search" aria-label="Search orders" placeholder="Search orders…" value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" />
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2" role="group" aria-label="Filter orders by status">
-          <label className="sr-only" htmlFor="order-status-filter">Order status</label>
-          <select id="order-status-filter" aria-label="Order status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm sm:w-56">
-            <option value="">All statuses</option>
-            {statuses.map(status => <option key={status} value={status}>{getOrderStatusLabel(status)}</option>)}
-          </select>
-          {statusFilter && <button type="button" onClick={() => setStatusFilter('')} className="min-h-11 px-3 text-sm text-slate-700 hover:text-orange-700">Clear status</button>}
-        </div>
+      <div data-testid="staff-orders-filters">
+        <DataToolbar search={search} onSearchChange={event => setSearch(event.target.value)} searchPlaceholder="Search orders…" label="Order filters">
+          <FilterSelect label="Order status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">All statuses</option>{statuses.map(status => <option key={status} value={status}>{getOrderStatusLabel(status)}</option>)}</FilterSelect>
+          <FilterSelect label="Payment status" value={paymentFilter} onChange={event => setPaymentFilter(event.target.value)}><option value="">All payments</option>{[...new Set(orders.map(order => order.payment_status).filter(Boolean))].sort().map(status => <option key={status} value={status}>{getPaymentStatusLabel(status)}</option>)}</FilterSelect>
+          <label className="ops-filter-select"><span>From</span><input type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label>
+          <label className="ops-filter-select"><span>To</span><input type="date" min={dateFrom || undefined} value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>
+          {(statusFilter || paymentFilter || dateFrom || dateTo || search) && <button type="button" onClick={() => { setSearch(''); setStatusFilter(''); setPaymentFilter(''); setDateFrom(''); setDateTo(''); }} className="min-h-11 px-3 text-sm font-semibold text-slate-700">Clear filters</button>}
+        </DataToolbar>
       </div>
-
       {/* Orders Table */}
       <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
         {loading ? (
@@ -329,13 +327,16 @@ const OrdersView = () => {
             />
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <><div className="md:hidden">{filtered.map(o => <MobileDataCard key={o.id} reference={`Order #${String(o.id).padStart(4, '0')}`} title={o.customer_display_name || o.customer_name || 'Customer unavailable'} status={<StatusBadge tone={['failed', 'cancelled'].includes(o.status) ? 'danger' : ['delivered', 'paid'].includes(o.status) ? 'success' : 'neutral'}>{getOrderStatusLabel(o.status)}</StatusBadge>} actions={<><button type="button" onClick={() => openDetail(o)}>View order</button><button type="button" disabled={isInStoreOrder(o)} onClick={() => openStatusChange(o)} title={isInStoreOrder(o) ? POS_STATUS_LOCK_HELP : undefined}>Update status</button></>}>
+            <dl className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt className="text-slate-600">Payment</dt><dd className="mt-1 font-medium">{o.payment_method === 'gcash' ? 'GCash' : o.payment_method === 'cash' ? 'Cash' : 'COD'} · {getPaymentStatusLabel(o.payment_status)}</dd></div><div><dt className="text-slate-600">Shipping</dt><dd className="mt-1 font-medium">{o.source === 'pos' ? 'In-store sale' : o.shipping_method === 'pickup' ? 'Store pickup' : 'Delivery'}</dd></div><div><dt className="text-slate-600">Date</dt><dd className="mt-1">{new Date(o.created_at).toLocaleDateString('en-PH')}</dd></div><div><dt className="text-slate-600">Total</dt><dd className="mt-1 text-sm font-semibold tabular-nums">₱{Number(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</dd></div></dl>
+          </MobileDataCard>)}</div><div tabIndex={0} role="region" aria-label="Order records" className="hidden overflow-x-auto md:block"><table className="w-full text-sm">
             <thead><tr className="bg-gray-50/80 border-b border-gray-700">
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Order</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Customer</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Date</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Status</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Fulfillment</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden sm:table-cell">Payment</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Shipping</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Total</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 w-28">Actions</th>
             </tr></thead>
@@ -362,7 +363,7 @@ const OrdersView = () => {
                     </button>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
-                    <span className="block text-xs font-medium text-gray-200">{String(o.payment_method || '-').toLowerCase() === 'gcash' ? 'GCash' : 'Cash on Delivery'}</span>
+                    <span className="block text-xs font-medium text-gray-200">{String(o.payment_method || '-').toLowerCase() === 'gcash' ? 'GCash' : o.payment_method === 'cash' ? 'Cash' : 'Cash on Delivery'}</span>
                     <span
                       className={`mt-0.5 block text-xs ${o.payment_status === 'paid' ? 'text-green-400' : o.payment_status === 'failed' ? 'text-red-700' : 'text-amber-800'}`}
                       title={o.payment_method === 'gcash' && !['paid', 'failed'].includes(o.payment_status) ? 'Waiting for PayMongo confirmation.' : undefined}
@@ -370,6 +371,7 @@ const OrdersView = () => {
                       {getPaymentStatusLabel(o.payment_status)}
                     </span>
                   </td>
+                  <td className="px-4 py-3 text-xs text-slate-600">{o.source === 'pos' ? 'In-store' : o.shipping_method === 'pickup' ? 'Pickup' : 'Delivery'}{o.tracking_number && <span className="mt-1 block font-mono text-xs">{o.tracking_number}</span>}</td>
                   <td className="px-4 py-3 text-right font-bold text-white">₱{(o.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -379,7 +381,7 @@ const OrdersView = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div></>
         )}
       </div>
 
@@ -388,7 +390,7 @@ const OrdersView = () => {
         {detailOrder && (
           <div className="space-y-5">
             {/* Status + Date */}
-            <div className="flex items-center justify-between p-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/20 shadow-sm">
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase border tracking-wider ${statusColors[detailOrder.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>
                 {statusIcons[detailOrder.status]} {getOrderStatusLabel(detailOrder.status)}
               </span>
@@ -451,7 +453,7 @@ const OrdersView = () => {
             <div className="rounded-xl border border-gray-700 bg-gray-900 p-4">
               <div className="flex items-center gap-2 text-xs font-medium text-gray-400"><CreditCard size={13} /> Payment</div>
               <div className="mt-3 grid gap-3 text-sm sm:grid-cols-4">
-                <div><p className="text-xs text-gray-500">Method</p><p className="font-medium text-white">{detailOrder.payment_method === 'gcash' ? 'GCash' : 'Cash on Delivery'}</p></div>
+                <div><p className="text-xs text-gray-500">Method</p><p className="font-medium text-white">{detailOrder.payment_method === 'gcash' ? 'GCash' : detailOrder.payment_method === 'cash' ? 'Cash' : 'Cash on Delivery'}</p></div>
                 <div><p className="text-xs text-gray-500">Provider</p><p className="font-medium text-white capitalize">{detailOrder.payment_provider || (detailOrder.payment_method === 'gcash' ? 'PayMongo' : 'COD')}</p></div>
                 <div><p className="text-xs text-gray-500">Status</p><p className={`font-medium ${detailOrder.payment_status === 'paid' ? 'text-green-400' : detailOrder.payment_status === 'failed' ? 'text-red-700' : 'text-amber-800'}`}>{getPaymentStatusLabel(detailOrder.payment_status)}</p></div>
                 <div><p className="text-xs text-gray-500">Paid At</p><p className="font-medium text-white">{detailOrder.paid_at ? new Date(detailOrder.paid_at).toLocaleString('en-PH') : '-'}</p></div>

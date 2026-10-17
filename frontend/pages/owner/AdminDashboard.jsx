@@ -43,7 +43,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   }
 
   const views = {
-    dashboard: isStaff ? <StaffDashboardView user={user} onNavigate={setActiveView} /> : <DashboardView onNavigate={setActiveView} />,
+    dashboard: isStaff ? <StaffDashboardView user={user} onNavigate={setActiveView} /> : <DashboardView user={user} onNavigate={setActiveView} />,
     storefront: <StorefrontListingsView />, inventory: <InventoryView />,
     'product-items': <InventoryProductItemsView />, orders: <OrdersView />,
     customers: <CustomersView />, returns: <ReturnsView />, staff: <StaffView />,

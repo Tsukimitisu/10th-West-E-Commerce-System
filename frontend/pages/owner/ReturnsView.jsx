@@ -5,13 +5,14 @@ import Modal from '../../components/owner/Modal';
 import { useSocketEvent } from '../../context/SocketContext';
 import { getCurrentAuthUser } from '../../services/authSession';
 import PageHeader from '../../components/operations/PageHeader';
+import DataToolbar, { FilterSelect } from '../../components/operations/DataToolbar';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  approved: 'bg-blue-50 text-blue-700 border-blue-200',
-  rejected: 'bg-orange-50 text-orange-800 border-red-200',
+  approved: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  rejected: 'bg-red-50 text-red-700 border-red-200',
 };
 
 const ReturnsView = () => {
@@ -90,49 +91,24 @@ const ReturnsView = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="ops-inline-kpis">
         {[
           { label: 'Pending', value: pending.toString(), icon: <Clock size={18} />, color: 'bg-yellow-50 text-yellow-600' },
           { label: 'Approved', value: approved.toString(), icon: <CheckCircle2 size={18} />, color: 'bg-blue-50 text-blue-600' },
           { label: 'Rejected', value: rejected.toString(), icon: <XCircle size={18} />, color: 'bg-orange-50 text-orange-800' },
           { label: 'Total', value: returns.length.toString(), icon: <RotateCcw size={18} />, color: 'bg-gray-900 text-gray-600' },
         ].map((kpi, index) => (
-          <div key={index} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-            <div className={`w-8 h-8 ${kpi.color} rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
+          <div key={index} className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className={`w-8 h-8 bg-slate-100 text-slate-700 rounded-lg flex items-center justify-center mb-2`}>{kpi.icon}</div>
             <div className="min-h-7 text-lg font-bold text-white">{loading ? <LoadingSkeleton className="h-6 w-16" /> : error ? '—' : kpi.value}</div>
             <p className="text-xs text-gray-400">{kpi.label}</p>
           </div>
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <label htmlFor="owner-return-search" className="sr-only">Search returns</label>
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            id="owner-return-search"
-            type="text"
-            placeholder="Search returns..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-          />
-        </div>
-        <div className="flex gap-1 flex-wrap">
-          <button onClick={() => setStatusFilter('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${!statusFilter ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}>All</button>
-          {allStatuses.map((status) => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(statusFilter === status ? '' : status)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors capitalize ${statusFilter === status ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-900'}`}
-            >
-              {status}
-            </button>
-          ))}
-        </div>
-      </div>
+      <DataToolbar search={search} onSearchChange={event => setSearch(event.target.value)} searchPlaceholder="Search returns…" label="Return request filters"><FilterSelect label="Request status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">All requests</option>{allStatuses.map(status => <option key={status} value={status}>{status}</option>)}</FilterSelect></DataToolbar>
 
-      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {loading ? (
           <div className="space-y-3 p-4" role="status" aria-label="Loading returns">{Array.from({ length: 4 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>
         ) : filtered.length === 0 ? (
@@ -145,7 +121,7 @@ const ReturnsView = () => {
             <button type="button" onClick={() => setDetailReturn(ret)} className="min-h-11 rounded-lg border border-slate-300 px-3 font-semibold text-slate-700">Review request</button>
           </article>)}</div><table className="hidden w-full text-sm md:table">
             <thead>
-              <tr className="bg-gray-50/80 border-b border-gray-700">
+              <tr className="bg-gray-50/80 border-b border-slate-200">
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Return ID</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Order</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 hidden md:table-cell">Customer</th>
@@ -166,7 +142,7 @@ const ReturnsView = () => {
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell max-w-[240px] truncate">{ret.reason || '-'}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize ${statusColors[ret.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize ${statusColors[ret.status] || 'bg-gray-900 text-gray-600 border-slate-200'}`}>
                       {ret.status}
                     </span>
                   </td>
@@ -193,7 +169,7 @@ const ReturnsView = () => {
         {detailReturn && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold border capitalize ${statusColors[detailReturn.status] || 'bg-gray-900 text-gray-600 border-gray-700'}`}>{detailReturn.status}</span>
+              <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold border capitalize ${statusColors[detailReturn.status] || 'bg-gray-900 text-gray-600 border-slate-200'}`}>{detailReturn.status}</span>
               <span className="text-xs text-gray-400">{new Date(detailReturn.created_at).toLocaleString()}</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -230,7 +206,7 @@ const ReturnsView = () => {
             {detailReturn.items?.length > 0 && (
               <div>
                 <h4 className="text-xs font-medium text-gray-400 mb-2">Returned Items</h4>
-                <div className="border border-gray-700 rounded-lg divide-y divide-gray-50">
+                <div className="border border-slate-200 rounded-lg divide-y divide-gray-50">
                   {detailReturn.items.map((item, index) => (
                     <div key={index} className="flex items-center justify-between p-3">
                       <div>

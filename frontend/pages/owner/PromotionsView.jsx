@@ -19,7 +19,7 @@ const InputField = ({ label, htmlFor, required, children }) => (
 const inputClass = "min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20";
 
 const getStatus = (discount) => {
-  if (!discount.is_active) return { label: 'Inactive', color: 'bg-gray-900 text-gray-600 border-gray-700' };
+  if (!discount.is_active) return { label: 'Inactive', color: 'bg-gray-900 text-gray-600 border-slate-200' };
   if (discount.expires_at && new Date(discount.expires_at) < new Date()) return { label: 'Expired', color: 'bg-red-50 text-red-600 border-red-200' };
   if (discount.starts_at && new Date(discount.starts_at) > new Date()) return { label: 'Upcoming', color: 'bg-blue-50 text-blue-700 border-blue-200' };
   return { label: 'Active', color: 'bg-green-50 text-green-600 border-green-200' };
@@ -140,14 +140,14 @@ const PromotionsView = () => {
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
       {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="ops-inline-kpis">
         {[
           { label: 'Total Campaigns', value: totalCampaigns.toString(), icon: <Gift size={18} />, color: 'bg-blue-50 text-blue-600' },
           { label: 'Active Campaigns', value: activeCampaigns.toString(), icon: <CheckCircle2 size={18} />, color: 'bg-green-50 text-green-600' },
           { label: 'Total Redemptions', value: totalRedemptions.toString(), icon: <Percent size={18} />, color: 'bg-orange-50 text-orange-800' },
         ].map((stat, i) => (
-          <div key={i} className="bg-gray-800 rounded-xl shadow-sm border border-gray-700 p-4">
-            <div className={`w-8 h-8 ${stat.color} rounded-lg flex items-center justify-center mb-2`}>{stat.icon}</div>
+          <div key={i} className="bg-white rounded-xl  border border-slate-200 p-4">
+            <div className={`w-8 h-8 bg-slate-100 text-slate-700 rounded-lg flex items-center justify-center mb-2`}>{stat.icon}</div>
             <div className="min-h-7 text-lg font-bold text-white">{loading ? <LoadingSkeleton className="h-6 w-16" /> : error ? '—' : stat.value}</div>
             <p className="text-xs text-gray-400">{stat.label}</p>
           </div>
@@ -155,7 +155,7 @@ const PromotionsView = () => {
       </div>
 
       {/* Discount Codes Table */}
-      <div className="bg-gray-800 rounded-xl shadow-sm border border-gray-700 overflow-hidden">
+      <div className="bg-white rounded-xl  border border-slate-200 overflow-hidden">
         {loading ? (
           <div className="space-y-3 p-4" role="status" aria-label="Loading promotions">{Array.from({ length: 3 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>
         ) : discounts.length === 0 ? (
@@ -168,7 +168,7 @@ const PromotionsView = () => {
             </article>; })}</div>
             <table className="hidden w-full text-sm md:table">
               <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-700">
+                <tr className="bg-gray-50/80 border-b border-slate-200">
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Code</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Type</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Value</th>
@@ -353,7 +353,7 @@ const PromotionsView = () => {
               </div>
 
               {/* Active Toggle */}
-              <div className={`p-4 rounded-lg border ${form.is_active ? 'bg-green-50 border-green-200' : 'bg-gray-900 border-gray-700'}`}>
+              <div className={`p-4 rounded-lg border ${form.is_active ? 'bg-green-50 border-green-200' : 'bg-gray-900 border-slate-200'}`}>
                 <label className="flex items-center gap-2 font-medium text-sm cursor-pointer">
                   <input
                     type="checkbox"

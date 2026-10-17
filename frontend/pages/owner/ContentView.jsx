@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Plus, Edit3, Trash2, FileText, HelpCircle, Check, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { getPolicy, updatePolicy, getFAQs, createFAQ, updateFAQ, deleteFAQ } from '../../services/api';
+import RichText from '../../components/ui/RichText';
 import RichTextEditor from '../../components/owner/RichTextEditor';
 import Modal from '../../components/owner/Modal';
 import PageHeader from '../../components/operations/PageHeader';
@@ -24,6 +25,8 @@ const ContentView = () => {
   const [policyTab, setPolicyTab] = useState('return_policy');
 
   // Policy state
+  const [previewPolicy, setPreviewPolicy] = useState(false);
+  const [policyDirty, setPolicyDirty] = useState(false);
   const [policyTitle, setPolicyTitle] = useState('');
   const [policyContent, setPolicyContent] = useState('');
   const [policyLoading, setPolicyLoading] = useState(false);
@@ -57,6 +60,7 @@ const ContentView = () => {
         const data = await getPolicy(policyTab);
         setPolicyTitle(data?.title || '');
         setPolicyContent(data?.content || '');
+        setPolicyDirty(false);
       } catch (err) {
         console.error('Failed to load policy:', err);
         setPolicyError('Failed to load policy content.');
@@ -95,6 +99,7 @@ const ContentView = () => {
     try {
       await updatePolicy(policyTab, policyTitle, policyContent);
       setPolicySaved(true);
+      setPolicyDirty(false);
       setTimeout(() => setPolicySaved(false), 3000);
     } catch (err) {
       console.error('Failed to save policy:', err);
@@ -225,6 +230,7 @@ const ContentView = () => {
                     value={policyTitle}
                     onChange={(e) => {
                       setPolicyTitle(e.target.value);
+                      setPolicyDirty(true);
                       setPolicySaved(false);
                     }}
                     placeholder="e.g. Return Policy"
@@ -234,15 +240,16 @@ const ContentView = () => {
 
                 <div>
                   <p className={labelClass}>Content</p>
-                  <RichTextEditor
+                  {previewPolicy ? <div className="min-h-[300px] rounded-lg border border-slate-200 bg-slate-50 p-5"><RichText value={policyContent} fallback={<p className="text-sm text-slate-600">No policy content yet.</p>} /></div> : <RichTextEditor
                     value={policyContent}
                     onChange={(html) => {
                       setPolicyContent(html);
+                      setPolicyDirty(true);
                       setPolicySaved(false);
                     }}
                     placeholder="Write the policy customers will read…"
                     minHeight="300px"
-                  />
+                  />}
                   <p className="mt-1.5 text-xs text-slate-500">Use Heading for section titles. Bold and italic are kept when you save.</p>
                 </div>
 
@@ -255,7 +262,9 @@ const ContentView = () => {
                     {policySaving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
                     {policySaving ? 'Saving…' : 'Save policy'}
                   </button>
+                  <button type="button" onClick={() => setPreviewPolicy(current => !current)} className={secondaryButtonClass}>{previewPolicy ? 'Back to editor' : 'Preview policy'}</button>
                   <span role="status" className="text-sm font-medium text-emerald-700">
+                    {policyDirty && <span className="text-slate-600">Unsaved changes</span>}
                     {policySaved && <span className="inline-flex items-center gap-1.5"><Check size={16} aria-hidden="true" /> Policy saved</span>}
                   </span>
                 </div>

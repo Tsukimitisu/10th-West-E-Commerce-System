@@ -134,7 +134,7 @@ const ReportsView = () => {
         </div>
         <div className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Date range">
             {['7d', '30d', '90d'].map(r => (
-              <button key={r} aria-pressed={dateRange === r} onClick={() => setDateRange(r)} className={`min-h-9 rounded-md px-3 text-xs font-semibold ${dateRange === r ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>{r === '7d' ? '7 days' : r === '30d' ? '30 days' : '90 days'}</button>
+              <button key={r} aria-pressed={dateRange === r} onClick={() => setDateRange(r)} className={`min-h-9 rounded-md px-3 text-xs font-semibold ${dateRange === r ? 'bg-white text-slate-950 ' : 'text-slate-600 hover:text-slate-900'}`}>{r === '7d' ? '7 days' : r === '30d' ? '30 days' : '90 days'}</button>
             ))}
         </div>
       </div>
@@ -151,14 +151,14 @@ const ReportsView = () => {
           {tab === 'sales' && (
             <div className="space-y-4">
               {/* Sales KPIs */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="ops-inline-kpis">
                 {[
                   { label: 'Total Sales', value: `₱${(salesReport?.total_revenue || 0).toLocaleString()}`, color: 'bg-green-50 text-green-600' },
                   { label: 'Orders', value: (salesReport?.total_orders || 0).toString(), color: 'bg-blue-50 text-blue-600' },
                   { label: 'Avg Order', value: `₱${(salesReport?.average_order_value || 0).toFixed(0)}`, color: 'bg-slate-100 text-slate-700' },
                   { label: 'POS Orders', value: (salesReport?.pos_orders || 0).toString(), color: 'bg-amber-50 text-amber-600' },
                 ].map((kpi, i) => (
-                  <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+                  <div key={i} className="bg-white rounded-xl border border-slate-200 p-4">
                     <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
                     <p className="text-lg font-bold text-white">{kpi.value}</p>
                   </div>
@@ -242,14 +242,14 @@ const ReportsView = () => {
           {/* Financial Tab */}
           {tab === 'financial' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="ops-inline-kpis">
                 {[
                   { label: 'Gross Revenue', value: `₱${(profitReport?.total_revenue || salesReport?.total_revenue || 0).toLocaleString()}` },
                   { label: profitReport?.profit_exact ? 'Total Cost' : 'Total Cost (incomplete)', value: profitReport?.profit_exact ? `₱${Number(profitReport.total_cost).toLocaleString()}` : 'Not computable' },
                   { label: profitReport?.profit_exact ? 'Net Profit' : 'Net Profit (incomplete)', value: profitReport?.profit_exact ? `₱${Number(profitReport.net_profit).toLocaleString()}` : 'Not computable' },
                   { label: 'Margin', value: profitReport?.profit_exact ? `${Number(profitReport.profit_margin).toFixed(1)}%` : 'Not computable' },
                 ].map((kpi, i) => (
-                  <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+                  <div key={i} className="bg-white rounded-xl border border-slate-200 p-4">
                     <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
                     <p className="text-lg font-bold text-white">{kpi.value}</p>
                   </div>
@@ -257,21 +257,21 @@ const ReportsView = () => {
               </div>
 
               {/* Profit & Loss Breakdown */}
-              <div className="bg-gray-800 rounded-xl border border-gray-700 p-5">
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <DollarSign size={16} className="text-red-500" />
                   <h3 className="font-semibold text-sm text-white">Profit & Loss Statement</h3>
                 </div>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between py-2 border-b border-gray-700">
+                  <div className="flex items-center justify-between py-2 border-b border-slate-200">
                     <span className="text-sm text-gray-600">Gross Revenue (Sales)</span>
                     <span className="text-sm font-semibold text-white">₱{(profitReport?.total_revenue || salesReport?.total_revenue || 0).toLocaleString()}</span>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-gray-700">
+                  <div className="flex items-center justify-between py-2 border-b border-slate-200">
                     <span className="text-sm text-gray-600">Cost of Goods Sold (Buying Price)</span>
                     <span className="text-sm font-semibold text-red-500">{profitReport?.profit_exact ? `- ₱${Number(profitReport.total_cost).toLocaleString()}` : 'Historical COGS missing'}</span>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-dashed border-gray-700">
+                  <div className="flex items-center justify-between py-2 border-b border-dashed border-slate-200">
                     <span className="text-sm font-medium text-gray-700">Gross Profit</span>
                     <span className="text-sm font-bold text-white">{profitReport?.profit_exact ? `₱${Number(profitReport.gross_profit).toLocaleString()}` : 'Not computable'}</span>
                   </div>
@@ -307,11 +307,11 @@ const ReportsView = () => {
                   ['Completed sales', posReport?.total_sales || 0],
                   ['POS revenue', `₱${Number(posReport?.total_revenue || 0).toLocaleString()}`],
                   ['Voided sales', posReport?.voided_sales || 0],
-                ].map(([label, value]) => <div key={label} className="rounded-xl border border-gray-700 bg-gray-800 p-4"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p></div>)}
+                ].map(([label, value]) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p></div>)}
               </div>
               <ChartCard title="POS transactions">
                 <div tabIndex={0} className="overflow-x-auto">
-                  <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b border-gray-700 text-left text-xs text-gray-400"><th className="p-3">Receipt</th><th className="p-3">Status</th><th className="p-3">Payment</th><th className="p-3">Date</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{(posReport?.sales || []).map((sale) => <tr key={sale.id} className="border-b border-gray-700/60"><td className="p-3 text-white">{sale.receipt_number}</td><td className="p-3 text-gray-300">{sale.voided_at ? 'voided' : sale.status}</td><td className="p-3 text-gray-300">{sale.payment_status}</td><td className="p-3 text-gray-300">{new Date(sale.created_at).toLocaleDateString()}</td><td className="p-3 text-right font-semibold text-white">₱{Number(sale.total_amount).toLocaleString()}</td></tr>)}</tbody></table>
+                  <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b border-slate-200 text-left text-xs text-gray-400"><th className="p-3">Receipt</th><th className="p-3">Status</th><th className="p-3">Payment</th><th className="p-3">Date</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{(posReport?.sales || []).map((sale) => <tr key={sale.id} className="border-b border-slate-200/60"><td className="p-3 text-white">{sale.receipt_number}</td><td className="p-3 text-gray-300">{sale.voided_at ? 'voided' : sale.status}</td><td className="p-3 text-gray-300">{sale.payment_status}</td><td className="p-3 text-gray-300">{new Date(sale.created_at).toLocaleDateString()}</td><td className="p-3 text-right font-semibold text-white">₱{Number(sale.total_amount).toLocaleString()}</td></tr>)}</tbody></table>
                   {!posReport?.sales?.length && <p className="p-8 text-center text-sm text-gray-400">No valid POS transactions in this period.</p>}
                 </div>
               </ChartCard>
@@ -326,11 +326,11 @@ const ReportsView = () => {
                   ['Pending', returnReport?.pending_returns || 0],
                   ['Refunds processed', returnReport?.processed_refunds || 0],
                   ['Refunded amount', `₱${Number(returnReport?.refunded_amount || 0).toLocaleString()}`],
-                ].map(([label, value]) => <div key={label} className="rounded-xl border border-gray-700 bg-gray-800 p-4"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p></div>)}
+                ].map(([label, value]) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p></div>)}
               </div>
               <ChartCard title="Return and refund activity">
                 <div tabIndex={0} className="overflow-x-auto">
-                  <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b border-gray-700 text-left text-xs text-gray-400"><th className="p-3">Return</th><th className="p-3">Order</th><th className="p-3">Return status</th><th className="p-3">Refund status</th><th className="p-3 text-right">Amount</th></tr></thead><tbody>{(returnReport?.returns || []).map((item) => <tr key={item.id} className="border-b border-gray-700/60"><td className="p-3 text-white">#{item.id}</td><td className="p-3 text-gray-300">#{item.order_id}</td><td className="p-3 text-gray-300">{item.status}</td><td className="p-3 text-gray-300">{item.refund_status || 'Not processed'}</td><td className="p-3 text-right font-semibold text-white">₱{Number(item.processed_refund || item.refund_amount || 0).toLocaleString()}</td></tr>)}</tbody></table>
+                  <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b border-slate-200 text-left text-xs text-gray-400"><th className="p-3">Return</th><th className="p-3">Order</th><th className="p-3">Return status</th><th className="p-3">Refund status</th><th className="p-3 text-right">Amount</th></tr></thead><tbody>{(returnReport?.returns || []).map((item) => <tr key={item.id} className="border-b border-slate-200/60"><td className="p-3 text-white">#{item.id}</td><td className="p-3 text-gray-300">#{item.order_id}</td><td className="p-3 text-gray-300">{item.status}</td><td className="p-3 text-gray-300">{item.refund_status || 'Not processed'}</td><td className="p-3 text-right font-semibold text-white">₱{Number(item.processed_refund || item.refund_amount || 0).toLocaleString()}</td></tr>)}</tbody></table>
                   {!returnReport?.returns?.length && <p className="p-8 text-center text-sm text-gray-400">No return or refund activity in this period.</p>}
                 </div>
               </ChartCard>
@@ -341,8 +341,8 @@ const ReportsView = () => {
           {tab === 'customers' && (
             <div className="space-y-4">
               {/* Customer KPIs */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-gray-800 rounded-xl border border-gray-700 p-5">
+              <div className="ops-inline-kpis">
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center">
                       <Users size={16} className="text-red-500" />
@@ -351,7 +351,7 @@ const ReportsView = () => {
                   </div>
                   <p className="text-2xl font-bold text-white">{customerActivity.total}</p>
                 </div>
-                <div className="bg-gray-800 rounded-xl border border-gray-700 p-5">
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
                       <TrendingUp size={16} className="text-green-500" />
@@ -360,7 +360,7 @@ const ReportsView = () => {
                   </div>
                   <p className="text-2xl font-bold text-white">{customerActivity.newThisMonth}</p>
                 </div>
-                <div className="bg-gray-800 rounded-xl border border-gray-700 p-5">
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
                       <ShoppingBag size={16} className="text-blue-500" />
@@ -372,8 +372,8 @@ const ReportsView = () => {
               </div>
 
               {/* Most Active Customers */}
-              <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-700 flex items-center gap-2">
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
                   <Users size={16} className="text-red-500" />
                   <h3 className="font-semibold text-sm text-white">Most Active Customers</h3>
                 </div>
@@ -386,7 +386,7 @@ const ReportsView = () => {
                   <div tabIndex={0} className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-gray-50/80 border-b border-gray-700">
+                        <tr className="bg-gray-50/80 border-b border-slate-200">
                           <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">#</th>
                           <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Customer</th>
                           <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Orders</th>

@@ -64,7 +64,8 @@ const InventoryView = () => {
   const [motorcycleModels, setMotorcycleModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState('stock');
+  const [tab, setTab] = useState(location.state?.inventoryTab === 'receive' ? 'receive' : 'stock');
+  const [modelFilter, setModelFilter] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
@@ -153,7 +154,7 @@ const InventoryView = () => {
   });
 
   // Presentation-only sorting/paging; stock values and mutation handlers stay intact.
-  const stockRows = filtered.filter((item) => stockFilter === 'all' || stockStatus(item).tone === stockFilter);
+  const stockRows = filtered.filter((item) => (stockFilter === 'all' || stockStatus(item).tone === stockFilter) && (!modelFilter || item.motorcycle_model === modelFilter));
   const sortedRows = [...stockRows].sort((a, b) => {
     const left = sortField === 'name' ? a.product_name || a.name : a[sortField];
     const right = sortField === 'name' ? b.product_name || b.name : b[sortField];
@@ -229,7 +230,7 @@ const InventoryView = () => {
         </div>
       )}
 
-      <div tabIndex={0} className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-4 [&>*]:min-w-[13rem] [&>*]:shrink-0 [&>*]:snap-start sm:[&>*]:min-w-0">
+      <div className="ops-summary-strip">
         <MetricCard icon={Boxes} label="Units on hand" value={totalStock.toLocaleString('en-PH')} detail={`${products.length.toLocaleString('en-PH')} inventory items`} tone="neutral" />
         <MetricCard icon={TrendingUp} label="Inventory value" value={formatPeso(totalValue, 0)} detail="At cost price" tone="neutral" />
         <MetricCard icon={Package} label="Reserved / damaged" value={`${reservedStock} / ${damagedStock}`} detail="Units not sellable" tone="neutral" />
@@ -270,6 +271,7 @@ const InventoryView = () => {
             <select aria-label="Filter inventory by stock" value={stockFilter} onChange={(event) => { setStockFilter(event.target.value); setPage(1); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm sm:flex-none">
               <option value="all">All stock</option><option value="success">In stock</option><option value="warning">Low stock</option><option value="danger">Out of stock</option>
             </select>
+            <select aria-label="Filter inventory by model" value={modelFilter} onChange={event => { setModelFilter(event.target.value); setPage(1); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm sm:flex-none"><option value="">All models</option>{[...new Set(products.map(item => item.motorcycle_model).filter(Boolean))].sort().map(model => <option key={model} value={model}>{model}</option>)}</select>
             <select aria-label="Sort inventory" value={sortField} onChange={(event) => { setSortField(event.target.value); setPage(1); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm sm:flex-none">
               <option value="name">Item name</option><option value="part_number">Part number</option><option value="motorcycle_model">Model</option><option value="box_location">Box location</option><option value="stock_quantity">Available stock</option><option value="store_selling_price">Store price</option>
             </select>
@@ -278,7 +280,7 @@ const InventoryView = () => {
           </div>
           <div className="border-b border-slate-200 px-3 py-2">
             <p className="text-xs text-slate-500">
-              <span className="font-semibold tabular-nums text-slate-700">{filtered.length}</span> of {products.length} items · type or scan a part number or barcode
+              <span className="font-semibold tabular-nums text-slate-700">{stockRows.length}</span> of {products.length} items · type or scan a part number or barcode
             </p>
           </div>
           {loading ? (
@@ -291,7 +293,7 @@ const InventoryView = () => {
                 icon={Boxes}
                 title={products.length === 0 ? 'No inventory items yet' : 'No items match your search'}
                 description={products.length === 0 ? 'Add an inventory item or receive stock to start tracking parts.' : 'Check the part number or try a model, brand, color, or Box location.'}
-                action={search || stockFilter !== 'all' ? <button type="button" onClick={() => { setSearch(''); setStockFilter('all'); setPage(1); }} className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Clear search</button> : null}
+                action={search || stockFilter !== 'all' || modelFilter ? <button type="button" onClick={() => { setSearch(''); setStockFilter('all'); setModelFilter(''); setPage(1); }} className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Clear search</button> : null}
               />
             </div>
           ) : (
@@ -309,7 +311,7 @@ const InventoryView = () => {
                     <th scope="col" className="px-4 py-2.5 text-right text-xs font-semibold text-slate-700">Store price</th>
                     <th scope="col" className="px-4 py-2.5 text-right text-xs font-semibold text-slate-700">Online price</th>
                     <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold text-slate-700">Status</th>
-                    <th scope="col" className="relative px-4 py-2.5 text-right text-xs font-semibold text-slate-700"><span className="sr-only">Actions</span></th>
+                    <th scope="col" className="relative px-4 py-2.5 text-right text-xs font-semibold text-slate-700">Actions</th>
                   </tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {visibleRows.map(p => {

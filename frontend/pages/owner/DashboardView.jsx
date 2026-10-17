@@ -55,7 +55,7 @@ const statusStyle = {
   refunded: 'bg-slate-100 text-slate-600',
 };
 
-const DashboardView = ({ onNavigate }) => {
+const DashboardView = ({ onNavigate, user }) => {
   const [data, setData] = useState({
     stats: null,
     orders: [],
@@ -131,7 +131,7 @@ const DashboardView = ({ onNavigate }) => {
       <PageHeader
         eyebrow="Commerce overview"
         title="Business overview"
-        description={`${new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}. ${new Intl.DateTimeFormat('en-PH', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())} · Sales, orders and inventory at a glance.`}
+        description={`${new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}${user?.name ? `, ${user.name.split(' ')[0]}` : ''}. ${new Intl.DateTimeFormat('en-PH', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())} · Sales, orders and inventory at a glance.`}
         actions={(
           <button type="button" onClick={() => onNavigate('orders')} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-slate-800">
             View orders <ArrowRight size={15} />
@@ -143,8 +143,8 @@ const DashboardView = ({ onNavigate }) => {
         <section className="dashboard-trading" aria-label="Business overview">
           <div className="dashboard-sales"><p>Today's sales</p><strong>{currency(operational.todaySales)}</strong><span>Paid and active orders created today</span></div>
           <div className="dashboard-totals">
-            <MetricCard label="Total orders" value={data.stats?.totalOrders ?? data.orders.length} detail={`${operational.pending.length} pending`} onClick={() => onNavigate('orders')} />
-            <MetricCard label="To process" value={operational.toProcess.length} detail="Packing or dispatch" onClick={() => onNavigate('orders')} />
+            <MetricCard label="Reported orders" value={data.stats?.totalOrders ?? data.orders.length} detail="Sales reporting scope" onClick={() => onNavigate('orders')} />
+            <MetricCard label="Pending fulfillment" value={operational.toProcess.length} detail="Packing or dispatch" onClick={() => onNavigate('orders')} />
             <MetricCard label="Low stock" value={operational.lowStock.length} detail="Reorder attention" onClick={() => onNavigate('inventory')} />
           </div>
         </section>
@@ -159,7 +159,7 @@ const DashboardView = ({ onNavigate }) => {
         </section>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
         <SectionCard title="Sales trend" description="Completed and active sales reported by the dashboard API.">
           {data.stats?.salesTrend?.length ? (
             <div className="h-[280px]">
@@ -205,7 +205,7 @@ const DashboardView = ({ onNavigate }) => {
       <div className="dashboard-orders-grid">
       <SectionCard title="Recent orders" description="Latest transactions across online and point-of-sale channels." action={<button type="button" onClick={() => onNavigate('orders')} className="text-xs font-semibold text-orange-700 hover:text-orange-800">View all</button>} padded={false}>
         {recentOrders.length ? (
-          <div tabIndex={0} className="overflow-x-auto">
+          <><div className="md:hidden">{recentOrders.map(order => <button key={order.id} type="button" onClick={() => onNavigate('orders')} className="staff-order-row"><div className="min-w-0"><p className="font-semibold text-slate-900">#{String(order.id).padStart(4, '0')} · {order.customer_name || order.shipping_name || 'Customer'}</p><small>{String(order.status || 'unknown').replaceAll('_', ' ')} · {new Date(order.created_at).toLocaleDateString('en-PH')}</small></div><span className="text-sm font-semibold tabular-nums">{currency(order.total_amount)}</span></button>)}</div><div tabIndex={0} role="region" aria-label="Recent orders" className="hidden overflow-x-auto md:block">
             <table className="min-w-[720px] w-full text-left">
               <thead className="bg-slate-50">
                 <tr>
@@ -225,7 +225,7 @@ const DashboardView = ({ onNavigate }) => {
                 ))}
               </tbody>
             </table>
-          </div>
+          </div></>
         ) : (
           <div className="px-5 py-12 text-center text-sm text-slate-500">No orders have been recorded.</div>
         )}
