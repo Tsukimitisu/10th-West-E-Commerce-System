@@ -2,6 +2,7 @@ import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
+import { sanitizePlainText, sanitizeRichText } from '../utils/inputSanitizer.js';
 
 const router = express.Router();
 
@@ -59,6 +60,13 @@ const toNullableTimestamp = (value) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 };
 
+// Publication is a server boundary. A scheduled campaign must not be readable
+// early by bypassing the Customer carousel's matching display filter.
+const publicAnnouncements = rows => (Array.isArray(rows) ? rows : [])
+  .filter(row => row.is_published === true && (!row.published_at || (Number.isFinite(Date.parse(row.published_at)) && Date.parse(row.published_at)<=Date.now())))
+  .sort((a,b) => Date.parse(b.published_at || b.created_at || 0)-Date.parse(a.published_at || a.created_at || 0))
+  .map(row => ({id:row.id,title:sanitizePlainText(row.title,{maxLength:200}) || '',content:sanitizeRichText(row.content) || '',is_published:true,published_at:row.published_at || null,created_at:row.created_at || null}));
+
 // Public: get published announcements if global toggle is enabled
 router.get('/', async (req, res) => {
   try {
@@ -67,24 +75,21 @@ router.get('/', async (req, res) => {
 
     if (shouldUseDatabaseReadFallback()) {
       const announcements = await supabaseRestFetch('announcements', {
-        select: '*',
+        select: 'id,title,content,is_published,published_at,created_at',
         is_published: 'eq.true',
+        or: `(published_at.is.null,published_at.lte.${new Date().toISOString()})`,
       });
 
-      return res.json((Array.isArray(announcements) ? announcements : []).sort((a, b) => {
-        const left = new Date(a?.published_at || a?.created_at || 0).getTime();
-        const right = new Date(b?.published_at || b?.created_at || 0).getTime();
-        return right - left;
-      }));
+      return res.json(publicAnnouncements(announcements));
     }
 
     const result = await pool.query(
-      `SELECT * FROM announcements
-       WHERE is_published = true
+      `SELECT id,title,content,is_published,published_at,created_at FROM announcements
+       WHERE is_published = true AND (published_at IS NULL OR published_at <= NOW())
        ORDER BY COALESCE(published_at, created_at) DESC`,
     );
 
-    res.json(result.rows);
+    res.json(publicAnnouncements(result.rows));
   } catch (error) {
     if (isDatabaseConnectivityError(error)) {
       return res.json([]);

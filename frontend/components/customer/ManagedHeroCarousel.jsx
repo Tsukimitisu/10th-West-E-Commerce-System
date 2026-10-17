@@ -53,7 +53,7 @@ const ManagedHeroCarousel = ({ slides, loading = false }) => {
           <img
             key={slide.image}
             src={slide.image}
-            alt=""
+            alt={slide.alt || ""}
             width="1600"
             height="600"
             fetchPriority="high"
@@ -94,7 +94,7 @@ const ManagedHeroCarousel = ({ slides, loading = false }) => {
                     <ArrowRight size={18} aria-hidden="true" />
                   </BrandButton>
                 ) : (
-                  <BrandButton as="a" href={slide.destination.href} size="lg">
+                  <BrandButton as="a" href={slide.destination.href} size="lg" target="_blank" rel="noopener noreferrer">
                     {slide.cta}
                     <ArrowRight size={18} aria-hidden="true" />
                   </BrandButton>

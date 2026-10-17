@@ -8,6 +8,7 @@ import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSessio
 import BrandButton from '../components/ui/BrandButton';
 import EmptyState from '../components/ui/EmptyState';
 import LoadingSkeleton from '../components/ui/LoadingSkeleton';
+import PromotionContext from '../components/customer/PromotionContext';
 import { shouldReturnEmptyProductSearch } from '../utils/productSearchSafety.js';
 
 const tokenizeSearchTerms = (value) => {
@@ -295,6 +296,7 @@ const ProductList = () => {
       });
     }
     if (selectedBrand) result = result.filter((product) => product.brand === selectedBrand);
+    if (searchParams.get('category')) result = result.filter(product => String(product.category_id) === searchParams.get('category'));
     if (selectedModel) result = result.filter((product) => product.motorcycle_model === selectedModel);
     if (selectedColor) result = result.filter((product) => product.color === selectedColor);
     if (inStockOnly) result = result.filter(p => p.stock_quantity > 0);
@@ -314,9 +316,10 @@ const ProductList = () => {
     return result;
   }, [products, debouncedSearchQuery, searchParams, selectedBrand, selectedModel, selectedColor, priceRange, inStockOnly, sortBy]);
 
-  const activeFilterCount = [searchQuery.trim(), selectedBrand, selectedModel, selectedColor, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000].filter(Boolean).length;
+  const activeFilterCount = [searchQuery.trim(), selectedBrand, selectedModel, selectedColor, inStockOnly, priceRange[0] > 0 || priceRange[1] < 100000, searchParams.get('category')].filter(Boolean).length;
 
   const activeFilters = [
+    searchParams.get('category') && { key: 'category', label: products.find(product => String(product.category_id) === searchParams.get('category'))?.category_name || 'Selected category' },
     searchQuery.trim() && { key: 'search', label: `Search: ${searchQuery.trim()}` },
     selectedBrand && { key: 'brand', label: selectedBrand },
     selectedModel && { key: 'model', label: selectedModel },
@@ -327,6 +330,7 @@ const ProductList = () => {
 
   const removeFilter = (key) => {
     const nextParams = new URLSearchParams(searchParams);
+    if (key === 'category') nextParams.delete('category');
     if (key === 'search') {
       setSearchQuery('');
       nextParams.delete('search');
@@ -416,6 +420,7 @@ const ProductList = () => {
       </div>
 
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+        {/^[1-9]\d*$/.test(searchParams.get('promotion') || '') && <PromotionContext key={searchParams.get('promotion')} id={searchParams.get('promotion')} />}
         <div className="catalog-toolbar mb-6 pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>

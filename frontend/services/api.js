@@ -4501,8 +4501,11 @@ export const getAllBanners = async () => {
     const { data } = await supabase.from('banners').select('*').order('display_order');
     return data || [];
   }
-  return authenticatedFetch(`${API_URL}/banners/all`).catch(() => []);
+  return authenticatedFetch(`${API_URL}/banners/all`);
 };
+
+export const getCarouselDestinations = (params = {}) => authenticatedFetch(`${API_URL}/banners/destinations?${new URLSearchParams(params)}`);
+export const getCarouselPromotion = id => authenticatedFetch(`${API_URL}/banners/destinations/promotion/${encodeURIComponent(id)}`);
 
 export const createBanner = async (banner) => {
   if (USE_SUPABASE) {
@@ -4617,7 +4620,7 @@ export const getAllAnnouncements = async () => {
     const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
     return data || [];
   }
-  return authenticatedFetch(`${API_URL}/announcements/all`).catch(() => []);
+  return authenticatedFetch(`${API_URL}/announcements/all`);
 };
 
 export const createAnnouncement = async (announcement) => {

@@ -30,6 +30,8 @@ export function managedHeroSlides(
       (banner) =>
         banner &&
         banner.is_active !== false &&
+        (!banner.starts_at || (Number.isFinite(Date.parse(banner.starts_at)) && Date.parse(banner.starts_at) <= now)) &&
+        (!banner.ends_at || (Number.isFinite(Date.parse(banner.ends_at)) && Date.parse(banner.ends_at) > now)) &&
         (banner.title || banner.image_url),
     )
     .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0))
@@ -38,6 +40,7 @@ export function managedHeroSlides(
       title: banner.title || "10th West Motorcycle Parts & Accessories",
       text: banner.subtitle || "",
       image: banner.image_url || "",
+      alt: banner.alt_text || "",
       destination: bannerDestination(banner.link_url),
       cta: banner.button_text || "View details",
       kind: "Store promotion",
@@ -63,6 +66,6 @@ export function managedHeroSlides(
       kind: "Store announcement",
     }));
   // Announcements have no image, CTA, priority or expiry fields in today's API.
-  // Banners have no schedule fields. Do not infer relationships from coupon codes.
+  // Optional banner schedules are public API metadata; legacy rows remain valid.
   return [...bannerSlides, ...announcementSlides];
 }
