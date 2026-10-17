@@ -38,20 +38,20 @@ import { repairMojibake } from '../../utils/text.js';
 
 const createNavItems = (badges = {}) => [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' },
-  { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: badges.pendingOrders, group: 'Sales', permission: 'orders.view' },
-  { id: 'pos', label: 'Point of sale', icon: Monitor, route: '/pos', group: 'Sales', permission: 'pos.access' },
+  { id: 'orders', label: 'Orders', icon: ShoppingCart, badge: badges.pendingOrders, group: 'Commerce', permission: 'orders.view' },
+  { id: 'returns', label: 'Returns & refunds', icon: RotateCcw, badge: badges.pendingReturns, group: 'Commerce', permission: 'returns.view' },
+  { id: 'customers', label: 'Customers', icon: Users, group: 'Commerce', permission: 'customers.view' },
+  { id: 'reviews', label: 'Reviews', icon: Star, group: 'Commerce', permission: 'reviews.moderate' },
   { id: 'inventory', label: 'Inventory', icon: Boxes, badge: badges.lowStock, group: 'Catalog', permission: 'inventory.view' },
   { id: 'product-items', label: 'Product Items', icon: PackageSearch, group: 'Catalog', parentId: 'inventory', permission: 'inventory.view' },
   { id: 'storefront', label: 'Storefront Listings', icon: Store, group: 'Catalog', permission: 'products.view' },
   { id: 'promotions', label: 'Promotions', icon: Tag, group: 'Catalog', permission: 'promotions.manage' },
-  { id: 'customers', label: 'Customers', icon: Users, group: 'Customers', permission: 'customers.view' },
-  { id: 'chat', label: 'Conversations', icon: MessageCircle, group: 'Customers', permission: 'chat.view' },
-  { id: 'reviews', label: 'Reviews', icon: Star, group: 'Customers', permission: 'reviews.moderate' },
-  { id: 'returns', label: 'Returns & refunds', icon: RotateCcw, badge: badges.pendingReturns, group: 'Operations', permission: 'returns.view' },
-  { id: 'staff', label: 'Staff & roles', icon: UserCog, group: 'Operations', permission: 'staff.view' },
-  { id: 'reports', label: 'Reports', icon: BarChart3, group: 'Insights', permission: 'reports.view' },
-  { id: 'banners', label: 'Banners', icon: Image, group: 'Storefront' },
-  { id: 'content', label: 'Content', icon: Newspaper, group: 'Storefront' },
+  { id: 'banners', label: 'Banners', icon: Image, group: 'Catalog' },
+  { id: 'pos', label: 'Point of sale', icon: Monitor, route: '/pos', group: 'Sales', permission: 'pos.access' },
+  { id: 'reports', label: 'Reports', icon: BarChart3, group: 'Sales', permission: 'reports.view' },
+  { id: 'content', label: 'Content & settings', icon: Newspaper, group: 'Content' },
+  { id: 'chat', label: 'Conversations', icon: MessageCircle, group: 'Communication', permission: 'chat.view' },
+  { id: 'staff', label: 'Staff & roles', icon: UserCog, group: 'Settings', permission: 'staff.view' },
 ];
 
 const ADMIN_NAV = [
@@ -140,12 +140,13 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
 
   useEffect(() => {
     const close = (event) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+      if (event.key === 'Escape' || (event.type === 'mousedown' && notificationRef.current && !notificationRef.current.contains(event.target))) {
         setNotificationsOpen(false);
       }
     };
     document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    document.addEventListener('keydown', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close); };
   }, []);
 
   const privileged = ['owner', 'admin'].includes(user?.role);
@@ -193,6 +194,8 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
     else if (type.includes('product') || type.includes('inventory')) onNavigate('inventory');
   };
 
+  const presentedNav = user?.role === 'store_staff' ? navItems.map(item => ({ ...item, group: item.id === 'dashboard' ? 'Today' : ['orders', 'returns'].includes(item.id) ? 'Fulfillment' : ['inventory', 'product-items', 'storefront'].includes(item.id) ? 'Parts counter' : item.id === 'chat' ? 'Communication' : 'Tools' })) : navItems;
+
   const currentTitle = navItems.find((item) => item.id === activeView)?.label || 'Operations';
   const isStaff = user?.role === 'store_staff';
 
@@ -202,6 +205,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
         type="button"
         onClick={() => setNotificationsOpen((open) => !open)}
         className="relative grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+        aria-expanded={notificationsOpen}
         aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
       >
         <Bell size={18} />
@@ -261,7 +265,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   return (
     <OperationsShell
       activeId={activeView}
-      navItems={navItems}
+      navItems={presentedNav}
       onNavigate={handleNavigate}
       onLogout={handleLogout}
       user={user}

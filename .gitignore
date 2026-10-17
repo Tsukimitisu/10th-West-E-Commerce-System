@@ -36,3 +36,6 @@ qa/rebrand/
 
 # Premium redesign screenshots and local QA
 qa/premium-redesign/
+
+# Role workspace QA screenshots and read-only capture reports
+qa/operations-premium/

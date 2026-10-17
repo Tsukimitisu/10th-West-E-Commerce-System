@@ -1,11 +1,13 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useContext, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { OperationsDialogContext } from '../../context/OperationsDialogContext';
 
 const sizeMap = { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-lg', xl: 'sm:max-w-xl', '2xl': 'sm:max-w-2xl', '3xl': 'sm:max-w-5xl' };
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
 
 const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentation = 'modal', tone = 'default', children }) => {
+  const operations = useContext(OperationsDialogContext);
   const panelRef = useRef(null);
   const titleId = useId();
 
@@ -71,7 +73,7 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentati
             <X size={18} />
           </button>
         </div>
-        <div className="overscroll-contain flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">{children}</div>
+        <div className={`overscroll-contain flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] ${operations && tone === 'default' ? 'operations-dialog-content operations-content' : ''}`}>{children}</div>
       </div>
     </div>,
     document.body
