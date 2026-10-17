@@ -6,12 +6,15 @@ import {
 } from 'lucide-react';
 import {
   getSecuritySettings, updateSecuritySettings,
-  getLoginAttempts, getSuspiciousActivity
+  getLoginAttempts, getSuspiciousActivity, getSystemHealth
 } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
+import ServiceHealth from '../../components/operations/ServiceHealth';
+import SectionCard from '../../components/operations/SectionCard';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
 const SystemSecurityView = () => {
+  const [health, setHealth] = useState(null);
   const [tab, setTab] = useState('lockout');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,7 +40,8 @@ const SystemSecurityView = () => {
   useEffect(() => {
     (async () => {
       try {
-        const [secSettings, loginData, suspiciousData] = await Promise.all([
+        const [readiness, secSettings, loginData, suspiciousData] = await Promise.all([
+          getSystemHealth().then(value => { setHealth(value); return value; }).catch(() => null),
           getSecuritySettings().catch(() => ({})),
           getLoginAttempts().catch(() => ({ attempts: [], stats: {} })),
           getSuspiciousActivity().catch(() => ({ failed_login_clusters: [], locked_accounts: [], bulk_operations: [] })),
@@ -80,6 +84,7 @@ const SystemSecurityView = () => {
     { id: 'password', label: 'Password Rules', icon: Key },
     { id: '2fa', label: 'Two-Factor Auth', icon: Shield },
     { id: 'monitor', label: 'Login Monitor', icon: Monitor },
+    { id: 'readiness', label: 'OAuth & services', icon: Globe },
     { id: 'suspicious', label: 'Suspicious Activity', icon: AlertTriangle },
   ];
 
@@ -122,6 +127,7 @@ const SystemSecurityView = () => {
         })}
       </div>
 
+      {tab === 'readiness' && <SectionCard title="Authentication readiness" description="Reported provider configuration. No keys, tokens or credentials are displayed." padded={false}><ServiceHealth health={health} /></SectionCard>}
       {/* Account Lockout Policy */}
       {tab === 'lockout' && (
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6 shadow-sm">
@@ -129,20 +135,20 @@ const SystemSecurityView = () => {
           <p className="text-xs text-gray-400">Configure how the system handles failed login attempts</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="text-xs text-gray-400 mb-2 block">Max Login Attempts</label>
-              <input type="number" min="1" max="20" value={config.max_login_attempts} onChange={(e) => setConfig({ ...config, max_login_attempts: e.target.value })}
+              <label htmlFor="security-max_login_attempts" className="text-xs text-gray-400 mb-2 block">Max Login Attempts</label>
+              <input type="number" min="1" max="20" id="security-max_login_attempts" value={config.max_login_attempts} onChange={(e) => setConfig({ ...config, max_login_attempts: e.target.value })}
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
               <p className="text-[10px] text-gray-400 mt-1">Number of failed attempts before account is locked</p>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-2 block">Lockout Duration (minutes)</label>
-              <input type="number" min="1" max="1440" value={config.lockout_duration_minutes} onChange={(e) => setConfig({ ...config, lockout_duration_minutes: e.target.value })}
+              <label htmlFor="security-lockout_duration_minutes" className="text-xs text-gray-400 mb-2 block">Lockout Duration (minutes)</label>
+              <input type="number" min="1" max="1440" id="security-lockout_duration_minutes" value={config.lockout_duration_minutes} onChange={(e) => setConfig({ ...config, lockout_duration_minutes: e.target.value })}
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
               <p className="text-[10px] text-gray-400 mt-1">How long the account stays locked after reaching max attempts</p>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-2 block">Session Timeout (minutes)</label>
-              <input type="number" min="5" max="480" value={config.session_timeout_minutes} onChange={(e) => setConfig({ ...config, session_timeout_minutes: e.target.value })}
+              <label htmlFor="security-session_timeout_minutes" className="text-xs text-gray-400 mb-2 block">Session Timeout (minutes)</label>
+              <input type="number" min="5" max="480" id="security-session_timeout_minutes" value={config.session_timeout_minutes} onChange={(e) => setConfig({ ...config, session_timeout_minutes: e.target.value })}
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
               <p className="text-[10px] text-gray-400 mt-1">Inactive sessions are automatically terminated</p>
             </div>
@@ -157,8 +163,8 @@ const SystemSecurityView = () => {
           <p className="text-xs text-gray-400">Set minimum password complexity requirements for all users</p>
           <div className="space-y-5">
             <div>
-              <label className="text-xs text-gray-400 mb-2 block">Minimum Password Length</label>
-              <input type="number" min="6" max="32" value={config.password_min_length} onChange={(e) => setConfig({ ...config, password_min_length: e.target.value })}
+              <label htmlFor="security-password_min_length" className="text-xs text-gray-400 mb-2 block">Minimum Password Length</label>
+              <input type="number" min="6" max="32" id="security-password_min_length" value={config.password_min_length} onChange={(e) => setConfig({ ...config, password_min_length: e.target.value })}
                 className="w-48 px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
             </div>
             {[
@@ -168,10 +174,7 @@ const SystemSecurityView = () => {
               { key: 'password_require_special', label: 'Require special character (!@#$...)' },
             ].map(rule => (
               <label key={rule.key} className="flex items-center gap-3 cursor-pointer group">
-                <div className={`w-10 h-5 rounded-full transition-colors relative ${config[rule.key] === 'true' ? 'bg-red-500/100' : 'bg-gray-300'}`}
-                  onClick={() => setConfig({ ...config, [rule.key]: config[rule.key] === 'true' ? 'false' : 'true' })}>
-                  <div className={`absolute top-0.5 w-4 h-4 bg-gray-800 rounded-full transition-colors shadow-sm ${config[rule.key] === 'true' ? 'left-5' : 'left-0.5'}`} />
-                </div>
+                <input type="checkbox" checked={config[rule.key] === 'true'} onChange={event => setConfig({ ...config, [rule.key]: event.target.checked ? 'true' : 'false' })} className="h-4 w-4 accent-orange-600" />
                 <span className="text-sm text-gray-600 group-hover:text-white transition-colors">{rule.label}</span>
               </label>
             ))}
@@ -204,14 +207,10 @@ const SystemSecurityView = () => {
             ].map(opt => (
               <label key={opt.value}
                 className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${
-                  config['2fa_enforcement'] === opt.value ? 'border-red-300 bg-red-500/10' : 'border-gray-700 hover:border-gray-700 bg-gray-800'
+                  config['2fa_enforcement'] === opt.value ? 'border-orange-400 bg-orange-50' : 'border-gray-700 hover:border-gray-700 bg-gray-800'
                 }`}
-                onClick={() => setConfig({ ...config, '2fa_enforcement': opt.value })}>
-                <div className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center flex-shrink-0 ${
-                  config['2fa_enforcement'] === opt.value ? 'border-red-500' : 'border-gray-300'
-                }`}>
-                  {config['2fa_enforcement'] === opt.value && <div className="w-2 h-2 bg-red-500/100 rounded-full" />}
-                </div>
+                >
+                <input type="radio" name="system-2fa-policy" value={opt.value} checked={config['2fa_enforcement'] === opt.value} onChange={() => setConfig({ ...config, '2fa_enforcement': opt.value })} className="mt-1 h-4 w-4 shrink-0 accent-orange-600" />
                 <div>
                   <p className="text-sm font-medium text-white">{opt.label}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{opt.desc}</p>
@@ -226,7 +225,7 @@ const SystemSecurityView = () => {
       {tab === 'monitor' && (
         <div className="space-y-4">
           {/* Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="ops-inline-kpis">
             <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 shadow-sm">
               <p className="text-xs text-gray-400">Login Attempts (24h)</p>
               <p className="text-2xl font-bold text-white mt-1">{loginStats.today_total || 0}</p>

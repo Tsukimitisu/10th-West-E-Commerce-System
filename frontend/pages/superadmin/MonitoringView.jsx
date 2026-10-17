@@ -1,283 +1,101 @@
-﻿import React, { useEffect, useState } from 'react';
-import {
-  Activity, FileText, AlertTriangle, Search, RefreshCw,
-  Loader2, CheckCircle2, XCircle, Filter, Download,
-  Clock, Globe, User, Server, Database
-} from 'lucide-react';
-import {
-  getActivityLogs, getErrorLogs, getTransactionLogs, getSuspiciousActivity
-} from '../../services/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { RefreshCw, ShieldCheck } from 'lucide-react';
+import { getActivityLogs, getErrorLogs, getTransactionLogs, getSystemHealth } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
+import SectionCard from '../../components/operations/SectionCard';
+import ServiceHealth from '../../components/operations/ServiceHealth';
+import DataToolbar, { FilterSelect, MobileDataCard } from '../../components/operations/DataToolbar';
+import StatusBadge from '../../components/ui/StatusBadge';
+import { Pagination } from '../../components/ui/BrandPrimitives';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
-const MonitoringView = ({ initialTab = 'activity', title = 'Monitoring & logs' }) => {
+const humanize = value => String(value || '').replaceAll('_', ' ');
+const resultOf = log => log.result || log.status || (typeof log.success === 'boolean' ? log.success ? 'success' : 'failed' : 'Not recorded');
+const entityOf = log => log.entity_type || log.entity || log.resource_type || log.table_name || '';
+const entityIdOf = log => log.entity_id ?? log.resource_id ?? log.record_id ?? '';
+const detailText = value => {
+  if (!value) return '';
+  if (typeof value === 'string') { try { return detailText(JSON.parse(value)); } catch { return value; } }
+  if (typeof value !== 'object') return String(value);
+  return Object.entries(value).map(([key, item]) => `${humanize(key)}: ${typeof item === 'object' ? JSON.stringify(item) : item}`).join(' · ');
+};
+const logTime = value => value ? new Date(value).toLocaleString('en-PH') : 'Not recorded';
+
+export default function MonitoringView({ initialTab = 'activity', title = 'Monitoring & logs' }) {
+  const isAudit = title === 'Audit trail';
   const [tab, setTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
-
-  const formatLogDetails = (details) => {
-    let obj = details;
-    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
-    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch { return obj; } }
-    if (typeof obj !== 'object' || obj === null) return String(obj);
-    return Object.entries(obj).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(', ');
-  };
-  const [activityLogs, setActivityLogs] = useState([]);
-  const [errorLogs, setErrorLogs] = useState([]);
-  const [transactionLogs, setTransactionLogs] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
+  const [data, setData] = useState({ activity: [], errors: [], transactions: [], health: null });
+  const [error, setError] = useState('');
+  const [activityPaging, setActivityPaging] = useState({ page: 1, total: 0, busy: false });
+  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState({ actor: '', action: '', entity: '', result: '', from: '', to: '' });
+  const [page, setPage] = useState(1);
   const loadData = async () => {
     setLoading(true);
-    try {
-      const [activity, errors, transactions] = await Promise.all([
-        getActivityLogs().catch(() => []),
-        getErrorLogs().catch(() => []),
-        getTransactionLogs().catch(() => []),
-      ]);
-      setActivityLogs(Array.isArray(activity) ? activity : []);
-      setErrorLogs(Array.isArray(errors) ? errors : []);
-      setTransactionLogs(Array.isArray(transactions) ? transactions : []);
-    } catch (e) { console.error(e); }
+    const results = await Promise.allSettled([getActivityLogs({ limit: 100 }), getErrorLogs(), getTransactionLogs(), ...(!isAudit ? [getSystemHealth()] : [])]);
+    const value = (index, fallback) => results[index]?.status === 'fulfilled' ? results[index].value : fallback;
+    const asRows = value => Array.isArray(value) ? value : Array.isArray(value?.logs) ? value.logs : [];
+    const activityResponse = value(0, []);
+    setActivityPaging({ page: 1, total: Number(activityResponse?.total || asRows(activityResponse).length), busy: false });
+    setData({ activity: asRows(value(0, [])), errors: asRows(value(1, [])), transactions: asRows(value(2, [])), health: value(3, null) });
+    setError(results.some(item => item.status === 'rejected') ? 'Some records could not be loaded. Refresh before relying on this view.' : '');
     setLoading(false);
   };
-
-  const tabs = [
-    { id: 'activity', label: 'Activity Logs', icon: Activity, count: activityLogs.length },
-    { id: 'errors', label: 'Error Logs', icon: AlertTriangle, count: errorLogs.length },
-    { id: 'transactions', label: 'Transaction Logs', icon: FileText, count: transactionLogs.length },
-  ];
-
-  const filterLogs = (logs) => {
-    if (!searchQuery) return logs;
-    const q = searchQuery.toLowerCase();
-    return logs.filter(l =>
-      (l.action || '').toLowerCase().includes(q) ||
-      (l.user_name || '').toLowerCase().includes(q) ||
-      (l.email || '').toLowerCase().includes(q) ||
-      (l.message || '').toLowerCase().includes(q) ||
-      (l.error_type || '').toLowerCase().includes(q) ||
-      (l.endpoint || '').toLowerCase().includes(q) ||
-      (l.ip_address || '').toLowerCase().includes(q)
-    );
+  useEffect(() => { loadData(); }, []);
+  const loadMoreActivity = async () => {
+    setActivityPaging(current => ({ ...current, busy: true }));
+    try {
+      const next = await getActivityLogs({ limit: 100, page: activityPaging.page + 1 });
+      const rows = Array.isArray(next) ? next : next?.logs || [];
+      setData(current => ({ ...current, activity: [...new Map([...current.activity, ...rows].map(row => [row.id, row])).values()] }));
+      setActivityPaging(current => ({ page: current.page + 1, total: Number(next?.total || current.total), busy: false }));
+    } catch { setError('Older activity records could not be loaded. Try again.'); setActivityPaging(current => ({ ...current, busy: false })); }
   };
-
-  const formatAction = (action) => (action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  const timeAgo = (date) => {
-    if (!date) return '';
-    const diff = Date.now() - new Date(date).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  };
-
-  const getActionColor = (action) => {
-    if (!action) return 'text-gray-400';
-    if (action.includes('delete') || action.includes('lock') || action.includes('reject')) return 'text-red-500';
-    if (action.includes('create') || action.includes('add') || action.includes('approve') || action.includes('unlock')) return 'text-green-500';
-    if (action.includes('update') || action.includes('edit') || action.includes('change') || action.includes('reset')) return 'text-blue-500';
-    if (action.includes('login') || action.includes('logout')) return 'text-slate-700';
-    if (action.includes('order') || action.includes('checkout') || action.includes('payment')) return 'text-red-500';
-    return 'text-gray-400';
-  };
-
-  if (loading) return <div className="space-y-4" role="status" aria-label="Loading audit events"><PageHeader title={title} description="Loading platform activity…" />{Array.from({ length: 5 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>;
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title={title}
-        description="Review platform activity, application errors, and auditable transaction history."
-        actions={<button onClick={loadData} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"><RefreshCw size={14} /> Refresh</button>}
-      />
-
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 flex items-center gap-3 shadow-sm">
-          <div className="p-2 bg-blue-50 rounded-lg"><Activity size={18} className="text-blue-500" /></div>
-          <div><p className="text-xs text-gray-400">Activity Logs</p><p className="text-lg font-bold text-white">{activityLogs.length}</p></div>
-        </div>
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 flex items-center gap-3 shadow-sm">
-          <div className="p-2 bg-slate-100 rounded-lg"><AlertTriangle size={18} className="text-red-500" /></div>
-          <div><p className="text-xs text-gray-400">Error Logs</p><p className="text-lg font-bold text-white">{errorLogs.length}</p></div>
-        </div>
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 flex items-center gap-3 shadow-sm">
-          <div className="p-2 bg-slate-100 rounded-lg"><FileText size={18} className="text-slate-700" /></div>
-          <div><p className="text-xs text-gray-400">Transaction Logs</p><p className="text-lg font-bold text-white">{transactionLogs.length}</p></div>
-        </div>
-      </div>
-
-      {/* Tabs + Search */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div tabIndex={0} className="flex gap-1 bg-white border border-slate-200 p-1 rounded-lg flex-1 overflow-x-auto" role="group" aria-label="Log type">
-          {tabs.map(t => {
-            const Icon = t.icon;
-            return (
-              <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-                  tab === t.id ? 'bg-orange-50 text-orange-800' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
-                }`}>
-                <Icon size={14} /> {t.label}
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${tab === t.id ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-400'}`}>{t.count}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="relative">
-          <label htmlFor="monitoring-search" className="sr-only">Search logs</label>
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input id="monitoring-search" type="search" placeholder="Search logs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 w-full sm:w-56" />
-        </div>
-      </div>
-
-      {/* Activity Logs */}
-      {tab === 'activity' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
-          <div tabIndex={0} className="max-h-[520px] overflow-y-auto">
-            {filterLogs(activityLogs).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <Activity size={36} className="mb-3 opacity-30" />
-                <p className="text-sm">No activity logs found</p>
-              </div>
-            ) : (
-              <><div className="divide-y divide-slate-200 md:hidden">
-                {filterLogs(activityLogs).map((log, idx) => <article key={log.id || idx} className="space-y-1 p-4 text-sm">
-                  <div className="flex items-start justify-between gap-3"><strong className="text-slate-900">{formatAction(log.action)}</strong><time className="shrink-0 text-xs text-slate-600">{timeAgo(log.created_at)}</time></div>
-                  <p className="text-slate-600">{log.user_name || 'System'}{log.ip_address ? ` · ${log.ip_address}` : ''}</p>
-                  {log.details && <p className="break-words text-xs text-slate-600">{formatLogDetails(log.details)}</p>}
-                </article>)}
-              </div><table className="hidden w-full text-left md:table">
-                <thead className="bg-gray-900 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400">Action</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden md:table-cell">User</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden lg:table-cell">IP Address</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden lg:table-cell">Details</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 text-right">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filterLogs(activityLogs).map((log, idx) => (
-                    <tr key={log.id || idx} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <span className={`text-xs font-medium ${getActionColor(log.action)}`}>{formatAction(log.action)}</span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden md:table-cell">{log.user_name || 'System'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell font-mono">{log.ip_address || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell max-w-xs truncate">
-                        {log.details ? formatLogDetails(log.details) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Error Logs */}
-      {tab === 'errors' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
-          <div tabIndex={0} className="max-h-[520px] overflow-y-auto">
-            {filterLogs(errorLogs).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-green-500">
-                <CheckCircle2 size={36} className="mb-3 opacity-50" />
-                <p className="text-sm">No errors logged</p>
-              </div>
-            ) : (
-              <><div className="divide-y divide-slate-200 md:hidden">
-                {filterLogs(errorLogs).map((log, idx) => <article key={log.id || idx} className="space-y-1 p-4 text-sm">
-                  <div className="flex items-start justify-between gap-3"><strong className="text-red-700">{log.error_type || 'Error'}</strong><time className="shrink-0 text-xs text-slate-600">{timeAgo(log.created_at)}</time></div>
-                  <p className="break-words text-slate-900">{log.message}</p>
-                  <p className="text-xs text-slate-600">{log.endpoint || 'Unknown endpoint'} · {log.user_name || 'System'}</p>
-                </article>)}
-              </div><table className="hidden w-full text-left md:table">
-                <thead className="bg-gray-900 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400">Type</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400">Message</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden md:table-cell">Endpoint</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden lg:table-cell">User</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 text-right">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filterLogs(errorLogs).map((log, idx) => (
-                    <tr key={log.id || idx} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-0.5 bg-red-50 text-red-500 border border-red-100 rounded-full text-[10px] font-bold">{log.error_type || 'Error'}</span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-700 max-w-xs truncate">{log.message}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden md:table-cell font-mono">{log.endpoint || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell">{log.user_name || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Transaction Logs */}
-      {tab === 'transactions' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
-          <div tabIndex={0} className="max-h-[520px] overflow-y-auto">
-            {filterLogs(transactionLogs).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <FileText size={36} className="mb-3 opacity-30" />
-                <p className="text-sm">No transaction logs found</p>
-              </div>
-            ) : (
-              <><div className="divide-y divide-slate-200 md:hidden">
-                {filterLogs(transactionLogs).map((log, idx) => <article key={log.id || idx} className="space-y-1 p-4 text-sm">
-                  <div className="flex items-start justify-between gap-3"><strong className="text-slate-900">{formatAction(log.action)}</strong><time className="shrink-0 text-xs text-slate-600">{timeAgo(log.created_at)}</time></div>
-                  <p className="text-slate-600">{log.user_name || 'System'}</p>
-                  {log.details && <p className="break-words text-xs text-slate-600">{formatLogDetails(log.details)}</p>}
-                </article>)}
-              </div><table className="hidden w-full text-left md:table">
-                <thead className="bg-gray-900 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400">Action</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden md:table-cell">User</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden lg:table-cell">Details</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 text-right">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filterLogs(transactionLogs).map((log, idx) => (
-                    <tr key={log.id || idx} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <span className={`text-xs font-medium ${getActionColor(log.action)}`}>{formatAction(log.action)}</span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden md:table-cell">{log.user_name || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell max-w-xs truncate">
-                        {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)).slice(0, 60) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></>
-            )}
-          </div>
-        </div>
-      )}
+  const logs = data[tab] || [];
+  const options = useMemo(() => ({
+    actor: [...new Set(logs.map(log => log.user_name || log.email || 'System'))].sort(),
+    action: [...new Set(logs.map(log => log.action || log.error_type || '').filter(Boolean))].sort(),
+    entity: [...new Set(logs.map(entityOf).filter(Boolean))].sort(),
+    result: [...new Set(logs.map(resultOf))].sort(),
+  }), [logs]);
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return logs.filter(log => {
+      const day = log.created_at ? new Date(log.created_at).toLocaleDateString('en-CA') : '';
+      return (!term || [log.action, log.user_name, log.email, log.message, log.error_type, log.endpoint, log.ip_address, entityOf(log), entityIdOf(log), detailText(log.details)].some(value => String(value || '').toLowerCase().includes(term)))
+        && (!filters.actor || (log.user_name || log.email || 'System') === filters.actor)
+        && (!filters.action || (log.action || log.error_type) === filters.action)
+        && (!filters.entity || entityOf(log) === filters.entity)
+        && (!filters.result || resultOf(log) === filters.result)
+        && (!filters.from || Boolean(day && day >= filters.from))
+        && (!filters.to || Boolean(day && day <= filters.to));
+    });
+  }, [logs, query, filters]);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / 20)));
+  const rows = filtered.slice((currentPage - 1) * 20, currentPage * 20);
+  const updateFilter = (key, value) => { setFilters(current => ({ ...current, [key]: value })); setPage(1); };
+  const tabs = [['activity', 'Activity Logs'], ['errors', 'Error Logs'], ['transactions', 'Transaction Logs']];
+  return <div className="space-y-5">
+    <PageHeader title={title} description={isAudit ? 'Read-only records of platform actions and transaction events.' : 'Current service readiness and application diagnostics.'} actions={<button type="button" onClick={loadData} disabled={loading} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} aria-hidden="true" />Refresh</button>} />
+    {error && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{error}</p>}
+    {!isAudit && <SectionCard title="System health" description={data.health?.timestamp ? `Last checked ${logTime(data.health.timestamp)} · readiness is configuration-level.` : 'Live readiness will appear when the request succeeds.'} padded={false}>{loading ? <LoadingSkeleton className="h-48 w-full" /> : <ServiceHealth health={data.health} />}</SectionCard>}
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
+      <div className="flex min-w-0 max-w-full gap-1 overflow-x-auto" role="group" aria-label="Log category">{tabs.map(([id, label]) => <button type="button" key={id} onClick={() => { setTab(id); setPage(1); setFilters({ actor: '', action: '', entity: '', result: '', from: '', to: '' }); }} aria-pressed={tab === id} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${tab === id ? 'border-orange-600 text-slate-950' : 'border-transparent text-slate-600 hover:text-slate-950'}`}>{label} <span className="ml-1 text-xs font-normal">{data[id].length}</span></button>)}</div>
+      <p className="ops-readonly-note pb-2"><ShieldCheck size={15} aria-hidden="true" />Read only</p>
     </div>
-  );
-};
-
-export default MonitoringView;
-
-
+    <DataToolbar search={query} onSearchChange={event => { setQuery(event.target.value); setPage(1); }} searchPlaceholder="Search actor, action, entity or details…" label="Log filters">
+      {['actor', 'action', 'entity', 'result'].map(key => <FilterSelect label={key[0].toUpperCase() + key.slice(1)} key={key} value={filters[key]} onChange={event => updateFilter(key, event.target.value)}><option value="">All {key === 'entity' ? 'entities' : `${key}s`}</option>{options[key].map(value => <option key={value} value={value}>{humanize(value)}</option>)}</FilterSelect>)}
+      <label className="ops-filter-select"><span>From</span><input type="date" value={filters.from} onChange={event => updateFilter('from', event.target.value)} /></label>
+      <label className="ops-filter-select"><span>To</span><input type="date" min={filters.from || undefined} value={filters.to} onChange={event => updateFilter('to', event.target.value)} /></label>
+    </DataToolbar>
+    <SectionCard title={tabs.find(([id]) => id === tab)?.[1]} description={`${filtered.length} matching records from the loaded log set. Missing fields remain “Not recorded”.`} padded={false}>
+      {loading ? <div className="space-y-2 p-4" role="status" aria-label="Loading audit events">{Array.from({ length: 5 }, (_, index) => <LoadingSkeleton key={index} className="h-12 w-full" />)}</div> : !rows.length ? <p className="p-6 text-sm text-slate-600">No records match these filters.</p> : <>
+        <div className="md:hidden">{rows.map((log, index) => <MobileDataCard key={log.id || index} title={humanize(log.action || log.error_type || 'System event')} reference={logTime(log.created_at)} status={<StatusBadge tone={tab === 'errors' ? 'danger' : 'neutral'}>{humanize(resultOf(log))}</StatusBadge>}><p className="mt-2 text-sm text-slate-600">{log.user_name || log.email || 'System'}</p><p className="mt-1 text-xs text-slate-600">{entityOf(log) || 'Entity not recorded'} {entityIdOf(log)}</p><details className="mt-2 text-xs"><summary className="min-h-11 cursor-pointer py-3 font-semibold">Event details</summary><p className="ops-log-details">{log.message || detailText(log.details) || 'No additional details.'}</p>{log.ip_address && <p className="mt-2 font-mono">Source: {log.ip_address}</p>}</details></MobileDataCard>)}</div>
+        <div tabIndex={0} role="region" aria-label="Audit log table" className="hidden max-h-[620px] overflow-auto md:block"><table className="ops-audit-table w-full text-left"><thead><tr>{['Timestamp', 'Actor', 'Action', 'Entity', 'Entity ID', 'Source', 'Result', 'Details'].map(heading => <th scope="col" key={heading}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map((log, index) => <tr key={log.id || index}><td className="whitespace-nowrap text-xs">{logTime(log.created_at)}</td><td>{log.user_name || log.email || 'System'}</td><td className="font-medium">{humanize(log.action || log.error_type || 'System event')}</td><td>{entityOf(log) || 'Not recorded'}</td><td className="font-mono text-xs">{entityIdOf(log) || '—'}</td><td className="font-mono text-xs">{log.ip_address || log.source || 'Not recorded'}</td><td><StatusBadge tone={tab === 'errors' ? 'danger' : 'neutral'}>{humanize(resultOf(log))}</StatusBadge></td><td><details><summary className="cursor-pointer py-2 text-xs font-semibold">View details</summary><p className="ops-log-details">{log.message || detailText(log.details) || 'No additional details.'}</p>{log.endpoint && <p className="mt-2 font-mono text-xs">{log.endpoint}</p>}</details></td></tr>)}</tbody></table></div>
+      </>}
+      {tab === 'activity' && data.activity.length < activityPaging.total && <div className="border-t border-slate-200 px-4 py-3"><button type="button" disabled={activityPaging.busy} onClick={loadMoreActivity} className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold">{activityPaging.busy ? 'Loading older activity…' : `Load older activity (${data.activity.length} of ${activityPaging.total} loaded)`}</button></div>}
+      <div className="px-4"><Pagination page={currentPage} totalPages={Math.max(1, Math.ceil(filtered.length / 20))} onChange={setPage} /></div>
+    </SectionCard>
+  </div>;
+}

@@ -159,16 +159,16 @@ const SystemConfigView = () => {
               <Input label="Address" value={store.address} onChange={(e) => setStore({ ...store, address: e.target.value })} placeholder="Manila, Philippines" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Currency</label>
-              <select value={store.currency} onChange={(e) => setStore({ ...store, currency: e.target.value })} className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30">
+              <label htmlFor="system-currency" className="text-xs text-gray-400 mb-1.5 block">Currency</label>
+              <select id="system-currency" value={store.currency} onChange={(e) => setStore({ ...store, currency: e.target.value })} className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30">
                 <option value="PHP">PHP - Philippine Peso</option>
                 <option value="USD">USD - US Dollar</option>
                 <option value="EUR">EUR - Euro</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Timezone</label>
-              <select value={store.timezone} onChange={(e) => setStore({ ...store, timezone: e.target.value })} className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30">
+              <label htmlFor="system-timezone" className="text-xs text-gray-400 mb-1.5 block">Timezone</label>
+              <select id="system-timezone" value={store.timezone} onChange={(e) => setStore({ ...store, timezone: e.target.value })} className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30">
                 <option value="Asia/Manila">Asia/Manila (GMT+8)</option>
                 <option value="Asia/Tokyo">Asia/Tokyo (GMT+9)</option>
                 <option value="America/New_York">America/New_York (EST)</option>

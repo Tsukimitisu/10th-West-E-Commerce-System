@@ -165,10 +165,10 @@ const BackupRecoveryView = () => {
           <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
             <li>Visit your Supabase project dashboard</li>
             <li>Navigate to <span className="text-gray-700 font-medium">Database → Backups</span></li>
-            <li>Select the desired backup point to restore</li>
-            <li>Supabase automatically manages Point-in-Time Recovery (PITR)</li>
+            <li>Follow the hosting provider’s recovery process in an isolated environment first</li>
+            <li>Confirm backup retention and Point-in-Time Recovery availability for the current plan</li>
           </ol>
-          <p className="text-[10px] text-red-400 mt-2">The records above are metadata only and are not recoverable backup files. Verify Supabase backup/PITR availability directly before production.</p>
+          <p className="text-xs text-red-700 mt-2">The records above are metadata only and are not recoverable backup files. Verify Supabase backup/PITR availability directly before production.</p>
         </div>
       </div>
     </div>

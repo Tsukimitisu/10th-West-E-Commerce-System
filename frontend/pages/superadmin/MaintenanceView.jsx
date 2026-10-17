@@ -31,6 +31,10 @@ const MaintenanceView = ({ onNavigate }) => {
         </div>
         <p className="mt-4 flex items-start gap-2 text-sm text-amber-900"><AlertTriangle size={17} className="mt-0.5 shrink-0" aria-hidden="true" />Traffic is not restricted by this setting. Coordinate maintenance through the hosting platform until server enforcement is implemented and tested.</p>
       </SectionCard>
+      <SectionCard title="Cleanup & scheduler" description="Read-only operator view. This interface does not execute maintenance.">
+        <dl className="grid gap-4 text-sm sm:grid-cols-3">{[['Scheduler status', 'Not exposed by the API'], ['Last cleanup', 'Not exposed by the API'], ['Last result', 'Not exposed by the API']].map(([label, value]) => <div key={label}><dt className="text-slate-600">{label}</dt><dd className="mt-1 font-medium">{value}</dd></div>)}</dl>
+        <p className="mt-4 border-t border-slate-200 pt-4 text-xs leading-6 text-slate-600">Server cleanup covers expired reservations and sessions, idempotency keys, rate-limit records and old notification delivery records. Confirm worker execution and results in server logs.</p>
+      </SectionCard>
       <SectionCard title="Preparation" description="Read-only checks before any maintenance window.">
         <div className="divide-y divide-slate-200">
           <button type="button" onClick={() => onNavigate('backup')} className="flex min-h-12 w-full items-center gap-3 text-left text-sm text-slate-700 hover:text-orange-700"><Database size={17} aria-hidden="true" /> Verify backup metadata and recovery instructions <ArrowRight size={15} className="ml-auto" aria-hidden="true" /></button>
