@@ -38,13 +38,15 @@ Self-hosted Barlow Condensed 600/700: hero, storefront sections, selected page t
 
 ## Composition
 
-Home: one true wide banner, 500px desktop/470px phone, short headline and two actions. One controlled image overlay only. No logo billboard or cards inside the hero. Follow with motorcycle models, featured parts, best sellers, maintenance, accessories, why shop, support. Preserve real data and new/recent product discovery. Merchant banner management remains supported; inappropriate supplied imagery must not become the store's main visual identity.
+Home: the public active, ordered banner carousel IS the hero (500px desktop, about 420px phone). Consume banners and published announcements; no separate marketing hero, promotional strip or hero search. Existing banner images, title/subtitle, button_text and link_url are authoritative. No invented CTA destinations. Manual previous/next, indicators, keyboard and swipe; no forced rotation. One branded fallback only when there is no eligible managed content. No banner scheduling fields or public autoplay settings exist today; Owner follow-up is documented separately. Follow with motorcycle models, featured parts, best sellers, maintenance, accessories, why shop and support.
 
 Header: compact official logo, Home/Shop/Support, contextual search and account/cart. Mobile logo, search, cart, menu. Less-frequent customer actions remain in the drawer/account menu. Header height 73px including border.
 
 Catalog: compact unboxed filter groups, search/results/sort and product grid. Product photo roughly 55–60% of the card, Inter name, stronger price, one stock line, legitimate ratings only. No badge pile. Product details use large gallery and information columns with separators below.
 
-Auth: one centered cohesive light surface, max 460px, official logo above welcome heading, OAuth then email form. Off-white background with restrained navy framing. No split panel, giant decoration or independent layouts for recovery/verification/2FA.
+Customer account: retain the storefront header and use a top horizontal account navigation at every width. No customer sidebar or operations drawer. Phone tabs scroll independently and keep the active destination visible.
+
+Auth: compact official-logo header with Back to Store, then one centered cohesive light surface, max 460px, official logo above welcome heading, OAuth then email form. Off-white background with restrained navy framing. No split panel, giant decoration or independent layouts for recovery/verification/2FA.
 
 Cart: items about 65%, summary 35%, clear part/fitment metadata. Checkout: five sequential numbered sections with separators, sticky summary, existing calculations unchanged. Shared OrderSummary provides consistent framing without owning business calculations.
 
@@ -76,3 +78,12 @@ Super Admin: technical service-readiness matrix, runtime/session-store informati
 Component aliases under .operations-shell: --ops-control-height 44px, --ops-panel-radius 8px, --ops-section-gap 20px. Extend OperationsSidebar, OperationsTopbar, DataToolbar/FilterSelect/MobileDataCard, ServiceHealth and existing PageHeader/MetricCard/SectionCard/StatusBadge/Modal/Pagination. No extra framework or package. Contextual focus and reduced-motion rules remain inherited.
 
 Operations portals inherit OperationsDialogContext from the shell. Default-tone Modal content re-establishes workspace variables and normalization outside the DOM shell; navy drawers and customer contexts retain their original treatment.
+
+
+## Customer correction pass - October 2026
+
+Preserve the identity and all operational workspaces. Customer color balance is 65-70% neutrals, 20-25% navy framing, 8-10% orange and minimal semantic red. Reviews use white, graphite, neutral borders, subdued verified-purchase labels and warm stars. Informational payment/profile panels are neutral, not bright blue.
+
+Guest shopping uses the existing cookie-backed server cart and its authenticated merge transaction. Browser storage is a recovery snapshot only; refresh reads authoritative prices, stock and availability. Preserve checkout selection on customer sign-in and return to the intended safe customer route. Errors must not masquerade as an empty successful cart.
+
+Customer Shop excludes year filter controls, state, chips and obsolete year query parameters; product compatibility years remain intact. Header search remains the single Home search. Carousel media is contained and never distorted. Controls have 44px targets, explicit labels and visible focus. No autoplay timer exists to interrupt focus or reduced-motion preferences.
