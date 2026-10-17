@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-17T03:24:51.519999+00:00",
+  "generatedAt": "2026-10-17T08:46:52.554885+00:00",
   "title": "Design System: 10th West Moto",
   "extensions": {
     "colorMeta": {
@@ -274,7 +274,7 @@
     "typographyMeta": {
       "display": {
         "displayName": "Retail Display",
-        "purpose": "Home hero: Barlow 44px phone, 60px at 640px, 68px at 1024px."
+        "purpose": "Short managed hero headlines; 42px phone, 56px at 640px and 64px at 1024px."
       },
       "headline": {
         "displayName": "Page Headline",
@@ -480,8 +480,8 @@
       "Complete unchanged official logo on its black plate.",
       "Light neutral majority, navy framing, orange interaction and selective red.",
       "Barlow Condensed retail headings; Inter product information, controls and business data.",
-      "Photographic commerce banner and image-led merchandise cards.",
-      "One centered authentication surface and compact professional workspaces."
+      "One management-controlled hero carousel and image-led merchandise cards.",
+      "One centered authentication surface, customer top navigation and compact professional workspaces."
     ],
     "rules": [
       {
@@ -509,7 +509,7 @@
       "Do follow MASTER and the runtime semantic tokens when extending this recorded system.",
       "Do preserve the complete official logo and use shared components.",
       "Do keep light content dominant, navy framing restrained and orange actions readable with dark text.",
-      "Do preserve the single photographic home banner and the single centered auth surface.",
+      "Do preserve the single managed home carousel, customer top navigation and the single centered auth surface with Back to Store.",
       "Do use context-specific Inter and Barlow headings, Inter data and tabular financial figures.",
       "Do keep tables scrolling inside their containers, visible focus, labeled status and reduced-motion behavior.",
       "Do show real prices, stock, fitment and ratings, with honest image fallbacks.",
@@ -520,7 +520,7 @@
       "Don't crop, recolor, filter, stretch or replace the official logo.",
       "Don't reintroduce split authentication, a product-card hero or a logo billboard.",
       "Don't turn red into the main interaction color or use orange fill colors as small text on white.",
-      "Don't add gaming imagery, neon, glow, decorative glass, rainbow dashboards or heavy panel shadows.",
+      "Don't introduce gaming styling, neon, glow, decorative glass, rainbow dashboards or heavy panel shadows.",
       "Don't replace readable product names or technical headings with condensed display typography.",
       "Don't invent ratings, fitment, stock, prices or unsupported marketing claims.",
       "Don't promote test-like product records, missing or unrelated merchant photos, incidental old link/red classes, or tiny legacy labels into design-system rules.",

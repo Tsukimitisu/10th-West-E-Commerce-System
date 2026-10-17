@@ -24,9 +24,9 @@ colors:
 typography:
   display:
     fontFamily: "Barlow Condensed, sans-serif"
-    fontSize: "44px"
+    fontSize: "42px"
     fontWeight: 700
-    lineHeight: 0.98
+    lineHeight: 1.05
     letterSpacing: "-0.015em"
   headline:
     fontFamily: "Barlow Condensed, sans-serif"
@@ -138,8 +138,8 @@ Authenticated Owner, Staff and Super Admin workspaces share the established iden
 - Complete unchanged official logo on its black plate.
 - Light neutral majority, navy framing, orange interaction and selective red.
 - Barlow Condensed retail headings; Inter product information, controls and business data.
-- Photographic commerce banner and image-led merchandise cards.
-- One centered authentication surface and compact professional workspaces.
+- One management-controlled hero carousel and image-led merchandise cards.
+- One centered authentication surface, customer top navigation and compact professional workspaces.
 
 ## Colors
 
@@ -178,7 +178,7 @@ Warm orange interaction stands against clear light content and deep automotive f
 
 ### Hierarchy
 
-- **Display:** the home hero begins at the frontmatter size, becomes (60px) at (640px), then (68px) at (1024px). This compact line height is for the short retail headline.
+- **Display:** the managed home hero begins at the frontmatter size, becomes (56px) at (640px), then (64px) at (1024px), with (1.05) line height. This scale is for short retail headlines; lengthy managed copy is shortened in the hero and remains available through a full-details dialog.
 - **Headline:** authentication uses the frontmatter role. Owner/staff PageHeader uses Barlow (30px/1.15), growing to (32px) at (1024px). Cart and checkout page titles use Barlow (32px/1.15), growing to (40px) at (640px).
 - **Section:** home sections use the frontmatter role, growing to (32px) at (640px); the shared SectionHeader uses Barlow (30px/1.15). Auth secondary headings use Barlow (24px/1.2).
 - **Title:** operations sections use the Inter title role. PDP titles deliberately use Inter (30px/1.12), becoming (36px) at (1024px); Super Admin titles use Inter (28px), or (26px) below (640px). PDP secondary headings use Inter (20px), and OrderSummary uses Inter (20px/1.3).
@@ -191,9 +191,9 @@ Warm orange interaction stands against clear light content and deep automotive f
 
 Spacing uses a (4px) rhythm. Main home sections use a centered (1500px) maximum width with (16/24/32px) responsive gutters. The header uses a (1600px) maximum width; several commerce detail pages use the existing (1280px) container. Section spacing grows from (40px) to (56px) at (640px). Retail grids commonly progress from two columns to three at (768px) and four at (1024px).
 
-The public header is (72px) plus its border. Desktop navigation is compact; mobile keeps the logo, search, cart and menu. The home hero is one wide photographic banner with a (470px) minimum height, increasing to (500px) at (1024px). Its controlled dark image overlay protects left-aligned short copy and the Shop Parts / Browse by motorcycle actions. Merchant announcements remain a separate editable content area; they do not define the primary visual identity. PDP places a large gallery beside purchasing information at (768px), with information tabs and separators below. Cart uses approximately a (65/35) items-to-summary split on wide screens. Checkout uses five numbered sections with separators; OrderSummary is sticky at (96px) and remains presentation only.
+The public header is (72px) plus its border. Desktop navigation is compact; mobile keeps the logo, search, cart and menu. Home begins with one managed hero carousel, using a (420px) minimum height on phones and (500px) at (1024px). Merchant images fill the region without stretching, with a controlled navy/obsidian overlay protecting left-aligned copy. Image-free announcements use the same navy surface. No separate marketing hero, repeated promotional strip or Home search competes with this region. A single branded Shop Parts fallback appears only when no eligible managed content exists. PDP places a large gallery beside purchasing information at (768px), with information tabs and separators below. Cart uses approximately a (65/35) items-to-summary split on wide screens. Checkout uses five numbered sections with separators; OrderSummary is sticky at (96px) and remains presentation only.
 
-Authentication uses one centered white surface with a (460px) maximum width at every breakpoint. An off-white canvas and a narrow navy top border frame it. Phone padding is (28px 24px), becoming (32px) at (768px). The complete logo sits above the welcome heading, followed by provider controls and the email form where available. Recovery, verification and 2FA retain this same composition. There is no split panel.
+Authentication uses one centered white surface with a (460px) maximum width at every breakpoint. An off-white canvas and compact dark customer header frame it. Phone padding is (28px 24px), becoming (32px) at (768px). The complete logo sits above the welcome heading, followed by provider controls and the email form where available. Recovery, verification and 2FA retain this same composition. A compact dark customer header carries the official logo and Back to Store action at every width. There is no split panel.
 
 Operations use a (1600px) maximum content width and (16/20/24px) responsive padding inside a dynamic-viewport shell. The desktop sidebar is (248px), collapses to (76px), and becomes a focus-managed drawer below (1024px). Its white top bar is (64px). The content area owns vertical scrolling, and a keyboard skip link focuses that region. Shared section gaps are (20px). Phone toolbars wrap search, filters and actions into full-width rows; summary strips become two columns below (768px).
 
@@ -203,7 +203,7 @@ POS fills the dynamic viewport with search, scan, image-led product tiles and a 
 
 ## Elevation & Depth
 
-White surfaces, muted canvases and fine borders establish hierarchy. Product cards, ordinary brand cards, metrics and POS tiles have no resting shadow. Product hover changes the border without lifting. Floating menus and dialogs carry soft neutral depth. The photographic hero uses its own single controlled overlay; this is not a general license for gradients or glass panels.
+White surfaces, muted canvases and fine borders establish hierarchy. Product cards, ordinary brand cards, metrics and POS tiles have no resting shadow. Product hover changes the border without lifting. Floating menus and dialogs carry soft neutral depth. Managed image slides use one controlled readability overlay; this is not a general license for gradients or glass panels.
 
 ### Shadow Vocabulary
 
@@ -219,7 +219,7 @@ Exact shadows and motion values live in the sidecar. BrandButton changes color o
 
 Controls use Control corners, ordinary brand cards use Card corners, and dialogs use Dialog corners. Product cards and POS tiles use (8px); product action buttons and navigation rows use Compact corners. The centered auth surface has its own Auth radius. Authenticated operations sections use a scoped panel radius of (8px), with square internal summary segments and fine dividers. Small status badges are pills, without turning ordinary buttons into pills.
 
-The complete logo is contained in a black rectangular plate with (4px) corners. A narrow skewed orange edge on the hero supplies a restrained angular accent. Do not clip text, controls, product imagery or the logo into decorative shapes. Fine (1px) borders define light content groups.
+The complete logo is contained in a black rectangular plate with (4px) corners. Angular accents remain restrained and do not compete with merchant banner imagery. Do not clip text, controls, product imagery or the logo into decorative shapes. Fine (1px) borders define light content groups.
 
 ## Components
 
@@ -249,9 +249,19 @@ The global keyboard outline is (3px) with a (3px) offset: Orange Ink on light su
 
 ### Navigation
 
-The public shell is Obsidian; its active destination has a restrained orange underline. The footer is dark with grouped columns and an orange top edge. Operations use Racing Navy and (6px) navigation corners; active rows have a translucent white fill, narrow orange inset marker and warm orange SVG icon. Preserve permission-filtered destinations. Account navigation becomes a horizontally scrolling row below (1024px). Mobile navigation uses the shared dialog/drawer behavior.
+The public shell is Obsidian; its active destination has a restrained orange underline. The footer is dark with grouped columns and an orange top edge. Operations use Racing Navy and (6px) navigation corners; active rows have a translucent white fill, narrow orange inset marker and warm orange SVG icon. Preserve permission-filtered destinations. Customer account navigation is a top horizontal row at every width, using (48px) targets, a neutral baseline and an Orange Ink active underline. On phones the row scrolls independently and brings the active destination into view. Customers have no account sidebar or operations drawer; the storefront mobile menu retains its existing drawer behavior.
 
 OperationsSidebar groups destinations under restrained uppercase role/task labels. OperationsTopbar keeps page context, the actual live-update connection, existing notifications and account access compact. Its account menu uses native details/summary disclosure, closes on outside interaction or Escape, and restores summary focus on Escape. Icon controls and account actions use (44px) targets. Phone top bars retain the current page, compact official logo, navigation trigger and account control.
+
+### Managed Hero Carousel
+
+Active public banners retain management ordering, image, headline, supporting text and valid supplied CTA destination. Published announcements join the same carousel after banners, with future publication dates excluded. The current public banner model has no schedule fields or exposed autoplay settings; do not imply those controls exist. Announcement records have no image, destination or priority fields. Missing links stay non-actionable.
+
+Previous/next, slide indicators and arrow-key navigation are explicit, with horizontal swipe on touch screens. Controls use (44px) targets, Hot Orange focus and a polite current-slide count. The carousel is manual, with no timer or focus movement. Long titles and descriptions are bounded to preserve the hero height; Read full details opens the complete plain-text content in the existing focus-managed dialog. Merchant image quality remains a content concern, not a reason to substitute a different hardcoded hero.
+
+### Customer Reviews and Notifications
+
+Buyer reviews use light neutral surfaces, graphite/navy text, subtle borders and muted dates. Stars use a restrained readable warm ochre; verified-buyer labels remain small and neutral. Review submission, reactions and media retain their original behavior. Customer notifications use compact light rows and Orange Ink interaction, with explicit unread state. Neither surface borrows the operations sidebar or introduces a separate dashboard palette.
 
 ### Official Logo
 
@@ -278,7 +288,7 @@ ServiceHealth pairs service name and provider detail with Ready, Needs attention
 - **Do** follow MASTER and the runtime semantic tokens when extending this recorded system.
 - **Do** preserve the complete official logo and use shared components.
 - **Do** keep light content dominant, navy framing restrained and orange actions readable with dark text.
-- **Do** preserve the single photographic home banner and the single centered auth surface.
+- **Do** preserve the single managed home carousel, customer top navigation and the single centered auth surface with Back to Store.
 - **Do** use context-specific Inter and Barlow headings, Inter data and tabular financial figures.
 - **Do** keep tables scrolling inside their containers, visible focus, labeled status and reduced-motion behavior.
 - **Do** show real prices, stock, fitment and ratings, with honest image fallbacks.
@@ -290,7 +300,7 @@ ServiceHealth pairs service name and provider detail with Ready, Needs attention
 - **Don't** crop, recolor, filter, stretch or replace the official logo.
 - **Don't** reintroduce split authentication, a product-card hero or a logo billboard.
 - **Don't** turn red into the main interaction color or use orange fill colors as small text on white.
-- **Don't** add gaming imagery, neon, glow, decorative glass, rainbow dashboards or heavy panel shadows.
+- **Don't** introduce gaming styling, neon, glow, decorative glass, rainbow dashboards or heavy panel shadows.
 - **Don't** replace readable product names or technical headings with condensed display typography.
 - **Don't** invent ratings, fitment, stock, prices or unsupported marketing claims.
 - **Don't** promote test-like product records, missing or unrelated merchant photos, incidental old link/red classes, or tiny legacy labels into design-system rules.

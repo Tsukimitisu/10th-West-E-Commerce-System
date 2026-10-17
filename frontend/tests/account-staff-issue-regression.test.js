@@ -25,12 +25,13 @@ test('OAuth, 2FA, GCash, and phone readiness are represented truthfully', async 
   assert.match(profile, /isValidPhilippineMobile/);
 });
 
-test('customer order summary, shipping address, and payment cards use readable dark-theme text', async () => {
+test('customer order summary, shipping address and payment cards use readable light surfaces', async () => {
   const detail = await read('pages/customer/OrderDetail.jsx');
   for (const heading of ['Order Summary', 'Shipping Address', 'Payment']) assert.ok(detail.includes(heading));
-  assert.match(detail, /bg-gray-900/);
-  assert.match(detail, /text-white/);
-  assert.match(detail, /text-gray-300/);
+  assert.match(detail, /bg-white/);
+  assert.match(detail, /text-slate-900/);
+  assert.match(detail, /text-slate-600/);
+  assert.doesNotMatch(detail, /bg-gray-800|bg-gray-900/);
   assert.doesNotMatch(detail, /bg-gray-9\d\d[^"']*text-gray-9\d\d/);
 });
 
@@ -112,20 +113,13 @@ test('FAQ and return policy use accurate payment wording, readable colors, and o
   }
 });
 
-test('account sidebar and dropdown use the same names and ordering', async () => {
-  const [layout, navbar] = await Promise.all([
-    read('components/customer/AccountLayout.jsx'),
-    read('components/Navbar.jsx'),
-  ]);
-  const expected = ['My Profile', 'My Orders', 'Messages', 'Wishlist', 'Address Book', 'Returns'];
-  const desktopStart = navbar.indexOf('<Link to="/profile"', navbar.indexOf('{userMenuOpen &&'));
-  const desktopEnd = navbar.indexOf('Admin Panel', desktopStart);
-  const desktopMenu = navbar.slice(desktopStart, desktopEnd);
-  for (const source of [layout, desktopMenu]) {
-    assert.match(source, /My Profile[\s\S]*My Orders[\s\S]*Messages[\s\S]*Wishlist[\s\S]*Address Book[\s\S]*Returns/);
-    expected.forEach((label) => assert.ok(source.includes(label)));
-    assert.doesNotMatch(source, /WishList/);
+test('customer top navigation and dropdown keep all account destinations reachable', async () => {
+  const [layout, navbar] = await Promise.all([read('components/customer/AccountLayout.jsx'), read('components/Navbar.jsx')]);
+  for (const path of ['/profile', '/orders', '/messages', '/wishlist', '/addresses', '/my-returns']) {
+    assert.ok(layout.includes(path)); assert.ok(navbar.includes(path));
   }
+  assert.doesNotMatch(layout, /<aside|lg:w-64|lg:flex-row/);
+  assert.match(layout, /className="customer-account-nav" aria-label="Account navigation"/);
 });
 
 test('store staff cannot navigate to Customers and products/inventory headers are readable', async () => {

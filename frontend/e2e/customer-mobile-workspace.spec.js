@@ -1,5 +1,17 @@
 import { expect, test } from '@playwright/test';
 
+// Keep role/session smoke checks away from shared cart/order/payment writes.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/**', route => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/cart')) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) });
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && !/\/auth\/(login|logout|csrf)$/.test(path)) return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    return route.continue();
+  });
+});
+
+
 const customerEmail = process.env.E2E_CUSTOMER_EMAIL;
 const customerPassword = process.env.E2E_CUSTOMER_PASSWORD;
 

@@ -39,3 +39,6 @@ qa/premium-redesign/
 
 # Role workspace QA screenshots and read-only capture reports
 qa/operations-premium/
+
+# Customer-only QA captures and isolated fixture reports
+qa/customer-fix/

@@ -32,7 +32,7 @@ CSS variables in index.css are canonical runtime tokens. Tailwind aliases in ind
 
 ## Type and geometry
 
-Self-hosted Barlow Condensed 600/700: hero, storefront sections, selected page titles. Inter 400–700: all navigation, product information, fields, buttons, data and settings. Hero 44px phone/68px desktop; page titles 32/40px; section 28/32px; card headings 16–18px; body 15–16px; supporting 13–14px. Limit 12px to timestamps/part metadata, never ordinary paragraph copy.
+Self-hosted Barlow Condensed 600/700: hero, storefront sections, selected page titles. Inter 400–700: all navigation, product information, fields, buttons, data and settings. Managed hero 42px phone/56px tablet/64px desktop; page titles 32/40px; section 28/32px; card headings 16–18px; body 15–16px; supporting 13–14px. Limit 12px to timestamps/part metadata, never ordinary paragraph copy.
 
 4px grid. Storefront section gaps 40/56px, gutters 16/24/32px, maximum content width 1440–1500px. Operations gaps 16/24px and compact toolbars; POS gaps 12/16px. Controls 8px radius, cards 10px, dialogs 14px. Borders define content groups; shadows only for overlays/dropdowns. Native inputs 44–48px. No blanket pill controls, decorative entrance motion or excessive nested cards.
 
