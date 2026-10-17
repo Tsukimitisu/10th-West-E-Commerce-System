@@ -63,7 +63,7 @@ The existing Cloudinary uploader accepts JPG, PNG, WebP or GIF up to (5MB); an e
 
 Destination choices use real backend data:
 
-- Product search lists active storefront products with image, name, part number, model and price. Search matches product, part number or model. The list shows up to 25 matches and asks for refinement when more exist.
+- Product search lists active storefront products with image, name, part number, model and price. Search matches product, part number or the normalized model name. Online prices come from the existing catalog-pricing helpers, not a new stored price or separate pricing rule. The list shows up to 25 matches and asks for refinement when more exist.
 - Categories and active motorcycle models use actual records, generating existing Shop filters.
 - Promotions use existing global coupon campaigns and their terms. `/shop?promotion=id` opens campaign context; it does not automatically discount products or checkout. Existing checkout validation remains authoritative.
 - Storefront choices use the existing public page allowlist. External links accept safe HTTP(S) URLs and open separately. Information-only slides have no CTA destination.
