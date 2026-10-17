@@ -3,6 +3,12 @@ import { Check, Search, Star, X } from 'lucide-react';
 import { getReviewModerationQueue, moderateReview } from '../../services/api';
 import StarRating from '../../components/StarRating';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import { getCurrentAuthUser } from '../../services/authSession';
+import PageHeader from '../../components/operations/PageHeader';
+import BrandButton from '../../components/ui/BrandButton';
+import StatusBadge from '../../components/ui/StatusBadge';
+import EmptyState from '../../components/ui/EmptyState';
+import DataToolbar, { FilterSelect } from '../../components/operations/DataToolbar';
 
 const FILTERS = ['pending', 'approved', 'rejected', 'all'];
 
@@ -13,6 +19,7 @@ const statusBadgeClass = {
 };
 
 const ReviewsView = () => {
+  const isOwner = ['owner','admin'].includes(getCurrentAuthUser()?.role);
   const [reviews, setReviews] = useState([]);
   const [statusFilter, setStatusFilter] = useState('pending');
   const [search, setSearch] = useState('');
@@ -72,6 +79,23 @@ const ReviewsView = () => {
     const haystack = `${review.product_name || ''} ${review.user_name || ''} ${review.comment || ''}`.toLowerCase();
     return haystack.includes(search.trim().toLowerCase());
   });
+
+  if (isOwner) return <div className="space-y-5">
+    <PageHeader title="Reviews" description="Approve or reject customer reviews before they appear on product pages." />
+    <DataToolbar label="Review filters" search={search} onSearchChange={event => setSearch(event.target.value)} searchPlaceholder="Search product, buyer or review"><FilterSelect label="Review status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>{FILTERS.map(value => <option key={value} value={value}>{value.charAt(0).toUpperCase()+value.slice(1)}</option>)}</FilterSelect></DataToolbar>
+    {actionMessage && <p role="status" className="owner-account-feedback">{actionMessage}</p>}
+    {error && <div role="alert" className="owner-account-feedback">{error}<BrandButton variant="ghost" onClick={() => loadReviews(statusFilter)}>Retry reviews</BrandButton></div>}
+    {loading ? <div role="status" aria-label="Loading reviews" className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">Loading reviews…</div> : !error && !filteredReviews.length ? <EmptyState icon={Star} title="No reviews in this view" description="Try another review status or clear your search." action={search ? <BrandButton variant="secondary" onClick={() => setSearch('')}>Clear search</BrandButton> : undefined} /> : !error && <section className="overflow-hidden rounded-lg border border-slate-200 bg-white" aria-label="Customer review records">
+      {filteredReviews.map(review => <article className="owner-review-row" key={review.id}>
+        <div className="owner-review-layout"><div className="owner-review-product">
+          {review.product_image ? <img src={resolveProductImageUrl(review.product_image)} alt="" width="48" height="48" onError={handleProductImageError} /> : <Star size={22} className="shrink-0 text-slate-500" aria-hidden="true" />}
+          <div className="min-w-0"><h2>{review.product_name || `Product #${review.product_id}`}</h2><p className="mt-1 text-sm text-slate-600">{review.user_name || 'Customer'}</p><time className="mt-1 block text-xs text-slate-600" dateTime={review.created_at}>{new Date(review.created_at).toLocaleDateString()}</time></div>
+        </div><div className="min-w-0 space-y-3"><div className="flex flex-wrap items-center gap-3"><StarRating rating={review.rating} size={15} /><StatusBadge tone={review.review_status==='approved' ? 'success' : review.review_status==='rejected' ? 'danger' : 'warning'}>{review.review_status || 'pending'}</StatusBadge>{review.verified_purchase && <StatusBadge tone="neutral">Verified purchase</StatusBadge>}</div><p className="owner-review-copy">{review.comment}</p></div>
+          <div className="flex flex-wrap gap-2"><BrandButton size="sm" onClick={() => handleModeration(review.id,'approved')} disabled={processingId===review.id || review.review_status==='approved'}><Check size={15} aria-hidden="true" />Approve</BrandButton><BrandButton size="sm" variant="secondary" onClick={() => handleModeration(review.id,'rejected')} disabled={processingId===review.id || review.review_status==='rejected'}><X size={15} aria-hidden="true" />Reject</BrandButton></div>
+        </div>
+      </article>)}
+    </section>}
+  </div>;
 
   return (
     <div className="space-y-6">
