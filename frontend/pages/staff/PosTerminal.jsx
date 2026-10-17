@@ -400,10 +400,10 @@ const PosTerminal = () => {
         type="button"
         onClick={() => chooseProduct(product)}
         disabled={available <= 0}
-        className="pos-product-tile group flex min-h-[205px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white text-left transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-55"
+        className="pos-product-tile group flex min-h-[160px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white text-left transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-55"
       >
-        <div className="relative h-28 w-full overflow-hidden bg-slate-50">
-          <img src={resolveProductImageUrl(product.image)} alt="" onError={handleProductImageError} className="h-full w-full object-contain p-3" />
+        <div className="relative h-16 w-full overflow-hidden bg-slate-50">
+          <img src={resolveProductImageUrl(product.image)} alt="" onError={handleProductImageError} width="160" height="64" loading="lazy" className="h-full w-full object-contain p-2" />
           {product.variants?.length > 0 && <span className="absolute left-2 top-2 rounded-lg bg-slate-950/88 px-2 py-1 text-[10px] font-bold text-white">{product.variants.length} variants</span>}
           {available <= 0 && <span className="absolute inset-0 grid place-items-center bg-white/75 text-xs font-black text-red-700">OUT OF STOCK</span>}
         </div>
@@ -477,7 +477,7 @@ const PosTerminal = () => {
                   className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
                   autoFocus
                 />
-                {catalogLoading && <Loader2 size={17} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-red-600" />}
+                {catalogLoading && <Loader2 size={17} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-slate-600" />}
               </div>
               <button type="button" onClick={() => setScannerOpen(true)} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-orange-400 bg-orange-50 px-3 text-sm font-bold text-orange-800 hover:bg-orange-100 sm:px-4">
                 <ScanLine size={18} aria-hidden="true" /> <span className="sm:hidden">Scan</span><span className="hidden sm:inline">Scan with Camera</span>
@@ -504,12 +504,12 @@ const PosTerminal = () => {
             ) : products.length === 0 && !catalogLoading ? (
               <EmptyState icon={PackageOpen} title="No products found" description="Try another product name, SKU, barcode, or category." />
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{productGrid}</div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{productGrid}</div>
             )}
           </div>
         </section>
 
-        <aside className={`flex min-h-0 flex-col border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)] lg:border-l lg:border-t-0 lg:shadow-none ${saleExpanded && !isDesktop ? 'max-h-[78dvh]' : ''}`} aria-label="Current sale">
+        <aside className={`flex min-h-0 flex-col border-t border-slate-200 bg-white lg:border-l lg:border-t-0 lg:shadow-none ${saleExpanded && !isDesktop ? 'max-h-[78dvh]' : ''}`} aria-label="Current sale">
           <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 lg:h-16">
             {isDesktop ? (
               <div className="flex items-center gap-2"><ShoppingCart size={19} aria-hidden="true" /><h2 className="font-sans text-base font-semibold">Current sale</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums">{cartCount}</span></div>
@@ -533,11 +533,11 @@ const PosTerminal = () => {
             ) : (
               <div className="space-y-2">
                 {cart.map((item) => (
-                  <div key={item.key} className="rounded-xl border border-slate-200 p-3">
+                  <div key={item.key} className="pos-sale-line border-b border-slate-200 py-3">
                     <div className="flex gap-3">
-                      <img src={resolveProductImageUrl(item.variant?.image_url || item.product.image)} alt="" onError={handleProductImageError} className="h-12 w-12 rounded-lg bg-slate-100 object-cover" />
+                      <img src={resolveProductImageUrl(item.variant?.image_url || item.product.image)} alt="" onError={handleProductImageError} width="48" height="48" className="h-12 w-12 rounded-lg bg-slate-100 object-contain" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{item.product.name}</p>
+                        <p className="truncate text-sm font-semibold">{item.product.name}</p><p className="mt-1 truncate font-mono text-xs text-slate-600">{item.product.part_number || item.product.sku || 'No part number'}</p>
                         {item.variant && <p className="truncate text-xs text-slate-500">{item.variant.variant_type}: {item.variant.variant_value}</p>}
                         <p className="mt-1 text-xs font-bold">{formatCurrency(productPrice(item.product, item.variant))}</p>
                       </div>
@@ -571,10 +571,10 @@ const PosTerminal = () => {
             <dl className="space-y-2 text-sm">
               <div className="hidden justify-between text-slate-600 lg:flex"><dt>Subtotal</dt><dd>{quoteLoading ? 'Validating…' : formatCurrency(quote?.subtotal_amount || 0)}</dd></div>
               {Number(quote?.discount_amount) > 0 && <div className="flex justify-between text-emerald-700"><dt>Discount {quote?.promotion?.code && `(${quote.promotion.code})`}</dt><dd>-{formatCurrency(quote.discount_amount)}</dd></div>}
-              <div className="flex items-end justify-between lg:border-t lg:border-slate-200 lg:pt-3"><dt className="font-sans text-base font-semibold">Total</dt><dd className="font-sans text-xl font-bold tabular-nums lg:text-2xl">{formatCurrency(displayTotal)}</dd></div>
+              <div className="flex items-end justify-between lg:border-t lg:border-slate-200 lg:pt-3"><dt className="font-sans text-base font-semibold">Total</dt><dd className="font-sans text-2xl font-bold tabular-nums lg:text-3xl">{formatCurrency(displayTotal)}</dd></div>
             </dl>
             {cartError && <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{cartError}</div>}
-            <button onClick={openPayment} disabled={!cart.length || !quote?.valid || quoteLoading || Boolean(cartError)} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 lg:mt-4 lg:min-h-14 px-5 text-base font-bold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40">
+            <button onClick={openPayment} disabled={!cart.length || !quote?.valid || quoteLoading || Boolean(cartError)} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-orange-600 lg:mt-4 lg:min-h-14 px-5 text-base font-bold text-slate-950 hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40">
               <ReceiptText size={19} /> Pay {formatCurrency(displayTotal)}
             </button>
           </div>
@@ -592,12 +592,12 @@ const PosTerminal = () => {
         <div className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="variant-title">
           <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
-              <div><p className="text-xs font-bold uppercase tracking-wider text-red-600">Choose variant</p><h2 id="variant-title" className="mt-1 font-display text-lg font-bold">{selectedProduct.name}</h2></div>
+              <div><p className="text-xs font-semibold text-slate-600">Choose variant</p><h2 id="variant-title" className="mt-1 font-display text-lg font-bold">{selectedProduct.name}</h2></div>
               <button onClick={() => setSelectedProduct(null)} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100" aria-label="Close variant selector"><X size={19} /></button>
             </div>
             <div className="max-h-[60vh] space-y-2 overflow-y-auto p-4">
               {selectedProduct.variants.map((variant) => (
-                <button key={variant.id} onClick={() => addLine(selectedProduct, variant)} disabled={variant.available_stock <= 0} className="flex min-h-16 w-full items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 text-left hover:border-red-300 hover:bg-red-50/40 disabled:opacity-45">
+                <button key={variant.id} onClick={() => addLine(selectedProduct, variant)} disabled={variant.available_stock <= 0} className="flex min-h-16 w-full items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 text-left hover:border-orange-400 hover:bg-orange-50/40 disabled:opacity-45">
                   <div><p className="text-sm font-semibold">{variant.variant_type}: {variant.variant_value}</p><p className="font-mono text-xs text-slate-500">{variant.sku || 'No SKU'}</p></div>
                   <div className="text-right"><p className="text-sm font-bold">{formatCurrency(productPrice(selectedProduct, variant))}</p><p className={`text-xs ${variant.available_stock > 0 ? 'text-emerald-700' : 'text-red-700'}`}>{variant.available_stock} available</p></div>
                 </button>
@@ -614,7 +614,7 @@ const PosTerminal = () => {
         <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="recent-sales-title">
           <div className="flex h-full w-full max-w-lg flex-col bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-5">
-              <div><p className="text-xs font-bold uppercase tracking-wider text-red-600">POS history</p><h2 id="recent-sales-title" className="mt-1 font-display text-xl font-bold">Recent sales</h2></div>
+              <div><p className="text-xs font-semibold text-slate-600">POS history</p><h2 id="recent-sales-title" className="mt-1 font-display text-xl font-bold">Recent sales</h2></div>
               <button onClick={() => setRecentOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl hover:bg-slate-100" aria-label="Close recent sales"><X size={19} /></button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
