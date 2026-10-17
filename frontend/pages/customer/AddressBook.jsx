@@ -211,7 +211,7 @@ const AddressBook = () => {
     <AccountLayout>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-display font-semibold text-lg text-gray-900 flex items-center gap-2"><MapPin size={20} className="text-red-500" /> Address Book</h2>
+          <h2 className="font-display font-semibold text-lg text-gray-900 flex items-center gap-2"><MapPin size={20} className="text-slate-600" /> Address Book</h2>
           {!showForm && (
             <button onClick={openCreateForm}
               className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium rounded-lg transition-colors duration-300 ease-in-out flex items-center gap-1.5">
@@ -368,7 +368,7 @@ const AddressBook = () => {
             {addresses.map(addr => (
               <div key={addr.id} className={`bg-white rounded-xl border p-4 relative ${addr.is_default ? 'border-red-200 ring-1 ring-red-100' : 'border-slate-200'}`}>
                 {addr.is_default && (
-                  <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/10 text-red-500 text-xs font-medium rounded-full">
+                  <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 text-xs font-medium rounded-full">
                     <Star size={10} className="fill-current" /> Default
                   </span>
                 )}
@@ -383,7 +383,7 @@ const AddressBook = () => {
                   {addr.phone}
                 </p>
                 <div className="flex gap-2 mt-3 pt-3 border-t border-slate-200">
-                  <button onClick={() => startEdit(addr)} className="text-sm text-gray-700 hover:text-red-700 flex items-center gap-1 transition-colors duration-300 ease-in-out"><Edit3 size={13} /> Edit</button>
+                  <button onClick={() => startEdit(addr)} className="text-sm text-gray-700 hover:text-orange-700 flex items-center gap-1 transition-colors duration-300 ease-in-out"><Edit3 size={13} /> Edit</button>
                   <button onClick={() => handleDelete(addr)} className="text-sm text-gray-700 hover:text-red-700 flex items-center gap-1 transition-colors duration-300 ease-in-out"><Trash2 size={13} /> Delete</button>
                 </div>
               </div>

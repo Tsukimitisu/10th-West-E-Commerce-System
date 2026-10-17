@@ -439,7 +439,7 @@ const Profile = () => {
     <AccountLayout>
       <div className="space-y-6">
         <header>
-          <h1 className="font-display text-2xl font-bold text-slate-950">My profile</h1>
+          <h2 className="font-display text-2xl font-bold text-slate-950">My profile</h2>
           <p className="mt-1 text-sm text-slate-600">Manage your account, sign-in security, and privacy choices.</p>
         </header>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Account</p>
@@ -597,7 +597,7 @@ const Profile = () => {
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <h2 className="font-display font-semibold text-lg text-gray-900 mb-3 flex items-center gap-2"><Lock size={20} className="text-slate-700" /> {hasLocalPassword ? 'Change Password' : 'Set Local Password'}</h2>
           {user?.oauth_provider && (
-            <p className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-blue-800">
+            <p className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-800">
               This account uses {oauthProviderLabel} sign-in. {hasLocalPassword
                 ? `Changing this password affects only your 10th West Moto account, not your ${oauthProviderLabel} password.`
                 : `To use a local password, set one for this system account only. This will not change your ${oauthProviderLabel} password.`}
@@ -736,7 +736,7 @@ const Profile = () => {
           <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Addresses</p>
           <h2 id="profile-addresses-heading" className="mt-2 font-display text-lg font-semibold text-slate-950">Saved delivery addresses</h2>
           <p className="mt-1 text-sm text-slate-600">Choose or update the addresses used at checkout.</p>
-          <Link to="/addresses" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-red-700 underline underline-offset-2">Manage saved addresses</Link>
+          <Link to="/addresses" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-orange-700 underline underline-offset-2">Manage saved addresses</Link>
         </section>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Privacy & account</p>
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
@@ -749,7 +749,7 @@ const Profile = () => {
             <li>Downloaded as a JSON file you can save or transfer</li>
           </ul>
           <button onClick={handleExportData} disabled={exportLoading}
-            className="px-4 py-2 text-sm text-orange-600 hover:bg-red-500/10 border border-red-300 rounded-lg transition-colors duration-300 ease-in-out flex items-center gap-2 disabled:opacity-50">
+            className="px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 border border-slate-300 rounded-lg transition-colors duration-300 ease-in-out flex items-center gap-2 disabled:opacity-50">
             {exportLoading ? <div className="w-4 h-4 border-2 border-red-300 border-t-orange-600 rounded-full animate-spin" /> : <Download size={14} />}
             {exportLoading ? 'Preparing...' : 'Download My Data'}
           </button>

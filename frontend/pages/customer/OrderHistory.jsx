@@ -8,9 +8,9 @@ import { handleProductImageError, resolveProductImageUrl } from '../../utils/pro
 
 const statusConfig = {
   pending: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' },
-  paid: { icon: CheckCircle2, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
+  paid: { icon: CheckCircle2, color: 'text-slate-600', bg: 'bg-slate-50 border-slate-200' },
   preparing: { icon: Package, color: 'text-orange-600', bg: 'bg-red-500/10 border-red-200' },
-  processing: { icon: Package, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
+  processing: { icon: Package, color: 'text-slate-600', bg: 'bg-slate-50 border-slate-200' },
   shipped: { icon: Truck, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' },
   delivered: { icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
   completed: { icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
@@ -57,7 +57,7 @@ const OrderHistory = () => {
     <AccountLayout>
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h1 className="font-display font-semibold text-3xl text-gray-900 flex items-center gap-2"><Package size={20} className="text-orange-700" /> My Orders</h1>
+          <h2 className="font-display font-semibold text-3xl text-gray-900 flex items-center gap-2"><Package size={20} className="text-orange-700" /> My Orders</h2>
         </div>
 
         {/* Search Input */}

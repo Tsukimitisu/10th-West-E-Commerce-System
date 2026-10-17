@@ -32,7 +32,7 @@ const MyReturns = () => {
   return (
     <AccountLayout>
       <div className="space-y-4">
-        <h2 className="font-display font-semibold text-lg text-gray-900 flex items-center gap-2"><RotateCcw size={20} className="text-red-500" /> My Returns</h2>
+        <h2 className="font-display font-semibold text-lg text-gray-900 flex items-center gap-2"><RotateCcw size={20} className="text-slate-600" /> My Returns</h2>
 
         {loading ? (
           <div className="space-y-3">

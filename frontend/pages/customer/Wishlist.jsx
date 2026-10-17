@@ -124,7 +124,7 @@ const Wishlist = () => {
     <AccountLayout>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-display font-semibold text-lg text-gray-900 flex items-center gap-2"><Heart size={20} className="text-red-500" /> Wishlist ({items.length})</h2>
+          <h2 className="font-display font-semibold text-lg text-gray-900 flex items-center gap-2"><Heart size={20} className="text-slate-600" /> Wishlist ({items.length})</h2>
           {items.length > 0 && (
             <Link to="/shop" className="text-sm text-red-600 hover:text-red-700 font-medium">Continue Shopping</Link>
           )}
