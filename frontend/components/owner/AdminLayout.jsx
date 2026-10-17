@@ -154,8 +154,12 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
     { id: 'notifications', label: 'Notifications', icon: Bell, group: 'Communication', selfService: true },
     { id: 'account', label: 'Account & security', icon: UserCog, group: 'Account', selfService: true },
   ] : [];
-  const navItems = [...createNavItems(badges), ...staffSelfService].filter((item) => (
-    (privileged ? ADMIN_NAV.includes(item.id) : (item.id === 'dashboard' || item.selfService || Boolean(item.permission)))
+  const ownerSelfService = privileged ? [
+    { id: 'notifications', label: 'Notifications', icon: Bell, group: 'Communication', selfService: true },
+    { id: 'account', label: 'Account & Security', icon: UserCog, group: 'Account', selfService: true },
+  ] : [];
+  const navItems = [...createNavItems(badges), ...staffSelfService, ...ownerSelfService].filter((item) => (
+    (privileged ? ADMIN_NAV.includes(item.id) || item.selfService : (item.id === 'dashboard' || item.selfService || Boolean(item.permission)))
     && (!item.permission || privileged || permissions?.has(item.permission))
     && !(user?.role === 'store_staff' && item.id === 'customers')
   ));
@@ -200,7 +204,10 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
 
   const presentedNav = user?.role === 'store_staff' ? navItems.map(item => ({ ...item, group: item.id === 'dashboard' ? 'Workspace' : ['orders', 'returns'].includes(item.id) ? 'Fulfillment' : ['inventory', 'product-items', 'storefront'].includes(item.id) ? 'Parts counter' : ['chat', 'notifications'].includes(item.id) ? 'Communication' : item.id === 'account' ? 'Account' : 'Tools' })) : navItems;
 
-  const currentTitle = navItems.find((item) => item.id === activeView)?.label || 'Operations';
+  const ownerOrder = ['dashboard','orders','pos','returns','customers','inventory','product-items','storefront','banners','promotions','reviews','content','reports','chat','notifications','staff','account'];
+  const ownerGroups = { dashboard: 'Overview', orders: 'Sales', pos: 'Sales', returns: 'Sales', customers: 'Sales', inventory: 'Catalog', 'product-items': 'Catalog', storefront: 'Catalog', banners: 'Marketing', promotions: 'Marketing', reviews: 'Marketing', content: 'Marketing', reports: 'Insights', chat: 'Communication', notifications: 'Communication', staff: 'Account', account: 'Account' };
+  const workspaceNav = privileged ? navItems.map(item => ({ ...item, group: ownerGroups[item.id] || item.group, ...(item.id === 'banners' ? { label: 'Hero Carousel', route: '/admin/hero-carousel' } : {}) })).sort((a,b) => ownerOrder.indexOf(a.id) - ownerOrder.indexOf(b.id)) : presentedNav;
+  const currentTitle = workspaceNav.find((item) => item.id === activeView)?.label || 'Operations';
   const isStaff = user?.role === 'store_staff';
 
   const notificationActions = (
@@ -269,7 +276,7 @@ const AdminLayout = ({ activeView, onNavigate, onLogout: parentLogout, badges = 
   return (
     <OperationsShell
       activeId={activeView}
-      navItems={presentedNav}
+      navItems={workspaceNav}
       onNavigate={handleNavigate}
       onLogout={handleLogout}
       user={user}

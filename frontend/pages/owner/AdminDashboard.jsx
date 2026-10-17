@@ -18,6 +18,8 @@ import StorefrontListingsView from './StorefrontListingsView';
 import InventoryProductItemsView from './InventoryProductItemsView';
 const StaffAccountView = lazy(() => import('../staff/StaffAccountView'));
 const StaffNotificationsView = lazy(() => import('../staff/StaffNotificationsView'));
+const OwnerAccountView = lazy(() => import('./OwnerAccountView'));
+const WorkspaceNotifications = lazy(() => import('../../components/operations/WorkspaceNotifications'));
 
 const AdminDashboard = ({ user, onLogout }) => {
   const canAccessAdmin = ['owner', 'store_staff', 'admin'].includes(user?.role);
@@ -27,12 +29,14 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const isStaff = user?.role === 'store_staff';
   const segment = location.pathname.split('/').filter(Boolean)[1] || 'dashboard';
-  const aliases = { shipments: 'orders', waybills: 'orders', refunds: 'returns', settings: 'content' };
+  const aliases = { shipments: 'orders', waybills: 'orders', refunds: 'returns', settings: 'content', 'hero-carousel': 'banners' };
   const activeView = segment === 'inventory' && location.pathname.endsWith('/inventory/product-items')
     ? 'product-items' : aliases[segment] || segment;
   const basePath = isStaff ? '/staff' : '/admin';
   const setActiveView = (view) => navigate(view === 'pos' ? '/pos' : view === 'product-items'
-    ? `${basePath}/inventory/product-items` : `${basePath}/${view}`);
+    ? `${basePath}/inventory/product-items` : !isStaff && view === 'banners' ? '/admin/hero-carousel' : `${basePath}/${view}`);
+
+  if (!isStaff && segment === 'banners') return <Navigate to="/admin/hero-carousel" replace />;
 
   if (['products', 'categories', 'variants'].includes(segment)) {
     return (
@@ -54,7 +58,10 @@ const AdminDashboard = ({ user, onLogout }) => {
     ...(isStaff ? {
       account: <Suspense fallback={<p role="status">Loading staff account…</p>}><StaffAccountView user={user} /></Suspense>,
       notifications: <Suspense fallback={<p role="status">Loading notifications…</p>}><StaffNotificationsView onNavigate={setActiveView} /></Suspense>,
-    } : {}),
+    } : {
+      account: <Suspense fallback={<p role="status">Loading Owner account…</p>}><OwnerAccountView user={user} /></Suspense>,
+      notifications: <Suspense fallback={<p role="status">Loading notifications…</p>}><WorkspaceNotifications variant="owner" onNavigate={setActiveView} /></Suspense>,
+    }),
   };
   if (isStaff && activeView === 'customers') return <Navigate to="/staff/dashboard" replace />;
   if (!views[activeView]) return <Navigate to={`${basePath}/dashboard`} replace />;

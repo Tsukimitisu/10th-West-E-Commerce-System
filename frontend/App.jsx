@@ -259,10 +259,10 @@ const App = () => {
       clearLegacyAuthStorage();
       await syncUserWithProfileRefresh();
 
-      // A superseded effect must not finish Staff startup before the current
+      // A superseded effect must not finish operations startup before the current
       // profile check. That race briefly rendered a signed-out route guard and
-      // lost Staff deep links. Other role startup behavior stays unchanged.
-      if (!isMounted && getCurrentAuthUser()?.role === Role.STORE_STAFF) return undefined;
+      // lost Staff and Owner deep links. Customer/System startup stays unchanged.
+      if (!isMounted && [Role.STORE_STAFF, Role.OWNER, Role.ADMIN].includes(getCurrentAuthUser()?.role)) return undefined;
 
       const handleAuthChanged = () => {
         if (isMounted) setUser(getCurrentAuthUser());

@@ -7,6 +7,7 @@ import { workspaceRole } from './OperationsSidebar';
 export default function OperationsTopbar({ title, contextLabel, user, connected, collapsed, onCollapse, onOpenNavigation, onLogout, actions }) {
   const menuRef = useRef(null);
   const isStaff = user?.role === 'store_staff';
+  const isOwner = ['owner', 'admin'].includes(user?.role);
   useEffect(() => {
     const close = event => {
       const menu = menuRef.current;
@@ -34,9 +35,9 @@ export default function OperationsTopbar({ title, contextLabel, user, connected,
         <summary aria-label="Open profile menu"><span className="ops-user-avatar">{user?.name?.charAt(0)?.toUpperCase() || 'U'}</span><span className="ops-user-name">{user?.name || 'Team member'}</span><ChevronDown size={14} aria-hidden="true" /></summary>
         <div className="ops-user-popover">
           <p>{user?.name || 'Team member'}<span>{workspaceRole(user?.role)}</span></p>
-          <Link to={isStaff ? '/staff/account' : '/profile'} onClick={() => { menuRef.current.open = false; }}>Profile</Link>
-          <Link to={isStaff ? '/staff/account#security' : '/profile?tab=security'} onClick={() => { menuRef.current.open = false; }}>Account & security</Link>
-          <button type="button" onClick={() => { menuRef.current.open = false; onLogout(isStaff ? menuRef.current.querySelector('summary') : undefined); }}>Sign out</button>
+          <Link to={isStaff ? '/staff/account' : isOwner ? '/admin/account' : '/profile'} onClick={() => { menuRef.current.open = false; }}>Profile</Link>
+          <Link to={isStaff ? '/staff/account#security' : isOwner ? '/admin/account#security' : '/profile?tab=security'} onClick={() => { menuRef.current.open = false; }}>Account & security</Link>
+          <button type="button" onClick={() => { menuRef.current.open = false; onLogout(isStaff || isOwner ? menuRef.current.querySelector('summary') : undefined); }}>Sign out</button>
         </div>
       </details>
     </div>

@@ -29,7 +29,7 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentati
     if (!isOpen) return undefined;
     const previouslyFocused = document.activeElement;
     const previousOverflow = document.body.style.overflow;
-    const releaseStaffScroll = operations === 'staff' ? lockStaffDialogScroll() : null;
+    const releaseStaffScroll = operations === 'staff' || operations === 'owner' ? lockStaffDialogScroll() : null;
     if (!releaseStaffScroll) document.body.style.overflow = 'hidden';
     // Respect a child that already took focus (e.g. an autoFocus field); otherwise focus the dialog.
     if (!panelRef.current?.contains(document.activeElement)) panelRef.current?.focus({ preventScroll: true });
@@ -89,7 +89,7 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentati
             <X size={18} />
           </button>
         </div>
-        <div className={`overscroll-contain flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] ${operations && tone === 'default' ? 'operations-dialog-content operations-content' : ''} ${operations === 'staff' && tone === 'default' ? 'staff-dialog-content' : ''}`}>{children}</div>
+        <div className={`overscroll-contain flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] ${operations && tone === 'default' ? 'operations-dialog-content operations-content' : ''} ${operations === 'staff' && tone === 'default' ? 'staff-dialog-content' : ''} ${operations === 'owner' && tone === 'default' ? 'owner-dialog-content' : ''}`}>{children}</div>
       </div>
     </div>,
     document.body
