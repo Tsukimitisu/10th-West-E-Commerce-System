@@ -70,4 +70,3 @@ gsap.from(el, { opacity: 0, y: 12, duration: 0.35, ease: 'power1.out', scrollTri
 - [ ] Focus states visible for keyboard nav
 - [ ] prefers-reduced-motion respected
 - [ ] Responsive: 375px, 768px, 1024px, 1440px
-

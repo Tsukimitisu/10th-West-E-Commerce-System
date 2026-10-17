@@ -131,6 +131,8 @@ A serious motorcycle retailer with merchandise and readable tasks at the center.
 
 Retail gives photography and part identification room to work. Store operations use the same identity with denser Inter text, compact tools and neutral tables. This records the implemented premium world, not the discarded treatment. [design-system/MASTER.md](design-system/MASTER.md) remains the primary authority; [PRODUCT.md](PRODUCT.md) supplies durable product constraints. Runtime values come from `frontend/index.css`, `frontend/styles/*.css` and Tailwind aliases in `frontend/index.html`. The user's pinned composition is the visual reference; no generated composition was approved.
 
+Authenticated Owner, Staff and Super Admin workspaces share the established identity with role-specific information hierarchy. Neutral data surfaces dominate, navy frames navigation, and orange identifies the next action. This operations extension preserves the storefront, authentication and customer-account directions above.
+
 **Key Characteristics:**
 
 - Complete unchanged official logo on its black plate.
@@ -177,7 +179,7 @@ Warm orange interaction stands against clear light content and deep automotive f
 ### Hierarchy
 
 - **Display:** the home hero begins at the frontmatter size, becomes (60px) at (640px), then (68px) at (1024px). This compact line height is for the short retail headline.
-- **Headline:** authentication uses the frontmatter role. Owner/staff PageHeader uses (32px), growing to (36px) at (1024px). Cart and checkout page titles use Barlow (32px/1.15), growing to (40px) at (640px).
+- **Headline:** authentication uses the frontmatter role. Owner/staff PageHeader uses Barlow (30px/1.15), growing to (32px) at (1024px). Cart and checkout page titles use Barlow (32px/1.15), growing to (40px) at (640px).
 - **Section:** home sections use the frontmatter role, growing to (32px) at (640px); the shared SectionHeader uses Barlow (30px/1.15). Auth secondary headings use Barlow (24px/1.2).
 - **Title:** operations sections use the Inter title role. PDP titles deliberately use Inter (30px/1.12), becoming (36px) at (1024px); Super Admin titles use Inter (28px), or (26px) below (640px). PDP secondary headings use Inter (20px), and OrderSummary uses Inter (20px/1.3).
 - **Body:** the frontmatter role describes the global baseline. Operations and much supporting retail copy use (14px). Product names use Inter (15px/1.45), becoming (16px) at (640px); product prices use (19px, 700). Operations table cells and headers use (13px). RichText uses (1.75) line height.
@@ -193,7 +195,9 @@ The public header is (72px) plus its border. Desktop navigation is compact; mobi
 
 Authentication uses one centered white surface with a (460px) maximum width at every breakpoint. An off-white canvas and a narrow navy top border frame it. Phone padding is (28px 24px), becoming (32px) at (768px). The complete logo sits above the welcome heading, followed by provider controls and the email form where available. Recovery, verification and 2FA retain this same composition. There is no split panel.
 
-Operations use a (1600px) maximum content width and (16/20/24px) responsive padding inside a dynamic-viewport shell. The desktop sidebar is (260px), collapses to (76px), and becomes a focus-managed drawer below (1024px). Its white top bar is (64px). The content area owns vertical scrolling. Owner dashboard groups primary sales with an action queue, then charts, inventory and orders. Staff shares the shell and only receives authorized destinations. Super Admin is a restrained technical workspace, without retail photography.
+Operations use a (1600px) maximum content width and (16/20/24px) responsive padding inside a dynamic-viewport shell. The desktop sidebar is (248px), collapses to (76px), and becomes a focus-managed drawer below (1024px). Its white top bar is (64px). The content area owns vertical scrolling, and a keyboard skip link focuses that region. Shared section gaps are (20px). Phone toolbars wrap search, filters and actions into full-width rows; summary strips become two columns below (768px).
+
+Owner gives sales a dominant Inter figure beside the action queue, followed by revenue, stock and orders. Staff prioritizes order processing, a worklist and stock picking locations, with only permitted shortcuts. Super Admin uses Inter titles and a technical hierarchy of readiness, runtime, security signals and events. Role navigation groups existing authorized destinations; Product Items remains available to Super Admin. These role compositions are scoped to authenticated workspaces.
 
 POS fills the dynamic viewport with search, scan, image-led product tiles and a dense cart. Its navy header is (72px), reducing to (64px) below (640px); the large orange payment action remains prominent. General operations tables retain (680px) minimum width, or (620px) on phones, inside horizontal scroll regions. The inventory stock table intentionally retains (1080px) for its columns. Keep that overflow inside the table container, never at page level.
 
@@ -213,7 +217,7 @@ Exact shadows and motion values live in the sidecar. BrandButton changes color o
 
 ## Shapes
 
-Controls use Control corners, ordinary brand cards use Card corners, and dialogs use Dialog corners. Product cards and POS tiles use (8px); product action buttons and navigation rows use Compact corners. The centered auth surface has its own Auth radius. Some retained SectionCard/FilterBar wrappers still use (12px) utility corners; this is an existing component detail, not a new global radius. Small status badges are pills, without turning ordinary buttons into pills.
+Controls use Control corners, ordinary brand cards use Card corners, and dialogs use Dialog corners. Product cards and POS tiles use (8px); product action buttons and navigation rows use Compact corners. The centered auth surface has its own Auth radius. Authenticated operations sections use a scoped panel radius of (8px), with square internal summary segments and fine dividers. Small status badges are pills, without turning ordinary buttons into pills.
 
 The complete logo is contained in a black rectangular plate with (4px) corners. A narrow skewed orange edge on the hero supplies a restrained angular accent. Do not clip text, controls, product imagery or the logo into decorative shapes. Fine (1px) borders define light content groups.
 
@@ -233,6 +237,8 @@ StatusBadge uses compact semibold Inter, a thin tonal border, pill corners and a
 
 Reuse BrandPrimitives Card, SectionCard and MetricCard. Light surfaces and borders define groups; content determines padding. Shared operations sections pair a compact header with (16/20px) padding. Metrics stay neutral and flat; primary sales receive visual priority rather than making every metric equally prominent.
 
+Operations management summaries use one flat divided strip. Avoid repeated decorative metric icons. Inventory uses monospace part and box identifiers; structured phone records pair a clear name/reference with status, supporting fields and practical actions. Reuse MobileDataCard rather than compressing desktop columns into unreadable phone tables.
+
 ProductCard uses a square contained photograph, two-line Inter name, optional part number, one stock line, a strong price and one purchase action. Product photo space should carry the card's visual weight. Its list layout changes at (640px). Sale and rating treatments only appear when supported by real data. Use the established product-image fallback for unavailable images; never disguise content defects as a photography direction.
 
 ### Inputs / Fields
@@ -245,6 +251,8 @@ The global keyboard outline is (3px) with a (3px) offset: Orange Ink on light su
 
 The public shell is Obsidian; its active destination has a restrained orange underline. The footer is dark with grouped columns and an orange top edge. Operations use Racing Navy and (6px) navigation corners; active rows have a translucent white fill, narrow orange inset marker and warm orange SVG icon. Preserve permission-filtered destinations. Account navigation becomes a horizontally scrolling row below (1024px). Mobile navigation uses the shared dialog/drawer behavior.
 
+OperationsSidebar groups destinations under restrained uppercase role/task labels. OperationsTopbar keeps page context, the actual live-update connection, existing notifications and account access compact. Its account menu uses native details/summary disclosure, closes on outside interaction or Escape, and restores summary focus on Escape. Icon controls and account actions use (44px) targets. Phone top bars retain the current page, compact official logo, navigation trigger and account control.
+
 ### Official Logo
 
 BrandLogo renders `frontend/public/brand/10th-west-logo.png` complete and unchanged. BrandMark delegates to it. The image uses contain without cropping, filtering, recoloring or stretching. The header plate is (52x54px), compact mobile (48x50px), auth (80x84px); contextual plate sizing does not authorize changing the asset. The companion name can hide when space is tight while the actual logo remains.
@@ -254,6 +262,14 @@ BrandLogo renders `frontend/public/brand/10th-west-logo.png` complete and unchan
 DataTable uses a white bordered scroll container, subdued sticky headers, tabular figures and (12px 16px) cells; inventory has a denser (10px 8px) cell override. Existing scoped operations styles normalize older utility classes. Extend shared components rather than copying those legacy classes into new screens.
 
 Modal owns focus trapping, Escape dismissal, scroll locking and opener restoration. Drawer/sheet variants reuse that behavior; phone dialogs are bottom-aligned with bounded height. OrderSummary provides consistent light framing and a sticky desktop position, while callers retain prices, shipping and payment state. Stored descriptions and policy HTML always render through RichText; previews use richTextToPlainText.
+
+Default-tone dialogs opened inside OperationsShell inherit the light operations presentation through OperationsDialogContext, including when portaled outside the shell. The context scopes legacy color normalization and control sizing to those dialog contents. Navy navigation drawers and customer dialogs keep their existing presentation.
+
+### Operations Data Controls and Technical State
+
+DataToolbar groups search, explicitly labeled FilterSelect controls and related actions. Operations fields and practical touch controls are at least (44px) high. Inventory keeps stock/model/search/sort/scan controls together; orders expose payment, status and date filters. Desktop audit records use a dense (1000px) minimum table within its scroll region, with mobile cards below (768px). Actor, action, entity, result and date filters retain every available log category. Full event details use native disclosure; older activity loads through the existing paged response envelope. Absent entity/result fields remain explicitly unrecorded.
+
+ServiceHealth pairs service name and provider detail with Ready, Needs attention or Unknown wording. Configuration readiness does not certify a completed transaction; unreported integrations stay Unknown. Maintenance shows unavailable scheduler/history explicitly, and backup metadata does not imply a recoverable backup or guaranteed point-in-time recovery. User dialogs retain native security controls and explicit role-change confirmation. Content previews use RichText and show local unsaved state.
 
 ## Do's and Don'ts
 
@@ -266,6 +282,8 @@ Modal owns focus trapping, Escape dismissal, scroll locking and opener restorati
 - **Do** use context-specific Inter and Barlow headings, Inter data and tabular financial figures.
 - **Do** keep tables scrolling inside their containers, visible focus, labeled status and reduced-motion behavior.
 - **Do** show real prices, stock, fitment and ratings, with honest image fallbacks.
+- **Do** extend the shared operations shell, toolbar, mobile record, readiness and dialog components for authenticated role workspaces.
+- **Do** preserve role-specific hierarchy, explicit unknown states and contextual dialog styling across portals.
 
 ### Don't:
 
@@ -276,3 +294,4 @@ Modal owns focus trapping, Escape dismissal, scroll locking and opener restorati
 - **Don't** replace readable product names or technical headings with condensed display typography.
 - **Don't** invent ratings, fitment, stock, prices or unsupported marketing claims.
 - **Don't** promote test-like product records, missing or unrelated merchant photos, incidental old link/red classes, or tiny legacy labels into design-system rules.
+- **Don't** infer audit outcomes, transaction success or recovery capability from missing fields or configuration readiness.
