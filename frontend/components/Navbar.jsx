@@ -588,28 +588,28 @@ const Navbar = ({ user, onLogout }) => {
                     )}
                   </button>
                   {notifOpen && (
-                    <div className="fixed left-4 right-4 top-[73px] z-50 max-h-[calc(100dvh-5rem)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0f141e] shadow-[0_18px_45px_rgba(0,0,0,0.45)] animate-fade-in sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem] sm:max-w-[calc(100vw-2rem)]">
-                      <div className="px-4 py-3.5 border-b border-white/10 bg-[#111C3D]">
+                    <div className="customer-notification-panel fixed left-4 right-4 top-[73px] z-50 max-h-[calc(100dvh-5rem)] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg animate-fade-in sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem] sm:max-w-[calc(100vw-2rem)]">
+                      <div className="px-4 py-3.5 border-b border-slate-200 bg-slate-50">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="font-bold text-white text-sm">Notifications</h3>
+                          <h3 className="font-bold text-slate-900 text-sm">Notifications</h3>
                           {unreadCount > 0 && (
-                            <button onClick={handleMarkAllRead} className="text-xs text-slate-300 hover:text-red-300 font-semibold transition-colors">
+                            <button onClick={handleMarkAllRead} className="text-xs text-slate-600 hover:text-orange-800 font-semibold transition-colors">
                               Mark all read
                             </button>
                           )}
                         </div>
-                        <p className="text-xs text-slate-400 mt-1">
+                        <p className="text-xs text-slate-600 mt-1">
                           {unreadCount > 0 ? `${unreadCount} unread update${unreadCount > 1 ? 's' : ''}` : 'You are all caught up'}
                         </p>
                       </div>
 
                       <div className="max-h-[min(26rem,calc(100dvh-10rem))] overflow-x-hidden overflow-y-auto">
                         {notifLoading ? (
-                          <div role="status" className="p-9 text-center text-sm text-slate-400">Loading notifications...</div>
+                          <div role="status" className="p-9 text-center text-sm text-slate-600">Loading notifications...</div>
                         ) : notifError ? (
-                          <div role="alert" className="space-y-3 p-6 text-center text-sm text-slate-300"><p>Unable to load notifications.</p><button type="button" onClick={() => { setNotifLoading(true); refreshNotifications(); }} className="rounded-lg border border-white/20 px-3 py-2 font-semibold text-white">Try again</button></div>
+                          <div role="alert" className="space-y-3 p-6 text-center text-sm text-slate-600"><p>Unable to load notifications.</p><button type="button" onClick={() => { setNotifLoading(true); refreshNotifications(); }} className="rounded-lg border border-slate-300 px-3 py-2 font-semibold text-slate-900">Try again</button></div>
                         ) : notifications.length === 0 ? (
-                          <div className="p-9 text-center text-slate-400 text-sm">
+                          <div className="p-9 text-center text-slate-600 text-sm">
                             <Bell size={24} className="mx-auto mb-2 opacity-40" />
                             No notifications yet
                           </div>
@@ -624,14 +624,14 @@ const Navbar = ({ user, onLogout }) => {
                               <button
                                 key={`${n.id || n.title}-${i}`}
                                 onClick={() => handleNotificationClick(n)}
-                                className={`w-full min-w-0 max-w-full break-words px-4 py-3.5 text-left transition-colors border-b border-white/10 last:border-b-0 hover:bg-white/5 [overflow-wrap:anywhere] ${!n.is_read ? 'bg-white/5' : 'bg-transparent'}`}
+                                className={`w-full min-w-0 max-w-full break-words px-4 py-3.5 text-left transition-colors border-b border-slate-200 last:border-b-0 hover:bg-slate-50 [overflow-wrap:anywhere] ${!n.is_read ? 'bg-slate-50' : 'bg-transparent'}`}
                               >
                                 <div className="flex items-start gap-3.5">
                                   <div className="mt-0.5 shrink-0">
                                     {n.thumbnail_url ? (
-                                      <img src={resolveProductImageUrl(n.thumbnail_url)} alt="" onError={handleProductImageError} className="h-11 w-11 rounded-xl object-cover bg-[#0b111a] border border-white/10 shadow-sm" />
+                                      <img src={resolveProductImageUrl(n.thumbnail_url)} alt="" onError={handleProductImageError} className="h-11 w-11 rounded-xl object-cover bg-slate-100 border border-slate-200 shadow-sm" />
                                     ) : (
-                                      <div className="h-10 w-10 rounded-xl bg-white/5 text-slate-300 border border-white/10 flex items-center justify-center">
+                                      <div className="h-10 w-10 rounded-xl bg-slate-50 text-slate-600 border border-slate-200 flex items-center justify-center">
                                         {getNotificationIcon(n)}
                                       </div>
                                     )}
@@ -640,14 +640,14 @@ const Navbar = ({ user, onLogout }) => {
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-start gap-2">
                                       <div className="min-w-0 flex-1">
-                                        <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-white' : 'font-medium text-slate-100'}`}>{title}</p>
-                                        {summary && <p className="mt-1 text-xs leading-5 text-slate-300 line-clamp-2">{summary}</p>}
-                                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                                          <span className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 font-medium text-slate-300">{typeLabel}</span>
+                                        <p className={`text-sm leading-5 ${!n.is_read ? 'font-semibold text-slate-900' : 'font-medium text-slate-800'}`}>{title}</p>
+                                        {summary && <p className="mt-1 text-xs leading-5 text-slate-600 line-clamp-2">{summary}</p>}
+                                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                                          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-600">{typeLabel}</span>
                                           <span>{formatNotificationTime(n)}</span>
                                         </div>
                                       </div>
-                                      {!n.is_read && <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" />}
+                                      {!n.is_read && <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-orange-600" />}
                                     </div>
                                   </div>
                                 </div>

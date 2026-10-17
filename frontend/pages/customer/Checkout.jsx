@@ -1029,9 +1029,9 @@ const Checkout = () => {
                     aria-pressed={paymentMethod === 'gcash'}
                     disabled={gcashAvailability.loading || !gcashAvailability.available}
                     aria-describedby="gcash-availability-message"
-                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'gcash' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'} disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:opacity-80`}
+                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'gcash' ? 'border-slate-500 bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300'} disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:opacity-80`}
                   >
-                    <Shield size={18} className={paymentMethod === 'gcash' ? 'text-blue-700' : 'text-slate-500'} />
+                    <Shield size={18} className={paymentMethod === 'gcash' ? 'text-slate-700' : 'text-slate-500'} />
                     <span>
                       <span className="block text-sm font-semibold text-gray-900">GCash via PayMongo</span>
                       <span className="block text-xs text-gray-600">
@@ -1050,8 +1050,8 @@ const Checkout = () => {
                   </p>
                 )}
                 {paymentMethod === 'gcash' && (
-                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
-                    <p className="mb-3 text-xs text-blue-700">After placing your order, you will be redirected to PayMongo to complete secure GCash payment.</p>
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="mb-3 text-xs text-slate-700">After placing your order, you will be redirected to PayMongo to complete secure GCash payment.</p>
                     <Input label="GCash Mobile Number" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: digitsOnly(v) }))} inputMode="numeric" pattern="[0-9]*" placeholder="09XX XXX XXXX" />
                   </div>
                 )}
@@ -1080,6 +1080,7 @@ const Checkout = () => {
                               -
                             </button>
                             <input 
+                              aria-label={`Quantity of ${item.product.name}`}
                               type="text" 
                               inputMode="numeric" 
                               pattern="[0-9]*"
@@ -1132,6 +1133,7 @@ const Checkout = () => {
                                 -
                               </button>
                               <input 
+                                aria-label={`Quantity of ${item.product.name}`}
                                 type="text" 
                                 inputMode="numeric" 
                                 pattern="[0-9]*"

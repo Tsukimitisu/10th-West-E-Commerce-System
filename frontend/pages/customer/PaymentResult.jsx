@@ -21,7 +21,7 @@ const getCopy = (paymentStatus, queryStatus) => {
   }
 
   return {
-    icon: <Clock size={42} className="text-blue-600" />,
+    icon: <Clock size={42} className="text-slate-600" />,
     title: 'Payment is being verified',
     body: 'Please check your order status. PayMongo is still confirming your payment.',
   };

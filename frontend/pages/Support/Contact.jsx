@@ -27,7 +27,7 @@ const Contact = () => {
         <p className="text-gray-600 text-sm mb-6">We've received your message and will get back to you within 24 hours.</p>
         <button
           onClick={() => { setSent(false); setForm({ name: '', email: '', subject: '', message: '', category: 'general' }); }}
-          className="text-sm text-red-600 hover:text-red-700 font-medium"
+          className="text-sm text-orange-700 hover:text-orange-700 font-medium"
         >
           Send another message
         </button>
@@ -41,7 +41,7 @@ const Contact = () => {
         <div className="text-center mb-10">
           <h1 className="font-display font-bold text-3xl md:text-4xl text-gray-900 mb-2">Contact Us</h1>
           <p className="text-gray-600">Have a question or need help? We're here for you.</p>
-          <div className="h-1 w-20 bg-red-600 mt-4 mx-auto skew-x-[-20deg]"></div>
+          <div className="h-1 w-20 bg-orange-500 mt-4 mx-auto skew-x-[-20deg]"></div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -54,8 +54,8 @@ const Contact = () => {
               { icon: Clock, label: 'Business Hours', value: 'Monday - Saturday', sub: '9:00 AM - 6:00 PM' },
             ].map(item => (
               <div key={item.label} className="bg-gray-50 rounded-xl border border-gray-200 p-4 flex items-start gap-3">
-                <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <item.icon size={18} className="text-red-600" />
+                <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <item.icon size={18} className="text-orange-700" />
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">{item.label}</p>
@@ -72,20 +72,20 @@ const Contact = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input type="text" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} required
-                    className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <label htmlFor="contact-name" className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input id="contact-name" type="text" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} required
+                    className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} required
-                    className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <label htmlFor="contact-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input id="contact-email" type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} required
+                    className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select value={form.category} onChange={e => setForm(f => ({...f, category: e.target.value}))}
-                  className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                <label htmlFor="contact-category" className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select id="contact-category" value={form.category} onChange={e => setForm(f => ({...f, category: e.target.value}))}
+                  className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500">
                   <option value="general">General Inquiry</option>
                   <option value="order">Order Support</option>
                   <option value="product">Product Question</option>
@@ -94,14 +94,14 @@ const Contact = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                <input type="text" value={form.subject} onChange={e => setForm(f => ({...f, subject: e.target.value}))} required
-                  className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+                <label htmlFor="contact-subject" className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                <input id="contact-subject" type="text" value={form.subject} onChange={e => setForm(f => ({...f, subject: e.target.value}))} required
+                  className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
-                <textarea value={form.message} onChange={e => setForm(f => ({...f, message: e.target.value}))} rows={5} required
-                  className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none" />
+                <label htmlFor="contact-message" className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <textarea id="contact-message" value={form.message} onChange={e => setForm(f => ({...f, message: e.target.value}))} rows={5} required
+                  className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" />
               </div>
               <button type="submit" disabled={loading}
                 className="w-full py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">

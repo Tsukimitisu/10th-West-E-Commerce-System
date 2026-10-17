@@ -9,14 +9,14 @@ const PrivacyPolicy = () => {
   return (
     <div data-legal-page className="min-h-screen bg-slate-50 text-slate-900 [&_.bg-gray-800]:!bg-white [&_.bg-gray-900]:!bg-slate-50 [&_.border-gray-700]:!border-slate-200 [&_.text-white]:!text-slate-950 [&_.text-gray-300]:!text-slate-700">
       <div className="max-w-4xl mx-auto px-4 py-12">
-        <Link to="/" className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+        <Link to="/" className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
           <ArrowLeft size={16} /> Back to Home
         </Link>
 
         <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-sm p-8 md:p-12">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center">
-              <Shield size={20} className="text-red-500" />
+            <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
+              <Shield size={20} className="text-slate-600" />
             </div>
             <div>
               <h1 className="font-display font-bold text-2xl text-white">{policy?.title || 'Privacy Policy'}</h1>
@@ -150,7 +150,7 @@ const PrivacyPolicy = () => {
             </p>
 
             <h2 className="font-display font-semibold text-lg text-white mt-8">12. Contact & Complaints</h2>
-            <div className="bg-red-500/10 border border-red-200 rounded-xl p-4 space-y-2 text-sm">
+            <div className="bg-slate-100 border border-red-200 rounded-xl p-4 space-y-2 text-sm">
               <p><strong>Data Protection Officer:</strong> <a href="mailto:dpo@10thwestmoto.com" className="text-red-500">dpo@10thwestmoto.com</a></p>
               <p><strong>General Support:</strong> <a href="mailto:support@10thwestmoto.com" className="text-red-500">support@10thwestmoto.com</a></p>
               <p><strong>Phone:</strong> (02) 8888-1234</p>

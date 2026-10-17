@@ -112,8 +112,8 @@ const OrderDetail = () => {
 
   if (!order) return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-      <Package size={48} className="mx-auto text-gray-300 mb-3" />
-      <h2 className="font-display font-semibold text-xl text-white mb-2">Order not found</h2>
+      <Package size={48} className="mx-auto text-slate-500 mb-3" />
+      <h2 className="font-display font-semibold text-xl text-slate-900 mb-2">Order not found</h2>
       <Link to="/orders" className="text-red-500 hover:text-orange-600 text-sm font-medium">Back to orders</Link>
     </div>
   );
@@ -160,7 +160,7 @@ const OrderDetail = () => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       {/* Back */}
-      <Link to="/orders" className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-red-500 mb-6 transition-colors">
+      <Link to="/orders" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-red-500 mb-6 transition-colors">
         <ArrowLeft size={16} /> Back to Orders
       </Link>
 
@@ -176,7 +176,7 @@ const OrderDetail = () => {
           {/* View Invoice */}
           <button
             onClick={() => window.open(`${API_URL}/orders/${order.id}/invoice`, '_blank')}
-            className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 flex items-center gap-1.5 transition-colors"
+            className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 transition-colors"
           >
             <Printer size={14} /> View Invoice
           </button>
@@ -191,7 +191,7 @@ const OrderDetail = () => {
             <button
               onClick={handleConfirmReceipt}
               disabled={confirmingReceipt}
-              className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-1.5 transition-colors"
+              className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-slate-900 rounded-lg flex items-center gap-1.5 transition-colors"
             >
               <CheckCircle2 size={14} />
               {confirmingReceipt ? 'Confirming...' : 'Confirm Receipt'}
@@ -203,7 +203,7 @@ const OrderDetail = () => {
             </span>
           )}
           {order.return_eligible && (
-            <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 flex items-center gap-1.5 transition-colors">
+            <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 transition-colors">
               <RotateCcw size={14} /> Request Return
             </Link>
           )}
@@ -227,25 +227,25 @@ const OrderDetail = () => {
       )}
 
       {showReturnSection && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-white">Return status</p>
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-sm font-medium text-slate-900">Return status</p>
+              <p className="text-sm text-slate-600 mt-1">
                 {returnRequestStatus
                   ? `Current request: ${returnRequestStatus}.`
                   : order.return_eligibility_message}
               </p>
               {order.return_eligible && returnDeadline && (
-                <p className="text-xs text-gray-400 mt-1">Request a return by {returnDeadline}.</p>
+                <p className="text-xs text-slate-600 mt-1">Request a return by {returnDeadline}.</p>
               )}
             </div>
             {returnRequestStatus ? (
-              <Link to="/my-returns" className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:bg-gray-900 transition-colors">
+              <Link to="/my-returns" className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                 View My Returns
               </Link>
             ) : order.return_eligible ? (
-              <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-500 text-white rounded-lg transition-colors">
+              <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-500 text-slate-900 rounded-lg transition-colors">
                 Request Return
               </Link>
             ) : null}
@@ -256,14 +256,14 @@ const OrderDetail = () => {
       {/* Cancel Confirmation Modal */}
       {showCancelConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-xl p-6 w-full max-w-sm shadow-xl">
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
                 <AlertTriangle size={20} className="text-red-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-white">Cancel Order</h3>
-                <p className="text-sm text-gray-400">This action cannot be undone.</p>
+                <h3 className="font-semibold text-slate-900">Cancel Order</h3>
+                <p className="text-sm text-slate-600">This action cannot be undone.</p>
               </div>
             </div>
             <p className="text-sm text-gray-600 mb-4">Are you sure you want to cancel Order #{order.order_number || order.id}?</p>
@@ -272,7 +272,7 @@ const OrderDetail = () => {
               <select
                 value={cancelReasonSelect}
                 onChange={e => { setCancelReasonSelect(e.target.value); setCancelReasonError(''); }}
-                className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 mb-2"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 mb-2"
               >
                 <option value="">Select a reason...</option>
                 <option value="Changed my mind">Changed my mind</option>
@@ -286,7 +286,7 @@ const OrderDetail = () => {
                   placeholder="Please describe your reason..."
                   value={cancelReasonOther}
                   onChange={e => { setCancelReasonOther(e.target.value); setCancelReasonError(''); }}
-                  className="w-full px-3 py-2 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 resize-none"
                   rows={2}
                 />
               )}
@@ -310,19 +310,19 @@ const OrderDetail = () => {
 
       {/* Progress tracker */}
       {order.status !== 'cancelled' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
-          <div className="flex items-center justify-between relative">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+          <div tabIndex={0} role="region" aria-label="Order progress" className="order-status-timeline flex items-center justify-between relative">
             <div className="absolute left-0 right-0 top-4 h-0.5 bg-gray-200 z-0" />
             <div
-              className="absolute left-0 top-4 h-0.5 bg-red-500/100 z-0 transition-colors duration-500"
+              className="absolute left-0 top-4 h-0.5 bg-slate-900 z-0 transition-colors duration-500"
               style={{ width: `${(step / (stepLabels.length - 1)) * 100}%` }}
             />
             {stepLabels.map((label, i) => (
               <div key={label} className="relative z-10 flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${i <= step ? 'bg-red-500/100 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${i <= step ? 'bg-slate-900 text-white' : 'bg-gray-200 text-slate-600'}`}>
                   {i < step ? <CheckCircle2 size={16} /> : i + 1}
                 </div>
-                <span className={`text-xs mt-2 ${i <= step ? 'text-white font-medium' : 'text-gray-400'}`}>{label}</span>
+                <span className={`text-xs mt-2 ${i <= step ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>{label}</span>
               </div>
             ))}
           </div>
@@ -341,18 +341,18 @@ const OrderDetail = () => {
       )}
 
       {order.shipping_method !== 'pickup' && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
           <div className="flex items-center gap-2">
-            <Truck size={18} className="text-red-500" />
-            <h3 className="font-semibold text-white text-sm">Shipment tracking</h3>
+            <Truck size={18} className="text-slate-600" />
+            <h3 className="font-semibold text-slate-900 text-sm">Shipment tracking</h3>
           </div>
           {tracking?.shipment ? (
             <div className="mt-4 space-y-4">
               <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                <div><p className="text-xs text-gray-400">Courier</p><p className="font-medium text-white">{tracking.shipment.courier_name || 'J&T Express'}</p></div>
-                <div><p className="text-xs text-gray-400">Waybill number</p><p className="font-medium text-white">{tracking.shipment.waybill_number || 'Pending'}</p></div>
-                <div><p className="text-xs text-gray-400">Tracking number</p><p className="font-medium text-white">{tracking.shipment.tracking_number || 'Pending'}</p></div>
-                <div><p className="text-xs text-gray-400">Shipping status</p><p className="font-medium text-white capitalize">{String(tracking.shipment.status || 'pending').replaceAll('_', ' ')}</p></div>
+                <div><p className="text-xs text-slate-600">Courier</p><p className="font-medium text-slate-900">{tracking.shipment.courier_name || 'J&T Express'}</p></div>
+                <div><p className="text-xs text-slate-600">Waybill number</p><p className="font-medium text-slate-900">{tracking.shipment.waybill_number || 'Pending'}</p></div>
+                <div><p className="text-xs text-slate-600">Tracking number</p><p className="font-medium text-slate-900">{tracking.shipment.tracking_number || 'Pending'}</p></div>
+                <div><p className="text-xs text-slate-600">Shipping status</p><p className="font-medium text-slate-900 capitalize">{String(tracking.shipment.status || 'pending').replaceAll('_', ' ')}</p></div>
               </div>
               <p className="rounded-lg border border-amber-700/40 bg-amber-500/10 p-3 text-xs leading-5 text-amber-200">
                 Tracking updates are manually encoded by the store. You can also use your J&T tracking number on the official J&T tracker.
@@ -361,8 +361,8 @@ const OrderDetail = () => {
                 <ol className="space-y-3 border-l border-gray-600 pl-4">
                   {tracking.events.map((event, index) => (
                     <li key={`${event.event_time || event.occurred_at}-${index}`}>
-                      <p className="text-sm font-medium text-white capitalize">{String(event.status || 'update').replaceAll('_', ' ')}</p>
-                      {event.description && <p className="text-xs text-gray-300">{event.description}</p>}
+                      <p className="text-sm font-medium text-slate-900 capitalize">{String(event.status || 'update').replaceAll('_', ' ')}</p>
+                      {event.description && <p className="text-xs text-slate-500">{event.description}</p>}
                       <p className="text-xs text-gray-500">
                         {[event.location, (event.event_time || event.occurred_at) && new Date(event.event_time || event.occurred_at).toLocaleString('en-PH')].filter(Boolean).join(' · ')}
                       </p>
@@ -372,7 +372,7 @@ const OrderDetail = () => {
               )}
             </div>
           ) : (
-            <p className="mt-3 text-sm text-gray-300">
+            <p className="mt-3 text-sm text-slate-500">
               {trackingUnavailable ? 'Tracking updates are not available yet.' : 'Shipment tracking is pending.'}
             </p>
           )}
@@ -381,9 +381,9 @@ const OrderDetail = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Items */}
-        <div className="lg:col-span-2 bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-          <div className="p-4 border-b border-gray-700">
-            <h3 className="font-semibold text-white text-sm">Items ({items.length})</h3>
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="p-4 border-b border-slate-200">
+            <h3 className="font-semibold text-slate-900 text-sm">Items ({items.length})</h3>
           </div>
           <div className="divide-y divide-gray-100">
             {items.map((item, i) => {
@@ -397,31 +397,31 @@ const OrderDetail = () => {
               return (
                 <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-4 p-4">
                   {productId ? (
-                    <Link to={`/products/${productId}`} className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-red-500/40 transition-colors" title="View product">
+                    <Link to={`/products/${productId}`} className="w-16 h-16 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-red-500/40 transition-colors" title="View product">
                       {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" /> :
-                        <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
+                        <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-slate-500" /></div>}
                     </Link>
                   ) : (
-                    <div className="w-16 h-16 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex-shrink-0">
+                    <div className="w-16 h-16 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden flex-shrink-0">
                       {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" /> :
-                        <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
+                        <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-slate-500" /></div>}
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
                     {productId ? (
-                      <Link to={`/products/${productId}`} className="text-sm font-medium text-white truncate hover:text-red-500 transition-colors inline-block" title="View product">
+                      <Link to={`/products/${productId}`} className="text-sm font-medium text-slate-900 truncate hover:text-red-500 transition-colors inline-block" title="View product">
                         {itemTitle}
                       </Link>
                     ) : (
-                      <p className="text-sm font-medium text-white truncate">{itemTitle}</p>
+                      <p className="text-sm font-medium text-slate-900 truncate">{itemTitle}</p>
                     )}
-                    {(item.sku || item.product?.sku) && <p className="text-xs text-gray-400">SKU: {item.sku || item.product?.sku}</p>}
-                    <p className="text-xs text-gray-300">Quantity: {itemQuantity}</p>
-                    <p className="text-xs text-gray-300">Unit price: {formatCurrency(unitPrice)}</p>
+                    {(item.sku || item.product?.sku) && <p className="text-xs text-slate-600">SKU: {item.sku || item.product?.sku}</p>}
+                    <p className="text-xs text-slate-500">Quantity: {itemQuantity}</p>
+                    <p className="text-xs text-slate-500">Unit price: {formatCurrency(unitPrice)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-gray-400">Line total</p>
-                    <p className="text-sm font-semibold text-white">{formatCurrency(lineTotal)}</p>
+                    <p className="text-xs text-slate-600">Line total</p>
+                    <p className="text-sm font-semibold text-slate-900">{formatCurrency(lineTotal)}</p>
                   </div>
                 </div>
               );
@@ -432,39 +432,39 @@ const OrderDetail = () => {
         {/* Summary sidebar */}
         <div className="space-y-4">
           {/* Order Summary */}
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-            <h3 className="font-semibold text-white text-sm mb-3">Order Summary</h3>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="font-semibold text-slate-900 text-sm mb-3">Order Summary</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-slate-300"><span>Subtotal</span><span>{formatCurrency(subtotalAmount)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{formatCurrency(subtotalAmount)}</span></div>
               {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(discountAmount)}</span></div>}
-              <div className="flex justify-between text-slate-300"><span>Shipping</span><span>{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
-              <div className="flex justify-between text-slate-300"><span>VAT (12%)</span><span>{formatCurrency(vatAmount)}</span></div>
-              <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold text-white">
+              <div className="flex justify-between text-slate-600"><span>Shipping</span><span>{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>VAT (12%)</span><span>{formatCurrency(vatAmount)}</span></div>
+              <div className="border-t border-slate-200 pt-2 flex justify-between font-semibold text-slate-900">
                 <span>Total</span><span>{formatCurrency(totalAmount)}</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-            <h3 className="font-semibold text-white text-sm mb-3">Shipping Calculation</h3>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="font-semibold text-slate-900 text-sm mb-3">Shipping Calculation</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-gray-400"><span>Shipping Coverage</span><span className="text-white">Luzon only</span></div>
-              <div className="flex justify-between text-gray-400"><span>Courier</span><span className="text-white">{order.courier_name || 'J&T Express'}</span></div>
-              <div className="flex justify-between text-gray-400"><span>Shipping Zone</span><span className="text-white">{formatShippingLabel(order.shipping_zone)}</span></div>
-              <div className="flex justify-between text-gray-400"><span>Estimated Distance</span><span className="text-white">{toFiniteNumber(order.estimated_distance_km)} km</span></div>
-              <div className="flex justify-between text-gray-400"><span>Actual Weight</span><span className="text-white">{toFiniteNumber(order.actual_weight_kg)} kg</span></div>
-              <div className="flex justify-between text-gray-400"><span>Base Shipping Fee</span><span className="text-white">{formatCurrency(order.base_shipping_fee)}</span></div>
-              <div className="flex justify-between text-gray-400"><span>Weight Surcharge</span><span className="text-white">{formatCurrency(order.weight_surcharge)}</span></div>
-              <div className="flex justify-between text-gray-400"><span>Distance Surcharge</span><span className="text-white">{formatCurrency(order.distance_surcharge)}</span></div>
-              <div className="flex justify-between text-gray-400"><span>Final Shipping Fee</span><span className="text-white">{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
-              <div className="flex justify-between text-gray-400"><span>Free Shipping Applied</span><span className="text-white">{order.free_shipping_applied ? 'Yes' : 'No'}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Shipping Coverage</span><span className="text-slate-900">Luzon only</span></div>
+              <div className="flex justify-between text-slate-600"><span>Courier</span><span className="text-slate-900">{order.courier_name || 'J&T Express'}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Shipping Zone</span><span className="text-slate-900">{formatShippingLabel(order.shipping_zone)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Estimated Distance</span><span className="text-slate-900">{toFiniteNumber(order.estimated_distance_km)} km</span></div>
+              <div className="flex justify-between text-slate-600"><span>Actual Weight</span><span className="text-slate-900">{toFiniteNumber(order.actual_weight_kg)} kg</span></div>
+              <div className="flex justify-between text-slate-600"><span>Base Shipping Fee</span><span className="text-slate-900">{formatCurrency(order.base_shipping_fee)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Weight Surcharge</span><span className="text-slate-900">{formatCurrency(order.weight_surcharge)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Distance Surcharge</span><span className="text-slate-900">{formatCurrency(order.distance_surcharge)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Final Shipping Fee</span><span className="text-slate-900">{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Free Shipping Applied</span><span className="text-slate-900">{order.free_shipping_applied ? 'Yes' : 'No'}</span></div>
             </div>
           </div>
 
           {/* Shipping Address */}
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-            <h3 className="font-semibold text-white text-sm mb-2 flex items-center gap-1.5"><MapPin size={14} /> Shipping Address</h3>
-            <div className="text-sm text-slate-200 leading-relaxed">
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="font-semibold text-slate-900 text-sm mb-2 flex items-center gap-1.5"><MapPin size={14} /> Shipping Address</h3>
+            <div className="text-sm text-slate-700 leading-relaxed">
               {addressLines.length > 0 ? (
                 addressLines.map((line, index) => (
                   <div key={index}>{line}</div>
@@ -477,9 +477,9 @@ const OrderDetail = () => {
           </div>
 
           {/* Payment */}
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-            <h3 className="font-semibold text-white text-sm mb-2 flex items-center gap-1.5"><CreditCard size={14} /> Payment</h3>
-            <p className="text-sm text-slate-200 capitalize">{order.payment_method || 'Cash on Delivery'}</p>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="font-semibold text-slate-900 text-sm mb-2 flex items-center gap-1.5"><CreditCard size={14} /> Payment</h3>
+            <p className="text-sm text-slate-700 capitalize">{order.payment_method || 'Cash on Delivery'}</p>
             {order.payment_status && <p className="text-xs text-slate-400 capitalize mt-0.5">Status: {order.payment_status}</p>}
           </div>
         </div>

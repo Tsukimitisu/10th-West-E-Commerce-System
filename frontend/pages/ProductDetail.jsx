@@ -1341,7 +1341,7 @@ const ProductDetail = () => {
           )}
 
           {activeTab === 'reviews' && (
-            <div className="animate-fade-in">
+            <div className="customer-reviews animate-fade-in">
               {reviewEligibility.eligible ? (
                 <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-5">
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
@@ -1350,7 +1350,7 @@ const ProductDetail = () => {
                     <p className="text-sm text-gray-600">Share your experience with this product. Reviews appear after moderation.</p>
                   </div>
                   {!userId && (
-                    <Link to="/login" className="text-sm font-medium text-red-500 hover:text-red-600">
+                    <Link to="/login" className="text-sm font-medium text-orange-700 hover:text-orange-800">
                       Log in to review
                     </Link>
                   )}
@@ -1383,7 +1383,7 @@ const ProductDetail = () => {
                       }}
                       disabled={!userId || reviewSubmitting}
                       placeholder="Describe the product quality, fit, or overall experience."
-                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:bg-gray-100"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 focus:border-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-700/20 disabled:cursor-not-allowed disabled:bg-gray-100"
                     />
                     {reviewFieldErrors.comment && <p className="mt-2 text-xs text-red-500">{reviewFieldErrors.comment}</p>}
                   </div>
@@ -1394,7 +1394,7 @@ const ProductDetail = () => {
                     </label>
                     <label
                       htmlFor="review-media"
-                      className={`block w-full rounded-xl border-2 border-dashed px-4 py-4 transition ${(!userId || reviewSubmitting) ? 'cursor-not-allowed border-gray-300 bg-gray-100' : 'cursor-pointer border-red-200 bg-white hover:border-red-300 hover:bg-red-50/30'}`}
+                      className={`block w-full rounded-xl border-2 border-dashed px-4 py-4 transition ${(!userId || reviewSubmitting) ? 'cursor-not-allowed border-gray-300 bg-gray-100' : 'cursor-pointer border-slate-300 bg-white hover:border-orange-700 hover:bg-slate-50'}`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
@@ -1403,7 +1403,7 @@ const ProductDetail = () => {
                             {selectedReviewMediaCount} selected. {remainingReviewMediaSlots} slot{remainingReviewMediaSlots !== 1 ? 's' : ''} remaining.
                           </p>
                         </div>
-                        <span className="shrink-0 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white">
+                        <span className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-900">
                           Choose files
                         </span>
                       </div>
@@ -1455,7 +1455,7 @@ const ProductDetail = () => {
                   <button
                     type="submit"
                     disabled={!userId || reviewSubmitting}
-                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-500 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-orange-500 text-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-500 disabled:cursor-not-allowed disabled:bg-gray-300"
                   >
                     {reviewSubmitting ? 'Submitting...' : 'Submit review'}
                   </button>
@@ -1471,7 +1471,7 @@ const ProductDetail = () => {
                         : 'Log in to see whether this purchase is ready for review.'}
                   </p>
                   {!userId && (
-                    <Link to="/login" className="mt-2 inline-flex text-sm font-semibold text-red-600 hover:text-red-700">
+                    <Link to="/login" className="mt-2 inline-flex text-sm font-semibold text-orange-700 hover:text-orange-800">
                       Log in
                     </Link>
                   )}
@@ -1479,10 +1479,10 @@ const ProductDetail = () => {
               )}
 
               {/* Rating summary */}
-              <div className="flex flex-col md:flex-row gap-8 mb-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl">
-                <div className="text-center md:text-left">
-                  <div className="text-5xl font-bold text-gray-900">{avgRating.toFixed(1)}</div>
-                  <StarRating rating={avgRating} size={20} />
+              <div className="grid grid-cols-[110px_minmax(0,1fr)] sm:grid-cols-[140px_minmax(0,1fr)] items-center gap-5 mb-6 p-5 bg-slate-50 border border-slate-200 rounded-lg">
+                <div className="text-left">
+                  <div className="text-4xl sm:text-5xl font-bold text-gray-900">{avgRating.toFixed(1)}</div>
+                  <StarRating rating={avgRating} size={16} />
                   <p className="text-sm text-gray-600 mt-1">{reviews.length} review{reviews.length !== 1 ? 's' : ''}</p>
                 </div>
                 <div className="flex-1 space-y-2">
@@ -1490,7 +1490,7 @@ const ProductDetail = () => {
                     <div key={d.star} className="flex items-center gap-2">
                       <span className="text-sm text-gray-700 w-6">{d.star}★</span>
                       <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-yellow-400 rounded-full transition-colors" style={{ width: `${d.pct}%` }} />
+                        <div className="h-full bg-amber-600 rounded-full transition-colors" style={{ width: `${d.pct}%` }} />
                       </div>
                       <span className="text-xs text-gray-600 w-8">{d.count}</span>
                     </div>
@@ -1504,7 +1504,7 @@ const ProductDetail = () => {
                   {reviews.map(r => <ReviewCard key={r.id} review={r} />)}
                 </div>
               ) : (
-                <p className="text-center text-gray-400 py-8">No reviews yet. Be the first to review this product!</p>
+                <p className="text-center text-slate-600 py-8">No reviews yet. Be the first to review this product!</p>
               )}
             </div>
           )}

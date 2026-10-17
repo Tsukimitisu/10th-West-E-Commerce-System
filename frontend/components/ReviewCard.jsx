@@ -115,8 +115,8 @@ const ReviewCard = ({ review }) => {
 
   return (
     <>
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 md:p-5 hover:border-gray-700 transition-colors">
-        <div className="flex items-start justify-between mb-3">
+      <div className="customer-review-card bg-white border border-slate-200 rounded-lg p-4 md:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3">
             {review.user_avatar ? (
               <img src={review.user_avatar} alt={userName} className="w-10 h-10 rounded-full object-cover" />
@@ -126,25 +126,25 @@ const ReviewCard = ({ review }) => {
               </div>
             )}
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-white text-sm">{userName}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-slate-900 text-sm">{userName}</span>
                 {reviewStatus === 'pending' && review.is_mine && (
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-300 bg-amber-900/40 px-2 py-0.5 rounded">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-800 bg-amber-50 px-2 py-0.5 rounded">
                     Pending
                   </span>
                 )}
                 {review.verified_purchase && (
-                  <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                  <span className="flex items-center gap-1 text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
                     <CheckCircle size={10} /> Verified Purchase
                   </span>
                 )}
               </div>
-              <span className="text-xs text-gray-400">{timeAgo}</span>
+              <span className="text-xs text-slate-600">{timeAgo}</span>
             </div>
           </div>
           <StarRating rating={review.rating} size={14} />
         </div>
-        <p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{review.comment}</p>
+        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{review.comment}</p>
 
         {mediaItems.length > 0 && (
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -153,7 +153,7 @@ const ReviewCard = ({ review }) => {
                 key={`${item.url}-${index}`}
                 type="button"
                 onClick={() => openPreview(index)}
-                className="group relative overflow-hidden rounded-lg border border-gray-700 bg-black/20 text-left focus:outline-none focus:ring-2 focus:ring-red-400/60"
+                className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left focus:outline-none focus:ring-2 focus:ring-orange-700"
               >
                 {item.kind === 'video' ? (
                   <video src={item.url} className="h-44 sm:h-40 w-full object-cover" preload="metadata" muted playsInline />
@@ -168,17 +168,17 @@ const ReviewCard = ({ review }) => {
           </div>
         )}
 
-        <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-700">
+        <div className="flex items-center gap-3 mt-4 pt-3 border-t border-slate-200">
           <button
             type="button"
             disabled
             title="Mark this review as helpful for other shoppers."
             aria-describedby={`review-helpful-${review.id}`}
-            className="flex cursor-not-allowed items-center gap-1.5 text-xs text-gray-400 opacity-80"
+            className="flex cursor-not-allowed items-center gap-1.5 text-xs text-slate-600 opacity-80"
           >
             <ThumbsUp size={13} /> Helpful (coming soon)
           </button>
-          <span id={`review-helpful-${review.id}`} className="text-xs text-gray-400">
+          <span id={`review-helpful-${review.id}`} className="text-xs text-slate-600">
             Mark this review as helpful for other shoppers.
           </span>
         </div>
@@ -188,6 +188,7 @@ const ReviewCard = ({ review }) => {
         <div
           className="fixed inset-0 z-[90] bg-black/85 backdrop-blur-sm p-2 sm:p-4 md:p-8"
           role="dialog"
+          aria-label="Review attachment preview"
           aria-modal="true"
           onClick={closePreview}
         >
@@ -264,7 +265,7 @@ const ReviewCard = ({ review }) => {
                     key={`preview-thumb-${item.url}-${index}`}
                     type="button"
                     onClick={() => setPreviewIndex(index)}
-                    className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-md border ${index === previewIndex ? 'border-red-400' : 'border-white/20'} focus:outline-none focus:ring-2 focus:ring-red-400/60`}
+                    className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-md border ${index === previewIndex ? 'border-red-400' : 'border-white/20'} focus:outline-none focus:ring-2 focus:ring-orange-700`}
                     aria-label={`Preview media ${index + 1}`}
                   >
                     {item.kind === 'video' ? (

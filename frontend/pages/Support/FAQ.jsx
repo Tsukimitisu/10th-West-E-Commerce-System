@@ -64,12 +64,12 @@ const FAQ = () => {
         <div className="mb-10 text-center">
           <h1 className="mb-3 font-display text-3xl font-bold text-gray-900 md:text-4xl">Frequently Asked Questions</h1>
           <p className="text-gray-600">Find answers to common questions about orders, shipping, returns, and more.</p>
-          <div className="mx-auto mt-4 h-1 w-20 -skew-x-[20deg] bg-red-600" />
+          <div className="mx-auto mt-4 h-1 w-20 -skew-x-[20deg] bg-orange-500" />
         </div>
 
         <div className="relative mb-6">
           <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search questions..." className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+          <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search questions..." className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
         </div>
 
         <div className="mb-6 flex flex-wrap gap-2">
@@ -91,13 +91,13 @@ const FAQ = () => {
               <div key={faq.id || `${faq.question}-${index}`} className={`rounded-xl border bg-gray-50 transition-colors ${openIndex === index ? 'border-red-300 shadow-sm' : 'border-gray-200'}`}>
                 <button type="button" onClick={() => setOpenIndex(openIndex === index ? null : index)} className="flex w-full items-center justify-between p-4 text-left" aria-expanded={openIndex === index}>
                   <div className="flex flex-1 items-start gap-3">
-                    <HelpCircle size={16} className={`mt-0.5 flex-shrink-0 ${openIndex === index ? 'text-red-600' : 'text-gray-400'}`} />
+                    <HelpCircle size={16} className={`mt-0.5 flex-shrink-0 ${openIndex === index ? 'text-orange-700' : 'text-gray-400'}`} />
                     <div>
                       <p className={`text-sm font-medium ${openIndex === index ? 'text-gray-900' : 'text-gray-700'}`}>{faq.question}</p>
                       <span className="mt-0.5 text-xs text-gray-500">{faq.category || 'General'}</span>
                     </div>
                   </div>
-                  {openIndex === index ? <ChevronUp size={16} className="text-red-600" /> : <ChevronDown size={16} className="text-gray-400" />}
+                  {openIndex === index ? <ChevronUp size={16} className="text-orange-700" /> : <ChevronDown size={16} className="text-gray-400" />}
                 </button>
                 {openIndex === index && <div className="px-4 pb-4 pl-11"><p className="text-sm leading-relaxed text-gray-600">{faq.answer}</p></div>}
               </div>

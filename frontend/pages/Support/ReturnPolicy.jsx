@@ -55,7 +55,7 @@ const sections = [
   {
     title: 'Contact and Support Instructions',
     content: (
-      <p>Open <Link to="/orders" className="font-semibold text-red-700 underline underline-offset-2 hover:text-red-800">My Orders</Link> to start or check a return. If the return action is unavailable or you need help, <Link to="/contact" className="font-semibold text-red-700 underline underline-offset-2 hover:text-red-800">contact support</Link> and include your order number.</p>
+      <p>Open <Link to="/orders" className="font-semibold text-orange-700 underline underline-offset-2 hover:text-orange-800">My Orders</Link> to start or check a return. If the return action is unavailable or you need help, <Link to="/contact" className="font-semibold text-orange-700 underline underline-offset-2 hover:text-orange-800">contact support</Link> and include your order number.</p>
     ),
   },
 ];
@@ -65,13 +65,13 @@ const ReturnPolicy = () => {
   return (
   <div data-legal-page className="min-h-screen bg-slate-50 text-slate-900">
     <div className="mx-auto max-w-4xl px-4 py-10 sm:py-12">
-      <Link to="/" className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+      <Link to="/" className="mb-6 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
         <ArrowLeft size={16} /> Back to Home
       </Link>
 
       <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8 md:p-10">
         <header className="mb-8 flex items-start gap-3 border-b border-slate-200 pb-6">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-700">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-orange-700">
             <Undo2 size={21} />
           </div>
           <div>
@@ -84,7 +84,7 @@ const ReturnPolicy = () => {
           <RichText value={policy.content} className="text-sm leading-7 text-slate-700 sm:text-base" />
         ) : <>
         {error && <p role="status" className="mb-4 text-sm text-amber-800">Current policy could not be loaded. Showing the store guide below.</p>}
-        <ol className="list-decimal space-y-7 pl-6 marker:font-bold marker:text-red-700">
+        <ol className="list-decimal space-y-7 pl-6 marker:font-bold marker:text-orange-700">
           {sections.map((section) => (
             <li key={section.title} className="pl-2">
               <h2 className="font-display text-lg font-semibold text-slate-950">{section.title}</h2>
