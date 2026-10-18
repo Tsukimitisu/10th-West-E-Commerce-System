@@ -1,3 +1,4 @@
+import { snapshotCheckoutCart, clearPaidCheckoutCart } from '../services/paidCart.js';
 import crypto from 'crypto';
 import pool from '../config/database.js';
 import { createPaymongoGcashCheckout, retrievePaymongoCheckout, verifyPaymongoWebhookSignature } from '../services/paymongo.js';
@@ -346,6 +347,8 @@ export const createCheckout = async (req, res) => {
     assertExpectedTotal(total, req.body?.expected_total);
     const snapshot = addressSnapshot(address);
     const orderStatus = paymentMethod === 'gcash' ? 'payment_pending' : 'pending';
+    const cartCheckout = paymentMethod === 'gcash'
+      ? await snapshotCheckoutCart(client, { userId: req.user.id, items: snapshots, source: purchaseSource }) : null;
     const orderResult = await client.query(
       `INSERT INTO orders (
         user_id, address_id, total_amount, subtotal_amount, shipping_fee, shipping_provider, courier,
@@ -353,8 +356,8 @@ export const createCheckout = async (req, res) => {
         status, payment_status, payment_method, payment_provider, source, shipping_method, shipping_address,
         shipping_address_snapshot, shipping_lat, shipping_lng, promo_code_used, checkout_idempotency_key, payment_expires_at,
         shipping_zone, shipping_coverage, base_shipping_fee, weight_surcharge, distance_surcharge,
-        actual_weight_kg, estimated_distance_km, distance_class, package_class
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,'PHP',$12,'pending',$13,$14,'online',$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+        actual_weight_kg, estimated_distance_km, distance_class, package_class, payment_metadata
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,'PHP',$12,'pending',$13,$14,'online',$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32::jsonb)
       RETURNING *`,
       [req.user.id, address.id || null, total, subtotal, shippingFee, shippingQuote.provider, shippingQuote.courier,
         shippingQuote.courier_name, shippingQuote.service_type, discount, taxAmount, orderStatus, paymentMethod,
@@ -362,7 +365,7 @@ export const createCheckout = async (req, res) => {
         JSON.stringify(snapshot), address.lat, address.lng, promotion?.code || null, idempotencyKey, expiresAt,
         shippingQuote.shipping_zone, shippingQuote.coverage, shippingQuote.base_shipping_fee,
         shippingQuote.weight_surcharge, shippingQuote.distance_surcharge, shippingQuote.actual_weight_kg,
-        shippingQuote.estimated_distance_km, shippingQuote.distance_class, shippingQuote.package_class]
+        shippingQuote.estimated_distance_km, shippingQuote.distance_class, shippingQuote.package_class, JSON.stringify({ cart_checkout: cartCheckout })]
     );
     const order = orderResult.rows[0];
     for (const item of snapshots) {
@@ -677,6 +680,7 @@ const finalizePaidOrder = async (client, payment, event) => {
       await client.query(`UPDATE payments SET status = 'paid', external_payment_id = COALESCE($2, external_payment_id), paid_at = NOW(), updated_at = NOW() WHERE id = $1`, [payment.id, event.externalPaymentId]);
       await client.query(`UPDATE orders SET payment_status = 'paid', status = 'payment_pending', paid_at = NOW(), payment_reference = COALESCE($2, payment_reference), updated_at = NOW() WHERE id = $1`, [payment.order_id, event.externalPaymentId]);
       await client.query(`INSERT INTO order_status_history (order_id, from_status, to_status, source, note) VALUES ($1,$2,'payment_pending','payment','Payment received; stock reservation unavailable. Manual fulfillment review required.')`, [payment.order_id, payment.order_status]);
+      await clearPaidCheckoutCart(client, payment.order_id);
       await writeAuditLog(client, { action: 'payment.paid.stock_review', entityType: 'order', entityId: payment.order_id, afterData: { payment_status: 'paid', fulfillment_review_required: true }, metadata: { payment_id: payment.id, event_id: event.eventId } });
       return;
     }
@@ -726,6 +730,7 @@ const finalizePaidOrder = async (client, payment, event) => {
     `UPDATE payments SET status = 'paid', external_payment_id = COALESCE($2, external_payment_id), paid_at = NOW(), updated_at = NOW() WHERE id = $1`,
     [payment.id, event.externalPaymentId]
   );
+  await clearPaidCheckoutCart(client, payment.order_id);
   await client.query(
     `INSERT INTO order_status_history (order_id, from_status, to_status, source, note, metadata) VALUES ($1,$2,'paid','payment','PayMongo payment verified',$3::jsonb)`,
     [payment.order_id, order.rows[0].status, JSON.stringify({ event_id: event.eventId })]
@@ -775,6 +780,7 @@ const reconcilePaymongoPayment = async (client, payment, { expire = false, cance
         paid_at = COALESCE(paid_at, $2, NOW()), updated_at = NOW() WHERE id = $1`, [payment.order_id, payment.paid_at || null]);
       await writeAuditLog(client, { action: 'payment.paid.order_repaired', entityType: 'order', entityId: payment.order_id, beforeData: { payment_status: payment.order_payment_status }, afterData: { payment_status: 'paid' }, metadata: { payment_id: payment.id } });
     }
+    if (payment.status === 'paid' || payment.order_payment_status === 'paid') await clearPaidCheckoutCart(client, payment.order_id);
     return payment.status === 'paid' ? 'paid' : payment.order_payment_status;
   }
   if (!payment.external_checkout_id) return 'pending';
@@ -999,7 +1005,7 @@ export const getPaymentStatus = async (req, res) => {
     );
     if (!result.rowCount) return res.status(404).json({ message: 'Payment not found.' });
     const row = result.rows[0];
-    if (row.provider === 'paymongo' && !['paid', 'partially_refunded', 'refunded'].includes(row.order_payment_status)) {
+    if (row.provider === 'paymongo' && !['partially_refunded', 'refunded'].includes(row.order_payment_status)) {
       const reconciledStatus = await reconcileOrderPayment(orderId);
       const refreshed = await pool.query(`SELECT o.status AS order_status, o.payment_status AS order_payment_status,
         p.status AS payment_status, p.external_payment_id, p.paid_at FROM orders o JOIN payments p ON p.order_id = o.id

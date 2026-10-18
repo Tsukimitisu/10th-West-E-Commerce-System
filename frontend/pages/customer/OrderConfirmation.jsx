@@ -1,7 +1,8 @@
+import { useCart } from '../../context/CartContext.jsx';
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { CheckCircle2, Package, Truck, Calendar, Home, ShoppingBag, Printer } from 'lucide-react';
-import { getOrderById } from '../../services/api';
+import { getOrderById, getPaymentOrderStatus } from '../../services/api';
 import { API_URL } from '../../services/apiConfig.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
@@ -18,6 +19,7 @@ const roundCurrency = (value) => {
 const formatCurrency = (value) => `₱${roundCurrency(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
 const OrderConfirmation = () => {
+  const { syncCart } = useCart();
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,6 +35,10 @@ const OrderConfirmation = () => {
       try {
         if (!id) return;
         const loadedOrder = await getOrderById(Number(id));
+        if (loadedOrder?.payment_method === 'gcash' && loadedOrder.payment_status === 'paid') {
+          await getPaymentOrderStatus(Number(id));
+          await syncCart();
+        }
         setOrder(loadedOrder || null);
       } catch { setError('Unable to load your order. Please try again from My Orders.'); }
       setLoading(false);

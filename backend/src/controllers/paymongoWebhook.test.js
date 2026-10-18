@@ -75,6 +75,7 @@ const createWebhookDatabase = ({ paymentId = 701, orderId = 501, failed = false,
     historyWrites: 0,
     notificationWrites: 0,
     eventIds: new Set(),
+    cartQuantity: 2, unrelatedCartQuantity: 1, cartCleanup: null,
   };
   const payment = () => ({
     id: paymentId,
@@ -94,6 +95,13 @@ const createWebhookDatabase = ({ paymentId = 701, orderId = 501, failed = false,
   const client = {
     async query(sql, params = []) {
       const source = String(sql);
+      if (source.includes('SELECT user_id, payment_method, payment_status, payment_metadata FROM orders')) return { rows: [{
+        user_id: 41, payment_method: 'gcash', payment_status: state.orderPaymentStatus,
+        payment_metadata: { cart_checkout: { source: 'cart', lines: [{ id: 91, product_id: 11, variant_id: null, quantity: 2 }], completed_at: state.cartCleanup } },
+      }], rowCount: 1 };
+      if (source.includes('SELECT ci.id, ci.quantity FROM cart_items')) return { rows: state.cartQuantity ? [{ id: 91, quantity: state.cartQuantity }] : [], rowCount: state.cartQuantity ? 1 : 0 };
+      if (source.startsWith('DELETE FROM cart_items WHERE id')) state.cartQuantity = 0;
+      if (source.includes('jsonb_set')) state.cartCleanup = 'completed';
       if (source.includes('INSERT INTO payment_events')) {
         if (state.eventIds.has(params[0])) return { rows: [], rowCount: 0 };
         state.eventIds.add(params[0]);
@@ -352,4 +360,16 @@ test('paid ledger repairs an order downgraded by the old cleanup without deducti
   assert.equal(state.orderPaymentStatus, 'paid');
   assert.equal(state.orderStatus, 'paid');
   assert.equal(state.stockDeductions, 0);
+});
+
+test('authoritative GCash webhook clears purchased cart lines exactly once and retains unrelated additions', async () => {
+  const { client, state } = createWebhookDatabase();
+  mock.method(pool, 'connect', async () => client);
+  mock.method(pool, 'query', async () => ({ rows: [], rowCount: 1 }));
+  const res = makeResponse(); await handlePaymongoWebhook(signedRequest(checkoutPaidPayload('evt_cart_success')), res);
+  assert.equal(res.statusCode, 200); assert.equal(state.orderPaymentStatus, 'paid'); assert.equal(state.cartQuantity, 0);
+  assert.equal(state.unrelatedCartQuantity, 1);
+  state.cartQuantity = 1; // A later addition must survive another paid event.
+  await handlePaymongoWebhook(signedRequest(checkoutPaidPayload('evt_cart_success_again')), makeResponse());
+  assert.equal(state.cartQuantity, 1);
 });
