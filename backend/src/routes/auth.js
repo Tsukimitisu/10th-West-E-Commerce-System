@@ -11,13 +11,14 @@ import { redirectOAuthResult } from '../services/oauthRedirect.js';
 import {
   register, login, logout, getProfile,
   forgotPassword, resetPassword, verifyResetToken, changePassword,
-  setup2FA, verify2FA, disable2FA,
+  setup2FA, verify2FA, disable2FA, challenge2FA,
   facebookOAuthCallback, googleOAuthCallback, exchangeOAuthCode,
   getActiveSessions, revokeSession,
   getActivityLogs, sendRegistrationOtp,
   deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData, getMyPermissions,
 } from '../controllers/authController.js';
 import { authenticateOptional, authenticateToken, requireRole } from '../middleware/auth.js';
+import { validatePolicyPassword } from '../services/securityPolicy.js';
 import { validate } from '../middleware/validator.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import { phoneOtpReadiness } from '../services/phoneOtp.js';
@@ -238,9 +239,7 @@ export const registerValidation = [
     .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters')
     .escape(),
   emailValidation(),
-  body('password').isStrongPassword({
-    minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 0
-  }).withMessage('Password must be at least 8 characters and include uppercase, lowercase, and a number'),
+  body('password').custom(validatePolicyPassword),
   body('confirmPassword')
     .notEmpty().withMessage('Please confirm your password')
     .custom((value, { req }) => value === req.body.password)
@@ -295,9 +294,7 @@ router.post(
 router.post('/reset-password',
   resetPasswordLimiter,
   body('token').trim().notEmpty().withMessage('Reset token is required'),
-  body('newPassword')
-    .isStrongPassword({ minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 1 })
-    .withMessage('Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character'),
+  body('newPassword').custom(validatePolicyPassword),
   validate,
   resetPassword
 );
@@ -408,9 +405,7 @@ router.get('/permissions', authenticateToken, getMyPermissions);
 router.put('/change-password',
   authenticateToken,
   body('currentPassword').notEmpty().withMessage('Current password is required'),
-  body('newPassword')
-    .isStrongPassword({ minLength: 8, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 1 })
-    .withMessage('Password must be at least 8 characters and include uppercase, lowercase, number, and special character'),
+  body('newPassword').custom(validatePolicyPassword),
   validate,
   changePassword
 );
@@ -423,6 +418,7 @@ router.post(
   validate,
   setup2FA
 );
+router.post('/2fa/challenge', loginLimiter, authenticateToken, challenge2FA);
 router.post('/2fa/verify', authenticateToken, body('totp_code').notEmpty(), validate, verify2FA);
 router.delete(
   '/2fa',

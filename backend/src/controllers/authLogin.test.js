@@ -46,6 +46,8 @@ test('healthy database wrong password returns exact INVALID_CREDENTIALS contract
   const passwordHash = await bcrypt.hash('CorrectPassword123!', 4);
   mock.method(pool, 'query', async (sql) => {
     const text = String(sql);
+    if (text.includes('FROM system_settings')) return { rows: [] };
+    if (text.includes('UPDATE users SET')) return { rows: [], rowCount: 1 };
     if (text.includes('SELECT COUNT(*)')) return { rows: [{ cnt: '0' }] };
     if (text.includes('FROM users') && text.includes('WHERE users.email = $1')) {
       return {
@@ -78,6 +80,8 @@ test('healthy database wrong password returns exact INVALID_CREDENTIALS contract
 test('healthy database missing user returns the same INVALID_CREDENTIALS contract', async () => {
   mock.method(pool, 'query', async (sql) => {
     const text = String(sql);
+    if (text.includes('FROM system_settings')) return { rows: [] };
+    if (text.includes('UPDATE users SET')) return { rows: [], rowCount: 1 };
     if (text.includes('SELECT COUNT(*)')) return { rows: [{ cnt: '0' }] };
     if (text.includes('FROM users') && text.includes('WHERE users.email = $1')) return { rows: [] };
     if (text.includes('INSERT INTO login_attempts')) return { rows: [], rowCount: 1 };

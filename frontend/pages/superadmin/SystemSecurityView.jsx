@@ -117,7 +117,7 @@ const SystemSecurityView = () => {
       />
 
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      {['lockout','password','2fa'].includes(tab) && <p role="note" className="rounded-lg border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-600">These policy values are saved for administration. Existing authentication handlers currently enforce their built-in lockout and password rules; global two-factor enforcement is not yet connected. Account-level two-factor authentication remains available.</p>}
+      {['lockout','password','2fa'].includes(tab) && <p role="note" className="rounded-lg border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-600">Saved policies apply to authentication within 30 seconds. Session timeout is the maximum session lifetime; a shorter idle logout still applies. Required two-factor authentication guides users through setup or verification before granting system access. Existing account forms may apply stricter client checks when password rules are relaxed.</p>}
       {/* Tabs */}
       <AdminTabs label="Security category" items={tabs} value={tab} onChange={setTab}>
 
@@ -142,9 +142,9 @@ const SystemSecurityView = () => {
             </div>
             <div>
               <label htmlFor="security-session_timeout_minutes" className="text-xs text-gray-400 mb-2 block">Session Timeout (minutes)</label>
-              <input type="number" min="5" max="480" id="security-session_timeout_minutes" value={config.session_timeout_minutes} onChange={(e) => setConfig({ ...config, session_timeout_minutes: e.target.value })}
+              <input type="number" min="5" max="10080" id="security-session_timeout_minutes" value={config.session_timeout_minutes} onChange={(e) => setConfig({ ...config, session_timeout_minutes: e.target.value })}
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
-              <p className="text-[10px] text-gray-400 mt-1">Inactive sessions are automatically terminated</p>
+              <p className="text-[10px] text-gray-400 mt-1">Sessions cannot exceed this lifetime; shorter idle logout still applies</p>
             </div>
           </div>
         </div>
@@ -194,10 +194,9 @@ const SystemSecurityView = () => {
           <p className="text-xs text-gray-400">Control whether 2FA is required for system users</p>
           <div className="space-y-3">
             {[
-              { value: 'disabled', label: 'Disabled', desc: '2FA is not available for any user' },
+              { value: 'disabled', label: 'Disabled', desc: 'New enrollment is disabled; existing enrolled accounts still verify their codes' },
               { value: 'optional', label: 'Optional', desc: 'Users can enable 2FA from their profile' },
-              { value: 'required_staff', label: 'Required for Staff', desc: 'All staff roles must enable 2FA' },
-              { value: 'required_all', label: 'Required for Everyone', desc: 'All users must set up 2FA to log in' },
+              { value: 'required', label: 'Required for Everyone', desc: 'All roles complete enrollment or verification before system access' },
             ].map(opt => (
               <label key={opt.value}
                 className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${

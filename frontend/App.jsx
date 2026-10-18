@@ -27,6 +27,7 @@ import IdleSessionGuard from './components/IdleSessionGuard.jsx';
 const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
 
 const Home = lazy(() => import('./pages/Home'));
+const TwoFactorPolicyGate = lazy(() => import('./components/TwoFactorPolicyGate.jsx'));
 const ProductList = lazy(() => import('./pages/ProductList'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
@@ -91,6 +92,9 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   );
 
   // Super Admin can ONLY access /super-admin — redirect everything else
+  if (user?.requires_2fa_enrollment || user?.requires_2fa_challenge) {
+    return <Suspense fallback={<RouteFallback />}><TwoFactorPolicyGate user={user} onLogin={onLogin} onLogout={onLogout} /></Suspense>;
+  }
   if (isSuperAdmin && !location.pathname.startsWith('/superadmin') && !location.pathname.startsWith('/super-admin') && location.pathname !== '/login') {
     return <Navigate to="/superadmin/dashboard" replace />;
   }

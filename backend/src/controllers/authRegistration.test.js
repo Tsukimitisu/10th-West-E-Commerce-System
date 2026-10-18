@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import test, { after, afterEach, mock } from 'node:test';
+import test, { after, afterEach, beforeEach, mock } from 'node:test';
 import dns from 'dns/promises';
 import nodemailer from 'nodemailer';
 import pool from '../config/database.js';
@@ -14,6 +14,13 @@ const originalSmtpEnvironment = Object.fromEntries(
   ['EMAIL_PROVIDER', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM']
     .map((name) => [name, process.env[name]])
 );
+beforeEach(() => {
+  // Registration validation now reads policy; keep direct focused runs isolated.
+  mock.method(pool, 'query', async sql => {
+    if (String(sql).includes('FROM system_settings')) return { rows: [] };
+    throw new Error('Unexpected unmocked registration query');
+  });
+});
 process.env.SMTP_HOST = process.env.SMTP_HOST || 'smtp.unit.test';
 process.env.EMAIL_PROVIDER = 'smtp';
 process.env.SMTP_PORT = process.env.SMTP_PORT || '587';
@@ -39,8 +46,8 @@ const repoRoot = path.resolve(directory, '..', '..', '..');
 const validRegistrationBody = {
   name: 'Jane Rider',
   email: 'jane.rider@gmail.com',
-  password: 'StrongPass123',
-  confirmPassword: 'StrongPass123',
+  password: 'StrongPass123!',
+  confirmPassword: 'StrongPass123!',
   consent_given: true,
   age_confirmed: true,
 };
@@ -150,7 +157,7 @@ test('register validation returns a clear message when password is weak', async 
   assert.equal(res.statusCode, 400);
   assert.equal(
     res.body.fieldErrors.password,
-    'Password must be at least 8 characters and include uppercase, lowercase, and a number'
+    'Password must be at least 8 characters and include uppercase, lowercase, a number, a special character.'
   );
 });
 
@@ -173,7 +180,7 @@ test('register creates a customer account without exposing password hashes', asy
     validatedData: {
       name: 'Jane Rider',
       email: 'jane.rider@gmail.com',
-      password: 'StrongPass123',
+      password: 'StrongPass123!',
       consent_given: true,
       age_confirmed: true,
     },
@@ -227,7 +234,7 @@ test('registration mailer uses the documented SMTP environment variables', async
     const res = makeResponse();
     await register({
       validatedData: {
-        name: 'Jane Rider', email: 'jane.rider@gmail.com', password: 'StrongPass123',
+        name: 'Jane Rider', email: 'jane.rider@gmail.com', password: 'StrongPass123!',
         consent_given: true, age_confirmed: true,
       },
     }, res);
@@ -267,7 +274,7 @@ test('registration keeps the created account and returns resendable status when 
 
   await register({
     validatedData: {
-      name: 'Jane Rider', email: 'jane.rider@gmail.com', password: 'StrongPass123',
+      name: 'Jane Rider', email: 'jane.rider@gmail.com', password: 'StrongPass123!',
       consent_given: true, age_confirmed: true,
     },
   }, res);
@@ -304,7 +311,7 @@ test('register returns a clear duplicate email message for existing verified acc
     validatedData: {
       name: 'Jane Rider',
       email: 'jane.rider@gmail.com',
-      password: 'StrongPass123',
+      password: 'StrongPass123!',
       consent_given: true,
       age_confirmed: true,
     },

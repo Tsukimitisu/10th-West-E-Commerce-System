@@ -4,6 +4,7 @@ import pool from '../config/database.js';
 import { USER_ROLES } from '../constants/schemaEnums.js';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 import { listSettings } from '../services/settings.js';
+import { SECURITY_RULES, securityPolicy, validatePolicyPassword } from '../services/securityPolicy.js';
 import backupRoutes from './backups.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import { getShippingConfigurationStatus } from '../services/shipping/providers/index.js';
@@ -31,17 +32,7 @@ const SETTING_RULES = {
   },
   email: { from_email: textRule(254), from_name: textRule(120), order_confirmation: booleanRule, promotions: booleanRule, return_approval: booleanRule, shipping_update: booleanRule },
   home: { announcements_enabled: booleanRule },
-  security: {
-    '2fa_enforcement': (v) => ['disabled', 'optional', 'required'].includes(String(v)),
-    lockout_duration_minutes: numberRule(1, 1440),
-    max_login_attempts: numberRule(1, 20),
-    password_min_length: numberRule(8, 128),
-    password_require_lowercase: booleanRule,
-    password_require_number: booleanRule,
-    password_require_special: booleanRule,
-    password_require_uppercase: booleanRule,
-    session_timeout_minutes: numberRule(5, 10080),
-  },
+  security: SECURITY_RULES,
   system: { maintenance_mode: booleanRule },
 };
 const SENSITIVE_SETTING_PATTERN = /(secret|password|token|api[_-]?key|private[_-]?key)/i;
@@ -63,6 +54,10 @@ const validateSettings = (category, settings) => {
     const value = typeof rawValue === 'string' ? rawValue.trim() : String(rawValue);
     if (!rules[key](value)) return { error: `Invalid value for ${category}.${key}` };
     normalized[key] = value;
+  }
+  if (category === 'security' && normalized['2fa_enforcement'] === 'required'
+    && String(process.env.TWO_FACTOR_ENCRYPTION_KEY || '').length < 32) {
+    return { error: 'Configure the backend two-factor encryption key before requiring enrollment.' };
   }
   if (!Object.keys(normalized).length) return { error: 'At least one setting is required.' };
   return { normalized };
@@ -237,9 +232,8 @@ router.post('/users/:id/reset-password', async (req, res) => {
   try {
     const { id } = req.params;
     const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 8) {
-      return res.status(400).json({ message: 'Password must be at least 8 characters' });
-    }
+    try { await validatePolicyPassword(newPassword); }
+    catch (error) { return res.status(400).json({ message: error.message }); }
     const hash = await bcrypt.hash(newPassword, 12);
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, id]);
     // Invalidate all sessions so user must re-login
@@ -362,7 +356,11 @@ router.put('/settings', async (req, res) => {
         JSON.stringify(safeBeforeSettings(category, beforeResult.rows)),
         JSON.stringify(validation.normalized)]
     );
+    if (category === 'security' && validation.normalized.session_timeout_minutes) {
+      await client.query('UPDATE sessions SET expires_at = LEAST(expires_at, created_at + make_interval(mins => $1)) WHERE is_active = true', [Number(validation.normalized.session_timeout_minutes)]);
+    }
     await client.query('COMMIT');
+    if (category === 'security') securityPolicy.invalidate();
     res.json({ message: 'Settings saved' });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -411,7 +409,11 @@ router.put('/security/settings', async (req, res) => {
         JSON.stringify(safeBeforeSettings('security', beforeResult.rows)),
         JSON.stringify(validation.normalized)]
     );
+    if (validation.normalized.session_timeout_minutes) {
+      await client.query('UPDATE sessions SET expires_at = LEAST(expires_at, created_at + make_interval(mins => $1)) WHERE is_active = true', [Number(validation.normalized.session_timeout_minutes)]);
+    }
     await client.query('COMMIT');
+    securityPolicy.invalidate();
     res.json({ message: 'Security settings updated' });
   } catch (err) {
     await client.query('ROLLBACK');

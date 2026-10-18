@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createSecurityPolicyService, passwordPolicyError } from '../src/services/securityPolicy.js';
 import { USER_ROLES } from '../src/constants/schemaEnums.js';
 
 class BootstrapError extends Error {}
@@ -21,6 +22,8 @@ export const readSuperadminCredentials = (env = process.env) => {
 
 export const createSuperadmin = async ({ db, env = process.env, resetPassword = false }) => {
   const { email, name, password } = readSuperadminCredentials(env);
+  const policyError = passwordPolicyError(password, await createSecurityPolicyService({ db }).get());
+  if (policyError) throw new BootstrapError(policyError);
   if (!USER_ROLES.includes('super_admin')) throw new BootstrapError('The existing role constants do not support super_admin.');
   const client = await db.connect();
   try {

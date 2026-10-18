@@ -1,3 +1,4 @@
+import { securityPolicy, twoFactorRequirement } from './services/securityPolicy.js';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -46,8 +47,9 @@ const hydrateSocketUserFromSession = async (sessionAuth) => {
   const tokenHash = String(sessionAuth?.tokenHash || '').trim();
   if (!Number.isInteger(userId) || userId <= 0 || !tokenHash) return null;
 
+  const policy = await securityPolicy.get();
   const result = await pool.query(
-    `SELECT u.id, u.name, u.email, u.role, u.is_active, u.is_deleted, u.email_verified,
+    `SELECT u.id, u.name, u.email, u.role, u.is_active, u.is_deleted, u.email_verified, u.two_factor_enabled,
             (u.role::text = ANY(ARRAY['admin', 'super_admin', 'owner']) OR EXISTS (
               SELECT 1 FROM permissions p
               LEFT JOIN role_permissions rp ON rp.permission_id = p.id AND rp.role = u.role
@@ -102,12 +104,14 @@ const hydrateSocketUserFromSession = async (sessionAuth) => {
        AND s.token_hash = $2
        AND s.is_active = true
        AND s.expires_at > NOW()
+       AND s.created_at > NOW() - make_interval(mins => $3)
      LIMIT 1`,
-    [userId, tokenHash]
+    [userId, tokenHash, policy.session_timeout_minutes]
   );
 
   const user = result.rows[0];
   if (!user || !user.is_active || user.is_deleted || !user.email_verified) return null;
+  if (twoFactorRequirement(user, policy, sessionAuth?.twoFactorVerified === true)) return null;
   return user;
 };
 
@@ -121,7 +125,7 @@ const hydrateSocketUserFromBearer = async (token) => {
     clockTolerance: 30,
   });
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-  return hydrateSocketUserFromSession({ userId: decoded.id, tokenHash });
+  return hydrateSocketUserFromSession({ userId: decoded.id, tokenHash, twoFactorVerified: decoded.mfa_verified === true });
 };
 
 export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = {}) {
@@ -163,6 +167,20 @@ export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = 
   });
 
   io.on('connection', (socket) => {
+    const revalidate = async () => {
+      const user = await hydrateSocketUserFromSession(socket.request?.session?.auth)
+        || await hydrateSocketUserFromBearer(String(socket.handshake.auth?.token || '').trim());
+      if (!user) throw new Error('Authentication required');
+      socket.data.user = user;
+    };
+    socket.use(async (_packet, next) => {
+      try { await revalidate(); return next(); }
+      catch { socket.disconnect(true); return next(new Error('Invalid or expired session')); }
+    });
+    // Also stop passive subscribers receiving private events after policy expiry.
+    const authTimer = setInterval(() => { void revalidate().catch(() => socket.disconnect(true)); }, 30_000);
+    authTimer.unref();
+    socket.on('disconnect', () => clearInterval(authTimer));
     const user = socket.data.user;
     console.log(`🔌 Socket connected: ${socket.id}`);
 

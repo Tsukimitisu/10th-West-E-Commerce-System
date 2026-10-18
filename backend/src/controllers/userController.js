@@ -1,3 +1,4 @@
+import { passwordPolicyError, securityPolicy } from '../services/securityPolicy.js';
 import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { getMissingCloudinaryVars, isCloudinaryConfigured, uploadBufferToCloudinary } from '../services/cloudinary.js';
@@ -15,7 +16,6 @@ const MIME_EXTENSION_MAP = {
 };
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const PROFILE_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
-const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const EMAIL_CHANGE_WINDOW_MINUTES = 60;
 const BLOCKED_EMAIL_DOMAINS = new Set(['example.com', 'example.net', 'example.org', 'test.com', 'invalid', 'localhost']);
 const EMAIL_DNS_TIMEOUT_MS = 3000;
@@ -580,9 +580,8 @@ export const changePassword = async (req, res) => {
     return res.status(400).json({ message: 'Current password and new password are required' });
   }
 
-  if (!STRONG_PASSWORD_REGEX.test(newPassword)) {
-    return res.status(400).json({ message: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.' });
-  }
+  const policyError = passwordPolicyError(newPassword, await securityPolicy.get());
+  if (policyError) return res.status(400).json({ message: policyError });
 
   try {
     // Get current password hash
@@ -635,9 +634,8 @@ export const changePassword = async (req, res) => {
 export const setLocalPassword = async (req, res) => {
   const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
 
-  if (!STRONG_PASSWORD_REGEX.test(newPassword)) {
-    return res.status(400).json({ message: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.' });
-  }
+  const policyError = passwordPolicyError(newPassword, await securityPolicy.get());
+  if (policyError) return res.status(400).json({ message: policyError });
 
   try {
     const userResult = await pool.query(

@@ -514,6 +514,9 @@ const authenticatedFetch = async (url, options = {}) => {
   }
 
   if (!response.ok) {
+    if (response.status === 403 && ['TWO_FACTOR_REQUIRED', 'TWO_FACTOR_ENROLLMENT_REQUIRED'].includes(responseBody?.code)) {
+      window.dispatchEvent(new Event('auth:verified'));
+    }
     if (!preserveSessionOnFailure && isSessionAuthFailure(response.status, responseBody)) {
       clearAuthSession();
       window.dispatchEvent(new Event('auth:session-expired'));
@@ -697,10 +700,20 @@ export const setLocalPassword = async (newPassword) => authenticatedFetch(`${API
 });
 
 export const verify2FA = async (totp_code) => {
-  return authenticatedFetch(`${API_URL}/auth/2fa/verify`, {
+  const result = await authenticatedFetch(`${API_URL}/auth/2fa/verify`, {
     method: 'POST',
     body: JSON.stringify({ totp_code }),
   });
+  await refreshCsrfAfterSessionRotation();
+  return result;
+};
+
+export const challenge2FA = async code => {
+  const result = await authenticatedFetch(`${API_URL}/auth/2fa/challenge`, {
+    method: 'POST', body: JSON.stringify(/^\d{6}$/.test(code) ? { totp_code: code } : { recovery_code: code }),
+  });
+  await refreshCsrfAfterSessionRotation();
+  return result;
 };
 
 export const disable2FA = async (password) => {

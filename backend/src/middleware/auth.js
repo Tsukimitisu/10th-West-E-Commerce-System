@@ -1,3 +1,4 @@
+import { securityPolicy, policyUser, twoFactorRequirement } from '../services/securityPolicy.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../config/database.js';
@@ -47,25 +48,52 @@ const readSessionAuth = (req) => {
   };
 };
 
+const policyRouteAllowed = req => /^(?:\/api)?\/auth\/(?:profile(?:\/optional)?|me|logout|2fa\/(?:setup|verify|challenge))\/?$/i.test(String(req.originalUrl || `${req.baseUrl || ''}${req.path || ''}`).split('?')[0]);
+const applySecurityPolicy = async (req, user, verified = false) => {
+  const policy = await securityPolicy.get();
+  req.twoFactorVerified = verified;
+  // Absolute session lifetime; the existing shorter browser idle logout remains.
+  if (req.session?.cookie) {
+    const issued = req.session.auth?.authenticatedAt || Date.now();
+    const remaining = Math.max(0, issued + policy.session_timeout_minutes * 60_000 - Date.now());
+    req.session.cookie.maxAge = Math.min(req.session.cookie.maxAge ?? remaining, remaining);
+  }
+  req.user = policyUser(user, policy, verified);
+  const requirement = twoFactorRequirement(user, policy, verified);
+  return !requirement || policyRouteAllowed(req);
+};
+const enforceSecurityPolicy = async (req, res, next, user, verified) => {
+  if (await applySecurityPolicy(req, user, verified)) return next();
+  return res.status(403).json({ message: 'Complete two-factor authentication to continue.',
+    code: req.user.requires_2fa_enrollment ? 'TWO_FACTOR_ENROLLMENT_REQUIRED' : 'TWO_FACTOR_REQUIRED' });
+};
+
+const findPolicySession = async (tokenHash, userId) => {
+  const policy = await securityPolicy.get();
+  const result = await pool.query(
+    'SELECT id FROM sessions WHERE token_hash = $1 AND user_id = $2 AND is_active = true AND expires_at > NOW() AND created_at > NOW() - make_interval(mins => $3)',
+    [tokenHash, userId, policy.session_timeout_minutes]);
+  if (!result.rows.length) {
+    // Expiry is terminal, even if a later policy extends the lifetime.
+    await pool.query(`UPDATE sessions SET is_active = false WHERE token_hash = $1 AND user_id = $2
+      AND (expires_at <= NOW() OR created_at <= NOW() - make_interval(mins => $3))`,
+    [tokenHash, userId, policy.session_timeout_minutes]);
+  }
+  return result;
+};
+
 const hydrateUserFromSession = async (req) => {
   const sessionAuth = readSessionAuth(req);
   if (!sessionAuth) return null;
 
-  const sessionResult = await pool.query(
-    `SELECT id
-     FROM sessions
-     WHERE token_hash = $1
-       AND is_active = true
-       AND expires_at > NOW()`,
-    [sessionAuth.tokenHash]
-  );
+  const sessionResult = await findPolicySession(sessionAuth.tokenHash, sessionAuth.userId);
 
   if (sessionResult.rows.length === 0) {
     return null;
   }
 
   const userResult = await pool.query(
-    `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified
+    `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified, two_factor_enabled
      FROM users
      WHERE id = $1
      LIMIT 1`,
@@ -97,7 +125,7 @@ export const authenticateOptional = async (req, res, next) => {
     try {
       const sessionUser = await hydrateUserFromSession(req);
       if (sessionUser) {
-        req.user = sessionUser;
+        if (!await applySecurityPolicy(req, sessionUser, req.session?.auth?.twoFactorVerified === true)) delete req.user;
       }
     } catch (error) {
       logAuthError('Optional session authentication error:', error);
@@ -113,21 +141,18 @@ export const authenticateOptional = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);
 
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const sessionResult = await pool.query(
-      'SELECT id FROM sessions WHERE token_hash = $1 AND user_id = $2 AND is_active = true AND expires_at > NOW()',
-      [tokenHash, decoded.id]
-    );
+    const sessionResult = await findPolicySession(tokenHash, decoded.id);
 
     if (sessionResult.rows.length === 0) return next();
 
     const userResult = await pool.query(
-      `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified
+      `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified, two_factor_enabled
        FROM users WHERE id = $1 LIMIT 1`,
       [decoded.id]
     );
     const user = userResult.rows[0];
     if (user?.is_active && !user?.is_deleted && user?.email_verified) {
-      req.user = user;
+      if (!await applySecurityPolicy(req, user, decoded.mfa_verified === true)) delete req.user;
     }
     next();
   } catch (error) {
@@ -145,14 +170,14 @@ export const authenticateToken = async (req, res, next) => {
   const trySessionFallback = async () => {
     const sessionUser = await hydrateUserFromSession(req);
     if (!sessionUser) return false;
-    req.user = sessionUser;
+    req.sessionPolicyUser = sessionUser;
     return true;
   };
 
   if (!token) {
     try {
       if (await trySessionFallback()) {
-        return next();
+        return enforceSecurityPolicy(req, res, next, req.sessionPolicyUser, req.session?.auth?.twoFactorVerified === true);
       }
     } catch (error) {
       logAuthError('Session authentication error:', error);
@@ -180,7 +205,7 @@ export const authenticateToken = async (req, res, next) => {
   } catch (err) {
     try {
       if (await trySessionFallback()) {
-        return next();
+        return enforceSecurityPolicy(req, res, next, req.sessionPolicyUser, req.session?.auth?.twoFactorVerified === true);
       }
     } catch (sessionError) {
       logAuthError('Session authentication fallback error:', sessionError);
@@ -216,10 +241,7 @@ export const authenticateToken = async (req, res, next) => {
   try {
     // Validate session is still active
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const sessionResult = await pool.query(
-      'SELECT id FROM sessions WHERE token_hash = $1 AND user_id = $2 AND is_active = true AND expires_at > NOW()',
-      [tokenHash, decoded.id]
-    );
+    const sessionResult = await findPolicySession(tokenHash, decoded.id);
 
     if (sessionResult.rows.length === 0) {
       return res.status(401).json({
@@ -232,7 +254,7 @@ export const authenticateToken = async (req, res, next) => {
     }
 
     const userResult = await pool.query(
-      `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified
+      `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified, two_factor_enabled
        FROM users WHERE id = $1 LIMIT 1`,
       [decoded.id]
     );
@@ -253,8 +275,7 @@ export const authenticateToken = async (req, res, next) => {
     }
 
     // Always use current database roles and account state, never JWT role claims.
-    req.user = currentUser;
-    next();
+    return enforceSecurityPolicy(req, res, next, currentUser, decoded.mfa_verified === true);
   } catch (error) {
     logAuthError('Authentication middleware error:', error);
     if (isDatabaseUnavailableError(error)) {

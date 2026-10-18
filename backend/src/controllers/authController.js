@@ -1,3 +1,4 @@
+import { securityPolicy, passwordPolicyError, policyUser } from '../services/securityPolicy.js';
 import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -26,16 +27,17 @@ const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Pl
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-const signToken = (user) =>
+const signToken = (user, policy, twoFactorVerified = false) =>
   jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, role: user.role, mfa_verified: twoFactorVerified },
     process.env.JWT_SECRET,
     {
       algorithm: 'HS256',
-      expiresIn: '24h',
+      expiresIn: Math.min(24 * 60 * 60, policy.session_timeout_minutes * 60),
       issuer: process.env.JWT_ISSUER || '10th-west-moto-api',
       audience: process.env.JWT_AUDIENCE || '10th-west-moto-web',
       subject: String(user.id),
+      jwtid: crypto.randomUUID(),
     }
   );
 
@@ -155,11 +157,8 @@ const getSessionTtlMs = () => parseDurationMs(
   Number(process.env.SESSION_TTL_MS || 7 * 24 * 60 * 60 * 1000)
 );
 
-const getSessionExpiresAt = () => new Date(Date.now() + getSessionTtlMs());
+const getSessionExpiresAt = (policy) => new Date(Date.now() + Math.min(getSessionTtlMs(), policy.session_timeout_minutes * 60_000));
 
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
-const MAX_LOGIN_ATTEMPTS = 5;
-const LOCK_DURATION_MINUTES = 15;
 const EMAIL_VERIFICATION_WINDOW_MINUTES = Math.min(
   3,
   Math.max(1, Number.parseInt(process.env.EMAIL_VERIFICATION_WINDOW_MINUTES || '3', 10) || 3)
@@ -266,8 +265,10 @@ const bindAuthenticatedSession = async (req, user, token) => {
     role: user.role || null,
     tokenHash: hashToken(token),
     authenticatedAt: Date.now(),
+    twoFactorVerified: jwt.decode(token)?.mfa_verified === true,
   };
 
+  if (req.session.cookie) req.session.cookie.maxAge = Math.min(getSessionTtlMs(), (await securityPolicy.get()).session_timeout_minutes * 60_000);
   await saveRequestSession(req);
 };
 
@@ -375,10 +376,11 @@ const buildVerificationUrl = (token) => {
   return url.toString();
 };
 
-const persistSession = async (client, user, ipAddress, userAgent) => {
-  const token = signToken(user);
+const persistSession = async (client, user, ipAddress, userAgent, twoFactorVerified = false) => {
+  const policy = await securityPolicy.get();
+  const token = signToken(user, policy, twoFactorVerified);
   const tokenHash = hashToken(token);
-  const expiresAt = getSessionExpiresAt();
+  const expiresAt = getSessionExpiresAt(policy);
 
   await client.query(
     `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
@@ -462,24 +464,73 @@ const registrationDeliveryResponse = ({ deliveryStatus, existing = false }) => {
 };
 
 // ─── Record login attempt ──────────────────────────────────────────
-const recordLoginAttempt = async (email, ip, success) => {
-  await pool.query(
-    'INSERT INTO login_attempts (email, ip_address, success) VALUES ($1, $2, $3)',
-    [email, ip, success]
-  );
+const recordLoginAttempt = async (email, ip, success, policy = null) => {
+  await pool.query('INSERT INTO login_attempts (email, ip_address, success) VALUES ($1, $2, $3)', [email, ip, success]);
+  if (!success) {
+    policy ||= await securityPolicy.get();
+    // One atomic row update serializes concurrent failures. A live lock is never
+    // extended by more attempts; the first failure after expiry starts at one.
+    await pool.query(
+      `UPDATE users SET
+         login_attempts = CASE WHEN locked_until <= NOW() THEN 1 ELSE COALESCE(login_attempts, 0) + 1 END,
+         locked_until = CASE WHEN
+           (CASE WHEN locked_until <= NOW() THEN 1 ELSE COALESCE(login_attempts, 0) + 1 END) >= $2
+           THEN NOW() + make_interval(mins => $3) ELSE NULL END
+       WHERE LOWER(email) = LOWER($1) AND (locked_until IS NULL OR locked_until <= NOW())`,
+      [email, policy.max_login_attempts, policy.lockout_duration_minutes]
+    );
+  }
 };
-
-// ─── Check account lockout ─────────────────────────────────────────
-const isAccountLocked = async (email) => {
+const invalidCredentials = res => res.status(401).json({ message: 'Invalid email or password', code: 'INVALID_CREDENTIALS' });
+const resetLoginState = async user => {
   const result = await pool.query(
-    `SELECT COUNT(*) as cnt FROM login_attempts
-     WHERE email = $1 AND success = false AND created_at > NOW() - make_interval(mins => $2)`,
-    [email, LOCK_DURATION_MINUTES]
-  );
-  return parseInt(result.rows[0].cnt) >= MAX_LOGIN_ATTEMPTS;
+    `UPDATE users SET login_attempts = 0, locked_until = NULL, last_login = NOW()
+     WHERE id = $1 AND (locked_until IS NULL OR locked_until <= NOW()) RETURNING id`, [user.id]);
+  return result.rowCount !== 0;
 };
 
-// ─── SEND REGISTRATION OTP ─────────────────────────────────────────
+const verifySecondFactor = async (user, totpCode, recoveryCode) => {
+  if (totpCode && user.two_factor_secret && speakeasy.totp.verify({
+    secret: decryptTwoFactorSecret(user.two_factor_secret), encoding: 'base32', token: String(totpCode), window: 1,
+  })) return true;
+  if (!recoveryCode) return false;
+  const recoveryHash = hashRecoveryCode(recoveryCode);
+  // Consume once atomically, including simultaneous challenges.
+  const result = await pool.query(
+    `UPDATE users SET two_factor_recovery_hashes = two_factor_recovery_hashes - $2::text
+     WHERE id = $1 AND two_factor_recovery_hashes ? $2 RETURNING id`, [user.id, recoveryHash]);
+  return result.rowCount === 1;
+};
+
+const completeSecondFactorSession = async (req, user) => {
+  const previousHash = req.session?.auth?.tokenHash
+    || (req.headers?.authorization ? hashToken(req.headers.authorization.replace(/^Bearer\s+/i, '')) : null);
+  if (!await resetLoginState(user)) return false;
+  const token = await persistSession(pool, user, req.clientIp, req.clientUa, true);
+  await prepareAuthenticatedSession(req, user, token, { strict: true });
+  if (previousHash) await pool.query('UPDATE sessions SET is_active = false WHERE token_hash = $1', [previousHash]);
+  return true;
+};
+
+export const challenge2FA = async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+    const user = result.rows[0];
+    if (!user?.two_factor_enabled || (user.locked_until && new Date(user.locked_until) > new Date())) return invalidCredentials(res);
+    if (!await verifySecondFactor(user, req.body?.totp_code, req.body?.recovery_code)) {
+      await recordLoginAttempt(user.email, req.clientIp, false);
+      await logActivity({ userId: user.id, action: 'login_2fa_failed', ipAddress: req.clientIp, userAgent: req.clientUa });
+      return res.status(401).json({ message: 'Invalid two-factor authentication code.', code: 'TWO_FACTOR_INVALID' });
+    }
+    if (!await completeSecondFactorSession(req, user)) return invalidCredentials(res);
+    await logActivity({ userId: user.id, action: 'login_2fa_verified', ipAddress: req.clientIp, userAgent: req.clientUa });
+    return res.json({ message: 'Two-factor authentication verified.' });
+  } catch (error) {
+    console.error('Two-factor challenge failed:', sanitizeDatabaseError(error));
+    return res.status(500).json({ message: 'Unable to verify two-factor authentication.' });
+  }
+};
+
 export const sendRegistrationOtp = async (req, res) => {
   const { email, name } = req.body;
   try {
@@ -586,6 +637,8 @@ export const register = async (req, res) => {
   console.info('ACCOUNT_CREATE_START', { request_id: requestId });
 
   try {
+    const policyError = passwordPolicyError(password, await securityPolicy.get());
+    if (policyError) return res.status(400).json({ message: policyError, fieldErrors: { password: policyError } });
     if (shouldUseDatabaseReadFallback()) {
       const existingUser = await getUserFromSupabaseRestByEmail(email);
       const verificationToken = createVerificationToken();
@@ -825,12 +878,7 @@ export const login = async (req, res) => {
   const guestCartSessionId = req.session?.cartSessionId || null;
 
   try {
-    if (await isAccountLocked(email)) {
-      return res.status(429).json({
-        message: 'Too many failed login attempts. Please try again later.',
-      });
-    }
-
+    const policy = await securityPolicy.get();
     const result = await pool.query(
       `SELECT users.*,
               (
@@ -862,20 +910,16 @@ export const login = async (req, res) => {
     }
 
     const user = result.rows[0];
+    if (user.locked_until && new Date(user.locked_until).getTime() > Date.now()) return invalidCredentials(res);
 
     if (!user.is_active || user.is_deleted) {
-      return res.status(403).json({ message: 'Your account is currently unavailable. Please contact support.' });
+      return invalidCredentials(res);
     }
 
     const isValid = await bcrypt.compare(password, user.password_hash || '');
 
     if (!isValid) {
       await recordLoginAttempt(email, ipAddress, false);
-      if (await isAccountLocked(email)) {
-        return res.status(429).json({
-          message: 'Too many failed login attempts. Please try again later.',
-        });
-      }
       return res.status(401).json({
         message: 'Invalid email or password',
         code: 'INVALID_CREDENTIALS',
@@ -900,26 +944,10 @@ export const login = async (req, res) => {
         });
       }
 
-      const validTotp = Boolean(totpCode && user.two_factor_secret) && speakeasy.totp.verify({
-        secret: decryptTwoFactorSecret(user.two_factor_secret), encoding: 'base32', token: String(totpCode), window: 1,
-      });
-      const recoveryHashes = Array.isArray(user.two_factor_recovery_hashes) ? user.two_factor_recovery_hashes : [];
-      const recoveryHash = recoveryCode ? hashRecoveryCode(recoveryCode) : null;
-      const recoveryIndex = recoveryHash ? recoveryHashes.indexOf(recoveryHash) : -1;
-      const validRecovery = recoveryIndex >= 0;
-
-      if (!validTotp && !validRecovery) {
+      if (!await verifySecondFactor(user, totpCode, recoveryCode)) {
         await recordLoginAttempt(email, ipAddress, false);
         await logActivity({ userId: user.id, action: 'login_2fa_failed', ipAddress, userAgent });
-        return res.status(401).json({
-          message: 'Invalid two-factor authentication code.',
-          code: 'TWO_FACTOR_INVALID',
-          requires_2fa: true,
-        });
-      }
-      if (validRecovery) {
-        recoveryHashes.splice(recoveryIndex, 1);
-        await pool.query('UPDATE users SET two_factor_recovery_hashes=$2::jsonb WHERE id=$1', [user.id, JSON.stringify(recoveryHashes)]);
+        return res.status(401).json({ message: 'Invalid two-factor authentication code.', code: 'TWO_FACTOR_INVALID', requires_2fa: true });
       }
     }
 
@@ -929,20 +957,13 @@ export const login = async (req, res) => {
       console.warn('Unable to merge guest cart during login:', sanitizeDatabaseError(cartMergeError));
     }
 
-    const token = await persistSession(pool, user, ipAddress, userAgent);
+    if (!await resetLoginState(user)) return invalidCredentials(res);
+    const token = await persistSession(pool, user, ipAddress, userAgent, Boolean(user.two_factor_enabled));
     await prepareAuthenticatedSession(req, user, token);
 
     // Post-login bookkeeping must not block a valid authentication response.
     void (async () => {
       try {
-        await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
-        await pool.query(
-          `DELETE FROM login_attempts
-           WHERE email = $1
-             AND success = false
-             AND created_at > NOW() - make_interval(mins => $2)`,
-          [email, LOCK_DURATION_MINUTES]
-        );
         await recordLoginAttempt(email, ipAddress, true);
         await logActivity({ userId: user.id, action: 'login', ipAddress, userAgent });
       } catch (bookkeepingError) {
@@ -950,7 +971,7 @@ export const login = async (req, res) => {
       }
     })();
 
-    res.json({ user: sanitizeUser({ ...user, last_login: new Date(), email_verified: true }) });
+    res.json({ user: policyUser(sanitizeUser({ ...user, last_login: new Date(), email_verified: true }), policy, Boolean(user.two_factor_enabled)) });
   } catch (error) {
     console.error('Login error:', sanitizeDatabaseError(error));
     if (isDatabaseUnavailableError(error)) {
@@ -1034,7 +1055,7 @@ export const getProfile = async (req, res) => {
     if (shouldUseDatabaseReadFallback()) {
       const user = await getUserFromSupabaseRestById(req.user.id);
       if (!user) return res.status(404).json({ message: 'User not found' });
-      return res.json(sanitizeUser(user));
+      return res.json(policyUser(sanitizeUser(user), await securityPolicy.get(), req.twoFactorVerified));
     }
 
     const result = await pool.query(
@@ -1060,14 +1081,14 @@ export const getProfile = async (req, res) => {
       [req.user.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
-    res.json(sanitizeUser(result.rows[0]));
+    res.json(policyUser(sanitizeUser(result.rows[0]), await securityPolicy.get(), req.twoFactorVerified));
   } catch (error) {
     console.error('Get profile error:', sanitizeDatabaseError(error));
     if (isDatabaseConnectivityError(error)) {
       try {
         const user = await getUserFromSupabaseRestById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
-        return res.json(sanitizeUser(user));
+        return res.json(policyUser(sanitizeUser(user), await securityPolicy.get(), req.twoFactorVerified));
       } catch (fallbackError) {
         console.error('Get profile Supabase REST fallback error:', sanitizeDatabaseError(fallbackError));
       }
@@ -1177,9 +1198,8 @@ export const resetPassword = async (req, res) => {
   const { token, newPassword } = req.validatedData || req.body;
 
   try {
-    if (!PASSWORD_REGEX.test(newPassword)) {
-      return res.status(400).json({ message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character' });
-    }
+    const policyError = passwordPolicyError(newPassword, await securityPolicy.get());
+    if (policyError) return res.status(400).json({ message: policyError });
 
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
     const result = await pool.query(
@@ -1204,7 +1224,7 @@ export const resetPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     await pool.query(
-      'UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, failed_login_attempts = 0, locked_until = NULL WHERE id = $2',
+      'UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, failed_login_attempts = 0, login_attempts = 0, locked_until = NULL WHERE id = $2',
       [hashedPassword, user.id]
     );
 
@@ -1228,9 +1248,8 @@ export const changePassword = async (req, res) => {
       return res.status(400).json({ message: 'Current password and new password are required.' });
     }
 
-    if (!PASSWORD_REGEX.test(newPassword)) {
-      return res.status(400).json({ message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character' });
-    }
+    const policyError = passwordPolicyError(newPassword, await securityPolicy.get());
+    if (policyError) return res.status(400).json({ message: policyError });
 
     const result = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
@@ -1277,6 +1296,7 @@ export const changePassword = async (req, res) => {
 // ─── 2FA: SETUP ───────────────────────────────────────────────────
 export const setup2FA = async (req, res) => {
   try {
+    if ((await securityPolicy.get())['2fa_enforcement'] === 'disabled') return res.status(403).json({ message: 'New two-factor enrollment is disabled by system policy.' });
     const user = await pool.query('SELECT id, email, password_hash, two_factor_enabled FROM users WHERE id = $1', [req.user.id]);
     if (user.rows.length === 0) return res.status(404).json({ message: 'User not found' });
 
@@ -1306,10 +1326,11 @@ export const setup2FA = async (req, res) => {
       issuer: '10th West Moto',
     });
 
-    await pool.query(
-      `UPDATE users SET two_factor_secret=$1,two_factor_enabled=false,two_factor_recovery_hashes='[]'::jsonb WHERE id=$2`,
+    const setup = await pool.query(
+      `UPDATE users SET two_factor_secret=$1,two_factor_enabled=false,two_factor_recovery_hashes='[]'::jsonb WHERE id=$2 AND two_factor_enabled=false RETURNING id`,
       [encryptTwoFactorSecret(secret.base32), req.user.id]
     );
+    if (setup.rowCount === 0) return res.status(409).json({ message: 'Two-factor setup changed. Please try again.' });
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
 
     // Security: Only return QR code, never expose the raw secret to the frontend
@@ -1325,21 +1346,29 @@ export const verify2FA = async (req, res) => {
   const { totp_code } = req.body;
 
   try {
-    const result = await pool.query('SELECT two_factor_secret FROM users WHERE id = $1', [req.user.id]);
+    if ((await securityPolicy.get())['2fa_enforcement'] === 'disabled') return res.status(403).json({ message: 'New two-factor enrollment is disabled by system policy.' });
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
 
+    if (result.rows[0].two_factor_enabled) return res.status(409).json({ message: 'Two-factor authentication is already enabled. Use the challenge endpoint.' });
+    if (result.rows[0].locked_until && new Date(result.rows[0].locked_until) > new Date()) return invalidCredentials(res);
     const encryptedSecret = result.rows[0].two_factor_secret;
     if (!encryptedSecret) return res.status(400).json({ message: 'No 2FA setup in progress' });
     const secret = decryptTwoFactorSecret(encryptedSecret);
 
     const verified = speakeasy.totp.verify({ secret, encoding: 'base32', token: totp_code, window: 1 });
-    if (!verified) return res.status(400).json({ message: 'Invalid code. Try again.' });
+    if (!verified) {
+      await recordLoginAttempt(result.rows[0].email, req.clientIp, false);
+      return res.status(400).json({ message: 'Invalid code. Try again.' });
+    }
 
     const recoveryCodes = generateRecoveryCodes();
-    await pool.query(
-      `UPDATE users SET two_factor_enabled=true,two_factor_recovery_hashes=$2::jsonb WHERE id=$1`,
-      [req.user.id, JSON.stringify(recoveryCodes.map(hashRecoveryCode))]
+    const enabled = await pool.query(
+      `UPDATE users SET two_factor_enabled=true,two_factor_recovery_hashes=$2::jsonb WHERE id=$1 AND two_factor_enabled=false AND two_factor_secret=$3 RETURNING id`,
+      [req.user.id, JSON.stringify(recoveryCodes.map(hashRecoveryCode)), encryptedSecret]
     );
+    if (enabled.rowCount === 0) return res.status(409).json({ message: 'Two-factor setup changed. Please try again.' });
+    if (!await completeSecondFactorSession(req, { ...result.rows[0], two_factor_enabled: true })) return invalidCredentials(res);
     await logActivity({ userId: req.user.id, action: '2fa_enabled', ipAddress: req.clientIp, userAgent: req.clientUa });
 
     res.json({ message: 'Two-factor authentication enabled successfully!', recovery_codes: recoveryCodes });
@@ -1354,6 +1383,7 @@ export const disable2FA = async (req, res) => {
   const { password } = req.body;
 
   try {
+    if ((await securityPolicy.get())['2fa_enforcement'] === 'required') return res.status(403).json({ message: 'Two-factor authentication is required by system policy.' });
     const result = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
 
@@ -1701,18 +1731,18 @@ export const exchangeOAuthCode = async (req, res) => {
     }
 
     const user = userResult.rows[0];
-    const token = signToken(user);
+    const token = signToken(user, await securityPolicy.get());
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
     await pool.query(
       `INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
        VALUES ($1, $2, $3, $4, $5)`,
-      [user.id, tokenHash, ip, ua, getSessionExpiresAt()]
+      [user.id, tokenHash, ip, ua, getSessionExpiresAt(await securityPolicy.get())]
     );
 
     await prepareAuthenticatedSession(req, user, token);
 
-    res.json({ user: sanitizeUser(user) });
+    res.json({ user: policyUser(sanitizeUser(user), await securityPolicy.get()) });
   } catch (error) {
     console.error('Exchange OAuth code error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
@@ -2114,7 +2144,7 @@ export const verifyEmailToken = async (req, res) => {
     return sendResponse(200, {
       success: true,
       message: 'Email verified successfully. Logging you in...',
-      user: sanitizeUser(updatedUser),
+      user: policyUser(sanitizeUser(updatedUser), await securityPolicy.get()),
       redirectTo: getPostVerificationRedirectPath(updatedUser),
       authenticated: true,
       autoLogin: true,

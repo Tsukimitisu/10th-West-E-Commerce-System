@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import test, { after, before, mock } from 'node:test';
+import express from 'express';
+import jwt from 'jsonwebtoken';
+process.env.NODE_ENV = 'test';
+process.env.TEST_DATABASE_URL = 'postgresql://unit:unit@127.0.0.1:1/policy_routes';
+process.env.JWT_SECRET = 'isolated-security-policy-routes';
+const { default: pool } = await import('../config/database.js');
+const { default: admin } = await import('./admin.js');
+const { securityPolicy } = await import('../services/securityPolicy.js');
+const roles = ['customer', 'store_staff', 'owner', 'super_admin'];
+const settings = new Map([['max_login_attempts', '5']]);
+const audits = [], queries = [];
+let server, base;
+before(async () => {
+  mock.method(pool, 'query', async (sql, args = []) => {
+    queries.push({ sql, args });
+    if (sql.includes('SELECT id FROM sessions')) return { rows: [{ id: 1 }] };
+    if (sql.includes('FROM users')) return { rows: [{ id: args[0], role: roles[args[0] - 1], is_active: true, email_verified: true }] };
+    if (sql.includes('FROM system_settings')) return { rows: [...settings].map(([key, value]) => ({ key, value, category: 'security' })) };
+    if (sql.includes('INSERT INTO system_settings')) {
+      const offset = sql.includes("VALUES ('security'") ? 0 : 1; settings.set(args[offset], args[offset + 1]);
+    }
+    if (sql.includes('INSERT INTO audit_logs')) audits.push(args);
+    return { rows: [], rowCount: 1 };
+  });
+  mock.method(pool, 'connect', async () => ({ query: (...args) => pool.query(...args), release() {} }));
+  const app = express(); app.use(express.json()); app.use('/api/admin', admin);
+  await new Promise(resolve => { server = app.listen(0, '127.0.0.1', resolve); }); base = `http://127.0.0.1:${server.address().port}/api/admin`;
+});
+after(async () => { await new Promise(resolve => server.close(resolve)); mock.restoreAll(); await pool.end(); });
+const call = (role, path, body, method = body ? 'PUT' : 'GET') => fetch(`${base}${path}`, {
+  method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt.sign({ id: roles.indexOf(role) + 1 }, process.env.JWT_SECRET, { issuer: '10th-west-moto-api', audience: '10th-west-moto-web' })}` },
+  ...(body ? { body: JSON.stringify(body) } : {}),
+});
+test('every global-policy write path denies non-Super-Admin roles before writes', async () => {
+  for (const role of roles.slice(0, 3)) for (const [path, body] of [['/security/settings', { settings: { max_login_attempts: '2' } }], ['/settings', { category: 'security', settings: { max_login_attempts: '2' } }]]) {
+    assert.equal((await call(role, path, body)).status, 403);
+  }
+  assert.equal(audits.length, 0); assert.equal(settings.get('max_login_attempts'), '5');
+});
+test('successful save invalidates runtime cache, survives reload, and audits safe names/values', async () => {
+  assert.equal((await securityPolicy.get()).max_login_attempts, 5);
+  const res = await call('super_admin', '/security/settings', { settings: { max_login_attempts: '3', session_timeout_minutes: '10' } });
+  assert.equal(res.status, 200); assert.equal((await securityPolicy.get()).max_login_attempts, 3);
+  assert.equal((await (await call('super_admin', '/security/settings')).json()).max_login_attempts, '3');
+  assert.equal(audits[0][0], 4); assert.equal(JSON.parse(audits[0].at(-1)).max_login_attempts, '3');
+  assert.ok(queries.some(({ sql, args }) => sql.includes('expires_at = LEAST') && args[0] === 10));
+  assert.equal((await call('super_admin', '/settings', { category: 'security', settings: { max_login_attempts: '4' } })).status, 200);
+  assert.equal((await securityPolicy.get()).max_login_attempts, 4);
+});
+test('fractional policies, unsupported 2FA modes and missing enrollment key are rejected', async () => {
+  for (const settings of [{ max_login_attempts: '2.5' }, { '2fa_enforcement': 'required_staff' }, { smtp_password: 'must-not-log' }]) {
+    assert.equal((await call('super_admin', '/security/settings', { settings })).status, 400);
+  }
+  const previous = process.env.TWO_FACTOR_ENCRYPTION_KEY; delete process.env.TWO_FACTOR_ENCRYPTION_KEY;
+  try { assert.equal((await call('super_admin', '/security/settings', { settings: { '2fa_enforcement': 'required' } })).status, 400); }
+  finally { if (previous !== undefined) process.env.TWO_FACTOR_ENCRYPTION_KEY = previous; }
+  assert.doesNotMatch(JSON.stringify(audits), /must-not-log|Bearer|password_hash|two_factor_secret/);
+});
+test('privileged password reset uses the same saved password policy before hashing or writing', async () => {
+  assert.equal((await call('super_admin', '/security/settings', { settings: { password_min_length: '20' } })).status, 200);
+  const before = queries.length;
+  const res = await call('super_admin', '/users/1/reset-password', { newPassword: 'ShortPass123!' }, 'POST');
+  assert.equal(res.status, 400); assert.match((await res.json()).message, /at least 20/);
+  assert.equal(queries.slice(before).some(({ sql }) => sql.includes('SET password_hash')), false);
+});
