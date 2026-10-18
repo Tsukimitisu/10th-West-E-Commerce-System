@@ -82,4 +82,16 @@ test('production verifier accepts complete deployment settings and reports names
       assert.equal(JSON.stringify(result).includes(env[key]), false);
     }
   }
+  const textbee = { ...env, PHONE_VERIFICATION_PROVIDER: 'textbee', TEXTBEE_API_KEY: 'txb_unit_verifier_secret', SEMAPHORE_API_KEY: '', SEMAPHORE_SENDER_NAME: '' };
+  assert.deepEqual(inspectProductionConfig(textbee), { ready: true, failures: [] }, 'TextBee does not require Semaphore credentials');
+  assert.ok(inspectProductionConfig({ ...textbee, TEXTBEE_API_KEY: 'YOUR_TEXTBEE_KEY' }).failures.includes('TEXTBEE_API_KEY missing or placeholder'));
+  for (const override of [{ TEXTBEE_API_KEY: '' }, { PHONE_VERIFICATION_PROVIDER: 'unknown' }]) {
+    const result = inspectProductionConfig({ ...textbee, ...override });
+    assert.equal(result.ready, false);
+    assert.ok(result.failures.includes('Phone verification provider or OTP limits invalid'));
+    assert.equal(JSON.stringify(result).includes('txb_unit_verifier_secret'), false);
+  }
+  assert.ok(inspectProductionConfig({ ...textbee, TEXTBEE_API_KEY: '' }).failures.includes('TEXTBEE_API_KEY missing or placeholder'));
+  const semaphoreMissing = inspectProductionConfig({ ...env, SEMAPHORE_SENDER_NAME: '' });
+  assert.ok(semaphoreMissing.failures.includes('SEMAPHORE_SENDER_NAME missing or placeholder'), 'Semaphore checks retained');
 });

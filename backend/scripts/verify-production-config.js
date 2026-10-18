@@ -1,7 +1,7 @@
 import '../src/config/environment.cjs';
 import { validateCoreEnvironment } from '../src/config/productionConfig.js';
 import { validateDeploymentUrls } from '../src/config/deployment.js';
-import { phoneOtpConfig } from '../src/services/phoneOtp.js';
+import { phoneOtpConfig, phoneProvider } from '../src/services/phoneOtp.js';
 import databaseConfig from '../src/config/databaseConfig.cjs';
 import { pathToFileURL } from 'node:url';
 
@@ -15,8 +15,9 @@ export const inspectProductionConfig = (env) => {
     'FACEBOOK_APP_ID', 'FACEBOOK_APP_SECRET', 'FACEBOOK_CALLBACK_URL',
     'PAYMONGO_PUBLIC_KEY', 'PAYMONGO_SECRET_KEY', 'PAYMONGO_WEBHOOK_SECRET',
     'PAYMONGO_SUCCESS_URL', 'PAYMONGO_FAILED_URL', 'PAYMONGO_CANCEL_URL',
-    'SEMAPHORE_API_KEY', 'SEMAPHORE_SENDER_NAME',
     'CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET',
+    // Only the selected SMS provider's credentials are required.
+    ...(phoneProvider(env) === 'textbee' ? ['TEXTBEE_API_KEY'] : phoneProvider(env) === 'semaphore' ? ['SEMAPHORE_API_KEY', 'SEMAPHORE_SENDER_NAME'] : []),
   ]) {
     if (!String(env[name] || '').trim() || /YOUR[-_]|placeholder|replace[-_]/i.test(env[name])) failures.push(`${name} missing or placeholder`);
   }
@@ -26,7 +27,7 @@ export const inspectProductionConfig = (env) => {
     const db = databaseConfig.createDatabaseConfig({ env: { ...env, NODE_ENV: 'production' } });
     if (!db.ssl) throw new Error();
   });
-  check('Semaphore configuration or OTP limits invalid', () => { if (!phoneOtpConfig(env).available) throw new Error(); });
+  check('Phone verification provider or OTP limits invalid', () => { if (!phoneOtpConfig(env).available) throw new Error(); });
   for (const [name, expected] of Object.entries({
     COOKIE_SAME_SITE: 'none', SESSION_STORE: 'postgres', PAYMENT_PROVIDER: 'paymongo',
     PAYMONGO_ALLOWED_METHODS: 'gcash', PAYMONGO_CURRENCY: 'PHP',

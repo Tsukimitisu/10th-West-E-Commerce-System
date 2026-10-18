@@ -2,7 +2,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import pool from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { canonicalPhone, phoneOtpConfig, phoneOtpReadiness, hashPhoneCode, sendSemaphoreCode } from '../services/phoneOtp.js';
+import { canonicalPhone, phoneOtpConfig, phoneOtpReadiness, hashPhoneCode, sendPhoneVerificationCode } from '../services/phoneOtp.js';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -62,7 +62,7 @@ router.post('/send', async (req, res, next) => {
     client.release();
     client = null;
     try {
-      await sendSemaphoreCode({ phone, code, expiry: config.expiry });
+      await sendPhoneVerificationCode({ phone, code, expiry: config.expiry });
     } catch {
       return res.status(502).json({ message: 'SMS delivery failed. Please try again.' });
     }
