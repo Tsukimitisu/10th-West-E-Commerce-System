@@ -5,6 +5,37 @@ import { getEmailConfigurationStatus } from './integrationReadiness.js';
 const DEFAULT_EMAIL_TIMEOUT_MS = 15_000;
 const MAX_EMAIL_TIMEOUT_MS = 30_000;
 
+class PrivateResendClient extends Resend {
+  // The SDK logs raw provider errors in development. Use only our sanitized
+  // diagnostics below, in every environment.
+  logError() {}
+}
+
+// This checks configuration, not DNS ownership or eventual inbox delivery.
+export const inspectResendConfiguration = (env = process.env) => {
+  const failures = [];
+  let code = 'EMAIL_CONFIG_MISSING';
+  for (const name of ['RESEND_API_KEY', 'RESEND_FROM']) {
+    if (!String(env[name] || '').trim() || /YOUR[-_]|placeholder|replace[-_]/i.test(env[name])) failures.push(`${name} missing or placeholder`);
+  }
+  const sender = String(env.RESEND_FROM || '').trim();
+  const mailbox = sender.includes('<') ? sender.match(/^[^<>\r\n]*<([^<>\r\n]+)>$/)?.[1] : sender;
+  if (sender && !/^[^\s<>@,;]+@(?:[a-z0-9-]+\.)+[a-z]{2,63}$/i.test(mailbox || '')) {
+    failures.push('RESEND_FROM must be a valid sender mailbox');
+    code = 'RESEND_SENDER_INVALID';
+  }
+  if (String(env.NODE_ENV).toLowerCase() === 'production' && /@(?:[a-z0-9-]+\.)?resend\.dev$/i.test(mailbox || '')) {
+    failures.push('RESEND_FROM uses the resend.dev test domain; a verified sending domain is required');
+    code = 'RESEND_TEST_SENDER';
+  }
+  if (env.EMAIL_PROVIDER_TIMEOUT_MS && (!/^\d+$/.test(env.EMAIL_PROVIDER_TIMEOUT_MS)
+    || Number(env.EMAIL_PROVIDER_TIMEOUT_MS) < 1000 || Number(env.EMAIL_PROVIDER_TIMEOUT_MS) > MAX_EMAIL_TIMEOUT_MS)) {
+    failures.push('EMAIL_PROVIDER_TIMEOUT_MS must be between 1000 and 30000');
+    code = 'EMAIL_TIMEOUT_INVALID';
+  }
+  return { ready: failures.length === 0, failures, code: failures.length ? code : null };
+};
+
 const escapeHtml = (value) => String(value ?? '')
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
@@ -41,8 +72,31 @@ const withTimeout = (promise, timeoutMs) => new Promise((resolve, reject) => {
 
 const safeErrorCode = (error) => {
   const raw = error?.code || error?.name || error?.statusCode || error?.status || 'EMAIL_DELIVERY_FAILED';
-  const normalized = String(raw).toUpperCase().replace(/[^A-Z0-9_-]/g, '_').slice(0, 80);
-  return normalized || 'EMAIL_DELIVERY_FAILED';
+  const normalized = String(raw).toUpperCase();
+  // Provider-controlled strings can contain PII/secrets. Only known codes may
+  // enter logs; inspect messages below solely to select a fixed safe reason.
+  return new Set([
+    'EMAIL_PROVIDER_TIMEOUT', 'EMAIL_PROVIDER_INVALID_RESPONSE', 'VALIDATION_ERROR',
+    'MISSING_API_KEY', 'RESTRICTED_API_KEY', 'SUSPENDED_API_KEY', 'INVALID_PERMISSION',
+    'RATE_LIMIT_EXCEEDED', 'DAILY_QUOTA_EXCEEDED', 'MONTHLY_QUOTA_EXCEEDED',
+    'APPLICATION_ERROR', 'SERVICE_UNAVAILABLE', 'RESEND_REJECTED',
+    'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ESOCKET', 'EAI_AGAIN', 'EAUTH',
+  ]).has(normalized) ? normalized : 'EMAIL_DELIVERY_FAILED';
+};
+
+const failureReason = (error, code) => {
+  const status = Number(error?.statusCode || error?.status || 0);
+  const message = `${error?.code || error?.name || ''} ${error?.message || ''}`.toLowerCase();
+  if (code === 'EMAIL_PROVIDER_TIMEOUT' || ['ETIMEDOUT', 'ESOCKET'].includes(code)) return 'timeout';
+  if (code === 'EMAIL_PROVIDER_INVALID_RESPONSE') return 'invalid_response';
+  if (/testing emails|test sender/.test(message)) return 'test_sender_restricted';
+  if (/domain.*not.*verif|not.*verif.*domain/.test(message)) return 'domain_not_verified';
+  if (/suppress|bounc/.test(message)) return 'suppressed_or_bounced';
+  if (status === 401 || /api.?key.*invalid|invalid.*api.?key/.test(message) || code === 'EAUTH') return 'invalid_api_key';
+  if (status === 429) return 'rate_limited';
+  if (/invalid.*(?:sender|from)|(?:sender|from).*invalid/.test(message)) return 'invalid_sender';
+  if (['ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN'].includes(code) || (!status && /fetch|network/.test(message))) return 'network';
+  return 'provider_rejected';
 };
 
 const isRetryableFailure = (error, code) => {
@@ -87,6 +141,7 @@ export const sendTransactionalEmail = async ({
   requestId = null,
   userId = null,
   idempotencyKey = null,
+  eventType = 'transactional',
   dependencies = {},
 }) => {
   const configuration = getEmailConfigurationStatus();
@@ -94,17 +149,20 @@ export const sendTransactionalEmail = async ({
   const startedAt = Date.now();
   const logContext = {
     provider,
+    event_type: eventType,
     request_id: requestId,
     user_id: userId,
   };
 
   console.info('EMAIL_SEND_START', logContext);
 
-  if (!configuration.ready) {
-    const result = failedResult(provider, 'EMAIL_CONFIG_MISSING', false);
+  const resendConfiguration = provider === 'resend' ? inspectResendConfiguration() : null;
+  if (!configuration.ready || resendConfiguration?.ready === false) {
+    const result = failedResult(provider, resendConfiguration?.code || 'EMAIL_CONFIG_MISSING', false);
     console.warn('EMAIL_SEND_FAILED', {
       ...logContext,
       code: result.code,
+      reason: 'configuration',
       retryable: result.retryable,
       duration_ms: Date.now() - startedAt,
     });
@@ -115,7 +173,7 @@ export const sendTransactionalEmail = async ({
     let messageId = null;
 
     if (provider === 'resend') {
-      const resend = dependencies.resendClient || new Resend(process.env.RESEND_API_KEY);
+      const resend = dependencies.resendClient || new PrivateResendClient(process.env.RESEND_API_KEY);
       const response = await withTimeout(
         resend.emails.send({
           from: process.env.RESEND_FROM,
@@ -131,9 +189,13 @@ export const sendTransactionalEmail = async ({
         const error = new Error('Resend rejected the email request.');
         error.code = response.error.name || response.error.statusCode || 'RESEND_REJECTED';
         error.statusCode = response.error.statusCode;
+        error.message = String(response.error.message || 'Resend rejected the email request.');
         throw error;
       }
-      messageId = response?.data?.id || null;
+      messageId = response?.data?.id;
+      if (typeof messageId !== 'string' || !messageId.trim()) {
+        throw Object.assign(new Error('Email provider returned no valid send ID.'), { code: 'EMAIL_PROVIDER_INVALID_RESPONSE' });
+      }
     } else if (provider === 'smtp') {
       const transporter = dependencies.smtpTransport || createSmtpTransport(configuration);
       const response = await withTimeout(transporter.sendMail({
@@ -161,10 +223,14 @@ export const sendTransactionalEmail = async ({
     return result;
   } catch (error) {
     const code = safeErrorCode(error);
-    const result = failedResult(provider, code, isRetryableFailure(error, code));
+    const reason = failureReason(error, code);
+    const status = Number(error?.statusCode || error?.status || 0);
+    const result = failedResult(provider, code, reason === 'network' || isRetryableFailure(error, code));
     console.warn('EMAIL_SEND_FAILED', {
       ...logContext,
       code: result.code,
+      reason,
+      provider_status: Number.isInteger(status) && status >= 400 && status <= 599 ? status : null,
       retryable: result.retryable,
       duration_ms: Date.now() - startedAt,
     });
@@ -232,6 +298,7 @@ export const sendVerificationEmail = ({
     requestId,
     userId,
     idempotencyKey: requestId ? `verification-${requestId}` : null,
+    eventType: 'verification',
     dependencies,
   });
 };
@@ -254,6 +321,7 @@ export const sendPasswordResetEmail = ({
     requestId,
     userId,
     idempotencyKey: requestId ? `password-reset-${requestId}` : null,
+    eventType: 'password_reset',
     dependencies,
   });
 };

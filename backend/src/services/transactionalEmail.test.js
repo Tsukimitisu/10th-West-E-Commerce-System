@@ -20,6 +20,7 @@ const EMAIL_ENV_NAMES = [
   'EMAIL_PROVIDER', 'RESEND_API_KEY', 'RESEND_FROM', 'EMAIL_FROM',
   'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS',
   'EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASSWORD',
+  'EMAIL_PROVIDER_TIMEOUT_MS', 'NODE_ENV',
 ];
 
 const originalEnvironment = Object.fromEntries(
@@ -227,4 +228,77 @@ test('password reset remains compatible with the Resend provider abstraction', a
   assert.equal(result.accepted, true);
   assert.equal(payload.subject, 'Password Reset - 10th West Moto');
   assert.match(payload.text, /reset-password\?token=unit-token/);
+});
+
+const deliveryCases = [
+  { name: 'success', response: { data: { id: 'provider-send-id' }, error: null }, accepted: true },
+  { name: 'invalid key', status: 401, reason: 'invalid_api_key', error: { name: 'validation_error', statusCode: 401, message: 'API key is invalid' } },
+  { name: 'unverified domain', status: 403, reason: 'domain_not_verified', error: { name: 'validation_error', statusCode: 403, message: 'The sender domain is not verified.' } },
+  { name: 'test sender restriction', status: 403, reason: 'test_sender_restricted', error: { name: 'validation_error', statusCode: 403, message: 'You can only send testing emails to your own email address.' } },
+  { name: 'rate limit', status: 429, reason: 'rate_limited', error: { name: 'rate_limit_exceeded', statusCode: 429 }, retryable: true },
+  { name: 'suppressed recipient', status: 400, reason: 'suppressed_or_bounced', error: { name: 'validation_error', statusCode: 400, message: 'Recipient is suppressed due to a previous bounce.' } },
+  { name: 'timeout', timeout: true, reason: 'timeout', retryable: true },
+  { name: 'network failure', network: true, reason: 'network', retryable: true },
+  ...[undefined, {}, { data: {} }, { data: { id: '' } }, { data: { id: '  ' } }, { data: { id: 123 } }]
+    .map((response, index) => ({ name: `malformed response ${index}`, response, reason: 'invalid_response' })),
+  { name: 'ID accompanied by error', response: { data: { id: 'not-success' }, error: { name: 'validation_error', statusCode: 403, message: 'Domain not verified' } }, reason: 'domain_not_verified', status: 403 },
+];
+
+for (const kind of ['verification', 'password_reset']) {
+  for (const scenario of deliveryCases) {
+    test(`${kind}: ${scenario.name} is classified without logging secrets`, async () => {
+      clearEmailEnvironment();
+      Object.assign(process.env, { NODE_ENV: 'test', EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_private_api_key', RESEND_FROM: '10th West <mail@verified.example.test>', EMAIL_PROVIDER_TIMEOUT_MS: '1000' });
+      const logs = [];
+      for (const method of ['info', 'warn', 'error']) mock.method(console, method, (...args) => logs.push(args));
+      const send = mock.fn(async () => {
+        if (scenario.timeout) return new Promise(() => {});
+        if (scenario.network) throw Object.assign(new Error('private-rider@example.test private-token re_private_api_key'), { code: 'ECONNRESET' });
+        return scenario.error ? { data: null, error: { ...scenario.error, message: `${scenario.error.message || ''} private-rider@example.test private-token re_private_api_key` } } : scenario.response;
+      });
+      const args = { email: 'private-rider@example.test', name: 'Rider', requestId: 'safe-request-id', userId: 7,
+        verificationUrl: 'https://shop.example.test/#/verify-email?token=private-token', expiresInMinutes: 3,
+        resetUrl: 'https://shop.example.test/#/reset-password?token=private-token', dependencies: { resendClient: { emails: { send } } } };
+      const result = await (kind === 'verification' ? sendVerificationEmail(args) : sendPasswordResetEmail(args));
+      assert.equal(result.accepted, Boolean(scenario.accepted));
+      assert.equal(send.mock.callCount(), 1);
+      const entry = logs.find(([event]) => event === (scenario.accepted ? 'EMAIL_SEND_SUCCESS' : 'EMAIL_SEND_FAILED'))?.[1];
+      assert.equal(entry.event_type, kind);
+      assert.equal(entry.request_id, 'safe-request-id');
+      assert.equal(entry.provider, 'resend');
+      if (scenario.reason) assert.equal(entry.reason, scenario.reason);
+      if (scenario.status) assert.equal(entry.provider_status, scenario.status);
+      if (scenario.retryable) assert.equal(result.retryable, true);
+      assert.doesNotMatch(JSON.stringify(logs), /private-rider@example\.test|private-token|re_private_api_key/);
+    });
+  }
+}
+
+test('production refuses the Resend test sender before contacting the provider', async () => {
+  clearEmailEnvironment();
+  Object.assign(process.env, { NODE_ENV: 'production', EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_private_production_key', RESEND_FROM: '10th West <onboarding@resend.dev>' });
+  const logs = [];
+  for (const method of ['info', 'warn']) mock.method(console, method, (...args) => logs.push(args));
+  const send = mock.fn(async () => ({ data: { id: 'must-not-send' }, error: null }));
+  const result = await sendPasswordResetEmail({ email: message.to, resetUrl: 'https://shop.example.test/#/reset-password?token=private-token', dependencies: { resendClient: { emails: { send } } } });
+  assert.equal(result.accepted, false);
+  assert.equal(result.code, 'RESEND_TEST_SENDER');
+  assert.equal(send.mock.callCount(), 0);
+  assert.doesNotMatch(JSON.stringify(logs), /private-token|re_private_production_key|rider@example.test/);
+});
+
+test('actual Resend SDK errors cannot print raw provider fields, even outside production', async () => {
+  clearEmailEnvironment();
+  Object.assign(process.env, { NODE_ENV: 'development', EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_private_sdk_key', RESEND_FROM: '10th West <noreply@verified.example.test>' });
+  const logs = [];
+  for (const method of ['info', 'warn', 'error']) mock.method(console, method, (...args) => logs.push(args));
+  const fetch = mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({
+    name: 're_private_sdk_key', statusCode: 403, message: 'Domain not verified private-token private-rider@example.test',
+  }), { status: 403, headers: { 'Content-Type': 'application/json' } }));
+  const result = await sendPasswordResetEmail({ email: 'private-rider@example.test', resetUrl: 'https://shop.example.test/#/reset-password?token=private-token' });
+  assert.equal(fetch.mock.callCount(), 1);
+  assert.equal(result.accepted, false);
+  assert.equal(result.code, 'EMAIL_DELIVERY_FAILED');
+  assert.doesNotMatch(JSON.stringify(logs), /private-token|re_private_sdk_key|private-rider@example.test/);
+  assert.ok(logs.some(([event, details]) => event === 'EMAIL_SEND_FAILED' && details.reason === 'domain_not_verified'));
 });

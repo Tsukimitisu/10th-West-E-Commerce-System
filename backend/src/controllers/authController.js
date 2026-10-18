@@ -308,6 +308,12 @@ const getFrontendUrl = () => {
   const frontendUrl = resolveFrontendOrigin();
   const url = new URL(frontendUrl);
 
+  if (String(process.env.NODE_ENV).toLowerCase() === 'production'
+    && (isLocalUrl(url.hostname) || ['[::1]', '::1', '0.0.0.0'].includes(url.hostname))) {
+    console.warn('EMAIL_LINK_CONFIGURATION_FAILED', { code: 'EMAIL_FRONTEND_URL_INVALID' });
+    throw Object.assign(new Error('A public frontend origin is required for email links.'), { code: 'EMAIL_FRONTEND_URL_INVALID' });
+  }
+
   if (!isLocalUrl(url.hostname)) {
     url.protocol = 'https:';
   }
@@ -1101,6 +1107,7 @@ export const getProfile = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   const { email } = req.validatedData || req.body;
   const genericResponse = 'If an account exists for this email, password reset instructions have been sent.';
+  const requestId = crypto.randomUUID();
 
   try {
     const user = shouldUseDatabaseReadFallback()
@@ -1137,22 +1144,23 @@ export const forgotPassword = async (req, res) => {
     const resetUrl = frontendUrl.toString();
 
     const emailResult = await sendPasswordResetEmail({
-      email,
+      email: user.email,
       name: user.name,
       resetUrl,
-      requestId: crypto.randomUUID(),
+      requestId,
       userId: user.id,
     });
     if (!emailResult.accepted) {
-      const error = new Error('Password reset email was not accepted.');
-      error.code = emailResult.code;
-      throw error;
+      console.warn('PASSWORD_RESET_EMAIL_FAILED', {
+        request_id: requestId, user_id: user.id, provider: emailResult.provider, code: emailResult.code,
+      });
+      return res.json({ message: genericResponse });
     }
 
     await logActivity({ userId: user.id, action: 'password_reset_requested', ipAddress: req.clientIp, userAgent: req.clientUa });
     res.json({ message: genericResponse });
   } catch (error) {
-    console.error('Forgot password error:', sanitizeDatabaseError(error));
+    console.error('Forgot password error:', { request_id: requestId, error: sanitizeDatabaseError(error) });
     res.json({ message: genericResponse });
   }
 };

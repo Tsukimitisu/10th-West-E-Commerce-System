@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { validateDeploymentUrls } from './deployment.js';
 import { verifyPaymongoWebhookSignature } from '../services/paymongo.js';
 import databaseConfig from './databaseConfig.cjs';
-import { inspectProductionConfig } from '../../scripts/verify-production-config.js';
+import { inspectProductionConfig, inspectProductionEmailConfig } from '../../scripts/verify-production-config.js';
 
 const production = {
   NODE_ENV: 'production', FRONTEND_ORIGIN: 'https://store.vercel.app',
@@ -64,7 +64,7 @@ test('production verifier accepts complete deployment settings and reports names
     PHONE_VERIFICATION_PROVIDER: 'semaphore', PHONE_VERIFICATION_ENABLED: 'true',
     SEMAPHORE_API_KEY: 'unit-sms', SEMAPHORE_SENDER_NAME: '10THWEST',
     CLOUDINARY_CLOUD_NAME: 'unit-cloud', CLOUDINARY_API_KEY: 'unit-key', CLOUDINARY_API_SECRET: 'unit-media',
-    EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_unit_secret', RESEND_FROM: '10th West Moto <onboarding@resend.dev>',
+    EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_unit_secret', RESEND_FROM: '10th West Moto <noreply@verified.example.test>',
   };
   for (const key of ['JWT_SECRET', 'SESSION_SECRET', 'CSRF_SECRET', 'TWO_FACTOR_ENCRYPTION_KEY']) {
     env[key] = crypto.randomBytes(32).toString('hex');
@@ -94,4 +94,21 @@ test('production verifier accepts complete deployment settings and reports names
   assert.ok(inspectProductionConfig({ ...textbee, TEXTBEE_API_KEY: '' }).failures.includes('TEXTBEE_API_KEY missing or placeholder'));
   const semaphoreMissing = inspectProductionConfig({ ...env, SEMAPHORE_SENDER_NAME: '' });
   assert.ok(semaphoreMissing.failures.includes('SEMAPHORE_SENDER_NAME missing or placeholder'), 'Semaphore checks retained');
+});
+
+
+test('email-only production diagnostic rejects test senders, missing secrets and unsafe links without printing values', () => {
+  const env = { EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_private_diagnostic_key', RESEND_FROM: '10th West <noreply@verified.example.test>', FRONTEND_ORIGIN: 'https://10th-west-e-commerce-system.vercel.app', EMAIL_PROVIDER_TIMEOUT_MS: '15000' };
+  assert.deepEqual(inspectProductionEmailConfig(env), { ready: true, failures: [] });
+  for (const override of [
+    { RESEND_FROM: '10th West <onboarding@resend.dev>' }, { RESEND_FROM: 'invalid' },
+    { RESEND_API_KEY: '' }, { RESEND_API_KEY: 'YOUR_RESEND_API_KEY' }, { EMAIL_PROVIDER: '' },
+    { FRONTEND_ORIGIN: 'http://localhost:5173' }, { FRONTEND_ORIGIN: 'https://127.0.0.1' },
+    { FRONTEND_ORIGIN: '' }, { EMAIL_PROVIDER_TIMEOUT_MS: '-1' }, { EMAIL_PROVIDER_TIMEOUT_MS: 'forever' },
+  ]) {
+    const result = inspectProductionEmailConfig({ ...env, ...override });
+    assert.equal(result.ready, false);
+    assert.doesNotMatch(JSON.stringify(result), /re_private_diagnostic_key|noreply@verified/);
+  }
+  assert.equal(inspectProductionEmailConfig({ ...env, FRONTEND_ORIGIN: '', FRONTEND_URL: env.FRONTEND_ORIGIN }).ready, true);
 });
