@@ -141,7 +141,7 @@ const resolveCustomerDisplayName = (order, shippingSnapshot) => {
   return 'Customer unavailable';
 };
 
-const mapOrderRecord = (order) => {
+export const mapOrderRecord = (order) => {
   const shippingSnapshot = parseShippingAddressSnapshot(order);
   const receiptConfirmed = Boolean(order.customer_confirmed_receipt_at);
   return ({
@@ -175,7 +175,7 @@ const mapOrderRecord = (order) => {
   waybill_status: normalizeWaybillStatus(order.waybill_status),
   waybill_generated_at: order.waybill_generated_at || null,
   payment_provider: normalizeText(order.payment_provider),
-  payment_status: normalizeText(order.payment_status) || (['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered'].includes(String(order.status || '').toLowerCase()) ? 'paid' : 'pending'),
+  payment_status: normalizeText(order.payment_status) || (order.payment_method === 'cod' ? (['delivered', 'completed'].includes(order.status) ? 'paid' : 'pending') : (['paid', 'processing', 'packed', 'ready_for_pickup', 'shipped', 'out_for_delivery', 'delivered'].includes(String(order.status || '').toLowerCase()) ? 'paid' : 'pending')),
   payment_reference: normalizeText(order.payment_reference),
   payment_checkout_url: normalizeText(order.payment_checkout_url),
   payment_metadata: order.payment_metadata || null,
@@ -771,10 +771,14 @@ export const confirmOrderDelivery = async (req, res) => {
     const orderDetail = orderDetailResult.rows[0];
     let codPayment = null;
     if (String(lockedOrder.payment_method || '').toLowerCase() === 'cod') {
+      if (!['pending','processing','paid'].includes(lockedOrder.payment_status || 'pending')) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: 'COD payment cannot be collected for this order.' });
+      }
       const paymentResult = await client.query(
         `UPDATE payments
          SET status = 'paid', paid_at = COALESCE(paid_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
-         WHERE order_id = $1 AND method = 'cod'
+         WHERE order_id = $1 AND method = 'cod' AND status IN ('pending','processing','paid')
          RETURNING id, status, paid_at`,
         [id]
       );

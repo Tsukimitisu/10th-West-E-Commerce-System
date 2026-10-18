@@ -1,12 +1,10 @@
+import { fulfillmentSteps as stepLabels, fulfillmentStep } from '../../utils/orderProgress.js';
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Package, ArrowLeft, Truck, MapPin, CreditCard, Clock, CheckCircle2, XCircle, Download, RotateCcw, Calendar, Mail, DollarSign, Printer, AlertTriangle } from 'lucide-react';
 import { getOrderById, getShipmentTracking, cancelOrder, confirmOrderReceipt } from '../../services/api';
 import { API_URL } from '../../services/apiConfig.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
-
-const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Delivered', 'Completed'];
-const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, delivered: 4, completed: 5, cancelled: -1 };
 
 const ORDER_VAT_RATE = 0.12;
 
@@ -119,7 +117,7 @@ const OrderDetail = () => {
   );
 
   const effectiveStatus = order.display_status || (order.customer_confirmed_receipt_at ? 'completed' : order.status);
-  const step = stepForStatus[effectiveStatus] ?? 0;
+  const step = fulfillmentStep(effectiveStatus);
   const date = new Date(order.created_at || order.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   const items = order.items || [];
   const itemsSubtotal = roundCurrency(items.reduce((sum, item) => {
@@ -309,8 +307,9 @@ const OrderDetail = () => {
       )}
 
       {/* Progress tracker */}
-      {order.status !== 'cancelled' && (
+      {step >= 0 && order.status !== 'cancelled' && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+          <p className="mb-5 text-sm font-medium text-slate-700">Payment: {order.payment_status === 'paid' ? 'Paid' : order.payment_status === 'pending' || !order.payment_status ? 'Payment Pending' : order.payment_status.replaceAll('_', ' ')}</p>
           <div tabIndex={0} role="region" aria-label="Order progress" className="order-status-timeline flex items-center justify-between relative">
             <div className="absolute left-0 right-0 top-4 h-0.5 bg-gray-200 z-0" />
             <div

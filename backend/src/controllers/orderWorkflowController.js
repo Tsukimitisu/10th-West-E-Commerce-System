@@ -186,8 +186,16 @@ export const updateOrderStatusSecure = async (req, res) => {
         [orderId, note || 'Order cancelled by staff']
       );
     } else {
-      await client.query(`UPDATE orders SET status = $2, updated_at = NOW() WHERE id = $1`, [orderId, nextStatus]);
+      if (order.payment_method === 'cod' && nextStatus === 'delivered') {
+        if (!['pending','processing','paid'].includes(order.payment_status || 'pending')) throw Object.assign(new Error('COD payment cannot be collected for this order.'), { status: 409 });
+        const captured = await client.query(`UPDATE payments SET status = 'paid', paid_at = COALESCE(paid_at, NOW()), updated_at = NOW()
+          WHERE order_id = $1 AND method = 'cod' AND status IN ('pending','processing','paid') RETURNING id`, [orderId]);
+        if (!captured.rowCount) throw Object.assign(new Error('COD payment cannot be collected for this order.'), { status: 409 });
+        await client.query(`UPDATE orders SET status = $2, payment_status = 'paid', paid_at = COALESCE(paid_at, NOW()),
+          delivered_at = COALESCE(delivered_at, NOW()), updated_at = NOW() WHERE id = $1`, [orderId, nextStatus]);
+      } else await client.query(`UPDATE orders SET status = $2, updated_at = NOW() WHERE id = $1`, [orderId, nextStatus]);
     }
+    const nextPaymentStatus = nextStatus === 'cancelled' ? 'cancelled' : order.payment_method === 'cod' && nextStatus === 'delivered' ? 'paid' : order.payment_status;
     await client.query(
       `INSERT INTO order_status_history (order_id, from_status, to_status, source, changed_by, note) VALUES ($1,$2,$3,'staff',$4,$5)`,
       [orderId, order.status, nextStatus, req.user.id, note]
@@ -195,7 +203,7 @@ export const updateOrderStatusSecure = async (req, res) => {
     await client.query(
       `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, before_data, after_data)
        VALUES ($1,'order.status.update','order',$2,$3,$4,$5::jsonb,$6::jsonb)`,
-      [req.user.id, String(orderId), req.ip, req.get('user-agent'), JSON.stringify({ status: order.status }), JSON.stringify({ status: nextStatus })]
+      [req.user.id, String(orderId), req.ip, req.get('user-agent'), JSON.stringify({ status: order.status, payment_status: order.payment_status }), JSON.stringify({ status: nextStatus, payment_status: nextPaymentStatus })]
     );
     await createOrderWorkflowNotification(client, {
       userId: order.user_id, orderId, status: nextStatus,
@@ -205,9 +213,10 @@ export const updateOrderStatusSecure = async (req, res) => {
     stockUpdates.forEach(emitStockUpdate);
     emitOrderStatusUpdate(orderId, nextStatus, {
       previous_status: order.status,
+      payment_status: nextPaymentStatus,
       timeline_event: { source: 'staff', note },
     });
-    return res.json({ order_id: orderId, status: nextStatus });
+    return res.json({ order_id: orderId, status: nextStatus, payment_status: nextPaymentStatus });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('Secure order status update failed:', error);
