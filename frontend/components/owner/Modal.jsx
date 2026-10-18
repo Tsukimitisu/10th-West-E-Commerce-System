@@ -29,7 +29,7 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentati
     if (!isOpen) return undefined;
     const previouslyFocused = document.activeElement;
     const previousOverflow = document.body.style.overflow;
-    const releaseStaffScroll = operations === 'staff' || operations === 'owner' ? lockStaffDialogScroll() : null;
+    const releaseStaffScroll = operations === 'staff' || operations === 'owner' || operations === 'system' ? lockStaffDialogScroll() : null;
     if (!releaseStaffScroll) document.body.style.overflow = 'hidden';
     // Respect a child that already took focus (e.g. an autoFocus field); otherwise focus the dialog.
     if (!panelRef.current?.contains(document.activeElement)) panelRef.current?.focus({ preventScroll: true });

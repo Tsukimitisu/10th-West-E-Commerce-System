@@ -14,6 +14,7 @@ import { useSocket } from '../../context/SocketContext';
 import { logoutApi } from '../../services/api';
 import { clearCurrentAuthUser } from '../../services/authSession';
 import OperationsShell from '../operations/OperationsShell';
+import '../../styles/superadmin.css';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'System overview', icon: LayoutDashboard, group: 'System' },

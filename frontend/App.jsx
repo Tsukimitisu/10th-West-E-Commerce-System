@@ -261,8 +261,8 @@ const App = () => {
 
       // A superseded effect must not finish operations startup before the current
       // profile check. That race briefly rendered a signed-out route guard and
-      // lost Staff and Owner deep links. Customer/System startup stays unchanged.
-      if (!isMounted && [Role.STORE_STAFF, Role.OWNER, Role.ADMIN].includes(getCurrentAuthUser()?.role)) return undefined;
+      // lost operational deep links. Customer startup stays unchanged.
+      if (!isMounted && [Role.STORE_STAFF, Role.OWNER, Role.ADMIN, Role.SUPER_ADMIN].includes(getCurrentAuthUser()?.role)) return undefined;
 
       const handleAuthChanged = () => {
         if (isMounted) setUser(getCurrentAuthUser());

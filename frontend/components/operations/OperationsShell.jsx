@@ -15,21 +15,22 @@ export default function OperationsShell({ activeId, navItems, onNavigate, onLogo
   const role = user?.role === 'super_admin' ? 'system' : ['owner', 'admin'].includes(user?.role) ? 'owner' : 'staff';
   const isStaff = user?.role === 'store_staff';
   const isOwner = ['owner', 'admin'].includes(user?.role);
+  const isSystem = user?.role === 'super_admin';
   const requestLogout = trigger => {
-    if (isStaff || isOwner) logoutTriggerRef.current = trigger?.currentTarget || trigger || document.activeElement;
+    if (isStaff || isOwner || isSystem) logoutTriggerRef.current = trigger?.currentTarget || trigger || document.activeElement;
     setConfirmingLogout(true);
   };
   const sidebarProps = { navItems, activeId, user, onLogout: requestLogout, onNavigate: item => { onNavigate(item); setMobileOpen(false); } };
-  return <OperationsDialogContext.Provider value={isStaff ? 'staff' : isOwner ? 'owner' : true}><div className="operations-shell flex h-[100dvh] overflow-hidden bg-slate-50" data-workspace={role}>
+  return <OperationsDialogContext.Provider value={isStaff ? 'staff' : isOwner ? 'owner' : isSystem ? 'system' : true}><div className="operations-shell flex h-[100dvh] overflow-hidden bg-slate-50" data-workspace={role}>
     <a href="#operations-main" className="ops-skip-link" onClick={event => { event.preventDefault(); document.getElementById('operations-main')?.focus(); }}>Skip to workspace</a>
     <aside className={`ops-desktop-sidebar ${collapsed ? 'w-[76px]' : 'w-[248px]'} hidden shrink-0 lg:block`}><OperationsSidebar {...sidebarProps} collapsed={collapsed} /></aside>
-    <Modal isOpen={mobileOpen} onClose={() => setMobileOpen(false)} title="Workspace navigation" presentation="drawer" tone={isStaff ? 'staff' : isOwner ? 'owner' : 'navy'}><OperationsSidebar {...sidebarProps} /></Modal>
+    <Modal isOpen={mobileOpen} onClose={() => setMobileOpen(false)} title="Workspace navigation" presentation="drawer" tone={isStaff ? 'staff' : isOwner ? 'owner' : isSystem ? 'system' : 'navy'}><OperationsSidebar {...sidebarProps} /></Modal>
     <div className="flex min-w-0 flex-1 flex-col">
       <OperationsTopbar title={title} contextLabel={contextLabel} user={user} connected={connected} collapsed={collapsed} onCollapse={() => setCollapsed(value => !value)} onOpenNavigation={() => setMobileOpen(true)} onLogout={requestLogout} actions={headerActions} />
       <main id="operations-main" tabIndex={-1} className={`operations-content min-h-0 min-w-0 flex-1 ${activeId === 'chat' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
         <div className={`ops-workspace-body mx-auto w-full max-w-[1600px] ${activeId === 'chat' ? 'h-full min-h-0 p-2 sm:p-3 lg:p-4' : 'p-4 sm:p-5 lg:p-6'}`}>{children}</div>
       </main>
     </div>
-    <ConfirmationDialog isOpen={confirmingLogout} onClose={() => setConfirmingLogout(false)} onConfirm={onLogout} title="Sign out?" description={isStaff ? 'You’ll need to sign in again to access Staff operations.' : isOwner ? 'You’ll need to sign in again to access Owner operations.' : 'You will need to sign in again to return to this workspace.'} confirmLabel="Sign out" presentation={isStaff ? 'staff-confirmation' : isOwner ? 'owner-confirmation' : undefined} returnFocusRef={isStaff || isOwner ? logoutTriggerRef : undefined} />
+    <ConfirmationDialog isOpen={confirmingLogout} onClose={() => setConfirmingLogout(false)} onConfirm={onLogout} title="Sign out?" description={isStaff ? 'You’ll need to sign in again to access Staff operations.' : isOwner ? 'You’ll need to sign in again to access Owner operations.' : 'You will need to sign in again to return to this workspace.'} confirmLabel="Sign out" presentation={isStaff ? 'staff-confirmation' : isOwner ? 'owner-confirmation' : isSystem ? 'system-confirmation' : undefined} returnFocusRef={isStaff || isOwner || isSystem ? logoutTriggerRef : undefined} />
   </div></OperationsDialogContext.Provider>;
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-import { adminGetAllUsers, getActivityLogs, getBackupHistory, getErrorLogs, getLoginAttempts, getSuspiciousActivity, getSystemHealth } from '../../services/api';
+import { adminGetAllUsers, getActivityLogs, getDatabaseBackups, getErrorLogs, getLoginAttempts, getSuspiciousActivity, getSystemHealth } from '../../services/api';
 import ServiceHealth from '../../components/operations/ServiceHealth';
 import StatusBadge from '../../components/ui/StatusBadge';
 import MetricCard from '../../components/operations/MetricCard';
@@ -31,7 +31,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
         getActivityLogs().catch(fallback('Activity', [])),
         getLoginAttempts().catch(fallback('Login events', { stats: {} })),
         getSuspiciousActivity().catch(fallback('Security signals', {})),
-        getBackupHistory().catch(fallback('Backup metadata', [])),
+        getDatabaseBackups().catch(fallback('Database backups', [])),
         getErrorLogs().catch(fallback('Application errors', [])),
         getSystemHealth().catch(fallback('Service readiness', null)),
       ]);
@@ -74,7 +74,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
     );
   }
 
-  const lastBackup = data.backups[0];
+  const lastBackup = data.backups.find(backup => backup.status === 'completed' && !backup.deleted_at);
   return <div className="system-overview space-y-5">
     <PageHeader title="System overview" description="Platform readiness, access and operational risk." actions={<button type="button" onClick={() => onNavigate('logs')} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold">Review audit trail <ArrowRight size={15} aria-hidden="true" /></button>} />
     {unavailable.length > 0 && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Unavailable: {unavailable.join(', ')}. Counts for these sources are incomplete. Reload to retry.</p>}
@@ -94,9 +94,9 @@ const SuperAdminOverview = ({ onNavigate }) => {
             <div className="flex justify-between gap-3"><dt className="text-slate-600">Environment</dt><dd className="font-medium">{data.health?.runtime?.environment || 'Not reported'}</dd></div>
             <div><dt className="text-slate-600">Session storage</dt><dd className="mt-1 font-mono text-xs">{data.health?.runtime?.session_store || 'Not reported'}</dd></div>
             <div><dt className="text-slate-600">Active session count</dt><dd className="mt-1 text-xs">Not reported by this endpoint</dd></div>
-            <div><dt className="text-slate-600">Latest backup metadata</dt><dd className="mt-1 text-xs">{lastBackup?.created_at ? new Date(lastBackup.created_at).toLocaleString('en-PH') : 'No record available'}</dd></div>
+            <div><dt className="text-slate-600">Last successful backup</dt><dd className="mt-1 text-xs">{lastBackup?.created_at ? new Date(lastBackup.created_at).toLocaleString('en-PH') : 'No record available'}</dd></div>
           </dl>
-          <button type="button" onClick={() => onNavigate('backup')} className="mt-4 min-h-11 text-sm font-semibold text-orange-800">Review recovery limitations <ArrowRight size={14} className="inline" aria-hidden="true" /></button>
+          <button type="button" onClick={() => onNavigate('backup')} className="mt-4 min-h-11 text-sm font-semibold text-orange-800">Review backup & recovery <ArrowRight size={14} className="inline" aria-hidden="true" /></button>
         </SectionCard>
         <SectionCard title="Security review" description="Authentication signals from the loaded logs.">
           {[

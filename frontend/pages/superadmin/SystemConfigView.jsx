@@ -1,3 +1,4 @@
+import AdminTabs from '../../components/superadmin/AdminTabs';
 import React, { useEffect, useId, useState } from 'react';
 import {
   Settings, Store, CreditCard, Truck, Mail,
@@ -36,6 +37,7 @@ const SystemConfigView = () => {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [providerHealth, setProviderHealth] = useState(null);
 
   const [store, setStore] = useState({
@@ -83,7 +85,8 @@ const SystemConfigView = () => {
         if (Object.keys(parsed.email).length) setEmail((prev) => ({ ...prev, ...parsed.email }));
         if (Object.keys(parsed.returns).length) setReturnsConfig((prev) => ({ ...prev, ...parsed.returns }));
       } catch (error) {
-        console.error(error);
+        setLoadFailed(true);
+        setError('Configuration could not be loaded. Refresh before making changes.');
       }
       setLoading(false);
     })();
@@ -122,7 +125,7 @@ const SystemConfigView = () => {
         description="Manage store identity, tax, payments, shipping, email delivery, and return policy."
         actions={<button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || loadFailed}
           className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 disabled:bg-slate-200 disabled:text-slate-500"
         >
           {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
@@ -131,21 +134,7 @@ const SystemConfigView = () => {
       />
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-      <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="Configuration category">
-        {tabs.map((tabOption) => {
-          const Icon = tabOption.icon;
-          return (
-            <button
-              key={tabOption.id}
-              aria-pressed={tab === tabOption.id}
-              onClick={() => setTab(tabOption.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${tab === tabOption.id ? 'bg-orange-50 text-orange-800' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'}`}
-            >
-              <Icon size={14} /> {tabOption.label}
-            </button>
-          );
-        })}
-      </div>
+      <AdminTabs label="Configuration category" items={tabs} value={tab} onChange={setTab}>
 
       {tab === 'store' && (
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 shadow-sm">
@@ -321,6 +310,7 @@ const SystemConfigView = () => {
           </div>
         </div>
       )}
+      </AdminTabs>
     </div>
   );
 };

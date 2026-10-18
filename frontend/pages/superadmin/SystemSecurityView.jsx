@@ -1,3 +1,4 @@
+import AdminTabs from '../../components/superadmin/AdminTabs';
 ﻿import React, { useEffect, useState } from 'react';
 import {
   Shield, Lock, Key, Eye, EyeOff, Settings, Save, Loader2,
@@ -19,6 +20,8 @@ const SystemSecurityView = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const [config, setConfig] = useState({
     max_login_attempts: '5',
@@ -42,17 +45,17 @@ const SystemSecurityView = () => {
       try {
         const [readiness, secSettings, loginData, suspiciousData] = await Promise.all([
           getSystemHealth().then(value => { setHealth(value); return value; }).catch(() => null),
-          getSecuritySettings().catch(() => ({})),
-          getLoginAttempts().catch(() => ({ attempts: [], stats: {} })),
-          getSuspiciousActivity().catch(() => ({ failed_login_clusters: [], locked_accounts: [], bulk_operations: [] })),
+          getSecuritySettings(),
+          getLoginAttempts().catch(() => { setError('Login monitoring could not be loaded. Please retry.'); return { attempts: [], stats: {} }; }),
+          getSuspiciousActivity().catch(() => { setError('Suspicious activity could not be loaded. Please retry.'); return { failed_login_clusters: [], locked_accounts: [], bulk_operations: [] }; }),
         ]);
         if (secSettings && typeof secSettings === 'object') {
-          setConfig(prev => ({ ...prev, ...secSettings }));
+          setConfig(prev => ({ ...prev, ...Object.fromEntries(Object.entries(secSettings).filter(([key]) => Object.hasOwn(prev, key))) }));
         }
         if (loginData?.attempts) setLoginAttempts(loginData.attempts);
         if (loginData?.stats) setLoginStats(loginData.stats);
         if (suspiciousData) setSuspicious(suspiciousData);
-      } catch (e) { console.error(e); }
+      } catch { setLoadFailed(true); setError('Security settings could not be loaded. Refresh before making changes.'); }
       setLoading(false);
     })();
   }, []);
@@ -60,10 +63,11 @@ const SystemSecurityView = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateSecuritySettings({ settings: config });
+      setError('');
+      await updateSecuritySettings(config);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (e) { console.error(e); }
+    } catch (failure) { setError(failure.message || 'Security operation failed. Please retry.'); }
     setSaving(false);
   };
 
@@ -76,7 +80,7 @@ const SystemSecurityView = () => {
       if (loginData?.attempts) setLoginAttempts(loginData.attempts);
       if (loginData?.stats) setLoginStats(loginData.stats);
       if (suspiciousData) setSuspicious(suspiciousData);
-    } catch (e) { console.error(e); }
+    } catch (failure) { setError(failure.message || 'Security operation failed. Please retry.'); }
   };
 
   const tabs = [
@@ -104,7 +108,7 @@ const SystemSecurityView = () => {
         title="Security controls"
         description="Configure account lockout, password policy, two-factor enforcement, and authentication monitoring."
         actions={(tab === 'lockout' || tab === 'password' || tab === '2fa') && (
-          <button onClick={handleSave} disabled={saving}
+          <button onClick={handleSave} disabled={saving || loadFailed}
             className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 disabled:bg-slate-200 disabled:text-slate-500">
             {saving ? <Loader2 size={14} className="animate-spin" /> : saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
             {saved ? 'Saved' : 'Save settings'}
@@ -112,20 +116,10 @@ const SystemSecurityView = () => {
         )}
       />
 
+      {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {['lockout','password','2fa'].includes(tab) && <p role="note" className="rounded-lg border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-600">These policy values are saved for administration. Existing authentication handlers currently enforce their built-in lockout and password rules; global two-factor enforcement is not yet connected. Account-level two-factor authentication remains available.</p>}
       {/* Tabs */}
-      <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1" role="group" aria-label="Security category">
-        {tabs.map(t => {
-          const Icon = t.icon;
-          return (
-            <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-                tab === t.id ? 'bg-orange-50 text-orange-800' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-900'
-              }`}>
-              <Icon size={14} /> {t.label}
-            </button>
-          );
-        })}
-      </div>
+      <AdminTabs label="Security category" items={tabs} value={tab} onChange={setTab}>
 
       {tab === 'readiness' && <SectionCard title="Authentication readiness" description="Reported provider configuration. No keys, tokens or credentials are displayed." padded={false}><ServiceHealth health={health} /></SectionCard>}
       {/* Account Lockout Policy */}
@@ -164,7 +158,7 @@ const SystemSecurityView = () => {
           <div className="space-y-5">
             <div>
               <label htmlFor="security-password_min_length" className="text-xs text-gray-400 mb-2 block">Minimum Password Length</label>
-              <input type="number" min="6" max="32" id="security-password_min_length" value={config.password_min_length} onChange={(e) => setConfig({ ...config, password_min_length: e.target.value })}
+              <input type="number" min="8" max="128" id="security-password_min_length" value={config.password_min_length} onChange={(e) => setConfig({ ...config, password_min_length: e.target.value })}
                 className="w-48 px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
             </div>
             {[
@@ -353,6 +347,7 @@ const SystemSecurityView = () => {
           </div>
         </div>
       )}
+      </AdminTabs>
     </div>
   );
 };

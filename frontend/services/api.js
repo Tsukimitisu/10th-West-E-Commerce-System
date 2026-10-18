@@ -5466,6 +5466,12 @@ export const getSuspiciousActivity = async () => {
 };
 
 // Backup & Recovery
+export const getDatabaseBackups = () => authenticatedFetch(`${API_URL}/admin/backups`);
+export const getDatabaseBackupStatus = () => authenticatedFetch(`${API_URL}/admin/backups/status`);
+export const createDatabaseBackup = () => authenticatedFetch(`${API_URL}/admin/backups`, { method: 'POST' });
+export const downloadDatabaseBackup = id => authenticatedFetch(`${API_URL}/admin/backups/${encodeURIComponent(id)}/download`);
+export const deleteDatabaseBackup = id => authenticatedFetch(`${API_URL}/admin/backups/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
 export const createBackup = async () => {
   return authenticatedFetch(`${API_URL}/admin/backup`, { method: 'POST' });
 };

@@ -1,180 +1,94 @@
-﻿import React, { useState, useEffect } from 'react';
-import {
-  Database, Download, RefreshCw, Clock, CheckCircle2,
-  AlertCircle, HardDrive, Server, Shield, Loader2,
-  FileText, Calendar, User, Archive
-} from 'lucide-react';
-import { createBackup, getBackupHistory } from '../../services/api';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Database, Download, RefreshCw, Trash2 } from 'lucide-react';
+import { createDatabaseBackup, deleteDatabaseBackup, downloadDatabaseBackup, getDatabaseBackups, getDatabaseBackupStatus } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
-import EmptyState from '../../components/ui/EmptyState';
-import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
+import BrandButton from '../../components/ui/BrandButton';
+import { ConfirmationDialog } from '../../components/ui/BrandPrimitives';
 
-const BackupRecoveryView = () => {
-  const backupProviderConfigured = false;
+const timestamp = (value, timezone) => value ? new Date(value).toLocaleString('en-PH', timezone ? { timeZone: timezone } : undefined) : 'Never';
+const size = value => value == null ? '-' : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : `${(value / 1048576).toFixed(1)} MB`;
+const duration = row => row.started_at && row.completed_at ? `${Math.max(0, Math.round((new Date(row.completed_at) - new Date(row.started_at)) / 1000))}s` : '-';
+
+export default function BackupRecoveryView() {
   const [backups, setBackups] = useState([]);
+  const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [message, setMessage] = useState({ type: '', text: '' });
-  const [tableCounts, setTableCounts] = useState(null);
-
-  useEffect(() => { loadBackups(); }, []);
-
-  const loadBackups = async () => {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [confirm, setConfirm] = useState(null);
+  const inFlight = useRef(false);
+  const previousActive = useRef(null);
+  const load = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     try {
-      const data = await getBackupHistory();
-      setBackups(Array.isArray(data) ? data : []);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  };
-
-  const handleCreateBackup = async () => {
-    setCreating(true);
-    setMessage({ type: '', text: '' });
+      const [history, state] = await Promise.all([getDatabaseBackups(), getDatabaseBackupStatus()]);
+      setBackups(history);
+      setStatus(state);
+      if (previousActive.current && !state.active) {
+        const finished = history.find(row => row.id === previousActive.current);
+        if (finished?.status === 'completed') setNotice('Backup completed successfully.');
+        if (finished?.status === 'failed') setError(finished.error_summary || 'Backup failed. Check system logs.');
+      }
+      previousActive.current = state.active?.id || null;
+    } catch (failure) { setError(failure.message || 'Backup status could not be loaded.'); }
+    finally { setLoading(false); inFlight.current = false; }
+  }, []);
+  useEffect(() => { load(); const timer = window.setInterval(load, 5000); return () => window.clearInterval(timer); }, [load]);
+  const act = async () => {
+    setBusy(true); setError(''); setNotice('');
     try {
-      const result = await createBackup();
-      setMessage({ type: 'success', text: 'Backup created successfully' });
-      if (result?.table_counts) setTableCounts(result.table_counts);
-      await loadBackups();
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Failed: ' + (err.message || 'Unknown error') });
-    }
-    setCreating(false);
+      if (confirm === 'create') {
+        const result = await createDatabaseBackup();
+        previousActive.current = result.backup.id;
+        setStatus(current => ({ ...current, active: result.backup }));
+        setNotice('Preparing backup...');
+      } else { await deleteDatabaseBackup(confirm.id); setNotice('Backup deleted.'); }
+      setConfirm(null);
+      await load();
+    } catch (failure) { setConfirm(null); setError(failure.message || 'Backup operation failed.'); }
+    finally { setBusy(false); }
   };
-
-  const lastBackup = backups.length > 0 ? backups[0] : null;
-  const lastBackupAge = lastBackup ? Math.floor((Date.now() - new Date(lastBackup.created_at).getTime()) / (1000 * 60 * 60)) : null;
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Backup & recovery"
-        description="Review legacy backup metadata. Recoverable in-app backups are not configured."
-        actions={<button onClick={handleCreateBackup} disabled={creating || !backupProviderConfigured}
-          title="Real backup provider is not configured"
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 disabled:bg-slate-200 disabled:text-slate-500">
-          {creating ? <Loader2 size={14} className="animate-spin" /> : <Database size={16} />}
-          {creating ? 'Creating backup…' : 'Backup not configured'}
-        </button>}
-      />
-
-      <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">In-app records below are metadata only. Verify recoverable backups and retention in Supabase before a recovery plan depends on them.</div>
-
-      {/* Toast */}
-      {message.text && (
-        <div className={`px-4 py-3 rounded-xl text-sm font-medium border ${
-          message.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
-        }`}>
-          <div className="flex items-center gap-2">
-            {message.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-            {message.text}
-          </div>
-        </div>
-      )}
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-blue-50 rounded-lg"><Archive size={18} className="text-blue-500" /></div>
-            <span className="text-xs text-gray-400">Legacy metadata records</span>
-          </div>
-          <p className="text-2xl font-bold text-white">{backups.length}</p>
-        </div>
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-green-50 rounded-lg"><Clock size={18} className="text-green-500" /></div>
-            <span className="text-xs text-gray-400">Last Backup</span>
-          </div>
-          <p className="text-lg font-bold text-white">
-            {lastBackup ? new Date(lastBackup.created_at).toLocaleDateString() : 'Never'}
-          </p>
-          {lastBackupAge !== null && (
-            <p className={`text-xs mt-1 ${lastBackupAge > 168 ? 'text-red-500' : lastBackupAge > 24 ? 'text-red-500' : 'text-green-500'}`}>
-              {lastBackupAge < 1 ? 'Less than an hour ago' : `${lastBackupAge} hours ago`}
-            </p>
-          )}
-        </div>
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-slate-100 rounded-lg"><Server size={18} className="text-slate-700" /></div>
-            <span className="text-xs text-gray-400">Backup provider</span>
-          </div>
-          <p className="text-lg font-bold text-red-500">
-            Not configured
-          </p>
-        </div>
-      </div>
-
-      {/* Table Counts (shown after a backup) */}
-      {tableCounts && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2"><HardDrive size={16} className="text-gray-400" /> Latest Backup Contents</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Object.entries(tableCounts).map(([table, count]) => (
-              <div key={table} className="bg-gray-900 rounded-lg px-3 py-2 border border-gray-700">
-                <p className="text-[10px] text-gray-400 capitalize">{table.replace(/_/g, ' ')}</p>
-                <p className="text-sm font-bold text-white">{count} rows</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Backup History */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
-        <div className="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2"><FileText size={16} className="text-gray-400" /> Backup History</h3>
-          <button onClick={loadBackups} aria-label="Refresh backup history" className="grid min-h-10 min-w-10 place-items-center rounded-lg text-slate-700 hover:bg-slate-100"><RefreshCw size={16} /></button>
-        </div>
-        {loading ? (
-          <div className="space-y-3 p-4" role="status" aria-label="Loading backup history">{Array.from({ length: 3 }, (_, index) => <LoadingSkeleton key={index} className="h-14 w-full" />)}</div>
-        ) : backups.length === 0 ? (
-          <div className="p-6"><EmptyState icon={Database} title="No backup metadata" description="Recoverable in-app backups are not configured. Check your Supabase backup plan directly." /></div>
-        ) : (
-          <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-            {backups.map((backup) => (
-              <div key={backup.id} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50/50 transition-colors">
-                <div className={`p-2 rounded-lg ${backup.status === 'completed' ? 'bg-green-50' : backup.status === 'failed' ? 'bg-red-50' : 'bg-red-500/10'}`}>
-                  {backup.status === 'completed' ? <CheckCircle2 size={16} className="text-green-500" /> :
-                    backup.status === 'failed' ? <AlertCircle size={16} className="text-red-500" /> :
-                    <Clock size={16} className="text-red-500" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium truncate">{backup.file_name || `Backup #${backup.id}`}</p>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span className="text-[10px] text-gray-400 flex items-center gap-1"><User size={10} /> {backup.initiated_by_name || 'System'}</span>
-                    <span className="text-[10px] text-gray-400 flex items-center gap-1"><Calendar size={10} /> {new Date(backup.created_at).toLocaleString()}</span>
-                  </div>
-                </div>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                  backup.status === 'completed' ? 'bg-green-50 text-green-600 border-green-200' :
-                  backup.status === 'failed' ? 'bg-red-50 text-red-600 border-red-200' :
-                  'bg-orange-50 text-orange-800 border-red-200'
-                }`}>{backup.status}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Recovery Info */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2"><Shield size={16} className="text-gray-400" /> Recovery Information</h3>
-        <div className="bg-gray-900 rounded-lg p-4 space-y-2 border border-gray-700">
-          <p className="text-xs text-gray-400">For full database restoration, access the Supabase Dashboard directly:</p>
-          <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
-            <li>Visit your Supabase project dashboard</li>
-            <li>Navigate to <span className="text-gray-700 font-medium">Database → Backups</span></li>
-            <li>Follow the hosting provider’s recovery process in an isolated environment first</li>
-            <li>Confirm backup retention and Point-in-Time Recovery availability for the current plan</li>
-          </ol>
-          <p className="text-xs text-red-700 mt-2">The records above are metadata only and are not recoverable backup files. Verify Supabase backup/PITR availability directly before production.</p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default BackupRecoveryView;
-
-
+  const download = async row => {
+    setError('');
+    try {
+      const result = await downloadDatabaseBackup(row.id);
+      const anchor = document.createElement('a');
+      anchor.href = result.url; anchor.download = result.filename; anchor.rel = 'noreferrer';
+      anchor.referrerPolicy = 'no-referrer'; anchor.click();
+    } catch (failure) { setError(failure.message || 'Backup download failed.'); }
+  };
+  const active = Boolean(status?.active);
+  const newest = status?.last_success?.id;
+  return <div className="space-y-5">
+    <PageHeader title="Backup & recovery" description="Encrypted PostgreSQL snapshots in private durable storage." actions={<BrandButton disabled={loading || busy || active || !status?.configured} onClick={() => setConfirm('create')}><Database size={16} aria-hidden="true" />{active ? 'Backup in progress' : 'Create backup'}</BrandButton>} />
+    {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {notice && <p role="status" className="text-sm text-slate-700">{notice}</p>}
+    {status?.readiness_error && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{status.readiness_error}</p>}
+    {status?.automatic_enabled && status.scheduler_status !== 'healthy' && <p role="status" className="text-sm text-amber-900">Automatic scheduler {status.scheduler_status === 'overdue' ? 'is overdue' : 'has not been observed'}. Configure the external backup Cron Job; the web page does not run scheduled backups.</p>}
+    <dl className="sa-backup-summary">
+      <div><dt>Last successful backup</dt><dd>{status ? timestamp(status.last_success?.completed_at) : 'Unavailable'}</dd></div>
+      <div><dt>Next automatic backup</dt><dd>{status?.next_automatic_backup ? `${timestamp(status.next_automatic_backup, status.timezone)} (${status.timezone})` : status ? 'Disabled' : 'Unavailable'}</dd></div>
+      <div><dt>Automatic backups</dt><dd>{status ? status.automatic_enabled ? 'Enabled' : 'Disabled' : 'Loading...'}</dd></div>
+      <div><dt>Retention / storage</dt><dd>{status ? `${status.retention_days} days / ${status.storage === 'private' ? 'Private - AES-256-GCM' : 'Unavailable'}` : 'Loading...'}</dd></div>
+    </dl>
+    {status?.last_failure && <p className="text-sm text-slate-700">Last failed backup: {timestamp(status.last_failure.completed_at)}. {status.last_failure.error_summary}</p>}
+    <div className="flex justify-end"><BrandButton variant="secondary" onClick={() => { setError(''); load(); }}><RefreshCw size={16} aria-hidden="true" />Refresh history</BrandButton></div>
+    {loading ? <p role="status">Loading backup history...</p> : <div className="max-w-full overflow-x-auto rounded-lg border border-slate-200 bg-white" role="region" aria-label="Backup history" tabIndex={0}>
+      <table className="sa-backup-table">
+        <caption>Backup history <span className="text-xs font-normal text-slate-600">Latest 100 records</span></caption>
+        <thead><tr>{['Created', 'Type', 'Status', 'Size', 'Duration', 'Created by', 'Actions'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead>
+        <tbody>{backups.length === 0 ? <tr><td colSpan={7}>No database backups yet.</td></tr> : backups.map(row => <tr key={row.id}>
+          <td className="min-w-40">{timestamp(row.created_at)}{row.checksum && <code title="SHA-256 of encrypted backup">SHA-256: {row.checksum}</code>}</td>
+          <td>{row.backup_type === 'automatic' ? 'Automatic' : 'Manual'}</td>
+          <td><span className="capitalize">{row.deleted_at ? 'Deleted' : row.status}</span>{row.error_summary && <p className="mt-1 min-w-40 text-xs text-red-700">{row.error_summary}</p>}</td>
+          <td className="whitespace-nowrap">{size(row.size_bytes)}</td><td>{duration(row)}</td><td>{row.created_by_name}</td>
+          <td><div className="flex gap-2">{row.status === 'completed' && !row.deleted_at && <BrandButton variant="secondary" onClick={() => download(row)} aria-label={`Download backup from ${timestamp(row.created_at)}`}><Download size={16} aria-hidden="true" />Download</BrandButton>}{!row.deleted_at && !['queued','running'].includes(row.status) && <BrandButton variant="secondary" disabled={active || row.id === newest} title={row.id === newest ? 'The newest successful backup is protected' : undefined} onClick={() => setConfirm(row)} aria-label={`Delete backup from ${timestamp(row.created_at)}`}><Trash2 size={16} aria-hidden="true" />Delete</BrandButton>}</div></td>
+        </tr>)}</tbody>
+      </table>
+    </div>}
+    <section className="border-t border-slate-200 pt-5"><h2 className="text-lg font-semibold">Recovery</h2><p className="mt-2 text-sm leading-6 text-slate-600">Backups can currently be downloaded for controlled database recovery. In-application restoration is disabled to protect production data.</p><p className="mt-2 text-sm leading-6 text-slate-600">Downloads are encrypted. An authorized operator must use the separately stored backup encryption key and the backup:decrypt command before restoring to an isolated PostgreSQL database.</p></section>
+    <ConfirmationDialog isOpen={Boolean(confirm)} onClose={() => { if (!busy) setConfirm(null); }} onConfirm={act} busy={busy} title={confirm === 'create' ? 'Create database backup?' : 'Delete database backup?'} description={confirm === 'create' ? 'This creates an encrypted, private snapshot of the current application database.' : 'This permanently deletes the encrypted backup from private storage. The newest successful backup is protected.'} confirmLabel={confirm === 'create' ? 'Create backup' : 'Delete backup'} danger={confirm !== 'create'} />
+  </div>;
+}
