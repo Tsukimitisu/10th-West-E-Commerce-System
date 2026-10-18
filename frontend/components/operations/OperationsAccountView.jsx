@@ -1,3 +1,5 @@
+import { usePasswordPolicy } from '../../hooks/usePasswordPolicy.js';
+import { passwordPolicyError, passwordRequirementsText } from '../../utils/passwordPolicy.js';
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import PageHeader from './PageHeader';
@@ -10,6 +12,7 @@ import { getCurrentAuthUser, setCurrentAuthUser, subscribeAuthChanges } from '..
 const Feedback = ({ value, skin = 'staff' }) => value ? <p className={`${skin}-account-feedback`} role={value.error ? 'alert' : 'status'}>{value.text}</p> : null;
 
 export default function OperationsAccountView({ user, variant = 'staff', profileExtras, securityExtras }) {
+  const { policy, refreshPolicy } = usePasswordPolicy();
   const skin = variant === 'owner' ? 'owner' : 'staff';
   const acceptsRole = role => variant === 'owner' ? ['owner', 'admin'].includes(role) : role === 'store_staff';
   const location = useLocation();
@@ -81,6 +84,10 @@ export default function OperationsAccountView({ user, variant = 'staff', profile
     setChanging(true);
     setPasswordFeedback(null);
     try {
+      const effectivePolicy = await refreshPolicy();
+      if (!isCurrent()) return;
+      const policyError = passwordPolicyError(password.next, effectivePolicy);
+      if (policyError) throw new Error(policyError);
       if (hasPassword) await changePassword(password.current, password.next);
       else { await setLocalPassword(password.next); if (isCurrent()) setCurrentAuthUser({ ...getCurrentAuthUser(), has_local_password: true }); }
       if (!isCurrent()) return;
@@ -137,10 +144,10 @@ export default function OperationsAccountView({ user, variant = 'staff', profile
         {profileExtras}
       </SectionCard>
       <div id={`${skin}-security`} className="space-y-5 scroll-mt-5">
-        <SectionCard title={hasPassword ? 'Change password' : 'Set a local password'} description="Use at least eight characters, with uppercase, lowercase, a number and a symbol.">
+        <SectionCard title={hasPassword ? 'Change password' : 'Set a local password'} description={passwordRequirementsText(policy)}>
           <form className={`${skin}-account-form`} onSubmit={savePassword}>
             {hasPassword && <label>Current password<input type="password" autoComplete="current-password" required value={password.current} onChange={event => setPassword({ ...password, current: event.target.value })} /></label>}
-            <label>New password<input type="password" autoComplete="new-password" minLength={8} required value={password.next} onChange={event => setPassword({ ...password, next: event.target.value })} /></label>
+            <label>New password<input type="password" autoComplete="new-password" required value={password.next} onChange={event => setPassword({ ...password, next: event.target.value })} /></label>
             <label>Confirm new password<input type="password" autoComplete="new-password" required value={password.confirm} onChange={event => setPassword({ ...password, confirm: event.target.value })} /></label>
             <Feedback skin={skin} value={passwordFeedback} />
             <BrandButton variant="secondary" type="submit" disabled={changing}>{changing ? 'Updating…' : hasPassword ? 'Update password' : 'Set password'}</BrandButton>

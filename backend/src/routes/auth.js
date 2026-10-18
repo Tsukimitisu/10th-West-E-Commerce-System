@@ -18,7 +18,7 @@ import {
   deleteAccountHandler, resendVerification, verifyEmailToken, exportUserData, getMyPermissions,
 } from '../controllers/authController.js';
 import { authenticateOptional, authenticateToken, requireRole } from '../middleware/auth.js';
-import { validatePolicyPassword } from '../services/securityPolicy.js';
+import { getPublicPasswordPolicy, validatePolicyPassword } from '../services/securityPolicy.js';
 import { validate } from '../middleware/validator.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import { phoneOtpReadiness } from '../services/phoneOtp.js';
@@ -32,6 +32,11 @@ import {
 } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
+
+router.get('/password-policy', async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(await getPublicPasswordPolicy());
+});
 
 export const getGoogleAuthAvailability = ({
   configuration = getGoogleOAuthConfigurationStatus(),

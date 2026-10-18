@@ -1,3 +1,5 @@
+import { usePasswordPolicy } from '../hooks/usePasswordPolicy.js';
+import { passwordChecks, passwordPolicyError } from '../utils/passwordPolicy.js';
 import BrandMark from '../components/ui/BrandMark';
 ﻿import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
@@ -5,6 +7,7 @@ import { Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowLeft, Check, X, Clock
 import { resetPassword, verifyResetToken } from '../services/api';
 
 const ResetPassword = () => {
+  const { policy, refreshPolicy } = usePasswordPolicy();
   const [searchParams] = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -68,15 +71,9 @@ const ResetPassword = () => {
     }
   }, [lockedUntil]);
 
-  const checks = [
-    { label: 'At least 8 characters', pass: password.length >= 8 },
-    { label: 'One uppercase letter', pass: /[A-Z]/.test(password) },
-    { label: 'One lowercase letter', pass: /[a-z]/.test(password) },
-    { label: 'One number', pass: /\d/.test(password) },
-    { label: 'One special character', pass: /[!@#$%^&*()_\-+=]/.test(password) },
-  ];
-  const passwordStrength = checks.filter(c => c.pass).length;
-  const strengthColor = passwordStrength <= 1 ? 'bg-orange-500' : passwordStrength <= 3 ? 'bg-amber-500' : 'bg-green-500';
+  const checks = passwordChecks(password, policy);
+  const passwordStrength = checks.filter(check => check.pass).length;
+  const strengthColor = passwordStrength === checks.length ? 'bg-green-500' : passwordStrength <= checks.length / 2 ? 'bg-orange-500' : 'bg-amber-500';
 
   const isLocked = lockedUntil && Date.now() < lockedUntil;
   const lockRemainingSeconds = isLocked ? Math.ceil((lockedUntil - Date.now()) / 1000) : 0;
@@ -92,16 +89,18 @@ const ResetPassword = () => {
     }
 
     if (password !== confirmPassword) { setError('Passwords do not match'); return; }
-    if (passwordStrength < 5) { setError('Password does not meet all requirements'); return; }
 
     setLoading(true);
     setError('');
 
     try {
+      const policyError = passwordPolicyError(password, await refreshPolicy());
+      if (policyError) { setError(policyError); return; }
       await resetPassword(token, password);
       setSuccess(true);
       setAttempts(0);
     } catch (err) {
+      if (err.message?.startsWith('Password must')) { setError(err.message); void refreshPolicy(); return; }
       const newAttempts = attempts + 1;
       setAttempts(newAttempts);
 
@@ -245,8 +244,8 @@ const ResetPassword = () => {
                   {password && (
                     <div className="mt-2">
                       <div className="flex gap-1 mb-2">
-                        {[1,2,3,4,5].map(i => (
-                          <div key={i} className={`h-1 flex-1 rounded-full ${i <= passwordStrength ? strengthColor : 'bg-gray-200'}`} />
+                        {checks.map((check, index) => (
+                          <div key={check.key} className={`h-1 flex-1 rounded-full ${index < passwordStrength ? strengthColor : 'bg-gray-200'}`} />
                         ))}
                       </div>
                       <div className="grid grid-cols-2 gap-1">

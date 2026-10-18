@@ -50,6 +50,14 @@ export const createSecurityPolicyService = ({ db, now = Date.now, ttl = 30_000 }
 };
 export const securityPolicy = createSecurityPolicyService();
 
+export const getPublicPasswordPolicy = async () => {
+  const policy = await securityPolicy.get();
+  return Object.fromEntries([
+    'password_min_length', 'password_require_uppercase', 'password_require_lowercase',
+    'password_require_number', 'password_require_special',
+  ].map(key => [key, policy[key]]));
+};
+
 export const passwordPolicyError = (password, policy) => {
   const requirements = [
     ['password_require_uppercase', /[A-Z]/, 'uppercase'],

@@ -7,6 +7,7 @@ process.env.TEST_DATABASE_URL = 'postgresql://unit:unit@127.0.0.1:1/policy_route
 process.env.JWT_SECRET = 'isolated-security-policy-routes';
 const { default: pool } = await import('../config/database.js');
 const { default: admin } = await import('./admin.js');
+const { default: auth } = await import('./auth.js');
 const { securityPolicy } = await import('../services/securityPolicy.js');
 const roles = ['customer', 'store_staff', 'owner', 'super_admin'];
 const settings = new Map([['max_login_attempts', '5']]);
@@ -25,7 +26,7 @@ before(async () => {
     return { rows: [], rowCount: 1 };
   });
   mock.method(pool, 'connect', async () => ({ query: (...args) => pool.query(...args), release() {} }));
-  const app = express(); app.use(express.json()); app.use('/api/admin', admin);
+  const app = express(); app.use(express.json()); app.use('/api/admin', admin); app.use('/api/auth', auth);
   await new Promise(resolve => { server = app.listen(0, '127.0.0.1', resolve); }); base = `http://127.0.0.1:${server.address().port}/api/admin`;
 });
 after(async () => { await new Promise(resolve => server.close(resolve)); mock.restoreAll(); await pool.end(); });
@@ -64,4 +65,14 @@ test('privileged password reset uses the same saved password policy before hashi
   const res = await call('super_admin', '/users/1/reset-password', { newPassword: 'ShortPass123!' }, 'POST');
   assert.equal(res.status, 400); assert.match((await res.json()).message, /at least 20/);
   assert.equal(queries.slice(before).some(({ sql }) => sql.includes('SET password_hash')), false);
+});
+test('public effective password policy exposes only the five password requirements without authentication', async () => {
+  settings.set('password_require_number', 'false'); settings.set('oauth_secret', 'private-secret');
+  securityPolicy.invalidate();
+  const res = await fetch(base.replace(/\/admin$/, '/auth/password-policy'));
+  assert.equal(res.status, 200); assert.equal(res.headers.get('Cache-Control'), 'no-store');
+  const policy = await res.json();
+  assert.deepEqual(Object.keys(policy).sort(), ['password_min_length', 'password_require_lowercase', 'password_require_number', 'password_require_special', 'password_require_uppercase']);
+  assert.equal(policy.password_min_length, 20); assert.equal(policy.password_require_number, false);
+  assert.doesNotMatch(JSON.stringify(policy), /private-secret|lockout|oauth|session|2fa/);
 });

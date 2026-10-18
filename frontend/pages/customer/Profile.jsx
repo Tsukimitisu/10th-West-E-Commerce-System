@@ -1,3 +1,5 @@
+import { usePasswordPolicy } from '../../hooks/usePasswordPolicy.js';
+import { passwordPolicyError, passwordRequirementsText } from '../../utils/passwordPolicy.js';
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { User, Mail, Phone, Lock, Eye, EyeOff, Save, Check, AlertCircle, Shield, Camera, Trash2, AlertTriangle, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -11,11 +13,11 @@ import { isValidPhilippineMobile, normalizePhilippineMobile } from '../../utils/
 const ALLOWED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const PROFILE_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
-const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 
 const normalizePhoneInput = normalizePhilippineMobile;
 
 const Profile = () => {
+  const { policy, refreshPolicy } = usePasswordPolicy();
   const [user, setUser] = useState(() => getCurrentAuthUser());
 
   const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '', phone: user?.phone || '' });
@@ -297,11 +299,6 @@ const Profile = () => {
       return;
     }
 
-    if (!STRONG_PASSWORD_REGEX.test(passData.new)) {
-      setPassMessage('Password must be at least 8 characters and include uppercase, lowercase, number, and special character.');
-      return;
-    }
-
     if (passData.new !== passData.confirm) {
       setPassMessage('Passwords do not match');
       return;
@@ -315,6 +312,8 @@ const Profile = () => {
     setPassLoading(true);
     setPassMessage('');
     try {
+      const policyError = passwordPolicyError(passData.new, await refreshPolicy());
+      if (policyError) { setPassMessage(policyError); return; }
       if (hasLocalPassword) {
         await changePassword(passData.current, passData.new);
         setPassMessage('Password changed successfully');
@@ -629,7 +628,7 @@ const Profile = () => {
                     {passwordVisibility.new ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Use at least 8 characters with uppercase, lowercase, number, and special character.</p>
+                <p className="mt-1 text-xs text-gray-500">{passwordRequirementsText(policy)}</p>
               </div>
               <div>
                 <label htmlFor="profile-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>

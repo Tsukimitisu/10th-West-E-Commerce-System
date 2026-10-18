@@ -1,3 +1,5 @@
+import { usePasswordPolicy } from '../hooks/usePasswordPolicy.js';
+import { passwordChecks, passwordPolicyError } from '../utils/passwordPolicy.js';
 import { customerReturnTo } from '../utils/customerReturnTo.js';
 import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -39,6 +41,7 @@ const getEmailValidationError = (value) => {
 };
 
 const Register = () => {
+  const { policy, refreshPolicy } = usePasswordPolicy();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -76,16 +79,9 @@ const Register = () => {
       .catch(() => setOauthProviders({ google: false, facebook: false, loading: false, error: true, googleReason: 'backend_unavailable', facebookReason: 'backend_unavailable' }));
   }, []);
 
-  const checks = [
-    { key: 'length', label: 'At least 8 characters', pass: password.length >= 8 },
-    { key: 'uppercase', label: 'One uppercase letter', pass: /[A-Z]/.test(password) },
-    { key: 'lowercase', label: 'One lowercase letter', pass: /[a-z]/.test(password) },
-    { key: 'number', label: 'One number', pass: /\d/.test(password) },
-    { key: 'special', label: 'One special character (optional)', pass: /[!@#$%^&*()_\-+=]/.test(password), optional: true },
-  ];
-
-  const passwordStrength = checks.filter((check) => check.pass).length;
-  const strengthColor = passwordStrength <= 2 ? 'bg-orange-500' : passwordStrength <= 4 ? 'bg-amber-500' : 'bg-green-500';
+  const checks = passwordChecks(password, policy);
+  const passwordStrength = checks.filter(check => check.pass).length;
+  const strengthColor = passwordStrength === checks.length ? 'bg-green-500' : passwordStrength <= checks.length / 2 ? 'bg-orange-500' : 'bg-amber-500';
   const checkboxClass = 'mt-0.5 h-4 w-4 shrink-0 rounded border border-slate-400 bg-white accent-red-600 focus:ring-2 focus:ring-orange-500';
 
   const getInputClassName = (field) =>
@@ -118,7 +114,7 @@ const Register = () => {
     });
   };
 
-  const validateForm = () => {
+  const validateForm = effectivePolicy => {
     const nextErrors = {};
 
     if (!name.trim()) nextErrors.name = 'Name is required.';
@@ -128,9 +124,7 @@ const Register = () => {
     if (emailError) nextErrors.email = emailError;
 
     if (!password) nextErrors.password = 'Password is required.';
-    else if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)) {
-      nextErrors.password = 'Password must be at least 8 characters and include uppercase, lowercase, and a number.';
-    }
+    else if (passwordPolicyError(password, effectivePolicy)) nextErrors.password = passwordPolicyError(password, effectivePolicy);
 
     if (!confirmPassword) nextErrors.confirmPassword = 'Please confirm your password.';
     else if (password !== confirmPassword) nextErrors.confirmPassword = 'Passwords do not match.';
@@ -147,20 +141,17 @@ const Register = () => {
     setError('');
     setResendStatus('');
 
-    const nextErrors = validateForm();
-    setFieldErrors(nextErrors);
-
-    if (Object.keys(nextErrors).length > 0) {
-      setError('Please correct the highlighted fields.');
-      if (nextErrors.email) focusEmailField();
-      else scrollToErrorBanner();
-      return;
-    }
-
     submittingRef.current = true;
     setLoading(true);
-
     try {
+      const nextErrors = validateForm(await refreshPolicy());
+      setFieldErrors(nextErrors);
+      if (Object.keys(nextErrors).length > 0) {
+        setError('Please correct the highlighted fields.');
+        if (nextErrors.email) focusEmailField();
+        else scrollToErrorBanner();
+        return;
+      }
       const normalizedEmail = email.trim().toLowerCase();
       const result = await register(
         name.trim(),
@@ -363,8 +354,8 @@ const Register = () => {
               {password && (
                 <div className="mt-2">
                   <div className="flex gap-1 mb-2">
-                    {[1, 2, 3, 4, 5].map((item) => (
-                      <div key={item} className={`h-1 flex-1 rounded-full transition-colors ${item <= passwordStrength ? strengthColor : 'bg-gray-200'}`} />
+                    {checks.map((check, index) => (
+                      <div key={check.key} className={`h-1 flex-1 rounded-full transition-colors ${index < passwordStrength ? strengthColor : 'bg-gray-200'}`} />
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-1">

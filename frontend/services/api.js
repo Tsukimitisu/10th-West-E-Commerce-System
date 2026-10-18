@@ -1,3 +1,4 @@
+import { loadPasswordPolicy } from '../utils/passwordPolicy.js';
 import { Role, OrderStatus, ReturnStatus } from '../types.js';
 import { supabase } from './supabase.js';
 import { clearCurrentAuthUser, getCurrentAuthUser } from './authSession.js';
@@ -15,7 +16,6 @@ const USE_BACKEND_ADDRESS_API = true;
 export { API_ORIGIN };
 
 const REGISTRATION_EMAIL_REGEX = /^(?=.{1,254}$)(?=.{1,64}@)(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]{0,62}[A-Za-z0-9])?@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
-const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,}$/;
 const GMAIL_TYPO_DOMAINS = new Set([
   'gmai.com',
   'gmial.com',
@@ -532,6 +532,13 @@ const authenticatedFetch = async (url, options = {}) => {
   return responseBody;
 };
 
+let pendingPasswordPolicy;
+export const getPasswordPolicy = () => {
+  pendingPasswordPolicy ||= loadPasswordPolicy(() => authenticatedFetch(`${API_URL}/auth/password-policy`, { preserveSessionOnFailure: true, timeoutMs: 5000 }))
+    .finally(() => { pendingPasswordPolicy = undefined; });
+  return pendingPasswordPolicy;
+};
+
 // ==================== AUTHENTICATION ====================
 
 export const login = async (email, password, totp_code) => {
@@ -673,10 +680,6 @@ export const verifyResetToken = async (token) => {
 export const changePassword = async (currentPassword, newPassword) => {
   if (!currentPassword || !newPassword) {
     throw new Error('Current password and new password are required.');
-  }
-
-  if (!STRONG_PASSWORD_REGEX.test(String(newPassword))) {
-    throw new Error('Password must be at least 8 characters and include uppercase, lowercase, number, and special character.');
   }
 
   return authenticatedFetch(`${API_URL}/auth/change-password`, {
