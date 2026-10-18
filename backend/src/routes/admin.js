@@ -4,6 +4,7 @@ import pool from '../config/database.js';
 import { USER_ROLES } from '../constants/schemaEnums.js';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 import { listSettings } from '../services/settings.js';
+import backupRoutes from './backups.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import { getShippingConfigurationStatus } from '../services/shipping/providers/index.js';
 import { getShippingOperationalReadiness } from '../services/shipping/shippingReadiness.js';
@@ -46,16 +47,17 @@ const SETTING_RULES = {
 const SENSITIVE_SETTING_PATTERN = /(secret|password|token|api[_-]?key|private[_-]?key)/i;
 const maskSettingRows = (rows) => rows.map((row) => ({
   ...row,
-  value: SENSITIVE_SETTING_PATTERN.test(row.key) ? '********' : row.value,
+  value: SENSITIVE_SETTING_PATTERN.test(row.key) && !SETTING_RULES[row.category]?.[row.key] ? '********' : row.value,
 }));
+const safeBeforeSettings = (category, rows) => Object.fromEntries(maskSettingRows(rows.map(row => ({ ...row, category }))).map(row => [row.key, row.value]));
 const validateSettings = (category, settings) => {
-  const rules = SETTING_RULES[category];
+  const rules = Object.hasOwn(SETTING_RULES, category) ? SETTING_RULES[category] : null;
   if (!rules || !settings || typeof settings !== 'object' || Array.isArray(settings)) {
     return { error: 'Unsupported settings category or payload.' };
   }
   const normalized = {};
   for (const [key, rawValue] of Object.entries(settings)) {
-    if (SENSITIVE_SETTING_PATTERN.test(key) || !rules[key]) {
+    if (!Object.hasOwn(rules, key)) {
       return { error: `Unsupported setting: ${category}.${key}` };
     }
     const value = typeof rawValue === 'string' ? rawValue.trim() : String(rawValue);
@@ -111,13 +113,18 @@ router.get(
 
 // All admin/system routes require super_admin only
 router.use(authenticateToken, (req, res, next) => {
-  if (req.path === '/settings' || req.path.startsWith('/settings/') || req.path.startsWith('/security/settings')) {
+  const normalizedPath = req.path.toLowerCase().replace(/\/+$/, '');
+  const securitySettings = normalizedPath.startsWith('/security/settings')
+    || req.query.category === 'security' || req.body?.category === 'security' || normalizedPath === '/settings/security';
+  if (!securitySettings && (req.path === '/settings' || req.path.startsWith('/settings/'))) {
     return requireRole('super_admin', 'owner', 'admin')(req, res, () => (
       requirePermission('settings.manage')(req, res, next)
     ));
   }
   return requireRole('super_admin')(req, res, next);
 });
+
+router.use('/backups', backupRoutes);
 
 router.get('/readiness', async (_req, res) => {
   try {
@@ -313,7 +320,8 @@ router.delete('/users/:id', async (req, res) => {
 // Get all settings or by category
 router.get('/settings', async (req, res) => {
   try {
-    res.json(maskSettingRows(await listSettings(pool, req.query.category || null)));
+    const rows = await listSettings(pool, req.query.category || null);
+    res.json(maskSettingRows(req.user.role === 'super_admin' ? rows : rows.filter(row => row.category !== 'security')));
   } catch (err) {
     console.error('Get settings error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -321,7 +329,7 @@ router.get('/settings', async (req, res) => {
 });
 
 // Get settings by category (route param)
-router.get('/settings/:category', async (req, res) => {
+router.get('/settings/:category', (req, res, next) => req.params.category === 'security' ? requireRole('super_admin')(req, res, next) : next(), async (req, res) => {
   try {
     res.json(maskSettingRows(await listSettings(pool, req.params.category)));
   } catch (err) {
@@ -351,7 +359,7 @@ router.put('/settings', async (req, res) => {
       `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, before_data, after_data)
        VALUES ($1, 'settings.update', 'system_settings', $2, $3, $4, $5::jsonb, $6::jsonb)`,
       [req.user.id, category, req.clientIp, req.clientUa,
-        JSON.stringify(Object.fromEntries(beforeResult.rows.map((row) => [row.key, row.value]))),
+        JSON.stringify(safeBeforeSettings(category, beforeResult.rows)),
         JSON.stringify(validation.normalized)]
     );
     await client.query('COMMIT');
@@ -372,7 +380,7 @@ router.get('/security/settings', async (req, res) => {
   try {
     const result = await pool.query("SELECT key, value FROM system_settings WHERE category = 'security'");
     const settings = {};
-    result.rows.forEach(r => { settings[r.key] = SENSITIVE_SETTING_PATTERN.test(r.key) ? '********' : r.value; });
+    result.rows.forEach(r => { settings[r.key] = SENSITIVE_SETTING_PATTERN.test(r.key) && !SETTING_RULES.security[r.key] ? '********' : r.value; });
     res.json(settings);
   } catch (err) {
     console.error('Get security settings error:', err);
@@ -400,7 +408,7 @@ router.put('/security/settings', async (req, res) => {
       `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, before_data, after_data)
        VALUES ($1, 'settings.security.update', 'system_settings', 'security', $2, $3, $4::jsonb, $5::jsonb)`,
       [req.user.id, req.clientIp, req.clientUa,
-        JSON.stringify(Object.fromEntries(beforeResult.rows.map((row) => [row.key, row.value]))),
+        JSON.stringify(safeBeforeSettings('security', beforeResult.rows)),
         JSON.stringify(validation.normalized)]
     );
     await client.query('COMMIT');
