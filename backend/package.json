@@ -24,6 +24,7 @@
     "verify:local": "node scripts/verify-local.js",
     "test:live-concurrency": "node scripts/verify-live-concurrency.js",
     "seed:test-fixtures": "node scripts/seed-test-fixtures.js",
+    "create:superadmin": "node scripts/create-superadmin.js",
     "data:quarantine-orders": "node scripts/quarantine-order-integrity.js",
     "security:disable-seeded-accounts": "node scripts/secure-seeded-accounts.js",
     "security:verify-rls": "node scripts/verify-rls.js",
