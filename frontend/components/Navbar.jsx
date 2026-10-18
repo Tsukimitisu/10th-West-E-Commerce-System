@@ -13,6 +13,11 @@ import { handleProductImageError, resolveProductImageUrl } from '../utils/produc
 import { repairMojibake } from '../utils/text.js';
 import { shouldReturnEmptyProductSearch } from '../utils/productSearchSafety.js';
 
+const customerExtraAccountNavigation = [
+  { path: '/my-returns', label: 'Returns', icon: RotateCcw },
+  { path: '/wishlist', label: 'Wishlist', icon: Heart },
+];
+
 const Navbar = ({ user, onLogout }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -726,9 +731,8 @@ const Navbar = ({ user, onLogout }) => {
                           )}
                         </Link>
                       )}
-                      <Link to="/wishlist" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><Heart size={16} className="text-slate-300" /> Wishlist</Link>
+                      {customerExtraAccountNavigation.map(({ path, label, icon: Icon }) => <Link key={path} to={path} onClick={() => setUserMenuOpen(false)} aria-current={location.pathname === path ? 'page' : undefined} className={userMenuItemClass}><Icon size={16} className="text-slate-300" /> {label}</Link>)}
                       <Link to="/addresses" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><MapPin size={16} className="text-slate-300" /> Address Book</Link>
-                      <Link to="/my-returns" onClick={() => setUserMenuOpen(false)} className={userMenuItemClass}><RotateCcw size={16} className="text-slate-300" /> Returns</Link>
                       {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
                         <>
                           <div className="border-t border-zinc-700 mt-1 pt-1" />
@@ -831,6 +835,7 @@ const Navbar = ({ user, onLogout }) => {
             { path: '/shop', label: 'Shop', icon: ShoppingCart },
             ...(user ? [
               { path: '/orders', label: 'Orders', icon: Package },
+              ...customerExtraAccountNavigation,
               { path: '/messages', label: 'Messages', icon: MessageCircle },
               { path: '/profile', label: 'Profile', icon: User },
             ] : [{ path: '/login', label: 'Sign in', icon: User }]),
