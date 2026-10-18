@@ -1,17 +1,19 @@
 /* Owner extension only. Frozen Customer/Staff and System defaults are untouched. */
 .operations-shell[data-workspace="owner"] { --ops-text:var(--text); background:var(--surface-muted); }
-.owner-sidebar { background:var(--obsidian); color:white; }
-.owner-sidebar .operations-role,.owner-sidebar .ops-nav-label { color:#b9bfca; font-size:11px; }
+.operations-sidebar.owner-sidebar { background:#090b0f; color:white; }
+.owner-sidebar .operations-role,.owner-sidebar .ops-nav-label { color:#a8adb7; font-size:11px; }
 .owner-sidebar .ops-nav-item { min-height:44px; color:#d6dae2; }
-.owner-sidebar .ops-nav-item > svg { color:#aeb5c2; }
-.owner-sidebar .ops-nav-item:hover { background:var(--racing-navy); color:white; }
-.owner-sidebar .ops-nav-item[aria-current="page"] { background:#181d28; box-shadow:inset 2px 0 var(--performance-orange); color:white; }
-.owner-sidebar .ops-nav-item[aria-current="page"] > svg { color:var(--performance-orange); }
+.owner-sidebar .ops-nav-item > svg { color:#a8adb7; }
+.owner-sidebar .ops-nav-item:hover { background:#12151b; color:white; }
+.owner-sidebar .ops-nav-item[aria-current="page"] { background:#12151b; box-shadow:inset 2px 0 var(--performance-orange); color:white; }
+.owner-sidebar .ops-nav-item[aria-current="page"] > svg { color:white; }
+.owner-sidebar :is(.operations-brand-header,.ops-sidebar-footer) { border-color:#252830; }
+.owner-sidebar .ops-nav-count { background:#252830; color:white; }
 .owner-sidebar .ops-sidebar-footer { padding:10px 12px max(10px,env(safe-area-inset-bottom)); }
 .owner-sidebar .ops-sidebar-footer button { display:flex; width:100%; gap:11px; padding:10px 12px; color:#d6dae2; font-size:13px; text-align:left; }
 .owner-sidebar.is-collapsed .ops-sidebar-footer button { justify-content:center; padding-inline:0; }
 .owner-sidebar :focus-visible,.brand-overlay-tone-owner :focus-visible { outline:2px solid var(--hot-orange); outline-offset:2px; }
-.brand-overlay-tone-owner .brand-dialog-panel > div { background:var(--obsidian); color:white; border-color:var(--dark-border); }
+.brand-overlay-tone-owner .brand-dialog-panel > div { background:#090b0f; color:white; border-color:#252830; }
 .brand-overlay-tone-owner .brand-dialog-panel > div:first-child :is(h2,button) { color:white; }
 .brand-overlay-tone-owner .brand-dialog-panel > div:last-child { display:flex; min-height:0; padding:0; }
 .brand-overlay-tone-owner .owner-sidebar { flex:1; }

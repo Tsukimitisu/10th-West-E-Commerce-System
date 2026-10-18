@@ -176,6 +176,14 @@
 .pos-header .brand-logo-description { display:none; }
 .pos-header > div:first-child > button { color:white; }
 .pos-header > div:first-child p:last-child { color:#c7cedb; }
+.pos-shell[data-workspace="owner"] .pos-header { background:#090b0f !important; border-color:#252830 !important; }
+.pos-shell[data-workspace="owner"] .pos-header .border-l { border-color:#252830; }
+.pos-shell[data-workspace="owner"] .pos-header > div:first-child p:last-child { color:#a8adb7; }
+.pos-shell[data-workspace="owner"] .pos-header > div:first-child > button:hover { background:#12151b; }
+.pos-shell[data-workspace="owner"] .pos-header > div:last-child > :is(button,div) { background:#12151b; border-color:#252830; color:white; }
+.pos-shell[data-workspace="owner"] .pos-header > div:last-child > button:hover { background:#242832; }
+.pos-shell[data-workspace="owner"] .pos-header > div:last-child > div .text-slate-950 { color:white; }
+.pos-shell[data-workspace="owner"] .pos-header > div:last-child > div :is(.text-slate-500,.text-\[10px\]) { color:#a8adb7; }
 .pos-product-tile { border-radius:8px; box-shadow:none !important; transform:none !important; }
 .pos-product-tile img { object-fit:contain; }
 .pos-shell input:not([type=checkbox]):not([type=radio]),.pos-shell select { min-height:44px; border-radius:8px; }

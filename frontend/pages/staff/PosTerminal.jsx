@@ -439,7 +439,7 @@ const PosTerminal = () => {
   }
 
   return (
-    <div className="pos-shell flex h-screen flex-col overflow-hidden bg-slate-100 text-slate-950">
+    <div className="pos-shell flex h-screen flex-col overflow-hidden bg-slate-100 text-slate-950" data-workspace={['owner', 'admin'].includes(user?.role) ? 'owner' : undefined}>
       <header className="pos-header flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 shadow-sm sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           {backPath && <button type="button" onClick={() => navigate(backPath)} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-600 hover:bg-slate-100" aria-label="Back to dashboard"><ArrowLeft size={19} /></button>}
