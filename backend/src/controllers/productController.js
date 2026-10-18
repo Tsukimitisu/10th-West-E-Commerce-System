@@ -1244,7 +1244,7 @@ export const getProductById = async (req, res) => {
     try {
       const modernVariantResult = await pool.query(
         `SELECT id, product_id, variant_type, variant_value, price_adjustment, price,
-                stock_quantity, sku, image_url, option_combination, combination_key
+                stock_quantity, reserved_stock, sku, image_url, option_combination, combination_key
          FROM product_variants
          WHERE product_id = $1
          ORDER BY created_at ASC, id ASC`,
@@ -1255,7 +1255,7 @@ export const getProductById = async (req, res) => {
       try {
         const legacyVariantResult = await pool.query(
           `SELECT id, product_id, variant_type, variant_value, price_adjustment,
-                  stock_quantity, sku
+                  stock_quantity, reserved_stock, sku
            FROM product_variants
            WHERE product_id = $1
            ORDER BY variant_type ASC, variant_value ASC`,
@@ -1304,7 +1304,7 @@ export const getProductById = async (req, res) => {
         }
 
         const normalizedOrder = optionOrder.length > 0 ? optionOrder : Object.keys(normalizedCombination);
-        const storeVariantPrice = Number.isFinite(Number(variantRow.price))
+        const storeVariantPrice = variantRow.price != null && Number.isFinite(Number(variantRow.price))
           ? Number(variantRow.price)
           : baseStorePrice + Number(variantRow.price_adjustment || 0);
         const resolvedPrice = includeUnpublished ? storeVariantPrice : calculateEcommercePrice(storeVariantPrice);
@@ -1315,7 +1315,7 @@ export const getProductById = async (req, res) => {
           option_combination: normalizedCombination,
           combination_key: variantRow.combination_key || buildVariantCombinationKey(normalizedCombination, normalizedOrder),
           price: Number.isFinite(resolvedPrice) ? resolvedPrice : (includeUnpublished ? baseStorePrice : calculateEcommercePrice(baseStorePrice)),
-          stock_quantity: Number.isFinite(Number(variantRow.stock_quantity)) ? Number(variantRow.stock_quantity) : 0,
+          stock_quantity: Math.max(0, Number(variantRow.stock_quantity || 0) - Number(variantRow.reserved_stock || 0)),
           image_url: String(variantRow.image_url || '').trim() || null,
           sku: String(variantRow.sku || '').trim() || null,
         };

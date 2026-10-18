@@ -8,7 +8,7 @@ test('storefront navbar keeps primary destinations concise without catalog short
   const navbar = await read('components/Navbar.jsx');
 
   for (const destination of ['Home', 'Shop', 'Support']) {
-    assert.match(navbar, new RegExp(`>${destination}<|\\n\\s*${destination}\\n`));
+    assert.match(navbar, new RegExp(`>${destination}<|\\n\\s*${destination}\\n|label: '${destination}'`));
   }
   for (const removedDestination of ['New Arrivals', 'Best Sellers', 'Brands']) {
     assert.doesNotMatch(navbar, new RegExp(`>${removedDestination}<|\\n\\s*${removedDestination}\\n`));

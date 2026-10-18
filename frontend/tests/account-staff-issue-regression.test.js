@@ -53,9 +53,8 @@ test('cart and checkout share the configured free-shipping explanation and progr
 
 test('checkout success actions keep readable hover, focus, and active text', async () => {
   const confirmation = await read('pages/customer/OrderConfirmation.jsx');
-  assert.match(confirmation, /hover:text-white/);
-  assert.match(confirmation, /focus-visible:text-white/);
-  assert.match(confirmation, /active:text-white/);
+  assert.match(confirmation, /text-slate-800 hover:bg-slate-50/);
+  assert.match(confirmation, /bg-orange-600.*text-slate-950/);
   for (const action of ['View Invoice', 'Continue Shopping', 'Go Home']) {
     assert.match(confirmation, new RegExp(action));
   }
@@ -115,10 +114,13 @@ test('FAQ and return policy use accurate payment wording, readable colors, and o
 
 test('customer top navigation and dropdown keep all account destinations reachable', async () => {
   const [layout, navbar] = await Promise.all([read('components/customer/AccountLayout.jsx'), read('components/Navbar.jsx')]);
-  for (const path of ['/profile', '/orders', '/messages', '/wishlist', '/addresses', '/my-returns']) {
+  for (const path of ['/profile', '/orders', '/messages', '/addresses']) {
     assert.ok(layout.includes(path)); assert.ok(navbar.includes(path));
   }
+  for (const path of ['/wishlist', '/my-returns']) assert.ok(navbar.includes(path));
   assert.doesNotMatch(layout, /<aside|lg:w-64|lg:flex-row/);
+  assert.match(navbar, /presentation="customer-top-sheet"/);
+  assert.doesNotMatch(navbar, /<Drawer/);
   assert.match(layout, /className="customer-account-nav" aria-label="Account navigation"/);
 });
 

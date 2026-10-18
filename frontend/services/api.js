@@ -2293,7 +2293,7 @@ const mapOrderItemToCartItem = (item) => {
   const product = {
     id: productId,
     partNumber: item.product_part_number ?? item.product?.partNumber ?? item.product?.part_number ?? '',
-    name: item.product_name ?? item.product?.name ?? 'Unknown Item',
+    name: item.product_name ?? item.name ?? item.product?.name ?? 'Unknown Item',
     description: item.product?.description ?? '',
     price: roundCurrency(item.product_price ?? item.price ?? item.product_price_current ?? item.product?.price ?? 0),
     buyingPrice: roundCurrency(item.product_buying_price ?? item.product?.buyingPrice ?? item.product?.buying_price ?? 0),
@@ -2314,6 +2314,7 @@ const mapOrderItemToCartItem = (item) => {
   return {
     orderItemId: Number(item.order_item_id ?? item.orderItemId ?? item.id) || null,
     order_item_id: Number(item.order_item_id ?? item.orderItemId ?? item.id) || null,
+    variant_name_snapshot: item.variant_name_snapshot ?? item.variant_label ?? null,
     productId,
     productReferenceId: hasProductReference ? productId : null,
     product,
@@ -2358,6 +2359,7 @@ const mapOrderFromApi = (order) => {
   return {
     id: orderId,
     order_id: orderId,
+    order_number: order.order_number ?? null,
     user_id: order.user_id ?? undefined,
     customer_display_name: order.customer_display_name ?? undefined,
     customer_name: order.customer_name ?? undefined,
@@ -2369,6 +2371,13 @@ const mapOrderFromApi = (order) => {
       ? { name: order.guest_name, email: order.guest_email }
       : order.guest_info,
     items: mappedItems,
+    confirmed_totals: {
+      subtotal: order.subtotal_amount ?? order.subtotal ?? checkoutTotals.subtotal ?? null,
+      shipping: order.shipping_fee ?? order.shipping_cost ?? flatShippingAmount ?? checkoutTotals.shipping_fee ?? null,
+      discount: order.discount_amount ?? order.discount ?? checkoutTotals.discount ?? null,
+      tax: order.tax_amount ?? order.vat_amount ?? checkoutTotals.tax ?? null,
+      total: order.total_amount ?? order.total ?? checkoutTotals.total ?? null,
+    },
     subtotal: subtotalAmount,
     total: totalAmount,
     total_amount: totalAmount,

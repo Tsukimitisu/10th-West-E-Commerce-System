@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle, Play } from 'lucide-react';
 import { getProductById, getRelatedProducts, getProductReviews, getReviewEligibility, addReview, addToWishlist, removeFromWishlist, getWishlist, getShippingConfig, getAuthAvailability, recordProductView, startProductChat, WISHLIST_SYNC_EVENT } from '../services/api';
@@ -11,6 +11,7 @@ import ReviewCard from '../components/ReviewCard';
 import RichText from '../components/ui/RichText';
 import EmptyState from '../components/ui/EmptyState';
 import BrandButton from '../components/ui/BrandButton';
+import { BottomSheet } from '../components/ui/BrandPrimitives';
 import { richTextToPlainText } from '../utils/richText.js';
 import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
 import { handleProductImageError, PRODUCT_IMAGE_FALLBACK, resolveProductImageUrl } from '../utils/productImages.js';
@@ -201,6 +202,7 @@ const ProductDetail = () => {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
+  const [purchaseIntent, setPurchaseIntent] = useState(null);
   const [selectedImage, setSelectedImage] = useState(0);
   const [activeTab, setActiveTab] = useState('description');
   const [wishlistedIds, setWishlistedIds] = useState([]);
@@ -598,6 +600,7 @@ const ProductDetail = () => {
     }
 
     const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
+    if (!Number.isInteger(Number(quantity)) || Number(quantity) < 1 || Number(quantity) > MAX_ITEM_QUANTITY) { setQuantityError('Choose a valid quantity within the cart limit.'); return false; }
     if (quantity > maxStock) {
       setQuantityError(`Maximum available quantity is ${maxStock}.`);
       return false;
@@ -640,11 +643,13 @@ const ProductDetail = () => {
   };
 
   const handleAddToCart = async () => {
+    if (variantRows.length && window.matchMedia('(max-width: 767px)').matches) { setPurchaseIntent('cart'); return; }
     await addCurrentSelectionToCart(true);
   };
 
-  const handleBuyNow = () => {
+  const handleBuyNow = (fromSheet = false) => {
     if (!product) return;
+    if (fromSheet !== true && variantRows.length && window.matchMedia('(max-width: 767px)').matches) { setPurchaseIntent('buy'); return; }
     if (!validateSelection()) return;
 
     const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
@@ -931,12 +936,23 @@ const ProductDetail = () => {
   const mediaItems = extractProductMedia(product);
   const selectedMedia = mediaItems[Math.min(selectedImage, mediaItems.length - 1)] || mediaItems[0];
   const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
-  const isOutOfStock = maxStock <= 0 || product.status === 'out_of_stock';
+  const isOutOfStock = (variantRows.length ? variantRows.every(row => row.stock_quantity <= 0) : maxStock <= 0) || product.status === 'out_of_stock';
   const isBundle = product.product_type === 'bundle';
   const hasDiscount = !hasVariants && product.is_on_sale && product.sale_price;
   const displayPrice = hasVariants
     ? Number(selectedVariantRow?.price ?? product.price)
     : Number(hasDiscount ? product.sale_price : product.price);
+
+  const optionCards = <fieldset className="mb-6">
+    <legend className="mb-3 text-sm font-semibold text-slate-900">Choose an option</legend>
+    <div className="grid grid-cols-2 gap-2">
+      {variantRows.map(variant => <button type="button" key={variant.id} disabled={variant.stock_quantity <= 0} aria-pressed={selectedVariantRow?.id === variant.id} onClick={() => { setSelectedVariant(variant.option_combination); setVariantError(''); setQuantity(1); }} className={`flex min-h-20 items-center gap-2 rounded-lg border p-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 ${selectedVariantRow?.id === variant.id ? 'border-orange-600 bg-orange-50 text-orange-900' : 'border-slate-300 bg-white text-slate-800'}`}>
+        {variant.image_url && <img src={resolveProductImageUrl(variant.image_url)} onError={handleProductImageError} alt="" width="40" height="40" className="h-10 w-10 shrink-0 rounded object-contain" />}
+        <span className="min-w-0 break-words"><span className="block font-semibold">{Object.values(variant.option_combination).join(' / ')}</span>{variant.sku && <span className="mt-1 block text-xs">{variant.sku}</span>}{variant.price !== Number(product.price) && <span className="mt-1 block">{'\u20b1'}{variant.price.toLocaleString('en-PH')}</span>}<span className="mt-1 block text-xs">{variant.stock_quantity > 0 ? `${variant.stock_quantity} available` : 'Unavailable'}</span></span>
+      </button>)}
+    </div>
+    {variantError && <p role="alert" className="mt-2 text-sm text-red-700">{variantError}</p>}
+  </fieldset>;
 
   const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : product.rating || 0;
   const ratingDist = [5, 4, 3, 2, 1].map(star => ({
@@ -1066,32 +1082,7 @@ const ProductDetail = () => {
               </div>
             )}
 
-            {/* Variants */}
-            {variantOptions.length > 0 && (
-            <div className="space-y-4 mb-6">
-              {variantOptions.map((option) => (
-                <div key={option.name}>
-                  <label className="text-sm font-medium text-slate-900 mb-2 block">{option.name} <span className="text-red-500">*</span></label>
-                  <div className="flex flex-wrap gap-2">
-                    {option.values.map((value) => (
-                      <button
-                        key={`${option.name}-${value}`}
-                        onClick={() => {
-                          setSelectedVariant((prev) => ({ ...prev, [option.name]: value }));
-                          setVariantError('');
-                        }}
-                        className={`px-4 py-2 border rounded-xl text-sm transition-colors ${selectedVariant?.[option.name] === value ? 'border-orange-600 bg-orange-50 text-orange-800' : 'border-slate-300 text-slate-700 hover:border-red-200 bg-white'}`}
-                      >
-                        {value}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {variantError && <p className="text-xs text-red-500 mt-2">{variantError}</p>}
-            </div>
-            )}
+            {variantRows.length > 0 && <div className="hidden md:block">{optionCards}</div>}
 
             {/* Quantity & Actions */}
             <div className="product-purchase-actions">
@@ -1527,7 +1518,21 @@ const ProductDetail = () => {
           </div>
         )}
       </div>
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-3 shadow-[0_-10px_35px_-24px_rgba(15,23,42,0.45)] backdrop-blur md:hidden">
+      <BottomSheet isOpen={Boolean(purchaseIntent)} onClose={() => setPurchaseIntent(null)} title={purchaseIntent === 'buy' ? 'Buy now' : 'Add to cart'}>
+        <div className="mb-5 flex items-start gap-4">
+          <img src={resolveProductImageUrl(selectedVariantRow?.image_url || product.image)} onError={handleProductImageError} alt={product.name} width="80" height="80" className="h-20 w-20 shrink-0 rounded-lg border border-slate-200 object-contain" />
+          <div className="min-w-0"><p className="break-words font-semibold text-slate-900">{product.name}</p><p className="mt-1 text-xl font-bold text-slate-950">{'\u20b1'}{displayPrice.toLocaleString('en-PH')}</p><p className="mt-1 text-sm text-slate-600">{selectedVariantRow ? `${selectedVariantRow.label} - ${maxStock} available` : 'Select your option below'}</p></div>
+        </div>
+        {optionCards}
+        <div className="mb-5 flex items-center justify-between gap-4"><span className="text-sm font-semibold">Quantity</span><div className="flex items-center rounded-lg border border-slate-300">
+          <button type="button" aria-label="Decrease quantity" aria-disabled={Number(quantity) <= 1} onClick={() => setQuantity(q => Math.max(1, Number(q) - 1))} className="grid h-11 w-11 place-items-center aria-disabled:opacity-40"><Minus size={18} /></button>
+          <output aria-label="Quantity" className="w-10 text-center">{quantity}</output>
+          <button type="button" aria-label="Increase quantity" aria-disabled={!selectedVariantRow || Number(quantity) >= Math.min(maxStock, MAX_ITEM_QUANTITY)} onClick={() => { if (selectedVariantRow && Number(quantity) < Math.min(maxStock, MAX_ITEM_QUANTITY)) setQuantity(q => Math.min(maxStock, MAX_ITEM_QUANTITY, Number(q) + 1)); }} className="grid h-11 w-11 place-items-center aria-disabled:opacity-40"><Plus size={18} /></button>
+        </div></div>
+        {quantityError && <p role="alert" className="mb-3 text-sm text-red-700">{quantityError}</p>}
+        <div className="purchase-sheet-action"><BrandButton className="w-full" disabled={!selectedVariantRow || maxStock <= 0} onClick={async () => { if (purchaseIntent === 'buy') handleBuyNow(true); else if (await addCurrentSelectionToCart(true)) setPurchaseIntent(null); }}>{purchaseIntent === 'buy' ? 'Buy Now' : 'Add to Cart'}</BrandButton></div>
+      </BottomSheet>
+      <div className="product-mobile-purchase-bar fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-3 shadow-[0_-10px_35px_-24px_rgba(15,23,42,0.45)] backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-[48px_minmax(0,1fr)_100px] gap-2">
           <button
             type="button"

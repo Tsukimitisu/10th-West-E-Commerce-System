@@ -5,7 +5,7 @@ import { getCurrentAuthUser } from '../../services/authSession.js';
 const menuItems = [
   { path: '/profile', label: 'Profile' }, { path: '/orders', label: 'Orders' },
   { path: '/addresses', label: 'Addresses' },
-  { path: '/messages', label: 'Messages' }, { path: '/wishlist', label: 'Wishlist' }, { path: '/my-returns', label: 'Returns' },
+  { path: '/messages', label: 'Messages' },
 ];
 const AccountLayout = ({ children }) => {
   const location = useLocation();

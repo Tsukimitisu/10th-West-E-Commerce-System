@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { CheckCircle2, Package, Truck, Calendar, ArrowRight, Home, ShoppingBag, Printer } from 'lucide-react';
+import { useParams, Link, Navigate } from 'react-router-dom';
+import { CheckCircle2, Package, Truck, Calendar, Home, ShoppingBag, Printer } from 'lucide-react';
 import { getOrderById } from '../../services/api';
 import { API_URL } from '../../services/apiConfig.js';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
@@ -21,6 +21,7 @@ const OrderConfirmation = () => {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const resolveOrderItemProductId = (item) => {
     const candidate = Number(item?.productReferenceId ?? item?.productId ?? item?.product_id ?? item?.product?.id);
@@ -33,7 +34,7 @@ const OrderConfirmation = () => {
         if (!id) return;
         const loadedOrder = await getOrderById(Number(id));
         setOrder(loadedOrder || null);
-      } catch {}
+      } catch { setError('Unable to load your order. Please try again from My Orders.'); }
       setLoading(false);
     };
     load();
@@ -45,116 +46,63 @@ const OrderConfirmation = () => {
     </div>
   );
 
-  const vatAmount = roundCurrency(order?.tax_amount ?? order?.vat_amount ?? 0);
-  const totalAmount = roundCurrency(order?.total ?? order?.total_amount ?? 0);
-  const secondaryActionClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-white px-6 py-3 font-medium text-slate-800 transition-colors hover:bg-slate-900 hover:text-white focus-visible:bg-slate-900 focus-visible:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 active:bg-slate-950 active:text-white';
+  const vatAmount = roundCurrency(order?.confirmed_totals?.tax ?? 0);
+  const totalAmount = roundCurrency(order?.confirmed_totals?.total ?? order?.total_amount ?? 0);
+  if (!order) return <div className="mx-auto max-w-xl px-4 py-16 text-center" role="alert"><h1 className="font-display text-3xl">Order unavailable</h1><p className="my-4">{error || 'This order could not be found.'}</p><Link to="/orders" className="brand-button brand-button-primary">My Orders</Link></div>;
+  if (order.payment_method === 'gcash' && order.payment_status !== 'paid') return <Navigate to={`/payment-result?order=${order.id}`} replace />;
+  const subtotal = order.confirmed_totals?.subtotal;
+  const shipping = order.confirmed_totals?.shipping;
+  const discount = order.confirmed_totals?.discount;
+  const secondaryActionClass = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50';
 
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-16">
-      {/* Success icon */}
-      <div className="text-center mb-8">
-        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <CheckCircle2 size={40} className="text-green-600" />
-        </div>
-        <h1 className="font-display font-bold text-2xl text-slate-950 mb-2">Order Confirmed!</h1>
-        <p className="text-slate-600">Thank you for your purchase. We've sent a confirmation to your email.</p>
-      </div>
-
-      {order && (
-        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden mb-6">
-          {/* Order info */}
-          <div className="p-6 border-b border-gray-700 text-center">
-            <p className="text-sm text-gray-400">Order Number</p>
-            <p className="font-display font-bold text-xl text-white mt-1">#{order.order_number || order.id}</p>
-            <p className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
-              <Calendar size={12} /> {new Date(order.created_at || Date.now()).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-          </div>
-
-          {/* Estimated delivery */}
-          <div className="p-4 bg-gray-900 flex items-center justify-center gap-3 text-sm">
-            <Truck size={18} className="text-slate-300" />
-            <span className="text-slate-300">Estimated delivery:</span>
-            <span className="font-medium text-white">3-7 business days</span>
-          </div>
-
-          {/* Items */}
-          <div className="p-6">
-            <h3 className="font-semibold text-sm text-white mb-3">Order Summary</h3>
-            <div className="space-y-3">
-              {(order.items || []).map((item, i) => {
-                const productId = resolveOrderItemProductId(item);
-                const itemTitle = item.name || item.product_name;
-                const itemImage = item.image_url || item.product?.image;
-                const lineTotal = roundCurrency(roundCurrency(item.price ?? item.product?.price ?? 0) * Math.max(0, toFiniteNumber(item.quantity, 0)));
-
-                return (
-                  <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-3">
-                    {productId ? (
-                      <Link to={`/products/${productId}`} className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700 hover:ring-2 hover:ring-red-500/40 transition-colors" title="View product">
-                        {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center"><Package size={16} className="text-gray-400" /></div>}
-                      </Link>
-                    ) : (
-                      <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700">
-                        {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center"><Package size={16} className="text-gray-400" /></div>}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      {productId ? (
-                        <Link to={`/products/${productId}`} className="text-sm text-white truncate hover:text-red-500 transition-colors inline-block" title="View product">
-                          {itemTitle}
-                        </Link>
-                      ) : (
-                        <p className="text-sm text-white truncate">{itemTitle}</p>
-                      )}
-                      <p className="text-xs text-gray-400">Qty: {Math.max(0, toFiniteNumber(item.quantity, 0))}</p>
-                    </div>
-                    <p className="text-sm font-medium text-white">{formatCurrency(lineTotal)}</p>
-                  </div>
-                );
-              })}
-            </div>
-            {vatAmount > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-700 flex justify-between text-sm text-gray-400">
-                <span>VAT (12%)</span>
-                <span>{formatCurrency(vatAmount)}</span>
+  return <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-12">
+    <header className="mb-8 text-center">
+      <CheckCircle2 size={52} className="mx-auto mb-4 text-green-700" aria-hidden="true" />
+      <h1 className="font-display text-4xl font-bold text-slate-950 sm:text-5xl">Order Confirmed!</h1>
+      <p className="mt-3 text-slate-700">Thank you for your purchase.</p>
+      <p className="mt-1 text-sm text-slate-600">You can follow your order's progress from My Orders.</p>
+    </header>
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-label="Order confirmation">
+      <dl className="grid gap-5 bg-[#111C3D] p-5 text-white sm:grid-cols-3 sm:p-6">
+        <div><dt className="text-sm text-slate-300">Order Number</dt><dd className="mt-1 break-words text-lg font-semibold">#{order.order_number || order.id}</dd></div>
+        <div><dt className="flex items-center gap-2 text-sm text-slate-300"><Calendar size={16} aria-hidden="true" />Order Date</dt><dd className="mt-1 font-medium">{order.created_at ? new Date(order.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not available'}</dd></div>
+        <div><dt className="flex items-center gap-2 text-sm text-slate-300"><Truck size={16} aria-hidden="true" />Estimated Delivery</dt><dd className="mt-1 font-medium">{order.estimated_delivery || '3-7 business days'}</dd></div>
+      </dl>
+      <div className="p-5 sm:p-6">
+        <h2 className="mb-4 text-lg font-semibold text-slate-950">Order Summary</h2>
+        <ul className="divide-y divide-slate-200">
+          {(order.items || []).map((item, i) => {
+            const productId = resolveOrderItemProductId(item);
+            const itemTitle = item.name || item.product_name;
+            const itemImage = item.image_url || item.image_snapshot || item.product?.image;
+            const lineTotal = roundCurrency(roundCurrency(item.price ?? item.product_price ?? item.product?.price ?? 0) * Math.max(0, toFiniteNumber(item.quantity, 0)));
+            return <li key={`${productId || 'item'}-${i}`} className="flex items-start gap-3 py-4 first:pt-0">
+              <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} width="64" height="64" className="h-16 w-16 shrink-0 rounded-lg border border-slate-200 object-contain" />
+              <div className="min-w-0 flex-1 text-sm">
+                {productId ? <Link to={`/products/${productId}`} className="break-words font-semibold text-slate-900 hover:underline">{itemTitle}</Link> : <p className="break-words font-semibold text-slate-900">{itemTitle}</p>}
+                {(item.variant_name_snapshot || item.variant_label) && <p className="mt-1 text-slate-600">{item.variant_name_snapshot || item.variant_label}</p>}
+                <p className="mt-1 text-slate-600">Qty: {item.quantity}</p>
               </div>
-            )}
-            <div className="mt-4 pt-4 border-t border-gray-700 flex justify-between font-semibold text-white">
-              <span>Total</span>
-              <span>{formatCurrency(totalAmount)}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-3 justify-center">
-        <Link to={order ? `/orders/${order.id}` : '/orders'}
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-lg transition-colors">
-          <Package size={16} /> Track Order
-        </Link>
-        {order && (
-          <button onClick={() => window.open(`${API_URL}/orders/${order.id}/invoice`, '_blank')}
-            className={secondaryActionClass}>
-            <Printer size={16} /> View Invoice
-          </button>
-        )}
-        <Link to="/shop"
-          className={secondaryActionClass}>
-          <ShoppingBag size={16} /> Continue Shopping
-        </Link>
-        <Link to="/"
-          className={secondaryActionClass}>
-          <Home size={16} /> Go Home
-        </Link>
+              <span className="shrink-0 text-sm font-semibold text-slate-900">{formatCurrency(lineTotal)}</span>
+            </li>;
+          })}
+        </ul>
+        <dl className="mt-4 space-y-3 border-t border-slate-200 pt-5 text-sm text-slate-700">
+          {subtotal != null && <div className="flex justify-between gap-4"><dt>Subtotal</dt><dd>{formatCurrency(subtotal)}</dd></div>}
+          {shipping != null && <div className="flex justify-between gap-4"><dt>Shipping</dt><dd>{formatCurrency(shipping)}</dd></div>}
+          {Number(discount) > 0 && <div className="flex justify-between gap-4"><dt>Discount</dt><dd>-{formatCurrency(discount)}</dd></div>}
+          {vatAmount > 0 && <div className="flex justify-between gap-4"><dt>VAT</dt><dd>{formatCurrency(vatAmount)}</dd></div>}
+          <div className="flex justify-between gap-4 border-t border-slate-200 pt-4 text-lg font-bold text-slate-950"><dt>Total</dt><dd>{formatCurrency(totalAmount)}</dd></div>
+        </dl>
       </div>
+    </section>
+    <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <Link to={`/orders/${order.id}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-3 font-semibold text-slate-950 hover:bg-orange-500"><Package size={18} aria-hidden="true" />Track Order</Link>
+      <Link to="/shop" className={secondaryActionClass}><ShoppingBag size={18} aria-hidden="true" />Continue Shopping</Link>
+      <button type="button" onClick={() => window.open(`${API_URL}/orders/${order.id}/invoice`, '_blank', 'noopener,noreferrer')} className={secondaryActionClass}><Printer size={16} aria-hidden="true" />View Invoice</button>
+      <Link to="/" className={secondaryActionClass}><Home size={16} aria-hidden="true" />Go Home</Link>
     </div>
-  );
+  </div>;
 };
 
 export default OrderConfirmation;
-
-

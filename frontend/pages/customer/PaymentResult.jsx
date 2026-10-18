@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, Navigate } from 'react-router-dom';
 import { CheckCircle2, Clock, RefreshCw, XCircle } from 'lucide-react';
 import { getPaymentOrderStatus } from '../../services/api';
 
-const getCopy = (paymentStatus, queryStatus) => {
+const getCopy = (paymentStatus) => {
   if (paymentStatus === 'paid') {
     return {
       icon: <CheckCircle2 size={42} className="text-green-600" />,
@@ -12,7 +12,7 @@ const getCopy = (paymentStatus, queryStatus) => {
     };
   }
 
-  if (paymentStatus === 'failed' || paymentStatus === 'expired' || queryStatus === 'cancelled') {
+  if (paymentStatus === 'failed' || paymentStatus === 'expired') {
     return {
       icon: <XCircle size={42} className="text-red-600" />,
       title: 'Payment was not completed',
@@ -20,9 +20,11 @@ const getCopy = (paymentStatus, queryStatus) => {
     };
   }
 
+  if (paymentStatus === 'cancelled') return { icon: <XCircle size={42} className="text-slate-600" />, title: 'Payment cancelled', body: 'This checkout was cancelled. You can continue shopping.' };
+
   return {
     icon: <Clock size={42} className="text-slate-600" />,
-    title: 'Payment is being verified',
+    title: 'Confirming payment...',
     body: 'Please check your order status. PayMongo is still confirming your payment.',
   };
 };
@@ -31,7 +33,6 @@ const PaymentResult = () => {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order');
-  const queryStatus = params.get('status');
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(Boolean(orderId));
   const [error, setError] = useState('');
@@ -45,7 +46,7 @@ const PaymentResult = () => {
 
     try {
       const data = await getPaymentOrderStatus(orderId);
-      setOrder(data);
+      setOrder(current => current?.payment_status === 'paid' ? current : data);
       setError('');
     } catch (statusError) {
       setError(statusError?.message || 'Unable to load payment status.');
@@ -64,7 +65,8 @@ const PaymentResult = () => {
     return () => window.clearInterval(timer);
   }, [loadStatus, orderId, order?.payment_status]);
 
-  const copy = getCopy(order?.payment_status, queryStatus);
+  const copy = getCopy(order?.payment_status);
+  if (order?.payment_status === 'paid') return <Navigate to={`/order-confirmation/${orderId}`} replace />;
   const snapshot = order?.shipping_address_snapshot && typeof order.shipping_address_snapshot === 'object'
     ? order.shipping_address_snapshot
     : {};
@@ -91,7 +93,7 @@ const PaymentResult = () => {
           </div>
           <div className="mt-2 flex justify-between gap-4">
             <span className="text-gray-500">Payment</span>
-            <span className="font-semibold capitalize">{loading ? 'checking' : (order?.payment_status || queryStatus || 'pending')}</span>
+            <span className="font-semibold capitalize">{loading ? 'checking' : (order?.payment_status || 'pending')}</span>
           </div>
           <div className="mt-2 flex justify-between gap-4">
             <span className="text-gray-500">Method</span>

@@ -166,3 +166,21 @@
  .order-status-timeline { gap:16px; overflow-x:auto; padding-bottom:8px; }
  .order-status-timeline > div.relative { min-width:58px; flex-shrink:0; }
 }
+
+/* Compact storefront menu; operations drawers keep their own presentation. */
+.brand-overlay-customer-top-sheet { align-items:flex-start !important; padding:73px 0 0 !important; overflow-y:auto; }
+.brand-overlay-customer-top-sheet .brand-dialog-panel { width:100%; max-width:none; max-height:calc(100dvh - 89px); border-radius:0 0 16px 16px; animation:customer-sheet-enter 180ms ease-out; }
+.brand-overlay-customer-top-sheet .brand-dialog-panel > div:first-child { padding:8px 16px; }
+.brand-overlay-customer-top-sheet .brand-dialog-panel > div:last-child { padding:8px 16px 16px; }
+.customer-top-menu { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 12px; }
+.customer-top-menu a { display:flex; align-items:center; gap:12px; min-height:48px; padding:10px 12px; border-radius:8px; color:var(--graphite); font-size:15px; font-weight:600; }
+.customer-top-menu a:hover { background:var(--off-white); }
+.customer-top-menu a[aria-current=page] { background:#fff3e9; color:var(--orange-ink,#a34110); }
+.customer-top-menu-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; border-top:1px solid var(--border); margin-top:10px; padding-top:8px; }
+.customer-top-menu-footer button { display:flex; align-items:center; gap:8px; min-height:44px; padding:8px 12px; font-size:14px; color:var(--text-secondary); }
+@keyframes customer-sheet-enter { from { transform:translateY(-16px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+@media (prefers-reduced-motion:reduce) { .brand-overlay-customer-top-sheet .brand-dialog-panel { animation:none; } }
+
+.product-mobile-purchase-bar { padding-bottom:max(12px,env(safe-area-inset-bottom)); }
+.purchase-sheet-action { position:sticky; bottom:-20px; margin:0 -20px -20px; border-top:1px solid var(--border); background:white; padding:12px 20px max(12px,env(safe-area-inset-bottom)); }
+@media (max-width:767px) { .product-detail-page > .max-w-7xl { padding-bottom:calc(112px + env(safe-area-inset-bottom)); } }

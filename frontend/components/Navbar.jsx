@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List, MessageCircle, AlertTriangle, CheckCircle2, XCircle, Info } from 'lucide-react';
+import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List, MessageCircle, Home, Headphones, AlertTriangle, CheckCircle2, XCircle, Info } from 'lucide-react';
 import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements, getProducts, getBuyerChatConversations } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
 import { useSocket } from '../context/SocketContext';
 import CartDrawer from './CartDrawer';
 import BrandMark from './ui/BrandMark';
-import { Drawer, ConfirmationDialog } from './ui/BrandPrimitives';
+import Modal from './owner/Modal';
+import { ConfirmationDialog } from './ui/BrandPrimitives';
 import { handleProductImageError, resolveProductImageUrl } from '../utils/productImages.js';
 import { repairMojibake } from '../utils/text.js';
 import { shouldReturnEmptyProductSearch } from '../utils/productSearchSafety.js';
@@ -823,74 +824,21 @@ const Navbar = ({ user, onLogout }) => {
         </div>
       )}
 
-      {/* Mobile drawer */}
-      <Drawer isOpen={mobileOpen} onClose={() => setMobileOpen(false)} title="Menu" tone="navy">
-          <div className="brand-mobile-nav min-h-full bg-slate-900">
-            <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-              <BrandMark dark onClick={() => setMobileOpen(false)} className="" />
-
-            </div>
-            {user && (
-              <div className="p-4 border-b border-zinc-800 bg-zinc-950/40">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white/5 text-red-500 rounded-lg flex items-center justify-center font-bold">{(user.name || user.email || 'Customer').charAt(0).toUpperCase()}</div>
-                  <div>
-                    <p className="font-semibold text-white text-sm">{user.name || user.email || 'Customer'}</p>
-                    <p className="text-xs text-zinc-400">{user.email}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            <nav className="p-4 space-y-1">
-              <Link to="/" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Home</Link>
-              <Link to="/shop" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/shop' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Shop</Link>
-              <div className="border-t border-zinc-800 my-2" />
-              <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Support</p>
-              <Link to="/faq" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/faq' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Help & FAQ</Link>
-              <Link to="/contact" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/contact' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Contact Support</Link>
-              {user && (
-                <>
-                  <div className="border-t border-zinc-800 my-2" />
-                  <button type="button" onClick={() => { setMobileOpen(false); setNotifOpen(true); }} className="flex min-h-11 w-full items-center justify-between px-3 text-sm text-slate-300">Notifications <span>{unreadCount > 0 ? unreadCount : ''}</span></button>
-                  <Link to="/profile" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/profile' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Profile</Link>
-                  <Link to="/orders" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/orders' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>My Orders</Link>
-                  {user?.role === Role.CUSTOMER && (
-                    <Link to="/messages" onClick={() => setMobileOpen(false)} className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/messages' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>
-                      <span>Messages</span>
-                      {messageUnreadCount > 0 && (
-                        <span className="rounded-full bg-orange-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                          {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
-                        </span>
-                      )}
-                    </Link>
-                  )}
-                  <Link to="/wishlist" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/wishlist' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Wishlist</Link>
-                  <Link to="/addresses" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/addresses' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Address Book</Link>
-                  <Link to="/my-returns" onClick={() => setMobileOpen(false)} className={`block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${location.pathname === '/my-returns' ? 'text-orange-400 bg-zinc-850' : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}>Returns</Link>
-                </>
-              )}
-              {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
-                <Link to="/admin" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors">Admin Panel</Link>
-              )}
-              {(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) && (
-                <Link to="/pos" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 rounded-lg text-sm font-semibold text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors">POS Terminal</Link>
-              )}
-            </nav>
-            <div className="p-4 border-t border-zinc-800">
-              {user ? (
-                <button onClick={() => { onLogout(); setMobileOpen(false); }} className="w-full px-4 py-2.5 border border-zinc-800 text-zinc-300 rounded-lg text-sm font-semibold hover:bg-zinc-850 hover:text-white transition-colors duration-200 flex items-center justify-center gap-2">
-                  <LogOut size={16} /> Sign Out
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <Link to="/login" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 bg-orange-600 text-white rounded-lg text-sm font-semibold text-center hover:bg-orange-500 transition-colors duration-200 shadow-md">Sign In</Link>
-                  <Link to="/register" onClick={() => setMobileOpen(false)} className="block w-full px-4 py-2.5 border border-zinc-850 text-zinc-300 rounded-lg text-sm font-semibold text-center hover:bg-zinc-800 hover:text-white transition-colors duration-200">Create Account</Link>
-                </div>
-              )}
-            </div>
-          </div>
-      </Drawer>
-
+      <Modal isOpen={mobileOpen} onClose={() => setMobileOpen(false)} title="Menu" presentation="customer-top-sheet">
+        <nav className="customer-top-menu" aria-label="Store navigation">
+          {[
+            { path: '/', label: 'Home', icon: Home },
+            { path: '/shop', label: 'Shop', icon: ShoppingCart },
+            ...(user ? [
+              { path: '/orders', label: 'Orders', icon: Package },
+              { path: '/messages', label: 'Messages', icon: MessageCircle },
+              { path: '/profile', label: 'Profile', icon: User },
+            ] : [{ path: '/login', label: 'Sign in', icon: User }]),
+            { path: '/contact', label: 'Support', icon: Headphones },
+          ].map(({ path, label, icon: Icon }) => <Link key={path} to={path} onClick={() => setMobileOpen(false)} aria-current={location.pathname === path || (path !== '/' && location.pathname.startsWith(`${path}/`)) ? 'page' : undefined}><Icon size={20} aria-hidden="true" /><span>{label}</span></Link>)}
+        </nav>
+        {user && <div className="customer-top-menu-footer"><button type="button" onClick={() => { setMobileOpen(false); setNotifOpen(true); }}><Bell size={18} aria-hidden="true" /> Notifications {unreadCount > 0 ? `(${unreadCount})` : ''}</button><button type="button" onClick={() => { setMobileOpen(false); setShowLogoutConfirm(true); }}><LogOut size={18} aria-hidden="true" /> Sign out</button></div>}
+      </Modal>
 
       {/* Cart Drawer */}
       <CartDrawer isOpen={cartOpen} onClose={() => setCartOpen(false)} />
