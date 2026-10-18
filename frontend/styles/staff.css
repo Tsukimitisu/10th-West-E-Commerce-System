@@ -1,18 +1,18 @@
 /* Staff-only refinement. Customer, Owner and System retain their existing rules. */
 .operations-shell[data-workspace="staff"] {
-  --ops-sidebar: var(--obsidian);
+  --ops-sidebar: #090b0f;
   --ops-text: var(--graphite, #242832);
   background: var(--off-white, #f6f7f9);
 }
-.staff-sidebar { background: var(--obsidian); color: white; }
+.operations-sidebar.staff-sidebar { background: #090b0f; color: white; }
 .staff-sidebar .operations-brand-header { background: var(--obsidian); padding: 18px 18px 14px; }
 .staff-sidebar .operations-role { color: #c6cbd4; font-size: 11px; letter-spacing: .08em; }
 .staff-sidebar .ops-nav-label { color: #aeb5c2; font-size: 11px; letter-spacing: .06em; }
 .staff-sidebar .ops-nav-item { min-height: 44px; color: #d6dae2; }
 .staff-sidebar .ops-nav-item > svg { color: #aeb5c2; }
-.staff-sidebar .ops-nav-item:hover { background: var(--racing-navy); color: white; }
-.staff-sidebar .ops-nav-item[aria-current="page"] { background: #181d28; box-shadow: inset 2px 0 var(--performance-orange); color: white; }
-.staff-sidebar .ops-nav-item[aria-current="page"] > svg { color: var(--performance-orange); }
+.staff-sidebar .ops-nav-item:hover { background: #12151b; color: white; }
+.staff-sidebar .ops-nav-item[aria-current="page"] { background: #12151b; box-shadow: inset 2px 0 var(--performance-orange); color: white; }
+.staff-sidebar .ops-nav-item[aria-current="page"] > svg { color: white; }
 .staff-sidebar .ops-sidebar-footer { padding: 10px 12px max(10px, env(safe-area-inset-bottom)); }
 .staff-sidebar .ops-sidebar-footer button { display: flex; width: 100%; gap: 11px; padding: 10px 12px; font-size: 13px; color: #d6dae2; text-align: left; }
 .staff-sidebar.is-collapsed .ops-sidebar-footer button { justify-content: center; padding-inline: 0; }
@@ -66,3 +66,6 @@
   .operations-shell[data-workspace="staff"] .operations-content button:not(.ops-metric) { min-height: 44px; }
   .staff-notification-row { padding: 14px 16px; gap: 10px; }
 }
+
+.staff-sidebar :is(.operations-brand-header,.ops-sidebar-footer) { border-color:#252830; }
+.staff-sidebar .ops-nav-count { background:#252830; color:white; }
