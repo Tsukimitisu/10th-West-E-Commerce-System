@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { AlertTriangle, Check, Heart, ShoppingCart, Star } from 'lucide-react';
+import { AlertTriangle, Check, Heart, Layers, Loader2, ShoppingCart, Star } from 'lucide-react';
 import { addToWishlist, getWishlist, removeFromWishlist } from '../services/api';
 import { getCurrentAuthUser } from '../services/authSession.js';
-import { useCart } from '../context/CartContext';
+import { cartPendingKey, useCart } from '../context/CartContext';
 import PriceDisplay from './ui/PriceDisplay';
 import { handleProductImageError, resolveProductImageUrl } from '../utils/productImages.js';
 import { richTextToPlainText } from '../utils/richText.js';
@@ -11,8 +11,10 @@ import { richTextToPlainText } from '../utils/richText.js';
 const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { addToCart, loading: cartLoading } = useCart();
+  const { addToCart, isCartKeyPending } = useCart();
   const productId = Number(product.id);
+  const isSet = product.listing_type === 'set';
+  const pending = !isSet && isCartKeyPending(cartPendingKey(productId));
   const hasExternalWishlistState = Array.isArray(wishlistedIds);
   const [wishlisted, setWishlisted] = useState(
     hasExternalWishlistState ? wishlistedIds.map(Number).includes(productId) : false,
@@ -49,7 +51,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
   const onSale = Boolean(product.is_on_sale && Number(product.sale_price) > 0 && Number(product.sale_price) < Number(product.price));
   const discount = onSale ? Math.round((1 - Number(product.sale_price) / Number(product.price)) * 100) : 0;
   const hasVariants = Array.isArray(product.variants) && product.variants.length > 0;
-  const productUrl = `/products/${product.id}`;
+  const productUrl = isSet ? `/sets/${product.id}` : `/products/${product.id}`;
   const image = resolveProductImageUrl(product.image || product.image_url);
 
   const handleWishlist = async () => {
@@ -71,8 +73,8 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
   };
 
   const handleAddToCart = async () => {
-    if (outOfStock) return;
-    if (hasVariants) {
+    if (outOfStock || pending) return;
+    if (hasVariants || isSet) {
       navigate(productUrl);
       return;
     }
@@ -87,9 +89,10 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
           <img src={image} alt={product.name} loading="lazy" width="480" height="480" onError={handleProductImageError} />
         </Link>
         {onSale && <span className="product-sale-label">Save {discount}%</span>}
-        <button type="button" onClick={handleWishlist} className="product-wishlist" aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`} aria-pressed={wishlisted}>
+        {!isSet && <button type="button" onClick={handleWishlist} className="product-wishlist" aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`} aria-pressed={wishlisted}>
           <Heart size={18} className={wishlisted ? 'fill-orange-500 text-orange-700' : ''} aria-hidden="true" />
-        </button>
+        </button>}
+        {isSet && <span className="product-sale-label inline-flex items-center gap-1"><Layers size={12} aria-hidden="true" />Set · {product.item_count} items</span>}
       </div>
       <div className="product-card-info">
         <p className="product-card-meta">{[product.brand, product.motorcycle_model || product.category_name].filter(Boolean).join(' · ') || 'Motorcycle part'}</p>
@@ -100,10 +103,11 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
           <span>{outOfStock ? 'Out of stock' : lowStock ? <><AlertTriangle size={13} aria-hidden="true" />Only {stock} left</> : 'In stock'}</span>
           {Number(product.rating) > 0 && <span className="inline-flex items-center gap-1 text-xs text-slate-700"><Star size={13} className="fill-slate-700" aria-hidden="true" />{Number(product.rating).toFixed(1)}<span className="sr-only"> out of 5</span></span>}
         </div>
+        {isSet && Number(product.max_price) > Number(product.price) && <p className="product-card-meta">From</p>}
         <PriceDisplay className="product-price" price={product.price} salePrice={onSale ? product.sale_price : null} />
-        <button type="button" onClick={handleAddToCart} disabled={outOfStock || cartLoading} className="product-card-button">
-          {added ? <Check size={16} aria-hidden="true" /> : <ShoppingCart size={16} aria-hidden="true" />}
-          {outOfStock ? 'Unavailable' : added ? 'Added to cart' : hasVariants ? 'Choose options' : 'Add to cart'}
+        <button type="button" onClick={handleAddToCart} disabled={outOfStock || pending} aria-busy={pending || undefined} data-cart-state={pending ? 'pending' : added ? 'added' : 'idle'} className="product-card-button">
+          {pending ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : added ? <Check size={16} aria-hidden="true" /> : <ShoppingCart size={16} aria-hidden="true" />}
+          {outOfStock ? 'Unavailable' : pending ? 'Adding…' : added ? 'Added to cart' : isSet ? 'Choose item' : hasVariants ? 'Choose options' : 'Add to cart'}
         </button>
       </div>
     </article>

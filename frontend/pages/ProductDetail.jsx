@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle, Play } from 'lucide-react';
+import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Loader2, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle, Play } from 'lucide-react';
 import { getProductById, getRelatedProducts, getProductReviews, getReviewEligibility, addReview, addToWishlist, removeFromWishlist, getWishlist, getShippingConfig, getAuthAvailability, recordProductView, startProductChat, WISHLIST_SYNC_EVENT } from '../services/api';
-import { useCart } from '../context/CartContext';
+import { cartPendingKey, useCart } from '../context/CartContext';
 import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
 import StarRating from '../components/StarRating';
@@ -223,7 +223,7 @@ const ProductDetail = () => {
   const [reviewEligibility, setReviewEligibility] = useState({ eligible: false, loading: false });
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(3000);
   const [gcashAvailability, setGcashAvailability] = useState({ available: false, loading: true });
-  const { addToCart } = useCart();
+  const { addToCart, isCartKeyPending } = useCart();
 
   const currentUser = getCurrentAuthUser();
   const userId = currentUser?.id ?? null;
@@ -454,6 +454,7 @@ const ProductDetail = () => {
       variantOptions.every((option) => variant.option_combination?.[option.name] === selectedVariant?.[option.name])
     )) || null;
   }, [variantRows, variantOptions, selectedVariant, isVariantSelectionComplete]);
+  const cartPending = Boolean(product?.id) && isCartKeyPending(cartPendingKey(product.id, selectedVariantRow?.id));
 
   useSocketEvent('product:updated', (updatedProduct) => {
     const updatedProductId = Number(updatedProduct?.id);
@@ -643,6 +644,7 @@ const ProductDetail = () => {
   };
 
   const handleAddToCart = async () => {
+    if (cartPending) return;
     if (variantRows.length && window.matchMedia('(max-width: 767px)').matches) { setPurchaseIntent('cart'); return; }
     await addCurrentSelectionToCart(true);
   };
@@ -1151,12 +1153,13 @@ const ProductDetail = () => {
               </div>
               <button
                 onClick={handleAddToCart}
-                disabled={isOutOfStock}
+                disabled={isOutOfStock || cartPending}
+                aria-busy={cartPending || undefined}
                 className="h-12 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-slate-950 rounded-lg transition-colors flex items-center justify-center gap-2 px-4 font-semibold text-sm"
                 title="Add to cart"
               >
-                {addedToCart ? <Check size={18} aria-hidden="true" /> : <ShoppingCart size={18} aria-hidden="true" />}
-                {addedToCart ? 'Added to cart' : 'Add to Cart'}
+                {cartPending ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : addedToCart ? <Check size={18} aria-hidden="true" /> : <ShoppingCart size={18} aria-hidden="true" />}
+                {cartPending ? 'Adding…' : addedToCart ? 'Added to cart' : 'Add to Cart'}
               </button>
             </div>
             <div className="product-secondary-actions">
@@ -1530,7 +1533,7 @@ const ProductDetail = () => {
           <button type="button" aria-label="Increase quantity" aria-disabled={!selectedVariantRow || Number(quantity) >= Math.min(maxStock, MAX_ITEM_QUANTITY)} onClick={() => { if (selectedVariantRow && Number(quantity) < Math.min(maxStock, MAX_ITEM_QUANTITY)) setQuantity(q => Math.min(maxStock, MAX_ITEM_QUANTITY, Number(q) + 1)); }} className="grid h-11 w-11 place-items-center aria-disabled:opacity-40"><Plus size={18} /></button>
         </div></div>
         {quantityError && <p role="alert" className="mb-3 text-sm text-red-700">{quantityError}</p>}
-        <div className="purchase-sheet-action"><BrandButton className="w-full" disabled={!selectedVariantRow || maxStock <= 0} onClick={async () => { if (purchaseIntent === 'buy') handleBuyNow(true); else if (await addCurrentSelectionToCart(true)) setPurchaseIntent(null); }}>{purchaseIntent === 'buy' ? 'Buy Now' : 'Add to Cart'}</BrandButton></div>
+        <div className="purchase-sheet-action"><BrandButton className="w-full" disabled={!selectedVariantRow || maxStock <= 0 || (purchaseIntent !== 'buy' && cartPending)} onClick={async () => { if (purchaseIntent === 'buy') handleBuyNow(true); else if (await addCurrentSelectionToCart(true)) setPurchaseIntent(null); }}>{purchaseIntent === 'buy' ? 'Buy Now' : cartPending ? 'Adding…' : 'Add to Cart'}</BrandButton></div>
       </BottomSheet>
       <div className="product-mobile-purchase-bar fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-3 shadow-[0_-10px_35px_-24px_rgba(15,23,42,0.45)] backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-[48px_minmax(0,1fr)_100px] gap-2">
@@ -1545,11 +1548,12 @@ const ProductDetail = () => {
           <button
             type="button"
             onClick={handleAddToCart}
-            disabled={isOutOfStock}
+            disabled={isOutOfStock || cartPending}
+            aria-busy={cartPending || undefined}
             className="flex h-12 items-center justify-center gap-2 rounded-lg bg-orange-600 text-slate-950 text-sm font-semibold disabled:bg-slate-300"
             aria-label="Add to cart"
           >
-            {addedToCart ? <Check size={19} aria-hidden="true" /> : <ShoppingCart size={19} aria-hidden="true" />}<span>{addedToCart ? 'Added' : 'Add to cart'}</span>
+            {cartPending ? <Loader2 size={19} className="animate-spin" aria-hidden="true" /> : addedToCart ? <Check size={19} aria-hidden="true" /> : <ShoppingCart size={19} aria-hidden="true" />}<span>{cartPending ? 'Adding…' : addedToCart ? 'Added' : 'Add to cart'}</span>
           </button>
           <button
             type="button"

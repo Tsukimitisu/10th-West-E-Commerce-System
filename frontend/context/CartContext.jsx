@@ -5,6 +5,9 @@ import { getCurrentAuthUser } from '../services/authSession.js';
 import { API_URL } from '../services/apiConfig.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
 import { detectCartPriceChanges } from '../utils/cartPriceChanges.js';
+import { cartPendingKey, createPendingGuard, runWithPendingKey } from '../utils/cartPending.js';
+
+export { cartPendingKey };
 
 const USE_SUPABASE = false;
 const GUEST_CART_KEY = 'shopCoreGuestCart';
@@ -28,6 +31,11 @@ export const CartProvider = ({ children }) => {
   const cartSyncRequestRef = React.useRef(0);
   const itemsRef = React.useRef(items);
   const quantityUpdatesRef = React.useRef(new Set());
+  // Keyed (not global) add-to-cart state: only the clicked product/option is
+  // pending, and a rapid repeat of the same key cannot mutate the cart twice.
+  const [pendingCartKeys, setPendingCartKeys] = useState(() => new Set());
+  const pendingCartGuardRef = React.useRef(null);
+  if (!pendingCartGuardRef.current) pendingCartGuardRef.current = createPendingGuard(setPendingCartKeys);
 
   const getStoredUser = () => {
     return getCurrentAuthUser();
@@ -569,7 +577,15 @@ export const CartProvider = ({ children }) => {
     return true;
   };
 
-  const addToCart = async (product, quantity = 1) => {
+  const addToCart = async (product, quantity = 1, options = {}) => {
+    const variantKey = product?.selected_variant?.id ?? product?.variant_id ?? null;
+    const key = options.pendingKey || cartPendingKey(product?.id, variantKey, options.listingId);
+    return runWithPendingKey(pendingCartGuardRef.current, key, () => performAddToCart(product, quantity, options));
+  };
+
+  const isCartKeyPending = (key) => pendingCartKeys.has(key);
+
+  const performAddToCart = async (product, quantity = 1, options = {}) => {
     const requestedQty = Number(quantity);
     if (!Number.isInteger(requestedQty) || requestedQty < 1) {
       setError('Invalid quantity.');
@@ -605,7 +621,6 @@ export const CartProvider = ({ children }) => {
     if (true) {
       if (USE_SUPABASE) {
         try {
-          setLoading(true);
           const currentUser = getCurrentUserFromToken();
           const cartId = await getOrCreateSupabaseCartId(currentUser?.id);
           if (!cartId) throw new Error('Unable to access cart');
@@ -645,20 +660,18 @@ export const CartProvider = ({ children }) => {
             setError('Failed to add item to cart');
           }
           return fallbackAdded;
-        } finally {
-          setLoading(false);
         }
       }
 
       // Add to backend if logged in
       try {
-        setLoading(true);
         const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/add`, {
           method: 'POST',
           body: JSON.stringify({
             product_id: product.id,
             variant_id: variantId,
-            quantity: requestedQty
+            quantity: requestedQty,
+            ...(options.listingId ? { listing_id: options.listingId } : {}),
           })
         }, { includeJson: true });
 
@@ -700,8 +713,6 @@ export const CartProvider = ({ children }) => {
           setError('Failed to add item to cart');
         }
         return fallbackAdded;
-      } finally {
-        setLoading(false);
       }
     } else {
       // Use local storage if not logged in
@@ -1222,6 +1233,8 @@ export const CartProvider = ({ children }) => {
         error,
         loading,
         updatingItemIds,
+        pendingCartKeys,
+        isCartKeyPending,
         syncCart,
         initialized,
         cartSyncError,

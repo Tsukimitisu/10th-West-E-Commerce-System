@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Grid3X3, List, Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
-import { getProducts, getMotorcycleModels, getWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
+import { getProducts, getMotorcycleModels, getStorefrontSets, getWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
 import { getCurrentAuthUser, subscribeAuthChanges } from '../services/authSession.js';
@@ -137,11 +137,12 @@ const ProductList = () => {
     setLoading(true);
     setCatalogError(false);
 
-    Promise.allSettled([getProducts(), getMotorcycleModels()])
-      .then(([productResult, modelResult]) => {
+    Promise.allSettled([getProducts(), getMotorcycleModels(), getStorefrontSets()])
+      .then(([productResult, modelResult, setResult]) => {
         if (!active) return;
         if (productResult.status === 'fulfilled') {
-          setProducts(productResult.value || []);
+          const sets = setResult.status === 'fulfilled' && Array.isArray(setResult.value) ? setResult.value : [];
+          setProducts([...sets, ...(productResult.value || [])]);
         } else {
           setProducts([]);
           setCatalogError(true);
@@ -517,11 +518,11 @@ const ProductList = () => {
               />
             ) : view === 'grid' ? (
               <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 2xl:gap-5">
-                {filtered.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} view="grid" />)}
+                {filtered.map(p => <ProductCard key={`${p.listing_type || 'item'}-${p.id}`} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} view="grid" />)}
               </div>
             ) : (
               <div className="space-y-3">
-                {filtered.map(p => <ProductCard key={p.id} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} view="list" />)}
+                {filtered.map(p => <ProductCard key={`${p.listing_type || 'item'}-${p.id}`} product={p} wishlistedIds={wishlistedIds} onWishlistToggle={handleWishlistToggle} view="list" />)}
               </div>
             )}
           </div>

@@ -5070,6 +5070,10 @@ export const createEcommerceListing = async (listing) => {
   return data.listing;
 };
 
+// Public set listings: options carry live price/stock from the real items.
+export const getStorefrontSets = async () => authenticatedFetch(`${API_URL}/ecommerce-listings/public/sets`).catch(() => []);
+export const getStorefrontSet = async (listingId) => authenticatedFetch(`${API_URL}/ecommerce-listings/public/sets/${encodeURIComponent(listingId)}`);
+
 export const updateEcommerceListing = async (listingId, listing) => {
   const data = await authenticatedFetch(`${API_URL}/ecommerce-listings/${listingId}`, {
     method: 'PUT',

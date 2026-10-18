@@ -36,6 +36,7 @@ const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
 const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const SetProductDetail = lazy(() => import('./pages/SetProductDetail'));
 const Contact = lazy(() => import('./pages/Support/Contact'));
 const FAQ = lazy(() => import('./pages/Support/FAQ'));
 const PrivacyPolicy = lazy(() => import('./pages/Support/PolicyPrivacy'));
@@ -163,6 +164,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                   }
                 />
                 <Route path="/products/:id" element={<ProductDetail />} />
+                <Route path="/sets/:id" element={<SetProductDetail />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route
                   path="/checkout"
