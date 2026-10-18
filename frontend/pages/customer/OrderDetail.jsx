@@ -2,8 +2,7 @@ import { fulfillmentSteps as stepLabels, fulfillmentStep } from '../../utils/ord
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Package, ArrowLeft, Truck, MapPin, CreditCard, Clock, CheckCircle2, XCircle, Download, RotateCcw, Calendar, Mail, DollarSign, Printer, AlertTriangle } from 'lucide-react';
-import { getOrderById, getShipmentTracking, cancelOrder, confirmOrderReceipt } from '../../services/api';
-import { API_URL } from '../../services/apiConfig.js';
+import { getOrderById, getShipmentTracking, cancelOrder, confirmOrderReceipt, openOrderInvoice } from '../../services/api';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const ORDER_VAT_RATE = 0.12;
@@ -36,6 +35,7 @@ const OrderDetail = () => {
   const [confirmingReceipt, setConfirmingReceipt] = useState(false);
   const receiptRequestInFlight = React.useRef(false);
   const [receiptError, setReceiptError] = useState('');
+  const [invoiceError, setInvoiceError] = useState('');
   const [tracking, setTracking] = useState(null);
   const [trackingUnavailable, setTrackingUnavailable] = useState(false);
 
@@ -173,7 +173,7 @@ const OrderDetail = () => {
         <div className="flex gap-2 flex-wrap">
           {/* View Invoice */}
           <button
-            onClick={() => window.open(`${API_URL}/orders/${order.id}/invoice`, '_blank')}
+            onClick={() => { setInvoiceError(''); openOrderInvoice(order.id).catch(error => setInvoiceError(error.message || 'Unable to open invoice. Please try again.')); }}
             className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 transition-colors"
           >
             <Printer size={14} /> View Invoice
@@ -208,6 +208,7 @@ const OrderDetail = () => {
         </div>
       </div>
 
+      {invoiceError && <p role="alert" className="mb-6 text-sm text-red-700">{invoiceError}</p>}
       {receiptError && (
         <div className="mb-6 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
           <AlertTriangle size={14} /> {receiptError}

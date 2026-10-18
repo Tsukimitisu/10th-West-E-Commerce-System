@@ -3,12 +3,15 @@ import crypto from 'node:crypto';
 export const renderOrderInvoice = ({ order, items, store, shipping, address, totals, taxName, legalLines, origin, escape }) => {
   const nonce = crypto.randomBytes(18).toString('base64');
   const e = escape;
+  // A fetched invoice opened as a blob has no HTTP response headers. Preserve
+  // its document policy (including the print script nonce) in the HTML too.
+  const documentCsp = `default-src 'none'; img-src ${origin}; font-src ${origin}; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none'`;
   const amount = value => `&#8369;${Number(value).toFixed(2)}`;
   const date = value => value ? new Date(value).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric' }) : 'Not provided';
   const paymentMethod = order.payment_method === 'gcash' ? 'GCash / PayMongo' : order.payment_method === 'cod' ? 'Cash on Delivery' : order.payment_method || 'Not provided';
   const paymentStatus = order.payment_status === 'paid' ? 'Paid' : !order.payment_status || order.payment_status === 'pending' ? 'Payment Pending' : order.payment_status.replaceAll('_', ' ');
   const contact = [store.address, [store.phone, store.email].filter(Boolean).join(' · ')].filter(Boolean).map(value => `<p>${e(value)}</p>`).join('');
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${e(documentCsp)}"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Invoice #${e(order.id)}</title><style>
   @font-face{font-family:Inter;src:url('${origin}/fonts/inter-0.woff2') format('woff2');font-weight:400 700;font-display:swap}
   *{box-sizing:border-box}body{margin:0;background:#f6f7f9;color:#242832;font:12px/1.55 Inter,Arial,sans-serif;overflow-wrap:anywhere}
@@ -34,5 +37,5 @@ export const renderOrderInvoice = ({ order, items, store, shipping, address, tot
   <section class="payment"><h2>PAYMENT DETAILS</h2><p>${e(paymentMethod)} · ${e(paymentStatus)}</p>${order.tracking_number || order.waybill_number ? `<p><strong>Tracking Number:</strong> ${e(order.tracking_number || order.waybill_number)}</p>` : ''}</section>
   <footer class="footer"><p>Thank you for shopping with 10th West Motorcycle Parts &amp; Accessories.</p>${[store.email, store.phone].filter(Boolean).length ? `<p>${e([store.email, store.phone].filter(Boolean).join(' · '))}</p>` : ''}<p>Generated: ${date(new Date())}</p></footer></main>
   <script nonce="${nonce}">document.getElementById('print-invoice').addEventListener('click',function(){window.print()});</script></body></html>`;
-  return { html, csp: `default-src 'none'; img-src ${origin}; font-src ${origin}; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'` };
+  return { html, csp: `${documentCsp}; frame-ancestors 'none'` };
 };

@@ -421,6 +421,7 @@ const authenticatedFetch = async (url, options = {}) => {
     timeoutMs = 0,
     skipCsrf = false,
     preserveSessionOnFailure = false,
+    responseType = 'json',
     ...requestOptions
   } = options;
   const headers = {
@@ -478,7 +479,9 @@ const authenticatedFetch = async (url, options = {}) => {
       });
       const responseBody = response.status === 204
         ? null
-        : await response.json().catch(() => ({ message: 'Request failed' }));
+        : response.ok && responseType === 'text'
+          ? await response.text()
+          : await response.json().catch(() => ({ message: 'Request failed' }));
       return { response, responseBody };
     } catch (error) {
       if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
@@ -531,6 +534,35 @@ const authenticatedFetch = async (url, options = {}) => {
 
   return responseBody;
 };
+
+export async function openOrderInvoice(orderId) {
+  // Keep the handle: passing noopener to window.open can return null even when
+  // the popup opens. Sever its opener immediately, before loading any content.
+  const tab = window.open('', '_blank');
+  if (!tab) throw new Error('Please allow pop-ups for this site and try View Invoice again.');
+  let objectUrl;
+  try {
+    tab.opener = null;
+    const html = await authenticatedFetch(`${API_URL}/orders/${encodeURIComponent(orderId)}/invoice`, {
+      headers: { Accept: 'text/html' },
+      responseType: 'text',
+      timeoutMs: 30000,
+      cache: 'no-store',
+    });
+    if (typeof html !== 'string' || !/^\s*<!doctype html\b/i.test(html)) {
+      throw new Error('Unable to open the invoice. Please try again.');
+    }
+    if (tab.closed) return;
+    objectUrl = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+    tab.location.href = objectUrl;
+    // Give the new document time to load before releasing the backing blob.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 300000);
+  } catch (error) {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    tab.close();
+    throw error;
+  }
+}
 
 let pendingPasswordPolicy;
 export const getPasswordPolicy = () => {

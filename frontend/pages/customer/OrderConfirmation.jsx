@@ -2,8 +2,7 @@ import { useCart } from '../../context/CartContext.jsx';
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { CheckCircle2, Package, Truck, Calendar, Home, ShoppingBag, Printer } from 'lucide-react';
-import { getOrderById, getPaymentOrderStatus } from '../../services/api';
-import { API_URL } from '../../services/apiConfig.js';
+import { getOrderById, getPaymentOrderStatus, openOrderInvoice } from '../../services/api';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
 const toFiniteNumber = (value, fallback = 0) => {
@@ -24,6 +23,7 @@ const OrderConfirmation = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [invoiceError, setInvoiceError] = useState('');
 
   const resolveOrderItemProductId = (item) => {
     const candidate = Number(item?.productReferenceId ?? item?.productId ?? item?.product_id ?? item?.product?.id);
@@ -102,10 +102,11 @@ const OrderConfirmation = () => {
         </dl>
       </div>
     </section>
+    {invoiceError && <p role="alert" className="mt-4 text-sm text-red-700">{invoiceError}</p>}
     <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
       <Link to={`/orders/${order.id}`} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-3 font-semibold text-slate-950 hover:bg-orange-500"><Package size={18} aria-hidden="true" />Track Order</Link>
       <Link to="/shop" className={secondaryActionClass}><ShoppingBag size={18} aria-hidden="true" />Continue Shopping</Link>
-      <button type="button" onClick={() => window.open(`${API_URL}/orders/${order.id}/invoice`, '_blank', 'noopener,noreferrer')} className={secondaryActionClass}><Printer size={16} aria-hidden="true" />View Invoice</button>
+      <button type="button" onClick={() => { setInvoiceError(''); openOrderInvoice(order.id).catch(error => setInvoiceError(error.message || 'Unable to open invoice. Please try again.')); }} className={secondaryActionClass}><Printer size={16} aria-hidden="true" />View Invoice</button>
       <Link to="/" className={secondaryActionClass}><Home size={16} aria-hidden="true" />Go Home</Link>
     </div>
   </div>;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getOrders, getOrderById, getShipmentTracking, updateShipmentStatus, updateOrderStatus, confirmOrderDelivery, processRefund, createManualWaybill, cancelOrder, getMyPermissions } from '../../services/api';
+import { getOrders, getOrderById, getShipmentTracking, updateShipmentStatus, updateOrderStatus, confirmOrderDelivery, processRefund, createManualWaybill, cancelOrder, getMyPermissions, openOrderInvoice } from '../../services/api';
 import { OrderStatus } from '../../types.js';
 import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock, Filter, ChevronDown, ChevronUp, ArrowLeft, Printer, DollarSign, MapPin, User, Calendar, CreditCard, AlertCircle, Undo } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
@@ -10,7 +10,6 @@ import DataToolbar, { FilterSelect, MobileDataCard } from '../../components/oper
 import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
-import { API_URL } from '../../services/apiConfig.js';
 
 const statusColors = {
   pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -563,7 +562,7 @@ const OrdersView = () => {
                 {isInStoreOrder(detailOrder) ? 'Status Locked' : 'Update Status'}
               </button>
               <button
-                onClick={() => window.open(`${API_URL}/orders/${detailOrder.id}/invoice`, '_blank')}
+                onClick={() => { setStatusError(''); openOrderInvoice(detailOrder.id).catch(error => setStatusError(error.message || 'Unable to open invoice. Please try again.')); }}
                 className="flex-1 min-w-[140px] px-4 py-2.5 bg-gray-800 border border-gray-700 hover:bg-gray-900 text-gray-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
               >
                 <Printer size={14} /> Print Invoice

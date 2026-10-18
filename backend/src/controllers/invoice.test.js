@@ -106,6 +106,11 @@ test('COD invoice stays Payment Pending and no provider secrets or invented VAT 
   assert.match(html, /Cash on Delivery/); assert.match(html, /Payment Pending/);
   assert.doesNotMatch(html, /private-provider-id|private-secret|VAT Inclusive|12%/);
   const nonce = html.match(/<script nonce="([^"]+)"/)[1]; assert.ok(csp.includes(`'nonce-${nonce}'`));
+  assert.match(html, /http-equiv="Content-Security-Policy"/);
+  assert.match(html, /src="https:\/\/shop\.example\.test\/brand\/10th-west-logo\.png"/);
+  assert.match(html, /url\('https:\/\/shop\.example\.test\/fonts\/inter-0\.woff2'\)/);
+  assert.match(html, /id="print-invoice"/);
+  assert.match(html, /window\.print\(\)/);
 });
 test('invoice prints exact stored discount/tax/total without recalculating a tax rate', () => {
   const { html } = renderOrderInvoice({
