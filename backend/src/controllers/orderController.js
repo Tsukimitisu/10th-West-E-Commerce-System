@@ -1,3 +1,5 @@
+import { renderOrderInvoice } from '../services/orderInvoice.js';
+import { resolveFrontendOrigin } from '../config/frontend.js';
 import pool from '../config/database.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { ORDER_STATUSES, STAFF_ROLE_SET } from '../constants/schemaEnums.js';
@@ -1554,7 +1556,6 @@ export const getOrderInvoice = async (req, res) => {
       address: normalizeText(process.env.BUSINESS_ADDRESS) || normalizeText(runtimeStoreSettings.address) || '',
     };
     const invoiceShipping = parseShippingAddressSnapshot(order);
-    const customerPhone = normalizeText(invoiceShipping.phone) || normalizeText(order.customer_phone) || '';
     const structuredCustomerAddress = [
       invoiceShipping.street,
       invoiceShipping.barangay,
@@ -1573,7 +1574,7 @@ export const getOrderInvoice = async (req, res) => {
       legalSettings.vat_registered ? 'VAT registered' : '',
     ].filter(Boolean);
 
-    // Generate invoice HTML (BIR RR 18-2012 compliant)
+    // Preserve stored amounts; a display must never infer a tax liability.
     const subtotal = roundMoney(items.reduce((sum, item) => {
       const linePrice = roundMoney(item.product_price);
       const quantity = toFiniteNumber(item.quantity, 0);
@@ -1582,149 +1583,14 @@ export const getOrderInvoice = async (req, res) => {
     const discount = roundMoney(order.discount_amount || 0);
     const shippingFee = roundMoney(order.shipping_fee || 0);
     const totalAmount = roundMoney(order.total_amount);
-    const vatAmount = roundMoney(toFiniteNumber(order.tax_amount, totalAmount - roundMoney(totalAmount / (1 + VAT_RATE))));
-    const vatableSales = roundMoney(totalAmount - vatAmount);
-
-    const invoiceHTML = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Invoice #${escapeInvoiceHtml(order.id)}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; padding: 40px; color: #333; overflow-wrap: anywhere; }
-          .invoice-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #F97316; padding-bottom: 20px; }
-          .company-name { font-size: 28px; font-weight: bold; color: #F97316; }
-          .company-info { font-size: 11px; color: #666; margin-top: 6px; line-height: 1.6; }
-          .invoice-title { font-size: 20px; margin-top: 10px; }
-          .or-number { font-size: 13px; color: #F97316; font-weight: bold; margin-top: 4px; }
-          .info-section { display: flex; justify-content: space-between; margin: 30px 0; }
-          .info-block { flex: 1; }
-          .info-block h3 { font-size: 14px; color: #666; margin-bottom: 10px; }
-          .info-block p { font-size: 14px; line-height: 1.6; }
-          table { width: 100%; border-collapse: collapse; margin: 30px 0; }
-          thead { background-color: #F97316; color: white; }
-          th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-          th { font-weight: bold; }
-          .item-description { max-width: 300px; }
-          .text-right { text-align: right; }
-          .totals { margin-top: 20px; text-align: right; }
-          .totals table { width: 300px; margin-left: auto; }
-          .totals td { padding: 8px; }
-          .totals .grand-total { font-size: 18px; font-weight: bold; background-color: #FFF7ED; }
-          .vat-section { font-size: 12px; color: #666; }
-          .footer { margin-top: 50px; text-align: center; color: #666; font-size: 11px; padding-top: 20px; border-top: 1px solid #ddd; line-height: 1.8; }
-          .legal-note { margin-top: 20px; font-size: 10px; color: #999; text-align: center; border-top: 1px dashed #ddd; padding-top: 15px; }
-          @media print {
-            body { padding: 20px; }
-            .no-print { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="invoice-header">
-          <div class="company-name">${escapeInvoiceHtml(storeSettings.name)}</div>
-          <div class="company-info">
-            Motorcycle Parts &amp; Accessories<br>
-            ${escapeInvoiceHtml(storeSettings.address)}
-            ${(storeSettings.phone || storeSettings.email) ? `<br>${escapeInvoiceHtml(storeSettings.phone)}${storeSettings.phone && storeSettings.email ? ' &nbsp;|&nbsp; ' : ''}${escapeInvoiceHtml(storeSettings.email)}` : ''}
-            ${legalLines.length ? `<br>${legalLines.join(' &nbsp;|&nbsp; ')}` : ''}
-          </div>
-          <div class="invoice-title">INVOICE</div>
-        </div>
-
-        <div class="info-section">
-          <div class="info-block">
-            <h3>SOLD TO:</h3>
-            <p>
-              <strong>${escapeInvoiceHtml(order.customer_name || 'Customer')}</strong><br>
-              ${escapeInvoiceHtml(order.customer_email || '')}<br>
-              ${customerPhone ? `${escapeInvoiceHtml(customerPhone)}<br>` : ''}
-              ${escapeInvoiceHtml(customerAddress).replace(/\r?\n/g, '<br>')}
-            </p>
-          </div>
-          <div class="info-block">
-            <h3>INVOICE DETAILS:</h3>
-            <p>
-              <strong>Invoice #:</strong> ${escapeInvoiceHtml(order.id)}<br>
-              <strong>Date:</strong> ${new Date(order.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
-              <strong>Payment Method:</strong> ${escapeInvoiceHtml(order.payment_method || 'N/A')}<br>
-              <strong>Payment Status:</strong> ${escapeInvoiceHtml(String(order.payment_status || 'pending').toUpperCase())}<br>
-              <strong>Order Status:</strong> ${escapeInvoiceHtml(String(order.status || '').toUpperCase())}<br>
-              <strong>Courier:</strong> ${escapeInvoiceHtml(order.courier_name || order.courier || 'J&T Express')}<br>
-              <strong>Tracking Number:</strong> ${escapeInvoiceHtml(order.tracking_number || order.waybill_number || 'Not assigned')}
-            </p>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Part Number</th>
-              <th class="text-right">Unit Price</th>
-              <th class="text-right">Qty</th>
-              <th class="text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${items.map(item => `
-              <tr>
-                <td class="item-description">${escapeInvoiceHtml(item.product_name || 'Product')}</td>
-                <td>${escapeInvoiceHtml(item.part_number || '-')}</td>
-                <td class="text-right">&#8369;${roundMoney(item.product_price).toFixed(2)}</td>
-                <td class="text-right">${toFiniteNumber(item.quantity, 0)}</td>
-                <td class="text-right">&#8369;${roundMoney(roundMoney(item.product_price) * toFiniteNumber(item.quantity, 0)).toFixed(2)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
- 
-        <div class="totals">
-          <table>
-            <tr>
-              <td>Subtotal:</td>
-              <td class="text-right">&#8369;${subtotal.toFixed(2)}</td>
-            </tr>
-            ${taxSettings.enabled ? `
-            <tr class="vat-section">
-              <td>${escapeInvoiceHtml(taxSettings.name)}able Sales:</td>
-              <td class="text-right">&#8369;${vatableSales.toFixed(2)}</td>
-            </tr>
-            <tr class="vat-section">
-              <td>${escapeInvoiceHtml(taxSettings.name)} (${Number(taxSettings.rate)}%):</td>
-              <td class="text-right">&#8369;${vatAmount.toFixed(2)}</td>
-            </tr>
-            ` : ''}
-            ${discount > 0 ? `
-            <tr>
-              <td>Discount:</td>
-              <td class="text-right">-&#8369;${discount.toFixed(2)}</td>
-            </tr>
-            ` : ''}
-            <tr>
-              <td>Shipping Fee:</td>
-              <td class="text-right">&#8369;${shippingFee.toFixed(2)}</td>
-            </tr>
-            <tr class="grand-total">
-              <td><strong>TOTAL (VAT Inclusive):</strong></td>
-              <td class="text-right"><strong>&#8369;${totalAmount.toFixed(2)}</strong></td>
-            </tr>
-          </table>
-        </div>
-
-        <div class="footer">
-          <p><strong>${escapeInvoiceHtml(storeSettings.name)}</strong></p>
-          ${storeSettings.address ? `<p>${escapeInvoiceHtml(storeSettings.address)}</p>` : ''}
-          ${legalLines.length ? `<p>${legalLines.join(' &nbsp;|&nbsp; ')}</p>` : ''}
-          ${(storeSettings.phone || storeSettings.email) ? `<p>${escapeInvoiceHtml(storeSettings.phone)} ${storeSettings.phone && storeSettings.email ? '&nbsp;|&nbsp;' : ''} ${escapeInvoiceHtml(storeSettings.email)}</p>` : ''}
-          <p>Thank you for your business!</p>
-        </div>
-      </body>
-      </html>
-    `;
-
+    const taxAmount = roundMoney(toFiniteNumber(order.tax_amount, 0));
+    const { html: invoiceHTML, csp } = renderOrderInvoice({
+      order, items, store: storeSettings, shipping: invoiceShipping, address: customerAddress,
+      totals: { subtotal, discount, shippingFee, tax: taxAmount, totalAmount },
+      taxName: taxSettings.name, legalLines, origin: resolveFrontendOrigin(), escape: escapeInvoiceHtml,
+    });
+    res.setHeader('Content-Security-Policy', csp);
+    res.setHeader('Cache-Control', 'private, no-store');
     // Set content type to HTML
     res.setHeader('Content-Type', 'text/html');
     res.send(invoiceHTML);

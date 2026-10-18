@@ -28,6 +28,7 @@ test('COD payment amount and checkout response include the backend shipping tota
 test('invoice and order serializers expose the saved shipping fee', async () => {
   const source = await readFile(new URL('./orderController.js', import.meta.url), 'utf8');
   assert.match(source, /shipping_fee: roundMoney\(order\.shipping_fee \|\| 0\)/);
-  assert.match(source, /<td>Shipping Fee:<\/td>/);
-  assert.match(source, /shippingFee\.toFixed\(2\)/);
+  const invoice = await readFile(new URL('../services/orderInvoice.js', import.meta.url), 'utf8');
+  assert.match(invoice, /<td>Shipping Fee:<\/td>/);
+  assert.match(invoice, /amount\(totals\.shippingFee\)/);
 });
