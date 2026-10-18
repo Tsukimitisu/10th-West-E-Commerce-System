@@ -38,3 +38,19 @@ test('structured targets resolve in bounded batches and unavailable products are
   assert.match(calls.find(call => call.sql.includes('discounts')).sql, /is_active=true/);
   assert.match(calls.find(call => call.sql.includes('products')).sql, /visibility_status='active'/);
 });
+test('set listing destinations validate, link to the set page and drop unavailable sets', async () => {
+  assert.equal(parseCarouselBanner({ ...base, destination_type: 'set', destination_id: 9, button_text: 'View Set' }).destination_id, 9);
+  assert.throws(() => parseCarouselBanner({ ...base, destination_type: 'set' }), { status: 400 });
+  assert.equal(safeCarouselLink('/sets/9'), '/sets/9');
+  assert.equal(safeCarouselLink('/sets/abc'), null);
+  const rows = [{ ...base, id: 1, destination_type: 'set', destination_id: 9 }, { ...base, id: 2, destination_type: 'set', destination_id: 10 }, { ...base, id: 3, destination_type: 'none', button_text: 'Ignored' }];
+  const calls = [];
+  const result = await resolveCarouselTargets(rows, async (sql, values) => { calls.push({ sql, values }); return { rows: [{ id: 9, name: 'Mio 125 M3 Fairings' }] }; });
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].sql, /listing_type='set' AND l\.visibility_status='active'/);
+  assert.match(calls[0].sql, /ip\.inventory_status='active'/);
+  assert.deepEqual(result.map(row => [row.id, row.link_url]), [[1, '/sets/9'], [3, '']]);
+  assert.equal(publicCarouselSlide(result[1]).link_url, '');
+  const managed = await resolveCarouselTargets(rows, async () => ({ rows: [] }), { forManagement: true, includeUnavailable: true });
+  assert.equal(managed.find(row => row.id === 2).destination_unavailable, true);
+});

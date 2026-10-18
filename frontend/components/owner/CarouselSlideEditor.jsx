@@ -3,7 +3,8 @@ import { getCarouselDestinations, uploadProductImage } from '../../services/api'
 import BrandButton from '../ui/BrandButton';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages';
 
-const TYPES = [['none','No link · information only'],['product','Product'],['promotion','Promotion'],['category','Shop category'],['model','Motorcycle model'],['storefront','Storefront page'],['external','External website']];
+const ID_TYPES = ['product','set','promotion','category','model'];
+const TYPES = [['none','No link · information only'],['product','Product / single listing'],['set','Set listing'],['promotion','Promotion'],['category','Shop category'],['model','Motorcycle model'],['storefront','Storefront page'],['external','External website']];
 const PAGES = [['/shop','Shop all parts'],['/contact','Contact the shop'],['/faq','FAQs'],['/return-policy','Return policy'],['/privacy','Privacy policy'],['/terms','Terms of service']];
 export const localDateTime = value => {
   if (!value) return '';
@@ -20,7 +21,9 @@ export function SlidePreview({ form, image }) {
   </div><figcaption className="mt-2 text-xs leading-5 text-slate-600">Approximate Home hero crop and overlay. Actual crops adapt to the customer’s screen.</figcaption></figure>;
 }
 
-function ProductChoices({ initial, initialMore = false, selected, onSelect }) {
+// kind='product' searches active single listings; kind='set' active set listings.
+function ProductChoices({ kind = 'product', initial, initialMore = false, selected, onSelect }) {
+  const noun = kind === 'set' ? 'set listing' : 'storefront product';
   const [search,setSearch] = useState('');
   const [rows,setRows] = useState(initial);
   const [loading,setLoading] = useState(false);
@@ -31,20 +34,20 @@ function ProductChoices({ initial, initialMore = false, selected, onSelect }) {
     if (!search.trim()) { setRows(initial); setMore(initialMore); setError(''); setLoading(false); return undefined; }
     const timer = setTimeout(() => {
       setLoading(true); setError(''); setRows([]);
-      getCarouselDestinations({ type:'product', search:search.trim() }).then(result => { if(active) { setRows(result.products || []); setMore(Boolean(result.hasMoreProducts)); } }).catch(() => { if(active) setError('Products could not be loaded. Change the search to retry.'); }).finally(() => { if(active) setLoading(false); });
+      getCarouselDestinations({ type:kind, search:search.trim() }).then(result => { if(active) { setRows((kind === 'set' ? result.sets : result.products) || []); setMore(Boolean(kind === 'set' ? result.hasMoreSets : result.hasMoreProducts)); } }).catch(() => { if(active) setError(`Choices could not be loaded. Change the search to retry.`); }).finally(() => { if(active) setLoading(false); });
     },250);
     return () => { active=false; clearTimeout(timer); };
-  },[search,initial,initialMore]);
+  },[search,initial,initialMore,kind]);
   return <div className="space-y-2">
-    <label className="owner-field">Find a storefront product<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Part number, product or motorcycle model" /></label>
+    <label className="owner-field">Find a {noun}<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={kind === 'set' ? 'Set title or motorcycle model' : 'Part number, product or motorcycle model'} /></label>
     {error && <p role="alert" className="owner-account-feedback">{error}</p>}
-    {loading && <p role="status" className="text-xs text-slate-600">Searching products…</p>}
-    <div className="owner-picker-results" role="group" aria-label="Storefront product choices">
+    {loading && <p role="status" className="text-xs text-slate-600">Searching…</p>}
+    <div className="owner-picker-results" role="group" aria-label={kind === 'set' ? 'Set listing choices' : 'Storefront product choices'}>
       {rows.length ? rows.map(row => <button type="button" key={row.id} aria-pressed={String(selected)===String(row.id)} onClick={() => onSelect(row.id)}>
         <img src={resolveProductImageUrl(row.image)} alt="" onError={handleProductImageError} width="42" height="42" />
-        <span className="min-w-0"><strong>{row.name}</strong><small>{row.part_number || 'Part number not set'} · {row.motorcycle_model || 'Check compatibility'}</small><small>{money(row.price)}{String(selected)===String(row.id) ? ' · Selected' : ''}</small></span>
-      </button>) : !loading && <p className="p-3 text-sm text-slate-600">No visible storefront products match.</p>}
-    </div><p className="text-xs text-slate-600">{more ? 'Showing the first 25 matches. Refine your search.' : 'Only active storefront listings can be selected.'}</p>
+        <span className="min-w-0"><strong>{row.name}</strong><small>{kind === 'set' ? `${row.item_count} items` : row.part_number || 'Part number not set'} · {row.motorcycle_model || 'Check compatibility'}</small><small>{kind === 'set' ? 'Set listing' : money(row.price)}{String(selected)===String(row.id) ? ' · Selected' : ''}</small></span>
+      </button>) : !loading && <p className="p-3 text-sm text-slate-600">No visible {noun}s match.</p>}
+    </div><p className="text-xs text-slate-600">{more ? 'Showing the first 25 matches. Refine your search.' : kind === 'set' ? 'Only active set listings with an available item can be selected.' : 'Only active storefront listings can be selected.'}</p>
   </div>;
 }
 
@@ -65,7 +68,7 @@ export default function CarouselSlideEditor({ slide, nextOrder, onSave, onCancel
   useEffect(() => { if(error) errorRef.current?.focus({preventScroll:false}); },[error]);
   const loadOptions = () => {
     setOptionsError('');
-    return getCarouselDestinations({ type:'all', ...(['product','promotion'].includes(slide?.destination_type) && slide.destination_id ? { id:slide.destination_id,selected_type:slide.destination_type } : {}) }).then(setOptions).catch(() => setOptionsError('Destinations could not be loaded. Retry before choosing a linked item.'));
+    return getCarouselDestinations({ type:'all', ...(['product','set','promotion'].includes(slide?.destination_type) && slide.destination_id ? { id:slide.destination_id,selected_type:slide.destination_type } : {}) }).then(setOptions).catch(() => setOptionsError('Destinations could not be loaded. Retry before choosing a linked item.'));
   };
   useEffect(() => { loadOptions(); }, []);
   useEffect(() => {
@@ -76,7 +79,7 @@ export default function CarouselSlideEditor({ slide, nextOrder, onSave, onCancel
   const submit = async event => {
     event.preventDefault(); if(busy || imageError) return;
     setError('');
-    if (['product','promotion','category','model'].includes(form.destination_type) && !form.destination_id) { setError('Choose a destination for this slide.'); return; }
+    if (ID_TYPES.includes(form.destination_type) && !form.destination_id) { setError('Choose a destination for this slide.'); return; }
     if (form.starts_at && form.ends_at && new Date(form.ends_at)<=new Date(form.starts_at)) { setError('End must be after start.'); return; }
     setBusy(true);
     try {
@@ -84,7 +87,7 @@ export default function CarouselSlideEditor({ slide, nextOrder, onSave, onCancel
       if(file) { setUploading(true); image=await uploadProductImage(file); setUploading(false); }
       await onSave({ ...form,image_url:image,destination_id:form.destination_id ? Number(form.destination_id) : null,
         starts_at:form.starts_at ? new Date(form.starts_at).toISOString() : null, ends_at:form.ends_at ? new Date(form.ends_at).toISOString() : null,
-        link_url:['product','promotion','category','model','none'].includes(form.destination_type) ? '' : form.link_url });
+        link_url:[...ID_TYPES,'none'].includes(form.destination_type) ? '' : form.link_url });
     } catch(failure) { setError(failure.message || 'Slide could not be saved. Check the details and try again.'); }
     finally { setBusy(false); setUploading(false); }
   };
@@ -103,11 +106,12 @@ export default function CarouselSlideEditor({ slide, nextOrder, onSave, onCancel
       <label className="owner-field">Destination type<select value={form.destination_type} onChange={event => setForm(current => ({ ...current,destination_type:event.target.value,destination_id:'',link_url:event.target.value==='storefront' ? '/shop' : '' }))}>{TYPES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       {optionsError && <div role="alert" className="owner-account-feedback">{optionsError}<BrandButton variant="ghost" onClick={loadOptions}>Retry destinations</BrandButton></div>}
       {form.destination_type==='product' && (options ? <ProductChoices initial={options.products || []} initialMore={Boolean(options.hasMoreProducts)} selected={form.destination_id} onSelect={id => field('destination_id',id)} /> : <p role="status">Loading product choices…</p>)}
+      {form.destination_type==='set' && (options ? <ProductChoices key="set" kind="set" initial={options.sets || []} initialMore={Boolean(options.hasMoreSets)} selected={form.destination_id} onSelect={id => field('destination_id',id)} /> : <p role="status">Loading set choices…</p>)}
       {['promotion','category','model'].includes(form.destination_type) && <label className="owner-field">{form.destination_type==='promotion' ? 'Promotion campaign' : form.destination_type==='category' ? 'Shop category' : 'Motorcycle model'}<select required value={form.destination_id} onChange={event => field('destination_id',event.target.value)}><option value="">Choose a destination</option>{(options?.[form.destination_type==='promotion' ? 'promotions' : form.destination_type==='category' ? 'categories' : 'models'] || []).map(row => <option key={row.id} value={row.id}>{form.destination_type==='promotion' ? `${row.code} · ${row.type==='percentage' ? `${Number(row.value)}%` : money(row.value)} · ${row.is_active ? 'Enabled' : 'Inactive'}${row.expires_at ? ` · ends ${new Date(row.expires_at).toLocaleDateString()}` : ''}` : row.model_name || row.name}</option>)}</select></label>}
       {promotion && <p className="owner-account-feedback">{promotion.code} applies to the order subtotal, subject to its existing limits. The customer opens Shop with this code and terms; checkout validates eligibility. {promotion.starts_at && `Starts ${new Date(promotion.starts_at).toLocaleString()}. `}{promotion.expires_at && `Ends ${new Date(promotion.expires_at).toLocaleString()}.`} A linked slide is public only while the campaign is available.</p>}
       {form.destination_type==='storefront' && <label className="owner-field">Storefront destination<select value={form.link_url} onChange={event => field('link_url',event.target.value)}>{!PAGES.some(([value]) => value===form.link_url) && form.link_url && <option value={form.link_url}>Existing: {form.link_url}</option>}{PAGES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
       {form.destination_type==='external' && <label className="owner-field">External destination URL<input type="url" required maxLength={500} value={form.link_url} onChange={event => field('link_url',event.target.value)} placeholder="https://example.com" /><small>HTTP(S) only. Customer links open in a separate tab.</small></label>}
-      {form.destination_type!=='none' && <label className="owner-field">CTA label<input maxLength={48} value={form.button_text} onChange={event => field('button_text',event.target.value)} placeholder="Shop the sale" /></label>}
+      {form.destination_type!=='none' && <label className="owner-field">CTA label<input maxLength={48} value={form.button_text} onChange={event => field('button_text',event.target.value)} placeholder={form.destination_type==='set' ? 'View Set' : form.destination_type==='product' ? 'View Product' : form.destination_type==='promotion' ? 'See Offer' : 'Shop Now'} /></label>}
     </div><div className="space-y-4"><SlidePreview form={form} image={preview || form.image_url} />
       <div className="owner-form-grid"><label className="owner-field">Start date/time<input type="datetime-local" value={form.starts_at} onChange={event => field('starts_at',event.target.value)} /></label><label className="owner-field">End date/time<input type="datetime-local" value={form.ends_at} onChange={event => field('ends_at',event.target.value)} /></label></div>
       <p className="text-xs leading-5 text-slate-600">Dates use your device’s local time and are stored with a timezone. Leave blank for no date limit.</p>

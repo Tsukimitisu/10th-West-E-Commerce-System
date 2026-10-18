@@ -1,6 +1,7 @@
 import { sanitizePlainText } from '../utils/inputSanitizer.js';
 
-export const CAROUSEL_TYPES = ['none', 'product', 'promotion', 'category', 'model', 'storefront', 'external', 'legacy'];
+export const CAROUSEL_TYPES = ['none', 'product', 'set', 'promotion', 'category', 'model', 'storefront', 'external', 'legacy'];
+export const ID_DESTINATION_TYPES = ['product', 'set', 'promotion', 'category', 'model'];
 const PUBLIC_PAGES = new Set(['/', '/shop', '/contact', '/faq', '/privacy', '/terms', '/return-policy']);
 const SHOP_PARAMS = new Set(['search', 'category', 'model', 'color', 'sort', 'promotion']);
 export const positiveId = value => /^\d+$/.test(String(value)) && Number.isSafeInteger(Number(value)) && Number(value) > 0 && Number(value) <= 2147483647 ? Number(value) : null;
@@ -13,7 +14,7 @@ export function safeCarouselLink(value) {
   if (/[\\\u0000-\u001f\u007f]/.test(decoded) || decoded.startsWith('//')) return null;
   if (raw.startsWith('/')) {
     const url = new URL(raw, 'https://store.example');
-    if (url.hash || (!PUBLIC_PAGES.has(url.pathname) && !/^\/products\/\d+$/.test(url.pathname))) return null;
+    if (url.hash || (!PUBLIC_PAGES.has(url.pathname) && !/^\/(?:products|sets)\/\d+$/.test(url.pathname))) return null;
     if (url.search && (url.pathname !== '/shop' || [...url.searchParams.keys()].some(key => !SHOP_PARAMS.has(key)))) return null;
     return `${url.pathname}${url.search}`;
   }
@@ -47,8 +48,8 @@ export function parseCarouselBanner(input = {}) {
   const type = input.destination_type ?? 'legacy';
   if (!CAROUSEL_TYPES.includes(type)) throw inputError('Choose a supported destination type.');
   const destinationId = input.destination_id === null || input.destination_id === '' || input.destination_id === undefined ? null : positiveId(input.destination_id);
-  if (['product', 'promotion', 'category', 'model'].includes(type) && !destinationId) throw inputError('Choose a valid destination.');
-  if (!['product', 'promotion', 'category', 'model'].includes(type) && input.destination_id != null && input.destination_id !== '') throw inputError('This destination does not accept an item ID.');
+  if (ID_DESTINATION_TYPES.includes(type) && !destinationId) throw inputError('Choose a valid destination.');
+  if (!ID_DESTINATION_TYPES.includes(type) && input.destination_id != null && input.destination_id !== '') throw inputError('This destination does not accept an item ID.');
   const image = safeCarouselImage(input.image_url);
   if (image === null) throw inputError('Use a valid image URL or upload a supported image.');
   const order = Number(input.display_order ?? 0);
@@ -86,16 +87,18 @@ export function publicCarouselSlide(row, destination = row.link_url) {
     is_active: true, display_order: Number(row.display_order) || 0, starts_at: row.starts_at || null, ends_at: row.ends_at || null };
 }
 
-export const targetLink = (type, target) => type === 'product' ? `/products/${target.id}` : type === 'promotion' ? `/shop?promotion=${target.id}` : type === 'category' ? `/shop?category=${target.id}` : type === 'model' ? `/shop?model=${encodeURIComponent(target.model_name)}` : null;
+export const targetLink = (type, target) => type === 'product' ? `/products/${target.id}` : type === 'set' ? `/sets/${target.id}` : type === 'promotion' ? `/shop?promotion=${target.id}` : type === 'category' ? `/shop?category=${target.id}` : type === 'model' ? `/shop?model=${encodeURIComponent(target.model_name)}` : null;
 
 // Resolve each target kind once, regardless of slide count. Writes accept future
 // promotion records; public reads require their current commercial availability.
 export async function resolveCarouselTargets(rows, query, { forManagement = false, includeUnavailable = false } = {}) {
-  const groups = ['product', 'promotion', 'category', 'model'];
+  const groups = ID_DESTINATION_TYPES;
   const maps = await Promise.all(groups.map(async type => {
     const ids = [...new Set(rows.filter(row => row.destination_type === type).map(row => positiveId(row.destination_id)).filter(Boolean))];
     if (!ids.length) return new Map();
     const sql = type === 'product' ? `SELECT p.id,p.name,p.part_number FROM products p JOIN ecommerce_listings el ON el.inventory_item_id=p.id WHERE p.id=ANY($1::int[]) AND el.visibility_status='active' AND p.inventory_status='active' AND COALESCE(p.is_deleted,false)=false`
+      : type === 'set' ? `SELECT l.id,l.title AS name FROM ecommerce_listings l WHERE l.id=ANY($1::int[]) AND l.listing_type='set' AND l.visibility_status='active'
+          AND EXISTS (SELECT 1 FROM ecommerce_listing_items li JOIN products ip ON ip.id=li.product_item_id WHERE li.listing_id=l.id AND ip.inventory_status='active' AND COALESCE(ip.is_deleted,false)=false)`
       : type === 'promotion' ? `SELECT id,code FROM discounts WHERE id=ANY($1::int[]) AND deleted_at IS NULL${forManagement ? '' : " AND is_active=true AND (starts_at IS NULL OR starts_at<=NOW()) AND (expires_at IS NULL OR expires_at>NOW()) AND (max_uses IS NULL OR COALESCE(used_count,0)<max_uses)"}`
       : type === 'category' ? 'SELECT id,name FROM categories WHERE id=ANY($1::int[])'
       : "SELECT id,model_name FROM motorcycle_models WHERE id=ANY($1::int[]) AND status='active'";
