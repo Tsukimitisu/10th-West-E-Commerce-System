@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import test, { after, afterEach, before, mock } from 'node:test';
+import test, { after, afterEach, before, beforeEach, mock } from 'node:test';
 
 process.env.NODE_ENV = 'test';
 process.env.TEST_DATABASE_URL = 'postgresql://invalid:invalid@127.0.0.1:1/invalid';
@@ -8,7 +8,7 @@ process.env.DB_READ_MODE = 'postgres';
 process.env.PAYMONGO_WEBHOOK_SECRET = 'whsk_test_webhook_verification';
 
 const { default: pool } = await import('../config/database.js');
-const { handlePaymongoWebhook, __testing } = await import('./secureCheckoutController.js');
+const { handlePaymongoWebhook, releaseExpiredReservations, __testing } = await import('./secureCheckoutController.js');
 
 const makeResponse = () => ({
   statusCode: 200,
@@ -65,7 +65,7 @@ const signedRequest = (payload) => {
   };
 };
 
-const createWebhookDatabase = ({ paymentId = 701, orderId = 501, failed = false } = {}) => {
+const createWebhookDatabase = ({ paymentId = 701, orderId = 501, failed = false, recoveryStock = 8 } = {}) => {
   const state = {
     paymentStatus: 'pending',
     orderStatus: 'payment_pending',
@@ -107,6 +107,9 @@ const createWebhookDatabase = ({ paymentId = 701, orderId = 501, failed = false 
           ? { rows: [{ product_id: 11, variant_id: null, quantity: 2 }], rowCount: 1 }
           : { rows: [], rowCount: 0 };
       }
+      if (source.includes("FROM stock_reservations WHERE order_id") && source.includes("status = 'released'")) return { rows: [{ product_id: 11, variant_id: null, quantity: 2 }], rowCount: 1 };
+      if (source.includes('AS available FROM products')) return { rows: [{ available: recoveryStock }], rowCount: 1 };
+      if (source.includes("UPDATE stock_reservations SET status = 'active'")) state.reservationStatus = 'active';
       if (source.includes('UPDATE products SET stock_quantity = stock_quantity -')) {
         state.stockDeductions += 1;
         return { rows: [{ stock_before: 8, stock_after: 6 }], rowCount: 1 };
@@ -117,6 +120,10 @@ const createWebhookDatabase = ({ paymentId = 701, orderId = 501, failed = false 
       if (source.includes("UPDATE orders SET status = 'paid'")) {
         state.orderStatus = 'paid';
         state.orderPaymentStatus = 'paid';
+      }
+      if (source.includes("UPDATE orders SET payment_status = 'paid'")) {
+        state.orderPaymentStatus = 'paid';
+        state.orderStatus = source.includes('CASE WHEN status') ? 'paid' : 'payment_pending';
       }
       if (source.includes("UPDATE payments SET status = 'paid'")) state.paymentStatus = 'paid';
       if (source.includes("UPDATE orders SET status = $2, payment_status = $2")) {
@@ -137,6 +144,7 @@ before(() => {
   mock.method(console, 'warn', () => {});
   mock.method(console, 'error', () => {});
 });
+beforeEach(() => { mock.method(globalThis, 'fetch', async () => { throw new Error('Network forbidden in regression tests'); }); });
 afterEach(() => {
   mock.restoreAll();
   mock.method(console, 'info', () => {});
@@ -154,6 +162,26 @@ test('checkout_session.payment.paid extracts checkout, payment, and metadata ide
   assert.equal(event.orderId, 501);
   assert.equal(event.amount, 125050);
   assert.equal(event.currency, 'PHP');
+});
+
+test('expired local reservation reconciles a successful GCash checkout instead of marking it failed', async () => {
+  const { client, state } = createWebhookDatabase();
+  process.env.PAYMONGO_PUBLIC_KEY = 'pk_test_regression';
+  process.env.PAYMONGO_SECRET_KEY = 'sk_test_regression';
+  mock.method(pool, 'connect', async () => client);
+  mock.method(pool, 'query', async (sql) => String(sql).includes('SELECT DISTINCT')
+    ? { rows: [{ order_id: 501 }], rowCount: 1 } : { rows: [], rowCount: 1 });
+  mock.method(globalThis, 'fetch', async () => ({ ok: true, json: async () => ({ data: checkoutPaidPayload().data.attributes.data }) }));
+  await releaseExpiredReservations();
+  assert.equal(state.orderPaymentStatus, 'paid');
+  assert.equal(state.paymentStatus, 'paid');
+  assert.equal(state.stockDeductions, 1);
+});
+
+test('checkout paid selects the successful attempt, even when an earlier attempt failed', () => {
+  const payload = checkoutPaidPayload();
+  payload.data.attributes.data.attributes.payments.unshift({ id: 'pay_old', attributes: { status: 'failed', amount: 1, currency: 'PHP' } });
+  assert.equal(__testing.extractPaymongoEvent(payload).externalPaymentId, 'pay_test_1');
 });
 
 test('checkout paid parser accepts JSON:API data envelopes used by provider deliveries', () => {
@@ -199,6 +227,7 @@ test('payment.failed does not require paid amount fields and never marks the ord
   mock.method(pool, 'connect', async () => client);
   mock.method(pool, 'query', async () => ({ rows: [], rowCount: 1 }));
 
+  mock.method(globalThis, 'fetch', async () => ({ ok: true, json: async () => ({ data: { id: 'cs_test_failed_1', attributes: { payments: [{ id: 'pay_test_failed_1', attributes: { status: 'failed' } }] } } }) }));
   const res = makeResponse();
   await handlePaymongoWebhook(signedRequest(paymentFailedPayload()), res);
   assert.equal(res.statusCode, 200);
@@ -213,7 +242,7 @@ test('webhook payment lookup falls back to checkout session then metadata order 
     async query(sql, params) {
       calls.push({ sql: String(sql), params });
       if (calls.length < 2) return { rows: [], rowCount: 0 };
-      return { rows: [{ id: 88, provider: 'paymongo' }], rowCount: 1 };
+      return { rows: [{ id: 77, order_id: 99, external_checkout_id: 'cs_fallback', provider: 'paymongo' }], rowCount: 1 };
     },
   };
   const result = await __testing.findPaymongoWebhookPayment(client, {
@@ -223,7 +252,104 @@ test('webhook payment lookup falls back to checkout session then metadata order 
     orderId: 99,
   });
   assert.equal(result.lookup, 'checkout_session_id');
-  assert.equal(result.payment.id, 88);
+  assert.equal(result.payment.id, 77);
   assert.match(calls[0].sql, /p\.id = \$1/);
   assert.match(calls[1].sql, /p\.external_checkout_id = \$1/);
+});
+
+for (const providerStatus of ['pending', 'unknown', 'timeout']) {
+  test(`local expiry with provider ${providerStatus} never marks payment failed`, async () => {
+    const { client, state } = createWebhookDatabase();
+    mock.method(pool, 'connect', async () => client);
+    mock.method(pool, 'query', async (sql) => String(sql).includes('SELECT DISTINCT') ? { rows: [{ order_id: 501 }], rowCount: 1 } : { rows: [], rowCount: 1 });
+    mock.method(globalThis, 'fetch', async () => {
+      if (providerStatus === 'timeout') throw new Error('timeout');
+      return { ok: true, json: async () => ({ data: { id: 'cs_test_checkout_1', attributes: { status: 'active', payments: [], payment_intent: { attributes: { status: providerStatus } } } } }) };
+    });
+    await releaseExpiredReservations();
+    assert.equal(state.paymentStatus, 'pending');
+    assert.equal(state.orderPaymentStatus, 'pending');
+    assert.equal(state.reservationStatus, 'active');
+  });
+}
+
+test('paid order ignores late failure webhook and unknown provider responses', async () => {
+  const { client, state } = createWebhookDatabase();
+  mock.method(pool, 'connect', async () => client);
+  mock.method(pool, 'query', async () => ({ rows: [], rowCount: 1 }));
+  await handlePaymongoWebhook(signedRequest(checkoutPaidPayload()), makeResponse());
+  const failed = checkoutPaidPayload('evt_late_failure');
+  failed.data.attributes.type = 'checkout_session.payment.failed';
+  failed.data.attributes.data.attributes.payments[0].attributes.status = 'failed';
+  const res = makeResponse();
+  await handlePaymongoWebhook(signedRequest(failed), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(state.paymentStatus, 'paid');
+  assert.equal(state.orderPaymentStatus, 'paid');
+  assert.equal(state.stockDeductions, 1);
+  assert.equal(await __testing.reconcilePaymongoPayment(client, { status: 'paid', order_payment_status: 'paid' }), 'paid');
+});
+
+test('authoritatively cancelled checkout releases reservation and remains cancelled', async () => {
+  const { client, state } = createWebhookDatabase();
+  mock.method(globalThis, 'fetch', async () => ({ ok: true, json: async () => ({ data: { id: 'cs_test_checkout_1', attributes: { status: 'expired', payments: [] } } }) }));
+  const result = await __testing.reconcilePaymongoPayment(client, { id: 701, order_id: 501, status: 'pending', external_checkout_id: 'cs_test_checkout_1' }, { cancelled: true });
+  assert.equal(result, 'cancelled');
+  assert.equal(state.paymentStatus, 'cancelled');
+  assert.equal(state.orderPaymentStatus, 'cancelled');
+});
+
+test('invalid signature is rejected before database access', async () => {
+  const connect = mock.method(pool, 'connect', async () => { throw new Error('Must not access database'); });
+  const res = makeResponse();
+  const req = signedRequest(checkoutPaidPayload());
+  req.get = () => 't=1,te=invalid';
+  await handlePaymongoWebhook(req, res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(connect.mock.callCount(), 0);
+});
+
+test('signed webhook with conflicting order metadata is rejected', async () => {
+  const { client, state } = createWebhookDatabase();
+  mock.method(pool, 'connect', async () => client);
+  const payload = checkoutPaidPayload();
+  payload.data.attributes.data.attributes.metadata.order_id = '999';
+  const res = makeResponse();
+  await handlePaymongoWebhook(signedRequest(payload), res);
+  assert.equal(res.statusCode, 400);
+  assert.equal(state.paymentStatus, 'pending');
+});
+
+for (const recoveryStock of [8, 0]) {
+  test(`late successful payment repairs a previously released order with ${recoveryStock} available stock`, async () => {
+    const { client, state } = createWebhookDatabase({ recoveryStock });
+    state.paymentStatus = 'expired';
+    state.orderPaymentStatus = 'failed';
+    state.orderStatus = 'failed';
+    state.reservationStatus = 'released';
+    mock.method(pool, 'connect', async () => client);
+    mock.method(pool, 'query', async () => ({ rows: [], rowCount: 1 }));
+    const res = makeResponse();
+    await handlePaymongoWebhook(signedRequest(checkoutPaidPayload()), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(state.paymentStatus, 'paid');
+    assert.equal(state.orderPaymentStatus, 'paid');
+    assert.equal(state.stockDeductions, recoveryStock > 0 ? 1 : 0);
+    assert.equal(state.orderStatus, recoveryStock > 0 ? 'paid' : 'payment_pending');
+  });
+}
+
+test('paid ledger repairs an order downgraded by the old cleanup without deducting stock again', async () => {
+  const { client, state } = createWebhookDatabase();
+  state.paymentStatus = 'paid';
+  state.orderPaymentStatus = 'failed';
+  state.orderStatus = 'failed';
+  state.reservationStatus = 'committed';
+  mock.method(pool, 'connect', async () => client);
+  const res = makeResponse();
+  await handlePaymongoWebhook(signedRequest(checkoutPaidPayload()), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(state.orderPaymentStatus, 'paid');
+  assert.equal(state.orderStatus, 'paid');
+  assert.equal(state.stockDeductions, 0);
 });

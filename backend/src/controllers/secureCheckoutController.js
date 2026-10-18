@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import pool from '../config/database.js';
-import { createPaymongoGcashCheckout, verifyPaymongoWebhookSignature } from '../services/paymongo.js';
+import { createPaymongoGcashCheckout, retrievePaymongoCheckout, verifyPaymongoWebhookSignature } from '../services/paymongo.js';
 import { releaseDiscountUsage } from '../services/discountUsage.js';
 import { getRuntimeSettings } from '../services/settings.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
@@ -212,6 +212,9 @@ const calculateDiscount = async (client, userId, code, subtotal) => {
 };
 
 const releaseOrderReservations = async (client, orderId, nextStatus, reason) => {
+  // Lock the order before reservations, consistently with checkout/webhook updates.
+  const locked = await client.query(`SELECT status, payment_status FROM orders WHERE id = $1 FOR UPDATE`, [orderId]);
+  if (['paid', 'partially_refunded', 'refunded'].includes(locked.rows[0]?.payment_status) || locked.rows[0]?.status === 'paid') return;
   const reservations = await client.query(
     `SELECT * FROM stock_reservations WHERE order_id = $1 AND status = 'active' FOR UPDATE`,
     [orderId]
@@ -598,7 +601,8 @@ const extractPaymongoEvent = (payload) => {
   const resourceEnvelope = event.data || {};
   const resource = resourceEnvelope?.data || resourceEnvelope;
   const attributes = resource.attributes || {};
-  const nestedPaymentEnvelope = Array.isArray(attributes.payments) ? attributes.payments[0] : null;
+  const attempts = Array.isArray(attributes.payments) ? attributes.payments : [];
+  const nestedPaymentEnvelope = attempts.find(item => (item?.data || item)?.attributes?.status === 'paid') || attempts[0];
   const nestedPayment = nestedPaymentEnvelope?.data || nestedPaymentEnvelope;
   const paymentAttributes = nestedPayment?.attributes || attributes;
   const metadata = {
@@ -633,7 +637,7 @@ const findPaymongoWebhookPayment = async (client, event) => {
                   JOIN orders o ON o.id = p.order_id`;
   const lock = ' FOR UPDATE OF p, o';
   const lookups = [
-    event.paymentId && { label: 'payment_id', sql: `${select} WHERE p.id = $1${lock}`, value: event.paymentId },
+    event.paymentId && { label: 'payment_id', sql: `${select} WHERE p.provider = 'paymongo' AND p.id = $1${lock}`, value: event.paymentId },
     event.checkoutId && { label: 'checkout_session_id', sql: `${select} WHERE p.provider = 'paymongo' AND p.external_checkout_id = $1${lock}`, value: event.checkoutId },
     event.externalPaymentId && { label: 'provider_payment_id', sql: `${select} WHERE p.provider = 'paymongo' AND p.external_payment_id = $1${lock}`, value: event.externalPaymentId },
     event.orderId && { label: 'order_id', sql: `${select} WHERE p.provider = 'paymongo' AND p.order_id = $1 ORDER BY p.created_at DESC LIMIT 1${lock}`, value: event.orderId },
@@ -641,14 +645,47 @@ const findPaymongoWebhookPayment = async (client, event) => {
 
   for (const lookup of lookups) {
     const result = await client.query(lookup.sql, [lookup.value]);
-    if (result.rows[0]) return { payment: result.rows[0], lookup: lookup.label };
+    if (result.rows[0]) {
+      const payment = result.rows[0];
+      if ((event.paymentId && Number(payment.id) !== event.paymentId)
+        || (event.orderId && Number(payment.order_id) !== event.orderId)
+        || (event.checkoutId && payment.external_checkout_id !== event.checkoutId)
+        || (event.externalPaymentId && payment.external_payment_id && payment.external_payment_id !== event.externalPaymentId)
+        || (event.metadata?.user_id && Number(event.metadata.user_id) !== Number(payment.order_user_id))) {
+        throw fail(400, 'PayMongo payment correlation mismatch.');
+      }
+      return { payment, lookup: lookup.label };
+    }
   }
   return { payment: null, lookup: null };
 };
 
 const finalizePaidOrder = async (client, payment, event) => {
-  const reservations = await client.query(`SELECT * FROM stock_reservations WHERE order_id = $1 AND status = 'active' FOR UPDATE`, [payment.order_id]);
-  if (!reservations.rowCount) throw fail(409, 'Payment has no active stock reservation.');
+  let reservations = await client.query(`SELECT * FROM stock_reservations WHERE order_id = $1 AND status = 'active' FOR UPDATE`, [payment.order_id]);
+  if (!reservations.rowCount) {
+    // Recover orders released by the old local timer without taking stock reserved for other orders.
+    const released = await client.query(`SELECT * FROM stock_reservations WHERE order_id = $1 AND status = 'released' ORDER BY product_id, variant_id FOR UPDATE`, [payment.order_id]);
+    let recoverable = released.rowCount > 0;
+    for (const row of released.rows) {
+      const table = row.variant_id ? 'product_variants' : 'products';
+      const stock = await client.query(`SELECT stock_quantity - reserved_stock AS available FROM ${table} WHERE id = $1 FOR UPDATE`, [row.variant_id || row.product_id]);
+      if (Number(stock.rows[0]?.available ?? 0) < Number(row.quantity)) recoverable = false;
+    }
+    if (!recoverable) {
+      // Money received remains Paid even when fulfillment needs a stock review.
+      await client.query(`UPDATE payments SET status = 'paid', external_payment_id = COALESCE($2, external_payment_id), paid_at = NOW(), updated_at = NOW() WHERE id = $1`, [payment.id, event.externalPaymentId]);
+      await client.query(`UPDATE orders SET payment_status = 'paid', status = 'payment_pending', paid_at = NOW(), payment_reference = COALESCE($2, payment_reference), updated_at = NOW() WHERE id = $1`, [payment.order_id, event.externalPaymentId]);
+      await client.query(`INSERT INTO order_status_history (order_id, from_status, to_status, source, note) VALUES ($1,$2,'payment_pending','payment','Payment received; stock reservation unavailable. Manual fulfillment review required.')`, [payment.order_id, payment.order_status]);
+      await writeAuditLog(client, { action: 'payment.paid.stock_review', entityType: 'order', entityId: payment.order_id, afterData: { payment_status: 'paid', fulfillment_review_required: true }, metadata: { payment_id: payment.id, event_id: event.eventId } });
+      return;
+    }
+    for (const row of released.rows) {
+      const table = row.variant_id ? 'product_variants' : 'products';
+      await client.query(`UPDATE ${table} SET reserved_stock = reserved_stock + $1, updated_at = NOW() WHERE id = $2`, [row.quantity, row.variant_id || row.product_id]);
+    }
+    await client.query(`UPDATE stock_reservations SET status = 'active', released_at = NULL WHERE order_id = $1 AND status = 'released'`, [payment.order_id]);
+    reservations = released;
+  }
   for (const row of reservations.rows) {
     let stock;
     if (row.variant_id) {
@@ -725,6 +762,71 @@ const finalizePaidOrder = async (client, payment, event) => {
   });
 };
 
+const isCapturedPayment = (payment) => ['paid', 'partially_refunded', 'refunded'].includes(payment.status)
+  || ['paid', 'partially_refunded', 'refunded'].includes(payment.order_payment_status);
+
+// Only a server-to-server session read (or a validated paid webhook) can settle payment.
+const reconcilePaymongoPayment = async (client, payment, { expire = false, cancelled = false } = {}) => {
+  if (isCapturedPayment(payment)) {
+    // The old timer could downgrade orders after payment/stock had already committed.
+    if (payment.status === 'paid' && !['paid', 'partially_refunded', 'refunded'].includes(payment.order_payment_status)) {
+      await client.query(`UPDATE orders SET payment_status = 'paid', status = CASE WHEN status IN ('failed','pending','payment_pending') THEN 'paid' ELSE status END,
+        paid_at = COALESCE(paid_at, $2, NOW()), updated_at = NOW() WHERE id = $1`, [payment.order_id, payment.paid_at || null]);
+      await writeAuditLog(client, { action: 'payment.paid.order_repaired', entityType: 'order', entityId: payment.order_id, beforeData: { payment_status: payment.order_payment_status }, afterData: { payment_status: 'paid' }, metadata: { payment_id: payment.id } });
+    }
+    return payment.status === 'paid' ? 'paid' : payment.order_payment_status;
+  }
+  if (!payment.external_checkout_id) return 'pending';
+  let body;
+  try {
+    if (expire) {
+      // PayMongo rejects expiry if a payment is processing or already paid.
+      try { await retrievePaymongoCheckout(payment.external_checkout_id, { expire: true }); } catch { /* Retrieve the current resource after a race/rejected expiry. */ }
+    }
+    body = await retrievePaymongoCheckout(payment.external_checkout_id);
+  } catch (error) {
+    console.warn('PAYMONGO_RECONCILIATION_DEFERRED', { order_id: payment.order_id, reason: error.code || error.name });
+    return 'pending';
+  }
+  if (body?.data?.id !== payment.external_checkout_id) throw fail(400, 'Checkout session mismatch.');
+  const attributes = body.data.attributes || {};
+  const intent = attributes.payment_intent?.data || attributes.payment_intent;
+  const event = extractPaymongoEvent({ data: { id: `reconcile:${payment.external_checkout_id}`, attributes: {
+    type: 'checkout_session.payment.paid', data: { ...body.data, attributes: { ...attributes, payments: attributes.payments?.length ? attributes.payments : intent?.attributes?.payments } },
+  } } });
+  if ((event.orderId && event.orderId !== Number(payment.order_id)) || (event.paymentId && event.paymentId !== Number(payment.id))) throw fail(400, 'PayMongo payment correlation mismatch.');
+  if (event.paymentAttributes.status === 'paid') {
+    if (!event.externalPaymentId || !Number.isInteger(Number(event.amount))
+      || roundMoney(Number(event.amount) / 100) !== roundMoney(money(payment.amount))
+      || String(event.currency).toUpperCase() !== String(payment.currency).toUpperCase()) throw fail(400, 'Payment amount or currency mismatch.');
+    await finalizePaidOrder(client, payment, event);
+    return 'paid';
+  }
+  const intentStatus = intent?.attributes?.status;
+  if (['processing', 'pending', 'awaiting_next_action', 'awaiting_payment_method'].includes(intentStatus)) return 'pending';
+  const terminal = attributes.status === 'expired' || intentStatus === 'cancelled' ? (cancelled ? 'cancelled' : 'expired')
+    : intentStatus === 'failed' || event.paymentAttributes.status === 'failed' ? 'failed' : null;
+  if (!terminal) return 'pending';
+  await releaseOrderReservations(client, payment.order_id, terminal === 'cancelled' ? 'cancelled' : 'failed', `PayMongo ${terminal}`);
+  await client.query(`UPDATE payments SET status = $2, updated_at = NOW() WHERE id = $1 AND status NOT IN ('paid','refunded')`, [payment.id, terminal]);
+  return terminal;
+};
+
+const reconcileOrderPayment = async (orderId, options) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { payment } = await findPaymongoWebhookPayment(client, { orderId: Number(orderId) });
+    const status = payment ? await reconcilePaymongoPayment(client, payment, options) : 'pending';
+    await client.query('COMMIT');
+    if (payment && status !== 'pending') emitOrderStatusUpdate(payment.order_id);
+    return status;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally { client.release(); }
+};
+
 export const handlePaymongoWebhook = async (req, res) => {
   console.info('PAYMONGO_WEBHOOK_RECEIVED', {
     raw_body_present: Boolean(req.rawBody),
@@ -739,6 +841,9 @@ export const handlePaymongoWebhook = async (req, res) => {
   if (!event.eventId || !event.eventType) {
     console.warn('PAYMONGO_WEBHOOK_FAILED', { reason: 'malformed_event' });
     return res.status(400).json({ message: 'Malformed PayMongo event.' });
+  }
+  if (!['payment.paid', 'checkout_session.payment.paid', 'payment.failed', 'checkout_session.payment.failed', 'checkout_session.expired'].includes(event.eventType)) {
+    return res.json({ message: 'Event ignored.' });
   }
   console.info('PAYMONGO_WEBHOOK_EVENT_TYPE', {
     event_id: event.eventId,
@@ -801,9 +906,10 @@ export const handlePaymongoWebhook = async (req, res) => {
           JSON.stringify({ event_id: event.eventId, checkout_id: event.checkoutId, lookup: lookup.lookup })]
       );
       if (!amountMatches || !currencyMatches) throw fail(400, 'Payment amount or currency mismatch.');
-      if (payment.status !== 'paid') {
+      if (!isCapturedPayment(payment)) {
         await finalizePaidOrder(client, payment, event);
       } else {
+        await reconcilePaymongoPayment(client, payment);
         console.info('PAYMONGO_PAYMENT_ALREADY_PROCESSED', {
           event_id: event.eventId,
           order_id: payment.order_id,
@@ -816,10 +922,9 @@ export const handlePaymongoWebhook = async (req, res) => {
         });
       }
     } else if (['payment.failed', 'checkout_session.payment.failed', 'checkout_session.expired'].includes(event.eventType)) {
-      const terminalStatus = event.eventType.endsWith('expired') ? 'expired' : 'failed';
-      if (payment.status !== 'paid') {
-        await releaseOrderReservations(client, payment.order_id, 'failed', `PayMongo ${terminalStatus}`);
-        await client.query(`UPDATE payments SET status = $2, updated_at = NOW() WHERE id = $1`, [payment.id, terminalStatus]);
+      const terminalStatus = await reconcilePaymongoPayment(client, payment);
+      event.resolvedStatus = terminalStatus;
+      if (['failed', 'expired', 'cancelled'].includes(terminalStatus)) {
         await writeAuditLog(client, {
           action: `payment.webhook.${terminalStatus}`,
           entityType: 'order',
@@ -848,22 +953,21 @@ export const handlePaymongoWebhook = async (req, res) => {
       [inserted.rows[0].id, payment.id]
     );
     await client.query('COMMIT');
-    const emittedStatus = ['payment.paid', 'checkout_session.payment.paid'].includes(event.eventType)
-      ? 'paid'
-      : ['payment.failed', 'checkout_session.payment.failed', 'checkout_session.expired'].includes(event.eventType)
-        ? 'failed'
-        : 'payment_pending';
-    await createOrderWorkflowNotification(pool, {
+    const resolvedStatus = isCapturedPayment(payment) ? payment.order_payment_status : event.resolvedStatus;
+    const emittedStatus = isPaidEvent || resolvedStatus === 'paid' ? 'paid'
+      : ['failed', 'expired'].includes(resolvedStatus) ? 'failed' : resolvedStatus === 'cancelled' ? 'cancelled' : 'payment_pending';
+    if (isCapturedPayment(payment) && !isPaidEvent) {
+      emitOrderStatusUpdate(payment.order_id);
+      return res.json({ message: 'SUCCESS' });
+    }
+    void createOrderWorkflowNotification(pool, {
       userId: payment.order_user_id,
       orderId: payment.order_id,
       type: emittedStatus === 'paid' ? 'payment_success' : emittedStatus === 'failed' ? 'payment_failed' : 'payment_update',
       status: emittedStatus,
       title: emittedStatus === 'paid' ? 'Payment received' : emittedStatus === 'failed' ? 'Payment failed' : 'Payment update',
-    });
-    emitOrderStatusUpdate(payment.order_id, emittedStatus, {
-      payment_status: emittedStatus === 'paid' ? 'paid' : emittedStatus,
-      timeline_event: { source: 'payment', event_id: event.eventId, event_type: event.eventType },
-    });
+    }).catch(error => console.error('Payment notification failed:', error.message));
+    emitOrderStatusUpdate(payment.order_id);
     return res.json({ message: 'SUCCESS' });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -893,7 +997,17 @@ export const getPaymentStatus = async (req, res) => {
       [orderId, staff, req.user.id]
     );
     if (!result.rowCount) return res.status(404).json({ message: 'Payment not found.' });
-    return res.json(result.rows[0]);
+    const row = result.rows[0];
+    if (row.provider === 'paymongo' && !['paid', 'partially_refunded', 'refunded'].includes(row.order_payment_status)) {
+      const reconciledStatus = await reconcileOrderPayment(orderId);
+      const refreshed = await pool.query(`SELECT o.status AS order_status, o.payment_status AS order_payment_status,
+        p.status AS payment_status, p.external_payment_id, p.paid_at FROM orders o JOIN payments p ON p.order_id = o.id
+        WHERE o.id = $1 ORDER BY p.created_at DESC LIMIT 1`, [orderId]);
+      Object.assign(row, refreshed.rows[0]);
+      if (reconciledStatus === 'pending' && !['paid', 'partially_refunded', 'refunded'].includes(row.order_payment_status)) row.payment_status = 'pending';
+    }
+    if (['paid', 'partially_refunded', 'refunded'].includes(row.order_payment_status)) row.payment_status = row.order_payment_status;
+    return res.json(row);
   } catch (error) {
     console.error('Get payment status failed:', error);
     return res.status(500).json({ message: 'Payment status could not be loaded.' });
@@ -942,6 +1056,12 @@ export const retryPayment = async (req, res) => {
     if (!payment) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Payment record not found.' });
+    }
+    if (payment.external_checkout_id) {
+      const status = await reconcilePaymongoPayment(client, { ...payment, order_payment_status: order.payment_status });
+      await client.query('COMMIT');
+      if (status === 'pending' && payment.metadata?.checkout_url) return res.json({ order_id: orderId, checkout_url: payment.metadata.checkout_url, payment_status: 'pending' });
+      return res.status(409).json({ message: status === 'paid' ? 'This order is already paid.' : 'Start a new checkout after this payment is resolved.', payment_status: status });
     }
     const existingAttempt = await client.query(
       `SELECT * FROM payment_attempts WHERE idempotency_key = $1 FOR UPDATE`,
@@ -1064,31 +1184,10 @@ export const expirePaymentSession = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: 'Paid payment sessions cannot be expired.' });
     }
-    await releaseOrderReservations(client, orderId, 'failed', 'Payment session expired');
-    await client.query(`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE order_id = $1 AND status <> 'paid'`, [orderId]);
-    await writeAuditLog(client, {
-      req,
-      actorUserId: req.user.id,
-      action: 'payment.expire',
-      entityType: 'order',
-      entityId: orderId,
-      beforeData: {
-        status: order.status,
-        payment_status: order.payment_status,
-      },
-      afterData: {
-        status: 'failed',
-        payment_status: 'expired',
-      },
-      metadata: {
-        actor_role: req.user.role,
-        source: 'payment_expiration',
-        order_id: orderId,
-      },
-    });
+    const { payment } = await findPaymongoWebhookPayment(client, { orderId });
+    const status = payment ? await reconcilePaymongoPayment(client, payment, { expire: true }) : 'pending';
     await client.query('COMMIT');
-    emitOrderStatusUpdate(orderId, 'failed', { payment_status: 'expired' });
-    return res.json({ message: 'Payment session expired.', order_id: orderId, status: 'failed', payment_status: 'expired' });
+    return res.status(status === 'pending' ? 202 : 200).json({ message: status === 'pending' ? 'Payment is still being confirmed.' : 'Payment reconciled.', order_id: orderId, payment_status: status });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('Expire payment session failed:', error);
@@ -1259,36 +1358,13 @@ export const confirmCheckout = async (req, res) => {
       [order.id]
     );
     const currentPayment = payment.rows[0] || null;
-    if (currentPayment?.expires_at && new Date(currentPayment.expires_at) <= new Date() && currentPayment.status !== 'paid') {
-      await releaseOrderReservations(client, order.id, 'failed', 'Payment reservation expired during checkout confirmation');
-      await client.query(`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE id = $1`, [currentPayment.id]);
-      await writeAuditLog(client, {
-        req,
-        actorUserId: req.user.id,
-        action: 'payment.expire',
-        entityType: 'order',
-        entityId: order.id,
-        beforeData: {
-          status: order.status,
-          payment_status: order.payment_status,
-        },
-        afterData: {
-          status: 'failed',
-          payment_status: 'expired',
-        },
-        metadata: {
-          actor_role: req.user.role,
-          source: 'checkout_confirmation',
-          order_id: order.id,
-          payment_id: currentPayment.id,
-        },
-      });
-      await client.query('COMMIT');
-      emitOrderStatusUpdate(order.id, 'failed');
-      return res.status(409).json({ message: 'Checkout payment session has expired.', status: 'failed', payment_status: 'expired' });
+    if (currentPayment?.provider === 'paymongo' && !isCapturedPayment({ ...currentPayment, order_payment_status: order.payment_status })) {
+      await reconcilePaymongoPayment(client, { ...currentPayment, order_payment_status: order.payment_status });
+      const refreshed = await client.query('SELECT * FROM orders WHERE id = $1', [order.id]);
+      Object.assign(order, refreshed.rows[0]);
     }
     await client.query('COMMIT');
-    const statusCode = currentPayment?.status === 'paid' || order.payment_method === 'cod' ? 200 : 202;
+    const statusCode = order.payment_status === 'paid' || order.payment_method === 'cod' ? 200 : 202;
     return res.status(statusCode).json(await buildCheckoutResponse(pool, order));
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -1317,6 +1393,12 @@ export const cancelCheckout = async (req, res) => {
     if (!['pending', 'payment_pending', 'failed'].includes(order.status)) {
       await client.query('ROLLBACK');
       return res.status(409).json({ message: 'This checkout can no longer be cancelled.' });
+    }
+    if (order.payment_provider === 'paymongo') {
+      const { payment } = await findPaymongoWebhookPayment(client, { orderId: Number(order.id) });
+      const status = payment ? await reconcilePaymongoPayment(client, payment, { expire: true, cancelled: true }) : 'pending';
+      await client.query('COMMIT');
+      return res.status(status === 'cancelled' ? 200 : 409).json({ message: status === 'paid' ? 'Payment was already received.' : status === 'cancelled' ? 'Checkout cancelled.' : 'Payment is still being confirmed.', order_id: order.id, payment_status: status });
     }
     await releaseOrderReservations(client, order.id, 'cancelled', 'Checkout cancelled by user');
     await client.query(`UPDATE payments SET status = 'cancelled', updated_at = NOW() WHERE order_id = $1 AND status <> 'paid'`, [order.id]);
@@ -1405,10 +1487,11 @@ export const releaseExpiredReservations = async () => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await releaseOrderReservations(client, row.order_id, 'failed', 'Payment reservation expired');
-      await client.query(`UPDATE payments SET status = 'expired', updated_at = NOW() WHERE order_id = $1 AND status IN ('pending','processing')`, [row.order_id]);
+      const { payment } = await findPaymongoWebhookPayment(client, { orderId: Number(row.order_id) });
+      // Local expiry is not evidence of payment failure. Keep the reservation on unknown/timeouts.
+      const status = payment ? await reconcilePaymongoPayment(client, payment, { expire: true }) : 'pending';
       await client.query('COMMIT');
-      emitOrderStatusUpdate(row.order_id, 'failed', { payment_status: 'expired' });
+      if (status !== 'pending') emitOrderStatusUpdate(row.order_id);
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       console.error('Expired reservation cleanup failed:', { orderId: row.order_id, error: error.message });
@@ -1418,6 +1501,7 @@ export const releaseExpiredReservations = async () => {
 };
 
 let reservationCleanupTimer = null;
+let reservationCleanupRunning = false;
 
 export const startExpiredReservationCleanup = ({ intervalMs = Number(process.env.RESERVATION_CLEANUP_INTERVAL_MS || 60000) } = {}) => {
   if (reservationCleanupTimer || String(process.env.RESERVATION_CLEANUP_DISABLED || '').toLowerCase() === 'true') {
@@ -1426,9 +1510,11 @@ export const startExpiredReservationCleanup = ({ intervalMs = Number(process.env
 
   const safeInterval = Math.max(15000, Number(intervalMs) || 60000);
   reservationCleanupTimer = setInterval(() => {
+    if (reservationCleanupRunning) return;
+    reservationCleanupRunning = true;
     releaseExpiredReservations().catch((error) => {
       console.error('Scheduled reservation cleanup failed:', error);
-    });
+    }).finally(() => { reservationCleanupRunning = false; });
   }, safeInterval);
   reservationCleanupTimer.unref?.();
   return reservationCleanupTimer;
@@ -1445,4 +1531,5 @@ export const __testing = {
   extractPaymongoEvent,
   findPaymongoWebhookPayment,
   finalizePaidOrder,
+  reconcilePaymongoPayment,
 };

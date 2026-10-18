@@ -218,6 +218,16 @@ export const createPaymongoRefund = async ({ paymentId, amount, idempotencyKey, 
   return { id: body.data.id, status: body.data.attributes?.status || 'pending', raw: body };
 };
 
+export const retrievePaymongoCheckout = async (checkoutId, { expire = false } = {}) => {
+  if (!/^cs_[A-Za-z0-9_]+$/.test(String(checkoutId || ''))) throw new Error('Invalid PayMongo checkout reference.');
+  const response = await fetch(`${getPaymongoBaseUrl()}/checkout_sessions/${encodeURIComponent(checkoutId)}${expire ? '/expire' : ''}`, {
+    method: expire ? 'POST' : 'GET',
+    headers: { Authorization: buildAuthHeader(), Accept: 'application/json' },
+    signal: AbortSignal.timeout(8000),
+  });
+  return parsePaymongoResponse(response);
+};
+
 const parseSignatureHeader = (header) => {
   const parts = {};
   String(header || '').split(',').forEach((part) => {
