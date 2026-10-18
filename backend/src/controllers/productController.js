@@ -20,6 +20,7 @@ import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl } from '../utils/productImages.js';
 import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
 import { shouldReturnEmptyProductSearch } from '../utils/productSearchSafety.js';
+import { hasSetListingSchema, storefrontVisibilitySql } from '../services/setListings.js';
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg', 'video/x-m4v']);
@@ -1204,9 +1205,10 @@ export const getProductById = async (req, res) => {
       });
     }
     
+    const withSets = await hasSetListingSchema(pool);
     const result = await pool.query(
       `SELECT p.*, c.name as category_name,
-              el.ecommerce_description, el.visibility_status,
+              el.ecommerce_description, ${storefrontVisibilitySql('p', withSets)} AS visibility_status,
               el.is_featured, el.is_best_seller, el.is_new_arrival,
               (SELECT m.url FROM ecommerce_listing_media m WHERE m.listing_id=el.id ORDER BY m.sort_order LIMIT 1) AS listing_primary_media,
               (SELECT COALESCE(jsonb_agg(jsonb_build_object('url', m.url, 'media_type', m.media_type, 'sort_order', m.sort_order) ORDER BY m.sort_order), '[]'::jsonb)

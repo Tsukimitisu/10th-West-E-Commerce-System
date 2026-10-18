@@ -3,6 +3,7 @@ import pool from '../config/database.js';
 import { isDatabaseConnectivityError } from '../services/supabaseRest.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
 import { calculateEcommercePrice } from '../services/catalogPricing.js';
+import { hasSetListingSchema, storefrontVisibilitySql } from '../services/setListings.js';
 
 const toPositiveInt = (value) => {
   const parsed = Number(value);
@@ -291,17 +292,17 @@ export const getCart = async (req, res) => {
       await saveSession(req);
     }
     const cart = await getOrCreateCart(req);
+    const withSets = await hasSetListingSchema(pool);
 
     const items = await pool.query(
       `SELECT ci.id, ci.cart_id, ci.product_id, ci.variant_id, ci.quantity,
               p.name, COALESCE(p.store_selling_price, p.price) AS store_selling_price,
-              p.image, p.inventory_status, el.visibility_status,
+              p.image, p.inventory_status, ${storefrontVisibilitySql('p', withSets)} AS visibility_status,
               pv.variant_type, pv.variant_value, pv.sku AS variant_sku, pv.image_url AS variant_image,
               COALESCE(pv.price, CASE WHEN pv.id IS NOT NULL THEN COALESCE(p.store_selling_price, p.price) + pv.price_adjustment ELSE COALESCE(p.store_selling_price, p.price) END) AS effective_store_price,
               COALESCE(pv.stock_quantity - pv.reserved_stock, p.stock_quantity - p.reserved_stock) AS available_stock
        FROM cart_items ci
        JOIN products p ON ci.product_id = p.id
-       LEFT JOIN ecommerce_listings el ON el.inventory_item_id = p.id
        LEFT JOIN product_variants pv ON pv.id = ci.variant_id AND pv.product_id = ci.product_id
        WHERE ci.cart_id = $1
        ORDER BY ci.id ASC`,
@@ -353,9 +354,14 @@ export const addToCart = async (req, res) => {
   const rawVariantId = req.body?.variant_id ?? req.body?.variantId;
   const variantId = rawVariantId === undefined || rawVariantId === null || rawVariantId === '' ? null : toPositiveInt(rawVariantId);
   const quantity = toPositiveInt(req.body?.quantity ?? 1);
+  const rawListingId = req.body?.listing_id;
+  const listingId = rawListingId === undefined || rawListingId === null || rawListingId === '' ? null : toPositiveInt(rawListingId);
 
   if (!productId) {
     return res.status(400).json({ message: 'Valid product_id is required' });
+  }
+  if (rawListingId !== undefined && rawListingId !== null && rawListingId !== '' && !listingId) {
+    return res.status(400).json({ message: 'Valid listing_id is required' });
   }
 
   if (!quantity || quantity > MAX_ITEM_QUANTITY) {
@@ -366,14 +372,26 @@ export const addToCart = async (req, res) => {
 
   try {
     await withCartTransaction(req, async (client, cart) => {
+      const withSets = await hasSetListingSchema(client);
+      if (listingId && !withSets) {
+        const notFoundError = new Error('Product not found');
+        notFoundError.statusCode = 404;
+        throw notFoundError;
+      }
+      // With listing_id the item must belong to that exact active set listing;
+      // otherwise it must be storefront-visible through any active listing.
       const productResult = await client.query(
           `SELECT p.id, p.stock_quantity, p.reserved_stock,
                  EXISTS (SELECT 1 FROM product_variants WHERE product_id = p.id) AS has_variants
            FROM products p
-           JOIN ecommerce_listings el ON el.inventory_item_id = p.id AND el.visibility_status='active'
            WHERE p.id = $1 AND p.inventory_status = 'active' AND COALESCE(p.is_deleted, false) = false
+             AND ${listingId
+    ? `EXISTS (SELECT 1 FROM ecommerce_listing_items li JOIN ecommerce_listings sl ON sl.id = li.listing_id
+                         WHERE li.listing_id = $2 AND li.product_item_id = p.id
+                           AND sl.listing_type = 'set' AND sl.visibility_status = 'active')`
+    : `${storefrontVisibilitySql('p', withSets)} = 'active'`}
            FOR UPDATE OF p`,
-        [productId]
+        listingId ? [productId, listingId] : [productId]
       );
 
       if (productResult.rows.length === 0) {

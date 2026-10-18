@@ -13,6 +13,7 @@ import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/comme
 import { normalizeCheckoutAddress, resolveCheckoutAddress } from '../utils/checkoutAddress.js';
 import { commitCodReservations } from './orderWorkflowController.js';
 import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
+import { hasSetListingSchema, storefrontVisibilitySql } from '../services/setListings.js';
 
 const PAYMENT_METHODS = new Set(['cod', 'gcash']);
 const roundMoney = (value) => Math.round(Number(value) * 100) / 100;
@@ -125,12 +126,12 @@ const formatAddress = (address) => [
 const loadAndReserveItems = async (client, items, expiresAt) => {
   const snapshots = [];
   let subtotal = 0;
+  const withSets = await hasSetListingSchema(client);
   for (const item of items) {
     const productResult = await client.query(
-      `SELECT p.*, el.visibility_status,
+      `SELECT p.*, ${storefrontVisibilitySql('p', withSets)} AS visibility_status,
               EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id) AS has_variants
        FROM products p
-       JOIN ecommerce_listings el ON el.inventory_item_id = p.id
        WHERE p.id = $1 AND COALESCE(p.is_deleted, false) = false FOR UPDATE OF p`,
       [item.product_id]
     );
@@ -1448,13 +1449,13 @@ export const validateDiscount = async (req, res) => {
     const items = normalizeItems(req.body?.items, { requireExpectedPrice: false });
     await client.query('BEGIN');
     let subtotal = 0;
+    const withSets = await hasSetListingSchema(client);
     for (const item of items) {
       const result = await client.query(
         `SELECT p.price, p.store_selling_price, pv.id AS matched_variant_id, pv.price AS variant_price, pv.price_adjustment
          FROM products p
-         JOIN ecommerce_listings el ON el.inventory_item_id = p.id
          LEFT JOIN product_variants pv ON pv.id = $2 AND pv.product_id = p.id
-         WHERE p.id = $1 AND p.inventory_status = 'active' AND el.visibility_status = 'active'
+         WHERE p.id = $1 AND p.inventory_status = 'active' AND ${storefrontVisibilitySql('p', withSets)} = 'active'
            AND COALESCE(p.is_deleted, false) = false`,
         [item.product_id, item.variant_id]
       );

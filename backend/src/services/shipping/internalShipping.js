@@ -1,4 +1,5 @@
 import { calculateEcommercePrice, resolveStoreSellingPrice } from '../catalogPricing.js';
+import { hasSetListingSchema, storefrontVisibilitySql } from '../setListings.js';
 
 const DEFAULTS = Object.freeze({
   metroManilaFee: 100,
@@ -194,13 +195,13 @@ export const calculateDatabaseShippingQuote = async (db, {
 
   let subtotal = 0;
   let actualWeightKg = 0;
+  const withSets = await hasSetListingSchema(db);
   for (const item of normalizedItems) {
     const productResult = await db.query(
       `SELECT p.id, p.name, p.price, p.store_selling_price, p.inventory_status, p.is_deleted, p.weight_kg,
-              el.visibility_status,
+              ${storefrontVisibilitySql('p', withSets)} AS visibility_status,
               EXISTS (SELECT 1 FROM product_variants pv WHERE pv.product_id = p.id) AS has_variants
        FROM products p
-       JOIN ecommerce_listings el ON el.inventory_item_id = p.id
        WHERE p.id = $1`,
       [item.product_id]
     );

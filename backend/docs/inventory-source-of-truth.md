@@ -39,3 +39,20 @@ source of truth by new APIs.
 Rack data is not introduced or rendered. If an older external import contains a
 combined location, only its box value should be copied to `box_location` during
 data cleanup; the application UI and APIs use Box Location only.
+
+## Set (grouped) storefront listings — `202610190001_set_storefront_listings.cjs`
+
+Additive and pending (not applied to the shared database during development).
+
+- `ecommerce_listings.listing_type` (`single` default | `set`), `title` and
+  `motorcycle_model_id` are added. `inventory_item_id` becomes nullable, but a
+  CHECK keeps every `single` listing bound to exactly one inventory item.
+- `ecommerce_listing_items (listing_id, product_item_id, sort_order)` links a set
+  to existing `products` rows. No product, price or stock is copied.
+- Child price/stock/availability are always read live from `products`. Cart and
+  checkout receive the real child `product_id`; `POST /cart/add` with
+  `listing_id` verifies membership in that active set.
+- Until the migration is applied, the API detects the missing relation table and
+  keeps legacy single-listing behaviour (set endpoints return empty/404/503).
+- Rollback deletes set listings and the relation table, then restores
+  `inventory_item_id NOT NULL`.
