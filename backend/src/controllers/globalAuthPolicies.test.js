@@ -98,6 +98,24 @@ test('successful authentication resets failure counters before responding', asyn
   assert.equal(f.user.login_lock_stage, 0); assert.equal(f.user.login_security_locked_at, null);
 });
 
+test('the exact configured threshold response immediately includes the authoritative lock timer', async () => {
+  const f = await fixture({ max_login_attempts: '5', lockout_duration_minutes: '15' });
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const res = response(); await auth.login(f.request('wrong'), res);
+    if (attempt < 5) {
+      assert.equal(res.statusCode, 401); assert.equal(res.body.code, 'INVALID_CREDENTIALS');
+    } else {
+      assert.equal(res.statusCode, 429); assert.equal(res.body.code, 'ACCOUNT_TEMPORARILY_LOCKED');
+      assert.ok(res.body.retry_after_seconds > 0 && Math.abs(res.body.retry_after_seconds - 900) <= 1);
+      assert.equal(Number(res['Retry-After']), res.body.retry_after_seconds);
+    }
+  }
+  const deadline = f.user.locked_until.getTime();
+  const retry = response(); await auth.login(f.request(), retry);
+  assert.equal(retry.statusCode, 429); assert.equal(retry.body.code, 'ACCOUNT_TEMPORARILY_LOCKED');
+  assert.equal(f.user.locked_until.getTime(), deadline); assert.equal(f.sessions.size, 0);
+});
+
 test('concurrent failures cannot skip a lock stage or extend a live pause; other browsers remain locked', async () => {
   const f = await fixture({ max_login_attempts: '5', lockout_duration_minutes: '3' });
   for (let stage = 1; stage <= 3; stage++) {
