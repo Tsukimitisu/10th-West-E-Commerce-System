@@ -80,19 +80,33 @@ export const createBackupService = ({ db, runtime, config, now = () => new Date(
     async status() {
       let readinessError = null;
       try { await runtime.ready(); } catch (error) { readinessError = safeFailure(error); }
+      const currentTime = now();
+      const schedule = config.enabled ? scheduleWindow(config, currentTime) : null;
       const result = await db.query(`SELECT
         (SELECT row_to_json(b) FROM backup_records b WHERE status='completed' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1) AS last_success,
         (SELECT row_to_json(b) FROM backup_records b WHERE status='failed' ORDER BY created_at DESC LIMIT 1) AS last_failure,
         (SELECT row_to_json(b) FROM backup_records b WHERE status IN ('queued','running') ORDER BY created_at DESC LIMIT 1) AS active,
-        (SELECT last_checked_at FROM backup_scheduler WHERE id=1) AS scheduler_last_checked_at`);
+        (SELECT last_checked_at FROM backup_scheduler WHERE id=1) AS scheduler_last_checked_at,
+        EXISTS (SELECT 1 FROM backup_records b WHERE b.backup_type = 'automatic' AND b.daily_key = $1
+          AND b.status = 'completed' AND b.deleted_at IS NULL) AS due_completed,
+        EXISTS (SELECT 1 FROM backup_records b WHERE b.backup_type = 'automatic' AND b.daily_key = $1
+          AND b.status = 'failed') AS due_failed`, [schedule?.dailyKey || null]);
       const row = result.rows[0] || {};
       const heartbeat = row.scheduler_last_checked_at;
+      // The external job runs once daily, around 15 minutes after the due time.
+      // A completed due day stays healthy; a fresh heartbeat cannot hide a
+      // missing backup after the 90-minute grace period.
+      const schedulerStatus = !config.enabled ? 'disabled'
+        : !heartbeat ? 'not_observed'
+          : row.due_completed ? 'healthy'
+            : row.due_failed ? 'failed'
+              : currentTime.getTime() >= new Date(schedule.due).getTime() + 90 * 60000 ? 'overdue' : 'healthy';
       return {
         configured: !readinessError, readiness_error: readinessError,
         automatic_enabled: config.enabled, cron: config.cron, timezone: config.timezone,
-        next_automatic_backup: config.enabled ? scheduleWindow(config, now()).next : null,
+        next_automatic_backup: schedule?.next || null,
         scheduler_last_checked_at: heartbeat || null,
-        scheduler_status: !config.enabled ? 'disabled' : !heartbeat ? 'not_observed' : now() - new Date(heartbeat) > 45 * 60000 ? 'overdue' : 'healthy',
+        scheduler_status: schedulerStatus,
         retention_days: config.retentionDays, storage: readinessError ? 'unavailable' : 'private', encrypted: true,
         last_success: publicBackup(row.last_success), last_failure: publicBackup(row.last_failure), active: publicBackup(row.active),
       };

@@ -66,7 +66,7 @@ export default function BackupRecoveryView() {
     {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {notice && <p role="status" className="text-sm text-slate-700">{notice}</p>}
     {status?.readiness_error && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{status.readiness_error}</p>}
-    {status?.automatic_enabled && status.scheduler_status !== 'healthy' && <p role="status" className="text-sm text-amber-900">Automatic scheduler {status.scheduler_status === 'overdue' ? 'is overdue' : 'has not been observed'}. Configure the external backup Cron Job; the web page does not run scheduled backups.</p>}
+    {status?.automatic_enabled && status.scheduler_status !== 'healthy' && <p role="status" className="text-sm text-amber-900">Automatic scheduler {status.scheduler_status === 'failed' ? 'reported a failed automatic backup' : status.scheduler_status === 'overdue' ? 'is overdue' : 'has not been observed'}. Check the latest backup result and external daily schedule; the web page does not run scheduled backups.</p>}
     <dl className="sa-backup-summary">
       <div><dt>Last successful backup</dt><dd>{status ? timestamp(status.last_success?.completed_at) : 'Unavailable'}</dd></div>
       <div><dt>Next automatic backup</dt><dd>{status?.next_automatic_backup ? `${timestamp(status.next_automatic_backup, status.timezone)} (${status.timezone})` : status ? 'Disabled' : 'Unavailable'}</dd></div>
