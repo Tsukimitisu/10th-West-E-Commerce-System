@@ -62,6 +62,7 @@ test('healthy database wrong password returns exact INVALID_CREDENTIALS contract
         }],
       };
     }
+    if (text.includes('SELECT login_lock_stage')) return { rows: [] };
     if (text.includes('INSERT INTO login_attempts')) return { rows: [], rowCount: 1 };
     throw new Error('Unexpected query in wrong-password test');
   });
@@ -84,6 +85,7 @@ test('healthy database missing user returns the same INVALID_CREDENTIALS contrac
     if (text.includes('UPDATE users SET')) return { rows: [], rowCount: 1 };
     if (text.includes('SELECT COUNT(*)')) return { rows: [{ cnt: '0' }] };
     if (text.includes('FROM users') && text.includes('WHERE users.email = $1')) return { rows: [] };
+    if (text.includes('SELECT login_lock_stage')) return { rows: [] };
     if (text.includes('INSERT INTO login_attempts')) return { rows: [], rowCount: 1 };
     throw new Error('Unexpected query in missing-user test');
   });
@@ -152,7 +154,7 @@ test('concurrent password resets consume a hashed token only once and store bcry
       assert.match(params[0], /^[a-f0-9]{64}$/); if (++readers === 2) release(); await gate;
       return { rows: [{ id: 17, name: 'Rider', password_hash: null }] };
     }
-    if (String(sql).startsWith('UPDATE users SET password_hash')) {
+    if (String(sql).includes('UPDATE users SET password_hash')) {
       if (String(sql).includes('AND password_reset_token = $3')) { if (consumed) return { rows: [], rowCount: 0 }; consumed = true; }
       savedHash = params[0]; return { rows: [], rowCount: 1 };
     }

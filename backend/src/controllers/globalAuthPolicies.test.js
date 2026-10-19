@@ -27,12 +27,12 @@ test('registration honors the saved minimum password length', async () => {
   assert.equal(validationResult(req).array().some(error => error.path === 'password'), true);
 });
 
-const response = () => ({ statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
+const response = () => ({ statusCode: 200, status(code) { this.statusCode = code; return this; }, set(key, value) { this[key] = value; return this; }, json(body) { this.body = body; return this; } });
 const session = () => ({ cookie: { maxAge: 7 * 86400000 }, save(done) { done(); }, regenerate(done) { delete this.auth; done(); } });
 const password = 'CorrectPass123!';
 const fixture = async (settings = {}) => {
   const user = { id: 11, email: 'rider@example.test', role: 'customer', name: 'Test Rider', is_active: true, email_verified: true,
-    password_hash: await bcrypt.hash(password, 4), login_attempts: 0, locked_until: null, two_factor_enabled: false };
+    password_hash: await bcrypt.hash(password, 4), login_attempts: 0, locked_until: null, login_lock_stage: 0, login_security_locked_at: null, two_factor_enabled: false };
   const queries = [], sessions = new Map();
   mock.method(pool, 'query', async (sql, args = []) => {
     queries.push({ sql, args });
@@ -50,16 +50,20 @@ const fixture = async (settings = {}) => {
     if (sql.includes('FROM users')) return { rows: [{ ...user }] };
     if (sql.includes('INSERT INTO sessions')) { sessions.set(args[1], { active: true, created: Date.now() }); return { rows: [], rowCount: 1 }; }
     if (sql.includes('UPDATE sessions SET is_active')) { if (sessions.has(args[0])) sessions.get(args[0]).active = false; return { rows: [], rowCount: 1 }; }
-    if (sql.includes('UPDATE users SET\n         login_attempts')) {
+    if (sql.includes('UPDATE users SET\n    login_attempts')) {
       assert.match(sql, /locked_until IS NULL OR locked_until <= NOW/);
-      if (!user.locked_until || user.locked_until <= new Date()) {
+      if (!user.login_security_locked_at && (!user.locked_until || user.locked_until <= new Date())) {
         user.login_attempts = user.locked_until ? 1 : user.login_attempts + 1;
-        user.locked_until = user.login_attempts >= args[1] ? new Date(Date.now() + args[2] * 60000) : null;
+        const stage = user.login_lock_stage;
+        user.locked_until = user.login_attempts >= args[1] && stage < 2 ? new Date(Date.now() + args[2] * (stage + 1) * 60000) : null;
+        if (user.login_attempts >= args[1]) user.login_lock_stage++;
+        if (user.login_lock_stage === 3) user.login_security_locked_at = new Date();
       }
     }
+    if (sql.includes('UPDATE users SET\n    login_attempts')) return { rows: [{ ...user }], rowCount: 1 };
     if (sql.includes('SET login_attempts = 0')) {
-      if (user.locked_until > new Date()) return { rows: [], rowCount: 0 };
-      user.login_attempts = 0; user.locked_until = null;
+      if (user.login_security_locked_at || user.locked_until > new Date()) return { rows: [], rowCount: 0 };
+      user.login_attempts = 0; user.locked_until = null; user.login_lock_stage = 0; user.login_security_locked_at = null;
     }
     if (sql.includes('SET two_factor_secret=')) user.two_factor_secret = args[0];
     if (sql.includes('SET two_factor_enabled=true')) { user.two_factor_enabled = true; user.two_factor_recovery_hashes = JSON.parse(args[1]); }
@@ -80,16 +84,40 @@ test('saved lockout threshold/duration apply; attempts below threshold remain un
   await auth.login(f.request('wrong'), response()); assert.equal(f.user.login_attempts, 2);
   assert.ok(f.user.locked_until.getTime() >= Date.now() + 6.9 * 60000);
   const locked = response(); await auth.login(f.request(), locked);
-  assert.equal(locked.statusCode, 401); assert.equal(locked.body.message, 'Invalid email or password');
+  assert.equal(locked.statusCode, 429); assert.equal(locked.body.code, 'ACCOUNT_TEMPORARILY_LOCKED');
+  assert.equal(Number(locked['Retry-After']), locked.body.retry_after_seconds);
   assert.equal(f.sessions.size, 0);
   f.user.locked_until = new Date(Date.now() - 1);
   const unlocked = response(); await auth.login(f.request(), unlocked);
   assert.equal(unlocked.statusCode, 200); assert.equal(f.user.login_attempts, 0); assert.equal(f.user.locked_until, null);
 });
 test('successful authentication resets failure counters before responding', async () => {
-  const f = await fixture(); f.user.login_attempts = 3;
+  const f = await fixture(); f.user.login_attempts = 3; f.user.login_lock_stage = 2; f.user.locked_until = new Date(0);
   const res = response(); await auth.login(f.request(), res);
   assert.equal(res.statusCode, 200); assert.equal(f.user.login_attempts, 0);
+  assert.equal(f.user.login_lock_stage, 0); assert.equal(f.user.login_security_locked_at, null);
+});
+
+test('concurrent failures cannot skip a lock stage or extend a live pause; other browsers remain locked', async () => {
+  const f = await fixture({ max_login_attempts: '5', lockout_duration_minutes: '3' });
+  for (let stage = 1; stage <= 3; stage++) {
+    const responses = Array.from({ length: 8 }, response);
+    await Promise.all(responses.map((res, index) => {
+      const req = f.request('wrong'); req.clientIp = `192.0.2.${index}`; return auth.login(req, res);
+    }));
+    assert.equal(f.user.login_lock_stage, stage);
+    assert.equal(f.user.login_attempts, 5);
+    const correct = response(); await auth.login(f.request(), correct);
+    assert.equal(correct.body.code, stage === 3 ? 'ACCOUNT_RECOVERY_REQUIRED' : 'ACCOUNT_TEMPORARILY_LOCKED');
+    assert.equal(f.sessions.size, 0);
+    if (stage < 3) {
+      const deadline = f.user.locked_until.getTime();
+      const again = response(); await auth.login(f.request('wrong'), again);
+      assert.equal(f.user.locked_until.getTime(), deadline);
+      assert.ok(Math.abs(correct.body.retry_after_seconds - stage * 180) <= 1);
+      f.user.locked_until = new Date(0);
+    }
+  }
 });
 test('Customer, Staff, Owner and Super Admin retain normal password login when 2FA is optional', async () => {
   const f = await fixture();

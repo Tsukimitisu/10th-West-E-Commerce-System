@@ -1,3 +1,4 @@
+import { recordPasswordFailure, loginLockResponse } from '../services/loginLockout.js';
 import { securityPolicy, passwordPolicyError, policyUser } from '../services/securityPolicy.js';
 import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
@@ -474,24 +475,14 @@ const recordLoginAttempt = async (email, ip, success, policy = null) => {
   await pool.query('INSERT INTO login_attempts (email, ip_address, success) VALUES ($1, $2, $3)', [email, ip, success]);
   if (!success) {
     policy ||= await securityPolicy.get();
-    // One atomic row update serializes concurrent failures. A live lock is never
-    // extended by more attempts; the first failure after expiry starts at one.
-    await pool.query(
-      `UPDATE users SET
-         login_attempts = CASE WHEN locked_until <= NOW() THEN 1 ELSE COALESCE(login_attempts, 0) + 1 END,
-         locked_until = CASE WHEN
-           (CASE WHEN locked_until <= NOW() THEN 1 ELSE COALESCE(login_attempts, 0) + 1 END) >= $2
-           THEN NOW() + make_interval(mins => $3) ELSE NULL END
-       WHERE LOWER(email) = LOWER($1) AND (locked_until IS NULL OR locked_until <= NOW())`,
-      [email, policy.max_login_attempts, policy.lockout_duration_minutes]
-    );
+    return recordPasswordFailure(email, policy);
   }
 };
 const invalidCredentials = res => res.status(401).json({ message: 'Invalid email or password', code: 'INVALID_CREDENTIALS' });
 const resetLoginState = async user => {
   const result = await pool.query(
-    `UPDATE users SET login_attempts = 0, locked_until = NULL, last_login = NOW()
-     WHERE id = $1 AND (locked_until IS NULL OR locked_until <= NOW()) RETURNING id`, [user.id]);
+    `UPDATE users SET login_attempts = 0, locked_until = NULL, login_lock_stage = 0, login_security_locked_at = NULL, last_login = NOW()
+     WHERE id = $1 AND login_security_locked_at IS NULL AND login_lock_stage < 3 AND (locked_until IS NULL OR locked_until <= NOW()) RETURNING id`, [user.id]);
   return result.rowCount !== 0;
 };
 
@@ -522,9 +513,11 @@ export const challenge2FA = async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     const user = result.rows[0];
-    if (!user?.two_factor_enabled || (user.locked_until && new Date(user.locked_until) > new Date())) return invalidCredentials(res);
+    if (!user?.two_factor_enabled) return invalidCredentials(res);
+    if (loginLockResponse(res, user)) return;
     if (!await verifySecondFactor(user, req.body?.totp_code, req.body?.recovery_code)) {
-      await recordLoginAttempt(user.email, req.clientIp, false);
+      const lock = await recordLoginAttempt(user.email, req.clientIp, false);
+      if (loginLockResponse(res, lock)) return;
       await logActivity({ userId: user.id, action: 'login_2fa_failed', ipAddress: req.clientIp, userAgent: req.clientUa });
       return res.status(401).json({ message: 'Invalid two-factor authentication code.', code: 'TWO_FACTOR_INVALID' });
     }
@@ -908,15 +901,12 @@ export const login = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      await recordLoginAttempt(email, ipAddress, false);
-      return res.status(401).json({
-        message: 'Invalid email or password',
-        code: 'INVALID_CREDENTIALS',
-      });
+      const lock = await recordLoginAttempt(email, ipAddress, false, policy);
+      return loginLockResponse(res, lock) || invalidCredentials(res);
     }
 
     const user = result.rows[0];
-    if (user.locked_until && new Date(user.locked_until).getTime() > Date.now()) return invalidCredentials(res);
+    if (loginLockResponse(res, user)) return;
 
     if (!user.is_active || user.is_deleted) {
       return invalidCredentials(res);
@@ -925,11 +915,8 @@ export const login = async (req, res) => {
     const isValid = await bcrypt.compare(password, user.password_hash || '');
 
     if (!isValid) {
-      await recordLoginAttempt(email, ipAddress, false);
-      return res.status(401).json({
-        message: 'Invalid email or password',
-        code: 'INVALID_CREDENTIALS',
-      });
+      const lock = await recordLoginAttempt(email, ipAddress, false, policy);
+      return loginLockResponse(res, lock) || invalidCredentials(res);
     }
 
     if (!user.email_verified) {
@@ -951,7 +938,8 @@ export const login = async (req, res) => {
       }
 
       if (!await verifySecondFactor(user, totpCode, recoveryCode)) {
-        await recordLoginAttempt(email, ipAddress, false);
+        const lock = await recordLoginAttempt(email, ipAddress, false, policy);
+        if (loginLockResponse(res, lock)) return;
         await logActivity({ userId: user.id, action: 'login_2fa_failed', ipAddress, userAgent });
         return res.status(401).json({ message: 'Invalid two-factor authentication code.', code: 'TWO_FACTOR_INVALID', requires_2fa: true });
       }
@@ -1233,7 +1221,7 @@ export const resetPassword = async (req, res) => {
 
     // Atomically consume the token: two concurrent requests cannot both reset.
     const updated = await pool.query(
-      'UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, failed_login_attempts = 0, login_attempts = 0, locked_until = NULL WHERE id = $2 AND password_reset_token = $3 AND password_reset_expires > NOW()',
+      `WITH reset_user AS (UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, failed_login_attempts = 0, login_attempts = 0, locked_until = NULL, login_lock_stage = 0, login_security_locked_at = NULL WHERE id = $2 AND password_reset_token = $3 AND password_reset_expires > NOW() RETURNING id), consumed AS (UPDATE password_reset_sms_challenges SET consumed_at = NOW() WHERE user_id IN (SELECT id FROM reset_user)) SELECT id FROM reset_user`,
       [hashedPassword, user.id, hashedToken]
     );
     if (updated.rowCount !== 1) return res.status(400).json({ message: 'Invalid or expired reset token' });
@@ -1361,14 +1349,15 @@ export const verify2FA = async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
 
     if (result.rows[0].two_factor_enabled) return res.status(409).json({ message: 'Two-factor authentication is already enabled. Use the challenge endpoint.' });
-    if (result.rows[0].locked_until && new Date(result.rows[0].locked_until) > new Date()) return invalidCredentials(res);
+    if (loginLockResponse(res, result.rows[0])) return;
     const encryptedSecret = result.rows[0].two_factor_secret;
     if (!encryptedSecret) return res.status(400).json({ message: 'No 2FA setup in progress' });
     const secret = decryptTwoFactorSecret(encryptedSecret);
 
     const verified = speakeasy.totp.verify({ secret, encoding: 'base32', token: totp_code, window: 1 });
     if (!verified) {
-      await recordLoginAttempt(result.rows[0].email, req.clientIp, false);
+      const lock = await recordLoginAttempt(result.rows[0].email, req.clientIp, false);
+      if (loginLockResponse(res, lock)) return;
       return res.status(400).json({ message: 'Invalid code. Try again.' });
     }
 

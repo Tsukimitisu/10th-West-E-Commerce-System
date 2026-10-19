@@ -1,3 +1,4 @@
+import useCountdown from '../hooks/useCountdown.js';
 import { customerReturnTo } from '../utils/customerReturnTo.js';
 ﻿import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -48,6 +49,7 @@ const FACEBOOK_REASON_MESSAGES = {
 };
 
 const Login = ({ onLogin }) => {
+  const [accountLock, setAccountLock] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -69,6 +71,10 @@ const Login = ({ onLogin }) => {
       ? 'You were signed out due to inactivity.'
       : '';
   const pageError = queryErrorMessage;
+  const sameIdentifier = accountLock?.identifier === email.trim().toLowerCase();
+  const { seconds: lockSeconds, formatted: lockTime } = useCountdown(sameIdentifier ? accountLock?.deadline : null);
+  const recoveryRequired = sameIdentifier && accountLock?.recovery;
+  const loginBlocked = lockSeconds > 0 || recoveryRequired;
 
   React.useEffect(() => {
     const queryError = searchParams.get('error');
@@ -104,6 +110,7 @@ const Login = ({ onLogin }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loginBlocked) return;
     setError('');
     setQueryErrorMessage('');
     setNeedsVerification(false);
@@ -130,7 +137,10 @@ const Login = ({ onLogin }) => {
       else if (defaultRedirect === '/') redirect = '/';
       navigate(redirect);
     } catch (err) {
-      setError(getLoginSubmissionErrorMessage(err));
+      if (['ACCOUNT_TEMPORARILY_LOCKED', 'ACCOUNT_RECOVERY_REQUIRED'].includes(err.code)) {
+        setAccountLock({ identifier: email.trim().toLowerCase(), recovery: err.code === 'ACCOUNT_RECOVERY_REQUIRED',
+          deadline: err.code === 'ACCOUNT_TEMPORARILY_LOCKED' ? Date.now() + Number(err.retry_after_seconds) * 1000 : null });
+      } else setError(getLoginSubmissionErrorMessage(err));
       if (err.requiresVerification || err.code === 'EMAIL_NOT_VERIFIED') {
         setNeedsVerification(true);
         setVerificationEmail(err.email || email);
@@ -199,6 +209,12 @@ const Login = ({ onLogin }) => {
             </div>
           )}
 
+          {loginBlocked && <section className="mb-4 rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm text-slate-900">
+            <h2 className="font-semibold">{recoveryRequired ? 'Sign-in temporarily disabled' : 'Too many failed attempts'}</h2>
+            <p className="mt-2 leading-6">{recoveryRequired ? 'Too many unsuccessful sign-in attempts were detected. To protect your account, verify your identity and reset your password before signing in again.' : 'For your security, sign-in has been temporarily paused.'}</p>
+            {!recoveryRequired && <p className="mt-2" aria-live="polite" aria-atomic="true">Try again in <strong className="tabular-nums">{lockTime}</strong></p>}
+            <div className="mt-2 flex flex-wrap gap-x-5"><Link to="/forgot-password" className="inline-flex min-h-11 items-center font-semibold text-orange-800">Reset Password</Link>{recoveryRequired && <Link to="/contact" className="inline-flex min-h-11 items-center font-medium text-slate-700">Contact Support</Link>}</div>
+          </section>}
           {error && (
             <div role="alert" className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-700 flex flex-col gap-2">
               <div className="flex items-center gap-2">
@@ -267,9 +283,9 @@ const Login = ({ onLogin }) => {
                     </button>
                   </div>
                 </div>
-                <button type="submit" disabled={loading}
+                <button type="submit" disabled={loading || loginBlocked}
                   className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
-                  {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>Sign In <ArrowRight size={16} /></>}
+                  {loginBlocked ? (recoveryRequired ? 'Reset password to continue' : `Try again in ${lockTime}`) : loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>Sign In <ArrowRight size={16} /></>}
                 </button>
               </form>
             </>
@@ -288,7 +304,7 @@ const Login = ({ onLogin }) => {
                   placeholder="000000" autoFocus
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 text-center font-mono text-2xl tracking-[0.5em] text-slate-950 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
                 />
-                <button type="submit" disabled={loading || totpCode.length !== 6}
+                <button type="submit" disabled={loading || loginBlocked || totpCode.length !== 6}
                   className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors text-sm">
                   {loading ? 'Verifying...' : 'Verify Code'}
                 </button>
