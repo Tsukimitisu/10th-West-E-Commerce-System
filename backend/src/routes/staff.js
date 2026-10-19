@@ -32,7 +32,7 @@ router.post('/',
 );
 router.put('/:id',
   body('name').trim().notEmpty(),
-  body('email').isEmail(),
+  body('email').not().exists().withMessage('User email cannot be changed from administration.'),
   body('role').isIn(['admin', 'owner', 'store_staff', 'cashier']),
   validate,
   editStaff

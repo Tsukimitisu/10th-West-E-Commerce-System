@@ -1,3 +1,4 @@
+import { lockedAccountSummary, maskEmail } from '../utils/masking.js';
 import { adminMutationLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import bcrypt from 'bcryptjs';
@@ -172,16 +173,16 @@ router.get('/users', async (req, res) => {
     const params = [];
 
     if (role) { params.push(role); where.push(`role = $${params.length}`); }
-    if (status === 'active') where.push('is_active = true AND locked_until IS NULL');
+    if (status === 'active') where.push('is_active = true AND login_security_locked_at IS NULL AND (locked_until IS NULL OR locked_until <= NOW())');
     if (status === 'inactive') where.push('is_active = false');
-    if (status === 'locked') where.push('locked_until IS NOT NULL AND locked_until > NOW()');
+    if (status === 'locked') where.push('(login_security_locked_at IS NOT NULL OR locked_until > NOW())');
     if (search) { params.push(`%${search}%`); where.push(`(name ILIKE $${params.length} OR email ILIKE $${params.length})`); }
 
     const whereClause = where.join(' AND ');
     const countResult = await pool.query(`SELECT COUNT(*) FROM users WHERE ${whereClause}`, params);
     params.push(limit, offset);
     const result = await pool.query(
-      `SELECT id, name, email, role, phone, is_active, login_attempts, locked_until, two_factor_enabled, last_login, created_at
+      `SELECT id, name, email, role, phone, is_active, login_attempts, locked_until, login_lock_stage, login_security_locked_at, two_factor_enabled, last_login, created_at
        FROM users WHERE ${whereClause} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params
     );
 
@@ -196,9 +197,9 @@ router.get('/users', async (req, res) => {
 router.patch('/users/:id/lock', async (req, res) => {
   try {
     const { id } = req.params;
-    // Lock indefinitely (far future date)
+    // Authentication protection is separate from business account deactivation.
     await pool.query(
-      `UPDATE users SET is_active = false, locked_until = NOW() + INTERVAL '100 years' WHERE id = $1`, [id]
+      `UPDATE users SET login_lock_stage = 3, login_security_locked_at = NOW(), locked_until = NULL WHERE id = $1`, [id]
     );
     // Invalidate all sessions
     await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [id]);
@@ -219,11 +220,11 @@ router.patch('/users/:id/unlock', async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query(
-      'UPDATE users SET is_active = true, locked_until = NULL, login_attempts = 0 WHERE id = $1', [id]
+      'UPDATE users SET locked_until = NULL, login_attempts = 0, login_lock_stage = 0, login_security_locked_at = NULL WHERE id = $1', [id]
     );
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'admin_unlock_user', JSON.stringify({ unlocked_user_id: parseInt(id) }), req.ip]
+      [req.user.id, 'account_security_unlock', JSON.stringify({ unlocked_user_id: parseInt(id) }), req.ip]
     );
     res.json({ message: 'User account unlocked' });
   } catch (err) {
@@ -240,7 +241,7 @@ router.post('/users/:id/reset-password', async (req, res) => {
     try { await validatePolicyPassword(newPassword); }
     catch (error) { return res.status(400).json({ message: error.message }); }
     const hash = await bcrypt.hash(newPassword, 12);
-    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, id]);
+    await pool.query(`WITH changed AS (UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, login_attempts = 0, locked_until = NULL, login_lock_stage = 0, login_security_locked_at = NULL WHERE id = $2 RETURNING id) UPDATE password_reset_sms_challenges SET consumed_at = NOW() WHERE user_id IN (SELECT id FROM changed)`, [hash, id]);
     // Invalidate all sessions so user must re-login
     await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [id]);
     await pool.query(
@@ -450,7 +451,7 @@ router.get('/security/login-attempts', async (req, res) => {
       FROM login_attempts
     `);
     const lockedResult = await pool.query(
-      "SELECT COUNT(*) FROM users WHERE locked_until IS NOT NULL AND locked_until > NOW()"
+      "SELECT COUNT(*) FROM users WHERE COALESCE(is_deleted, false) = false AND (login_security_locked_at IS NOT NULL OR locked_until > NOW())"
     );
     res.json({
       attempts: result.rows,
@@ -519,8 +520,8 @@ router.get('/logs/suspicious', async (req, res) => {
     `);
     // Recently locked accounts
     const lockedAccounts = await pool.query(`
-      SELECT id, name, email, login_attempts, locked_until, last_login
-      FROM users WHERE locked_until IS NOT NULL AND locked_until > NOW()
+      SELECT id, email, role, login_attempts, login_lock_stage, login_security_locked_at, locked_until
+      FROM users WHERE COALESCE(is_deleted, false) = false AND (login_security_locked_at IS NOT NULL OR locked_until > NOW())
       ORDER BY locked_until DESC LIMIT 20
     `);
     // Unusual admin activity (bulk operations)
@@ -534,8 +535,9 @@ router.get('/logs/suspicious', async (req, res) => {
       ORDER BY op_count DESC LIMIT 20
     `);
     res.json({
-      failed_login_clusters: failedLogins.rows,
-      locked_accounts: lockedAccounts.rows,
+      failed_login_clusters: failedLogins.rows.map(row => ({ ...row, targeted_emails: (row.targeted_emails || []).map(maskEmail) })),
+      locked_accounts: lockedAccounts.rows.map(lockedAccountSummary),
+      server_time: new Date().toISOString(),
       bulk_operations: bulkOps.rows,
     });
   } catch (err) {

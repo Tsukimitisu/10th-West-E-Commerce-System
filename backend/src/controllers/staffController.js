@@ -1,6 +1,7 @@
 import pool from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import { logActivity } from '../middleware/activityLogger.js';
+import { validatePolicyPassword } from '../services/securityPolicy.js';
 
 const STAFF_ROLES = ['admin', 'owner', 'store_staff', 'cashier'];
 const DELEGATED_STAFF_ROLES = ['store_staff', 'cashier'];
@@ -133,7 +134,8 @@ export const addStaff = async (req, res) => {
 
 // ─── EDIT STAFF ────────────────────────────────────────────────────
 export const editStaff = async (req, res) => {
-  const { name, email, role, phone, password } = req.body;
+  const { name, role, phone, password } = req.body;
+  if (Object.hasOwn(req.body, 'email')) return res.status(400).json({ message: 'User email cannot be changed from administration.' });
 
   try {
     if (!STAFF_ROLES.includes(role) || !canManageRole(req.user.role, role)) {
@@ -151,27 +153,34 @@ export const editStaff = async (req, res) => {
       return res.status(403).json({ message: 'You cannot modify this account.' });
     }
 
-    let query = 'UPDATE users SET name = $1, email = $2, role = $3, phone = $4, updated_at = NOW()';
-    const params = [name, email, role, phone];
-    let idx = 5;
+    let query = 'UPDATE users SET name = $1, role = $2, phone = $3, updated_at = NOW()';
+    const params = [name, role, phone];
+    let idx = 4;
 
     if (password) {
+      try { await validatePolicyPassword(password); }
+      catch (error) { return res.status(400).json({ message: error.message }); }
       const hashedPassword = await bcrypt.hash(password, 12);
-      query += `, password_hash = $${idx++}`;
+      query += `, password_hash = $${idx++}, password_reset_token = NULL, password_reset_expires = NULL,
+        login_attempts = 0, locked_until = NULL, login_lock_stage = 0, login_security_locked_at = NULL`;
       params.push(hashedPassword);
     }
 
     query += ` WHERE id = $${idx} RETURNING id, name, email, role, phone, is_active, created_at`;
     params.push(req.params.id);
 
+    if (password) query = `WITH changed AS (${query}), consumed AS (
+      UPDATE password_reset_sms_challenges SET consumed_at = NOW() WHERE user_id IN (SELECT id FROM changed)
+    ) SELECT * FROM changed`;
     const result = await pool.query(query, params);
+    if (password) await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [req.params.id]);
 
     await logActivity({
       userId: req.user.id,
       action: 'staff_edited',
       entityType: 'user',
       entityId: parseInt(req.params.id),
-      details: { name, email, role, passwordChanged: !!password },
+      details: { name, role, passwordChanged: !!password },
       ipAddress: req.clientIp,
       userAgent: req.clientUa,
     });

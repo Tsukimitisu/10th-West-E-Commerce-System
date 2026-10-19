@@ -1,3 +1,4 @@
+import LockedAccount from '../../components/superadmin/LockedAccount.jsx';
 import AdminTabs from '../../components/superadmin/AdminTabs';
 ﻿import React, { useEffect, useState } from 'react';
 import {
@@ -7,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
   getSecuritySettings, updateSecuritySettings,
-  getLoginAttempts, getSuspiciousActivity, getSystemHealth
+  getLoginAttempts, getSuspiciousActivity, getSystemHealth, adminUnlockUser
 } from '../../services/api';
 import PageHeader from '../../components/operations/PageHeader';
 import ServiceHealth from '../../components/operations/ServiceHealth';
@@ -38,6 +39,7 @@ const SystemSecurityView = () => {
   const [loginAttempts, setLoginAttempts] = useState([]);
   const [loginStats, setLoginStats] = useState({ today_total: 0, today_failed: 0, locked_accounts: 0 });
   const [suspicious, setSuspicious] = useState({ failed_login_clusters: [], locked_accounts: [], bulk_operations: [] });
+  const [unlocking, setUnlocking] = useState(null);
   const [loginFilter, setLoginFilter] = useState('all');
 
   useEffect(() => {
@@ -54,7 +56,7 @@ const SystemSecurityView = () => {
         }
         if (loginData?.attempts) setLoginAttempts(loginData.attempts);
         if (loginData?.stats) setLoginStats(loginData.stats);
-        if (suspiciousData) setSuspicious(suspiciousData);
+        if (suspiciousData) setSuspicious({ ...suspiciousData, receivedAt: Date.now() });
       } catch { setLoadFailed(true); setError('Security settings could not be loaded. Refresh before making changes.'); }
       setLoading(false);
     })();
@@ -71,6 +73,14 @@ const SystemSecurityView = () => {
     setSaving(false);
   };
 
+  const unlockAccount = async id => {
+    if (!window.confirm('Unlock password sign-in for this account?')) return;
+    setUnlocking(id);
+    try { await adminUnlockUser(id); await refreshLoginData(); }
+    catch { setError('Account could not be unlocked. Please retry.'); }
+    finally { setUnlocking(null); }
+  };
+
   const refreshLoginData = async () => {
     try {
       const [loginData, suspiciousData] = await Promise.all([
@@ -79,7 +89,7 @@ const SystemSecurityView = () => {
       ]);
       if (loginData?.attempts) setLoginAttempts(loginData.attempts);
       if (loginData?.stats) setLoginStats(loginData.stats);
-      if (suspiciousData) setSuspicious(suspiciousData);
+      if (suspiciousData) setSuspicious({ ...suspiciousData, receivedAt: Date.now() });
     } catch (failure) { setError(failure.message || 'Security operation failed. Please retry.'); }
   };
 
@@ -117,7 +127,7 @@ const SystemSecurityView = () => {
       />
 
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      {['lockout','password','2fa'].includes(tab) && <p role="note" className="rounded-lg border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-600">Saved policies apply to authentication within 30 seconds. Session timeout is the maximum session lifetime; a shorter idle logout still applies. Required two-factor authentication guides users through setup or verification before granting system access. Existing account forms may apply stricter client checks when password rules are relaxed.</p>}
+      {['lockout','password','2fa'].includes(tab) && <p role="note" className="rounded-lg border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-600">Saved policies apply to authentication within 30 seconds. Session timeout is the maximum session lifetime; a shorter idle logout still applies. Required two-factor authentication guides users through setup or verification before granting system access. Password forms use the effective saved password requirements.</p>}
       {/* Tabs */}
       <AdminTabs label="Security category" items={tabs} value={tab} onChange={setTab}>
 
@@ -132,13 +142,13 @@ const SystemSecurityView = () => {
               <label htmlFor="security-max_login_attempts" className="text-xs text-gray-400 mb-2 block">Max Login Attempts</label>
               <input type="number" min="1" max="20" id="security-max_login_attempts" value={config.max_login_attempts} onChange={(e) => setConfig({ ...config, max_login_attempts: e.target.value })}
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
-              <p className="text-[10px] text-gray-400 mt-1">Number of failed attempts before account is locked</p>
+              <p className="text-[10px] text-gray-400 mt-1">Each expired pause gives a fresh set of attempts.</p>
             </div>
             <div>
               <label htmlFor="security-lockout_duration_minutes" className="text-xs text-gray-400 mb-2 block">Lockout Duration (minutes)</label>
               <input type="number" min="1" max="1440" id="security-lockout_duration_minutes" value={config.lockout_duration_minutes} onChange={(e) => setConfig({ ...config, lockout_duration_minutes: e.target.value })}
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
-              <p className="text-[10px] text-gray-400 mt-1">How long the account stays locked after reaching max attempts</p>
+              <p className="text-[10px] text-gray-400 mt-1">Base pause duration; the second pause lasts twice as long.</p>
             </div>
             <div>
               <label htmlFor="security-session_timeout_minutes" className="text-xs text-gray-400 mb-2 block">Session Timeout (minutes)</label>
@@ -146,6 +156,12 @@ const SystemSecurityView = () => {
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
               <p className="text-[10px] text-gray-400 mt-1">Sessions cannot exceed this lifetime; shorter idle logout still applies</p>
             </div>
+          </div>
+          <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm leading-6 text-slate-800">
+            <p className="font-semibold">Progressive protection</p>
+            <ul className="mt-2 list-disc pl-5"><li>{config.max_login_attempts} failed attempts → {config.lockout_duration_minutes}-minute pause</li>
+              <li>Next {config.max_login_attempts} failures → {Number(config.lockout_duration_minutes) * 2}-minute pause</li>
+              <li>Next {config.max_login_attempts} failures → account recovery required</li></ul>
           </div>
         </div>
       )}
@@ -307,18 +323,8 @@ const SystemSecurityView = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                {suspicious.locked_accounts.map((a, idx) => (
-                  <div key={idx} className="flex items-center justify-between bg-red-500/10 border border-red-100 rounded-lg px-4 py-3">
-                    <div>
-                      <p className="text-sm text-white font-medium">{a.name}</p>
-                      <p className="text-[10px] text-gray-400">{a.email}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-red-500">{a.login_attempts} failed attempts</p>
-                      <p className="text-[10px] text-gray-400">Locked until: {a.locked_until ? new Date(a.locked_until).toLocaleString() : 'Indefinite'}</p>
-                    </div>
-                  </div>
-                ))}
+                {suspicious.locked_accounts.map(account => <LockedAccount key={`${account.id}-${account.locked_until || 'recovery'}`} account={account} threshold={config.max_login_attempts}
+                  serverOffset={new Date(suspicious.server_time).getTime() - suspicious.receivedAt || 0} onExpire={refreshLoginData} onUnlock={unlockAccount} busy={unlocking === account.id} />)}
               </div>
             )}
           </div>

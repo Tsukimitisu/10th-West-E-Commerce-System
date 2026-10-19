@@ -120,7 +120,7 @@ const UserManagementView = () => {
     if (!form.name || !form.email) return showMessage('error', 'Name and email are required');
     setActionLoading('edit');
     try {
-      await editStaff(selectedUser.id, { name: form.name, email: form.email, phone: form.phone, role: form.role });
+      await editStaff(selectedUser.id, { name: form.name, phone: form.phone, role: form.role });
       showMessage('success', 'User updated');
       setShowModal(null);
       loadUsers();
@@ -167,7 +167,7 @@ const UserManagementView = () => {
     return <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${r.color}`}>{r.label}</span>;
   };
 
-  const isLocked = (user) => user.locked_until && new Date(user.locked_until) > new Date();
+  const isLocked = (user) => Boolean(user.login_security_locked_at || user.login_lock_stage >= 3 || (user.locked_until && new Date(user.locked_until) > new Date()));
   const userActions = (user) => [
     { label: 'View account', icon: Eye, onClick: () => openView(user) },
     { label: 'Edit user', icon: Edit3, onClick: () => openEdit(user) },
@@ -363,9 +363,11 @@ const UserManagementView = () => {
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
                   </div>
                   <div>
+                    {showModal === 'edit' ? <><p className="text-xs text-gray-400 mb-1">Email</p><p className="break-all text-sm text-slate-950">{form.email}</p><p className="mt-1 text-xs text-slate-500">Verified account identifier</p></> : <>
                     <label htmlFor="managed-user-email" className="text-xs text-gray-400 mb-1 block">Email *</label>
                     <input type="email" id="managed-user-email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@10thwest.com"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                    </>}
                   </div>
                   <div>
                     <label htmlFor="managed-user-phone" className="text-xs text-gray-400 mb-1 block">Phone</label>

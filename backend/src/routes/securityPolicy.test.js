@@ -17,6 +17,7 @@ before(async () => {
   mock.method(pool, 'query', async (sql, args = []) => {
     queries.push({ sql, args });
     if (sql.includes('SELECT id FROM sessions')) return { rows: [{ id: 1 }] };
+    if (sql.includes('SELECT id, email, role, login_attempts')) return { rows: [{ id: 1, email: 'private@example.test', role: 'customer', login_attempts: 5, login_lock_stage: 3, login_security_locked_at: new Date(), locked_until: null }] };
     if (sql.includes('FROM users')) return { rows: [{ id: args[0], role: roles[args[0] - 1], is_active: true, email_verified: true }] };
     if (sql.includes('FROM system_settings')) return { rows: [...settings].map(([key, value]) => ({ key, value, category: 'security' })) };
     if (sql.includes('INSERT INTO system_settings')) {
@@ -39,6 +40,21 @@ test('every global-policy write path denies non-Super-Admin roles before writes'
     assert.equal((await call(role, path, body)).status, 403);
   }
   assert.equal(audits.length, 0); assert.equal(settings.get('max_login_attempts'), '5');
+});
+
+test('locked-account monitoring and manual unlock stay Super Admin only; responses mask PII and unlock resets protection without reactivating users', async () => {
+  for (const [path, body, method] of [['/logs/suspicious', null, 'GET'], ['/users/1/unlock', {}, 'PATCH']]) {
+    assert.equal((await fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })).status, 401);
+    for (const role of roles.filter(role => role !== 'super_admin')) assert.equal((await call(role, path, body, method)).status, 403);
+  }
+  const monitoring = await call('super_admin', '/logs/suspicious'); assert.equal(monitoring.status, 200);
+  const row = (await monitoring.json()).locked_accounts[0];
+  assert.equal(row.masked_email, 'p•••••••@example.test'); assert.equal(row.recovery_required, true);
+  assert.doesNotMatch(JSON.stringify(row), /private@|password_hash|two_factor_secret|phone|address/);
+  assert.equal((await call('super_admin', '/users/1/unlock', {}, 'PATCH')).status, 200);
+  const update = queries.find(q => q.sql.includes('SET locked_until = NULL, login_attempts = 0'));
+  assert.match(update.sql, /login_lock_stage = 0, login_security_locked_at = NULL/); assert.doesNotMatch(update.sql, /is_active/);
+  assert.ok(queries.some(q => q.args.includes('account_security_unlock')));
 });
 test('successful save invalidates runtime cache, survives reload, and audits safe names/values', async () => {
   assert.equal((await securityPolicy.get()).max_login_attempts, 5);

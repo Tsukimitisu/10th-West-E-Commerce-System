@@ -115,7 +115,7 @@ const StaffManagement = () => {
         await addStaff(form);
         setSuccess('Staff member added!');
       } else if (view === 'edit' && selected) {
-        await editStaff(selected.id, form);
+        await editStaff(selected.id, { name: form.name, role: form.role, phone: form.phone, ...(form.password ? { password: form.password } : {}) });
         setSuccess('Staff member updated!');
       }
       setView('list');
@@ -218,8 +218,10 @@ const StaffManagement = () => {
             <input type="text" required className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
           </div>
           <div>
+            {view === 'edit' ? <><p className="text-sm font-medium text-slate-700">Email</p><p className="break-all text-sm text-slate-950">{form.email}</p><p className="mt-1 text-xs text-slate-500">Verified account identifier</p></> : <>
             <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
             <input type="email" required className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+            </>}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
