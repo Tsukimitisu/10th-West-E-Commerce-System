@@ -1,5 +1,7 @@
 import express from 'express';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
+import { adminMutationLimiter } from '../middleware/rateLimiter.js';
+import { getOfflineDevice, getOfflineReserves, registerOfflineDevice, revokeOfflineDevice, saveOfflineReserve, syncOfflineCatalogue } from '../controllers/offlinePosController.js';
 import {
   createPosOrder,
   getPosCapabilities,
@@ -15,6 +17,14 @@ import {
 const router = express.Router();
 const allowedRoles = requireRole('admin', 'super_admin', 'owner', 'store_staff', 'cashier');
 const canAccessPos = [authenticateToken, allowedRoles, requirePermission('pos.access')];
+
+router.get('/offline/device', ...canAccessPos, getOfflineDevice);
+router.post('/offline/device', ...canAccessPos, adminMutationLimiter, registerOfflineDevice);
+router.delete('/offline/device', ...canAccessPos, requireRole('owner','super_admin','admin'), adminMutationLimiter, revokeOfflineDevice);
+const manageReserve=[authenticateToken, requireRole('admin','super_admin','owner','store_staff'),requirePermission('inventory.adjust')];
+router.get('/offline/reserves', ...manageReserve, getOfflineReserves);
+router.put('/offline/reserve', ...manageReserve, adminMutationLimiter, saveOfflineReserve);
+router.post('/offline/snapshot', ...canAccessPos, adminMutationLimiter, syncOfflineCatalogue);
 
 router.get('/products', ...canAccessPos, getPosProducts);
 router.get('/capabilities', ...canAccessPos, getPosCapabilities);

@@ -3,6 +3,7 @@ import pool from '../config/database.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl, PRODUCT_IMAGE_FALLBACK } from '../utils/productImages.js';
+import { prepareOfflineSale, consumeOfflineAllowance, completeOfflineSale, itemKey, validateOfflineEnvelope } from '../services/offlinePos.js';
 
 const MAX_ITEMS = 100;
 const PAGE_SIZE = 25;
@@ -129,7 +130,7 @@ const resolvePromotion = async (client, code, subtotal, user) => {
   return { ...promotion, discount_amount: discount };
 };
 
-const validateCart = async (client, rawItems, { lock = false, deduct = false } = {}) => {
+const validateCart = async (client, rawItems, { lock = false, deduct = false, offlinePrices = null } = {}) => {
   const items = normalizeCartItems(rawItems);
   const snapshots = [];
   let subtotal = 0;
@@ -192,6 +193,7 @@ const validateCart = async (client, rawItems, { lock = false, deduct = false } =
       stockAfter = Number(stockResult.rows[0].after);
     }
 
+    if (offlinePrices) unitPrice = offlinePrices.get(itemKey(item));
     const lineTotal = money(unitPrice * item.quantity);
     subtotal = money(subtotal + lineTotal);
     snapshots.push({
@@ -349,6 +351,7 @@ export const getPosCapabilities = async (req, res) => {
       can_access: true,
       can_discount: canDiscount,
       can_void: canVoid,
+      can_manage_offline_reserve: await hasPermission(client, req.user, 'inventory.adjust'),
     });
   } finally {
     client.release();
@@ -403,6 +406,7 @@ export const createPosOrder = async (req, res) => {
   let normalizedItems;
   try {
     normalizedItems = normalizeCartItems(req.body?.items);
+    if (req.body?.offline) validateOfflineEnvelope(req.body, idempotencyKey);
   } catch (error) {
     return res.status(error.status || 500).json({ message: error.status && error.status < 500 ? error.message : 'POS order could not be created.', code: error.status && error.status < 500 ? error.code : 'POS_ORDER_FAILED' });
   }
@@ -412,6 +416,7 @@ export const createPosOrder = async (req, res) => {
     payment_reference: paymentReference,
     promotion_code: normalizeCode(req.body?.promotion_code),
     amount_tendered: paymentMethod === 'cash' ? money(req.body?.amount_tendered) : null,
+    ...(req.body?.offline ? { offline:req.body.offline, prices:req.body.items.map(i => ({ key:itemKey(i), price:i.unit_price })) } : {}),
   };
   const requestHash = crypto.createHash('sha256').update(JSON.stringify(canonicalRequest)).digest('hex');
   const client = await pool.connect();
@@ -419,6 +424,11 @@ export const createPosOrder = async (req, res) => {
 
   try {
     await client.query('BEGIN');
+    const offlineSale = req.body?.offline ? await prepareOfflineSale(client,req,idempotencyKey,requestHash) : null;
+    if (offlineSale?.response) {
+      await client.query('COMMIT');
+      return res.status(200).json(offlineSale.response);
+    }
     const idempotency = await claimPosIdempotencyKey(client, {
       userId: req.user.id,
       key: idempotencyKey,
@@ -428,10 +438,12 @@ export const createPosOrder = async (req, res) => {
       const saved = idempotency.row;
       if (saved.request_hash !== requestHash) throw fail(409, 'This idempotency key was used for a different sale.', 'IDEMPOTENCY_KEY_CONFLICT');
       if (saved.status === 'completed') {
+        if(offlineSale)await completeOfflineSale(client,req,idempotencyKey,requestHash,saved.response_body);
         await client.query('COMMIT');
         return res.status(saved.response_status || 201).json(saved.response_body);
       }
       if (saved.status === 'failed') {
+        if(offlineSale)throw fail(409,'This saved offline sale needs review before retrying with its original reference.','OFFLINE_POS_PRIOR_FAILURE');
         await client.query('COMMIT');
         return res.status(saved.response_status || 502).json(saved.response_body || {
           message: 'Previous POS sale attempt failed. Please retry with a new idempotency key.',
@@ -441,7 +453,8 @@ export const createPosOrder = async (req, res) => {
       throw fail(409, 'This sale is already processing.', 'POS_REQUEST_IN_PROGRESS');
     }
 
-    const cart = await validateCart(client, normalizedItems, { lock: true, deduct: true });
+    const offlinePrices=offlineSale ? await consumeOfflineAllowance(client,req,normalizedItems) : null;
+    const cart = await validateCart(client, normalizedItems, { lock: true, deduct: true, offlinePrices });
     const promotion = await resolvePromotion(client, canonicalRequest.promotion_code, cart.subtotal, req.user);
     const discountAmount = promotion?.discount_amount || 0;
     const total = money(cart.subtotal - discountAmount);
@@ -465,8 +478,8 @@ export const createPosOrder = async (req, res) => {
       [
         total, cart.subtotal, discountAmount, taxAmount, paymentMethod,
         paymentMethod === 'cash' ? 'cash' : 'manual', paymentReference || null,
-        money(tendered), changeDue, req.user.id, idempotencyKey, promotion?.code || null,
-        JSON.stringify({ terminal: 'web', item_count: cart.items.length }),
+        money(tendered), changeDue, offlineSale?.cashier_id || req.user.id, idempotencyKey, promotion?.code || null,
+        JSON.stringify({ terminal: 'web', item_count: cart.items.length,...(offlineSale ? {offline:offlineSale.metadata,offline_cashier_id:offlineSale.cashier_id} : {}) }),
       ],
     );
     const order = orderResult.rows[0];
@@ -581,8 +594,13 @@ export const createPosOrder = async (req, res) => {
       item_count: cart.items.length,
     });
 
+    if(offlineSale){
+      await client.query('UPDATE orders SET created_at=$1,paid_at=$1 WHERE id=$2',[offlineSale.metadata.created_at,order.id]);
+      await client.query('UPDATE payments SET paid_at=$1 WHERE order_id=$2',[offlineSale.metadata.created_at,order.id]);
+    }
     const receipt = await buildReceipt(client, order.id);
     const response = { order: receipt, receipt };
+    if (offlineSale) await completeOfflineSale(client,req,idempotencyKey,requestHash,response);
     await client.query(
       `UPDATE idempotency_keys
        SET status = 'completed', response_status = 201, response_body = $4::jsonb, updated_at = NOW()
@@ -596,6 +614,7 @@ export const createPosOrder = async (req, res) => {
     return res.status(201).json(response);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
+    if (req.body?.offline && error.status && error.status<500) await writeAuditLog(client,{ req,actorUserId:req.user.id,action:'OFFLINE_POS_SYNC_CONFLICT',entityType:'pos_offline_sale',entityId:idempotencyKey,metadata:{ code:error.code || 'POS_SYNC_CONFLICT' } }).catch(()=>{});
     console.error('POS order failed:', error);
     return res.status(error.status || 500).json({
       message: error.status ? error.message : 'POS order could not be completed.',
