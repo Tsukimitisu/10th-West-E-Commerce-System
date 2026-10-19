@@ -22,13 +22,14 @@ export const createRestoreWorker = ({ db, runtime, backupRuntime, safetyService,
   };
   const preserveBackup = async record => {
     // No creator FK: an older snapshot may not contain the requesting account.
-    await db.query(`INSERT INTO backup_records (id,storage_key,filename,backup_type,status,daily_key,created_by,created_at,started_at,completed_at,size_bytes,checksum,encrypted)
-      VALUES ($1,$2,$3,$4,'completed',$5,NULL,$6,$7,$8,$9,$10,true) ON CONFLICT (id) DO UPDATE SET
+    await db.query(`INSERT INTO backup_records (id,storage_key,filename,backup_type,status,daily_key,created_by,created_at,started_at,completed_at,size_bytes,checksum,encrypted,source,recovery_expires_at)
+      VALUES ($1,$2,$3,$4,'completed',$5,NULL,$6,$7,$8,$9,$10,true,$11,NULL) ON CONFLICT (id) DO UPDATE SET
         storage_key=EXCLUDED.storage_key, filename=EXCLUDED.filename, backup_type=EXCLUDED.backup_type,
         status='completed', daily_key=EXCLUDED.daily_key, created_by=NULL, created_at=EXCLUDED.created_at,
         started_at=EXCLUDED.started_at, completed_at=EXCLUDED.completed_at, size_bytes=EXCLUDED.size_bytes,
-        checksum=EXCLUDED.checksum, encrypted=true, deleted_at=NULL, error_summary=NULL`,
-    [record.id, record.storage_key, record.filename, record.backup_type, record.daily_key, record.created_at, record.started_at, record.completed_at, record.size_bytes, record.checksum]);
+        checksum=EXCLUDED.checksum, encrypted=true, deleted_at=NULL, error_summary=NULL,
+        source=EXCLUDED.source, recovery_expires_at=NULL`,
+    [record.id, record.storage_key, record.filename, record.backup_type, record.daily_key, record.created_at, record.started_at, record.completed_at, record.size_bytes, record.checksum, record.source || 'system']);
   };
   return {
     fail,

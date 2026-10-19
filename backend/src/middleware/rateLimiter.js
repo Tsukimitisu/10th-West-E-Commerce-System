@@ -217,6 +217,7 @@ export const messageLimiter = actionLimit('messages', 60 * 1000, 30);
 export const adminMutationLimiter = actionLimit('admin-mutation', 60 * 1000, 30);
 export const backupCreateLimiter = actionLimit('backup-create', 60 * 60 * 1000, 3);
 export const backupRestoreLimiter = actionLimit('backup-restore', 60 * 60 * 1000, 3);
+export const backupRecoveryUploadLimiter = actionLimit('backup-recovery-upload', 60 * 60 * 1000, 3);
 
 export default rateLimit;
 

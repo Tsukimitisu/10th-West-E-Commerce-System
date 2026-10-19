@@ -9,6 +9,7 @@ export const publicBackup = row => row && ({
   deleted_at: row.deleted_at, created_by_name: row.created_by_name || (row.backup_type === 'automatic' ? 'System' : 'Super Admin'),
   size_bytes: row.size_bytes == null ? null : Number(row.size_bytes), checksum: row.checksum,
   encrypted: row.encrypted, error_summary: row.error_summary,
+  source: row.source || 'system', recovery_expires_at: row.recovery_expires_at || null,
 });
 const safeFailure = error => error instanceof BackupError ? error.message : 'Backup failed. Check system logs.';
 
@@ -30,7 +31,7 @@ export const createBackupService = ({ db, runtime, config, now = () => new Date(
     if (protectedBackup.rows.length) throw new BackupError('RESTORE_BUSY', 'This backup is protected by database recovery.', 409);
     if (record.deleted_at) return;
     if (record.status === 'queued' || record.status === 'running') throw new BackupError('BACKUP_BUSY', 'Backup already in progress.', 409);
-    const newest = await db.query("SELECT id FROM backup_records WHERE status = 'completed' AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1");
+    const newest = await db.query("SELECT id FROM backup_records WHERE status = 'completed' AND deleted_at IS NULL AND (source='system' OR recovery_expires_at IS NULL) ORDER BY created_at DESC, id DESC LIMIT 1");
     if (newest.rows[0]?.id === record.id) throw new BackupError('BACKUP_NEWEST', 'Keep the newest successful backup.', 409);
     // Write the deletion intent before touching storage; failures remain traceable.
     await log('BACKUP_DELETE_REQUESTED', record, actor, req, { reason });
@@ -40,7 +41,9 @@ export const createBackupService = ({ db, runtime, config, now = () => new Date(
   };
   const retention = async () => {
     const cutoff = new Date(now().getTime() - config.retentionDays * 86400000);
-    const expired = await db.query("SELECT * FROM backup_records WHERE created_at < $1 AND deleted_at IS NULL AND status IN ('completed','failed') ORDER BY created_at", [cutoff]);
+    const expired = await db.query(`SELECT * FROM backup_records WHERE (created_at < $1
+      OR (source='uploaded_recovery' AND recovery_expires_at <= NOW()))
+      AND deleted_at IS NULL AND status IN ('completed','failed') ORDER BY created_at`, [cutoff]);
     for (const record of expired.rows) {
       try { await removeRecord(record, null, null, 'retention'); }
       catch (error) { if (error.code !== 'BACKUP_NEWEST') throw error; }
@@ -89,8 +92,8 @@ export const createBackupService = ({ db, runtime, config, now = () => new Date(
       const currentTime = now();
       const schedule = config.enabled ? scheduleWindow(config, currentTime) : null;
       const result = await db.query(`SELECT
-        (SELECT row_to_json(b) FROM backup_records b WHERE status='completed' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1) AS last_success,
-        (SELECT row_to_json(b) FROM backup_records b WHERE status='failed' ORDER BY created_at DESC LIMIT 1) AS last_failure,
+        (SELECT row_to_json(b) FROM backup_records b WHERE status='completed' AND deleted_at IS NULL AND (b.source='system' OR b.recovery_expires_at IS NULL) ORDER BY created_at DESC LIMIT 1) AS last_success,
+        (SELECT row_to_json(b) FROM backup_records b WHERE status='failed' AND (b.source='system' OR b.recovery_expires_at IS NULL) ORDER BY created_at DESC LIMIT 1) AS last_failure,
         (SELECT row_to_json(b) FROM backup_records b WHERE status IN ('queued','running') ORDER BY created_at DESC LIMIT 1) AS active,
         (SELECT last_checked_at FROM backup_scheduler WHERE id=1) AS scheduler_last_checked_at,
         EXISTS (SELECT 1 FROM backup_records b WHERE b.backup_type = 'automatic' AND b.daily_key = $1

@@ -23,21 +23,23 @@ const service = {
 };
 const settings = new Map([['security.password_min_length', '8'], ['security.max_login_attempts', '5'], ['security.smtp_password', 'hidden-secret']]);
 let restoreCalls = 0;
+let uploadCalls = 0;
 const restoreService = {
   async overview() { return { restore_configured: true }; },
   async request() { restoreCalls++; return { id, backup_id: id, status: 'queued' }; },
   async status() { restoreCalls++; return { id, backup_id: id, status: 'queued' }; },
 };
+const uploadService = { async receive() { uploadCalls++; return { id, filename: 'saved.dump.enc', source: 'uploaded_recovery', status: 'completed', encrypted: true }; } };
 const app = express(); app.use(express.json());
 app.use((req, _res, next) => {
   if (req.headers['x-test-session'] === 'true') {
     req.sessionID = 'isolated-restore-session';
-    req.session = { auth: { userId: 4, tokenHash: 'isolated-session-hash' }, save(callback) { callback(); } };
+    req.session = { auth: { userId: 4, tokenHash: 'isolated-session-hash', authenticatedAt: Date.now() - Number(req.headers['x-test-session-age'] || 0) }, save(callback) { callback(); } };
   }
   next();
 });
 app.get('/test-csrf', generateCsrfToken, (req, res) => res.json({ token: req.csrfToken }));
-app.use('/backups', createBackupsRouter(() => service, () => restoreService)); app.use('/admin', adminRouter);
+app.use('/backups', createBackupsRouter(() => service, () => restoreService, () => uploadService)); app.use('/admin', adminRouter);
 let server;
 let base;
 before(async () => {
@@ -64,8 +66,29 @@ before(async () => {
 after(async () => { await new Promise(resolve => server.close(resolve)); mock.restoreAll(); await pool.end(); });
 const call = async (role, path, method = 'GET', body, headers = {}) => {
   const token = jwt.sign({ id: roles.indexOf(role) + 1, role }, process.env.JWT_SECRET, { algorithm: 'HS256', issuer: process.env.JWT_ISSUER || '10th-west-moto-api', audience: process.env.JWT_AUDIENCE || '10th-west-moto-web' });
-  return fetch(`${base}${path}`, { method, headers: { ...(role ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json', ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  return fetch(`${base}${path}`, { method, headers: { ...(role ? { Authorization: `Bearer ${token}` } : {}), ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...headers }, ...(body ? { body: body instanceof FormData ? body : JSON.stringify(body) } : {}) });
 };
+
+test('recovery upload is Super Admin only, requires a fresh cookie session and CSRF, and is rate limited', async () => {
+  rateCounts.clear();
+  const path = '/backups/recovery-upload';
+  assert.equal((await call(null, path, 'POST')).status, 401);
+  for (const role of roles.filter(role => role !== 'super_admin')) assert.equal((await call(role, path, 'POST')).status, 403);
+  assert.equal(uploadCalls, 0);
+  assert.equal((await call('super_admin', path, 'POST')).status, 401);
+  assert.equal((await call('super_admin', path, 'POST', null, { 'x-test-session': 'true' })).status, 403);
+  const csrf = await (await call('super_admin', '/test-csrf', 'GET', null, { 'x-test-session': 'true' })).json();
+  const form = new FormData(); form.append('backup', new Blob(['mocked-only']), 'saved.dump.enc');
+  const accepted = await call('super_admin', path, 'POST', form, { 'x-test-session': 'true', 'x-csrf-token': csrf.token });
+  assert.equal(accepted.status, 201); assert.equal(uploadCalls, 1);
+  assert.doesNotMatch(JSON.stringify(await accepted.json()), /storage_key|SUPABASE|DATABASE_URL|ENCRYPTION_KEY|GITHUB/);
+  assert.equal((await call('super_admin', path, 'POST', form, { 'x-test-session': 'true', 'x-csrf-token': csrf.token })).status, 429);
+  rateCounts.clear();
+  for (const age of [16 * 60000, 'not-a-number']) {
+    assert.equal((await call('super_admin', path, 'POST', form, { 'x-test-session': 'true', 'x-test-session-age': String(age), 'x-csrf-token': csrf.token })).status, 401);
+  }
+  assert.equal(uploadCalls, 1);
+});
 
 test('restore request/status deny unauthenticated and non-Super-Admin access; restore requires cookie session and CSRF', async () => {
   for (const [path, method] of [[`/backups/${id}/restore`, 'POST'], [`/backups/restores/${id}`, 'GET']]) {

@@ -124,14 +124,17 @@ export const createBackupRuntime = (env = process.env) => {
         return { path: encrypted, size, checksum, cleanup };
       } catch (error) { await cleanup(); throw error; }
     },
-    async upload(record, artifact, signal) {
+    async uploadStream(record, body, signal) {
       await privateBucket();
       const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/${encodeURIComponent(bucket)}/${record.storage_key.split('/').map(encodeURIComponent).join('/')}`, {
         method: 'POST', headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, apikey: env.SUPABASE_SERVICE_ROLE_KEY, 'Content-Type': 'application/octet-stream', 'x-upsert': 'false' },
-        body: createReadStream(artifact.path), duplex: 'half', signal,
+        body, duplex: 'half', signal,
       });
       if (!response.ok) throw new BackupError('BACKUP_UPLOAD', 'Private backup upload failed. Check storage limits and connectivity.');
       await response.body?.cancel();
+    },
+    async upload(record, artifact, signal) {
+      return this.uploadStream(record, createReadStream(artifact.path), signal);
     },
     async assertObject(record) {
       const api = await privateBucket();

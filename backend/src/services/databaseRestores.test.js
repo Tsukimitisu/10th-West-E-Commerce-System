@@ -80,6 +80,24 @@ test('valid request creates an auditable job without password, TOTP, storage key
   assert.doesNotMatch(JSON.stringify(h.jobs), /fresh-test-password|never-return/);
 });
 
+test('uploaded file reuses the same guarded dispatch; expired uploads cannot be restored', async () => {
+  const h = harness(); Object.assign(h.backup, { source: 'uploaded_recovery', recovery_expires_at: new Date(Date.now() + 3600000).toISOString() });
+  await assert.rejects(h.service.request(id, 1, { ...body, password: 'wrong' }), { code: 'RESTORE_REAUTH' });
+  const job = await h.service.request(id, 1, body);
+  assert.equal(job.backup_source, 'uploaded_recovery'); assert.equal(h.dispatched[0].backup_id, id);
+  const expired = harness(); Object.assign(expired.backup, { source: 'uploaded_recovery', recovery_expires_at: new Date(Date.now() - 1000).toISOString() });
+  await assert.rejects(expired.service.request(id, 1, body), { code: 'RECOVERY_UPLOAD_EXPIRED' });
+  assert.equal(expired.dispatched.length, 0);
+});
+
+test('invalid upload configuration disables only uploaded recovery, preserving cloud restore', async () => {
+  const h = harness();
+  const service = createRestoreService({ db: h.db, runtime: h.runtime, env: { ...env, BACKUP_RECOVERY_MAX_UPLOAD_BYTES: '0' } });
+  const state = await service.overview(1);
+  assert.equal(state.restore_configured, true); assert.equal(state.recovery_upload_configured, false);
+  assert.equal(state.recovery_upload_max_bytes, null);
+});
+
 test('second request is rejected while queued or protected maintenance is active', async () => {
   const h = harness(); await h.service.request(id, 1, body);
   await assert.rejects(h.service.request(id, 1, body), { code: 'RESTORE_BUSY', status: 409 });
@@ -102,7 +120,7 @@ const workerHarness = () => {
   h.restoredRecords = new Map([[id, { ...record, status: 'running', checksum: null, size_bytes: null }]]);
   h.db = { async query(sql, args = []) {
     if (sql.startsWith('UPDATE recovery_control.database_restore_jobs j SET')) { if (h.job.status !== 'queued') return { rows: [] }; h.job.status = 'preparing'; return { rows: [h.job], rowCount: 1 }; }
-    if (sql.startsWith('SELECT * FROM backup_records')) return { rows: [args[0] === id ? record : h.safety] };
+    if (sql.startsWith('SELECT * FROM backup_records')) return { rows: [args[0] === id ? (h.selected || record) : h.safety] };
     if (sql.includes('SET maintenance=true')) h.maintenance = true;
     if (sql.includes('SET maintenance=false')) h.maintenance = false;
     if (sql.includes('SET events =')) h.job.events.push(...JSON.parse(args[1]));
@@ -113,7 +131,7 @@ const workerHarness = () => {
     if (sql.includes("SET status='failed'")) { if (['completed','failed'].includes(h.job.status)) return { rows: [] }; h.job.status = 'failed'; h.job.failure_code = args[1]; }
     if (sql.startsWith('INSERT INTO backup_records')) {
       h.calls.push('preserve');
-      if (!h.restoredRecords.has(args[0]) || sql.includes('DO UPDATE SET')) h.restoredRecords.set(args[0], { id: args[0], status: 'completed', checksum: args[9], size_bytes: args[8] });
+      if (!h.restoredRecords.has(args[0]) || sql.includes('DO UPDATE SET')) h.restoredRecords.set(args[0], { id: args[0], status: 'completed', checksum: args[9], size_bytes: args[8], source: args[10], recovery_expires_at: null });
     }
     return { rows: [h.job], rowCount: 1 };
   } };
@@ -136,6 +154,17 @@ test('worker requires safety completion, checksum, authenticated decryption and 
   assert.equal(h.restoredRecords.get(id).checksum, record.checksum);
   assert.equal(h.restoredRecords.get(safetyId).size_bytes, record.size_bytes);
   assert.ok(h.job.events.some(event => event.action === 'DATABASE_RESTORE_COMPLETED'));
+});
+
+test('successfully restored upload becomes a normally retained backup, while safety backup stays distinct', async () => {
+  const h = workerHarness();
+  h.selected = { ...record, source: 'uploaded_recovery', storage_key: `recovery-uploads/${id}/snapshot.dump.enc`, recovery_expires_at: new Date(Date.now() + 3600000).toISOString() };
+  h.job.selected_metadata = { ...h.selected };
+  await h.worker().run(safetyId, id);
+  assert.equal(h.restoredRecords.get(id).source, 'uploaded_recovery');
+  assert.equal(h.restoredRecords.get(id).recovery_expires_at, null);
+  assert.equal(h.restoredRecords.get(safetyId).source, 'system');
+  assert.ok(h.calls.indexOf('safety') < h.calls.indexOf('restore'));
 });
 
 for (const seam of ['safety', 'checksum', 'decrypt', 'inspect']) test(`${seam} failure aborts before destructive restore and releases maintenance`, async () => {

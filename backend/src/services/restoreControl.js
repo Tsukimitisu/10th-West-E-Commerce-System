@@ -23,6 +23,7 @@ export const safeRestoreJob = row => row && ({
   requested_at: row.requested_at, started_at: row.started_at, completed_at: row.completed_at,
   failure_code: row.failure_code, destructive_started: Boolean(row.destructive_started),
   restored_from: row.selected_metadata?.created_at,
+  backup_source: row.selected_metadata?.source || 'system', backup_filename: row.selected_metadata?.filename,
   github_run_url: /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+$/.test(row.github_run_url || '') ? row.github_run_url : null,
 });
 

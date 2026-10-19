@@ -27,7 +27,7 @@ const harness = () => {
     if (sql.startsWith('SELECT * FROM backup_records WHERE daily_key')) { const found = rows.filter(row => row.daily_key === args[0] && row.status === 'completed'); return { rows: found, rowCount: found.length }; }
     if (sql.startsWith('SELECT * FROM backup_records WHERE id')) { const found = rows.filter(row => row.id === args[0]); return { rows: found, rowCount: found.length }; }
     if (sql.startsWith('SELECT id FROM backup_records')) return { rows: rows.filter(row => row.status === 'completed' && !row.deleted_at).sort((a,b) => new Date(b.created_at)-new Date(a.created_at)).slice(0,1) };
-    if (sql.startsWith('SELECT * FROM backup_records WHERE created_at')) return { rows: rows.filter(row => new Date(row.created_at) < args[0] && !row.deleted_at && ['completed','failed'].includes(row.status)) };
+    if (sql.startsWith('SELECT * FROM backup_records WHERE (created_at')) return { rows: rows.filter(row => (new Date(row.created_at) < args[0] || (row.source === 'uploaded_recovery' && row.recovery_expires_at && new Date(row.recovery_expires_at) <= fixedNow)) && !row.deleted_at && ['completed','failed'].includes(row.status)) };
     if (sql.startsWith('SELECT b.*')) return { rows };
     return { rows: [], rowCount: 1 };
   } };
@@ -116,6 +116,19 @@ test('signed downloads require completed encrypted metadata; listing never expos
   assert.doesNotMatch(JSON.stringify(await h.service.list()), /storage_key|signed\?|token=/);
   h.rows[0].deleted_at = new Date();
   await assert.rejects(h.service.download(job.backup.id, 9), { code: 'BACKUP_NOT_READY' });
+});
+
+test('routine cleanup expires unused uploaded files while preserving the ordinary retention and safety backup', async () => {
+  const h = harness();
+  h.rows.push(
+    { id: 'unused-upload', source: 'uploaded_recovery', recovery_expires_at: '2026-10-18T00:00:00Z', status: 'completed', created_at: '2026-10-18T00:00:00Z' },
+    { id: 'safety-backup', source: 'system', backup_type: 'manual', status: 'completed', created_at: '2026-10-18T00:00:00Z' },
+    { id: 'retained-upload', source: 'uploaded_recovery', recovery_expires_at: null, status: 'completed', created_at: '2026-10-18T00:00:00Z' },
+  );
+  const job = await h.service.request(); await job.completion;
+  assert.deepEqual(h.counters.remove, ['unused-upload']);
+  assert.equal(h.rows.find(row => row.id === 'safety-backup').deleted_at, undefined);
+  assert.equal(h.rows.find(row => row.id === 'retained-upload').deleted_at, undefined);
 });
 
 test('daily schedule defaults to 02:00 Manila and invalid retention fails closed', () => {

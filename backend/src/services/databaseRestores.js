@@ -5,6 +5,7 @@ import { BackupError } from './backupConfig.js';
 import { decryptTwoFactorSecret } from './twoFactorCrypto.js';
 import { assertNoRestore, safeRestoreJob, recordRestoreEvent, expireUnclaimedRestores } from './restoreControl.js';
 import { writeAuditLog } from '../utils/audit.js';
+import { recoveryUploadLimit } from './recoveryUploads.js';
 
 export const restoreGithubConfig = (env = process.env) => {
   const repository = env.GITHUB_RESTORE_REPOSITORY || 'Tsukimitisu/10th-West-E-Commerce-System';
@@ -50,9 +51,11 @@ export const createRestoreService = ({ db, runtime, env = process.env, dispatch 
       await expireUnclaimedRestores(db);
       let configured = true;
       try { restoreGithubConfig(env); } catch { configured = false; }
+      let uploadMaximum = null;
+      try { uploadMaximum = recoveryUploadLimit(env); } catch { /* keep cloud restore available */ }
       const user = await db.query('SELECT two_factor_enabled FROM users WHERE id=$1', [actor]);
       const jobs = await db.query('SELECT * FROM recovery_control.database_restore_jobs ORDER BY requested_at DESC LIMIT 1');
-      return { restore_configured: configured, restore_requires_totp: Boolean(user.rows[0]?.two_factor_enabled), restore_job: safeRestoreJob(jobs.rows[0]) };
+      return { restore_configured: configured, restore_requires_totp: Boolean(user.rows[0]?.two_factor_enabled), restore_job: safeRestoreJob(jobs.rows[0]), recovery_upload_max_bytes: uploadMaximum, recovery_upload_configured: uploadMaximum !== null };
     },
     async request(backupId, actor, body, req) {
       if (body?.confirmation !== 'RESTORE' || body?.acknowledgement !== true)
@@ -78,6 +81,8 @@ export const createRestoreService = ({ db, runtime, env = process.env, dispatch 
         const state = await db.query('SELECT maintenance FROM recovery_control.state WHERE id=1');
         if (state.rows[0]?.maintenance !== false) throw new BackupError('RESTORE_BUSY', 'Database recovery controls require attention.', 409);
         const record = validateRestoreBackup((await db.query('SELECT * FROM backup_records WHERE id=$1', [backupId])).rows[0]);
+        if (record.source === 'uploaded_recovery' && record.recovery_expires_at && new Date(record.recovery_expires_at).getTime() <= Date.now())
+          throw new BackupError('RECOVERY_UPLOAD_EXPIRED', 'This uploaded backup has expired. Select and upload the file again.', 409);
         await runtime.assertObject(record);
         const id = randomUUID();
         const inserted = await db.query(`INSERT INTO recovery_control.database_restore_jobs (id,backup_id,requested_by,status,selected_metadata)

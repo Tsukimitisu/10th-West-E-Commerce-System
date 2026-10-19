@@ -43,7 +43,9 @@ export const createRestoreRuntime = (env = process.env) => {
     async download(record) {
       directory = await mkdtemp(path.join(tmpdir(), '10thwest-restore-'));
       await chmod(directory, 0o700);
-      if (!/^database\/[a-f\d-]{36}\/[\w.-]+\.dump\.enc$/i.test(record.storage_key)) throw new BackupError('RESTORE_OBJECT', 'Backup object key is invalid.');
+      const cloudKey = /^database\/[a-f\d-]{36}\/[\w.-]+\.dump\.enc$/i.test(record.storage_key);
+      const recoveryKey = record.source === 'uploaded_recovery' && record.storage_key === `recovery-uploads/${record.id}/snapshot.dump.enc`;
+      if (!cloudKey && !recoveryKey) throw new BackupError('RESTORE_OBJECT', 'Backup object key is invalid.');
       const target = path.join(directory, 'selected.dump.enc');
       const bucket = env.BACKUP_STORAGE_BUCKET || 'database-backups';
       const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/authenticated/${encodeURIComponent(bucket)}/${record.storage_key.split('/').map(encodeURIComponent).join('/')}`, {
