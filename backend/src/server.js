@@ -209,7 +209,7 @@ const io = initSocket(httpServer, allowedOrigins, { sessionMiddleware });
 // Leave express-session's proxy option unset: it uses this same trust decision.
 app.set('trust proxy', sessionTransport.trustProxy);
 if (sessionTransport.render && !isProduction) {
-  console.warn('RENDER_ENVIRONMENT_MISMATCH: set NODE_ENV=production and SESSION_STORE=postgres on Render.');
+  throw new Error('RENDER_ENVIRONMENT_MISMATCH: NODE_ENV=production and SESSION_STORE=postgres are required on Render.');
 }
 
 // C8: Security headers via Helmet (CSP, X-Frame-Options, HSTS, etc.)

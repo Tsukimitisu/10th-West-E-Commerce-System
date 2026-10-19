@@ -96,4 +96,8 @@ test('audit metadata honors Express trust proxy rather than raw forwarding heade
 test('production refuses disabled database TLS and a global TLS verification bypass', () => {
   assert.throws(() => databaseConfig.createDatabaseConfig({ env: { NODE_ENV: 'production', DATABASE_URL: 'postgresql://unit:unit@db.example.test/app', DB_SSL_MODE: 'disable' } }), { code: 'DATABASE_SSL_REQUIRED' });
   assert.throws(() => validateCoreEnvironment({ NODE_ENV: 'production', JWT_SECRET: 'present', NODE_TLS_REJECT_UNAUTHORIZED: '0' }), { code: 'PRODUCTION_TLS_DISABLED' });
+  const start = source.indexOf('if (sessionTransport.render && !isProduction)');
+  const renderGuard = source.slice(start, source.indexOf('// C8:', start));
+  assert.throws(() => vm.runInNewContext(renderGuard, { sessionTransport: { render: true }, isProduction: false }), /RENDER_ENVIRONMENT_MISMATCH/);
+  assert.doesNotThrow(() => vm.runInNewContext(renderGuard, { sessionTransport: { render: true }, isProduction: true }));
 });
