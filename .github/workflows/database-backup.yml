@@ -83,6 +83,7 @@ jobs:
             -e NODE_ENV \
             -e DATABASE_URL \
             -e BACKUP_DATABASE_URL \
+            -e DB_SSL_MODE \
             -e SUPABASE_URL \
             -e SUPABASE_SERVICE_ROLE_KEY \
             -e BACKUP_ENCRYPTION_KEY \
