@@ -20,14 +20,14 @@ export default function RestoreDatabaseDialog({ backup, requiresTotp, busy, onCo
   return <Modal isOpen onClose={() => { if (!busy) onClose(); }} title="Restore database backup?" size="xl" tone="danger">
     <form onSubmit={submit} className="min-w-0 space-y-4">
       <dl className="grid min-w-0 gap-2 text-sm">
-        <div><dt className="font-semibold">Backup</dt><dd>{new Date(backup.created_at).toLocaleString()}</dd></div>
+        {backup.source === 'uploaded_recovery' ? <><div><dt className="font-semibold">Backup file</dt><dd className="break-all">{backup.filename}</dd></div><div><dt className="font-semibold">Uploaded on</dt><dd>{new Date(backup.created_at).toLocaleString()}</dd></div><div><dt className="font-semibold">Backup date</dt><dd>The original backup date has not been verified.</dd></div></> : <div><dt className="font-semibold">Backup</dt><dd>{new Date(backup.created_at).toLocaleString()}</dd></div>}
         <div><dt className="font-semibold">Size</dt><dd>{backup.size_bytes == null ? 'Unavailable' : Number(backup.size_bytes) < 1048576 ? `${(Number(backup.size_bytes) / 1024).toFixed(1)} KB` : `${(Number(backup.size_bytes) / 1048576).toFixed(2)} MB`}</dd></div>
         <div><dt className="font-semibold">Checksum (SHA-256)</dt><dd className="break-all font-mono">{backup.checksum?.slice(0, 16)}…</dd></div>
       </dl>
       <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-900">
-        <p className="font-semibold">This replaces current application database data.</p>
-        <p>Orders, users, inventory changes and other database changes made after this backup may be lost.</p>
-        <p>A fresh encrypted safety backup of the current production database must complete before restoration can begin.</p>
+        <p className="font-semibold">Restoring this backup replaces current database information with the information saved in this backup.</p>
+        <p>Orders, users, inventory and other changes made after this backup may be lost.</p>
+        <p>The system will create a fresh safety backup before continuing.</p>
       </div>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       <label className="flex min-h-11 items-start gap-3 text-sm"><input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={acknowledgement} onChange={event => setAcknowledgement(event.target.checked)} disabled={busy} /><span>I understand that newer database changes may be replaced.</span></label>

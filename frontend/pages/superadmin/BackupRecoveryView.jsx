@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Database, Download, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import { createDatabaseBackup, deleteDatabaseBackup, downloadDatabaseBackup, getDatabaseBackups, getDatabaseBackupStatus, requestDatabaseRestore, getDatabaseRestoreJob } from '../../services/api';
+import EmergencyRecoveryDialog from '../../components/superadmin/EmergencyRecoveryDialog';
 import RestoreDatabaseDialog from '../../components/superadmin/RestoreDatabaseDialog';
 import PageHeader from '../../components/operations/PageHeader';
 import BrandButton from '../../components/ui/BrandButton';
@@ -12,7 +13,7 @@ const duration = row => row.started_at && row.completed_at ? `${Math.max(0, Math
 
 const RESTORE_STORAGE = '10thwest.restore-job';
 const activeRestore = job => job && ['queued', 'preparing', 'restoring', 'validating'].includes(job.status);
-const restorePhase = job => ({ queued: 'Waiting for the recovery worker...', safety_backup: 'Preparing safety backup...', downloading: 'Downloading selected backup...', verifying: 'Verifying backup...', restoring: 'Restoring database...', migrating: 'Applying controlled migrations...', validating: 'Validating restored data...' }[job.phase] || 'Preparing recovery...');
+const restorePhase = job => ({ queued: 'Preparing recovery...', safety_backup: 'Creating safety backup...', downloading: 'Checking backup file...', verifying: 'Checking backup file...', restoring: 'Restoring database...', migrating: 'Checking restored data...', validating: 'Checking restored data...' }[job.phase] || 'Preparing recovery...');
 const savedJob = () => { try { return sessionStorage.getItem(RESTORE_STORAGE); } catch { return null; } };
 const saveJob = id => { try { if (id) sessionStorage.setItem(RESTORE_STORAGE, id); else sessionStorage.removeItem(RESTORE_STORAGE); } catch { /* optional refresh persistence */ } };
 
@@ -24,6 +25,7 @@ export default function BackupRecoveryView() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [confirm, setConfirm] = useState(null);
+  const [emergencyOpen, setEmergencyOpen] = useState(false);
   const [restoreBackup, setRestoreBackup] = useState(null);
   const [restoreJob, setRestoreJob] = useState(null);
   const restoreId = useRef(savedJob());
@@ -61,7 +63,7 @@ export default function BackupRecoveryView() {
       }
       if (previousActive.current && !state.active) {
         const finished = history.find(row => row.id === previousActive.current);
-        if (finished?.status === 'completed') setNotice('Backup completed successfully.');
+        if (finished?.status === 'completed') setNotice(finished.source === 'uploaded_recovery' ? 'Backup file ready for recovery.' : 'Backup completed successfully.');
         if (finished?.status === 'failed') setError(finished.error_summary || 'Backup failed. Check system logs.');
       }
       previousActive.current = state.active?.id || null;
@@ -108,11 +110,11 @@ export default function BackupRecoveryView() {
     {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {notice && <p role="status" className="text-sm text-slate-700">{notice}</p>}
     {restoreJob && <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-4" aria-live="polite" aria-atomic="true">
-      <h2 className="text-lg font-semibold">{restoreJob.status === 'completed' ? 'Database restored successfully' : restoreJob.status === 'failed' ? (restoreJob.destructive_started ? 'Database recovery requires attention' : 'Database restoration was stopped safely') : 'Database restoration'}</h2>
+      <h2 className="text-lg font-semibold">{restoreJob.status === 'completed' ? 'Database restored successfully' : restoreJob.status === 'failed' ? (restoreJob.destructive_started ? 'Recovery requires attention' : 'Recovery stopped safely') : 'Database restoration'}</h2>
       {activeRestore(restoreJob) && <><p role="status">{restorePhase(restoreJob)}</p><p className="text-sm text-slate-600">Keep this page available for status updates. Other application activity is paused during recovery.</p></>}
-      {restoreJob.status === 'completed' && <><p>Restored from: {timestamp(restoreJob.restored_from)}</p><p>A safety backup of the previous database state was created before restoration.</p><p className="text-sm">You may need to sign in again.</p><BrandButton onClick={() => window.location.reload()}>Refresh application</BrandButton></>}
-      {restoreJob.status === 'failed' && <p>{restoreJob.destructive_started ? 'The system remains in maintenance mode. Use the pre-restore safety backup with an authorized recovery operator.' : 'Production database was not changed by restoration.'}</p>}
-      {restoreJob.github_run_url && <a href={restoreJob.github_run_url} target="_blank" rel="noopener noreferrer" className="text-sm underline">View recovery workflow</a>}
+      {restoreJob.status === 'completed' && <><p>Your system has been recovered from the selected backup.</p><p>Restored from: {restoreJob.backup_source === 'uploaded_recovery' ? restoreJob.backup_filename : timestamp(restoreJob.restored_from)}</p><p>A safety backup of the previous database state was created automatically.</p><p className="text-sm">You may need to sign in again.</p><BrandButton onClick={() => window.location.reload()}>Refresh application</BrandButton></>}
+      {restoreJob.status === 'failed' && <p>{restoreJob.destructive_started ? 'The system remains protected in maintenance mode. Contact the system administrator or use the automatically created safety backup.' : 'Your current database was not changed.'}</p>}
+      {restoreJob.github_run_url && restoreJob.backup_source !== 'uploaded_recovery' && <a href={restoreJob.github_run_url} target="_blank" rel="noopener noreferrer" className="text-sm underline">View recovery workflow</a>}
       {error && <a href="/#/login" className="block text-sm underline">Sign in again to check recovery status</a>}
     </section>}
     {status?.readiness_error && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{status.readiness_error}</p>}
@@ -131,14 +133,23 @@ export default function BackupRecoveryView() {
         <thead><tr>{['Created', 'Type', 'Status', 'Size', 'Duration', 'Created by', 'Actions'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead>
         <tbody>{backups.length === 0 ? <tr><td colSpan={7}>No database backups yet.</td></tr> : backups.map(row => <tr key={row.id}>
           <td className="min-w-40">{timestamp(row.created_at)}{row.checksum && <code title="SHA-256 of encrypted backup">SHA-256: {row.checksum}</code>}</td>
-          <td>{row.backup_type === 'automatic' ? 'Automatic' : 'Manual'}</td>
+          <td>{row.source === 'uploaded_recovery' ? 'Uploaded recovery' : row.backup_type === 'automatic' ? 'Automatic' : 'Manual'}</td>
           <td><span className="capitalize">{row.deleted_at ? 'Deleted' : row.status}</span>{row.error_summary && <p className="mt-1 min-w-40 text-xs text-red-700">{row.error_summary}</p>}</td>
           <td className="whitespace-nowrap">{size(row.size_bytes)}</td><td>{duration(row)}</td><td>{row.created_by_name}</td>
-          <td><div className="flex gap-2">{row.status === 'completed' && !row.deleted_at && <BrandButton variant="secondary" onClick={() => download(row)} aria-label={`Download backup from ${timestamp(row.created_at)}`}><Download size={16} aria-hidden="true" />Download</BrandButton>}{row.status === 'completed' && row.encrypted === true && !row.deleted_at && <BrandButton variant="danger" disabled={busy || active || !status?.restore_configured} onClick={() => setRestoreBackup(row)} aria-label={`Restore backup from ${timestamp(row.created_at)}`}><RotateCcw size={16} aria-hidden="true" />Restore</BrandButton>}{!row.deleted_at && !['queued','running'].includes(row.status) && <BrandButton variant="secondary" disabled={active || row.id === newest} title={row.id === newest ? 'The newest successful backup is protected' : undefined} onClick={() => setConfirm(row)} aria-label={`Delete backup from ${timestamp(row.created_at)}`}><Trash2 size={16} aria-hidden="true" />Delete</BrandButton>}</div></td>
+          <td><div className="flex gap-2">{row.status === 'completed' && !row.deleted_at && <BrandButton variant="secondary" title="Download an encrypted copy you can keep outside the system for emergency recovery." onClick={() => download(row)} aria-label={`Download backup from ${timestamp(row.created_at)}`}><Download size={16} aria-hidden="true" />Download</BrandButton>}{row.status === 'completed' && row.encrypted === true && !row.deleted_at && <BrandButton variant="danger" disabled={busy || active || !status?.restore_configured} onClick={() => setRestoreBackup(row)} aria-label={`Restore backup from ${timestamp(row.created_at)}`}><RotateCcw size={16} aria-hidden="true" />Restore</BrandButton>}{!row.deleted_at && !['queued','running'].includes(row.status) && <BrandButton variant="secondary" disabled={active || row.id === newest} title={row.id === newest ? 'The newest successful backup is protected' : undefined} onClick={() => setConfirm(row)} aria-label={`Delete backup from ${timestamp(row.created_at)}`}><Trash2 size={16} aria-hidden="true" />Delete</BrandButton>}</div></td>
         </tr>)}</tbody>
       </table>
     </div>}
-    <section className="border-t border-slate-200 pt-5"><h2 className="text-lg font-semibold">Recovery</h2><p className="mt-2 text-sm leading-6 text-slate-600">Restoration runs through the guarded GitHub Actions recovery worker. It creates a fresh encrypted safety backup before replacing application data. Downloaded backups remain encrypted for controlled recovery.</p>{status && !status.restore_configured && <p className="mt-2 text-sm text-amber-900">Restore dispatch must be configured by the deployment operator before restoration is available.</p>}</section>
+    <section className="space-y-4 border-t border-slate-200 pt-5">
+      <div><h2 className="text-lg font-semibold">Recovery</h2><p className="mt-2 text-sm text-slate-600">Restore a database backup without technical tools.</p></div>
+      <div><h3 className="font-semibold">Cloud backups</h3><p className="mt-1 text-sm leading-6 text-slate-600">Use Restore beside a completed backup in Backup History.</p></div>
+      <div><h3 className="font-semibold">Downloaded backup</h3><p className="mt-1 text-sm leading-6 text-slate-600">Have an encrypted backup saved on your computer, USB drive or secure storage?</p><BrandButton variant="secondary" className="mt-3" disabled={loading || busy || active || !status?.restore_configured || status?.recovery_upload_configured === false} onClick={() => setEmergencyOpen(true)}>Restore downloaded backup</BrandButton></div>
+      <p className="text-sm leading-6 text-slate-600">Download keeps an encrypted emergency copy outside the system. If you need it later, choose Restore downloaded backup and select the file. No command-line tools are required.</p>
+      <p className="text-sm leading-6 text-slate-600">If the website itself is unavailable, the application must first be redeployed before this recovery screen can be used.</p>
+      {status && !status.restore_configured && <p className="text-sm text-amber-900">Recovery is not available yet. Please contact your system administrator.</p>}
+      {status?.restore_configured && status?.recovery_upload_configured === false && <p className="text-sm text-amber-900">Downloaded backup recovery is not available yet. Please contact your system administrator.</p>}
+    </section>
+    {emergencyOpen && <EmergencyRecoveryDialog maximum={status?.recovery_upload_max_bytes || 67108864} onBusy={setBusy} onClose={() => setEmergencyOpen(false)} onContinue={backup => { setEmergencyOpen(false); setRestoreBackup(backup); }} />}
     {restoreBackup && <RestoreDatabaseDialog backup={restoreBackup} requiresTotp={status?.restore_requires_totp} busy={busy} onConfirm={restore} onClose={() => setRestoreBackup(null)} />}
     <ConfirmationDialog isOpen={Boolean(confirm)} onClose={() => { if (!busy) setConfirm(null); }} onConfirm={act} busy={busy} title={confirm === 'create' ? 'Create database backup?' : 'Delete database backup?'} description={confirm === 'create' ? 'This creates an encrypted, private snapshot of the current application database.' : 'This permanently deletes the encrypted backup from private storage. The newest successful backup is protected.'} confirmLabel={confirm === 'create' ? 'Create backup' : 'Delete backup'} danger={confirm !== 'create'} />
   </div>;

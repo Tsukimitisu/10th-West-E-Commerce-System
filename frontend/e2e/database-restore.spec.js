@@ -42,22 +42,22 @@ for (const width of [390, 1440]) test(`guarded restore confirmation and progress
   await expect(page.getByRole('heading', { name: 'Database restoration', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Recovery in progress', exact: true })).toBeDisabled();
   job = { ...job, status: 'preparing', phase: 'safety_backup' };
-  await expect(page.getByText('Preparing safety backup...', { exact: true })).toBeVisible({ timeout: 8000 });
+  await expect(page.getByText('Creating safety backup...', { exact: true })).toBeVisible({ timeout: 8000 });
   if (width === 1440) {
     job = { ...job, phase: 'downloading' };
-    await expect(page.getByText('Downloading selected backup...', { exact: true })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Checking backup file...', { exact: true })).toBeVisible({ timeout: 8000 });
     job = { ...job, phase: 'verifying' };
-    await expect(page.getByText('Verifying backup...', { exact: true })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Checking backup file...', { exact: true })).toBeVisible({ timeout: 8000 });
   }
   job = { ...job, status: 'restoring', phase: 'restoring', destructive_started: true };
   await expect(page.getByText('Restoring database...', { exact: true })).toBeVisible({ timeout: 8000 });
   if (width === 390) {
     job = { ...job, status: 'failed', phase: 'restoring', destructive_started: true };
-    await expect(page.getByRole('heading', { name: 'Database recovery requires attention', exact: true })).toBeVisible({ timeout: 8000 });
-    await expect(page.getByText(/The system remains in maintenance mode/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recovery requires attention', exact: true })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText(/The system remains protected in maintenance mode/)).toBeVisible();
   } else {
     job = { ...job, status: 'validating', phase: 'validating' };
-    await expect(page.getByText('Validating restored data...', { exact: true })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('Checking restored data...', { exact: true })).toBeVisible({ timeout: 8000 });
     job = { ...job, status: 'completed', phase: 'completed', restored_from: state.backups[0].created_at };
     await expect(page.getByRole('heading', { name: 'Database restored successfully', exact: true })).toBeVisible({ timeout: 8000 });
     await expect(page.getByRole('button', { name: 'Refresh application', exact: true })).toBeVisible();
@@ -70,6 +70,6 @@ test('failure before destructive work honestly reports that restoration did not 
   await superadminFixture(page);
   await page.route('**/api/admin/backups/status', route => route.fulfill({ json: { configured: true, restore_configured: true, retention_days: 14, restore_job: { id: '00000000-0000-4000-8000-000000000003', status: 'failed', destructive_started: false } } }));
   await page.goto('/#/superadmin/backup');
-  await expect(page.getByRole('heading', { name: 'Database restoration was stopped safely', exact: true })).toBeVisible();
-  await expect(page.getByText('Production database was not changed by restoration.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recovery stopped safely', exact: true })).toBeVisible();
+  await expect(page.getByText('Your current database was not changed.', { exact: true })).toBeVisible();
 });

@@ -15,6 +15,6 @@ test('restore uses authenticated POST and keeps privileged credentials out of st
   assert.doesNotMatch(modal, /sessionStorage|localStorage|GITHUB_RESTORE_TOKEN|DATABASE_URL/);
   assert.match(page, /row\.status === 'completed' && row\.encrypted === true && !row\.deleted_at/);
   assert.match(page, /setInterval\(load, 5000\)/);
-  assert.match(page, /Preparing safety backup/);
+  assert.match(page, /Creating safety backup/);
   assert.match(page, /destructive_started/);
 });

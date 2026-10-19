@@ -5532,6 +5532,10 @@ export const downloadDatabaseBackup = id => authenticatedFetch(`${API_URL}/admin
 export const deleteDatabaseBackup = id => authenticatedFetch(`${API_URL}/admin/backups/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const requestDatabaseRestore = (id, confirmation) => authenticatedFetch(`${API_URL}/admin/backups/${encodeURIComponent(id)}/restore`, { method: 'POST', body: JSON.stringify(confirmation), timeoutMs: 40000 });
 export const getDatabaseRestoreJob = id => authenticatedFetch(`${API_URL}/admin/backups/restores/${encodeURIComponent(id)}`, { preserveSessionOnFailure: true });
+export const uploadRecoveryBackup = (file, signal) => {
+  const body = new FormData(); body.append('backup', file);
+  return authenticatedFetch(`${API_URL}/admin/backups/recovery-upload`, { method: 'POST', body, signal, timeoutMs: 150000 });
+};
 
 export const createBackup = async () => {
   return authenticatedFetch(`${API_URL}/admin/backup`, { method: 'POST' });
