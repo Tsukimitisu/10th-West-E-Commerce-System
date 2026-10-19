@@ -1,5 +1,21 @@
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
+export const validatePublicEnvironment = (environment) => {
+  for (const [name, value] of Object.entries(environment)) {
+    if (!name.startsWith('VITE_') || !value) continue;
+    const text = String(value).trim();
+    let privateJwt = false;
+    if (text.startsWith('eyJ')) {
+      try { privateJwt = JSON.parse(atob(text.split('.')[1].replaceAll('-', '+').replaceAll('_', '/'))).role !== 'anon'; }
+      catch { /* Other public strings are not JWT credentials. */ }
+    }
+    if (/(?:DATABASE_URL|SERVICE_ROLE|SESSION_SECRET|CSRF_SECRET|JWT_SECRET|TWO_FACTOR_ENCRYPTION_KEY|BACKUP_ENCRYPTION_KEY|RESEND_API_KEY|TEXTBEE_API_KEY|PAYMONGO_SECRET_KEY|PAYMONGO_WEBHOOK_SECRET|GOOGLE_CLIENT_SECRET|FACEBOOK_APP_SECRET|CLOUDINARY_API_SECRET)/i.test(name)
+      || /^(?:sk_(?:test|live)_|re_|sb_secret_)/.test(text) || privateJwt) {
+      throw new Error(`${name} contains a backend-only credential. Remove it from the frontend environment.`);
+    }
+  }
+};
+
 export const normalizeApiUrl = (value) => String(value || '').trim().replace(/\/+$/, '');
 
 export const validateProductionApiUrl = (value) => {

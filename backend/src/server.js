@@ -74,6 +74,8 @@ import { checkCoreDatabaseReadiness } from './services/coreReadiness.js';
 import { resolveAllowedFrontendOrigins, resolveFrontendOrigin } from './config/frontend.js';
 import { resolveSessionTransport, describeSessionTransport } from './config/sessionTransport.js';
 import { getGoogleOAuthConfigurationStatus, getFacebookOAuthConfigurationStatus } from './config/passport.js';
+import { createCorsOptions } from './config/cors.js';
+import { protectPrivateFiles } from './middleware/privateFiles.js';
 
 // Get directory name for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -232,6 +234,10 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false, // allow loading external images
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
+app.use((_req, res, next) => {
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  next();
+});
 
 // Reject insecure production requests without reflecting an untrusted Host
 // header into a redirect target. The trusted ingress terminates TLS.
@@ -244,27 +250,11 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    // Allow same-network LAN requests (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
-    try {
-      const url = new URL(origin);
-      const host = url.hostname;
-      if (process.env.NODE_ENV !== 'production' && (host === 'localhost' || host === '127.0.0.1' ||
-          host.startsWith('192.168.') || host.startsWith('10.') ||
-          /^172\.(1[6-9]|2\d|3[01])\./.test(host))) {
-        return callback(null, true);
-      }
-    } catch {}
-    // C5: Reject unknown origins instead of allowing all
-    callback(new Error('CORS not allowed'), false);
-  },
-  credentials: true
-}));
+app.use(cors(createCorsOptions(allowedOrigins)));
+app.use(protectPrivateFiles);
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
+  dotfiles: 'deny',
+  index: false,
   fallthrough: true,
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
 }));

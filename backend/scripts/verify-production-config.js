@@ -5,6 +5,7 @@ import { phoneOtpConfig, phoneProvider } from '../src/services/phoneOtp.js';
 import databaseConfig from '../src/config/databaseConfig.cjs';
 import { pathToFileURL } from 'node:url';
 import { inspectResendConfiguration } from '../src/services/transactionalEmail.js';
+import { backupConfig, encryptionKey } from '../src/services/backupConfig.js';
 
 export const inspectProductionEmailConfig = (env) => {
   const failures = [];
@@ -48,6 +49,17 @@ export const inspectProductionConfig = (env) => {
     if (!db.ssl) throw new Error();
   });
   check('Phone verification provider or OTP limits invalid', () => { if (!phoneOtpConfig(env).available) throw new Error(); });
+  if (env.BACKUP_ENABLED && !['true', 'false'].includes(env.BACKUP_ENABLED)) failures.push('BACKUP_ENABLED must be true or false');
+  if (env.BACKUP_ENABLED === 'true') {
+    check('Backup schedule or retention invalid', () => backupConfig(env));
+    check('BACKUP_ENCRYPTION_KEY missing or invalid', () => encryptionKey(env));
+    check('Private backup storage configuration missing or invalid', () => {
+      const url = new URL(env.SUPABASE_URL);
+      if (url.protocol !== 'https:' || url.username || url.password
+        || !String(env.SUPABASE_SERVICE_ROLE_KEY || '').trim()
+        || /YOUR[-_]|placeholder|replace[-_]/i.test(env.SUPABASE_SERVICE_ROLE_KEY)) throw new Error();
+    });
+  }
   for (const [name, expected] of Object.entries({
     COOKIE_SAME_SITE: 'none', SESSION_STORE: 'postgres', PAYMENT_PROVIDER: 'paymongo',
     PAYMONGO_ALLOWED_METHODS: 'gcash', PAYMONGO_CURRENCY: 'PHP',

@@ -200,6 +200,9 @@ const resolveSslConfig = ({ env, urlSslMode, nodeEnv, isSupabase }) => {
   }
 
   const mode = configuredMode || urlSslMode || (nodeEnv === 'production' ? 'verify-full' : 'require');
+  if (nodeEnv === 'production' && mode === 'disable') {
+    throw new DatabaseConfigurationError('DATABASE_SSL_REQUIRED', 'Production database connections require TLS.');
+  }
   if (isSupabase && mode === 'disable') {
     throw new DatabaseConfigurationError(
       'DATABASE_SSL_REQUIRED',

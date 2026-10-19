@@ -112,3 +112,26 @@ test('email-only production diagnostic rejects test senders, missing secrets and
   }
   assert.equal(inspectProductionEmailConfig({ ...env, FRONTEND_ORIGIN: '', FRONTEND_URL: env.FRONTEND_ORIGIN }).ready, true);
 });
+
+
+test('invalid webhook tolerance cannot disable signed-event age validation', () => {
+  const names = ['PAYMONGO_WEBHOOK_SECRET', 'PAYMONGO_WEBHOOK_TOLERANCE_SECONDS'];
+  const previous = Object.fromEntries(names.map(name => [name, process.env[name]]));
+  try {
+    process.env.PAYMONGO_WEBHOOK_SECRET = 'isolated-webhook-key';
+    const timestamp = Math.floor(Date.now() / 1000) - 3600;
+    const rawBody = Buffer.from('{"data":{}}');
+    const digest = crypto.createHmac('sha256', process.env.PAYMONGO_WEBHOOK_SECRET).update(`${timestamp}.${rawBody}`).digest('hex');
+    for (const value of ['invalid', 'Infinity', '99999999']) {
+      process.env.PAYMONGO_WEBHOOK_TOLERANCE_SECONDS = value;
+      assert.equal(verifyPaymongoWebhookSignature({ rawBody, signatureHeader: `t=${timestamp},te=${digest}` }), false);
+    }
+  } finally { for (const name of names) { if (previous[name] === undefined) delete process.env[name]; else process.env[name] = previous[name]; } }
+});
+
+
+test('enabled automatic backups require valid schedule, encryption and private-storage configuration', () => {
+  const result = inspectProductionConfig({ NODE_ENV: 'production', BACKUP_ENABLED: 'true', BACKUP_CRON: 'invalid', BACKUP_RETENTION_DAYS: '-1' });
+  assert.equal(result.ready, false);
+  for (const failure of ['Backup schedule or retention invalid', 'BACKUP_ENCRYPTION_KEY missing or invalid', 'Private backup storage configuration missing or invalid']) assert.ok(result.failures.includes(failure));
+});

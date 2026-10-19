@@ -106,6 +106,9 @@ export const validateCoreEnvironment = (environment = process.env) => {
   if (nodeEnvironment !== 'production') {
     return { isProduction: false, nodeEnvironment };
   }
+  if (String(environment.NODE_TLS_REJECT_UNAUTHORIZED || '') === '0') {
+    throw new ProductionConfigurationError('PRODUCTION_TLS_DISABLED', 'Global TLS verification must remain enabled.');
+  }
 
   const secrets = SECRET_NAMES.map((name) => [name, validateSecret(environment, name)]);
   if (new Set(secrets.map(([, value]) => value)).size !== secrets.length) {

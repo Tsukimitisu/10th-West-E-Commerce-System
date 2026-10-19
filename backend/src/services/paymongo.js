@@ -251,7 +251,8 @@ export const verifyPaymongoWebhookSignature = ({ rawBody, signatureHeader }) => 
   if (!timestamp || !expected || !rawBody) return false;
 
   const timestampSeconds = Number(timestamp);
-  const toleranceSeconds = Math.max(60, Number(process.env.PAYMONGO_WEBHOOK_TOLERANCE_SECONDS || 300));
+  const configuredTolerance = Number(process.env.PAYMONGO_WEBHOOK_TOLERANCE_SECONDS || 300);
+  const toleranceSeconds = Number.isFinite(configuredTolerance) ? Math.min(900, Math.max(60, configuredTolerance)) : 300;
   if (!Number.isFinite(timestampSeconds) || Math.abs(Math.floor(Date.now() / 1000) - timestampSeconds) > toleranceSeconds) {
     return false;
   }
