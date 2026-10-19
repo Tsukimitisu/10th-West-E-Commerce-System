@@ -67,8 +67,8 @@ for (const accepted of [true, false]) {
   });
 }
 
-test('forgot-password sends to the existing account with a hashed expiring token and retains generic responses on failure/missing account', async () => {
-  const f = fixture();
+test('forgot-password remains available during recovery lock and sends to the existing account with a hashed expiring token and retains generic responses on failure/missing account', async () => {
+  const f = fixture(); f.user.login_lock_stage = 3; f.user.login_security_locked_at = new Date();
   const success = response();
   await forgotPassword({ validatedData: { email } }, success);
   assert.equal(f.payloads.length, 1);

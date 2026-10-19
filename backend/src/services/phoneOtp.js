@@ -39,7 +39,7 @@ export const canonicalPhone = (value) => {
 export const hashPhoneCode = (userId, phone, code) => crypto.createHmac('sha256', process.env.SESSION_SECRET)
   .update(`${userId}:${phone}:${code}`).digest('hex');
 
-export const sendSemaphoreCode = async ({ phone, code, expiry }, request = fetch) => {
+export const sendSemaphoreCode = async ({ phone, code, expiry, purpose }, request = fetch) => {
   const response = await request('https://api.semaphore.co/api/v4/otp', {
     method: 'POST',
     signal: AbortSignal.timeout(10000),
@@ -48,7 +48,7 @@ export const sendSemaphoreCode = async ({ phone, code, expiry }, request = fetch
       apikey: process.env.SEMAPHORE_API_KEY,
       number: phone.slice(1),
       code,
-      message: `Your 10th West Moto verification code is {otp}. Expires in ${expiry} minutes. Do not share this code.`,
+      message: otpMessage('{otp}', expiry, purpose),
       sendername: process.env.SEMAPHORE_SENDER_NAME || '10THWEST',
     }),
   });
@@ -61,9 +61,9 @@ export const sendSemaphoreCode = async ({ phone, code, expiry }, request = fetch
 };
 
 const deliveryFailure = () => new Error('SMS delivery could not be started. Please try again later.');
-const otpMessage = (code, expiry) => `Your 10th West Moto verification code is ${code}. Expires in ${expiry} minutes. Do not share this code.`;
+const otpMessage = (code, expiry, purpose) => `Your 10th West Moto ${purpose === 'password-reset' ? 'password reset' : 'verification'} code is ${code}. Expires in ${expiry} minutes. Do not share this code.`;
 
-export const sendTextBeeCode = async ({ phone, code, expiry }, request = fetch, env = process.env) => {
+export const sendTextBeeCode = async ({ phone, code, expiry, purpose }, request = fetch, env = process.env) => {
   const apiKey = env.TEXTBEE_API_KEY?.trim();
   if (!apiKey || !canonicalPhone(phone)) throw deliveryFailure();
   const baseUrl = String(env.TEXTBEE_API_BASE_URL || 'https://api.textbee.dev/api/v1').trim().replace(/\/+$/, '');
@@ -74,7 +74,7 @@ export const sendTextBeeCode = async ({ phone, code, expiry }, request = fetch, 
       method: 'POST',
       signal: AbortSignal.timeout(timeout),
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-      body: JSON.stringify({ recipients: [phone], message: otpMessage(code, expiry) }),
+      body: JSON.stringify({ recipients: [phone], message: otpMessage(code, expiry, purpose) }),
     });
     payload = response.ok ? await response.json().catch(() => null) : null;
   } catch {

@@ -1,3 +1,4 @@
+import { canonicalPhone } from '../services/phoneOtp.js';
 import pool from '../config/database.js';
 import databaseConfig from '../config/databaseConfig.cjs';
 import { createHash } from 'node:crypto';
@@ -217,3 +218,10 @@ export const adminMutationLimiter = actionLimit('admin-mutation', 60 * 1000, 30)
 export const backupCreateLimiter = actionLimit('backup-create', 60 * 60 * 1000, 3);
 
 export default rateLimit;
+
+// Persisted keys are SHA-256 namespaced by rateLimit; no raw phone is stored.
+const recoveryKey = action => req => `${action}:${req.ip || 'unknown'}:${canonicalPhone(req.body?.phone) || 'invalid'}`;
+export const phoneRecoveryIpLimiter = rateLimit(10 * 60 * 1000, 10, { storage: 'db' });
+export const phoneRecoveryLimiter = rateLimit(10 * 60 * 1000, 3, { storage: 'db', keyGenerator: recoveryKey('phone-reset') });
+export const phoneRecoveryVerifyIpLimiter = rateLimit(10 * 60 * 1000, 30, { storage: 'db' });
+export const phoneRecoveryVerifyLimiter = rateLimit(10 * 60 * 1000, 10, { storage: 'db', keyGenerator: recoveryKey('phone-reset-verify') });

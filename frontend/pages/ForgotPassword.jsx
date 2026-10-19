@@ -1,3 +1,4 @@
+import PhonePasswordRecovery from '../components/PhonePasswordRecovery.jsx';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
@@ -27,6 +28,7 @@ const mapForgotPasswordError = (err) => {
 };
 
 const ForgotPassword = () => {
+  const [method, setMethod] = useState('email');
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
@@ -96,7 +98,11 @@ const ForgotPassword = () => {
         </div>
 
         <div className="auth-form-body">
-          {sent ? (
+          <p className="mb-4 text-center text-sm text-slate-600">Choose how you'd like to verify your identity.</p>
+          <div role="group" aria-label="Recovery method" className="mb-6 grid grid-cols-2 gap-2">
+            {['email', 'phone'].map(value => <button key={value} type="button" aria-pressed={method === value} onClick={() => { setMethod(value); setError(''); }} className={`min-h-11 rounded-lg border px-4 text-sm font-semibold capitalize ${method === value ? 'border-orange-500 bg-orange-50 text-slate-950' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>{value === 'email' ? 'Email' : 'Phone'}</button>)}
+          </div>
+          {method === 'phone' ? <><h1 className="mb-4 font-display text-xl font-semibold text-slate-950">Forgot your password?</h1><PhonePasswordRecovery /><Link to="/login" className="mt-6 inline-flex min-h-11 items-center gap-2 text-sm text-slate-600"><ArrowLeft size={16} />Back to Sign In</Link></> : sent ? (
             <div className="text-center animate-fade-in">
               <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle size={32} className="text-green-500" />

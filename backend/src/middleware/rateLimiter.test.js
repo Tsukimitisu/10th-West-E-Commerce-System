@@ -6,7 +6,7 @@ process.env.NODE_ENV = 'test';
 process.env.TEST_DATABASE_URL = 'postgresql://invalid:invalid@127.0.0.1:1/invalid';
 
 const { default: pool } = await import('../config/database.js');
-const { default: rateLimit } = await import('./rateLimiter.js');
+const { default: rateLimit, phoneRecoveryLimiter, phoneRecoveryVerifyLimiter } = await import('./rateLimiter.js');
 
 after(async () => {
   await pool.end().catch(() => {});
@@ -23,6 +23,26 @@ const makeResponse = () => ({
     this.body = body;
     return this;
   },
+});
+
+test('phone recovery and verification reuse persistent limits with hashed canonical identifiers and safe 429s', async () => {
+  const original = pool.query, counts = new Map();
+  pool.query = async (_sql, params) => {
+    const count = (counts.get(params[0]) || 0) + 1; counts.set(params[0], count);
+    assert.match(params[0], /^[a-f0-9]{64}$/);
+    return { rows: [{ request_count: count, retry_after_seconds: 60 }] };
+  };
+  try {
+    let allowed = 0;
+    for (const phone of ['09123456789', '+639123456789', '639123456789', '09123456789']) {
+      const res = makeResponse();
+      await phoneRecoveryLimiter({ ip: '192.0.2.100', body: { phone } }, res, () => allowed++);
+      if (allowed === 3 && res.statusCode) { assert.equal(res.statusCode, 429); assert.doesNotMatch(JSON.stringify(res.body), /639123|account|registered/); }
+    }
+    assert.equal(allowed, 3); assert.equal(counts.size, 1);
+    for (let i = 0; i < 11; i++) await phoneRecoveryVerifyLimiter({ ip: '192.0.2.100', body: { phone: '09123456789' } }, makeResponse(), () => allowed++);
+    assert.equal(allowed, 13); assert.equal(counts.size, 2);
+  } finally { pool.query = original; }
 });
 
 test('database-backed rate limiter fails closed with the database outage contract', async () => {

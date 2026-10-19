@@ -1,3 +1,5 @@
+import { forgotPasswordPhone, verifyPasswordResetPhone } from '../services/passwordRecovery.js';
+import { phoneRecoveryIpLimiter, phoneRecoveryLimiter, phoneRecoveryVerifyIpLimiter, phoneRecoveryVerifyLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import { body, matchedData, validationResult } from 'express-validator';
 import passport, {
@@ -290,6 +292,8 @@ router.post(
   validate,
   forgotPassword
 );
+router.post('/forgot-password/phone', phoneRecoveryIpLimiter, phoneRecoveryLimiter, forgotPasswordPhone);
+router.post('/forgot-password/phone/verify', phoneRecoveryVerifyIpLimiter, phoneRecoveryVerifyLimiter, verifyPasswordResetPhone);
 router.post(
   '/verify-reset-token',
   verifyResetTokenLimiter,

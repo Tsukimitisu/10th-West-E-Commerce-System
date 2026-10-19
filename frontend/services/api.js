@@ -694,6 +694,13 @@ export const forgotPassword = async (email) => {
   });
 };
 
+export const requestPhonePasswordReset = phone => authenticatedFetch(`${API_URL}/auth/forgot-password/phone`, {
+  method: 'POST', body: JSON.stringify({ phone }),
+});
+export const verifyPhonePasswordReset = (phone, challenge_id, code) => authenticatedFetch(`${API_URL}/auth/forgot-password/phone/verify`, {
+  method: 'POST', body: JSON.stringify({ phone, challenge_id, code }),
+});
+
 export const resetPassword = async (token, newPassword) => {
   return authenticatedFetch(`${API_URL}/auth/reset-password`, {
     method: 'POST',

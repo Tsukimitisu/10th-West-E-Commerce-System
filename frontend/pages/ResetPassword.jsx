@@ -2,7 +2,7 @@ import { usePasswordPolicy } from '../hooks/usePasswordPolicy.js';
 import { passwordChecks, passwordPolicyError } from '../utils/passwordPolicy.js';
 import BrandMark from '../components/ui/BrandMark';
 ﻿import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowLeft, Check, X, Clock, ShieldAlert } from 'lucide-react';
 import { resetPassword, verifyResetToken } from '../services/api';
 
@@ -23,7 +23,8 @@ const ResetPassword = () => {
   const [lockedUntil, setLockedUntil] = useState(null);
   const navigate = useNavigate();
 
-  const token = searchParams.get('token') || '';
+  const location = useLocation();
+  const token = searchParams.get('token') || location.state?.resetToken || '';
 
   // Validate token on mount — no email in URL (backend resolves from token)
   useEffect(() => {
@@ -286,8 +287,8 @@ const ResetPassword = () => {
 
                 <div className="bg-gray-900 border border-gray-700 rounded-lg p-3">
                   <p className="text-[11px] text-gray-400 leading-relaxed">
-                    Your password is encrypted using industry-standard bcrypt hashing. We never store plain-text passwords.
-                    You cannot reuse your current password. This link expires after 1 hour.
+                    Your password is protected using bcrypt hashing. We never store plain-text passwords.
+                    You cannot reuse your current password. Use this one-time reset before its displayed expiry.
                   </p>
                 </div>
 
