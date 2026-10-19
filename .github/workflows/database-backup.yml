@@ -26,6 +26,8 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
 
+      DB_SSL_MODE: "no-verify"
+
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
