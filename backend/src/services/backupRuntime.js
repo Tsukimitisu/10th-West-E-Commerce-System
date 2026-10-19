@@ -8,6 +8,25 @@ import databaseConfig from '../config/databaseConfig.cjs';
 import { BackupError, encryptionKey } from './backupConfig.js';
 import { encryptBackup } from './backupCrypto.js';
 
+export const postgresEnvironment = async (config, directory, env = process.env) => {
+  const url = new URL(config.connectionString);
+  const escape = value => String(value).replace(/\\/g, '\\\\').replace(/:/g, '\\:');
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  const port = url.port || '5432';
+  const database = decodeURIComponent(url.pathname.slice(1));
+  const user = decodeURIComponent(url.username);
+  if ([database, user, decodeURIComponent(url.password)].some(value => /[\r\n]/.test(value))) throw new BackupError('BACKUP_DATABASE', 'Backup connection credentials contain unsupported control characters.');
+  const passfile = path.join(directory, 'pgpass');
+  await writeFile(passfile, [host, port, database, user, decodeURIComponent(url.password)].map(escape).join(':') + '\n', { mode: 0o600 });
+  const dumpEnv = {
+    PATH: env.PATH, SystemRoot: env.SystemRoot, PGHOST: host, PGPORT: port,
+    PGDATABASE: database, PGUSER: user, PGPASSFILE: passfile, PGCONNECT_TIMEOUT: '15',
+    PGSSLMODE: config.ssl ? (config.ssl.rejectUnauthorized ? 'verify-full' : 'require') : 'disable',
+    ...(env.BACKUP_PGSSLROOTCERT ? { PGSSLROOTCERT: env.BACKUP_PGSSLROOTCERT } : {}),
+  };
+  return dumpEnv;
+};
+
 const LOCK = 108701801;
 export const runPgDump = (binary, args, env, signal) => new Promise((resolve, reject) => {
   const child = spawn(binary, args, { env, signal, shell: false, windowsHide: true, stdio: 'ignore' });
@@ -94,23 +113,10 @@ export const createBackupRuntime = (env = process.env) => {
       try {
         await chmod(directory, 0o700);
         const config = connection();
-        const url = new URL(config.connectionString);
-        const escape = value => String(value).replace(/\\/g, '\\\\').replace(/:/g, '\\:');
-        const host = url.hostname.replace(/^\[|\]$/g, '');
-        const port = url.port || '5432';
-        const database = decodeURIComponent(url.pathname.slice(1));
-        const user = decodeURIComponent(url.username);
-        if ([database, user, decodeURIComponent(url.password)].some(value => /[\r\n]/.test(value))) throw new BackupError('BACKUP_DATABASE', 'Backup connection credentials contain unsupported control characters.');
-        const passfile = path.join(directory, 'pgpass');
-        await writeFile(passfile, [host, port, database, user, decodeURIComponent(url.password)].map(escape).join(':') + '\n', { mode: 0o600 });
+        const dumpEnv = await postgresEnvironment(config, directory, env);
+        const passfile = dumpEnv.PGPASSFILE;
         const dump = path.join(directory, 'database.dump');
         const encrypted = path.join(directory, record.filename);
-        const dumpEnv = {
-          PATH: env.PATH, SystemRoot: env.SystemRoot, PGHOST: host, PGPORT: port,
-          PGDATABASE: database, PGUSER: user, PGPASSFILE: passfile, PGCONNECT_TIMEOUT: '15',
-          PGSSLMODE: config.ssl ? (config.ssl.rejectUnauthorized ? 'verify-full' : 'require') : 'disable',
-          ...(env.BACKUP_PGSSLROOTCERT ? { PGSSLROOTCERT: env.BACKUP_PGSSLROOTCERT } : {}),
-        };
         await runPgDump(binary, ['--format=custom', '--compress=6', '--schema=public', '--no-owner', '--no-acl', '--no-password', '--file', dump], dumpEnv, signal);
         const { size, checksum } = await encryptBackup(dump, encrypted, encryptionKey(env), signal);
         await rm(dump, { force: true });
@@ -126,6 +132,11 @@ export const createBackupRuntime = (env = process.env) => {
       });
       if (!response.ok) throw new BackupError('BACKUP_UPLOAD', 'Private backup upload failed. Check storage limits and connectivity.');
       await response.body?.cancel();
+    },
+    async assertObject(record) {
+      const api = await privateBucket();
+      const { data, error } = await api.info(record.storage_key);
+      if (error || !data) throw new BackupError('BACKUP_STORAGE', 'The selected private backup is unavailable.', 409);
     },
     async download(record) {
       const api = await privateBucket();

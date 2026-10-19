@@ -57,11 +57,14 @@ import { errorLogger } from './middleware/errorLogger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { generateCsrfToken, validateCsrf } from './middleware/csrf.js';
 import pool from './config/database.js';
-import { startExpiredReservationCleanup } from './controllers/secureCheckoutController.js';
+import pg from 'pg';
+import databaseConfig from './config/databaseConfig.cjs';
+import { createRestoreProtection } from './middleware/restoreMaintenance.js';
+import { releaseExpiredReservations, startExpiredReservationCleanup } from './controllers/secureCheckoutController.js';
 import { getPaymongoConfigurationStatus } from './services/paymongo.js';
 import { getShippingConfigurationStatus } from './services/shipping/providers/index.js';
 import { getTrackingConfigurationStatus } from './services/tracking/providers/index.js';
-import { startMaintenanceWorkers } from './services/maintenance.js';
+import { runMaintenanceCleanup, startMaintenanceWorkers } from './services/maintenance.js';
 import {
   buildPublicIntegrationReadiness,
   getEmailConfigurationStatus,
@@ -251,6 +254,9 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use(cors(createCorsOptions(allowedOrigins)));
+const restoreLeasePool = new pg.Pool({ ...databaseConfig.getDatabaseConfig().pgPoolConfig, max: 4, min: 0, idleTimeoutMillis: 10000 });
+restoreLeasePool.on('error', () => console.error('Recovery protection database connection unavailable.'));
+const restoreProtection = createRestoreProtection(restoreLeasePool);
 app.use(protectPrivateFiles);
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
   dotfiles: 'deny',
@@ -266,6 +272,9 @@ app.use(express.json({
   },
 }));
 app.use(express.urlencoded({ extended: true }));
+// Parse bodies before taking write leases; slow uploads must not occupy the
+// recovery pool. Guard before session/auth middleware can perform database writes.
+app.use(restoreProtection.middleware);
 app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(activityLogger);
@@ -418,8 +427,8 @@ if (isProduction) {
 
 // Start server with Socket.IO only after the production schema preflight.
 if (coreStartupReady) {
-  startExpiredReservationCleanup();
-  startMaintenanceWorkers();
+  startExpiredReservationCleanup({ run: () => restoreProtection.run(releaseExpiredReservations) });
+  startMaintenanceWorkers({ run: () => restoreProtection.run(runMaintenanceCleanup) });
   httpServer.on('error', (error) => {
     if (error?.code === 'EADDRINUSE' && Number(PORT) === 5000) {
       console.error('Port 5000 is already in use. Stop the existing backend process or restart your terminal before running npm run dev.');

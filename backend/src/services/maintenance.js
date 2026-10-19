@@ -55,14 +55,14 @@ export const runMaintenanceCleanup = async () => {
   return summary;
 };
 
-export const startMaintenanceWorkers = ({ intervalMs = Number(process.env.SESSION_CLEANUP_INTERVAL_MS || process.env.MAINTENANCE_CLEANUP_INTERVAL_MS || 5 * 60 * 1000) } = {}) => {
+export const startMaintenanceWorkers = ({ run = runMaintenanceCleanup, intervalMs = Number(process.env.SESSION_CLEANUP_INTERVAL_MS || process.env.MAINTENANCE_CLEANUP_INTERVAL_MS || 5 * 60 * 1000) } = {}) => {
   if (maintenanceTimer || String(process.env.MAINTENANCE_CLEANUP_DISABLED || '').toLowerCase() === 'true') {
     return maintenanceTimer;
   }
 
   const safeInterval = Math.max(60000, Number(intervalMs) || 5 * 60 * 1000);
   maintenanceTimer = setInterval(() => {
-    runMaintenanceCleanup().catch((error) => {
+    run().catch((error) => {
       console.error('Scheduled maintenance cleanup failed:', error);
     });
   }, safeInterval);

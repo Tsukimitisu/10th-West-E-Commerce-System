@@ -1510,7 +1510,7 @@ export const releaseExpiredReservations = async () => {
 let reservationCleanupTimer = null;
 let reservationCleanupRunning = false;
 
-export const startExpiredReservationCleanup = ({ intervalMs = Number(process.env.RESERVATION_CLEANUP_INTERVAL_MS || 60000) } = {}) => {
+export const startExpiredReservationCleanup = ({ run = releaseExpiredReservations, intervalMs = Number(process.env.RESERVATION_CLEANUP_INTERVAL_MS || 60000) } = {}) => {
   if (reservationCleanupTimer || String(process.env.RESERVATION_CLEANUP_DISABLED || '').toLowerCase() === 'true') {
     return reservationCleanupTimer;
   }
@@ -1519,7 +1519,7 @@ export const startExpiredReservationCleanup = ({ intervalMs = Number(process.env
   reservationCleanupTimer = setInterval(() => {
     if (reservationCleanupRunning) return;
     reservationCleanupRunning = true;
-    releaseExpiredReservations().catch((error) => {
+    run().catch((error) => {
       console.error('Scheduled reservation cleanup failed:', error);
     }).finally(() => { reservationCleanupRunning = false; });
   }, safeInterval);

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { BackupError, scheduleWindow } from './backupConfig.js';
 import { writeAuditLog } from '../utils/audit.js';
+import { assertNoRestore } from './restoreControl.js';
 
 export const publicBackup = row => row && ({
   id: row.id, filename: row.filename, backup_type: row.backup_type, status: row.status,
@@ -11,7 +12,7 @@ export const publicBackup = row => row && ({
 });
 const safeFailure = error => error instanceof BackupError ? error.message : 'Backup failed. Check system logs.';
 
-export const createBackupService = ({ db, runtime, config, now = () => new Date(), audit = writeAuditLog }) => {
+export const createBackupService = ({ db, runtime, config, now = () => new Date(), audit = writeAuditLog, restoreJobId = null }) => {
   const log = (action, record, actor = null, req = null, metadata = {}) => audit(db, {
     req, actorUserId: actor, action, entityType: 'backup', entityId: record.id,
     metadata: { backup_type: record.backup_type, ...metadata },
@@ -22,6 +23,11 @@ export const createBackupService = ({ db, runtime, config, now = () => new Date(
     return result.rows[0];
   };
   const removeRecord = async (record, actor, req, reason) => {
+    const protectedBackup = await db.query(`SELECT id FROM recovery_control.database_restore_jobs WHERE
+      (status IN ('queued','preparing','restoring','validating') OR
+       (destructive_started AND status='failed' AND EXISTS (SELECT 1 FROM recovery_control.state WHERE maintenance)))
+      AND (backup_id=$1 OR safety_backup_id=$1) LIMIT 1`, [record.id]);
+    if (protectedBackup.rows.length) throw new BackupError('RESTORE_BUSY', 'This backup is protected by database recovery.', 409);
     if (record.deleted_at) return;
     if (record.status === 'queued' || record.status === 'running') throw new BackupError('BACKUP_BUSY', 'Backup already in progress.', 409);
     const newest = await db.query("SELECT id FROM backup_records WHERE status = 'completed' AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1");
@@ -117,6 +123,7 @@ export const createBackupService = ({ db, runtime, config, now = () => new Date(
       if (!lock) throw new BackupError('BACKUP_BUSY', 'Backup already in progress.', 409);
       let handedOff = false;
       try {
+        await assertNoRestore(db, restoreJobId);
         // With the global session lock acquired, any old active record lost its worker.
         const interrupted = await db.query("UPDATE backup_records SET status = 'failed', completed_at = NOW(), error_summary = 'Backup worker was interrupted. Retry the backup.' WHERE status IN ('queued','running') RETURNING *");
         for (const record of interrupted.rows) await log('BACKUP_FAILED', record, null, null, { reason: 'worker_interrupted' });
@@ -144,7 +151,7 @@ export const createBackupService = ({ db, runtime, config, now = () => new Date(
     async delete(id, actor, req) {
       const lock = await runtime.lock();
       if (!lock) throw new BackupError('BACKUP_BUSY', 'Backup already in progress.', 409);
-      try { await removeRecord(await get(id), actor, req, 'manual'); }
+      try { await assertNoRestore(db); await removeRecord(await get(id), actor, req, 'manual'); }
       finally { await lock.release(); }
     },
   };
