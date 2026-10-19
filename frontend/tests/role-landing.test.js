@@ -16,7 +16,9 @@ test('restored operations roles land in their workspace while customers retain H
 test('the root route redirects only after session profile restoration', async () => {
   const app = await readFile(new URL('../App.jsx', import.meta.url), 'utf8');
   assert.match(app, /await syncUserWithProfileRefresh\(\)/);
-  assert.match(app, /if \(loading\)/);
+  // Only the restricted cached POS can start before cloud profile restoration.
+  assert.match(app, /if \(loading && !window\.location\.hash\.split\('\?'\)\[0\]\.match/);
+  assert.match(app, /\^#\\\/pos/);
   assert.match(app, /path="\/" element=\{roleLandingPath\(user\?\.role\)/);
   assert.match(app, /<Navigate to=\{roleLandingPath\(user\.role\)\} replace \/>/);
 });

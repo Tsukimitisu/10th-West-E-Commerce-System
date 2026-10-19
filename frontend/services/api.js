@@ -2793,6 +2793,13 @@ export const getPosCapabilities = async () => {
   return authenticatedFetch(`${API_URL}/pos/capabilities`);
 };
 
+export const getOfflinePosDevice = () => authenticatedFetch(`${API_URL}/pos/offline/device`, { timeoutMs:8000,preserveSessionOnFailure:true });
+export const registerOfflinePosDevice = deviceUuid => authenticatedFetch(`${API_URL}/pos/offline/device`, { method:'POST',body:JSON.stringify({ device_uuid:deviceUuid }),timeoutMs:10000 });
+export const revokeOfflinePosDevice = () => authenticatedFetch(`${API_URL}/pos/offline/device`, { method:'DELETE' });
+export const saveOfflinePosReserve = data => authenticatedFetch(`${API_URL}/pos/offline/reserve`, { method:'PUT',body:JSON.stringify(data) });
+export const getOfflinePosReserves = productId => authenticatedFetch(`${API_URL}/pos/offline/reserves?product_id=${encodeURIComponent(productId)}`);
+export const getOfflinePosSnapshot = deviceId => authenticatedFetch(`${API_URL}/pos/offline/snapshot`, { method:'POST',body:JSON.stringify({ device_id:deviceId }),timeoutMs:60000,preserveSessionOnFailure:true });
+
 export const getMyPermissions = async () => {
   const data = await authenticatedFetch(`${API_URL}/auth/permissions`);
   return data.permissions || [];
@@ -2831,6 +2838,7 @@ export const createPosOrder = async ({
   paymentReference,
   promotionCode,
   idempotencyKey,
+  offline,
 }) => {
   return authenticatedFetch(`${API_URL}/pos/orders`, {
     method: 'POST',
@@ -2841,11 +2849,13 @@ export const createPosOrder = async ({
         product_id: item.product_id ?? item.productId,
         variant_id: item.variant_id ?? item.variantId ?? null,
         quantity: item.quantity,
+        ...(offline ? { unit_price:item.unit_price } : {}),
       })),
       payment_method: paymentMethod,
       amount_tendered: amountTendered,
       payment_reference: paymentReference || undefined,
       promotion_code: promotionCode || undefined,
+      ...(offline ? { offline } : {}),
     }),
   });
 };

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Banknote, Loader2, Smartphone, X } from 'lucide-react';
 
 const formatCurrency = (value) => new Intl.NumberFormat('en-PH', {
@@ -6,8 +6,11 @@ const formatCurrency = (value) => new Intl.NumberFormat('en-PH', {
   currency: 'PHP',
 }).format(Number(value || 0));
 
-const PaymentModal = ({ total, processing = false, error = '', onComplete, onCancel }) => {
-  const [method, setMethod] = useState('cash');
+const PaymentModal = ({ total, offline = false, processing = false, error = '', onComplete, onCancel }) => {
+  const [selectedMethod, setMethod] = useState('cash');
+  const method=offline ? 'cash' : selectedMethod;
+  // Reconnection must not silently reselect a previously selected GCash method.
+  useEffect(()=>{if(offline)setMethod('cash');},[offline]);
   const [tendered, setTendered] = useState('');
   const [reference, setReference] = useState('');
   const numericTendered = Number(tendered);
@@ -43,6 +46,7 @@ const PaymentModal = ({ total, processing = false, error = '', onComplete, onCan
         </div>
 
         <div className="space-y-5 p-5 sm:p-6">
+          {offline && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Online payments are unavailable while offline. Cash payments are still available.</p>}
           <fieldset>
             <legend className="mb-2 text-sm font-semibold text-slate-800">Payment method</legend>
             <div className="grid grid-cols-2 gap-3">
@@ -58,6 +62,7 @@ const PaymentModal = ({ total, processing = false, error = '', onComplete, onCan
               <button
                 type="button"
                 onClick={() => setMethod('gcash')}
+                disabled={offline}
                 aria-pressed={method === 'gcash'}
                 className={`flex min-h-20 items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors ${method === 'gcash' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
               >

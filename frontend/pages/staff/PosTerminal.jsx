@@ -19,7 +19,6 @@ import {
   Tag,
   Trash2,
   UserRound,
-  Wifi,
   X,
 } from 'lucide-react';
 import {
@@ -34,7 +33,11 @@ import {
   voidPosOrder,
 } from '../../services/api';
 import { getCurrentAuthUser } from '../../services/authSession';
-import { useSocket, useSocketEvent } from '../../context/SocketContext';
+import { useSocketEvent } from '../../context/SocketContext';
+import useOfflinePos from '../../hooks/useOfflinePos.js';
+import { allPosValues, commitOfflineCashSale, readPosValue, searchOfflineProducts, validateOfflineCart, updateOfflineSale } from '../../services/offlinePosDb.js';
+import OfflinePosSetup from '../../components/staff/OfflinePosSetup.jsx';
+import { lockLocalPos } from '../../services/offlinePosAccess.js';
 import BrandMark from '../../components/ui/BrandMark';
 import EmptyState from '../../components/ui/EmptyState';
 import PaymentModal from './PaymentModal';
@@ -54,10 +57,13 @@ const formatCurrency = (value) => new Intl.NumberFormat('en-PH', {
 }).format(Number(value || 0));
 const lineKey = (productId, variantId) => `${productId}:${variantId || 0}`;
 
-const PosTerminal = () => {
+const PosTerminal = ({ userOverride, connection }) => {
   const navigate = useNavigate();
-  const user = getCurrentAuthUser();
-  const { connected } = useSocket();
+  const user = userOverride || getCurrentAuthUser();
+  const online = connection?.online !== false;
+  const offline = useOfflinePos({ online,user });
+  const [setupOpen,setSetupOpen]=useState(false);
+  const uncertainOnlineSale=useRef(false);
   const searchRef = useRef(null);
   const idempotencyKeyRef = useRef(null);
 
@@ -116,7 +122,7 @@ const PosTerminal = () => {
     try {
       setCatalogLoading(true);
       setPageError('');
-      const rows = await getPosProducts({ search: term, categoryId: selectedCategory });
+      const rows = await (online ? getPosProducts({ search: term, categoryId: selectedCategory }) : searchOfflineProducts({ search:term,categoryId:selectedCategory }));
       setProducts(rows);
     } catch (error) {
       if (error.status === 403) setAccessDenied(true);
@@ -124,25 +130,26 @@ const PosTerminal = () => {
     } finally {
       setCatalogLoading(false);
     }
-  }, [categoryId, debouncedSearch]);
+  }, [categoryId, debouncedSearch,online]);
 
   const loadSummary = useCallback(async () => {
+    if (!online) return;
     try {
       setDailySummary(await getPosDailySummary());
     } catch {
       // A summary failure should not block active selling.
     }
-  }, []);
+  }, [online]);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getCategories(), getPosCapabilities(), getPosDailySummary()])
+    (online ? Promise.all([getCategories(), getPosCapabilities(), getPosDailySummary()]) : Promise.resolve([[],{can_access:true,can_discount:false,can_void:false},null]))
       .then(([categoryRows, access, summary]) => {
         if (!active) return;
         setCategories(categoryRows || []);
         setCapabilities(access);
         setDailySummary(summary);
-        return getPosProducts();
+        return online ? getPosProducts() : searchOfflineProducts();
       })
       .then((rows) => {
         if (active && rows) setProducts(rows);
@@ -156,12 +163,19 @@ const PosTerminal = () => {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, []);
+  }, [online]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 220);
     return () => window.clearTimeout(timer);
   }, [search]);
+
+  useEffect(()=>{
+    if(online)return;
+    let live=true;
+    searchOfflineProducts().then(rows=>{if(live)setCart(current=>current.map(item=>{const product=rows.find(p=>p.id===item.product_id);const variant=product?.variants?.find(v=>v.id===item.variant_id);return product ? {...item,product,variant,available_stock:variant?.available_stock ?? product.available_stock} : item;}));});
+    return()=>{live=false;};
+  },[online]);
 
   useEffect(() => {
     if (loading || accessDenied) return;
@@ -225,7 +239,7 @@ const PosTerminal = () => {
     setSearch(value);
     setCatalogLoading(true);
     try {
-      const rows = await getPosProducts({ search: value });
+      const rows = await (online ? getPosProducts({ search: value }) : searchOfflineProducts({ search:value }));
       const normalized = value.toLowerCase();
       let exactProduct = null;
       let exactVariant = null;
@@ -282,7 +296,7 @@ const PosTerminal = () => {
     const timer = window.setTimeout(async () => {
       setQuoteLoading(true);
       try {
-        const result = await validatePosCart(cart, promotionCode);
+        const result = online ? await validatePosCart(cart, promotionCode) : await validateOfflineCart(cart);
         if (active) {
           setQuote(result);
           setCartError('');
@@ -300,9 +314,10 @@ const PosTerminal = () => {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [cart, promotionCode]);
+  }, [cart, promotionCode,online]);
 
   const applyPromotion = () => {
+    if (!online) return;
     const code = promotionInput.trim().toUpperCase();
     setPromotionCode(code);
     if (!code) setPromotionInput('');
@@ -310,7 +325,7 @@ const PosTerminal = () => {
 
   const openPayment = () => {
     if (!quote?.valid || cartError || quoteLoading) return;
-    idempotencyKeyRef.current = crypto.randomUUID();
+    if (!uncertainOnlineSale.current) idempotencyKeyRef.current = crypto.randomUUID();
     setPaymentError('');
     setPaymentOpen(true);
   };
@@ -319,6 +334,14 @@ const PosTerminal = () => {
     setPaymentProcessing(true);
     setPaymentError('');
     try {
+      if (!online && uncertainOnlineSale.current) throw new Error('The previous online payment has not been confirmed. Reconnect and retry it before starting an offline sale.');
+      if (!online) {
+        const saved = await commitOfflineCashSale({ items:cart,amountTendered,paymentMethod,transactionId:idempotencyKeyRef.current,cashier:user });
+        setReceipt(saved);setPaymentOpen(false);setCart([]);setPromotionCode('');setPromotionInput('');idempotencyKeyRef.current=null;
+        await offline.refreshLocal();await loadCatalog();
+        return;
+      }
+      uncertainOnlineSale.current=true;
       const result = await createPosOrder({
         items: cart,
         paymentMethod,
@@ -328,15 +351,18 @@ const PosTerminal = () => {
         idempotencyKey: idempotencyKeyRef.current,
       });
       setReceipt(result.receipt || result.order);
+      uncertainOnlineSale.current=false;
       setPaymentOpen(false);
       setCart([]);
       setPromotionCode('');
       setPromotionInput('');
       idempotencyKeyRef.current = null;
       await Promise.all([loadCatalog(), loadSummary()]);
+      await offline.refreshSnapshot().catch(()=>{});
     } catch (error) {
       setPaymentError(error.message || 'The sale could not be completed.');
-      if (!['NETWORK_ERROR', 'REQUEST_TIMEOUT', 'POS_ORDER_PROCESSING'].includes(error.code)) {
+      if (online && !['NETWORK_ERROR', 'REQUEST_TIMEOUT', 'POS_ORDER_PROCESSING', 'POS_REQUEST_IN_PROGRESS'].includes(error.code) && !(error.status>=500)) {
+        uncertainOnlineSale.current=false;
         idempotencyKeyRef.current = crypto.randomUUID();
       }
     } finally {
@@ -348,8 +374,9 @@ const PosTerminal = () => {
     setRecentOpen(true);
     setRecentLoading(true);
     try {
-      const result = await getPosOrders({ limit: 20 });
-      setRecentOrders(result.orders || []);
+      const local = (await allPosValues('pending_sales')).map(s=>({ ...s, local:true }));
+      if (!online) setRecentOrders(local);
+      else {const result=await getPosOrders({limit:20});setRecentOrders([...local,...(result.orders || []).filter(o=>!local.some(s=>Number(s.server_order_id)===Number(o.id)))]);}
     } catch (error) {
       showToast('error', error.message || 'Recent sales could not be loaded.');
     } finally {
@@ -359,7 +386,12 @@ const PosTerminal = () => {
 
   const openReceipt = async (orderId) => {
     try {
-      setReceipt(await getPosReceipt(orderId));
+      const local=await readPosValue('receipts',orderId);
+      if(local?.server_order_id && online){
+        const current=await getPosReceipt(local.server_order_id);
+        await updateOfflineSale(local.id,{server_receipt:current,server_voided:current.status==='cancelled'});
+        setReceipt({...current,offline_sale:true,status:'synchronized',server_voided:current.status==='cancelled',offline_receipt_number:local.receipt_number});
+      }else setReceipt(local ? local.server_receipt ? {...local.server_receipt,offline_sale:true,status:'synchronized',server_voided:local.server_voided,offline_receipt_number:local.receipt_number} : local : await getPosReceipt(orderId));
       setRecentOpen(false);
     } catch (error) {
       showToast('error', error.message || 'Receipt could not be loaded.');
@@ -367,14 +399,17 @@ const PosTerminal = () => {
   };
 
   const confirmVoid = async () => {
-    if (!voidTarget || voidReason.trim().length < 5) return;
+    if (!online || !voidTarget || voidReason.trim().length < 5) return;
     setVoidProcessing(true);
     try {
       await voidPosOrder(voidTarget.id, voidReason.trim());
-      setRecentOrders((current) => current.map((order) => order.id === voidTarget.id ? { ...order, status: 'cancelled', payment_status: 'refunded', voided_at: new Date().toISOString() } : order));
+      const local=offline.sales.find(s=>Number(s.server_order_id)===Number(voidTarget.id));
+      if(local)await updateOfflineSale(local.id,{server_voided:true,server_receipt:{...local.server_receipt,status:'cancelled',payment_status:'refunded',voided_at:new Date().toISOString()}});
+      setRecentOrders((current) => current.map((order) => order.id === voidTarget.id || Number(order.server_order_id)===Number(voidTarget.id) ? { ...order, status:order.local ? 'synchronized' : 'cancelled',server_voided:true, payment_status: 'refunded', voided_at: new Date().toISOString() } : order));
       setVoidTarget(null);
       setVoidReason('');
       await Promise.all([loadCatalog(), loadSummary()]);
+      await offline.refreshLocal();await offline.refreshSnapshot().catch(()=>{});
       showToast('success', 'Sale voided and stock restored.');
     } catch (error) {
       showToast('error', error.message || 'Sale could not be voided.');
@@ -450,7 +485,7 @@ const PosTerminal = () => {
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
-          <span className={`hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold sm:inline-flex ${connected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}><Wifi size={12} /> {connected ? 'Live inventory' : 'Reconnecting'}</span>
+          {online && <button onClick={()=>setSetupOpen(true)} className="min-h-11 rounded-lg border px-2 text-xs font-semibold">Offline POS setup</button>}
           <button aria-label="Recent sales" onClick={openRecentSales} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"><History size={16} /><span className="hidden sm:inline">Recent sales</span></button>
           <div className="hidden items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 lg:flex">
             <UserRound size={16} className="text-slate-500" />
@@ -458,6 +493,13 @@ const PosTerminal = () => {
           </div>
         </div>
       </header>
+
+      <div className={`shrink-0 border-b px-3 py-2 text-xs sm:px-5 ${online?'bg-emerald-50 text-emerald-900':'bg-amber-50 text-amber-900'}`} role="status" aria-live="polite">
+        <div className="flex flex-wrap items-center justify-between gap-2"><p><strong>{offline.syncing?'↻ Synchronizing':online?'● Online':'● Offline mode'}</strong> · {online ? offline.pending ? `${offline.pending} pending transaction(s)` : 'All transactions synchronized.' : `Cash sales are available. Pending sync: ${offline.pending}`}</p>{online && offline.pending>0 && <button disabled={offline.syncing} onClick={async()=>{await connection.check();await offline.sync();await loadCatalog();}} className="min-h-11 rounded-lg border px-3 font-semibold">Sync now</button>}{!online && <button onClick={()=>{lockLocalPos();window.dispatchEvent(new Event('offline-pos:prepared'));}} className="min-h-11 rounded-lg border px-3 font-semibold">Lock POS</button>}</div>
+        {!online && <><p>Online payments are unavailable while offline. Cash payments are still available.</p><p>Promotions require an internet connection.</p><p>Last inventory sync: {offline.snapshot ? new Date(offline.snapshot.created_at).toLocaleString() : 'Not prepared'}</p>{offline.snapshot && Date.parse(offline.snapshot.expires_at)<=Date.now() && <p role="alert">Offline catalogue and access have expired. Reconnect before starting another sale. Pending sales are saved.</p>}</>}
+        {offline.message && <p role="alert">{offline.message}</p>}
+        {offline.sales.filter(s=>s.status==='attention').map(s=><div key={s.id} className="mt-1 flex flex-wrap items-center gap-2"><p>{s.receipt_number}: Needs attention. {s.last_error}</p>{online && ['owner','admin','super_admin'].includes(user?.role) && <button className="min-h-11 rounded border px-2" onClick={async()=>{if(window.confirm('Confirm the physical sale and correct inventory/reserve before retrying. The original transaction ID will be preserved.')){await updateOfflineSale(s.id,{status:'pending',next_attempt_at:0});await offline.sync();}}}>Retry after stock review</button>}</div>)}
+      </div>
 
       <main className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-1">
         <section className="flex min-h-0 flex-col overflow-hidden">
@@ -558,7 +600,7 @@ const PosTerminal = () => {
           </div>
 
           <div className="shrink-0 border-t border-slate-200 bg-slate-50 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:p-4">
-            {capabilities?.can_discount && (isDesktop || saleExpanded) && (
+            {online && capabilities?.can_discount && (isDesktop || saleExpanded) && (
               <div className="mb-3">
                 <label htmlFor="promotion-code" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><Tag size={13} /> Promotion code</label>
                 <div className="flex gap-2">
@@ -607,7 +649,8 @@ const PosTerminal = () => {
         </div>
       )}
 
-      {paymentOpen && <PaymentModal total={displayTotal} processing={paymentProcessing} error={paymentError} onComplete={completeSale} onCancel={() => !paymentProcessing && setPaymentOpen(false)} />}
+      {paymentOpen && <PaymentModal offline={!online} total={displayTotal} processing={paymentProcessing} error={paymentError} onComplete={completeSale} onCancel={() => !paymentProcessing && setPaymentOpen(false)} />}
+      {setupOpen && online && <OfflinePosSetup onClose={()=>setSetupOpen(false)} offline={offline} user={user} capabilities={capabilities} />}
       {receipt && <ReceiptModal order={receipt} onClose={() => setReceipt(null)} onNewSale={() => { setReceipt(null); searchRef.current?.focus(); }} />}
 
       {recentOpen && (
@@ -624,12 +667,12 @@ const PosTerminal = () => {
                     <div key={order.id} className="rounded-xl border border-slate-200 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div><p className="font-mono text-xs font-bold">{order.receipt_number || `Order #${order.id}`}</p><p className="mt-1 text-xs text-slate-500">{new Date(order.created_at).toLocaleString('en-PH')} · {order.cashier_name}</p></div>
-                        <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${order.status === 'cancelled' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{order.status === 'cancelled' ? 'Voided' : order.payment_method}</span>
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${order.status === 'cancelled' || order.server_voided ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{order.server_voided ? 'Voided' : order.local ? order.status==='synchronized' ? 'Synchronized' : order.status==='attention' ? 'Needs attention' : 'Pending sync' : order.status === 'cancelled' ? 'Voided' : order.payment_method}</span>
                       </div>
                       <div className="mt-3 flex items-center justify-between">
                         <strong>{formatCurrency(order.total_amount)}</strong>
                         <div className="flex gap-2">
-                          {capabilities?.can_void && order.status === 'paid' && <button onClick={() => setVoidTarget(order)} className="rounded-lg px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50">Void</button>}
+                          {online && capabilities?.can_void && !order.server_voided && (order.status === 'paid' || order.status==='synchronized') && <button onClick={() => setVoidTarget(order.local ? {...order,id:order.server_order_id} : order)} className="rounded-lg px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50">Void</button>}
                           <button onClick={() => openReceipt(order.id)} className="inline-flex items-center gap-1 rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white">Receipt <ChevronRight size={13} /></button>
                         </div>
                       </div>

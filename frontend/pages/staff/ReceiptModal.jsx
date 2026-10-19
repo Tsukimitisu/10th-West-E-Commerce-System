@@ -16,7 +16,7 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
       <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 print:hidden">
           <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
-            <CheckCircle2 size={18} /> Sale completed
+            <CheckCircle2 size={18} /> {order.server_voided ? 'Voided' : order.offline_sale ? order.status==='synchronized' ? 'Synchronized' : 'Pending synchronization' : 'Sale completed'}
           </div>
           <div className="flex gap-1">
             <button onClick={handlePrint} className="grid h-10 w-10 place-items-center rounded-xl text-slate-600 hover:bg-slate-200" aria-label="Print receipt"><Printer size={18} /></button>
@@ -29,11 +29,13 @@ const ReceiptModal = ({ order, onClose, onNewSale }) => {
             <BrandMark link={false} className="justify-center" />
             <h1 id="receipt-title" className="sr-only">POS receipt</h1>
             <p className="mt-4 font-mono text-xs font-bold">{order.receipt_number}</p>
+            {order.offline_sale && <p className="mt-2 text-xs font-bold">OFFLINE SALE · {order.server_voided ? 'Voided' : order.status==='synchronized' ? 'Synchronized' : 'Pending synchronization'}</p>}
+            {order.offline_receipt_number && <p className="text-xs">Original receipt: {order.offline_receipt_number}</p>}
             <p className="mt-1 text-xs text-slate-500">{createdAt.toLocaleString('en-PH')}</p>
           </div>
 
           <dl className="mt-5 space-y-1 border-y border-dashed border-slate-300 py-4 text-xs">
-            <div className="flex justify-between gap-4"><dt className="text-slate-500">Order</dt><dd className="font-semibold">#{order.order_id || order.id}</dd></div>
+            {(!order.offline_sale || order.status==='synchronized') && <div className="flex justify-between gap-4"><dt className="text-slate-500">Order</dt><dd className="font-semibold">#{order.order_id || order.id}</dd></div>}
             <div className="flex justify-between gap-4"><dt className="text-slate-500">Cashier</dt><dd className="font-semibold">{order.cashier_name || 'Staff'}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-slate-500">Payment</dt><dd className="font-semibold uppercase">{order.payment_method}</dd></div>
             {order.payment_reference && <div className="flex justify-between gap-4"><dt className="text-slate-500">Reference</dt><dd className="font-mono font-semibold">{order.payment_reference}</dd></div>}

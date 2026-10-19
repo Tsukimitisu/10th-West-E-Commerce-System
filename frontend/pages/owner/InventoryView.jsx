@@ -15,6 +15,7 @@ import { handleProductImageError, resolveProductImageUrl } from '../../utils/pro
 import InventoryItemForm from '../../components/owner/InventoryItemForm';
 import MotorcycleModelManager from '../../components/owner/MotorcycleModelManager';
 import CameraScannerModal from '../../components/staff/CameraScannerModal';
+import OfflinePosReserveModal from '../../components/owner/OfflinePosReserveModal.jsx';
 
 const STOCK_ADJUSTMENT_REASONS = Object.freeze({
   add: [
@@ -89,6 +90,7 @@ const InventoryView = ({ user }) => {
   const [sortDirection, setSortDirection] = useState('asc');
   const [page, setPage] = useState(1);
   const [adjustModal, setAdjustModal] = useState(false);
+  const [offlineReserveProduct,setOfflineReserveProduct]=useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [adjForm, setAdjForm] = useState({ type: 'add', quantity: '', reason: 'restocking', notes: '' });
 
@@ -468,6 +470,7 @@ const InventoryView = ({ user }) => {
       <CameraScannerModal open={lookupScannerOpen} onClose={() => setLookupScannerOpen(false)} onScan={value => { setSearch(String(value).trim()); setPage(1); setTab('stock'); setLookupScannerOpen(false); }} title="Find a part by barcode" />
 
       {/* Adjust Stock Modal */}
+      {offlineReserveProduct && <OfflinePosReserveModal product={offlineReserveProduct} onClose={()=>setOfflineReserveProduct(null)} onSaved={fetchData} />}
       <Modal isOpen={adjustModal} onClose={() => setAdjustModal(false)} title={`Adjust Stock - ${selectedProduct?.name || ''}`} size="md">
         <form onSubmit={handleAdjust} className="space-y-4">
           <div className="flex items-center gap-3 p-3 bg-gray-900 rounded-lg">
@@ -524,6 +527,7 @@ const InventoryView = ({ user }) => {
           )}
 
           <div className="flex justify-end gap-2 pt-2">
+            <button type="button" disabled={!canAdjustStock} onClick={()=>{setAdjustModal(false);setOfflineReserveProduct(selectedProduct);}} className="min-h-11 rounded-lg border px-3 text-sm">Offline POS reserve</button>
             <button type="button" onClick={() => setAdjustModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
             <button type="submit" disabled={adjLoading} className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${adjForm.type === 'add' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-500/100 hover:bg-red-600'}`}>
               {adjLoading ? 'Processing...' : adjForm.type === 'add' ? 'Add Stock' : 'Remove Stock'}

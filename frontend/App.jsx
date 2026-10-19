@@ -1,4 +1,6 @@
 import AuthHeader from './components/customer/AuthHeader';
+import OfflinePosRoute from './components/staff/OfflinePosRoute.jsx';
+import { offlinePosRestricted } from './services/offlinePosScope.js';
 import { customerReturnTo } from './utils/customerReturnTo.js';
 import AuthShell from './components/AuthShell';
 import BrandLogo from './components/ui/BrandLogo';
@@ -56,7 +58,6 @@ const Wishlist = lazy(() => import('./pages/customer/Wishlist'));
 const Messages = lazy(() => import('./pages/customer/Messages'));
 const AdminDashboard = lazy(() => import('./pages/owner/AdminDashboard'));
 const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
-const PosTerminal = lazy(() => import('./pages/staff/PosTerminal'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const RouteFallback = () => (
@@ -72,6 +73,8 @@ const CustomerAuthRedirect = () => {
 
 const AppLayout = ({ user, onLogout, onLogin }) => {
   const location = useLocation();
+  const [posRestricted,setPosRestricted]=useState(offlinePosRestricted);
+  useEffect(()=>{ const update=()=>setPosRestricted(offlinePosRestricted());window.addEventListener('offline-pos:scope',update);return()=>window.removeEventListener('offline-pos:scope',update); },[]);
   const shouldReduceMotion = useReducedMotion();
 
   useLayoutEffect(() => {
@@ -96,7 +99,8 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   if (user?.requires_2fa_enrollment || user?.requires_2fa_challenge) {
     return <Suspense fallback={<RouteFallback />}><TwoFactorPolicyGate user={user} onLogin={onLogin} onLogout={onLogout} /></Suspense>;
   }
-  if (isSuperAdmin && !location.pathname.startsWith('/superadmin') && !location.pathname.startsWith('/super-admin') && location.pathname !== '/login') {
+  if (posRestricted && location.pathname !== '/pos') return <main className="mx-auto max-w-lg p-6"><p>This area requires an internet connection.</p><a href="#/pos">Return to POS</a></main>;
+  if (isSuperAdmin && !location.pathname.startsWith('/superadmin') && !location.pathname.startsWith('/super-admin') && location.pathname !== '/login' && location.pathname !== '/pos') {
     return <Navigate to="/superadmin/dashboard" replace />;
   }
 
@@ -196,7 +200,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                 <Route path="/staff/*" element={user?.role === Role.STORE_STAFF ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
                 <Route path="/superadmin/*" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
                 <Route path="/super-admin/*" element={<Navigate to="/superadmin/dashboard" replace />} />
-                <Route path="/pos" element={[Role.OWNER, Role.ADMIN, Role.STORE_STAFF, Role.CASHIER].includes(user?.role) ? <PosTerminal /> : <Navigate to="/login" replace />} />
+                <Route path="/pos" element={<OfflinePosRoute user={user} />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
               </Suspense>
@@ -344,7 +348,7 @@ const App = () => {
     // Navigation to /login handled by route guards (user is null)
   }, []);
 
-  if (loading) {
+  if (loading && !window.location.hash.split('?')[0].match(/^#\/pos\/?$/)) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col gap-6 items-center justify-center" role="status" aria-label="Loading 10th West">
         <BrandLogo dark link={false} />

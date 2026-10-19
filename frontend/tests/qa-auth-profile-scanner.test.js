@@ -124,6 +124,9 @@ test('staff camera scanner has permission fallback, manual entry, and determinis
   assert.match(pos, /Scan with Camera/);
   assert.match(pos, /Item not found in inventory\./);
   assert.match(pos, /addLine\(exactProduct, exactVariant\)/);
-  assert.match(app, /\[Role\.OWNER, Role\.ADMIN, Role\.STORE_STAFF, Role\.CASHIER\]\.includes\(user\?\.role\)/);
+  assert.match(app, /path="\/pos" element=\{<OfflinePosRoute user=\{user\}/);
+  const offlineRoute=await read('components/staff/OfflinePosRoute.jsx');
+  assert.match(offlineRoute, /roles=\['owner','admin','super_admin','store_staff','cashier'\]/);
+  assert.match(offlineRoute, /connection\.online && user && roles\.includes\(user\.role\)/);
   assert.doesNotMatch(app, /Role\.CUSTOMER[^\n]*<PosTerminal/);
 });

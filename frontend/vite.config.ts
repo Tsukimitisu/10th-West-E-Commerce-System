@@ -1,6 +1,7 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import posPwaPlugin from './posPwaPlugin.js';
 import { validateProductionApiUrl, validatePublicEnvironment } from './api-url.js';
 
 export default defineConfig(({ command, mode }) => {
@@ -16,7 +17,7 @@ export default defineConfig(({ command, mode }) => {
         strictPort: true,
         host: '0.0.0.0',
       },
-      plugins: [react()],
+      plugins: [react(), posPwaPlugin()],
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
@@ -26,6 +27,9 @@ export default defineConfig(({ command, mode }) => {
         chunkSizeWarningLimit: 700,
         rollupOptions: {
           output: {
+            // Keep shared auth/API modules out of manually grouped role pages.
+            // Eager offline entry otherwise creates a production chunk cycle.
+            onlyExplicitManualChunks: true,
             manualChunks(id) {
               const normalizedId = id.replace(/\\/g, '/');
               if (normalizedId.includes('/node_modules/')) {
