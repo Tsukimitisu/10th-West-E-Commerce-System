@@ -10,7 +10,7 @@ router.get('/', authenticateToken, requireRole('admin', 'super_admin', 'owner', 
     const result = await pool.query('SELECT * FROM suppliers ORDER BY name ASC');
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -21,7 +21,7 @@ router.get('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
     if (result.rows.length === 0) return res.status(404).json({ message: 'Supplier not found' });
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -35,7 +35,7 @@ router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner')
     );
     res.status(201).json({ supplier: result.rows[0] });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -49,7 +49,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
     );
     res.json({ supplier: result.rows[0] });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -59,7 +59,7 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'super_admin', 'ow
     await pool.query('DELETE FROM suppliers WHERE id = $1', [req.params.id]);
     res.json({ message: 'Deleted' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 

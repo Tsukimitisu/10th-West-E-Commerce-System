@@ -87,12 +87,12 @@ export const sanitizeHttpUrlOrPath = (value, { maxLength = 500 } = {}) => {
   if (!text) return null;
 
   if (text.startsWith('/')) {
-    return text.slice(0, maxLength);
+    return text.startsWith('//') || text.includes('\\') ? null : text.slice(0, maxLength);
   }
 
   try {
     const parsed = new URL(text);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return null;
     return parsed.toString().slice(0, maxLength);
   } catch {
     return null;

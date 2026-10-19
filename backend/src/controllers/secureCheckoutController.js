@@ -1167,7 +1167,7 @@ export const retryPayment = async (req, res) => {
       },
     }).catch(() => {});
     console.error('Retry payment failed:', error);
-    return res.status(error.status || (error.code === 'PAYMONGO_NOT_CONFIGURED' ? 503 : 500)).json({ message: error.message || 'Payment retry failed.' });
+    return res.status(error.status || (error.code === 'PAYMONGO_NOT_CONFIGURED' ? 503 : 500)).json({ message: error.status && error.status < 500 ? error.message : 'Payment retry failed. Please try again later.' });
   } finally { client.release(); }
 };
 

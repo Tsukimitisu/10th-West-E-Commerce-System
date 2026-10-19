@@ -436,7 +436,7 @@ router.get('/product/:productId', async (req, res) => {
         variants: [],
       });
     }
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -552,7 +552,7 @@ router.put('/product/:productId', authenticateToken, requireRole('admin', 'super
     if (error.code === '23505') {
       return res.status(400).json({ message: 'Duplicate variant combinations are not allowed.' });
     }
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   } finally {
     client.release();
   }
@@ -651,7 +651,7 @@ router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner',
       variant: mapDbRowToVariant(result.rows[0], normalizedOrder, basePrice),
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -756,7 +756,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
       variant: mapDbRowToVariant(result.rows[0], optionOrder, basePrice),
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -768,7 +768,7 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'super_admin', 'ow
     await req.logActivity?.('variant.delete', 'product_variant', Number(req.params.id), { before: deleted.rows[0] });
     res.json({ message: 'Deleted' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 

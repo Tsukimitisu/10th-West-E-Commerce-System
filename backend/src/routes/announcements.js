@@ -94,7 +94,7 @@ router.get('/', async (req, res) => {
     if (isDatabaseConnectivityError(error)) {
       return res.json([]);
     }
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -104,7 +104,7 @@ router.get('/all', authenticateToken, requireRole('admin', 'super_admin', 'owner
     const result = await pool.query('SELECT * FROM announcements ORDER BY created_at DESC');
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -114,7 +114,7 @@ router.get('/toggle', authenticateToken, requireRole('admin', 'super_admin', 'ow
     const enabled = await getAnnouncementsEnabled();
     res.json({ enabled });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -135,7 +135,7 @@ router.put('/toggle', authenticateToken, requireRole('admin', 'super_admin', 'ow
 
     res.json({ enabled });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -163,7 +163,7 @@ router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner')
 
     res.status(201).json({ announcement: result.rows[0] });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -209,7 +209,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
 
     res.json({ announcement: result.rows[0] });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -219,7 +219,7 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'super_admin', 'ow
     await pool.query('DELETE FROM announcements WHERE id = $1', [req.params.id]);
     res.json({ message: 'Deleted' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 

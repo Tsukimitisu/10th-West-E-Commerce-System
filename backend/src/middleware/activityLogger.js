@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import databaseConfig from '../config/databaseConfig.cjs';
 
 /**
  * Log a user/system activity to the activity_logs table.
@@ -28,7 +29,7 @@ export const logActivity = async ({
     );
   } catch (err) {
     // Never let logging crash the request
-    console.error('Activity log error:', err.message);
+    console.error('Activity log error:', databaseConfig.sanitizeDatabaseError(err));
   }
 };
 
@@ -37,11 +38,9 @@ export const logActivity = async ({
  * `req.logActivity(action, entityType?, entityId?, details?)` to the request.
  */
 export const activityLogger = (req, res, next) => {
-  const forwardedFor = req.headers['x-forwarded-for'];
-  const ip = typeof forwardedFor === 'string'
-    ? forwardedFor.split(',')[0].trim()
-    : (req.socket.remoteAddress || null);
-  const ua = req.headers['user-agent'] || '';
+  // Express resolves forwarding headers using the configured trusted proxy.
+  const ip = req.ip || req.socket?.remoteAddress || null;
+  const ua = String(req.headers['user-agent'] || '').slice(0, 512);
 
   req.clientIp = ip;
   req.clientUa = ua;

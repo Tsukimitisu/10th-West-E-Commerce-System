@@ -7,7 +7,7 @@ export const errorHandler = (err, req, res, _next) => {
   const safeError = sanitizeDatabaseError(err);
   console.error('[ERROR]', {
     timestamp: new Date().toISOString(),
-    endpoint: `${req.method} ${req.originalUrl}`,
+    endpoint: `${req.method} ${String(req.originalUrl || req.path || '').split('?')[0]}`,
     error: safeError,
   });
 

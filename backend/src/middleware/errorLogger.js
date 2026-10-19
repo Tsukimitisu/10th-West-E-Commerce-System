@@ -12,8 +12,7 @@ export const errorLogger = async (err, req, _res, next) => {
   const safeError = sanitizeDatabaseError(err);
   if (String(req.originalUrl || '').startsWith('/api/auth/google')) {
     console.error('GOOGLE_OAUTH_ERROR_DETAIL', {
-      name: String(err?.name || 'Error').slice(0, 80),
-      message: String(err?.message || safeError.message || 'OAuth request failed').slice(0, 200),
+      error: safeError,
     });
   }
 

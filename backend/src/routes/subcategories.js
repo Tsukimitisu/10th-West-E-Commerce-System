@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -25,7 +25,7 @@ router.get('/category/:categoryId', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -39,7 +39,7 @@ router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner')
     );
     res.status(201).json({ subcategory: result.rows[0] });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -53,7 +53,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
     );
     res.json({ subcategory: result.rows[0] });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
@@ -63,7 +63,7 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'super_admin', 'ow
     await pool.query('DELETE FROM subcategories WHERE id = $1', [req.params.id]);
     res.json({ message: 'Deleted' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 

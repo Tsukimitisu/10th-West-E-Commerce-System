@@ -4,7 +4,8 @@ export const validate = (req, res, next) => {
   const errors = validationResult(req);
   
   if (!errors.isEmpty()) {
-    const rawErrors = errors.array();
+    // Validation feedback must never echo submitted passwords or action tokens.
+    const rawErrors = errors.array().map(error => ({ type: error.type, path: error.path, location: error.location, msg: error.msg }));
     const fieldErrors = rawErrors.reduce((acc, error) => {
       if (error.type === 'field' && error.path && !acc[error.path]) {
         acc[error.path] = error.msg;

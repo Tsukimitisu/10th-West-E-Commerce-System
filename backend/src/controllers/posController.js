@@ -404,7 +404,7 @@ export const createPosOrder = async (req, res) => {
   try {
     normalizedItems = normalizeCartItems(req.body?.items);
   } catch (error) {
-    return res.status(error.status || 400).json({ message: error.message, code: error.code });
+    return res.status(error.status || 500).json({ message: error.status && error.status < 500 ? error.message : 'POS order could not be created.', code: error.status && error.status < 500 ? error.code : 'POS_ORDER_FAILED' });
   }
   const canonicalRequest = {
     items: normalizedItems,
@@ -642,7 +642,7 @@ export const getPosOrder = async (req, res) => {
   try {
     return res.json({ order: await buildReceipt(client, Number(req.params.id)) });
   } catch (error) {
-    return res.status(error.status || 500).json({ message: error.message || 'POS order could not be loaded.', code: error.code || 'POS_ORDER_FAILED' });
+    return res.status(error.status || 500).json({ message: error.status && error.status < 500 ? error.message : 'POS order could not be loaded.', code: error.status && error.status < 500 ? error.code : 'POS_ORDER_FAILED' });
   } finally {
     client.release();
   }
@@ -653,7 +653,7 @@ export const getPosReceipt = async (req, res) => {
   try {
     return res.json({ receipt: await buildReceipt(client, Number(req.params.id)) });
   } catch (error) {
-    return res.status(error.status || 500).json({ message: error.message || 'Receipt could not be loaded.', code: error.code || 'POS_RECEIPT_FAILED' });
+    return res.status(error.status || 500).json({ message: error.status && error.status < 500 ? error.message : 'Receipt could not be loaded.', code: error.status && error.status < 500 ? error.code : 'POS_RECEIPT_FAILED' });
   } finally {
     client.release();
   }
