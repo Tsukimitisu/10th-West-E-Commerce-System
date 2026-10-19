@@ -1,3 +1,4 @@
+import { checkoutLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import {
   getAllOrders,
@@ -25,7 +26,7 @@ const operationsPermission = (permission) => requirePermissionForRoles(permissio
 router.get('/:id/timeline', authenticateToken, operationsPermission('orders.view'), getOrderTimeline);
 router.get('/:id', authenticateToken, operationsPermission('orders.view'), getOrderById);
 router.get('/:id/invoice', authenticateToken, operationsPermission('orders.view'), getOrderInvoice);
-router.post('/', authenticateToken, (req, res, next) => {
+router.post('/', authenticateToken, checkoutLimiter, (req, res, next) => {
   req.body = { ...req.body, payment_method: 'cod' };
   return createCheckout(req, res, next);
 });

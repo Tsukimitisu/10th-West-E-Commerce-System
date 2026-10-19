@@ -1,3 +1,4 @@
+import { backupCreateLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
@@ -25,7 +26,7 @@ export const createBackupsRouter = (getService = configuredService) => {
   };
   router.get('/', handle(async (service, _req, res) => res.json(await service.list())));
   router.get('/status', handle(async (service, _req, res) => res.json(await service.status())));
-  router.post('/', handle(async (service, req, res) => {
+  router.post('/', backupCreateLimiter, handle(async (service, req, res) => {
     const job = await service.request({ actor: req.user.id, req });
     job.completion.catch(() => console.error('Backup worker could not persist its final status.'));
     res.status(202).json({ backup: job.backup });

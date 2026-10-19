@@ -272,7 +272,7 @@ const bindAuthenticatedSession = async (req, user, token) => {
   await saveRequestSession(req);
 };
 
-const prepareAuthenticatedSession = async (req, user, token, { strict = false } = {}) => {
+const prepareAuthenticatedSession = async (req, user, token, { strict = true } = {}) => {
   try {
     await withTimeout(rotateGuestSession(req), SESSION_PERSIST_TIMEOUT_MS, 'rotateGuestSession');
   } catch (error) {
@@ -1231,10 +1231,12 @@ export const resetPassword = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    await pool.query(
-      'UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, failed_login_attempts = 0, login_attempts = 0, locked_until = NULL WHERE id = $2',
-      [hashedPassword, user.id]
+    // Atomically consume the token: two concurrent requests cannot both reset.
+    const updated = await pool.query(
+      'UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, failed_login_attempts = 0, login_attempts = 0, locked_until = NULL WHERE id = $2 AND password_reset_token = $3 AND password_reset_expires > NOW()',
+      [hashedPassword, user.id, hashedToken]
     );
+    if (updated.rowCount !== 1) return res.status(400).json({ message: 'Invalid or expired reset token' });
 
     // Invalidate all active sessions for security
     await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [user.id]);

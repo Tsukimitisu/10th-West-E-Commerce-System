@@ -32,7 +32,8 @@ test('required 2FA enrollment reuses setup/verification before mounting the work
   await page.getByRole('button', { name: 'Verify and continue', exact: true }).click();
   await expect(page.getByText('12345678-abcd1234', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'I saved my codes — Continue' }).click();
-  await expect(page.locator('.system-sidebar').first()).toBeVisible();
+  await expect(page.locator('.system-sidebar').first()).toBeAttached();
+  await expect(page.getByRole('button', { name: 'I saved my codes ? Continue' })).toHaveCount(0);
 });
 test('an existing OAuth/session user can finish the same authenticator challenge', async ({ page }) => {
   const state = await staffFixture(page, { user: { role: 'store_staff', two_factor_enabled: true, requires_2fa_challenge: true } });

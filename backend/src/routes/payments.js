@@ -1,3 +1,4 @@
+import { checkoutLimiter, paymentStatusLimiter, webhookLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import {
   createCheckout,
@@ -12,23 +13,23 @@ import { STAFF_ROLES } from '../constants/schemaEnums.js';
 
 const router = express.Router();
 
-router.post('/paymongo/checkout', authenticateToken, (req, res, next) => {
+router.post('/paymongo/checkout', authenticateToken, checkoutLimiter, (req, res, next) => {
   req.body = { ...req.body, payment_method: 'gcash' };
   return createCheckout(req, res, next);
 });
-router.post('/gcash/checkout', authenticateToken, (req, res, next) => {
+router.post('/gcash/checkout', authenticateToken, checkoutLimiter, (req, res, next) => {
   req.body = { ...req.body, payment_method: 'gcash' };
   return createCheckout(req, res, next);
 });
-router.post('/paymongo/webhook', handlePaymongoWebhook);
-router.post('/:orderId/retry', authenticateToken, retryPayment);
+router.post('/paymongo/webhook', webhookLimiter, handlePaymongoWebhook);
+router.post('/:orderId/retry', authenticateToken, checkoutLimiter, retryPayment);
 const staffPermission = (permission) => requirePermissionForRoles(permission, ...STAFF_ROLES);
 
 router.post('/:orderId/expire', authenticateToken, staffPermission('payments.manage'), expirePaymentSession);
-router.get('/:orderId/reconciliation', authenticateToken, staffPermission('payments.view'), getPaymentReconciliation);
+router.get('/:orderId/reconciliation', authenticateToken, staffPermission('payments.view'), paymentStatusLimiter, getPaymentReconciliation);
 // Ownership is enforced inside getPaymentStatus. Customers need this read-only
 // endpoint after returning from hosted checkout, while staff can inspect any order.
-router.get('/:orderId/status', authenticateToken, staffPermission('payments.view'), getPaymentStatus);
-router.get('/orders/:orderId/status', authenticateToken, staffPermission('payments.view'), getPaymentStatus);
+router.get('/:orderId/status', authenticateToken, staffPermission('payments.view'), paymentStatusLimiter, getPaymentStatus);
+router.get('/orders/:orderId/status', authenticateToken, staffPermission('payments.view'), paymentStatusLimiter, getPaymentStatus);
 
 export default router;

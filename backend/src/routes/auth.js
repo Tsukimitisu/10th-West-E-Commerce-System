@@ -29,6 +29,7 @@ import {
   forgotPasswordLimiter,
   verifyResetTokenLimiter,
   resetPasswordLimiter,
+  accountMutationLimiter, twoFactorLimiter,
 } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
@@ -409,6 +410,7 @@ router.get('/profile', traceProfile, authenticateToken, getProfile);
 router.get('/permissions', authenticateToken, getMyPermissions);
 router.put('/change-password',
   authenticateToken,
+  accountMutationLimiter,
   body('currentPassword').notEmpty().withMessage('Current password is required'),
   body('newPassword').custom(validatePolicyPassword),
   validate,
@@ -419,15 +421,17 @@ router.put('/change-password',
 router.post(
   '/2fa/setup',
   authenticateToken,
+  accountMutationLimiter,
   body('password').optional({ nullable: true }).isString().withMessage('Password confirmation is invalid'),
   validate,
   setup2FA
 );
-router.post('/2fa/challenge', loginLimiter, authenticateToken, challenge2FA);
-router.post('/2fa/verify', authenticateToken, body('totp_code').notEmpty(), validate, verify2FA);
+router.post('/2fa/challenge', loginLimiter, authenticateToken, twoFactorLimiter, challenge2FA);
+router.post('/2fa/verify', authenticateToken, twoFactorLimiter, body('totp_code').notEmpty(), validate, verify2FA);
 router.delete(
   '/2fa',
   authenticateToken,
+  accountMutationLimiter,
   body('password').optional({ nullable: true }).isString().withMessage('Password confirmation is invalid'),
   validate,
   disable2FA
@@ -443,6 +447,7 @@ router.get('/activity-logs', authenticateToken, requireRole('admin', 'super_admi
 // ─── Account deletion (Right to be Forgotten - RA 10173) ────────────────────
 router.delete('/account',
   authenticateToken,
+  accountMutationLimiter,
   body('confirmation').equals('DELETE').withMessage('Type DELETE to confirm account deletion'),
   body('password').optional({ nullable: true }).isString().withMessage('Password confirmation is invalid'),
   validate,

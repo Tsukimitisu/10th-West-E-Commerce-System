@@ -1,3 +1,4 @@
+import { adminMutationLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import pool from '../config/database.js';
@@ -16,6 +17,7 @@ import {
 } from '../services/integrationReadiness.js';
 
 const router = express.Router();
+const systemSettingCategories = new Set(['security', 'system']);
 const booleanRule = (value) => ['true', 'false'].includes(String(value).toLowerCase());
 const numberRule = (min, max) => (value) => Number.isFinite(Number(value)) && Number(value) >= min && Number(value) <= max;
 const textRule = (max = 500) => (value) => typeof value === 'string' && value.trim().length <= max;
@@ -110,7 +112,8 @@ router.get(
 router.use(authenticateToken, (req, res, next) => {
   const normalizedPath = req.path.toLowerCase().replace(/\/+$/, '');
   const securitySettings = normalizedPath.startsWith('/security/settings')
-    || req.query.category === 'security' || req.body?.category === 'security' || normalizedPath === '/settings/security';
+    || systemSettingCategories.has(req.query.category) || systemSettingCategories.has(req.body?.category)
+    || ['/settings/security', '/settings/system'].includes(normalizedPath);
   if (!securitySettings && (req.path === '/settings' || req.path.startsWith('/settings/'))) {
     return requireRole('super_admin', 'owner', 'admin')(req, res, () => (
       requirePermission('settings.manage')(req, res, next)
@@ -118,6 +121,8 @@ router.use(authenticateToken, (req, res, next) => {
   }
   return requireRole('super_admin')(req, res, next);
 });
+
+router.use((req, res, next) => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) ? adminMutationLimiter(req, res, next) : next());
 
 router.use('/backups', backupRoutes);
 
@@ -315,7 +320,7 @@ router.delete('/users/:id', async (req, res) => {
 router.get('/settings', async (req, res) => {
   try {
     const rows = await listSettings(pool, req.query.category || null);
-    res.json(maskSettingRows(req.user.role === 'super_admin' ? rows : rows.filter(row => row.category !== 'security')));
+    res.json(maskSettingRows(req.user.role === 'super_admin' ? rows : rows.filter(row => !systemSettingCategories.has(row.category))));
   } catch (err) {
     console.error('Get settings error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -323,7 +328,7 @@ router.get('/settings', async (req, res) => {
 });
 
 // Get settings by category (route param)
-router.get('/settings/:category', (req, res, next) => req.params.category === 'security' ? requireRole('super_admin')(req, res, next) : next(), async (req, res) => {
+router.get('/settings/:category', (req, res, next) => systemSettingCategories.has(req.params.category) ? requireRole('super_admin')(req, res, next) : next(), async (req, res) => {
   try {
     res.json(maskSettingRows(await listSettings(pool, req.params.category)));
   } catch (err) {

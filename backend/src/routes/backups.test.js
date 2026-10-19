@@ -9,7 +9,7 @@ process.env.JWT_SECRET = 'isolated-backup-route-test-key';
 const { default: pool } = await import('../config/database.js');
 const { createBackupsRouter } = await import('./backups.js');
 const { default: adminRouter } = await import('./admin.js');
-const roles = ['customer', 'store_staff', 'owner', 'super_admin'];
+const roles = ['customer', 'store_staff', 'owner', 'super_admin', 'cashier'];
 const id = '00000000-0000-4000-8000-000000000001';
 let serviceCalls = 0;
 const auditValues = [];
@@ -49,7 +49,7 @@ const call = async (role, path, method = 'GET', body) => {
 test('every backup endpoint authenticates and denies Customer, Staff and Owner while allowing only Super Admin', async () => {
   for (const [method, path] of [['GET','/backups'],['GET','/backups/status'],['POST','/backups'],['GET',`/backups/${id}/download`],['DELETE',`/backups/${id}`]]) {
     assert.equal((await call(null, path, method)).status, 401);
-    for (const role of roles.slice(0,3)) {
+    for (const role of roles.filter(role => role !== 'super_admin')) {
       const before = serviceCalls;
       assert.equal((await call(role, path, method)).status, 403);
       assert.equal(serviceCalls, before);

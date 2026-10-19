@@ -1,5 +1,6 @@
 import pool from '../config/database.js';
 import databaseConfig from '../config/databaseConfig.cjs';
+import { createHash } from 'node:crypto';
 
 const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
 const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
@@ -75,7 +76,9 @@ const namespaceRateLimitKey = (key) => {
     .trim()
     .replace(/[^A-Za-z0-9._-]/g, '_')
     .slice(0, 64);
-  return namespace ? `${namespace}:${key}` : key;
+  // Limiter keys can contain emails or reset tokens. Persist only a digest.
+  const digest = createHash('sha256').update(String(key)).digest('hex');
+  return namespace ? `${namespace}:${digest}` : digest;
 };
 
 const normalizeIdentifier = (value) => {
@@ -85,7 +88,7 @@ const normalizeIdentifier = (value) => {
 
 const rateLimit = (windowMs = 60000, maxRequests = 100, options = {}) => {
   const keyGenerator = options.keyGenerator || defaultKeyGenerator;
-  const storage = options.storage || 'memory';
+  const storage = options.storage || (String(process.env.NODE_ENV).trim().toLowerCase() === 'production' ? 'db' : 'memory');
 
   return async (req, res, next) => {
     try {
@@ -120,6 +123,7 @@ const rateLimit = (windowMs = 60000, maxRequests = 100, options = {}) => {
       }
 
       if (count > maxRequests) {
+        res.setHeader?.('Retry-After', String(Math.max(1, retryAfter)));
         return res.status(429).json({
           message: 'Too many requests. Please try again later.',
           retryAfter: Math.max(1, retryAfter),
@@ -129,7 +133,7 @@ const rateLimit = (windowMs = 60000, maxRequests = 100, options = {}) => {
       return next();
     } catch (error) {
       console.error('Rate limiter failure:', sanitizeDatabaseError(error));
-      return next();
+      return res.status(503).json({ message: 'Rate limiting service is temporarily unavailable. Please try again later.', code: 'RATE_LIMIT_UNAVAILABLE' });
     }
   };
 };
@@ -201,5 +205,15 @@ export const supportLimiter = rateLimit(15 * 60 * 1000, 5, {
 export const apiLimiter = rateLimit(60 * 1000, 100);
 // Webhook limiter
 export const webhookLimiter = rateLimit(60 * 1000, 50);
+
+const actionKey = action => req => `${action}:${req.user?.id || 'guest'}:${req.ip || req.connection?.remoteAddress || 'unknown'}`;
+const actionLimit = (action, windowMs, maximum) => rateLimit(windowMs, maximum, { storage: 'db', keyGenerator: actionKey(action) });
+export const accountMutationLimiter = actionLimit('account-security', 15 * 60 * 1000, 10);
+export const twoFactorLimiter = actionLimit('two-factor', 5 * 60 * 1000, 10);
+export const checkoutLimiter = actionLimit('checkout', 10 * 60 * 1000, 15);
+export const paymentStatusLimiter = actionLimit('payment-status', 60 * 1000, 60);
+export const messageLimiter = actionLimit('messages', 60 * 1000, 30);
+export const adminMutationLimiter = actionLimit('admin-mutation', 60 * 1000, 30);
+export const backupCreateLimiter = actionLimit('backup-create', 60 * 60 * 1000, 3);
 
 export default rateLimit;

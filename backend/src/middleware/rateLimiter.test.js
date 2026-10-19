@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import test, { after } from 'node:test';
 
@@ -76,7 +77,7 @@ test('database-backed rate limiter relies on migrations and does not run schema 
     assert.equal(statements.length, 1);
     assert.match(statements[0], /INSERT INTO request_rate_limits/);
     assert.doesNotMatch(statements[0], /CREATE\s+(TABLE|INDEX)/i);
-    assert.equal(parameters[0][0], 'POST:/api/auth/login:127.0.0.1');
+    assert.equal(parameters[0][0], createHash('sha256').update('POST:/api/auth/login:127.0.0.1').digest('hex'));
   } finally {
     pool.query = originalQuery;
   }
@@ -101,10 +102,41 @@ test('rate-limit namespaces isolate repeated automated runs without changing lim
 
   try {
     await limiter(req, res, () => {});
-    assert.equal(storedKey, 'e2e_run_unsafe:POST:/api/auth/login:127.0.0.1');
+    assert.equal(storedKey, 'e2e_run_unsafe:' + createHash('sha256').update('POST:/api/auth/login:127.0.0.1').digest('hex'));
   } finally {
     pool.query = originalQuery;
     if (previousNamespace === undefined) delete process.env.RATE_LIMIT_NAMESPACE;
     else process.env.RATE_LIMIT_NAMESPACE = previousNamespace;
   }
+});
+
+
+test('limits return 429, keep reset tokens out of storage, and fail closed on internal errors', async () => {
+  const originalQuery = pool.query;
+  let count = 0, stored;
+  pool.query = async (_sql, params) => { stored = params[0]; return { rows: [{ request_count: ++count, retry_after_seconds: 30 }] }; };
+  try {
+    const limiter = rateLimit(60000, 1, { storage: 'db', keyGenerator: () => 'private-reset-token:private@example.test' });
+    let allowed = 0;
+    await limiter({}, makeResponse(), () => { allowed++; });
+    const denied = makeResponse(); await limiter({}, denied, () => { allowed++; });
+    assert.equal(allowed, 1); assert.equal(denied.statusCode, 429);
+    assert.match(stored, /^[a-f0-9]{64}$/); assert.doesNotMatch(stored, /private-reset-token|private@example/);
+    const broken = rateLimit(60000, 1, { keyGenerator: () => { throw new Error('bad key generator'); } });
+    const unavailable = makeResponse(); await broken({}, unavailable, () => assert.fail('must fail closed'));
+    assert.equal(unavailable.statusCode, 503);
+  } finally { pool.query = originalQuery; }
+});
+
+
+test('production default limiter uses persistent storage', async () => {
+  const originalQuery = pool.query, originalEnv = process.env.NODE_ENV;
+  let persisted = false;
+  process.env.NODE_ENV = 'production';
+  pool.query = async sql => { persisted = String(sql).includes('INSERT INTO request_rate_limits'); return { rows: [{ request_count: 2, retry_after_seconds: 30 }] }; };
+  try {
+    const limiter = rateLimit(60000, 1);
+    const res = makeResponse(); await limiter({ method: 'GET', path: '/health' }, res, () => assert.fail('limit must reject'));
+    assert.equal(persisted, true); assert.equal(res.statusCode, 429);
+  } finally { pool.query = originalQuery; process.env.NODE_ENV = originalEnv; }
 });

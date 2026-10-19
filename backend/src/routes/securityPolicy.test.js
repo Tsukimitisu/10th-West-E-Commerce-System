@@ -9,7 +9,7 @@ const { default: pool } = await import('../config/database.js');
 const { default: admin } = await import('./admin.js');
 const { default: auth } = await import('./auth.js');
 const { securityPolicy } = await import('../services/securityPolicy.js');
-const roles = ['customer', 'store_staff', 'owner', 'super_admin'];
+const roles = ['customer', 'store_staff', 'owner', 'super_admin', 'cashier'];
 const settings = new Map([['max_login_attempts', '5']]);
 const audits = [], queries = [];
 let server, base;
@@ -35,7 +35,7 @@ const call = (role, path, body, method = body ? 'PUT' : 'GET') => fetch(`${base}
   ...(body ? { body: JSON.stringify(body) } : {}),
 });
 test('every global-policy write path denies non-Super-Admin roles before writes', async () => {
-  for (const role of roles.slice(0, 3)) for (const [path, body] of [['/security/settings', { settings: { max_login_attempts: '2' } }], ['/settings', { category: 'security', settings: { max_login_attempts: '2' } }]]) {
+  for (const role of roles.filter(role => role !== 'super_admin')) for (const [path, body] of [['/security/settings', { settings: { max_login_attempts: '2' } }], ['/settings', { category: 'security', settings: { max_login_attempts: '2' } }]]) {
     assert.equal((await call(role, path, body)).status, 403);
   }
   assert.equal(audits.length, 0); assert.equal(settings.get('max_login_attempts'), '5');
@@ -75,4 +75,13 @@ test('public effective password policy exposes only the five password requiremen
   assert.deepEqual(Object.keys(policy).sort(), ['password_min_length', 'password_require_lowercase', 'password_require_number', 'password_require_special', 'password_require_uppercase']);
   assert.equal(policy.password_min_length, 20); assert.equal(policy.password_require_number, false);
   assert.doesNotMatch(JSON.stringify(policy), /private-secret|lockout|oauth|session|2fa/);
+});
+
+
+test('maintenance/system settings remain Super Admin only through every settings alias', async () => {
+  for (const role of roles.filter(role => role !== 'super_admin')) {
+    assert.equal((await call(role, '/settings/system')).status, 403);
+    assert.equal((await call(role, '/settings?category=system')).status, 403);
+    assert.equal((await call(role, '/settings', { category: 'system', settings: { maintenance_mode: 'true' } })).status, 403);
+  }
 });

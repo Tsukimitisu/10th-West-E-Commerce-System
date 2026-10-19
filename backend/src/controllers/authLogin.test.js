@@ -7,7 +7,7 @@ process.env.TEST_DATABASE_URL = 'postgresql://invalid:invalid@127.0.0.1:1/invali
 process.env.DB_READ_MODE = 'postgres';
 
 const { default: pool } = await import('../config/database.js');
-const { login } = await import('./authController.js');
+const { login, resetPassword } = await import('./authController.js');
 
 const DATABASE_UNAVAILABLE_MESSAGE = 'The service is temporarily unavailable. Please try again later.';
 
@@ -125,4 +125,41 @@ test('database tenant outage returns sanitized 503 and never falls back to REST 
   assert.doesNotMatch(JSON.stringify(res.body), new RegExp(secretMarker));
   assert.doesNotMatch(JSON.stringify(logged), new RegExp(secretMarker));
   assert.doesNotMatch(JSON.stringify(logged), /postgresql:\/\//i);
+});
+
+
+test('failed session rotation cannot authenticate the original cookie session', async () => {
+  const passwordHash = await bcrypt.hash('CorrectPassword123!', 4);
+  mock.method(pool, 'query', async sql => {
+    if (String(sql).includes('FROM system_settings')) return { rows: [] };
+    if (String(sql).includes('FROM users')) return { rows: [{ id: 17, email: 'rider@example.test', role: 'customer', password_hash: passwordHash, is_active: true, email_verified: true }] };
+    return { rows: [], rowCount: 1 };
+  });
+  const req = makeRequest('CorrectPassword123!');
+  req.session.regenerate = done => done(new Error('session store unavailable'));
+  const res = makeResponse(); await login(req, res);
+  assert.equal(res.statusCode, 500); assert.equal(req.session.auth, undefined); assert.equal(res.body.user, undefined);
+});
+
+
+test('concurrent password resets consume a hashed token only once and store bcrypt cost 12', async () => {
+  let readers = 0, consumed = false, savedHash;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  mock.method(pool, 'query', async (sql, params = []) => {
+    if (String(sql).includes('FROM system_settings')) return { rows: [] };
+    if (String(sql).includes('FROM users WHERE password_reset_token')) {
+      assert.match(params[0], /^[a-f0-9]{64}$/); if (++readers === 2) release(); await gate;
+      return { rows: [{ id: 17, name: 'Rider', password_hash: null }] };
+    }
+    if (String(sql).startsWith('UPDATE users SET password_hash')) {
+      if (String(sql).includes('AND password_reset_token = $3')) { if (consumed) return { rows: [], rowCount: 0 }; consumed = true; }
+      savedHash = params[0]; return { rows: [], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 1 };
+  });
+  const responses = [makeResponse(), makeResponse()];
+  await Promise.all(responses.map(res => resetPassword({ validatedData: { token: 'a'.repeat(64), newPassword: 'NewCorrectPassword123!' } }, res)));
+  assert.deepEqual(responses.map(res => res.statusCode).sort(), [200, 400]);
+  assert.match(savedHash, /^\$2[ab]\$12\$/); assert.equal(await bcrypt.compare('NewCorrectPassword123!', savedHash), true);
 });

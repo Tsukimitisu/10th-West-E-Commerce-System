@@ -1,3 +1,4 @@
+import { messageLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import {
   archiveSellerConversation,
@@ -20,7 +21,7 @@ router.get('/search', requirePermission('chat.view'), getSellerConversations);
 router.get('/unread-count', requirePermission('chat.view'), getSellerUnreadCount);
 router.get('/:conversationId', requirePermission('chat.view'), getConversationMessages);
 router.get('/:conversationId/messages', requirePermission('chat.view'), getConversationMessages);
-router.post('/:conversationId/messages', requirePermission('chat.reply'), sendConversationMessage);
+router.post('/:conversationId/messages', requirePermission('chat.reply'), messageLimiter, sendConversationMessage);
 router.patch('/:conversationId/read', requirePermission('chat.reply'), markConversationRead);
 router.patch('/:conversationId/archive', requirePermission('chat.reply'), archiveSellerConversation);
 router.patch('/:conversationId/pin', requirePermission('chat.reply'), pinSellerConversation);

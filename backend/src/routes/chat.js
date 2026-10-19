@@ -1,3 +1,4 @@
+import { messageLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import {
   assignThread,
@@ -23,7 +24,7 @@ router.post('/quick-replies', staffPermission('chat.reply'), saveQuickReply);
 router.get('/threads', staffPermission('chat.view'), getThreads);
 router.post('/threads', staffPermission('chat.reply'), createThread);
 router.get('/threads/:id', staffPermission('chat.view'), getThread);
-router.post('/threads/:id/messages', staffPermission('chat.reply'), sendMessage);
+router.post('/threads/:id/messages', staffPermission('chat.reply'), messageLimiter, sendMessage);
 router.put('/threads/:id/read', staffPermission('chat.reply'), markThreadRead);
 router.put('/threads/:id/assign', staffPermission('chat.reply'), assignThread);
 

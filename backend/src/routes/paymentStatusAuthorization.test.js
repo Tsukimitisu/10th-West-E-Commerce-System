@@ -17,12 +17,12 @@ const response = () => ({
 test('payment status authenticates, authorizes staff, then validates the order ID', async () => {
   const query = mock.method(pool, 'query', async (sql) => String(sql).includes('FROM orders o JOIN payments p')
     ? { rowCount: 1, rows: [{ order_id: 1, payment_status: 'pending' }] }
-    : { rows: [{ has_permission: false }] });
+    : String(sql).includes('INSERT INTO request_rate_limits') ? { rows: [{ request_count: 1, retry_after_seconds: 60 }] } : { rows: [{ has_permission: false }] });
   try {
     for (const path of ['/:orderId/status', '/orders/:orderId/status']) {
       const route = router.stack.find((layer) => layer.route?.path === path)?.route;
       assert.ok(route, `${path} is registered`);
-      const [authenticate, authorize, status] = route.stack.map((layer) => layer.handle);
+      const [authenticate, authorize, throttle, status] = route.stack.map((layer) => layer.handle);
 
       const guest = response();
       await authenticate({ headers: {} }, guest, () => assert.fail('guest reached authorization'));
@@ -41,11 +41,12 @@ test('payment status authenticates, authorizes staff, then validates the order I
       await status({ user: { id: 1, role: 'owner' }, params: { orderId: '0' } }, owner);
       assert.equal(owner.statusCode, 400);
       const valid = response();
+      let permitted = false; await throttle({ user: { id: 1, role: 'owner' } }, valid, () => { permitted = true; }); assert.equal(permitted, true);
       await status({ user: { id: 1, role: 'owner' }, params: { orderId: '1' } }, valid);
       assert.equal(valid.statusCode, 200);
       assert.equal(valid.body.order_id, 1);
     }
-    assert.equal(query.mock.callCount(), 4);
+    assert.equal(query.mock.callCount(), 6);
   } finally {
     mock.restoreAll();
     await pool.end();

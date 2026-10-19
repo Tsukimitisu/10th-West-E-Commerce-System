@@ -1,3 +1,4 @@
+import { accountMutationLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import { body } from 'express-validator';
 import { getProfile, updateProfile, uploadProfileAvatar, changePassword, setLocalPassword, confirmEmailChange } from '../controllers/userController.js';
@@ -34,7 +35,7 @@ router.post(
 );
 
 // Change password
-router.put('/password', changePassword);
-router.put('/password/set', setLocalPassword);
+router.put('/password', accountMutationLimiter, changePassword);
+router.put('/password/set', accountMutationLimiter, setLocalPassword);
 
 export default router;

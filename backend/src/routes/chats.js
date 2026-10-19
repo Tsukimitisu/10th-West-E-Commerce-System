@@ -1,3 +1,4 @@
+import { messageLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import {
   getConversationMessages,
@@ -18,7 +19,7 @@ const staffPermission = (permission) => requirePermissionForRoles(permission, ..
 router.post('/product/start', staffPermission('chat.reply'), startProductConversation);
 router.get('/my-conversations', staffPermission('chat.view'), getMyConversations);
 router.get('/:conversationId/messages', staffPermission('chat.view'), getConversationMessages);
-router.post('/:conversationId/messages', staffPermission('chat.reply'), sendConversationMessage);
+router.post('/:conversationId/messages', staffPermission('chat.reply'), messageLimiter, sendConversationMessage);
 router.patch('/:conversationId/read', staffPermission('chat.reply'), markConversationRead);
 
 export default router;

@@ -100,9 +100,11 @@ export const validateCsrf = (req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   // Public token-based endpoints are protected by one-time token checks.
   if (CSRF_PATH_EXEMPTIONS.has(req.path)) return next();
-  // Skip for API calls with Bearer token (already authenticated)
+  // A Bearer header alone is not proof of authentication: invalid tokens may
+  // fall back to a cookie session later. Cookie-backed requests still need CSRF.
   const authHeader = req.headers.authorization;
-  if (typeof authHeader === 'string' && /^Bearer\s+/i.test(authHeader)) return next();
+  const cookieSession = req.session?.auth || /(?:^|;\s*)twm\.sid=/.test(req.headers.cookie || '');
+  if (!cookieSession && typeof authHeader === 'string' && /^Bearer\s+/i.test(authHeader)) return next();
 
   const token = req.headers['x-csrf-token'] || req.headers['x-xsrf-token'] || req.body?._csrf;
   const scope = getCsrfScope(req);

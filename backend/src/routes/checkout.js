@@ -1,3 +1,4 @@
+import { checkoutLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import {
   cancelCheckout,
@@ -10,8 +11,8 @@ import { authenticateToken, requirePermission, requireRole } from '../middleware
 
 const router = express.Router();
 
-router.post('/', authenticateToken, createCheckout);
-router.post('/confirm', authenticateToken, confirmCheckout);
+router.post('/', authenticateToken, checkoutLimiter, createCheckout);
+router.post('/confirm', authenticateToken, checkoutLimiter, confirmCheckout);
 router.post(
   '/cleanup-expired',
   authenticateToken,
