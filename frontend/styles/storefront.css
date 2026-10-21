@@ -120,14 +120,19 @@
 .managed-hero h1 { max-width:18ch; color:white; font:700 42px/1.05 'Barlow Condensed',sans-serif; text-wrap:balance; }
 .managed-hero-description { max-width:48ch; margin:18px 0 24px; color:#e5e8ef; font-size:15px; line-height:1.65; white-space:pre-line; }
 .managed-hero-description:empty { display:none; }
-.managed-hero-controls { display:flex; align-items:center; gap:8px; width:100%; padding:0 16px 20px; }
-.managed-hero-arrow { display:grid; place-items:center; min-width:44px; height:44px; border:1px solid #7d879b; border-radius:6px; color:white; background:rgba(8,10,14,.45); }
-.managed-hero-arrow:hover { background:var(--racing-navy); border-color:var(--hot-orange); }
-.managed-hero-pagination { display:flex; max-width:70%; overflow-x:auto; }
+.managed-hero-controls { display:flex; justify-content:center; align-items:center; width:100%; padding:0 16px 20px; }
+.managed-hero-arrow { position:absolute; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:48px; height:48px; border:1px solid rgba(255,255,255,.2); border-radius:50%; color:white; background:rgba(9,11,15,.45); box-shadow:0 3px 12px rgba(0,0,0,.15); backdrop-filter:blur(6px); opacity:0; transition:opacity .18s ease,background .18s ease; }
+.managed-hero-previous { left:20px; }
+.managed-hero-next { right:20px; }
+.managed-hero-arrow:focus-visible,.managed-hero-arrow:hover { opacity:1; background:rgba(9,11,15,.7); }
+@media (hover:hover) and (min-width:768px) { .managed-hero:hover .managed-hero-arrow { opacity:.85; } }
+@media (min-width:768px) { .managed-hero-content { padding-left:84px !important; padding-right:84px !important; } }
+@media (prefers-reduced-motion:reduce) { .managed-hero-arrow { transition:none; } }
+.managed-hero-pagination { display:flex; max-width:100%; overflow-x:auto; }
 .managed-hero-pagination button { display:grid; place-items:center; min-width:44px; min-height:44px; }
-.managed-hero-pagination span { display:block; width:16px; height:3px; background:#b3bdce; }
-.managed-hero-pagination [aria-current=true] span { background:var(--hot-orange); width:26px; }
-.managed-hero-count { margin-left:8px; color:#e5e8ef; white-space:nowrap; font-size:13px; }
+.managed-hero-pagination span { display:block; width:6px; height:6px; border-radius:999px; background:#a8adb7; }
+.managed-hero-pagination [aria-current=true] span { background:white; width:22px; }
+.managed-hero-count { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .managed-hero :focus-visible { outline:3px solid var(--hot-orange); outline-offset:3px; }
 .customer-account-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
 .customer-account-heading h1 { margin-top:4px; color:var(--racing-navy); }

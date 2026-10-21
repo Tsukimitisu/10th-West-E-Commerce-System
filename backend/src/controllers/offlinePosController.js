@@ -13,6 +13,9 @@ const run = fn => async (req,res) => {
     return res.json(result);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
+    if (['42P01','42703'].includes(error.code)) {
+      return res.status(503).json({ code:'OFFLINE_POS_SCHEMA_NOT_READY', message:'Offline POS database setup is not ready. Apply the offline POS migration before enabling this computer.' });
+    }
     return res.status(error.status || (error.code === '23505' ? 409 : 500)).json({ message:error.status ? error.message : 'Offline POS preparation could not be completed.', code:error.status ? error.code : 'OFFLINE_POS_PREPARATION_FAILED' });
   } finally { client.release(); }
 };

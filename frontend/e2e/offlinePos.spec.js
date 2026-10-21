@@ -32,14 +32,17 @@ async function fixture(page){
   return state;
 }
 
-for(const width of [1440,390])test(`cached POS cash sale, offline restart and authenticated resynchronization at ${width}px`,async({page,context})=>{
+for(const width of [1440,768,390])test(`cached POS cash sale, offline restart and authenticated resynchronization at ${width}px`,async({page,context})=>{
   test.setTimeout(90000);
   await page.setViewportSize({width,height:900});const state=await fixture(page);
   await page.goto('/#/pos');await expect(page.getByText('● Online',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Offline POS setup',exact:true}).click();
   await page.getByLabel('6-digit Offline POS PIN').fill('482916');
-  await page.getByRole('button',{name:'Enable offline POS on this computer'}).click();
-  await expect(page.getByText(/Offline POS enabled/)).toBeVisible({timeout:45000});
+  await page.getByRole('button',{name:'Prepare Offline POS'}).click();
+  await expect(page.getByText(/Offline POS Ready/)).toBeVisible({timeout:45000});
+  await expect(page.getByText('● Online',{exact:true})).toBeVisible();
+  expect(await page.getByRole('dialog').evaluate(element=>element.scrollWidth<=element.clientWidth)).toBe(true);
+  await page.screenshot({path:`test-results/offline-pos-ready-${width}.png`});
   await page.getByRole('button',{name:'Close',exact:true}).click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.screenshot({path:`test-results/offline-pos-${width}.png`});

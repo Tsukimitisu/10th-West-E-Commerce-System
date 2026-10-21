@@ -120,7 +120,7 @@ const ManagedHeroCarousel = ({ slides, loading = false }) => {
           <div className="managed-hero-controls mx-auto max-w-[1500px]">
             <button
               type="button"
-              className="managed-hero-arrow"
+              className="managed-hero-arrow managed-hero-previous"
               onClick={() => move(-1)}
               aria-label="Previous slide"
             >
@@ -144,7 +144,7 @@ const ManagedHeroCarousel = ({ slides, loading = false }) => {
             </div>
             <button
               type="button"
-              className="managed-hero-arrow"
+              className="managed-hero-arrow managed-hero-next"
               onClick={() => move(1)}
               aria-label="Next slide"
             >

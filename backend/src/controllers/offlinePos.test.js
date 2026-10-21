@@ -3,7 +3,7 @@ import test,{after} from 'node:test';
 import {readFileSync} from 'node:fs';
 import pool from '../config/database.js';
 import {createPosOrder} from './posController.js';
-import {registerOfflineDevice,revokeOfflineDevice} from './offlinePosController.js';
+import {registerOfflineDevice,revokeOfflineDevice,getOfflineDevice} from './offlinePosController.js';
 import {validateOfflineEnvelope,setOfflineReserve,createOfflineSnapshot} from '../services/offlinePos.js';
 import {requirePermission,requireRole} from '../middleware/auth.js';
 after(()=>pool.end());
@@ -154,4 +154,10 @@ test('POS authorization remains backend-enforced; reserve management uses existi
 });
 test('migration protects one device, stock holds, private data and refuses destructive rollback',()=>{
   const migration=readFileSync(new URL('../../migrations/202610200004_offline_pos.cjs',import.meta.url),'utf8');assert.match(migration,/CREATE UNIQUE INDEX pos_one_active_offline_device/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);assert.match(migration,/protect_product_offline_hold/);assert.match(migration,/preserve issued snapshots/);assert.doesNotMatch(migration,/password|pin_hash|session_cookie/);
+});
+
+
+test('missing offline schema gives an actionable safe error',async t=>{
+  t.mock.method(pool,'connect',async()=>({release(){},query:async sql=>{if(sql.includes('FROM pos_offline_devices'))throw Object.assign(new Error('private SQL'),{code:'42P01'});return {rows:[]};}}));
+  const res=response();await getOfflineDevice(request(),res);assert.equal(res.statusCode,503);assert.equal(res.body.code,'OFFLINE_POS_SCHEMA_NOT_READY');assert.match(res.body.message,/Apply the offline POS migration/);assert.doesNotMatch(JSON.stringify(res.body),/private SQL/);
 });

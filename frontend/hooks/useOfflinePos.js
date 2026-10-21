@@ -2,8 +2,9 @@ import { useCallback,useEffect,useRef,useState } from 'react';
 import { createPosOrder,getOfflinePosSnapshot,registerOfflinePosDevice } from '../services/api.js';
 import { allPosValues,pendingPosSales,readPosValue,savePosSnapshot,writePosValue } from '../services/offlinePosDb.js';
 import { synchronizeOfflineSales } from '../services/offlinePosSync.js';
-import { setupOfflinePin,renewUnlockedPos,lockLocalPos } from '../services/offlinePosAccess.js';
+import { renewUnlockedPos,lockLocalPos } from '../services/offlinePosAccess.js';
 import { requirePosShell } from '../services/posPwa.js';
+import { prepareOfflinePos } from '../services/offlinePosPreparation.js';
 
 export default function useOfflinePos({ online,user }) {
   const [sales,setSales]=useState([]);
@@ -61,18 +62,12 @@ export default function useOfflinePos({ online,user }) {
     const timer=setInterval(async()=>{if((await pendingPosSales()).some(s=>s.status==='pending'))void sync();},30000);
     return()=>clearInterval(timer);
   },[online,user?.role,sync]);
-  const prepare=async pin=>{
+  const prepare=async (pin,onProgress)=>{
     if(!online || !user?.role)throw new Error('Sign in online before preparing this computer.');
-    await requirePosShell();
-    let computer=await readPosValue('metadata','computer');
-    if(!computer){computer={id:'computer',uuid:crypto.randomUUID()};await writePosValue('metadata',computer);}
-    const {device}=await registerOfflinePosDevice(computer.uuid);
-    const fresh=await getOfflinePosSnapshot(device.id);
-    await savePosSnapshot(fresh);
-    await setupOfflinePin(pin,fresh,user);
-    await refreshLocal();
+    const verified = await prepareOfflinePos({pin,user,onProgress,requireShell:requirePosShell,registerDevice:registerOfflinePosDevice,getSnapshot:getOfflinePosSnapshot,refreshLocal});
     window.dispatchEvent(new Event('offline-pos:prepared'));
     navigator.storage?.persist?.().catch(()=>{});
+    return verified;
   };
   return { sales,snapshot,syncing,message,sync,prepare,refreshLocal,refreshSnapshot,pending:sales.filter(s=>s.status!=='synchronized').length };
 }
