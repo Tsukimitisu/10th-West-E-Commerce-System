@@ -6,7 +6,7 @@ import { waitForPosShell } from '../services/posPwa.js';
 import { posTransaction, writePosValue, readPosValue, allPosValues } from '../services/offlinePosDb.js';
 const device = '11111111-1111-4111-8111-111111111111';
 const snapshot = () => ({ id: crypto.randomUUID(), device_id: device, created_at: new Date().toISOString(), expires_at: new Date(Date.now()+3600000).toISOString(), products: [] });
-const options = () => ({ pin: '482916', user: { id: 1, name: 'Cashier' }, requireShell: async()=>{}, registerDevice: async()=>({device:{id:device}}), getSnapshot: async()=>snapshot(), refreshLocal: async()=>{} });
+const options = () => ({ pin: '482916', user: { id: 1, name: 'Cashier' }, requireShell: async()=>{}, registerDevice: async uuid=>({device:{id:device,device_uuid:uuid}}), getSnapshot: async()=>snapshot(), refreshLocal: async()=>{} });
 beforeEach(async()=>posTransaction(['metadata','products','pending_sales','offline_access'],'readwrite',async(s,r)=>{for(const store of Object.values(s))await r(store.clear());}));
 
 test('preparation phases are reported and saved metadata/PIN verifier is read back before readiness',async()=>{
@@ -18,8 +18,16 @@ test('preparation phases are reported and saved metadata/PIN verifier is read ba
   assert.equal((await allPosValues('pending_sales')).length,1);
 });
 test('repeat preparation reuses the computer identifier and safely renews the grant',async()=>{
-  const identifiers=[];const registerDevice=async id=>{identifiers.push(id);return {device:{id:device}};};
+  const identifiers=[];const registerDevice=async id=>{identifiers.push(id);return {device:{id:device,device_uuid:id}};};
   await prepareOfflinePos({...options(),registerDevice});await prepareOfflinePos({...options(),registerDevice});assert.equal(identifiers[0],identifiers[1]);
+});
+test('preparation sends this browser UUID and friendly name, never adopting another laptop identity',async()=>{
+  let registered;
+  await prepareOfflinePos({...options(),deviceName:'James Laptop',registerDevice:async(uuid,name)=>{registered={uuid,name};return {device:{id:device,device_uuid:uuid}};}});
+  assert.equal(registered.uuid,(await readPosValue('metadata','computer')).uuid);assert.equal(registered.name,'James Laptop');
+  const original=await readPosValue('offline_access','grant');
+  await assert.rejects(prepareOfflinePos({...options(),registerDevice:async()=>({device:{id:'other',device_uuid:crypto.randomUUID()}})}),/does not match this browser/);
+  assert.deepEqual(await readPosValue('offline_access','grant'),original);
 });
 for(const stage of ['requireShell','registerDevice','getSnapshot'])test(`${stage} failure reaches the caller and never reports ready`,async()=>{
   const phases=[];await assert.rejects(prepareOfflinePos({...options(),[stage]:async()=>{throw new Error('Actionable failure');},onProgress:p=>phases.push(p)}),/Actionable failure/);

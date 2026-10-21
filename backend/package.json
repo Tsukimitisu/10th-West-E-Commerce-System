@@ -70,6 +70,7 @@
     "qs": "^6.16.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.11",
     "eslint": "^10.8.0",
     "socket.io-client": "^4.8.3"
   }

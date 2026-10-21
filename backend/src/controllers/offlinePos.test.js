@@ -3,7 +3,7 @@ import test,{after} from 'node:test';
 import {readFileSync} from 'node:fs';
 import pool from '../config/database.js';
 import {createPosOrder} from './posController.js';
-import {registerOfflineDevice,revokeOfflineDevice,getOfflineDevice} from './offlinePosController.js';
+import {getOfflineDevice} from './offlinePosController.js';
 import {validateOfflineEnvelope,setOfflineReserve,createOfflineSnapshot} from '../services/offlinePos.js';
 import {requirePermission,requireRole} from '../middleware/auth.js';
 after(()=>pool.end());
@@ -16,7 +16,7 @@ const request=(overrides={})=>({body:{items:[{product_id:1,variant_id:null,quant
 // Transactional adapter, not a shared database. Exercises the actual POS order
 // controller, its existing SQL write path and the new offline transaction seam.
 function database(){
-  const model={state:{device:{id:device,device_uuid:device,is_active:true,name:'POS'},product:{id:1,name:'Brake pad',price:150,store_selling_price:150,stock_quantity:10,reserved_stock:3},grant:{unit_price:120,allowance:3,consumed:0},hold:{remaining:3,target_quantity:3},ledger:new Map(),idempotency:new Map(),orders:[],movements:[],payments:[],items:[],audits:[]},calls:[],tail:Promise.resolve()};
+  const model={state:{device:{id:device,device_uuid:device,is_active:true,name:'POS'},product:{id:1,name:'Brake pad',price:150,store_selling_price:150,stock_quantity:10,reserved_stock:3},grant:{unit_price:120,allowance:3,consumed:0},hold:{id:'1:0',remaining:3,target_quantity:3},ledger:new Map(),idempotency:new Map(),orders:[],movements:[],payments:[],items:[],audits:[]},calls:[],tail:Promise.resolve()};
   model.connect=async()=>{
     let checkpoint;let unlock;
     return {release(){},async query(source,args=[]){
@@ -39,7 +39,7 @@ function database(){
       if(sql.startsWith('SELECT id FROM products'))return rows(s.inactive?null:{id:1});
       if(sql.startsWith('SELECT id,stock_quantity,reserved_stock FROM products'))return rows(s.product);
       if(sql.startsWith('SELECT id FROM product_variants'))return rows({id:2});
-      if(sql.startsWith('SELECT remaining'))return rows(s.hold);
+      if(sql.startsWith('SELECT remaining') || sql.startsWith('SELECT id,remaining'))return rows(s.hold);
       if(sql.startsWith('UPDATE pos_offline_reserves SET remaining=remaining-')){s.hold.remaining-=args[0];return rows({});}
       if(sql.startsWith('UPDATE pos_offline_reserves SET quarantined')){s.hold.quarantined=true;return rows({});}
       if(sql.startsWith('UPDATE products SET reserved_stock=reserved_stock-')||sql.startsWith('UPDATE product_variants SET reserved_stock=reserved_stock-')){if(s.product.stock_quantity<s.product.reserved_stock||s.product.reserved_stock<args[0])return rows();s.product.reserved_stock-=args[0];return rows({id:1});}
@@ -112,17 +112,6 @@ for(const kind of ['price','allowance','inactive','variant','stock','revoked','w
 test('online POS still uses current price and cannot consume the protected offline hold',async t=>{
   const db=database();install(t,db);const req=request();delete req.body.offline;const res=response();await createPosOrder(req,res);assert.equal(res.statusCode,201);assert.equal(res.body.receipt.total_amount,150);assert.equal(db.state.product.reserved_stock,3);assert.equal(db.state.ledger.size,0);
 });
-test('one active computer; registration needs recent normal authentication and revocation quarantines stock',async t=>{
-  const db=database();install(t,db);const req=request({session:{auth:{authenticatedAt:Date.now()}},body:{device_uuid:'44444444-4444-4444-8444-444444444444'}});const res=response();await registerOfflineDevice(req,res);assert.equal(res.statusCode,409);
-  const expired=response();await registerOfflineDevice({...req,session:{}},expired);assert.equal(expired.statusCode,401);
-  const revoked=response();await revokeOfflineDevice(req,revoked);assert.equal(revoked.body.revoked,true);assert.equal(db.state.device.is_active,false);assert.equal(db.state.hold.quarantined,true);assert.equal(db.state.product.reserved_stock,3);
-});
-test('concurrent registration of different computers permits only one active device',async t=>{
-  const db=database();db.state.device=null;install(t,db);
-  const results=[response(),response()];
-  await Promise.all(results.map((res,i)=>registerOfflineDevice(request({session:{auth:{authenticatedAt:Date.now()}},body:{device_uuid:i ? '44444444-4444-4444-8444-444444444444' : device}}),res)));
-  assert.deepEqual(results.map(r=>r.statusCode).sort(),[200,409]);assert.equal(db.state.audits.filter(a=>a.action==='OFFLINE_POS_DEVICE_REGISTERED').length,1);
-});
 test('snapshot persists authoritative variant prices and only physically protected allowances',async()=>{
   let stored;
   const client={async query(sql,args=[]){
@@ -130,7 +119,7 @@ test('snapshot persists authoritative variant prices and only physically protect
     if(sql.includes('remaining < target_quantity'))return {rows:[]};
     if(sql.includes('COALESCE(p.store_selling_price,p.price)'))return {rows:[{id:1,name:'Helmet',price:'100.00'},{id:2,name:'Pad',price:'120.00'}]};
     if(sql.includes('FROM product_variants v'))return {rows:[{id:10,product_id:1,variant_type:'Color',variant_value:'Black',price:null,price_adjustment:'0.10'}]};
-    if(sql.includes('FROM pos_offline_reserves r'))return {rows:[{id:'1:10',remaining:2,stock_quantity:5,reserved_stock:2},{id:'2:0',remaining:3,stock_quantity:1,reserved_stock:3}]};
+    if(sql.includes('FROM pos_offline_reserves r'))return {rows:[{id:'1:10',product_id:1,variant_id:10,remaining:2,stock_quantity:5,reserved_stock:2},{id:'2:0',product_id:2,variant_id:null,remaining:3,stock_quantity:1,reserved_stock:3}]};
     if(sql.includes('jsonb_to_recordset'))stored=JSON.parse(args[1]);
     return {rows:[]};
   }};
@@ -143,7 +132,7 @@ test('offline envelope rejects future sale, changed transaction reference, promo
 });
 test('protected reserve cannot be configured with invalid quantity or released from quarantine without review',async()=>{
   await assert.rejects(setOfflineReserve({query:()=>assert.fail('invalid request must not query')},{productId:1,quantity:-1}),/valid item/);
-  const db=database();db.state.hold.quarantined=true;const client=await db.connect();await assert.rejects(setOfflineReserve(client,{productId:1,quantity:3}),/Review the old computer/);
+  const db=database();db.state.hold.quarantined=true;const client=await db.connect();await assert.rejects(setOfflineReserve(client,{deviceId:device,productId:1,quantity:3}),/Review the old computer/);
 });
 test('POS authorization remains backend-enforced; reserve management uses existing inventory permission',async t=>{
   t.mock.method(pool,'query',async()=>({rows:[{has_permission:false}]}));
@@ -152,12 +141,12 @@ test('POS authorization remains backend-enforced; reserve management uses existi
   const customer=response();requireRole('owner','super_admin','store_staff','cashier')({user:{role:'customer'}},customer,()=>assert.fail());assert.equal(customer.statusCode,403);
   const routes=readFileSync(new URL('../routes/pos.js',import.meta.url),'utf8');assert.match(routes,/router\.post\('\/orders', \.\.\.canAccessPos, createPosOrder\)/);assert.match(routes,/requirePermission\('inventory.adjust'\)/);assert.match(routes,/requireRole\('owner','super_admin','admin'\)/);
 });
-test('migration protects one device, stock holds, private data and refuses destructive rollback',()=>{
+test('legacy migration protects one device, stock holds, private data and refuses destructive rollback',()=>{
   const migration=readFileSync(new URL('../../migrations/202610200004_offline_pos.cjs',import.meta.url),'utf8');assert.match(migration,/CREATE UNIQUE INDEX pos_one_active_offline_device/);assert.match(migration,/ENABLE ROW LEVEL SECURITY/);assert.match(migration,/protect_product_offline_hold/);assert.match(migration,/preserve issued snapshots/);assert.doesNotMatch(migration,/password|pin_hash|session_cookie/);
 });
 
 
 test('missing offline schema gives an actionable safe error',async t=>{
   t.mock.method(pool,'connect',async()=>({release(){},query:async sql=>{if(sql.includes('FROM pos_offline_devices'))throw Object.assign(new Error('private SQL'),{code:'42P01'});return {rows:[]};}}));
-  const res=response();await getOfflineDevice(request(),res);assert.equal(res.statusCode,503);assert.equal(res.body.code,'OFFLINE_POS_SCHEMA_NOT_READY');assert.match(res.body.message,/Apply the offline POS migration/);assert.doesNotMatch(JSON.stringify(res.body),/private SQL/);
+  const res=response();await getOfflineDevice(request({query:{device_uuid:device}}),res);assert.equal(res.statusCode,503);assert.equal(res.body.code,'OFFLINE_POS_SCHEMA_NOT_READY');assert.match(res.body.message,/Apply the offline POS migration/);assert.doesNotMatch(JSON.stringify(res.body),/private SQL/);
 });

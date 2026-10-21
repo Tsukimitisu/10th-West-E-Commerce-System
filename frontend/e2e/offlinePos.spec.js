@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {staffFixture,staffUser} from './staffPhaseFixture.js';
+import {readFile} from 'node:fs/promises';
 
 const DEVICE='11111111-1111-4111-8111-111111111111';
 const SNAPSHOT='22222222-2222-4222-8222-222222222222';
@@ -13,7 +14,8 @@ async function fixture(page){
     if(state.unreachable)return route.abort('internetdisconnected');
     const reply=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
     if(path==='/health')return reply({status:'OK'});
-    if(path==='/pos/offline/device')return reply({device:{id:DEVICE,name:'10th West POS',last_synced_at:new Date().toISOString()}});
+    if(path==='/pos/offline/device'){if(req.method()==='POST')state.device={id:DEVICE,device_uuid:req.postDataJSON().device_uuid,name:req.postDataJSON().name || '10th West POS',is_active:true};return reply({device:state.device || null});}
+    if(path==='/pos/offline/devices')return reply({devices:state.device ? [state.device] : []});
     if(path==='/pos/offline/snapshot')return reply({id:SNAPSHOT,device_id:DEVICE,created_at:new Date().toISOString(),expires_at:new Date(Date.now()+72*3600000).toISOString(),products:[product()]});
     if(path==='/pos/products')return reply({products:[product()]});
     if(path==='/pos/capabilities')return reply({can_access:true,can_discount:true,can_void:true,can_manage_offline_reserve:true});
@@ -34,6 +36,7 @@ async function fixture(page){
 
 for(const width of [1440,768,390])test(`cached POS cash sale, offline restart and authenticated resynchronization at ${width}px`,async({page,context})=>{
   test.setTimeout(90000);
+  if(process.env.E2E_TAILWIND_SCRIPT){const body=await readFile(process.env.E2E_TAILWIND_SCRIPT);await context.route(/^https:\/\/cdn\.tailwindcss\.com(?:\/|\?|$)/,route=>route.fulfill({contentType:'application/javascript',body}));}
   await page.setViewportSize({width,height:900});const state=await fixture(page);
   await page.goto('/#/pos');await expect(page.getByText('● Online',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Offline POS setup',exact:true}).click();
