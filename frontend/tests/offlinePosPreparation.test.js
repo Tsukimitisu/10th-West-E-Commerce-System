@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareOfflinePos, verifyOfflinePreparation } from '../services/offlinePosPreparation.js';
+import { prepareOfflinePos, verifyOfflinePreparation,getOfflinePosComputer } from '../services/offlinePosPreparation.js';
 import { waitForPosShell } from '../services/posPwa.js';
 import { posTransaction, writePosValue, readPosValue, allPosValues } from '../services/offlinePosDb.js';
 const device = '11111111-1111-4111-8111-111111111111';
@@ -20,6 +20,13 @@ test('preparation phases are reported and saved metadata/PIN verifier is read ba
 test('repeat preparation reuses the computer identifier and safely renews the grant',async()=>{
   const identifiers=[];const registerDevice=async id=>{identifiers.push(id);return {device:{id:device,device_uuid:id}};};
   await prepareOfflinePos({...options(),registerDevice});await prepareOfflinePos({...options(),registerDevice});assert.equal(identifiers[0],identifiers[1]);
+});
+
+test('approval requests and concurrent setup tabs preserve the same browser identity and pending sales',async()=>{
+  await writePosValue('pending_sales',{id:'keep-me',status:'pending',items:[]});
+  const [a,b]=await Promise.all([getOfflinePosComputer(),getOfflinePosComputer()]);assert.equal(a.uuid,b.uuid);
+  let preparedUuid;await prepareOfflinePos({...options(),registerDevice:async uuid=>{preparedUuid=uuid;return {device:{id:device,device_uuid:uuid}};}});
+  assert.equal(preparedUuid,a.uuid);assert.equal((await allPosValues('pending_sales')).length,1);
 });
 test('preparation sends this browser UUID and friendly name, never adopting another laptop identity',async()=>{
   let registered;
