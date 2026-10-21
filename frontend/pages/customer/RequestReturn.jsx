@@ -9,6 +9,8 @@ const RequestReturn = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState(new Set());
+  const [quantities, setQuantities] = useState({});
+  const [refundMethod, setRefundMethod] = useState('original');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -70,9 +72,10 @@ const RequestReturn = () => {
       await createReturn({
         order_id: order.id,
         reason: normalizedReason,
+        refund_method: refundMethod,
         items: selectedPreview.map((item) => ({
           order_item_id: item.order_item_id ?? item.orderItemId ?? item.id,
-          quantity: Math.max(1, Number(item.quantity) || 1),
+          quantity: quantities[item.id] || 1,
         })),
       });
       setSuccess(true);
@@ -168,12 +171,16 @@ const RequestReturn = () => {
               <h3 className="font-semibold text-slate-900 text-sm">Select items to return</h3>
             </div>
             <div className="divide-y divide-gray-100">
-              {items.map((item, index) => (
-                <label
+              {items.map((item, index) => {
+                const remaining = Math.max(0, Number(item.returnable_quantity ?? (Number(item.quantity) - Number(item.returned_quantity || 0))));
+                return (
+                <div
                   key={`${item.product_id || item.id || index}-${index}`}
-                  className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-slate-50 transition-colors ${selectedItems.has(index) ? 'bg-orange-50' : ''}`}
+                  className={`flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors ${selectedItems.has(index) ? 'bg-orange-50' : ''}`}
                 >
                   <input
+                    aria-label={`Return ${item.name || item.product_name}`}
+                    disabled={remaining < 1}
                     type="checkbox"
                     checked={selectedItems.has(index)}
                     onChange={() => toggleItem(index)}
@@ -194,8 +201,14 @@ const RequestReturn = () => {
                       Qty: {item.quantity} · ₱{Number(item.price ?? item.product_price ?? item.product?.price ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
-                </label>
-              ))}
+                  {selectedItems.has(index) && <label className="shrink-0 text-xs text-slate-600">Return quantity
+                    <input aria-label={`Return quantity for ${item.name || item.product_name}`} type="number" min={1} max={remaining} step={1} required
+                      value={quantities[item.id] || 1} onChange={event => setQuantities(prev => ({ ...prev, [item.id]: Math.min(remaining, Math.max(1, Number(event.target.value) || 1)) }))}
+                      className="mt-1 block min-h-11 w-16 rounded-lg border p-2 text-slate-900" />
+                    <span>of {remaining} eligible</span>
+                  </label>}
+                </div>
+              );})}
             </div>
           </div>
 
@@ -215,6 +228,11 @@ const RequestReturn = () => {
             <p className="text-xs text-slate-600 mt-2">{reason.trim().length}/1000</p>
           </div>
 
+          <fieldset className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+            <legend className="px-1 text-sm font-semibold">Refund preference</legend>
+            {[['original', 'Original payment method'], ['store_credit', 'Store credit']].map(([value, label]) => <label key={value} className="flex min-h-11 items-center gap-3 text-sm"><input type="radio" name="refund_method" value={value} checked={refundMethod === value} onChange={() => setRefundMethod(value)} />{label}</label>)}
+            <p className="text-xs text-slate-600">Final refund approval is subject to return review. Return approved items to the shop; a refund is processed only after receipt.</p>
+          </fieldset>
           <button
             type="submit"
             disabled={submitting}

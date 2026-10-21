@@ -11,7 +11,7 @@ import {
   getStoreCreditHistory
 } from '../controllers/returnController.js';
 import { authenticateToken, requirePermission, requirePermissionForRoles, requireRole } from '../middleware/auth.js';
-import { createReturnSecure, processRefundSecure } from '../controllers/returnWorkflowController.js';
+import { createReturnSecure, markReturnReceived, processRefundSecure } from '../controllers/returnWorkflowController.js';
 
 const router = express.Router();
 
@@ -28,6 +28,7 @@ router.get('/', authenticateToken, requireRole(...operationsRoles), requirePermi
 router.patch('/:id/approve', authenticateToken, requireRole(...operationsRoles), requirePermission('returns.manage'), approveReturn);
 router.put('/:id/approve', authenticateToken, requireRole(...operationsRoles), requirePermission('returns.manage'), approveReturn);
 router.patch('/:id/reject', authenticateToken, requireRole(...operationsRoles), requirePermission('returns.manage'), rejectReturn);
+router.patch('/:id/received', authenticateToken, requireRole(...operationsRoles), requirePermission('returns.manage'), markReturnReceived);
 router.put('/:id/reject', authenticateToken, requireRole(...operationsRoles), requirePermission('returns.manage'), rejectReturn);
 router.post('/:id/refund', authenticateToken, requireRole(...operationsRoles), requirePermission('refunds.process'), processRefundSecure);
 

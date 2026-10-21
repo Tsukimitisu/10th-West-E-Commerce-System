@@ -3,6 +3,39 @@ import { createPaymongoRefund } from '../services/paymongo.js';
 import { emitNotification, emitOrderStatusUpdate, emitReturnCreated, emitReturnUpdated, emitStockUpdate } from '../socket.js';
 import { getRuntimeSettings } from '../services/settings.js';
 import { writeAuditLog } from '../utils/audit.js';
+import { createNotification } from '../utils/notifications.js';
+
+export const markReturnReceived = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: 'Invalid return ID.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT r.id,r.order_id,r.user_id,r.status FROM returns r JOIN orders o ON o.id=r.order_id WHERE r.id=$1 FOR UPDATE OF r,o', [id]);
+    const returned = rows[0];
+    if (!returned || returned.status !== 'approved') {
+      await client.query('ROLLBACK');
+      return res.status(returned ? 409 : 404).json({ message: returned ? 'Only approved returns can be marked received.' : 'Return not found.' });
+    }
+    const result = await client.query("UPDATE returns SET status='received',updated_at=NOW() WHERE id=$1 RETURNING *", [id]);
+    await client.query("UPDATE orders SET status='returned',updated_at=NOW() WHERE id=$1", [returned.order_id]);
+    await client.query(`INSERT INTO order_status_history (order_id,from_status,to_status,source,changed_by,note,metadata)
+      VALUES ($1,'return_approved','returned','return',$2,'Returned item physically received',$3::jsonb)`,
+    [returned.order_id, req.user.id, JSON.stringify({ return_id: id })]);
+    await writeAuditLog(client, { req, actorUserId: req.user.id, action: 'return.received', entityType: 'return', entityId: id,
+      beforeData: { status: 'approved' }, afterData: { status: 'received' }, metadata: { return_id: id, order_id: returned.order_id } });
+    await createNotification(client, { user_id: returned.user_id, type: 'return.status', title: 'Returned item received',
+      message: 'Your returned item has been received and is being prepared for refund.', reference_id: returned.order_id,
+      reference_type: 'order', metadata: { return_id: id, status: 'received' } });
+    await client.query('COMMIT');
+    emitReturnUpdated(result.rows[0]);
+    emitOrderStatusUpdate(returned.order_id, 'returned');
+    return res.json({ return: result.rows[0] });
+  } catch {
+    await client.query('ROLLBACK').catch(() => {});
+    return res.status(500).json({ message: 'The returned item could not be marked received.' });
+  } finally { client.release(); }
+};
 
 const cleanEvidence = (input) => Array.isArray(input)
   ? [...new Set(input.map((value) => String(value || '').trim()).filter((value) => /^https:\/\//i.test(value)).slice(0, 8))]
@@ -52,7 +85,7 @@ export const createReturnSecure = async (req, res) => {
     const normalized = [];
     for (const row of itemRows.rows) {
       const quantity = requested.get(Number(row.id));
-      if (quantity + Number(row.already_requested) > Number(row.quantity)) {
+      if (quantity + Math.max(Number(row.already_requested), Number(row.returned_quantity || 0)) > Number(row.quantity)) {
         await client.query('ROLLBACK');
         return res.status(409).json({ message: `Return quantity exceeds the remaining quantity for ${row.product_name}.` });
       }
@@ -210,7 +243,7 @@ export const processRefundSecure = async (req, res) => {
     );
     const data = returned.rows[0];
     if (!data) { await client.query('ROLLBACK'); return res.status(404).json({ message: 'Return not found.' }); }
-    if (data.status !== 'approved') { await client.query('ROLLBACK'); return res.status(409).json({ message: 'Return must be approved before refund processing.' }); }
+    if (data.status !== 'received') { await client.query('ROLLBACK'); return res.status(409).json({ message: 'Return must be received before refund processing.' }); }
     const method = data.refund_method || 'original';
     const provider = method === 'store_credit' ? 'store_credit' : data.provider;
     if (method === 'original' && provider === 'paymongo' && !data.external_payment_id) {

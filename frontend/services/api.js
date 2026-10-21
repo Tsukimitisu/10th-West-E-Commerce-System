@@ -3500,10 +3500,15 @@ export const updateReturnStatus = async (id, status) => {
   return data.return;
 };
 
-export const processRefund = async (id, payload = {}) => {
+export const markReturnReceived = async (id) => {
+  const data = await authenticatedFetch(`${API_URL}/returns/${id}/received`, { method: 'PATCH' });
+  return data.return;
+};
+
+export const processRefund = async (id, payload = {}, idempotencyKey = crypto.randomUUID()) => {
   const data = await authenticatedFetch(`${API_URL}/returns/${id}/refund`, {
     method: 'POST',
-    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),
   });
   return data;

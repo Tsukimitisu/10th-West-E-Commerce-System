@@ -623,7 +623,10 @@ export const getOrderById = async (req, res) => {
          p.sale_price as product_sale_price,
          p.is_on_sale as product_is_on_sale,
          p.sku as product_sku,
-         p.barcode as product_barcode
+         p.barcode as product_barcode,
+         GREATEST(0, oi.quantity - GREATEST(COALESCE(oi.returned_quantity,0), COALESCE((SELECT SUM(ri.quantity) FROM return_items ri
+           JOIN returns r ON r.id=ri.return_id WHERE ri.order_item_id=oi.id
+           AND r.status NOT IN ('rejected','cancelled')),0)))::int AS returnable_quantity
        FROM order_items oi
        LEFT JOIN products p ON oi.product_id = p.id
       WHERE oi.order_id = $1`,

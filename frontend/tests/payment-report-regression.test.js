@@ -26,11 +26,11 @@ test('OAuth callback validates the current session before non-blocking CSRF refr
   assert.ok(navigateIndex > csrfIndex);
 });
 
-test('owner refunds are exposed only for an approved return request', async () => {
+test('owner refunds are exposed only for a received return request', async () => {
   const source = await read('pages/owner/OrdersView.jsx');
-  assert.match(source, /detailOrder\.return_request\?\.status === 'approved'/);
+  assert.match(source, /detailOrder\.return_request\?\.status === 'received'/);
   assert.match(source, /processRefund\(approvedReturn\.id/);
-  assert.match(source, /Refund can only be processed after an approved return\/refund request/);
+  assert.match(source, /Refund can only be processed after the returned item has been received/);
 });
 
 test('report export produces human-readable CSV headers and data-based paginated print tables', () => {

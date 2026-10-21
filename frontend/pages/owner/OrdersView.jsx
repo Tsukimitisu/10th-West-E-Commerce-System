@@ -198,8 +198,8 @@ const OrdersView = () => {
 
   const handleRefund = async () => {
     const approvedReturn = refundOrder?.return_request;
-    if (!approvedReturn?.id || approvedReturn.status !== 'approved') {
-      setRefundError('Refund can only be processed after an approved return/refund request.');
+    if (!approvedReturn?.id || approvedReturn.status !== 'received') {
+      setRefundError('Refund can only be processed after the returned item has been received.');
       return;
     }
     setRefunding(true);
@@ -575,7 +575,7 @@ const OrdersView = () => {
                   <Truck size={14} /> Create J&T Waybill
                 </button>
               )}
-              {!isStaff && detailOrder.return_request?.status === 'approved' && (
+              {permissions.has('refunds.process') && detailOrder.return_request?.status === 'received' && (
                 <button onClick={() => {
                   setRefundOrder(detailOrder);
                   setRefundAmount(detailOrder.return_request.refund_amount || detailOrder.total_amount);

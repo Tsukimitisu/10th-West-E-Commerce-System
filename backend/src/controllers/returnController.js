@@ -228,7 +228,7 @@ export const getAllReturns = async (req, res) => {
               u.name as customer_name, 
               u.email as customer_email,
               reviewer.name as reviewed_by_name,
-              o.total_amount as order_total
+              o.total_amount as order_total, o.payment_method
        FROM returns r
        LEFT JOIN users u ON r.user_id = u.id
        LEFT JOIN users reviewer ON r.reviewed_by = reviewer.id

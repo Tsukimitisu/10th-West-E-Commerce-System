@@ -8,7 +8,9 @@ test('return forms submit order_item_id and positive quantity', async () => {
   const requestReturn = await read('pages/customer/RequestReturn.jsx');
   const returnModal = await read('components/customer/ReturnModal.jsx');
   assert.match(requestReturn, /order_item_id:/);
-  assert.match(requestReturn, /Math\.max\(1, Number\(item\.quantity\)/);
+  assert.match(requestReturn, /quantity: quantities\[item\.id\] \|\| 1/);
+  assert.match(requestReturn, /max={remaining}/);
+  assert.match(requestReturn, /min={1}/);
   assert.match(returnModal, /getOrderItemId/);
   assert.match(returnModal, /order_item_id: Number\(pid\)/);
   assert.doesNotMatch(requestReturn, /items: selectedPreview\.map\(\(item\) => \(\{\s*product_id:/s);
