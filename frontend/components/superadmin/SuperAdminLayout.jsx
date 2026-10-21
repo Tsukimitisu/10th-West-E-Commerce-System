@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { id: 'backup', label: 'Backup & recovery', icon: Database, group: 'Governance' },
   { id: 'config', label: 'Configuration', icon: Settings, group: 'Platform' },
   { id: 'product-items', label: 'Product Items', icon: PackageSearch, group: 'Platform' },
+  { id: 'offline-pos-devices', label: 'Offline POS Devices', icon: PackageSearch, group: 'Platform' },
 ];
 
 const SuperAdminLayout = ({ activeView, onNavigate, user, children }) => {

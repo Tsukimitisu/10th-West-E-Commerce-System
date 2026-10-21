@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/owner/AdminLayout';
+import OfflinePosDevicesView from './OfflinePosDevicesView.jsx';
 import DashboardView from './DashboardView';
 import InventoryView from './InventoryView';
 import OrdersView from './OrdersView';
@@ -59,6 +60,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       account: <Suspense fallback={<p role="status">Loading staff account…</p>}><StaffAccountView user={user} /></Suspense>,
       notifications: <Suspense fallback={<p role="status">Loading notifications…</p>}><StaffNotificationsView onNavigate={setActiveView} /></Suspense>,
     } : {
+      'offline-pos-devices': <OfflinePosDevicesView user={user} />,
       account: <Suspense fallback={<p role="status">Loading Owner account…</p>}><OwnerAccountView user={user} /></Suspense>,
       notifications: <Suspense fallback={<p role="status">Loading notifications…</p>}><WorkspaceNotifications variant="owner" onNavigate={setActiveView} /></Suspense>,
     }),

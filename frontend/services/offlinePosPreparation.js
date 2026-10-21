@@ -1,5 +1,16 @@
-import { readPosValue, writePosValue, savePosSnapshot } from './offlinePosDb.js';
+import { readPosValue, posTransaction, savePosSnapshot } from './offlinePosDb.js';
 import { setupOfflinePin } from './offlinePosAccess.js';
+
+// Request approval and preparation share one identity, even across setup tabs.
+export const getOfflinePosComputer = () => posTransaction(['metadata'],'readwrite',async(s,r)=>{
+  const existing=await r(s.metadata.get('computer'));
+  if(existing){
+    if(!existing.uuid)throw new Error('This computer identifier is invalid. Ask an administrator to review Offline POS setup.');
+    return existing;
+  }
+  const computer={id:'computer',uuid:crypto.randomUUID()};
+  await r(s.metadata.put(computer));return computer;
+});
 
 export async function verifyOfflinePreparation(deviceId) {
   const [snapshot, grant] = await Promise.all([readPosValue('metadata', 'snapshot'), readPosValue('offline_access', 'grant')]);
@@ -17,8 +28,7 @@ export async function prepareOfflinePos({ pin, deviceName, user, requireShell, r
   if (!/^\d{6}$/.test(pin)) throw new Error('Choose a 6-digit Offline POS PIN.');
   onProgress('Preparing offline app…');
   await requireShell();
-  let computer = await readPosValue('metadata', 'computer');
-  if (!computer) { computer = { id: 'computer', uuid: crypto.randomUUID() }; await writePosValue('metadata', computer); }
+  const computer = await getOfflinePosComputer();
   onProgress('Registering this computer…');
   const { device } = await registerDevice(computer.uuid,deviceName);
   if (device?.device_uuid !== computer.uuid) throw new Error('The registered computer does not match this browser. Stay online and ask an administrator to review registration.');

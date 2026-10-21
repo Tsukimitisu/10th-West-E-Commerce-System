@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 import { adminMutationLimiter } from '../middleware/rateLimiter.js';
-import { getOfflineDevice, getOfflineDevices, getOfflineReserves, registerOfflineDevice, renameOfflineDevice, revokeOfflineDevice, saveOfflineReserve, syncOfflineCatalogue } from '../controllers/offlinePosController.js';
+import { getOfflineDevice, getOfflineDevices, getOfflineReserves, registerOfflineDevice, renameOfflineDevice, revokeOfflineDevice, saveOfflineReserve, syncOfflineCatalogue, requestOfflineDevice, getCurrentOfflineDeviceRequest, listOfflineDeviceRequests, approveOfflineDeviceRequest, rejectOfflineDeviceRequest } from '../controllers/offlinePosController.js';
 import {
   createPosOrder,
   getPosCapabilities,
@@ -17,6 +17,12 @@ import {
 const router = express.Router();
 const allowedRoles = requireRole('admin', 'super_admin', 'owner', 'store_staff', 'cashier');
 const canAccessPos = [authenticateToken, allowedRoles, requirePermission('pos.access')];
+const manageDevices = [...canAccessPos,requireRole('owner','admin','super_admin')];
+router.post('/offline/device-requests', ...canAccessPos, adminMutationLimiter, requestOfflineDevice);
+router.get('/offline/device-requests/current', ...canAccessPos, getCurrentOfflineDeviceRequest);
+router.get('/offline/device-requests', ...manageDevices, listOfflineDeviceRequests);
+router.post('/offline/device-requests/:id/approve', ...manageDevices, adminMutationLimiter, approveOfflineDeviceRequest);
+router.post('/offline/device-requests/:id/reject', ...manageDevices, adminMutationLimiter, rejectOfflineDeviceRequest);
 
 router.get('/offline/device', ...canAccessPos, getOfflineDevice);
 router.get('/offline/device/:deviceUuid', ...canAccessPos, getOfflineDevice);

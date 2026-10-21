@@ -22,10 +22,22 @@ promotions, server receipt voids and other workspaces require internet.
   app. Keep its clock correct. Do not clear site data or use private browsing.
   Pending sales exist on this computer until the server acknowledges them;
   losing the computer/profile can lose unsynchronized records.
-- Sign in freshly, open POS → **Offline POS setup**, choose a 6-digit PIN and
-  prepare this computer. New computers require an Owner/Admin/Super Admin to
-  sign in freshly and approve registration; staff with POS access can then prepare
-  that same browser. Give each laptop a useful name. Preparation waits for the production app shell to be
+- Apply `202610210002_offline_pos_device_approval.cjs` after the multi-device
+  migration. It adds approval requests without changing devices or stock.
+- Staff on a new laptop open POS → **Offline POS setup**, enter a computer name
+  and select **Request approval**. No PIN is requested before approval. Requests
+  expire after seven days; rejected/expired requests can be submitted again.
+- Owner/Admin: open **Offline POS Devices** in the Sales navigation. Super Admin:
+  open **Offline POS Devices** in Platform navigation. Review Pending approval,
+  confirm Approve computer or reject with an optional reason. Sign in again if
+  fresh authentication is requested. Approval never allocates stock or revokes
+  another laptop. Revoked devices require explicit management reapproval;
+  their quarantined stock stays protected.
+- On the same staff browser, select **Check approval status** (or wait for the
+  15-second refresh), enter a 6-digit PIN and prepare Offline POS. The browser's
+  existing UUID is preserved through request, approval and preparation. Managers
+  may still register their own new computer directly while freshly signed in.
+  Preparation waits for the production app shell to be
   cached. Installation is optional if the browser does not offer it.
 - An inventory manager can open **Inventory → Adjust stock → Offline POS
   reserve**, select the target computer and variant where applicable, and save a quantity. The same

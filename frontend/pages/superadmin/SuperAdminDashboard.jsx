@@ -9,6 +9,7 @@ import MonitoringView from './MonitoringView';
 import BackupRecoveryView from './BackupRecoveryView';
 import MaintenanceView from './MaintenanceView';
 import InventoryProductItemsView from '../owner/InventoryProductItemsView';
+import OfflinePosDevicesView from '../owner/OfflinePosDevicesView.jsx';
 
 const SuperAdminDashboard = ({ user }) => {
   const location = useLocation();
@@ -18,8 +19,9 @@ const SuperAdminDashboard = ({ user }) => {
   const activeView = segment === 'inventory' && location.pathname.endsWith('/inventory/product-items')
     ? 'product-items' : aliases[segment] || segment;
   const routes = { overview: 'dashboard', users: 'users', security: 'security', config: 'settings', monitoring: 'monitoring', logs: 'audit-logs', backup: 'backup', maintenance: 'maintenance', 'product-items': 'inventory/product-items' };
-  const setActiveView = (view) => navigate(`/superadmin/${routes[view] || 'dashboard'}`);
+  const setActiveView = (view) => navigate(`/superadmin/${view==='offline-pos-devices' ? view : routes[view] || 'dashboard'}`);
   const views = {
+    'offline-pos-devices': <OfflinePosDevicesView user={user} />,
     overview: <SuperAdminOverview onNavigate={setActiveView} />, users: <UserManagementView />,
     security: <SystemSecurityView />, config: <SystemConfigView />, monitoring: <MonitoringView key="monitoring" initialTab="errors" />, logs: <MonitoringView key="audit" title="Audit trail" />,
     backup: <BackupRecoveryView />, maintenance: <MaintenanceView onNavigate={setActiveView} />, 'product-items': <InventoryProductItemsView />,
