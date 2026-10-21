@@ -2,6 +2,57 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import {staffFixture} from './staffPhaseFixture.js';
 
+test('approval lookup failure does not hide the staff request action',async({page})=>{
+  await staffFixture(page,{permissions:['pos.access'],user:{role:'store_staff'}});
+  let pending=null;
+  await page.route('**/api/**',async route=>{
+    const request=route.request(),url=new URL(request.url()),path=url.pathname.replace(/^\/api/,'');
+    const reply=(data,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(data)});
+    if(path==='/health')return reply({status:'OK'});
+    if(path==='/pos/capabilities')return reply({can_access:true});
+    if(path==='/pos/products')return reply({products:[]});
+    if(path==='/pos/daily-summary')return reply({transaction_count:0});
+    if(path==='/pos/offline/device')return reply({device:null});
+    if(path==='/pos/offline/device-requests/current')return pending ? reply({status:'pending',request:pending}) : reply({message:'Approval status is temporarily unavailable.'},503);
+    if(path==='/pos/offline/device-requests' && request.method()==='POST'){
+      const body=request.postDataJSON();pending={id:crypto.randomUUID(),requested_name:body.name,requested_at:new Date().toISOString(),status:'pending'};
+      return reply({status:'pending',request:pending});
+    }
+    return route.fallback();
+  });
+  await page.goto('/#/pos');await page.getByRole('button',{name:'Offline POS setup',exact:true}).click();
+  await expect(page.getByText('Approval status is temporarily unavailable.',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:/^Request approval$/i})).toBeVisible({timeout:3000});
+  await expect(page.getByLabel('6-digit Offline POS PIN')).toHaveCount(0);
+  await page.getByLabel('Computer name',{exact:true}).fill('James Laptop');await page.getByRole('button',{name:/^Request approval$/i}).click();
+  await expect(page.getByText(/^Pending approval$/i)).toBeVisible();
+  await page.reload();await page.getByRole('button',{name:'Offline POS setup',exact:true}).click();
+  await expect(page.getByText(/^Pending approval$/i)).toBeVisible();
+});
+
+test('existing active staff laptop opens PIN preparation without request-history availability',async({page})=>{
+  await staffFixture(page,{permissions:['pos.access'],user:{role:'store_staff'}});
+  let approvalLookups=0;
+  await page.route('**/api/**',async route=>{
+    const url=new URL(route.request().url()),path=url.pathname.replace(/^\/api/,'');
+    const reply=data=>route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
+    if(path==='/health')return reply({status:'OK'});
+    if(path==='/pos/capabilities')return reply({can_access:true});
+    if(path==='/pos/products')return reply({products:[]});
+    if(path==='/pos/daily-summary')return reply({transaction_count:0});
+    if(path==='/pos/offline/device')return reply({device:{id:'11111111-1111-4111-8111-111111111111',device_uuid:url.searchParams.get('device_uuid'),name:'Friend Laptop',is_active:true}});
+    if(path==='/pos/offline/device-requests/current'){approvalLookups++;return route.fulfill({status:503,contentType:'application/json',body:'{"message":"Approval lookup unavailable"}'});}
+    return route.fallback();
+  });
+  await page.goto('/#/pos');await page.getByRole('button',{name:'Offline POS setup',exact:true}).click();
+  await expect(page.getByLabel('6-digit Offline POS PIN')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Prepare Offline POS',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Request Approval',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Approve computer',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('heading',{name:'Registered Offline POS Devices',exact:true})).toHaveCount(0);
+  expect(approvalLookups).toBe(0);
+});
+
 // Every API is intercepted. Approval does not perform an inventory mutation.
 for(const width of [1440,768,390])test(`staff requests, management approves and same laptop prepares at ${width}px`,async({browser})=>{
   test.setTimeout(120000);
@@ -51,11 +102,12 @@ for(const width of [1440,768,390])test(`staff requests, management approves and 
   }
   try{
     const james=await screen('store_staff');await james.goto('/#/pos');await james.getByRole('button',{name:'Offline POS setup',exact:true}).click();
+    await expect(james.getByRole('heading',{name:'Request Device Approval',exact:true})).toBeInViewport();
     await expect(james.getByText('Not approved',{exact:true})).toBeVisible();await expect(james.getByLabel('6-digit Offline POS PIN')).toHaveCount(0);
-    await james.getByLabel('Computer name',{exact:true}).fill('James Laptop');await james.getByRole('button',{name:'Request approval',exact:true}).click();
-    await expect(james.getByText('Pending approval',{exact:true})).toBeVisible();expect(registerCalls).toBe(0);
+    await james.getByLabel('Computer name',{exact:true}).fill('James Laptop');await james.getByRole('button',{name:'Request Approval',exact:true}).click();
+    await expect(james.getByText('Pending Approval',{exact:true})).toBeVisible();expect(registerCalls).toBe(0);
     const uuid=requests[0].device_uuid;
-    await james.reload();await james.getByRole('button',{name:'Offline POS setup',exact:true}).click();await expect(james.getByText('Pending approval',{exact:true})).toBeVisible();
+    await james.reload();await james.getByRole('button',{name:'Offline POS setup',exact:true}).click();await expect(james.getByText('Pending Approval',{exact:true})).toBeVisible();
     // Verify rejection and requesting again before the final approval.
     const managerRole=width===1440 ? 'owner' : width===768 ? 'admin' : 'super_admin';
     const managementPath=managerRole==='super_admin' ? '/#/superadmin/offline-pos-devices' : '/#/admin/offline-pos-devices';
@@ -63,7 +115,7 @@ for(const width of [1440,768,390])test(`staff requests, management approves and 
     if(width<1024)await owner.getByRole('button',{name:'Open navigation',exact:true}).click();
     await owner.getByRole('button',{name:'Offline POS Devices',exact:true}).click();
     await expect(owner.getByRole('heading',{name:'Offline POS Devices',exact:true})).toBeVisible();await owner.getByRole('button',{name:'Reject',exact:true}).click();await owner.getByLabel('Rejection reason (optional)').fill('Confirm the computer name');await owner.getByRole('button',{name:'Reject request',exact:true}).click();
-    await james.getByRole('button',{name:'Check approval status',exact:true}).click();await expect(james.getByText('Request rejected',{exact:true})).toBeVisible();await expect(james.getByText('Confirm the computer name',{exact:true})).toBeVisible();await james.getByRole('button',{name:'Request approval again',exact:true}).click();expect(requests[1].device_uuid).toBe(uuid);
+    await james.getByRole('button',{name:'Check approval status',exact:true}).click();await expect(james.getByText('Rejected',{exact:true})).toBeVisible();await expect(james.getByText('Confirm the computer name',{exact:true})).toBeVisible();await james.getByRole('button',{name:'Request Again',exact:true}).click();expect(requests[1].device_uuid).toBe(uuid);
     await owner.reload();await owner.getByRole('button',{name:'Approve',exact:true}).click();await expect(owner.getByRole('dialog')).toContainText('James Laptop');expect(await owner.getByRole('dialog').evaluate(e=>e.scrollWidth<=e.clientWidth)).toBe(true);await owner.screenshot({path:`test-results/offline-approval-confirm-${width}.png`,animations:'disabled'});await owner.getByRole('button',{name:'Approve computer',exact:true}).click();await expect(owner.getByText(/Computer approved\. It may now prepare/)).toBeVisible();
     // Let the normal 15-second poll detect approval without a manual click.
     await expect(james.getByText('Computer approved. Create your 6-digit Offline POS PIN to finish setup.')).toBeVisible({timeout:20000});

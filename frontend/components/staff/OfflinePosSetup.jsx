@@ -19,6 +19,7 @@ export default function OfflinePosSetup({ onClose,offline,user,capabilities,mana
   const [computerUuid,setComputerUuid]=useState('');
   const [deviceName,setDeviceName]=useState('');
   const [approval,setApproval]=useState({status:'loading'});
+  const [approvalError,setApprovalError]=useState('');
   const [reserveDevice,setReserveDevice]=useState('');
   const [allocations,setAllocations]=useState({reserves:[],stock:[]});
   const manageDevices=['owner','super_admin','admin'].includes(user?.role);
@@ -32,14 +33,23 @@ export default function OfflinePosSetup({ onClose,offline,user,capabilities,mana
   const [reviewed,setReviewed]=useState(false);
   const product=products.find(p=>String(p.id)===productId);
   const checkApproval=useCallback(async()=>{
+    try {
     const computer=await getOfflinePosComputer();setComputerUuid(computer.uuid);
-    // Management may register immediately; staff must resolve their request first.
-    const result=manageDevices ? await getOfflinePosDevice(computer.uuid).then(r=>({status:r.device?.is_active ? 'approved' : 'none',device:r.device})) : await getOfflinePosApproval(computer.uuid);
+    // Existing approved computers do not depend on the request-history lookup.
+    const {device:registered}=await getOfflinePosDevice(computer.uuid);
+    const result=registered?.is_active ? {status:'approved',device:registered} : manageDevices ? {status:'none',device:registered} : await getOfflinePosApproval(computer.uuid);
     if(result.device && result.device.device_uuid!==computer.uuid)throw new Error('Computer identity does not match. Ask an administrator to review this registration.');
-    setApproval(result);setDevice(result.device || null);
+    setApproval(result);setApprovalError('');setDevice(result.device || null);
     if(result.device?.is_active){setDeviceName(result.device.name);try{setReady(await verifyOfflinePreparation(result.device.id));}catch{setReady(null);}}
     else if(result.request?.requested_name)setDeviceName(result.request.requested_name);
     return result;
+    } catch(error) {
+      // A failed lookup must not leave the only request action hidden forever.
+      // Keep known pending state so its normal 15-second polling can recover.
+      setApproval(current=>current.status==='loading' ? {status:'unavailable'} : current);
+      setApprovalError(error.message || 'Approval status could not be checked. Try again or request approval.');
+      return null;
+    }
   },[manageDevices]);
   useEffect(()=>{if(!managementOnly)void checkApproval().catch(e=>setMessage(e.message));else void readPosValue('metadata','computer').then(c=>setComputerUuid(c?.uuid || '')).catch(e=>setMessage(e.message));},[checkApproval,managementOnly]);
   useEffect(()=>{if(managementOnly || approval.status!=='pending')return;const timer=setInterval(()=>{void checkApproval().catch(e=>setMessage(e.message));},15000);return()=>clearInterval(timer);},[approval.status,checkApproval,managementOnly]);
@@ -51,21 +61,22 @@ export default function OfflinePosSetup({ onClose,offline,user,capabilities,mana
   const run=async task=>{if(working.current)return;working.current=true;setBusy(true);setMessage('');setPhase('');try{await task();}catch(e){setPhase('');setMessage(e.message || 'Offline preparation failed. Stay online and try again.');if(e.code==='OFFLINE_POS_DEVICE_APPROVAL_REQUIRED')await checkApproval().catch(()=>{});}finally{working.current=false;setBusy(false);}};
   const content=<div className="min-w-0 space-y-5 p-4">
     {!managementOnly && <>
-    <ol className="list-inside list-decimal space-y-1 text-sm"><li>Register this computer and set an offline PIN.</li><li>Ask an inventory manager to protect offline stock.</li><li>Synchronize the catalogue.</li><li>Install 10th West POS, or reopen it in this browser.</li></ol>
-    <p className="text-sm">Each approved computer has its own PIN, catalogue, pending sales and stock allocation. Offline PIN access is limited to cash POS sales and expires unless renewed online.</p>
-    <section aria-live="polite" className="space-y-3 rounded-lg border p-4 text-sm"><h3 className="font-semibold">Offline POS on this computer</h3>
+    <section aria-live="polite" className="space-y-3 rounded-lg border border-orange-200 bg-orange-50 p-4 text-sm"><h3 className="font-semibold">{!manageDevices && approval.status!=='approved' ? 'Request Device Approval' : 'Offline POS on this computer'}</h3>
+      {approvalError && <><p role="alert" className="break-words text-red-800">{approvalError}</p><button type="button" disabled={busy} className="min-h-11 rounded-lg border px-4" onClick={()=>run(checkApproval)}>Retry approval check</button></>}
       {approval.status==='loading' && <><p>Checking computer approval…</p><button type="button" disabled={busy} className="min-h-11 rounded-lg border px-4" onClick={()=>run(checkApproval)}>Check approval status</button></>}
       {!manageDevices && approval.status!=='loading' && approval.status!=='approved' && <>
-        <p>{approval.status==='pending' ? 'Pending approval' : approval.status==='rejected' ? 'Request rejected' : approval.status==='expired' ? 'Request expired' : 'Not approved'}</p>
+        <p className="font-semibold">{approval.status==='pending' ? 'Pending Approval' : approval.status==='rejected' ? 'Rejected' : approval.status==='expired' ? 'Request expired' : approval.status==='unavailable' ? 'Approval status unavailable' : 'Not approved'}</p>
         {approval.status==='pending' ? <><p>Request sent. Waiting for an Owner or System Administrator to approve this computer.</p><p>Computer: {approval.request?.requested_name}</p><p>Requested: {new Date(approval.request?.requested_at).toLocaleString()}</p><button type="button" disabled={busy} className="min-h-11 rounded-lg border px-4" onClick={()=>run(checkApproval)}>Check approval status</button></> : <>
           <p>{approval.status==='rejected' ? 'Contact an Owner or System Administrator if this computer should be approved.' : 'This computer needs approval before Offline POS can be prepared.'}</p>
           {approval.request?.rejection_reason && <p>{approval.request.rejection_reason}</p>}
           <label className="block font-semibold">Computer name<input maxLength={80} value={deviceName} onChange={e=>setDeviceName(e.target.value)} placeholder="James Laptop" className="mt-2 block min-h-11 w-full rounded-lg border p-3" /></label>
-          <button type="button" disabled={busy || !computerUuid || !deviceName.trim()} className="min-h-11 rounded-lg bg-orange-500 px-4 font-semibold disabled:opacity-40" onClick={()=>run(async()=>{setApproval(await requestOfflinePosApproval(computerUuid,deviceName));})}>{approval.status==='none' ? 'Request approval' : 'Request approval again'}</button>
+          <button type="button" disabled={busy || !computerUuid || !deviceName.trim()} className="min-h-11 rounded-lg bg-orange-500 px-4 font-semibold disabled:opacity-40" onClick={()=>run(async()=>{setApproval(await requestOfflinePosApproval(computerUuid,deviceName));setApprovalError('');})}>{['none','unavailable'].includes(approval.status) ? 'Request Approval' : 'Request Again'}</button>
         </>}
       </>}
       {approval.status==='approved' && !ready && <p className="font-semibold text-emerald-800">Computer approved. Create your 6-digit Offline POS PIN to finish setup.</p>}
     </section>
+    <ol className="list-inside list-decimal space-y-1 text-sm"><li>Get this computer approved, then set an offline PIN.</li><li>Ask an inventory manager to protect offline stock.</li><li>Synchronize the catalogue.</li><li>Install 10th West POS, or reopen it in this browser.</li></ol>
+    <p className="text-sm">Each approved computer has its own PIN, catalogue, pending sales and stock allocation. Offline PIN access is limited to cash POS sales and expires unless renewed online.</p>
     {approval.status!=='loading' && (manageDevices || approval.status==='approved') && <form className="space-y-3" onSubmit={e=>{e.preventDefault();void run(async()=>{setReady(null);const verified=await offline.prepare(pin,setPhase,deviceName);setReady(verified);setDevice(verified.device);setApproval({status:'approved',device:verified.device});setComputerUuid(verified.device.device_uuid);setDeviceName(verified.device.name);if(!reserveDevice)setReserveDevice(verified.device.id);setPin('');await refreshDevices();setMessage('Catalogue synchronized and offline PIN secured. Keep browser site data to preserve pending sales.');});}}>
       <label className="block text-sm font-semibold">Computer name<input maxLength={80} value={deviceName} onChange={e=>setDeviceName(e.target.value)} placeholder="Shop Main POS" className="mt-2 block min-h-11 w-full rounded-lg border p-3" /></label>
       {!manageDevices && <p className="text-sm">An owner or system administrator must approve a new computer first. You may prepare an already approved computer.</p>}

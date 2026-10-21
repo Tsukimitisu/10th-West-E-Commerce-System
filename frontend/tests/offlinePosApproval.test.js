@@ -5,8 +5,8 @@ const source=p=>readFileSync(new URL(p,import.meta.url),'utf8');
 test('new staff computers resolve approval before showing PIN preparation',()=>{
   const ui=source('../components/staff/OfflinePosSetup.jsx');
   assert.match(ui,/getOfflinePosApproval/);
-  assert.match(ui,/Request approval/);
-  assert.match(ui,/Pending approval/);
+  assert.match(ui,/Request Device Approval/);
+  assert.match(ui,/Pending Approval/);
   assert.match(ui,/15000/);
 });
 test('management navigation exposes Offline POS Devices for both administration shells',()=>{
