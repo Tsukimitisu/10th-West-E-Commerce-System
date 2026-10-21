@@ -614,7 +614,7 @@ export const createPosOrder = async (req, res) => {
     return res.status(201).json(response);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
-    if (req.body?.offline && error.status && error.status<500) await writeAuditLog(client,{ req,actorUserId:req.user.id,action:'OFFLINE_POS_SYNC_CONFLICT',entityType:'pos_offline_sale',entityId:idempotencyKey,metadata:{ code:error.code || 'POS_SYNC_CONFLICT' } }).catch(()=>{});
+    if (req.body?.offline && error.status && error.status<500) await writeAuditLog(client,{ req,actorUserId:req.user.id,action:'OFFLINE_POS_SYNC_CONFLICT',entityType:'pos_offline_sale',entityId:idempotencyKey,metadata:{ device_id:req.body.offline.device_id, code:error.code || 'POS_SYNC_CONFLICT' } }).catch(()=>{});
     console.error('POS order failed:', error);
     return res.status(error.status || 500).json({
       message: error.status ? error.message : 'POS order could not be completed.',

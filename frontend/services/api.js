@@ -2793,9 +2793,11 @@ export const getPosCapabilities = async () => {
   return authenticatedFetch(`${API_URL}/pos/capabilities`);
 };
 
-export const getOfflinePosDevice = () => authenticatedFetch(`${API_URL}/pos/offline/device`, { timeoutMs:8000,preserveSessionOnFailure:true });
-export const registerOfflinePosDevice = deviceUuid => authenticatedFetch(`${API_URL}/pos/offline/device`, { method:'POST',body:JSON.stringify({ device_uuid:deviceUuid }),timeoutMs:10000 });
-export const revokeOfflinePosDevice = () => authenticatedFetch(`${API_URL}/pos/offline/device`, { method:'DELETE' });
+export const getOfflinePosDevice = deviceUuid => authenticatedFetch(`${API_URL}/pos/offline/device?device_uuid=${encodeURIComponent(deviceUuid || '')}`, { timeoutMs:8000,preserveSessionOnFailure:true });
+export const getOfflinePosDevices = () => authenticatedFetch(`${API_URL}/pos/offline/devices`);
+export const registerOfflinePosDevice = (deviceUuid,name) => authenticatedFetch(`${API_URL}/pos/offline/device`, { method:'POST',body:JSON.stringify({ device_uuid:deviceUuid,name }),timeoutMs:10000 });
+export const revokeOfflinePosDevice = deviceId => authenticatedFetch(`${API_URL}/pos/offline/device/${encodeURIComponent(deviceId)}`, { method:'DELETE' });
+export const renameOfflinePosDevice = (deviceId,name) => authenticatedFetch(`${API_URL}/pos/offline/device/${encodeURIComponent(deviceId)}`, { method:'PATCH',body:JSON.stringify({name}) });
 export const saveOfflinePosReserve = data => authenticatedFetch(`${API_URL}/pos/offline/reserve`, { method:'PUT',body:JSON.stringify(data) });
 export const getOfflinePosReserves = productId => authenticatedFetch(`${API_URL}/pos/offline/reserves?product_id=${encodeURIComponent(productId)}`);
 export const getOfflinePosSnapshot = deviceId => authenticatedFetch(`${API_URL}/pos/offline/snapshot`, { method:'POST',body:JSON.stringify({ device_id:deviceId }),timeoutMs:60000,preserveSessionOnFailure:true });

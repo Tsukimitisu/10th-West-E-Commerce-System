@@ -19,10 +19,16 @@ export const requireDevice = async (client, id) => {
 
 // Holds live inside reserved_stock, alongside checkout reservations. Never
 // release a checkout reservation when changing an offline hold.
-export const setOfflineReserve = async (client, { productId, variantId = null, quantity,reviewed = false }) => {
+export const setOfflineReserve = async (client, { deviceId, productId, variantId = null, quantity,reviewed = false }) => {
   if (!Number.isInteger(productId) || productId < 1 || (variantId !== null && (!Number.isInteger(variantId) || variantId < 1)) || !Number.isInteger(quantity) || quantity < 0 || quantity > 10000) {
     throw offlineError('Enter a valid item and reserve quantity (0–10000).', 'OFFLINE_POS_RESERVE_INVALID', 400);
   }
+  if (deviceId == null) {
+    if (quantity !== 0 || !reviewed) throw offlineError('Review physical stock and pending sales before releasing unassigned protection.', 'OFFLINE_POS_RESERVE_INVALID',400);
+  } else if (quantity === 0 && reviewed && uuid(deviceId)) {
+    const device = (await client.query('SELECT * FROM pos_offline_devices WHERE id=$1 FOR UPDATE',[deviceId])).rows[0];
+    if (!device) throw offlineError('Select a registered computer.');
+  } else await requireDevice(client, deviceId);
   const product = (await client.query("SELECT id FROM products WHERE id=$1 AND inventory_status='active' AND COALESCE(is_deleted,false)=false FOR UPDATE", [productId])).rows[0];
   if (!product) throw offlineError('This inventory item is unavailable.');
   const table = variantId ? 'product_variants' : 'products';
@@ -30,23 +36,24 @@ export const setOfflineReserve = async (client, { productId, variantId = null, q
   const target = (await client.query(`SELECT id,stock_quantity,reserved_stock FROM ${table} WHERE id=$1 ${variantId ? 'AND product_id=$2' : ''} FOR UPDATE`, variantId ? [variantId,productId] : [productId])).rows[0];
   if (!target) throw offlineError('This variant is unavailable.');
   const key = itemKey({ product_id: productId, variant_id: variantId });
-  const old = (await client.query('SELECT remaining,quarantined FROM pos_offline_reserves WHERE id=$1 FOR UPDATE', [key])).rows[0];
+  const old = (await client.query('SELECT id,remaining,quarantined FROM pos_offline_reserves WHERE device_id IS NOT DISTINCT FROM $1::uuid AND product_id=$2 AND variant_id IS NOT DISTINCT FROM $3::int FOR UPDATE', [deviceId,productId,variantId])).rows[0];
+  if (deviceId == null && !old) throw offlineError('No unassigned protected reserve exists.');
   if(old?.quarantined && !reviewed)throw offlineError('Review the old computer’s pending sales and physical stock, then confirm that review before releasing this protected reserve.');
   const delta = quantity - Number(old?.remaining || 0);
-  if (Number(target.stock_quantity) - Number(target.reserved_stock) < delta) throw offlineError('Not enough unreserved stock for this offline allowance.');
+  if (Number(target.stock_quantity) - Number(target.reserved_stock) < delta) throw offlineError(`Only ${Math.max(0,Number(target.stock_quantity)-Number(target.reserved_stock))} units are currently available for additional offline reserve.`);
   // Do not reduce an issued allowance during its offline window: physical sales
   // may already exist on the disconnected computer. Revocation is explicit.
   if (delta < 0) {
     const issued = (await client.query(`SELECT COUNT(*)::int AS issued,COALESCE(BOOL_OR(s.expires_at>now() AND d.is_active),false) AS live
       FROM pos_offline_snapshot_items i JOIN pos_offline_snapshots s ON s.id=i.snapshot_id
-      JOIN pos_offline_devices d ON d.id=s.device_id WHERE i.item_key=$1 AND i.allowance>i.consumed`, [key])).rows[0];
+      JOIN pos_offline_devices d ON d.id=s.device_id WHERE i.item_key=$1 AND ($2::uuid IS NULL OR s.device_id=$2) AND i.allowance>i.consumed`, [key,deviceId])).rows[0];
     if (issued?.live) throw offlineError('Synchronize pending sales and wait for the issued offline allowance to expire, or revoke the device before reducing this reserve.');
     if(Number(issued?.issued)>0 && !reviewed)throw offlineError('Review physical stock and all pending offline sales, then confirm that review before reducing this reserve.');
   }
   // Increase the aggregate first; decrease the hold first (DB guard).
   if (delta > 0) await client.query(`UPDATE ${table} SET reserved_stock=reserved_stock+$1 WHERE id=$2`, [delta,target.id]);
-  await client.query(`INSERT INTO pos_offline_reserves(id,product_id,variant_id,target_quantity,remaining) VALUES($1,$2,$3,$4,$4)
-    ON CONFLICT(id) DO UPDATE SET target_quantity=$4,remaining=$4,quarantined=false`, [key,productId,variantId,quantity]);
+  if (old) await client.query('UPDATE pos_offline_reserves SET target_quantity=$1,remaining=$1,quarantined=$3 WHERE id=$2', [quantity,old.id,deviceId == null]);
+  else await client.query(`INSERT INTO pos_offline_reserves(id,device_id,product_id,variant_id,target_quantity,remaining) VALUES($1,$2,$3,$4,$5,$5)`, [`${deviceId}:${key}`,deviceId,productId,variantId,quantity]);
   if (delta < 0) await client.query(`UPDATE ${table} SET reserved_stock=reserved_stock+$1 WHERE id=$2`, [delta,target.id]);
 };
 
@@ -55,7 +62,7 @@ export const createOfflineSnapshot = async (client, deviceId, userId) => {
   // Refill configured holds only from genuinely unreserved physical stock.
   // Local snapshot replacement subtracts unsynchronized physical sales, so a
   // reconnect cannot reissue an allowance those pending sales already consumed.
-  const configured=(await client.query('SELECT * FROM pos_offline_reserves WHERE remaining < target_quantity AND NOT quarantined ORDER BY product_id,variant_id NULLS FIRST')).rows;
+  const configured=(await client.query('SELECT * FROM pos_offline_reserves WHERE device_id=$1 AND remaining < target_quantity AND NOT quarantined ORDER BY product_id,variant_id NULLS FIRST', [deviceId])).rows;
   for(const hold of configured){
     await client.query('SELECT id FROM products WHERE id=$1 FOR UPDATE',[hold.product_id]);
     const table=hold.variant_id ? 'product_variants' : 'products';
@@ -73,12 +80,12 @@ export const createOfflineSnapshot = async (client, deviceId, userId) => {
   if (rows.length > 20000) throw offlineError('The offline catalogue is too large. Contact support.', 'OFFLINE_POS_CATALOGUE_LIMIT');
   const variants = (await client.query(`SELECT v.id,v.product_id,v.sku,v.variant_type,v.variant_value,v.option_combination,v.price,v.price_adjustment,v.image_url
     FROM product_variants v JOIN products p ON p.id=v.product_id WHERE p.inventory_status='active' AND COALESCE(p.is_deleted,false)=false ORDER BY v.id`)).rows;
-  const reserves = (await client.query(`SELECT r.id,r.remaining,
+  const reserves = (await client.query(`SELECT r.product_id,r.variant_id,r.remaining,
     CASE WHEN r.variant_id IS NULL THEN p.stock_quantity ELSE v.stock_quantity END AS stock_quantity,
     CASE WHEN r.variant_id IS NULL THEN p.reserved_stock ELSE v.reserved_stock END AS reserved_stock
     FROM pos_offline_reserves r JOIN products p ON p.id=r.product_id
-    LEFT JOIN product_variants v ON v.id=r.variant_id AND v.product_id=r.product_id WHERE NOT r.quarantined`)).rows;
-  const holds = new Map(reserves.map(r => [r.id,Number(r.stock_quantity)>=Number(r.reserved_stock) && Number(r.reserved_stock)>=Number(r.remaining) ? Number(r.remaining) : 0]));
+    LEFT JOIN product_variants v ON v.id=r.variant_id AND v.product_id=r.product_id WHERE r.device_id=$1 AND NOT r.quarantined`, [deviceId])).rows;
+  const holds = new Map(reserves.map(r => [itemKey(r),Number(r.stock_quantity)>=Number(r.reserved_stock) && Number(r.reserved_stock)>=Number(r.remaining) ? Number(r.remaining) : 0]));
   const snapshotId = crypto.randomUUID();
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + offlineAccessHours()*3600000);
@@ -144,9 +151,9 @@ export const consumeOfflineAllowance = async (client,req,items) => {
     await client.query('SELECT id FROM products WHERE id=$1 FOR UPDATE', [item.product_id]);
     const table = item.variant_id ? 'product_variants' : 'products';
     await client.query(`SELECT id FROM ${table} WHERE id=$1 FOR UPDATE`, [item.variant_id || item.product_id]);
-    const hold = (await client.query('SELECT remaining FROM pos_offline_reserves WHERE id=$1 FOR UPDATE', [key])).rows[0];
+    const hold = (await client.query('SELECT id,remaining FROM pos_offline_reserves WHERE device_id=$1 AND product_id=$2 AND variant_id IS NOT DISTINCT FROM $3::int AND NOT quarantined FOR UPDATE', [o.device_id,item.product_id,item.variant_id || null])).rows[0];
     if (!hold || hold.remaining < item.quantity) throw offlineError('Offline stock changed. Review this in-store sale and physical stock.', 'OFFLINE_POS_STOCK_CONFLICT');
-    await client.query('UPDATE pos_offline_reserves SET remaining=remaining-$1 WHERE id=$2', [item.quantity,key]);
+    await client.query('UPDATE pos_offline_reserves SET remaining=remaining-$1 WHERE id=$2', [item.quantity,hold.id]);
     const released = await client.query(`UPDATE ${table} SET reserved_stock=reserved_stock-$1 WHERE id=$2 AND reserved_stock >= $1 AND stock_quantity >= reserved_stock RETURNING id`, [item.quantity,item.variant_id || item.product_id]);
     if (!released.rowCount) throw offlineError('Inventory changed before this sale could synchronize.', 'OFFLINE_POS_STOCK_CONFLICT');
     await client.query('UPDATE pos_offline_snapshot_items SET consumed=consumed+$1 WHERE snapshot_id=$2 AND item_key=$3', [item.quantity,o.snapshot_id,key]);
@@ -160,5 +167,5 @@ export const completeOfflineSale = async (client, req, key, hash, response) => {
   await client.query(`INSERT INTO pos_offline_sales(transaction_id,device_id,snapshot_id,request_hash,order_id,response,sold_at)
     VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)`, [key,o.device_id,o.snapshot_id,hash,response.order.id || response.order.order_id,JSON.stringify(response),o.created_at]);
   await client.query('UPDATE pos_offline_devices SET last_synced_at=now() WHERE id=$1', [o.device_id]);
-  await writeAuditLog(client, { req,actorUserId:req.user.id,action:'OFFLINE_POS_SALE_SYNCED',entityType:'pos_offline_sale',entityId:key,metadata:{ order_id:response.order.id || response.order.order_id, sold_at:o.created_at } });
+  await writeAuditLog(client, { req,actorUserId:req.user.id,action:'OFFLINE_POS_SALE_SYNCED',entityType:'pos_offline_sale',entityId:key,metadata:{ device_id:o.device_id, order_id:response.order.id || response.order.order_id, sold_at:o.created_at } });
 };

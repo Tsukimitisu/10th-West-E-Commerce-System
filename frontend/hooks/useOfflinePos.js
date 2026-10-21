@@ -62,9 +62,9 @@ export default function useOfflinePos({ online,user }) {
     const timer=setInterval(async()=>{if((await pendingPosSales()).some(s=>s.status==='pending'))void sync();},30000);
     return()=>clearInterval(timer);
   },[online,user?.role,sync]);
-  const prepare=async (pin,onProgress)=>{
+  const prepare=async (pin,onProgress,deviceName)=>{
     if(!online || !user?.role)throw new Error('Sign in online before preparing this computer.');
-    const verified = await prepareOfflinePos({pin,user,onProgress,requireShell:requirePosShell,registerDevice:registerOfflinePosDevice,getSnapshot:getOfflinePosSnapshot,refreshLocal});
+    const verified = await prepareOfflinePos({pin,deviceName,user,onProgress,requireShell:requirePosShell,registerDevice:registerOfflinePosDevice,getSnapshot:getOfflinePosSnapshot,refreshLocal});
     window.dispatchEvent(new Event('offline-pos:prepared'));
     navigator.storage?.persist?.().catch(()=>{});
     return verified;
