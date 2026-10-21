@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 import { adminMutationLimiter } from '../middleware/rateLimiter.js';
-import { getOfflineDevice, getOfflineDevices, getOfflineReserves, registerOfflineDevice, renameOfflineDevice, revokeOfflineDevice, saveOfflineReserve, syncOfflineCatalogue, requestOfflineDevice, getCurrentOfflineDeviceRequest, listOfflineDeviceRequests, approveOfflineDeviceRequest, rejectOfflineDeviceRequest } from '../controllers/offlinePosController.js';
+import { getOfflineDevice, getOfflineDevices, getOfflineReserves, registerOfflineDevice, renameOfflineDevice, revokeOfflineDevice, saveOfflineReserve, saveOfflineStockMode, syncOfflineCatalogue, requestOfflineDevice, getCurrentOfflineDeviceRequest, listOfflineDeviceRequests, approveOfflineDeviceRequest, rejectOfflineDeviceRequest } from '../controllers/offlinePosController.js';
 import {
   createPosOrder,
   getPosCapabilities,
@@ -31,6 +31,7 @@ router.delete('/offline/device', ...canAccessPos, requireRole('owner','super_adm
 router.delete('/offline/device/:id', ...canAccessPos, requireRole('owner','super_admin','admin'), adminMutationLimiter, revokeOfflineDevice);
 router.patch('/offline/device/:id', ...canAccessPos, requireRole('owner','super_admin','admin'), adminMutationLimiter, renameOfflineDevice);
 const manageReserve=[authenticateToken, requireRole('admin','super_admin','owner','store_staff'),requirePermission('inventory.adjust')];
+router.patch('/offline/device/:id/stock-mode', ...manageReserve, adminMutationLimiter, saveOfflineStockMode);
 router.get('/offline/devices', ...manageReserve, getOfflineDevices);
 router.get('/offline/reserves', ...manageReserve, getOfflineReserves);
 router.put('/offline/reserve', ...manageReserve, adminMutationLimiter, saveOfflineReserve);

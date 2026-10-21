@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import assert from 'node:assert/strict';
 import test,{beforeEach} from 'node:test';
 import { readFileSync } from 'node:fs';
-import { posTransaction,savePosSnapshot,readPosValue,writePosValue,pendingPosSales,allPosValues,searchOfflineProducts,commitOfflineCashSale,updateOfflineSale } from '../services/offlinePosDb.js';
+import { posTransaction,savePosSnapshot,readPosValue,writePosValue,pendingPosSales,allPosValues,searchOfflineProducts,commitOfflineCashSale,updateOfflineSale,offlinePosStockSummary } from '../services/offlinePosDb.js';
 import { setupOfflinePin,unlockOfflinePos,lockLocalPos,currentOfflineAccess } from '../services/offlinePosAccess.js';
 import { synchronizeOfflineSales } from '../services/offlinePosSync.js';
 import { checkPosBackend } from '../services/posReachability.js';
@@ -70,6 +70,19 @@ test('concurrent local sales cannot oversell the protected allowance',async()=>{
 test('selected variant uses its exact cached price, stock allowance and receipt identity',async()=>{
   await prepare();const sale=await sell({items:[{product_id:2,variant_id:20,quantity:1}],amountTendered:600});assert.equal(sale.total_amount,550);assert.equal(sale.items[0].variant_id,20);assert.equal(sale.items[0].variant_name_snapshot,'Color: Black');assert.equal((await readPosValue('products',2)).variants[0].available_stock,0);
   await assert.rejects(sell({items:[{product_id:2,variant_id:20,quantity:1}],amountTendered:600}),/No offline stock/);
+});
+
+test('automatic inventory counts use locally deducted stock; repeated snapshots never double-count pending sales',async()=>{
+  const s=snapshot();s.stock_mode='automatic';s.products[0].available_stock=10;
+  await savePosSnapshot(s);await writePosValue('offline_access',{id:'grant',device_id:device,expires_at:s.expires_at});
+  assert.deepEqual(await offlinePosStockSummary(),{products:2,units:11});
+  const sale=await sell({items:[{product_id:1,quantity:2}],amountTendered:300});
+  assert.deepEqual(await offlinePosStockSummary(),{products:2,units:9});
+  await savePosSnapshot(s);await savePosSnapshot(s);assert.deepEqual(await offlinePosStockSummary(),{products:2,units:9});
+  assert.equal((await pendingPosSales())[0].id,sale.id);assert.equal((await readPosValue('metadata','snapshot')).stock_mode,'automatic');
+  await updateOfflineSale(sale.id,{status:'synchronized',server_order_id:99,server_receipt_number:'POS-99'});
+  s.products[0].available_stock=8;await savePosSnapshot(s);assert.deepEqual(await offlinePosStockSummary(),{products:2,units:9});
+  assert.equal((await readPosValue('pending_sales',sale.id)).server_order_id,99);
 });
 test('catalogue/grant expiry preserves already completed pending physical sales',async()=>{
   await prepare();const sale=await sell();const snapshot=await readPosValue('metadata','snapshot');await writePosValue('metadata',{...snapshot,expires_at:new Date(0).toISOString()});await assert.rejects(sell(),/expired/);assert.equal((await pendingPosSales())[0].id,sale.id);

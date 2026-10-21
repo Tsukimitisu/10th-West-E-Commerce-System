@@ -2,7 +2,7 @@ import test, { before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import pool from '../config/database.js';
 import {registerOfflineDevice,revokeOfflineDevice,getOfflineDevice,getOfflineDevices} from './offlinePosController.js';
-import {setOfflineReserve,createOfflineSnapshot,prepareOfflineSale,lockOfflineDevice} from '../services/offlinePos.js';
+import {setOfflineReserve,createOfflineSnapshot,prepareOfflineSale,lockOfflineDevice,setOfflineStockMode} from '../services/offlinePos.js';
 import {createPosOrder} from './posController.js';
 import {requireRole,requirePermission} from '../middleware/auth.js';
 import {fixture,A,B,response,request} from './offlinePosFixture.js';
@@ -103,10 +103,10 @@ test('legacy migration preserves laptop, hold, snapshots, sales, price grants an
   assert.equal(await scalar('SELECT stock_quantity FROM products WHERE id=1'),9);
 });
 test('ambiguous legacy protection is never released or assigned to new laptops; explicit review is required',async t=>{
-  install(t);await f.reset({migrate:false,active:false});await f.multi.up({raw:f.raw});
+  install(t);await f.reset({migrate:false,active:false});await f.multi.up({raw:f.raw});await f.automatic.up({raw:f.raw});
   const row=(await f.db.query('SELECT * FROM pos_offline_reserves')).rows[0];assert.equal(row.device_id,null);assert.equal(row.quarantined,true);assert.equal(row.remaining,2);
   await assert.rejects(f.db.query('UPDATE pos_offline_reserves SET quarantined=false WHERE device_id IS NULL'),/pos_unassigned_reserve_quarantined/);
-  assert.equal(await scalar('SELECT reserved_stock FROM products WHERE id=1'),2);const b=(await register()).body.device.id;assert.equal((await snapshot(b)).products[0].available_stock,0);
+  assert.equal(await scalar('SELECT reserved_stock FROM products WHERE id=1'),2);const b=(await register()).body.device.id;await transaction(c=>setOfflineStockMode(c,b,'manual'));assert.equal((await snapshot(b)).products[0].available_stock,0);
   await assert.rejects(allocate(null,0),/Review physical stock/);await allocate(null,0,null,true);assert.equal(await scalar('SELECT reserved_stock FROM products WHERE id=1'),0);
 });
 test('down migration refuses multi-device or ambiguous protected state; safe one-device rollback retains original hold',async t=>{

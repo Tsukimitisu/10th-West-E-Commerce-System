@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import pool from '../config/database.js';
 import { writeAuditLog } from '../utils/audit.js';
-import { createOfflineSnapshot, lockOfflineDevice, offlineError, setOfflineReserve } from '../services/offlinePos.js';
+import { createOfflineSnapshot, lockOfflineDevice, offlineError, setOfflineReserve, setOfflineStockMode } from '../services/offlinePos.js';
 
 const run = fn => async (req,res) => {
   const client = await pool.connect();
@@ -13,6 +13,7 @@ const run = fn => async (req,res) => {
     return res.json(result);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
+    if(error.code==='23505' && error.constraint==='pos_one_active_automatic_device')return res.status(409).json({code:'OFFLINE_POS_AUTOMATIC_DEVICE_CONFLICT',message:'Another computer is already the primary automatic device. Switch it to Manual first. Existing protected stock remains reserved.'});
     if (error.code==='23505' && error.constraint==='pos_one_active_offline_device') {
       return res.status(503).json({code:'OFFLINE_POS_SCHEMA_NOT_READY',message:'Multi-device Offline POS database setup is not ready. Apply 202610210001_multi_device_offline_pos.cjs before registering another computer.'});
     }
@@ -34,9 +35,9 @@ export const getOfflineDevice = run(async (client,req) => {
   const id=req.params?.deviceUuid || req.query?.device_uuid;
   if (!id) return {device:null}; // Old clients must never select an arbitrary laptop.
   if (!validUuid(id)) throw offlineError('A valid computer identifier is required.','OFFLINE_POS_DEVICE_INVALID',400);
-  return {device:(await client.query('SELECT id,device_uuid,name,is_active,registered_at,last_synced_at,revoked_at FROM pos_offline_devices WHERE device_uuid=$1',[id])).rows[0] || null};
+  return {device:(await client.query('SELECT id,device_uuid,name,is_active,stock_mode,registered_at,last_synced_at,revoked_at FROM pos_offline_devices WHERE device_uuid=$1',[id])).rows[0] || null};
 });
-export const getOfflineDevices = run(async client => ({devices:(await client.query('SELECT d.id,d.device_uuid,d.name,d.is_active,d.registered_at,d.last_synced_at,d.revoked_at,u.name AS registered_by_name FROM pos_offline_devices d LEFT JOIN users u ON u.id=d.registered_by ORDER BY d.registered_at,d.id')).rows}));
+export const getOfflineDevices = run(async client => ({devices:(await client.query('SELECT d.id,d.device_uuid,d.name,d.is_active,d.stock_mode,d.registered_at,d.last_synced_at,d.revoked_at,u.name AS registered_by_name FROM pos_offline_devices d LEFT JOIN users u ON u.id=d.registered_by ORDER BY d.registered_at,d.id')).rows}));
 export const getOfflineReserves = run(async(client,req)=>{
   const id=Number(req.query.product_id);
   if(!Number.isInteger(id)||id<1)throw offlineError('Select a valid inventory item.','OFFLINE_POS_RESERVE_INVALID',400);
@@ -62,7 +63,8 @@ const activateDevice = async (client,req,id,name,current) => {
     await audit(client,req,'OFFLINE_POS_DEVICE_REGISTERED',current.id,{device_id:current.id,device_name:current.name,reauthorized:true});
     return device;
   }
-  const device=(await client.query('INSERT INTO pos_offline_devices(id,device_uuid,name,registered_by) VALUES($1,$2,$3,$4) RETURNING *',[crypto.randomUUID(),id,name,req.user.id])).rows[0];
+  const device=(await client.query(`INSERT INTO pos_offline_devices(id,device_uuid,name,registered_by,stock_mode)
+    SELECT $1,$2,$3,$4,CASE WHEN EXISTS(SELECT 1 FROM pos_offline_devices WHERE is_active) THEN 'manual' ELSE 'automatic' END RETURNING *`,[crypto.randomUUID(),id,name,req.user.id])).rows[0];
   await audit(client,req,'OFFLINE_POS_DEVICE_REGISTERED',device.id,{device_id:device.id,device_name:name});
   return device;
 };
@@ -80,7 +82,7 @@ const requireManagement = req => {
   if(!managementRole(req))throw offlineError('Management approval is required.','OFFLINE_POS_DEVICE_APPROVAL_REQUIRED',403);
 };
 const expireRequests = client => client.query("UPDATE pos_offline_device_requests SET status='expired',updated_at=now() WHERE status='pending' AND requested_at <= now()-interval '7 days'");
-const safeDevice = d => d ? {id:d.id,device_uuid:d.device_uuid,name:d.name,is_active:d.is_active,registered_at:d.registered_at,last_synced_at:d.last_synced_at} : null;
+const safeDevice = d => d ? {id:d.id,device_uuid:d.device_uuid,name:d.name,is_active:d.is_active,stock_mode:d.stock_mode,registered_at:d.registered_at,last_synced_at:d.last_synced_at} : null;
 const safeRequest = r => r ? {id:r.id,requested_name:r.requested_name,status:r.status,requested_at:r.requested_at,reviewed_at:r.reviewed_at,rejection_reason:r.rejection_reason,approved_device_id:r.approved_device_id} : null;
 const browserId = req => {
   const id=req.body?.device_uuid || req.query?.device_uuid;
@@ -162,5 +164,10 @@ export const saveOfflineReserve = run(async (client,req) => {
   await setOfflineReserve(client,{deviceId:req.body?.device_id ?? null,productId:Number(req.body?.product_id),variantId:req.body?.variant_id == null ? null : Number(req.body.variant_id),quantity:Number(req.body?.quantity),reviewed:req.body?.reviewed === true});
   await audit(client,req,'OFFLINE_POS_RESERVE_UPDATED',req.body.device_id || 'unassigned',{device_id:req.body.device_id || null,product_id:req.body.product_id,variant_id:req.body.variant_id || null,quantity:Number(req.body.quantity)});
   return { saved:true };
+});
+export const saveOfflineStockMode = run(async(client,req)=>{
+  const device=await setOfflineStockMode(client,req.params?.id,req.body?.stock_mode);
+  await audit(client,req,'OFFLINE_POS_STOCK_MODE_UPDATED',device.id,{device_id:device.id,stock_mode:device.stock_mode});
+  return {device};
 });
 export const syncOfflineCatalogue = run(async (client,req) => createOfflineSnapshot(client,req.body?.device_id,req.user.id));

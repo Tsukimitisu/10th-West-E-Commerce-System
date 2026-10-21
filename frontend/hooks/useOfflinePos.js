@@ -1,6 +1,6 @@
 import { useCallback,useEffect,useRef,useState } from 'react';
 import { createPosOrder,getOfflinePosSnapshot,registerOfflinePosDevice } from '../services/api.js';
-import { allPosValues,pendingPosSales,readPosValue,savePosSnapshot,writePosValue } from '../services/offlinePosDb.js';
+import { allPosValues,pendingPosSales,readPosValue,savePosSnapshot,writePosValue,offlinePosStockSummary } from '../services/offlinePosDb.js';
 import { synchronizeOfflineSales } from '../services/offlinePosSync.js';
 import { renewUnlockedPos,lockLocalPos } from '../services/offlinePosAccess.js';
 import { requirePosShell } from '../services/posPwa.js';
@@ -9,13 +9,14 @@ import { prepareOfflinePos } from '../services/offlinePosPreparation.js';
 export default function useOfflinePos({ online,user }) {
   const [sales,setSales]=useState([]);
   const [snapshot,setSnapshot]=useState(null);
+  const [inventorySummary,setInventorySummary]=useState({products:0,units:0});
   const [syncing,setSyncing]=useState(false);
   const [message,setMessage]=useState('');
   const refreshing=useRef(null);
   const mounted=useRef(false);
   const refreshLocal=useCallback(async()=>{
-    const [rows,meta]=await Promise.all([allPosValues('pending_sales'),readPosValue('metadata','snapshot')]);
-    if(mounted.current){setSales(rows);setSnapshot(meta || null);}
+    const [rows,meta,summary]=await Promise.all([allPosValues('pending_sales'),readPosValue('metadata','snapshot'),offlinePosStockSummary()]);
+    if(mounted.current){setSales(rows);setSnapshot(meta || null);setInventorySummary(summary);}
   },[]);
   const refreshSnapshot=useCallback(async()=>{
     if (!online || !user?.role) return;
@@ -69,5 +70,5 @@ export default function useOfflinePos({ online,user }) {
     navigator.storage?.persist?.().catch(()=>{});
     return verified;
   };
-  return { sales,snapshot,syncing,message,sync,prepare,refreshLocal,refreshSnapshot,pending:sales.filter(s=>s.status!=='synchronized').length };
+  return { sales,snapshot,inventorySummary,syncing,message,sync,prepare,refreshLocal,refreshSnapshot,pending:sales.filter(s=>s.status!=='synchronized').length };
 }

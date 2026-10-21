@@ -2,6 +2,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import legacy from '../../migrations/202610200004_offline_pos.cjs';
 import multi from '../../migrations/202610210001_multi_device_offline_pos.cjs';
+import automatic from '../../migrations/202610210003_automatic_offline_pos.cjs';
 export const A='11111111-1111-4111-8111-111111111111';
 export const B='22222222-2222-4222-8222-222222222222';
 export const response=()=>({statusCode:200,status(n){this.statusCode=n;return this;},json(body){this.body=body;return this;}});
@@ -42,7 +43,7 @@ export async function fixture() {
     await db.query('INSERT INTO pos_offline_devices(id,device_uuid,name,is_active,registered_by) VALUES($1,$1,$2,$3,7)',[A,'Friend Laptop',active]);
     await db.query("INSERT INTO pos_offline_reserves(id,product_id,target_quantity,remaining) VALUES('1:0',1,2,2)");
     await db.query('UPDATE products SET reserved_stock=2 WHERE id=1');
-    if(migrate)await multi.up({raw});
+    if(migrate){await multi.up({raw});await automatic.up({raw});}
   }
-  return {db,raw,connect,reset,multi,close:()=>db.close()};
+  return {db,raw,connect,reset,multi,automatic,close:()=>db.close()};
 }

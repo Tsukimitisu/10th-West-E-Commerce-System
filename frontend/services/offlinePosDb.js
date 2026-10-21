@@ -22,6 +22,14 @@ export const posTransaction = async (names,mode,fn) => {
 export const readPosValue = (store,id) => posTransaction([store],'readonly',async(s,r)=>r(s[store].get(id)));
 export const writePosValue = (store,value) => posTransaction([store],'readwrite',async(s,r)=>r(s[store].put(value)));
 export const allPosValues = store => posTransaction([store],'readonly',async(s,r)=>r(s[store].getAll()));
+export const offlinePosStockSummary = async () => {
+  let products=0,units=0;
+  for(const product of await allPosValues('products')){
+    const quantity=(product.variants?.length ? product.variants : [product]).reduce((sum,item)=>sum+Math.max(0,Number(item.available_stock) || 0),0);
+    if(quantity>0)products++;units+=quantity;
+  }
+  return {products,units};
+};
 export const pendingPosSales = async () => (await allPosValues('pending_sales')).filter(s=>s.status !== 'synchronized').sort((a,b)=>a.created_at.localeCompare(b.created_at));
 export const posMoney = v => Math.round((Number(v)+Number.EPSILON)*100)/100;
 const itemKey = i => `${i.product_id}:${i.variant_id || 0}`;

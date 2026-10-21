@@ -7,16 +7,23 @@ const SNAPSHOT='22222222-2222-4222-8222-222222222222';
 test.use({ignoreHTTPSErrors:true});
 async function fixture(page){
   const state=await staffFixture(page,{permissions:['pos.access','inventory.adjust'],user:{role:'owner'}});
-  state.unreachable=false;state.synced=[];state.allowance=3;
+  state.unreachable=false;state.synced=[];state.allowance=3;state.stockMode='manual';state.automaticStock=8;
   const product=()=>({id:1,name:'Offline Brake Pad',sku:'PAD-1',barcode:'12345678',part_number:'BRK-125',price:120,store_selling_price:120,available_stock:state.allowance,stock_quantity:10,variants:[]});
   await page.route('**/api/**',async route=>{
     const req=route.request();const path=new URL(req.url()).pathname.replace(/^\/api/,'');
     if(state.unreachable)return route.abort('internetdisconnected');
     const reply=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
     if(path==='/health')return reply({status:'OK'});
-    if(path==='/pos/offline/device'){if(req.method()==='POST')state.device={id:DEVICE,device_uuid:req.postDataJSON().device_uuid,name:req.postDataJSON().name || '10th West POS',is_active:true};return reply({device:state.device || null});}
+    if(path==='/pos/offline/device'){if(req.method()==='POST')state.device={id:DEVICE,device_uuid:req.postDataJSON().device_uuid,name:req.postDataJSON().name || '10th West POS',is_active:true,stock_mode:state.stockMode};return reply({device:state.device || null});}
+    if(path===`/pos/offline/device/${DEVICE}/stock-mode`){
+      if(state.modeConflict)return reply({message:'Another computer is already the primary automatic device. Switch it to Manual first. Existing protected stock remains reserved.'},409);
+      state.stockMode=req.postDataJSON().stock_mode;state.device.stock_mode=state.stockMode;return reply({device:state.device});
+    }
     if(path==='/pos/offline/devices')return reply({devices:state.device ? [state.device] : []});
-    if(path==='/pos/offline/snapshot')return reply({id:SNAPSHOT,device_id:DEVICE,created_at:new Date().toISOString(),expires_at:new Date(Date.now()+72*3600000).toISOString(),products:[product()]});
+    if(path==='/pos/offline/snapshot'){
+      if(state.stockMode==='automatic')state.allowance=Math.max(0,state.automaticStock-state.synced.length);
+      return reply({id:SNAPSHOT,device_id:DEVICE,stock_mode:state.stockMode,created_at:new Date().toISOString(),expires_at:new Date(Date.now()+72*3600000).toISOString(),products:[product()]});
+    }
     if(path==='/pos/products')return reply({products:[product()]});
     if(path==='/pos/capabilities')return reply({can_access:true,can_discount:true,can_void:true,can_manage_offline_reserve:true});
     if(path==='/pos/daily-summary')return reply({transaction_count:0,gross_sales:0,cash_sales:0,gcash_sales:0});
@@ -88,7 +95,38 @@ for(const width of [1440,768,390])test(`cached POS cash sale, offline restart an
   expect(state.synced).toHaveLength(1);
 });
 
+for(const width of [1440,390])test(`Automatic stock sync, offline cash sale and reconnect preserve allowances at ${width}px`,async({page,context})=>{
+  test.setTimeout(90000);await page.setViewportSize({width,height:900});
+  if(process.env.E2E_TAILWIND_SCRIPT){const body=await readFile(process.env.E2E_TAILWIND_SCRIPT);await context.route(/^https:\/\/cdn\.tailwindcss\.com(?:\/|\?|$)/,route=>route.fulfill({contentType:'application/javascript',body}));}
+  const state=await fixture(page);await page.goto('/#/pos');await page.getByRole('button',{name:'Offline POS setup',exact:true}).click();
+  await page.getByLabel('6-digit Offline POS PIN').fill('482916');await page.getByRole('button',{name:'Prepare Offline POS',exact:true}).click();await expect(page.getByText(/Offline POS Ready/)).toBeVisible({timeout:45000});
+  await page.getByRole('radio',{name:/^Automatic/}).click();await expect(page.getByRole('radio',{name:/^Automatic/})).toBeChecked();await page.getByRole('button',{name:'Sync Offline Inventory',exact:true}).click();
+  await expect(page.getByText('Offline inventory updated successfully.',{exact:true})).toBeVisible();await expect(page.getByText('Products available offline: 1',{exact:true})).toBeVisible();await expect(page.getByText('Units available offline: 8',{exact:true})).toBeVisible();
+  expect(await page.getByRole('dialog').evaluate(e=>e.scrollWidth<=e.clientWidth)).toBe(true);await page.screenshot({path:`test-results/automatic-offline-stock-${width}.png`,animations:'disabled'});
+  await page.getByRole('button',{name:'Close',exact:true}).click();state.unreachable=true;await context.setOffline(true);
+  await expect(page.getByText('● Offline mode',{exact:true})).toBeVisible();await page.getByRole('searchbox',{name:'Search products or scan a barcode'}).fill('12345678');
+  await page.getByRole('button').filter({has:page.getByRole('heading',{name:'Offline Brake Pad'})}).click();await page.getByRole('button',{name:/^Pay /}).click();await page.getByLabel('Amount received').fill('200');await page.getByRole('button',{name:/^Charge /}).click();await expect(page.getByText('OFFLINE SALE · Pending synchronization')).toBeVisible();
+  await page.reload({waitUntil:'domcontentloaded'});await page.getByLabel('Offline POS PIN',{exact:true}).fill('482916');await page.getByRole('button',{name:'Unlock offline POS'}).click();await expect(page.getByText(/Pending sync: 1/)).toBeVisible();
+  state.unreachable=false;await context.setOffline(false);await expect(page.getByText(/Sign in to synchronize/)).toBeVisible({timeout:15000});await page.getByRole('link',{name:'Sign in',exact:true}).click();
+  await page.getByLabel('Email',{exact:true}).fill('staff@example.test');await page.getByLabel('Password',{exact:true}).fill('LocalFixture-Only-8!');await page.getByRole('button',{name:'Sign In',exact:true}).click();await expect(page).toHaveURL(/#\/admin\/dashboard/);
+  await page.goto('/#/pos');await expect(page.getByText('All transactions synchronized.')).toBeVisible({timeout:15000});expect(state.synced).toHaveLength(1);
+  await page.getByRole('button',{name:'Offline POS setup',exact:true}).click();await expect(page.getByText('Units available offline: 7',{exact:true})).toBeVisible();
+  await page.getByRole('radio',{name:/^Manual/}).click();await expect(page.getByRole('radio',{name:/^Manual/})).toBeChecked();expect(state.allowance).toBe(7);await page.getByRole('button',{name:'Sync Offline Inventory',exact:true}).click();expect(state.allowance).toBe(7);
+  state.stockMode='automatic';state.device.stock_mode='automatic';await page.getByRole('button',{name:'Sync Offline Inventory',exact:true}).click();await expect(page.getByRole('radio',{name:/^Automatic/})).toBeChecked();await page.getByRole('radio',{name:/^Manual/}).click();await expect(page.getByRole('radio',{name:/^Manual/})).toBeChecked();
+  state.modeConflict=true;await page.getByRole('radio',{name:/^Automatic/}).click();await expect(page.getByText(/Another computer is already the primary automatic device/)).toBeVisible();await expect(page.getByRole('radio',{name:/^Manual/})).toBeChecked();
+});
+
 test('backend unreachable despite navigator online and first-use offline remain safe',async({page})=>{
   const state=await fixture(page);state.unreachable=true;await page.goto('/#/pos');
   await expect(page.getByText('Offline POS is not ready on this computer.')).toBeVisible({timeout:15000});expect(await page.evaluate(()=>navigator.onLine)).toBe(true);
+});
+
+test('new Automatic device with no safe stock explains the empty allowance',async({page,context})=>{
+  if(process.env.E2E_TAILWIND_SCRIPT){const body=await readFile(process.env.E2E_TAILWIND_SCRIPT);await context.route(/^https:\/\/cdn\.tailwindcss\.com(?:\/|\?|$)/,route=>route.fulfill({contentType:'application/javascript',body}));}
+  const state=await fixture(page);state.stockMode='automatic';state.automaticStock=0;
+  await page.goto('/#/pos');await page.getByRole('button',{name:'Offline POS setup',exact:true}).click();
+  await page.getByLabel('6-digit Offline POS PIN').fill('482916');await page.getByRole('button',{name:'Prepare Offline POS',exact:true}).click();
+  await expect(page.getByText('Automatic stock allocation: On',{exact:true})).toBeVisible();
+  await expect(page.getByText('Units available offline: 0',{exact:true})).toBeVisible();
+  await expect(page.getByText('No stock is currently available for offline allocation.',{exact:true})).toBeVisible();
 });

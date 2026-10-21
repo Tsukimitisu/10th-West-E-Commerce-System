@@ -10,7 +10,7 @@ test('offline preparation exposes progress and feedback beside its explicit subm
   assert.match(ui, /type="submit"/);
   assert.match(ui, /aria-live="polite"/);
   assert.match(ui, /Offline POS Ready/);
-  assert.ok(ui.indexOf('{message &&') < ui.indexOf('Offline POS reserve'));
+  assert.ok(ui.indexOf('{message &&') < ui.indexOf('id="offline-reserve-editor"'));
 });
 
 test('actual return statuses have customer labels and rejected/manual review do not claim refund completion', () => {

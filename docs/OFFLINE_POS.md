@@ -46,7 +46,31 @@ promotions, server receipt voids and other workspaces require internet.
 - Synchronize the catalogue after configuring reserves. Confirm the last-sync
   time and access-expiry time before disconnecting.
 
-## Stock protection
+## Automatic stock allocation
+
+Apply `202610210003_automatic_offline_pos.cjs` after the approval migration.
+Existing devices remain **Manual** with all reserves unchanged. A newly registered
+computer defaults to **Automatic** only when no other device is active. Approval
+still allocates no stock; allocation happens when its catalogue is synchronized.
+
+In Offline POS setup, an authorized inventory manager selects **Offline Stock
+Mode**. One active computer may be the primary Automatic device; other computers
+keep their separate Manual allocations. Device management also exposes this
+setting. Select **Sync Offline Inventory** to update allowances and local counts.
+
+Automatic sync adds `max(0, stock_quantity - reserved_stock)` to each eligible
+item's existing non-quarantined hold through the existing reserve writer. The
+aggregate already includes online reservations, all devices and legacy protection.
+Pending physical sales remain protected in those holds and are deducted locally
+once when replacing the catalogue. Product variants receive separate allowances.
+Inactive/deleted products are excluded. Quarantined stock is never released.
+
+Allocating all safe stock offline makes those units unavailable online. Switching
+back to Manual preserves existing holds; releasing issued protection still requires
+the existing expiry/review workflow. The existing 10,000-unit per-item reserve limit
+remains enforced: an allocation exceeding it fails safely without partial changes.
+
+## Reservation rules
 
 Offline holds are included in the existing `reserved_stock` total, separately
 tracked by device and product/variant. Consequently all existing online availability checks,

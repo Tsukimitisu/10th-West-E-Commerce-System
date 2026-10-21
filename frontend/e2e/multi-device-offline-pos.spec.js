@@ -81,6 +81,6 @@ for(const width of [1440,390])test(`two approved laptops sell and synchronize is
     await expect(b.page.getByText('Registered Offline POS Devices',{exact:true})).toBeVisible();await expect(b.page.getByText('James Laptop · This computer',{exact:true})).toBeVisible();
     b.page.once('dialog',dialog=>{expect(dialog.message()).toContain('Friend Laptop');return dialog.accept();});await b.page.getByRole('button',{name:'Revoke Friend Laptop',exact:true}).click();await expect(b.page.getByText('Friend Laptop revoked. Only its remaining stock is quarantined for review.')).toBeVisible();
     expect(server.devices.get(a.own.device_uuid).is_active).toBe(false);expect(server.devices.get(b.own.device_uuid).is_active).toBe(true);expect(server.holds.get(b.own.id).quarantined).toBe(false);
-    await b.page.getByRole('button',{name:'Synchronize catalogue',exact:true}).click();await expect(b.page.getByText('Catalogue synchronized.',{exact:true})).toBeVisible();expect(await b.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await b.page.screenshot({path:`test-results/multi-device-pos-${width}.png`});
+    await b.page.getByRole('button',{name:'Sync Offline Inventory',exact:true}).click();await expect(b.page.getByText('Offline inventory updated successfully.',{exact:true})).toBeVisible();expect(await b.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await b.page.screenshot({path:`test-results/multi-device-pos-${width}.png`});
   }finally{await Promise.all(contexts.map(c=>c.close()));}
 });
