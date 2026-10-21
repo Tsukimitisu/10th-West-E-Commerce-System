@@ -1,6 +1,10 @@
 import pool from '../config/database.js';
 
 const BUSINESS_TIME_ZONE = process.env.BUSINESS_TIME_ZONE || 'Asia/Manila';
+const recognizedSale = `status::text IN ('paid','processing','packed','ready_for_pickup','shipped','out_for_delivery','delivered','partially_refunded')
+              AND payment_status::text IN ('paid','partially_refunded')
+              AND COALESCE(integrity_status, 'valid') = 'valid'
+              AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id)`;
 const toNumber = (value) => Number(value || 0);
 
 export const getOperationsDashboard = async (req, res) => {
@@ -18,18 +22,19 @@ export const getOperationsDashboard = async (req, res) => {
         SELECT
           COUNT(*) FILTER (WHERE COALESCE(integrity_status, 'valid') = 'valid')::int AS total_orders,
           COALESCE(SUM(total_amount) FILTER (
-            WHERE status::text IN ('paid','processing','packed','ready_for_pickup','shipped','out_for_delivery','delivered','partially_refunded')
-              AND payment_status::text IN ('paid','partially_refunded')
-              AND COALESCE(integrity_status, 'valid') = 'valid'
-              AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id)
+            WHERE ${recognizedSale}
           ), 0) AS total_sales,
           COALESCE(SUM(total_amount) FILTER (
             WHERE (created_at AT TIME ZONE $1)::date = (NOW() AT TIME ZONE $1)::date
-              AND status::text IN ('paid','processing','packed','ready_for_pickup','shipped','out_for_delivery','delivered','partially_refunded')
-              AND payment_status::text IN ('paid','partially_refunded')
-              AND COALESCE(integrity_status, 'valid') = 'valid'
-              AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id)
+              AND ${recognizedSale}
           ), 0) AS today_sales,
+          COALESCE(SUM(total_amount) FILTER (WHERE ${recognizedSale} AND source='pos'),0) AS total_in_store_sales,
+          COALESCE(SUM(total_amount) FILTER (WHERE ${recognizedSale} AND source='pos' AND (created_at AT TIME ZONE $1)::date=(NOW() AT TIME ZONE $1)::date),0) AS today_in_store_sales,
+          COUNT(*) FILTER (WHERE ${recognizedSale} AND source='pos' AND (created_at AT TIME ZONE $1)::date=(NOW() AT TIME ZONE $1)::date)::int AS today_in_store_orders,
+          COALESCE(SUM(total_amount) FILTER (WHERE ${recognizedSale} AND source='online'),0) AS total_online_sales,
+          COALESCE(SUM(total_amount) FILTER (WHERE ${recognizedSale} AND source='online' AND (created_at AT TIME ZONE $1)::date=(NOW() AT TIME ZONE $1)::date),0) AS today_online_sales,
+          COUNT(*) FILTER (WHERE ${recognizedSale} AND source='online' AND (created_at AT TIME ZONE $1)::date=(NOW() AT TIME ZONE $1)::date)::int AS today_online_orders,
+          COALESCE(SUM(total_amount) FILTER (WHERE ${recognizedSale} AND (source IS NULL OR source NOT IN ('pos','online')) AND (created_at AT TIME ZONE $1)::date=(NOW() AT TIME ZONE $1)::date),0) AS today_other_sales,
           COUNT(*) FILTER (WHERE status::text IN ('pending', 'payment_pending') AND COALESCE(integrity_status, 'valid') = 'valid')::int AS pending_orders,
           COUNT(*) FILTER (WHERE status::text IN ('paid', 'processing') AND COALESCE(integrity_status, 'valid') = 'valid')::int AS orders_to_process,
           COUNT(*) FILTER (WHERE status::text = 'packed' AND COALESCE(integrity_status, 'valid') = 'valid')::int AS orders_to_pack,
@@ -112,6 +117,13 @@ export const getOperationsDashboard = async (req, res) => {
       totalRevenue: toNumber(commerce.total_sales),
       totalSales: toNumber(commerce.total_sales),
       todaySales: toNumber(commerce.today_sales),
+      todayInStoreSales: toNumber(commerce.today_in_store_sales),
+      todayOnlineSales: toNumber(commerce.today_online_sales),
+      todayInStoreOrders: toNumber(commerce.today_in_store_orders),
+      todayOnlineOrders: toNumber(commerce.today_online_orders),
+      totalInStoreSales: toNumber(commerce.total_in_store_sales),
+      totalOnlineSales: toNumber(commerce.total_online_sales),
+      todayOtherSales: toNumber(commerce.today_other_sales),
       totalOrders: toNumber(commerce.total_orders),
       totalProducts: toNumber(queues.total_products),
       lowStockProducts: toNumber(queues.low_stock_products),

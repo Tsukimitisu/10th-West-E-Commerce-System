@@ -35,11 +35,6 @@ const currency = (value, compact = false) => new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: compact ? 1 : 2,
 }).format(Number(value || 0));
 
-const validSaleStatuses = new Set([
-  'paid', 'processing', 'packed', 'ready_for_pickup',
-  'shipped', 'out_for_delivery', 'delivered', 'partially_refunded',
-]);
-
 const statusStyle = {
   pending: 'bg-amber-50 text-amber-700',
   payment_pending: 'bg-amber-50 text-amber-700',
@@ -90,11 +85,8 @@ const DashboardView = ({ onNavigate, user }) => {
   useSocketEvent('inventory:low-stock', loadData);
 
   const operational = useMemo(() => {
-    const today = new Date().toDateString();
-    const calculatedTodaySales = data.orders
-      .filter((order) => new Date(order.created_at).toDateString() === today && validSaleStatuses.has(order.status))
-      .reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
-    const todaySales = data.stats?.todaySales ?? calculatedTodaySales;
+    // Sales and channels must share the backend's payment/integrity/date rules.
+    const todaySales = data.stats?.todaySales ?? null;
     const pending = data.orders.filter((order) => ['pending', 'payment_pending'].includes(order.status));
     const toProcess = data.orders.filter((order) => ['paid', 'processing', 'packed', 'ready_for_pickup'].includes(order.status));
     const paymentIssues = data.orders.filter((order) => ['payment_pending', 'failed'].includes(order.status));
@@ -141,7 +133,12 @@ const DashboardView = ({ onNavigate, user }) => {
 
       <div className="dashboard-overview">
         <section className="dashboard-trading" aria-label="Business overview">
-          <div className="dashboard-sales"><p>Today's sales</p><strong>{currency(operational.todaySales)}</strong><span>Paid and active orders created today</span></div>
+          <div className="dashboard-sales"><p>Today's sales</p><strong>{operational.todaySales === null ? 'Unavailable' : currency(operational.todaySales)}</strong><span>Paid and active orders created today</span></div>
+          <div className="grid min-w-0 gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2" aria-label="Today's sales channels">
+            <MetricCard label="In-store Sales" value={data.stats ? currency(data.stats.todayInStoreSales) : 'Unavailable'} detail={`${data.stats?.todayInStoreOrders ?? 'Unavailable'} sales today`} />
+            <MetricCard label="Online Sales" value={data.stats ? currency(data.stats.todayOnlineSales) : 'Unavailable'} detail={`${data.stats?.todayOnlineOrders ?? 'Unavailable'} orders today`} />
+            {Number(data.stats?.todayOtherSales) > 0 && <p className="text-xs text-slate-600">Other recorded sources: {currency(data.stats.todayOtherSales)}</p>}
+          </div>
           <div className="dashboard-totals">
             <MetricCard label="Reported orders" value={data.stats?.totalOrders ?? data.orders.length} detail="Sales reporting scope" onClick={() => onNavigate('orders')} />
             <MetricCard label="Pending fulfillment" value={operational.toProcess.length} detail="Packing or dispatch" onClick={() => onNavigate('orders')} />

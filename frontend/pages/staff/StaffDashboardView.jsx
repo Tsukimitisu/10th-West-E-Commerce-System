@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import {
   getMyPermissions,
+  getDashboardStats,
   getInventory,
   getOrders,
   getReturns,
@@ -30,6 +31,7 @@ const StaffDashboardView = ({ user, onNavigate }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [permissions, setPermissions] = useState(new Set());
+  const [sales, setSales] = useState(null);
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [returns, setReturns] = useState([]);
@@ -39,12 +41,14 @@ const StaffDashboardView = ({ user, onNavigate }) => {
     const permissionList = await getMyPermissions().catch(() => []);
     const allowed = new Set(permissionList);
     setPermissions(allowed);
-    const [orderList, productList, returnList, unread] = await Promise.all([
+    const [orderList, productList, returnList, unread, stats] = await Promise.all([
       allowed.has('orders.view') ? getOrders().catch(() => []) : [],
       allowed.has('inventory.view') ? getInventory().catch(() => []) : [],
       allowed.has('returns.view') ? getReturns().catch(() => []) : [],
       allowed.has('chat.view') ? getSellerChatUnreadCount().catch(() => 0) : 0,
+      getDashboardStats().catch(() => null),
     ]);
+    setSales(stats);
     setOrders(Array.isArray(orderList) ? orderList : []);
     setProducts(Array.isArray(productList) ? productList : []);
     setReturns(Array.isArray(returnList) ? returnList : returnList?.returns || []);
@@ -110,6 +114,9 @@ const StaffDashboardView = ({ user, onNavigate }) => {
   return (
     <div className="staff-dashboard space-y-5">
       <PageHeader title={`Today's work${user?.name ? `, ${user.name.split(' ')[0]}` : ''}`} description="Process orders, locate parts and keep the shop moving." />
+      <section aria-label="Today's sales" className="grid min-w-0 gap-3 sm:grid-cols-3">
+        {[['Today\'s Sales', 'todaySales', null], ['In-store Sales', 'todayInStoreSales', 'todayInStoreOrders'], ['Online Sales', 'todayOnlineSales', 'todayOnlineOrders']].map(([label, field, count]) => <MetricCard key={field} label={label} value={sales ? new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(sales[field] || 0) : 'Unavailable'} detail={count ? `${sales?.[count] ?? 'Unavailable'} today` : 'Recognized sales today'} />)}
+      </section>
       <div className="staff-quick-actions" aria-label="Staff shortcuts">
         {can('orders.view') && <button type="button" onClick={() => onNavigate('orders')}><PackageCheck size={17} aria-hidden="true" />Process orders</button>}
         {can('inventory.view') && <button type="button" onClick={() => navigate('/staff/inventory', { state: { inventoryTab: 'receive' } })}><ScanBarcode size={17} aria-hidden="true" />Inventory scan</button>}
