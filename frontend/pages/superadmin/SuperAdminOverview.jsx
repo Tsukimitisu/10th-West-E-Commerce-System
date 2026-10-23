@@ -1,212 +1,122 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Users, Shield, Activity, Database, AlertTriangle, CheckCircle2,
-  TrendingUp, Server, Lock, Clock, Eye, UserCog, KeyRound,
-  XCircle, Globe, Monitor, ArrowUpRight, ArrowDownRight, Settings
-} from 'lucide-react';
-import {
-  adminGetAllUsers, getActivityLogs, getLoginAttempts,
-  getSuspiciousActivity, getBackupHistory, getSecuritySettings, getErrorLogs
-} from '../../services/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { actionLabel, actorLabel, auditTime } from '../../utils/auditPresentation.js';
+import { ArrowRight } from 'lucide-react';
+import { adminGetAllUsers, getActivityLogs, getDatabaseBackups, getErrorLogs, getLoginAttempts, getSuspiciousActivity, getSystemHealth } from '../../services/api';
+import ServiceHealth from '../../components/operations/ServiceHealth';
+import StatusBadge from '../../components/ui/StatusBadge';
+import MetricCard from '../../components/operations/MetricCard';
+import PageHeader from '../../components/operations/PageHeader';
+import SectionCard from '../../components/operations/SectionCard';
 
 const SuperAdminOverview = ({ onNavigate }) => {
-  const [stats, setStats] = useState({
-    totalUsers: 0, activeUsers: 0, lockedUsers: 0,
-    totalLoginAttempts: 0, failedLogins: 0,
-    suspiciousCount: 0, lastBackup: null,
-    errorLogs: 0, recentActivity: [],
-    usersByRole: {},
-  });
+  const [unavailable, setUnavailable] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [data, setData] = useState({
+    users: [],
+    totalUsers: 0,
+    activity: [],
+    loginStats: {},
+    suspicious: {},
+    backups: [],
+    errors: [],
+    health: null,
+  });
 
   useEffect(() => {
+    let active = true;
     (async () => {
-      try {
-        const [usersData, activityData, loginData, suspiciousData, backupData, errorData] = await Promise.all([
-          adminGetAllUsers().catch(() => ({ users: [], total: 0 })),
-          getActivityLogs().catch(() => []),
-          getLoginAttempts().catch(() => ({ attempts: [], stats: { today_total: 0, today_failed: 0, locked_accounts: 0 } })),
-          getSuspiciousActivity().catch(() => ({ failed_login_clusters: [], locked_accounts: [], bulk_operations: [] })),
-          getBackupHistory().catch(() => []),
-          getErrorLogs().catch(() => []),
-        ]);
-
-        const users = usersData?.users || [];
-        const roleCount = {};
-        users.forEach(u => { roleCount[u.role] = (roleCount[u.role] || 0) + 1; });
-
-        setStats({
-          totalUsers: usersData?.total || users.length,
-          activeUsers: users.filter(u => u.is_active && !u.locked_until).length,
-          lockedUsers: loginData?.stats?.locked_accounts || 0,
-          totalLoginAttempts: loginData?.stats?.today_total || 0,
-          failedLogins: loginData?.stats?.today_failed || 0,
-          suspiciousCount: (suspiciousData?.failed_login_clusters?.length || 0) + (suspiciousData?.locked_accounts?.length || 0) + (suspiciousData?.bulk_operations?.length || 0),
-          lastBackup: Array.isArray(backupData) && backupData.length > 0 ? backupData[0] : null,
-          errorLogs: Array.isArray(errorData) ? errorData.length : 0,
-          recentActivity: Array.isArray(activityData) ? activityData.slice(0, 10) : [],
-          usersByRole: roleCount,
-        });
-      } catch (e) { console.error(e); }
+      const failures = [];
+      const fallback = (label, value) => () => { failures.push(label); return value; };
+      const [users, activity, logins, suspicious, backups, errors, health] = await Promise.all([
+        adminGetAllUsers().catch(fallback('Users', { users: [], total: 0 })),
+        getActivityLogs().catch(fallback('Activity', [])),
+        getLoginAttempts().catch(fallback('Login events', { stats: {} })),
+        getSuspiciousActivity().catch(fallback('Security signals', {})),
+        getDatabaseBackups().catch(fallback('Database backups', [])),
+        getErrorLogs().catch(fallback('Application errors', [])),
+        getSystemHealth().catch(fallback('Service readiness', null)),
+      ]);
+      if (!active) return;
+      setUnavailable(failures);
+      setData({
+        users: users?.users || [],
+        totalUsers: users?.total || users?.users?.length || 0,
+        activity: Array.isArray(activity) ? activity : activity?.logs || [],
+        loginStats: logins?.stats || {},
+        suspicious: suspicious || {},
+        backups: Array.isArray(backups) ? backups : [],
+        errors: Array.isArray(errors) ? errors : [],
+        health,
+      });
       setLoading(false);
     })();
+    return () => { active = false; };
   }, []);
 
-  if (loading) return (
-    <div className="space-y-6 animate-pulse">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map(i => <div key={i} className="h-28 bg-gray-200 rounded-xl" />)}
+  const summary = useMemo(() => {
+    const staffRoles = new Set(['owner', 'admin', 'store_staff', 'cashier']);
+    const activeStaff = data.users.filter((user) => staffRoles.has(user.role) && user.is_active && !user.locked_until).length;
+    const suspiciousCount = (
+      (data.suspicious.failed_login_clusters?.length || 0)
+      + (data.suspicious.locked_accounts?.length || 0)
+      + (data.suspicious.bulk_operations?.length || 0)
+    );
+    return { activeStaff, suspiciousCount };
+  }, [data]);
+
+  if (loading) {
+    return (
+      <div className="space-y-5" role="status" aria-label="Loading system overview">
+        <PageHeader title="System overview" description="Loading platform health and administration activity…" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 animate-pulse">
+          {[0, 1, 2, 3].map((item) => <div key={item} className="h-32 rounded-xl bg-slate-200" />)}
+        </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {[1, 2].map(i => <div key={i} className="h-64 bg-gray-200 rounded-xl" />)}
+    );
+  }
+
+  const lastBackup = data.backups.find(backup => backup.status === 'completed' && !backup.deleted_at);
+  return <div className="system-overview space-y-5">
+    <PageHeader title="System overview" description="Platform readiness, access and operational risk." actions={<button type="button" onClick={() => onNavigate('logs')} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold">Review audit trail <ArrowRight size={15} aria-hidden="true" /></button>} />
+    {unavailable.length > 0 && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Unavailable: {unavailable.join(', ')}. Counts for these sources are incomplete. Reload to retry.</p>}
+    <div className="ops-summary-strip">
+      <MetricCard label="Accounts" value={unavailable.includes('Users') ? '—' : data.totalUsers} detail="Registered platform users" onClick={() => onNavigate('users')} />
+      <MetricCard label="Enabled team accounts" value={unavailable.includes('Users') ? '—' : summary.activeStaff} detail="From the loaded user page" onClick={() => onNavigate('users')} />
+      <MetricCard label="Security signals" value={unavailable.includes('Security signals') ? '—' : summary.suspiciousCount} detail="Review authentication anomalies" onClick={() => onNavigate('security')} />
+      <MetricCard label="Application errors" value={unavailable.includes('Application errors') ? '—' : data.errors.length} detail="Loaded error records" onClick={() => onNavigate('monitoring')} />
+    </div>
+    <div className="system-overview-grid">
+      <SectionCard title="Service readiness" description={data.health?.timestamp ? `Last checked ${new Date(data.health.timestamp).toLocaleString('en-PH')}. Configuration readiness does not confirm a completed transaction.` : 'The readiness endpoint did not respond. Service states remain unconfirmed.'} padded={false}>
+        <ServiceHealth health={data.health} />
+      </SectionCard>
+      <div className="space-y-5">
+        <SectionCard title="Runtime & recovery" description="Reported environment and recovery capability.">
+          <dl className="space-y-4 text-sm">
+            <div className="flex justify-between gap-3"><dt className="text-slate-600">Environment</dt><dd className="font-medium">{data.health?.runtime?.environment || 'Not reported'}</dd></div>
+            <div><dt className="text-slate-600">Session storage</dt><dd className="mt-1 font-mono text-xs">{data.health?.runtime?.session_store || 'Not reported'}</dd></div>
+            <div><dt className="text-slate-600">Active session count</dt><dd className="mt-1 text-xs">Not reported by this endpoint</dd></div>
+            <div><dt className="text-slate-600">Last successful backup</dt><dd className="mt-1 text-xs">{lastBackup?.created_at ? new Date(lastBackup.created_at).toLocaleString('en-PH') : 'No record available'}</dd></div>
+          </dl>
+          <button type="button" onClick={() => onNavigate('backup')} className="mt-4 min-h-11 text-sm font-semibold text-orange-800">Review backup & recovery <ArrowRight size={14} className="inline" aria-hidden="true" /></button>
+        </SectionCard>
+        <SectionCard title="Security review" description="Authentication signals from the loaded logs.">
+          {[
+            ['Failed logins today', Number(data.loginStats.today_failed || 0)],
+            ['Locked accounts', Number(data.loginStats.locked_accounts || 0)],
+            ['Suspicious activity groups', summary.suspiciousCount],
+          ].map(([label, value]) => <button key={label} type="button" onClick={() => onNavigate('security')} className="flex min-h-11 w-full items-center justify-between gap-3 border-b border-slate-100 text-left text-sm"><span className="text-slate-600">{label}</span><StatusBadge tone={value ? 'warning' : 'neutral'}>{value}</StatusBadge></button>)}
+        </SectionCard>
       </div>
     </div>
-  );
-
-  const kpis = [
-    { label: 'Total Users', value: stats.totalUsers, icon: Users, color: 'blue', sub: `${stats.activeUsers} active`, onClick: () => onNavigate('users') },
-    { label: 'Locked Accounts', value: stats.lockedUsers, icon: Lock, color: stats.lockedUsers > 0 ? 'red' : 'green', sub: stats.lockedUsers > 0 ? 'Needs attention' : 'All clear', onClick: () => onNavigate('users') },
-    { label: 'Login Attempts (24h)', value: stats.totalLoginAttempts, icon: Activity, color: 'orange', sub: `${stats.failedLogins} failed`, onClick: () => onNavigate('security') },
-    { label: 'Suspicious Activity', value: stats.suspiciousCount, icon: AlertTriangle, color: stats.suspiciousCount > 0 ? 'red' : 'green', sub: stats.suspiciousCount > 0 ? 'Review required' : 'No threats', onClick: () => onNavigate('logs') },
-  ];
-
-  const colorMap = {
-    blue: 'bg-blue-50 text-blue-600 border border-blue-100',
-    red: 'bg-red-50 text-red-600 border border-red-100',
-    green: 'bg-green-50 text-green-600 border border-green-100',
-    orange: 'bg-orange-50 text-orange-600 border border-orange-100',
-  };
-
-  const roleLabels = { super_admin: 'Super Admin', owner: 'Owner', store_staff: 'Store Staff', customer: 'Customer', admin: 'Admin', cashier: 'Cashier' };
-  const roleColors = { super_admin: 'text-red-500', owner: 'text-purple-500', store_staff: 'text-blue-500', customer: 'text-green-500', admin: 'text-orange-500', cashier: 'text-yellow-500' };
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2"><KeyRound size={22} className="text-orange-500" /> System Overview</h1>
-        <p className="text-sm text-gray-500 mt-1">Monitor system health, security, and user activity</p>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <button key={kpi.label} onClick={kpi.onClick} className={`p-5 rounded-xl text-left transition-all hover:shadow-md hover:scale-[1.02] ${colorMap[kpi.color]}`}>
-              <div className="flex items-center justify-between mb-3">
-                <Icon size={20} />
-                <ArrowUpRight size={14} className="opacity-40" />
-              </div>
-              <p className="text-2xl font-bold">{kpi.value}</p>
-              <p className="text-xs mt-1 opacity-70">{kpi.label}</p>
-              <p className="text-[10px] mt-0.5 opacity-50">{kpi.sub}</p>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Users by Role */}
-        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><UserCog size={16} className="text-gray-400" /> Users by Role</h3>
-          <div className="space-y-3">
-            {Object.entries(stats.usersByRole).sort((a, b) => b[1] - a[1]).map(([role, count]) => (
-              <div key={role} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${roleColors[role]?.replace('text-', 'bg-') || 'bg-gray-400'}`} />
-                  <span className="text-xs text-gray-500">{roleLabels[role] || role}</span>
-                </div>
-                <span className={`text-sm font-bold ${roleColors[role] || 'text-gray-500'}`}>{count}</span>
-              </div>
-            ))}
-            {Object.keys(stats.usersByRole).length === 0 && <p className="text-xs text-gray-400">No users found</p>}
-          </div>
-        </div>
-
-        {/* System Health */}
-        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Server size={16} className="text-gray-400" /> System Health</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Database</span>
-              <span className="flex items-center gap-1 text-xs text-green-500"><CheckCircle2 size={12} /> Connected</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Error Logs</span>
-              <span className={`text-xs font-medium ${stats.errorLogs > 0 ? 'text-orange-500' : 'text-green-500'}`}>
-                {stats.errorLogs > 0 ? `${stats.errorLogs} errors` : 'No errors'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Last Backup</span>
-              <span className="text-xs text-gray-500">
-                {stats.lastBackup ? new Date(stats.lastBackup.created_at).toLocaleDateString() : 'Never'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Security Threats</span>
-              <span className={`flex items-center gap-1 text-xs ${stats.suspiciousCount > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                {stats.suspiciousCount > 0 ? <><AlertTriangle size={12} /> {stats.suspiciousCount} alerts</> : <><CheckCircle2 size={12} /> Clear</>}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Settings size={16} className="text-gray-400" /> Quick Actions</h3>
-          <div className="space-y-1">
-            {[
-              { label: 'Manage Users', icon: Users, view: 'users' },
-              { label: 'Security Settings', icon: Shield, view: 'security' },
-              { label: 'System Configuration', icon: Settings, view: 'config' },
-              { label: 'View Logs', icon: Activity, view: 'logs' },
-              { label: 'Create Backup', icon: Database, view: 'backup' },
-            ].map(action => {
-              const Icon = action.icon;
-              return (
-                <button key={action.view} onClick={() => onNavigate(action.view)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-orange-50 hover:text-orange-600 transition-all">
-                  <Icon size={14} className="text-gray-400" />
-                  <span className="flex-1 text-left">{action.label}</span>
-                  <ArrowUpRight size={12} className="opacity-40" />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><Activity size={16} className="text-gray-400" /> Recent System Activity</h3>
-          <button onClick={() => onNavigate('logs')} className="text-xs text-orange-500 hover:text-orange-600 font-medium">View All →</button>
-        </div>
-        {stats.recentActivity.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-8">No recent activity</p>
-        ) : (
-          <div className="space-y-1 max-h-64 overflow-y-auto">
-            {stats.recentActivity.map((log, idx) => (
-              <div key={log.id || idx} className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
-                <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Activity size={12} className="text-gray-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-700 truncate">{log.action?.replace(/_/g, ' ')}</p>
-                  <p className="text-[10px] text-gray-400">{log.user_name || 'System'} &middot; {log.ip_address || ''}</p>
-                </div>
-                <span className="text-[10px] text-gray-400 flex-shrink-0">
-                  {log.created_at ? new Date(log.created_at).toLocaleString() : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+    <div className="system-overview-grid">
+      <SectionCard title="Latest system events" description="Recent auditable platform activity." padded={false}>
+        {data.activity.length ? data.activity.slice(0, 7).map((log, index) => <div key={log.id || index} className="ops-event-row"><p>{actionLabel(log)}</p><small>{actorLabel(log)} · {auditTime(log.created_at)}</small></div>) : <p className="p-5 text-sm text-slate-600">No activity records available.</p>}
+      </SectionCard>
+      <SectionCard title="Administration" description="Access, governance and platform controls.">
+        {[['Manage users & roles', 'users'], ['Review security controls', 'security'], ['Maintenance status', 'maintenance'], ['Platform configuration', 'config']].map(([label, view]) => <button key={view} type="button" onClick={() => onNavigate(view)} className="flex min-h-12 w-full items-center justify-between border-b border-slate-100 text-left text-sm">{label}<ArrowRight size={15} aria-hidden="true" /></button>)}
+      </SectionCard>
     </div>
-  );
+  </div>;
 };
 
 export default SuperAdminOverview;

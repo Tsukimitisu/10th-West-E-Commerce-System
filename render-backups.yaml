@@ -1,0 +1,33 @@
+# Optional Blueprint for the scheduler only. Existing web/frontend services are unchanged.
+# Use backend/Dockerfile for the API too, so manual backups have pg_dump available.
+services:
+  - type: cron
+    name: tenth-west-database-backups
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    schedule: "*/15 * * * *"
+    dockerCommand: npm run backup:database
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BACKUP_ENABLED
+        value: "true"
+      - key: BACKUP_CRON
+        value: "0 2 * * *"
+      - key: BACKUP_TIMEZONE
+        value: Asia/Manila
+      - key: BACKUP_RETENTION_DAYS
+        value: "30"
+      - key: BACKUP_STORAGE_BUCKET
+        value: database-backups
+      - key: DATABASE_URL
+        sync: false
+      - key: BACKUP_DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: BACKUP_ENCRYPTION_KEY
+        sync: false

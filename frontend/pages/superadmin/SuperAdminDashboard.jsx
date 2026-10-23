@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import SuperAdminLayout from '../../components/superadmin/SuperAdminLayout';
 import SuperAdminOverview from './SuperAdminOverview';
 import UserManagementView from './UserManagementView';
@@ -6,27 +7,26 @@ import SystemSecurityView from './SystemSecurityView';
 import SystemConfigView from './SystemConfigView';
 import MonitoringView from './MonitoringView';
 import BackupRecoveryView from './BackupRecoveryView';
+import MaintenanceView from './MaintenanceView';
+import InventoryProductItemsView from '../owner/InventoryProductItemsView';
+import OfflinePosDevicesView from '../owner/OfflinePosDevicesView.jsx';
 
-const SuperAdminDashboard = () => {
-  const [activeView, setActiveView] = useState('overview');
-
-  const renderView = () => {
-    switch (activeView) {
-      case 'overview': return <SuperAdminOverview onNavigate={setActiveView} />;
-      case 'users': return <UserManagementView />;
-      case 'security': return <SystemSecurityView />;
-      case 'config': return <SystemConfigView />;
-      case 'logs': return <MonitoringView />;
-      case 'backup': return <BackupRecoveryView />;
-      default: return <SuperAdminOverview onNavigate={setActiveView} />;
-    }
+const SuperAdminDashboard = ({ user }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const aliases = { dashboard: 'overview', roles: 'users', settings: 'config', 'audit-logs': 'logs' };
+  const segment = location.pathname.split('/').filter(Boolean)[1] || 'dashboard';
+  const activeView = segment === 'inventory' && location.pathname.endsWith('/inventory/product-items')
+    ? 'product-items' : aliases[segment] || segment;
+  const routes = { overview: 'dashboard', users: 'users', security: 'security', config: 'settings', monitoring: 'monitoring', logs: 'audit-logs', backup: 'backup', maintenance: 'maintenance', 'product-items': 'inventory/product-items' };
+  const setActiveView = (view) => navigate(`/superadmin/${view==='offline-pos-devices' ? view : routes[view] || 'dashboard'}`);
+  const views = {
+    'offline-pos-devices': <OfflinePosDevicesView user={user} />,
+    overview: <SuperAdminOverview onNavigate={setActiveView} />, users: <UserManagementView />,
+    security: <SystemSecurityView />, config: <SystemConfigView />, monitoring: <MonitoringView key="monitoring" initialTab="errors" />, logs: <MonitoringView key="audit" title="Audit trail" />,
+    backup: <BackupRecoveryView />, maintenance: <MaintenanceView onNavigate={setActiveView} />, 'product-items': <InventoryProductItemsView />,
   };
-
-  return (
-    <SuperAdminLayout activeView={activeView} onNavigate={setActiveView}>
-      {renderView()}
-    </SuperAdminLayout>
-  );
+  return <SuperAdminLayout activeView={activeView} onNavigate={setActiveView} user={user}>{views[activeView] || views.overview}</SuperAdminLayout>;
 };
 
 export default SuperAdminDashboard;

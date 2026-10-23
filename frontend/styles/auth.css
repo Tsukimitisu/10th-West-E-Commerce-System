@@ -1,0 +1,38 @@
+/* One centered authentication experience; no alternate desktop brand panel. */
+.auth-experience { min-height:100dvh; background:var(--surface-muted); border-top:6px solid var(--racing-navy); }
+.auth-route-content { min-height:calc(100dvh - 6px); }
+.auth-page { display:flex; align-items:center; justify-content:center; min-height:calc(100dvh - 6px); padding:32px 16px; }
+.auth-content { width:100%; max-width:460px; padding:28px 24px; background:white; border:1px solid var(--border); border-radius:12px; }
+.auth-header { margin-bottom:28px; text-align:center; }
+.auth-header .brand-logo { justify-content:center; }
+.auth-header .brand-logo-plate { width:80px; height:84px; padding:6px; }
+.auth-header h1 { margin-top:24px; font:600 32px/1.1 'Barlow Condensed',sans-serif; color:var(--racing-navy); }
+.auth-header p { margin:10px auto 0; max-width:35ch; font-size:14px; color:var(--text-secondary); line-height:1.6; }
+.auth-form-body { padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.auth-page :is(h1,h2) { color:var(--racing-navy); }
+.auth-page h2 { font:600 24px/1.2 'Barlow Condensed',sans-serif; }
+.auth-page form :is(input:not([type=checkbox]),select) { min-height:46px; border-radius:8px; border-color:var(--input-border); background:white; color:var(--text); }
+.auth-page label { font-size:14px; color:var(--text); }
+.auth-page button[type=submit] { min-height:48px; font-size:14px; font-weight:600; }
+.auth-page a:not(.brand-logo):not([class~="bg-orange-500"]):not([class~="bg-orange-600"]) { color:var(--accent-hover); }
+.auth-page :is(.text-xs,.text-sm) { line-height:1.6; }
+.auth-page .text-xs { font-size:13px; }
+.auth-page :is(.text-gray-400,.text-slate-400) { color:var(--text-secondary); }
+.auth-page :is(.focus\:ring-red-500,.focus\:ring-red-500\/10):focus { --tw-ring-color:var(--accent-hover); }
+@media (min-width:768px) { .auth-page { padding:40px 24px; } .auth-content { padding:32px; } }
+
+.auth-content > .brand-logo .brand-logo-plate { width:80px; height:84px; }
+
+.customer-auth-header { padding:8px 0; background:var(--obsidian); border-bottom:1px solid var(--dark-border, #28324a); }
+.customer-auth-header .brand-logo-plate { width:48px; height:50px; }
+.auth-experience { min-height:calc(100dvh - 67px); border-top:0; }
+
+/* Readable shared helper text on light cards; dark notices have their own ink. */
+.auth-content { min-width:0; overflow-wrap:anywhere; }
+.auth-page :is(.text-xs, [class~="text-[10px]"], [class~="text-[11px]"]) { font-size:14px; line-height:1.6; }
+.auth-page :is(.text-gray-300,.text-gray-400,.text-gray-500,.text-slate-400,.text-slate-500) { color:#475569; }
+.auth-page :is(.text-green-400,.text-green-500,.text-green-600) { color:#15803d; }
+.auth-page :is(.text-red-400,.text-red-500) { color:#b91c1c; }
+.auth-page .text-amber-600 { color:#92400e; }
+.auth-page .auth-info-dark { background:#111827; color:#f1f5f9; }
+.auth-page .auth-info-dark :is(p,span) { color:inherit; }
