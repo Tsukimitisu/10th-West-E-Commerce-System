@@ -1,3 +1,4 @@
+import { roleLandingPath } from '../utils/roleLanding.js';
 import useCountdown from '../hooks/useCountdown.js';
 import { loginIdentifier, readLoginLock, saveLoginLock, clearLoginLock } from '../utils/loginLockState.js';
 import { customerReturnTo } from '../utils/customerReturnTo.js';
@@ -144,17 +145,7 @@ const Login = ({ onLogin }) => {
       clearLoginLock();
       setAccountLock(null);
       onLogin(result.user, result.token);
-      // Role-based redirect: each role goes to their own dashboard
-      const role = result.user?.role;
-      let redirect = defaultRedirect;
-      
-      if (role === 'super_admin') redirect = '/superadmin/dashboard';
-      else if (role === 'owner') redirect = '/admin/dashboard';
-      else if (role === 'admin') redirect = '/admin/dashboard';
-      else if (role === 'store_staff') redirect = '/staff/dashboard';
-      else if (role === 'cashier') redirect = '/pos';
-      else if (defaultRedirect === '/') redirect = '/';
-      navigate(redirect);
+      navigate(roleLandingPath(result.user?.role) || defaultRedirect, { replace: true });
     } catch (err) {
       if (['ACCOUNT_TEMPORARILY_LOCKED', 'ACCOUNT_RECOVERY_REQUIRED'].includes(err.code)) {
         const receivedAt = Date.now();

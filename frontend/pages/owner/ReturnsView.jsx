@@ -9,6 +9,9 @@ import EmptyState from '../../components/ui/EmptyState';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 
 import { returnLabels } from '../../utils/returnStatus.js';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { getCurrentAuthUser } from '../../services/authSession.js';
+import { notificationFallback } from '../../utils/notificationDestination.js';
 
 const statusColors = {
   received: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -21,6 +24,9 @@ const statusColors = {
 };
 
 const ReturnsView = () => {
+  const [searchParams] = useSearchParams();
+  const requestedReturn = searchParams.get('return');
+  const navigate = useNavigate();
   const [permissions, setPermissions] = useState(new Set());
   const canManage = permissions.has('returns.manage');
   const canRefund = permissions.has('refunds.process');
@@ -36,6 +42,12 @@ const ReturnsView = () => {
   const [error, setError] = useState('');
   const [decision, setDecision] = useState(null);
   const [savingDecision, setSavingDecision] = useState(false);
+  useEffect(() => {
+    if (loading || !requestedReturn) return;
+    const selected = returns.find(item => String(item.id) === requestedReturn);
+    if (selected) setDetailReturn(selected);
+    else navigate(notificationFallback(getCurrentAuthUser()?.role), { replace: true });
+  }, [loading, requestedReturn, returns, navigate]);
 
   const fetchData = async () => {
     try {

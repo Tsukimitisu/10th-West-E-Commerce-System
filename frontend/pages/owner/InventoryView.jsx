@@ -70,6 +70,7 @@ const InventoryView = ({ user }) => {
     return () => { active = false; };
   }, [isStaff, user?.id]);
   const location = useLocation();
+  const requestedProduct = new URLSearchParams(location.search).get('product');
   const catalogNotice = location.state?.catalogNotice || '';
   const [products, setProducts] = useState([]);
   const [adjustments, setAdjustments] = useState([]);
@@ -161,6 +162,7 @@ const InventoryView = ({ user }) => {
   const outOfStock = products.filter(p => p.stock_quantity === 0).length;
 
   const filtered = products.filter(p => {
+    if (requestedProduct && String(p.id) !== requestedProduct) return false;
     const term = search.toLowerCase();
     return !term
       || String(p.name || '').toLowerCase().includes(term)

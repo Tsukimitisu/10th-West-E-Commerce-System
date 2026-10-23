@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { RotateCcw, Package, Clock, CheckCircle2, XCircle, Calendar } from 'lucide-react';
 import AccountLayout from '../../components/customer/AccountLayout';
 import { getMyReturns } from '../../services/api';
@@ -17,8 +17,14 @@ const statusConfig = {
 };
 
 const MyReturns = () => {
+  const [searchParams] = useSearchParams();
+  const requestedReturn = searchParams.get('return');
+  const navigate = useNavigate();
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!loading && requestedReturn && !returns.some(item => String(item.id) === requestedReturn)) navigate('/profile', { replace: true });
+  }, [loading, requestedReturn, returns, navigate]);
 
   useEffect(() => {
     const load = async () => {
@@ -52,7 +58,7 @@ const MyReturns = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {returns.map((ret) => {
+            {returns.filter(ret => !requestedReturn || String(ret.id) === requestedReturn).map((ret) => {
               const st = statusConfig[ret.status] || statusConfig.pending;
               const StatusIcon = st.icon;
               const date = new Date(ret.created_at || ret.date).toLocaleDateString('en-PH', {

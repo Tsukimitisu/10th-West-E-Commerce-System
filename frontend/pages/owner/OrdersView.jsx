@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { notificationFallback } from '../../utils/notificationDestination.js';
 import { getOrders, getOrderById, getShipmentTracking, updateShipmentStatus, updateOrderStatus, confirmOrderDelivery, processRefund, createManualWaybill, cancelOrder, getMyPermissions, openOrderInvoice } from '../../services/api';
 import { OrderStatus } from '../../types.js';
 import { ShoppingCart, Search, Eye, Package, Truck, CheckCircle2, XCircle, Clock, Filter, ChevronDown, ChevronUp, ArrowLeft, Printer, DollarSign, MapPin, User, Calendar, CreditCard, AlertCircle, Undo } from 'lucide-react';
@@ -84,6 +86,9 @@ const POS_STATUS_LOCK_HELP = 'In-store completed orders are locked. Use the audi
 const isInStoreOrder = (order) => String(order?.source || '').toLowerCase() === 'pos';
 
 const OrdersView = () => {
+  const [searchParams] = useSearchParams();
+  const requestedOrder = searchParams.get('order');
+  const navigate = useNavigate();
   // Role check: staff cannot process refunds
   const currentUser = getCurrentAuthUser();
   const isStaff = currentUser?.role === 'store_staff';
@@ -134,21 +139,32 @@ const OrdersView = () => {
   useSocketEvent('order:new', fetchOrders);
   useSocketEvent('order:updated', fetchOrders);
 
-  const openDetail = async (order) => {
+  const openDetail = useCallback(async (order, fromNotification = false, isCurrent = () => true) => {
     setShipmentData(null);
     try {
       const [full, shipment] = await Promise.all([
         getOrderById(order.id),
         getShipmentTracking(order.id).catch(() => null),
       ]);
+      if (!isCurrent()) return;
       setDetailOrder(full);
       setShipmentData(shipment);
       if (shipment?.shipment?.status) {
         setShipmentStatus(shipment.shipment.status === 'waybill_created' ? 'picked_up' : shipment.shipment.status);
       }
-    } catch { setDetailOrder(order); }
+    } catch {
+      if (!isCurrent()) return;
+      if (fromNotification) { navigate(notificationFallback(currentUser?.role), { replace: true }); return; }
+      setDetailOrder(order);
+    }
     setDetailOpen(true);
-  };
+  }, [navigate, currentUser?.role]);
+
+  useEffect(() => {
+    let active = true;
+    if (requestedOrder) void openDetail({ id: requestedOrder }, true, () => active);
+    return () => { active = false; };
+  }, [requestedOrder, openDetail]);
 
   const openStatusChange = (order) => {
     if (isStaff && !permissions.has('orders.update') && !permissions.has('orders.cancel')) return;

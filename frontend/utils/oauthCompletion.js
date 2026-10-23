@@ -1,3 +1,4 @@
+import { roleLandingPath } from './roleLanding.js';
 import { safeCustomerReturnTo } from './customerReturnTo.js';
 
 export const SESSION_REFRESH_MESSAGE = 'OAuth login completed, but session refresh failed. Please sign in again.';
@@ -25,8 +26,7 @@ export async function refreshOAuthProfile({ getProfile, delay = (ms) => new Prom
 }
 
 export function oauthDestination(user, requested) {
-  const dashboard = { owner: '/admin/dashboard', admin: '/admin/dashboard', store_staff: '/staff/dashboard',
-    super_admin: '/superadmin/dashboard', cashier: '/pos' }[user.role];
+  const dashboard = roleLandingPath(user.role);
   if (dashboard) return dashboard;
   if (typeof requested !== 'string' || !requested.startsWith('/') || requested.startsWith('//')
     || /[\\\r\n]/.test(requested) || /^\/(?:login|register|oauth-callback)(?:[/?#]|$)/.test(requested)

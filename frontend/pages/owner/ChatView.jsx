@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
@@ -190,10 +191,11 @@ const MessageBubble = ({ message, currentUserId, onRetry }) => {
 };
 
 const ChatView = () => {
+  const [searchParams] = useSearchParams();
   const currentUser = useMemo(() => getCurrentAuthUser(), []);
   const { connected, emit, on, off } = useSocket();
   const [conversations, setConversations] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(() => Number(searchParams.get('conversation')) || null);
   const [messages, setMessages] = useState([]);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('active');

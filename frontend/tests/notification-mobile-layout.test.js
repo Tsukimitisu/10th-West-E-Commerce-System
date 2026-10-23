@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 test('customer and operations notification panels fit the mobile viewport', async () => {
   const [navbar, operations] = await Promise.all([
     readFile(new URL('../components/Navbar.jsx', import.meta.url), 'utf8'),
-    readFile(new URL('../components/owner/AdminLayout.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../components/operations/WorkspaceNotificationBell.jsx', import.meta.url), 'utf8'),
   ]);
   assert.match(navbar, /fixed left-4 right-4 top-\[73px\]/);
   assert.match(navbar, /sm:w-\[26rem\]/);

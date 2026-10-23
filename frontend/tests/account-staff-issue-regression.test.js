@@ -158,7 +158,7 @@ test('staff orders use safe names, distinct failed labels, responsive filters, a
 test('notification symbols are semantic icons and mojibake is repaired before rendering', async () => {
   const [navbar, admin, textUtility] = await Promise.all([
     read('components/Navbar.jsx'),
-    read('components/owner/AdminLayout.jsx'),
+    read('components/operations/WorkspaceNotificationBell.jsx'),
     read('utils/text.js'),
   ]);
   for (const source of [navbar, admin]) {

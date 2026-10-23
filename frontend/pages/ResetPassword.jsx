@@ -278,15 +278,15 @@ const ResetPassword = () => {
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                        aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'}
                       >
                         {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                   </div>
                 </div>
 
-                <div className="bg-gray-900 border border-gray-700 rounded-lg p-3">
-                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                <div className="auth-info-dark bg-gray-900 border border-gray-700 rounded-lg p-3">
+                  <p className="text-sm leading-relaxed">
                     Your password is protected using bcrypt hashing. We never store plain-text passwords.
                     You cannot reuse your current password. Use this one-time reset before its displayed expiry.
                   </p>

@@ -26,3 +26,13 @@
 .customer-auth-header { padding:8px 0; background:var(--obsidian); border-bottom:1px solid var(--dark-border, #28324a); }
 .customer-auth-header .brand-logo-plate { width:48px; height:50px; }
 .auth-experience { min-height:calc(100dvh - 67px); border-top:0; }
+
+/* Readable shared helper text on light cards; dark notices have their own ink. */
+.auth-content { min-width:0; overflow-wrap:anywhere; }
+.auth-page :is(.text-xs, [class~="text-[10px]"], [class~="text-[11px]"]) { font-size:14px; line-height:1.6; }
+.auth-page :is(.text-gray-300,.text-gray-400,.text-gray-500,.text-slate-400,.text-slate-500) { color:#475569; }
+.auth-page :is(.text-green-400,.text-green-500,.text-green-600) { color:#15803d; }
+.auth-page :is(.text-red-400,.text-red-500) { color:#b91c1c; }
+.auth-page .text-amber-600 { color:#92400e; }
+.auth-page .auth-info-dark { background:#111827; color:#f1f5f9; }
+.auth-page .auth-info-dark :is(p,span) { color:inherit; }

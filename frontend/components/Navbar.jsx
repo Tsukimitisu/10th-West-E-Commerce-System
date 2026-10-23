@@ -1,7 +1,8 @@
+import { openNotification, notificationReadChanged } from '../services/notificationNavigation.js';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Heart, User, Menu, X, ChevronDown, LogOut, Package, MapPin, RotateCcw, Shield, Monitor, Bell, Search, SlidersHorizontal, Grid3X3, List, MessageCircle, Home, Headphones, AlertTriangle, CheckCircle2, XCircle, Info } from 'lucide-react';
-import { getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead, getAnnouncements, getProducts, getBuyerChatConversations } from '../services/api';
+import { getNotifications, getUnreadNotificationCount, markAllNotificationsRead, getAnnouncements, getProducts, getBuyerChatConversations } from '../services/api';
 import { Role } from '../types.js';
 import { useCart } from '../context/CartContext';
 import { useSocket } from '../context/SocketContext';
@@ -286,7 +287,8 @@ const Navbar = ({ user, onLogout }) => {
     setNotifLoading(true);
     refreshNotifications();
     const interval = setInterval(refreshNotifications, 30000);
-    return () => clearInterval(interval);
+    window.addEventListener('notifications:read', refreshNotifications);
+    return () => { clearInterval(interval); window.removeEventListener('notifications:read', refreshNotifications); };
   }, [user, refreshNotifications]);
 
   useEffect(() => {
@@ -347,58 +349,16 @@ const Navbar = ({ user, onLogout }) => {
       await markAllNotificationsRead();
       setUnreadCount(0);
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      notificationReadChanged();
     } catch (e) { console.error(e); }
   };
 
-  const handleMarkRead = async (id, type) => {
-    if (type === 'announcement') return;
-    try {
-      await markNotificationRead(id);
-      setUnreadCount(prev => Math.max(0, prev - 1));
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    } catch (e) { console.error(e); }
-  };
-
-  const handleNotificationClick = async (n) => {
-    // Mark as read first
-    if (n.type !== 'announcement' && !n.is_read) {
-      await handleMarkRead(n.id, n.type);
-    }
-    setNotifOpen(false);
-
-    // Navigate to relevant page based on type or reference_type
-    const refType = n.reference_type || n.type;
-    const refId = n.reference_id;
-
-    if (refType === 'order' || refType === 'order_status') {
-      if (user.role === 'customer') {
-        navigate(refId ? `/orders/${refId}` : '/orders');
-      } else {
-        navigate(refId ? `/admin/orders` : '/admin/orders');
-      }
-    } else if (refType === 'support' || refType === 'ticket' || refType === 'message') {
-      if (user.role === 'customer') {
-        navigate('/contact');
-      } else {
-        navigate('/admin/support');
-      }
-    } else if (refType === 'promo') {
-      navigate(refId ? `/products/${refId}` : '/shop');
-    } else if (refType === 'inventory' || refType === 'product') {
-       if (user.role !== 'customer') {
-         navigate('/admin/inventory');
-       } else {
-         navigate(refId ? `/products/${refId}` : '/shop');
-       }
-    } else {
-      // Fallback
-      if (user.role === 'customer') {
-        navigate('/');
-      } else {
-        navigate('/admin');
-      }
-    }
-  };
+  const handleNotificationClick = notification => openNotification(notification, user, {
+    navigate, close: () => setNotifOpen(false), onRead: id => {
+      setUnreadCount(count => Math.max(0, count - 1));
+      setNotifications(items => items.map(item => item.id === id ? { ...item, is_read: true } : item));
+    },
+  });
 
   const isShopRoute = location.pathname === '/shop';
   const isHomeRoute = location.pathname === '/';

@@ -1,3 +1,4 @@
+import WorkspaceNotificationBell from './WorkspaceNotificationBell.jsx';
 import React, { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronDown, Menu, Wifi, WifiOff } from 'lucide-react';
@@ -30,13 +31,13 @@ export default function OperationsTopbar({ title, contextLabel, user, connected,
     </div>
     <div className="ops-topbar-actions">
       <span className="ops-connection" title={connected ? 'Live updates connected' : 'Live updates reconnecting'}>{connected ? <Wifi size={14} aria-hidden="true" /> : <WifiOff size={14} aria-hidden="true" />}<span>{connected ? 'Live' : 'Reconnecting'}</span></span>
-      {actions}
+      {actions || <WorkspaceNotificationBell user={user} />}
       <details className="ops-user-menu" ref={menuRef}>
         <summary aria-label="Open profile menu"><span className="ops-user-avatar">{user?.name?.charAt(0)?.toUpperCase() || 'U'}</span><span className="ops-user-name">{user?.name || 'Team member'}</span><ChevronDown size={14} aria-hidden="true" /></summary>
         <div className="ops-user-popover">
           <p>{user?.name || 'Team member'}<span>{workspaceRole(user?.role)}</span></p>
-          <Link to={isStaff ? '/staff/account' : isOwner ? '/admin/account' : '/profile'} onClick={() => { menuRef.current.open = false; }}>Profile</Link>
-          <Link to={isStaff ? '/staff/account#security' : isOwner ? '/admin/account#security' : '/profile?tab=security'} onClick={() => { menuRef.current.open = false; }}>Account & security</Link>
+          <Link to={isStaff ? '/staff/account' : isOwner ? '/admin/account' : user?.role === 'super_admin' ? '/superadmin/security' : '/pos'} onClick={() => { menuRef.current.open = false; }}>Profile</Link>
+          <Link to={isStaff ? '/staff/account#security' : isOwner ? '/admin/account#security' : user?.role === 'super_admin' ? '/superadmin/security' : '/pos'} onClick={() => { menuRef.current.open = false; }}>Account & security</Link>
           <button type="button" onClick={() => { menuRef.current.open = false; onLogout(isStaff || isOwner ? menuRef.current.querySelector('summary') : undefined); }}>Sign out</button>
         </div>
       </details>

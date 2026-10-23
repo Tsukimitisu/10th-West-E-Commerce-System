@@ -22,7 +22,7 @@ import {
 } from './services/authSession.js';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { Role } from './types.js';
-import { roleLandingPath } from './utils/roleLanding.js';
+import { roleLandingPath, roleRouteRedirect } from './utils/roleLanding.js';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import IdleSessionGuard from './components/IdleSessionGuard.jsx';
 
@@ -95,14 +95,13 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
     location.pathname === '/messages'
   );
 
-  // Super Admin can ONLY access /super-admin — redirect everything else
+  // Keep the existing authentication challenges ahead of workspace routing.
   if (user?.requires_2fa_enrollment || user?.requires_2fa_challenge) {
     return <Suspense fallback={<RouteFallback />}><TwoFactorPolicyGate user={user} onLogin={onLogin} onLogout={onLogout} /></Suspense>;
   }
+  const roleRedirect = roleRouteRedirect(user?.role, location.pathname);
+  if (roleRedirect) return <Navigate to={roleRedirect} replace />;
   if (posRestricted && location.pathname !== '/pos') return <main className="mx-auto max-w-lg p-6"><p>This area requires an internet connection.</p><a href="#/pos">Return to POS</a></main>;
-  if (isSuperAdmin && !location.pathname.startsWith('/superadmin') && !location.pathname.startsWith('/super-admin') && location.pathname !== '/login' && location.pathname !== '/pos') {
-    return <Navigate to="/superadmin/dashboard" replace />;
-  }
 
   return (
     <div className={`flex min-h-screen flex-col bg-slate-50 text-slate-950 ${!hideChrome && !isSuperAdmin ? 'customer-surface' : ''}`}>
@@ -129,28 +128,12 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
                   ? <Navigate to={roleLandingPath(user.role)} replace />
                   : <Home />} />
                 <Route path="/shop" element={<ProductList />} />
-                <Route path="/login" element={
-                  user && user.role === Role.STORE_STAFF
-                    ? <Navigate to="/staff/dashboard" replace />
-                    : user && (user.role === Role.OWNER || user.role === Role.ADMIN)
-                      ? <Navigate to="/admin/dashboard" replace />
-                    : user && user.role === Role.SUPER_ADMIN
-                      ? <Navigate to="/superadmin/dashboard" replace />
-                      : user
-                        ? <Navigate to={customerReturnTo(location.search)} replace />
-                        : <Login onLogin={onLogin} />
-                } />
-                <Route path="/register" element={
-                  user && user.role === Role.STORE_STAFF
-                    ? <Navigate to="/staff/dashboard" replace />
-                    : user && (user.role === Role.OWNER || user.role === Role.ADMIN)
-                      ? <Navigate to="/admin/dashboard" replace />
-                    : user && user.role === Role.SUPER_ADMIN
-                      ? <Navigate to="/superadmin/dashboard" replace />
-                      : user
-                        ? <Navigate to={customerReturnTo(location.search)} replace />
-                        : <Register onLogin={onLogin} />
-                } />
+                <Route path="/login" element={user
+                  ? <Navigate to={roleLandingPath(user.role) || customerReturnTo(location.search)} replace />
+                  : <Login onLogin={onLogin} />} />
+                <Route path="/register" element={user
+                  ? <Navigate to={roleLandingPath(user.role) || customerReturnTo(location.search)} replace />
+                  : <Register onLogin={onLogin} />} />
                 <Route path="/verify-email" element={<VerifyEmail onLogin={onLogin} />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
