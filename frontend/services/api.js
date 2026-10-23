@@ -517,6 +517,12 @@ const authenticatedFetch = async (url, options = {}) => {
   }
 
   if (!response.ok) {
+    if (['MAINTENANCE_MODE', 'MAINTENANCE_STATUS_UNAVAILABLE'].includes(responseBody?.code)) {
+      window.dispatchEvent(new CustomEvent('store:maintenance', { detail: {
+        active: responseBody.code === 'MAINTENANCE_MODE', unavailable: responseBody.code !== 'MAINTENANCE_MODE',
+        message: responseBody.message,
+      } }));
+    }
     if (response.status === 403 && ['TWO_FACTOR_REQUIRED', 'TWO_FACTOR_ENROLLMENT_REQUIRED'].includes(responseBody?.code)) {
       window.dispatchEvent(new Event('auth:verified'));
     }
@@ -5512,6 +5518,10 @@ export const getLoginAttempts = async (params = {}) => {
 };
 
 // Error & Transaction Logs
+export const getMaintenanceStatus = () => authenticatedFetch(`${API_URL}/maintenance-status`, { preserveSessionOnFailure: true });
+export const getOperationsStatus = () => authenticatedFetch(`${API_URL}/admin/maintenance`);
+export const changeMaintenanceMode = body => authenticatedFetch(`${API_URL}/admin/maintenance`, { method: 'PUT', body: JSON.stringify(body) });
+
 export const getErrorLogs = async (params = {}) => {
   if (USE_SUPABASE) {
     let query = supabase.from('error_logs').select('*').order('created_at', { ascending: false });

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { actionLabel, actorLabel, auditTime } from '../../utils/auditPresentation.js';
 import { ArrowRight } from 'lucide-react';
 import { adminGetAllUsers, getActivityLogs, getDatabaseBackups, getErrorLogs, getLoginAttempts, getSuspiciousActivity, getSystemHealth } from '../../services/api';
 import ServiceHealth from '../../components/operations/ServiceHealth';
@@ -109,7 +110,7 @@ const SuperAdminOverview = ({ onNavigate }) => {
     </div>
     <div className="system-overview-grid">
       <SectionCard title="Latest system events" description="Recent auditable platform activity." padded={false}>
-        {data.activity.length ? data.activity.slice(0, 7).map((log, index) => <div key={log.id || index} className="ops-event-row"><p>{String(log.action || 'System activity').replaceAll('_', ' ')}</p><small>{log.user_name || 'System'} · {log.created_at ? new Date(log.created_at).toLocaleString('en-PH') : 'Time not recorded'}</small></div>) : <p className="p-5 text-sm text-slate-600">No activity records available.</p>}
+        {data.activity.length ? data.activity.slice(0, 7).map((log, index) => <div key={log.id || index} className="ops-event-row"><p>{actionLabel(log)}</p><small>{actorLabel(log)} · {auditTime(log.created_at)}</small></div>) : <p className="p-5 text-sm text-slate-600">No activity records available.</p>}
       </SectionCard>
       <SectionCard title="Administration" description="Access, governance and platform controls.">
         {[['Manage users & roles', 'users'], ['Review security controls', 'security'], ['Maintenance status', 'maintenance'], ['Platform configuration', 'config']].map(([label, view]) => <button key={view} type="button" onClick={() => onNavigate(view)} className="flex min-h-12 w-full items-center justify-between border-b border-slate-100 text-left text-sm">{label}<ArrowRight size={15} aria-hidden="true" /></button>)}

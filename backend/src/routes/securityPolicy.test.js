@@ -42,6 +42,16 @@ test('every global-policy write path denies non-Super-Admin roles before writes'
   assert.equal(audits.length, 0); assert.equal(settings.get('max_login_attempts'), '5');
 });
 
+test('the old settings endpoint cannot bypass fresh maintenance confirmation', async () => {
+  const payload = { category: 'system', settings: { maintenance_mode: 'true' } };
+  const before = audits.length;
+  const response = await call('super_admin', '/settings', payload);
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).code, 'MAINTENANCE_CONFIRMATION_REQUIRED');
+  for (const role of ['owner', 'store_staff', 'customer']) assert.equal((await call(role, '/settings', payload)).status, 403);
+  assert.equal(audits.length, before);
+});
+
 test('locked-account monitoring and manual unlock stay Super Admin only; responses mask PII and unlock resets protection without reactivating users', async () => {
   for (const [path, body, method] of [['/logs/suspicious', null, 'GET'], ['/users/1/unlock', {}, 'PATCH']]) {
     assert.equal((await fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })).status, 401);
@@ -65,6 +75,7 @@ test('successful save invalidates runtime cache, survives reload, and audits saf
   assert.ok(queries.some(({ sql, args }) => sql.includes('expires_at = LEAST') && args[0] === 10));
   assert.equal((await call('super_admin', '/settings', { category: 'security', settings: { max_login_attempts: '4' } })).status, 200);
   assert.equal((await securityPolicy.get()).max_login_attempts, 4);
+  assert.ok(queries.some(({ sql }) => sql.includes('settings.security.update') && sql.includes('"outcome":"success"')));
 });
 test('fractional policies, unsupported 2FA modes and missing enrollment key are rejected', async () => {
   for (const settings of [{ max_login_attempts: '2.5' }, { '2fa_enforcement': 'required_staff' }, { smtp_password: 'must-not-log' }]) {

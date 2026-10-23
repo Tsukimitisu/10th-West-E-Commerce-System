@@ -65,6 +65,7 @@ import { getPaymongoConfigurationStatus } from './services/paymongo.js';
 import { getShippingConfigurationStatus } from './services/shipping/providers/index.js';
 import { getTrackingConfigurationStatus } from './services/tracking/providers/index.js';
 import { runMaintenanceCleanup, startMaintenanceWorkers } from './services/maintenance.js';
+import { createMaintenanceMiddleware, publicMaintenanceStatus } from './middleware/maintenanceMode.js';
 import {
   buildPublicIntegrationReadiness,
   getEmailConfigurationStatus,
@@ -349,6 +350,11 @@ app.get('/api/ready', async (_req, res) => {
 app.get('/api/csrf-token', generateCsrfToken, (req, res) => {
   res.json({ csrfToken: req.csrfToken });
 });
+
+app.get('/api/maintenance-status', publicMaintenanceStatus(pool));
+// Recovery protection remains independent and takes precedence. Read-only
+// payment reconciliation and signed webhooks remain available in maintenance.
+app.use(createMaintenanceMiddleware({ db: pool }));
 
 // API Routes
 // Apply the strict credential rate limit only to authentication mutations.

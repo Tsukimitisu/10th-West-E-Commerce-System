@@ -1,4 +1,5 @@
 import AuthHeader from './components/customer/AuthHeader';
+import MaintenanceGate from './components/customer/MaintenanceGate.jsx';
 import OfflinePosRoute from './components/staff/OfflinePosRoute.jsx';
 import { offlinePosRestricted } from './services/offlinePosScope.js';
 import { customerReturnTo } from './utils/customerReturnTo.js';
@@ -104,6 +105,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
   if (posRestricted && location.pathname !== '/pos') return <main className="mx-auto max-w-lg p-6"><p>This area requires an internet connection.</p><a href="#/pos">Return to POS</a></main>;
 
   return (
+    <MaintenanceGate pathname={location.pathname} enabled={!hideChrome && !isAuthRoute && !roleLandingPath(user?.role) && !/^\/(?:payment(?:[/-]|$)|order-confirmation\/)/.test(location.pathname)}>
     <div className={`flex min-h-screen flex-col bg-slate-50 text-slate-950 ${!hideChrome && !isSuperAdmin ? 'customer-surface' : ''}`}>
       <a href="#main-content" className="skip-link" onClick={(event) => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>Skip to main content</a>
       <IdleSessionGuard user={user} onLogout={onLogout} />
@@ -195,6 +197,7 @@ const AppLayout = ({ user, onLogout, onLogin }) => {
       {!hideFooter && !isSuperAdmin && <Footer />}
       <PrivacyBanner />
     </div>
+    </MaintenanceGate>
   );
 };
 

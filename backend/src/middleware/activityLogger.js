@@ -1,5 +1,6 @@
 import pool from '../config/database.js';
 import databaseConfig from '../config/databaseConfig.cjs';
+import { auditOutcome } from '../utils/audit.js';
 
 /**
  * Log a user/system activity to the activity_logs table.
@@ -25,7 +26,7 @@ export const logActivity = async ({
     await pool.query(
       `INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details, ip_address, user_agent)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId, action, entityType, entityId, details ? JSON.stringify(details) : null, ipAddress, userAgent]
+      [userId, action, entityType, entityId, JSON.stringify({ outcome: auditOutcome(action), ...details }), ipAddress, userAgent]
     );
   } catch (err) {
     // Never let logging crash the request

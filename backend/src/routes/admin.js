@@ -8,6 +8,9 @@ import { authenticateToken, requirePermission, requireRole } from '../middleware
 import { listSettings } from '../services/settings.js';
 import { SECURITY_RULES, securityPolicy, validatePolicyPassword } from '../services/securityPolicy.js';
 import backupRoutes from './backups.js';
+import { createMaintenanceRouter } from './maintenance.js';
+import { unifiedAuditCte } from '../utils/audit.js';
+import { presentAuditRecord } from '../utils/auditPresentation.js';
 import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
 import { getShippingConfigurationStatus } from '../services/shipping/providers/index.js';
 import { getShippingOperationalReadiness } from '../services/shipping/shippingReadiness.js';
@@ -126,6 +129,7 @@ router.use(authenticateToken, (req, res, next) => {
 router.use((req, res, next) => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) ? adminMutationLimiter(req, res, next) : next());
 
 router.use('/backups', backupRoutes);
+router.use('/maintenance', createMaintenanceRouter());
 
 router.get('/readiness', async (_req, res) => {
   try {
@@ -206,7 +210,7 @@ router.patch('/users/:id/lock', async (req, res) => {
     // Log activity
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'admin_lock_user', JSON.stringify({ locked_user_id: parseInt(id) }), req.ip]
+      [req.user.id, 'admin_lock_user', JSON.stringify({ outcome: 'success', locked_user_id: parseInt(id) }), req.ip]
     );
     res.json({ message: 'User account locked' });
   } catch (err) {
@@ -224,7 +228,7 @@ router.patch('/users/:id/unlock', async (req, res) => {
     );
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'account_security_unlock', JSON.stringify({ unlocked_user_id: parseInt(id) }), req.ip]
+      [req.user.id, 'account_security_unlock', JSON.stringify({ outcome: 'success', unlocked_user_id: parseInt(id) }), req.ip]
     );
     res.json({ message: 'User account unlocked' });
   } catch (err) {
@@ -246,7 +250,7 @@ router.post('/users/:id/reset-password', async (req, res) => {
     await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [id]);
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'admin_reset_password', JSON.stringify({ target_user_id: parseInt(id) }), req.ip]
+      [req.user.id, 'admin_reset_password', JSON.stringify({ outcome: 'success', target_user_id: parseInt(id) }), req.ip]
     );
     res.json({ message: 'Password reset successfully' });
   } catch (err) {
@@ -276,7 +280,7 @@ router.patch('/users/:id/role', async (req, res) => {
     await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, id]);
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'admin_change_role', JSON.stringify({ target_user_id: parseInt(id), new_role: role }), req.ip]
+      [req.user.id, 'admin_change_role', JSON.stringify({ outcome: 'success', target_user_id: parseInt(id), new_role: role }), req.ip]
     );
     res.json({ message: 'Role updated' });
   } catch (err) {
@@ -306,7 +310,7 @@ router.delete('/users/:id', async (req, res) => {
     // Log
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'admin_delete_user', JSON.stringify({ deleted_user_id: parseInt(id), name: user.name, email: user.email, role: user.role }), req.ip]
+      [req.user.id, 'admin_delete_user', JSON.stringify({ outcome: 'success', deleted_user_id: parseInt(id), name: user.name, email: user.email, role: user.role }), req.ip]
     );
     res.json({ message: 'User deleted successfully' });
   } catch (err) {
@@ -341,6 +345,9 @@ router.get('/settings/:category', (req, res, next) => systemSettingCategories.ha
 // Update settings (bulk)
 router.put('/settings', async (req, res) => {
   const { category, settings } = req.body;
+  if (category === 'system' && settings && Object.hasOwn(settings, 'maintenance_mode')) {
+    return res.status(400).json({ message: 'Use Maintenance to change store status with fresh authentication.', code: 'MAINTENANCE_CONFIRMATION_REQUIRED' });
+  }
   const validation = validateSettings(category, settings);
   if (validation.error) return res.status(400).json({ message: validation.error });
   const client = await pool.connect();
@@ -356,8 +363,8 @@ router.put('/settings', async (req, res) => {
       );
     }
     await client.query(
-      `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, before_data, after_data)
-       VALUES ($1, 'settings.update', 'system_settings', $2, $3, $4, $5::jsonb, $6::jsonb)`,
+      `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, before_data, after_data, metadata)
+       VALUES ($1, 'settings.update', 'system_settings', $2, $3, $4, $5::jsonb, $6::jsonb, '{"outcome":"success"}'::jsonb)`,
       [req.user.id, category, req.clientIp, req.clientUa,
         JSON.stringify(safeBeforeSettings(category, beforeResult.rows)),
         JSON.stringify(validation.normalized)]
@@ -409,8 +416,8 @@ router.put('/security/settings', async (req, res) => {
       );
     }
     await client.query(
-      `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, before_data, after_data)
-       VALUES ($1, 'settings.security.update', 'system_settings', 'security', $2, $3, $4::jsonb, $5::jsonb)`,
+      `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, before_data, after_data, metadata)
+       VALUES ($1, 'settings.security.update', 'system_settings', 'security', $2, $3, $4::jsonb, $5::jsonb, '{"outcome":"success"}'::jsonb)`,
       [req.user.id, req.clientIp, req.clientUa,
         JSON.stringify(safeBeforeSettings('security', beforeResult.rows)),
         JSON.stringify(validation.normalized)]
@@ -481,7 +488,7 @@ router.get('/logs/errors', async (req, res) => {
        LEFT JOIN users u ON u.id = e.user_id
        WHERE ${where.join(' AND ')} ORDER BY e.created_at DESC LIMIT $${params.length}`, params
     );
-    res.json(result.rows);
+    res.json(result.rows.map(row => presentAuditRecord(row, 'errors')));
   } catch (err) {
     console.error('Get error logs error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -493,13 +500,13 @@ router.get('/logs/transactions', async (req, res) => {
   try {
     const { limit = 100 } = req.query;
     const result = await pool.query(
-      `SELECT a.*, u.name as user_name FROM activity_logs a
-       LEFT JOIN users u ON u.id = a.user_id
-       WHERE a.action LIKE 'order%' OR a.action LIKE 'payment%' OR a.action LIKE 'checkout%'
-         OR a.action LIKE 'refund%' OR a.action LIKE 'pos%'
-       ORDER BY a.created_at DESC LIMIT $1`, [parseInt(limit)]
+      `${unifiedAuditCte} SELECT ul.unified_id AS id, ul.source, ul.actor_user_id AS user_id,
+         ul.action,ul.entity_type,ul.entity_id,ul.ip_address,ul.metadata AS details,ul.created_at,u.name AS user_name
+       FROM unified_logs ul LEFT JOIN users u ON u.id=ul.actor_user_id
+       WHERE LOWER(ul.action) ~ '^(order|payment|checkout|refund|pos|return)[._ ]|^offline_pos_sale'
+       ORDER BY ul.created_at DESC LIMIT $1`, [Math.min(100, Math.max(1, parseInt(limit) || 100))]
     );
-    res.json(result.rows);
+    res.json(result.rows.map(row => presentAuditRecord(row, 'transactions')));
   } catch (err) {
     console.error('Get transaction logs error:', err);
     res.status(500).json({ message: 'Server error' });

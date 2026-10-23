@@ -8,6 +8,8 @@ import dns from 'dns/promises';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import { logActivity } from '../middleware/activityLogger.js';
+import { unifiedAuditCte } from '../utils/audit.js';
+import { presentAuditRecord } from '../utils/auditPresentation.js';
 import { mergeGuestCartIntoUserCart, rotateGuestSession } from './cartController.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch, supabaseRestRequest } from '../services/supabaseRest.js';
 import { decryptTwoFactorSecret, encryptTwoFactorSecret, generateRecoveryCodes, hashRecoveryCode } from '../services/twoFactorCrypto.js';
@@ -1780,19 +1782,7 @@ export const getActivityLogs = async (req, res) => {
   const offset = (page - 1) * limit;
 
   try {
-    const unifiedCte = `
-      WITH unified_logs AS (
-        SELECT CONCAT('activity:', al.id)::text AS unified_id, 'activity'::text AS source,
-               al.user_id AS actor_user_id, al.action, al.entity_type, al.entity_id::text AS entity_id,
-               al.ip_address, al.user_agent, NULL::jsonb AS before_data, NULL::jsonb AS after_data,
-               al.details AS metadata, al.created_at AT TIME ZONE 'UTC' AS created_at
-        FROM activity_logs al
-        UNION ALL
-        SELECT CONCAT('audit:', au.id)::text, 'audit'::text, au.actor_user_id, au.action,
-               au.entity_type, au.entity_id, au.ip_address, au.user_agent, au.before_data,
-               au.after_data, au.metadata, au.created_at
-        FROM audit_logs au
-      )`;
+    const unifiedCte = unifiedAuditCte;
     const filters = ['1=1'];
     const params = [];
     if (userId) { params.push(userId); filters.push(`ul.actor_user_id = $${params.length}`); }
@@ -1824,7 +1814,7 @@ export const getActivityLogs = async (req, res) => {
       params
     );
     const total = Number.parseInt(countResult.rows[0].count, 10);
-    res.json({ logs: result.rows, total, page, totalPages: Math.ceil(total / limit) });
+    res.json({ logs: result.rows.map(row => presentAuditRecord(row)), total, page, totalPages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('Get activity logs error:', sanitizeDatabaseError(error));
     res.status(500).json({ message: 'Server error' });
