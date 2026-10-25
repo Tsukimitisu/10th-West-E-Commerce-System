@@ -199,6 +199,18 @@ const Login = ({ onLogin }) => {
     window.location.href = `${API_ORIGIN}/api/auth/${provider}`;
   };
 
+  const inlineFeedback = (loginBlocked || error) && (
+    <div role="alert" aria-label="Sign-in feedback" aria-live="polite" aria-atomic="true" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-900">
+      <AlertCircle size={16} className="mt-1 shrink-0" aria-hidden="true" />
+      <div className="min-w-0">
+        {temporaryLocked ? <p>Too many failed sign-in attempts. Try again in <span className="font-medium tabular-nums">{lockTime}</span>.</p>
+          : recoveryRequired ? <><p>Sign-in temporarily disabled. Reset your password or contact support to continue.</p><div className="mt-1 flex flex-wrap gap-x-4"><Link to="/forgot-password" className="inline-flex min-h-11 items-center font-semibold underline">Reset Password</Link><Link to="/contact" className="inline-flex min-h-11 items-center underline">Contact Support</Link></div></>
+          : <p>{error}</p>}
+        {needsVerification && !loginBlocked && <button type="button" onClick={handleResendVerification} disabled={loading} className="mt-2 min-h-11 rounded-lg bg-orange-600 px-3 text-sm font-medium text-white hover:bg-orange-500">Resend Verification Email</button>}
+      </div>
+    </div>
+  );
+
   return (
     <main className="auth-page">
                   <div className="auth-content">
@@ -222,31 +234,6 @@ const Login = ({ onLogin }) => {
             </div>
           )}
 
-          {loginBlocked && <section role="region" aria-labelledby="login-lock-title" className="mb-4 rounded-lg border border-orange-300 bg-orange-50 p-4 text-sm text-slate-900">
-            <h2 id="login-lock-title" className="text-base font-semibold">{recoveryRequired ? 'Sign-in temporarily disabled' : 'Too many failed attempts'}</h2>
-            <p className="mt-2 leading-6">{recoveryRequired ? 'Too many unsuccessful sign-in attempts were detected. To protect your account, verify your identity and reset your password before signing in again.' : 'For your security, sign-in has been temporarily paused.'}</p>
-            {!recoveryRequired && <>
-              <div className="mt-3" aria-live="polite" aria-atomic="true"><p>Try again in</p><p className="mt-1 text-3xl font-semibold tabular-nums">{lockTime}</p></div>
-              <p className="mt-2 text-slate-700">Available again at <time dateTime={new Date(accountLock.deadline).toISOString()}>{new Date(accountLock.deadline).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time></p>
-            </>}
-            <div className="mt-2 flex flex-wrap gap-x-5"><Link to="/forgot-password" className="inline-flex min-h-11 items-center font-semibold text-orange-800">{recoveryRequired ? 'Reset Password' : 'Reset password instead'}</Link>{recoveryRequired && <Link to="/contact" className="inline-flex min-h-11 items-center font-medium text-slate-700">Contact Support</Link>}</div>
-          </section>}
-          {error && !loginBlocked && (
-            <div role="alert" className="mb-4 p-3 bg-red-500/10 border border-red-200 rounded-lg text-sm text-red-700 flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <AlertCircle size={16} /> <span>{error}</span>
-              </div>
-              {needsVerification && (
-                <button 
-                  onClick={handleResendVerification}
-                  disabled={loading}
-                  className="px-3 py-1.5 bg-orange-600 text-white rounded text-xs font-medium hover:bg-orange-500 transition-colors self-start mt-1"
-                >
-                  Resend Verification Email
-                </button>
-              )}
-            </div>
-          )}
 
           {resendSuccess && (
             <div role="status" className="mb-4 p-3 bg-green-500/10 border border-green-200 rounded-lg text-sm text-green-700 flex items-center gap-2">
@@ -299,6 +286,7 @@ const Login = ({ onLogin }) => {
                     </button>
                   </div>
                 </div>
+                {inlineFeedback}
                 <button type="submit" disabled={loading || loginBlocked}
                   className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
                   {loginBlocked ? (recoveryRequired ? 'Reset password to continue' : `Try again in ${lockTime}`) : loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>Sign In <ArrowRight size={16} /></>}
@@ -313,6 +301,7 @@ const Login = ({ onLogin }) => {
               <h2 className="mb-1 font-display text-lg font-semibold text-slate-950">Two-factor authentication</h2>
               <p className="mb-6 text-sm text-slate-600">Enter the 6-digit code from your authenticator app.</p>
               <form onSubmit={handleSubmit} className="space-y-4">
+                {inlineFeedback}
                 <label htmlFor="login-totp" className="sr-only">Authenticator code</label>
                 <input
                   id="login-totp"

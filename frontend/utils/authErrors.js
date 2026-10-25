@@ -6,5 +6,6 @@ export const getLoginSubmissionErrorMessage = (error) => {
   if (code === 'DATABASE_UNAVAILABLE' || Number(error?.status) === 503) {
     return 'The service is temporarily unavailable. Please try again later.';
   }
+  if (code === 'INVALID_CREDENTIALS') return 'Invalid login attempt.';
   return error?.message || 'Invalid email or password';
 };

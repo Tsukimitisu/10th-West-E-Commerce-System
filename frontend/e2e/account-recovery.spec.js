@@ -16,13 +16,13 @@ for (const width of [390, 1440]) {
     await page.locator('#login-email').fill('rider@example.test');
     await page.locator('#login-password').fill('WrongPassword123!');
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Too many failed attempts' })).toBeVisible();
+    await expect(page.getByRole('alert', { name: 'Sign-in feedback' })).toContainText('Too many failed sign-in attempts. Try again in 00:0');
     await expect(page.getByRole('button', { name: /Try again in 00:0[123]/ })).toBeDisabled();
-    await expect(page.locator('section').filter({ hasText: 'Too many failed attempts' })).not.toContainText('rider@example.test');
+    await expect(page.getByRole('alert', { name: 'Sign-in feedback' })).not.toContainText('rider@example.test');
     await noOverflow(page);
     await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeEnabled({ timeout: 6000 });
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Sign-in temporarily disabled' })).toBeVisible();
+    await expect(page.getByRole('alert', { name: 'Sign-in feedback' })).toContainText('Sign-in temporarily disabled.');
     await expect(page.getByRole('link', { name: 'Contact Support' })).toBeVisible();
     await page.getByRole('link', { name: 'Reset Password', exact: true }).click();
     await expect(page).toHaveURL(/forgot-password/);

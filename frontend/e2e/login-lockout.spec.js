@@ -11,37 +11,54 @@ const enterCredentials = async page => {
   await page.locator('#login-password').fill(password);
 };
 
-test('fifth failure shows a ticking timer, local unlock time, and privacy-safe refresh persistence', async ({ page }) => {
-  await staffFixture(page, { loggedOut: true });
+for (const width of [390, 1440]) test(`compact failed-attempt alert, ticking lock, refresh, expiry and successful login at ${width}px`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 900 });
+  await staffFixture(page, { loggedOut: true, user: { role: 'customer' } });
   const now = Date.now();
   await page.clock.setFixedTime(new Date(now));
   let requests = 0;
-  await page.route('**/api/auth/login', route => route.fulfill({ status: ++requests < 5 ? 401 : 429,
-    json: requests < 5 ? { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' }
-      : { code: 'ACCOUNT_TEMPORARILY_LOCKED', retry_after_seconds: 900, message: 'Please wait.' } }));
+  await page.route('**/api/auth/login', route => {
+    requests++;
+    if (requests > 5) return route.fallback();
+    return route.fulfill({ status: requests < 5 ? 401 : 429,
+      json: requests < 5 ? { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' }
+        : { code: 'ACCOUNT_TEMPORARILY_LOCKED', retry_after_seconds: 900, message: 'Please wait.' } });
+  });
+  let failedStyle;
   await page.goto('/#/login');
   await enterCredentials(page);
   for (let attempt = 1; attempt <= 5; attempt++) {
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-    if (attempt < 5) await expect(page.getByRole('alert')).toContainText('Invalid email or password');
+    if (attempt < 5) {
+      const alert = page.getByRole('alert', { name: 'Sign-in feedback' });
+      await expect(alert).toHaveText('Invalid login attempt.');
+      await expect(page.locator('form [role="alert"]')).toHaveCount(1);
+      failedStyle = await alert.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderTopColor, color: getComputedStyle(element).color }));
+    }
   }
-  const notice = page.getByRole('region', { name: 'Too many failed attempts' });
+  const notice = page.getByRole('alert', { name: 'Sign-in feedback' });
   await expect(notice).toBeVisible();
   await expect(notice).toBeInViewport();
   await expect(notice).toContainText('15:00');
   await expect(notice.locator('.tabular-nums')).toBeInViewport();
   await expect(notice).not.toContainText(email);
-  await expect(notice).toContainText('Available again at');
+  await expect(notice).toHaveText('Too many failed sign-in attempts. Try again in 15:00.');
+  await expect(notice.getByRole('heading')).toHaveCount(0);
   await expect(notice.locator('.tabular-nums')).toHaveCSS('font-variant-numeric', 'tabular-nums');
-  await expect(notice.getByRole('link', { name: 'Reset password instead' })).toBeVisible();
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(1);
+  const lockedStyle = await notice.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderTopColor, color: getComputedStyle(element).color }));
+  expect(lockedStyle).toEqual(failedStyle);
+  expect(await notice.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(110);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  await page.screenshot({ path: testInfo.outputPath(`inline-lockout-${width}.png`), animations: 'disabled', fullPage: true });
   await expect(page.getByRole('button', { name: 'Try again in 15:00', exact: true })).toBeDisabled();
-  await expect(notice.locator('[aria-live="polite"]')).toHaveAttribute('aria-atomic', 'true');
+  await expect(notice).toHaveAttribute('aria-live', 'polite');
+  await expect(notice).toHaveAttribute('aria-atomic', 'true');
   await page.clock.setFixedTime(new Date(now + 1000));
   await expect(page.getByRole('button', { name: 'Try again in 14:59', exact: true })).toBeDisabled();
   const saved = await page.evaluate(key => sessionStorage.getItem(key), storageKey);
   expect(JSON.parse(saved)).toEqual({ identifier: expect.stringMatching(/^[a-f0-9]{64}$/), deadline: expect.any(Number), recovery: false });
-  await expect(notice.locator('time')).toHaveAttribute('datetime', new Date(JSON.parse(saved).deadline).toISOString());
+  expect(JSON.parse(saved).deadline).toBe(now + 900000);
   for (const secret of [email, password, 'token', 'otp']) expect(saved.toLowerCase()).not.toContain(secret.toLowerCase());
   await page.reload();
   // Simulate an autofill input event without retaining email in our storage.
@@ -60,6 +77,11 @@ test('fifth failure shows a ticking timer, local unlock time, and privacy-safe r
   await expect(notice).toHaveCount(0);
   expect(await page.evaluate(key => sessionStorage.getItem(key), storageKey)).toBeNull();
   expect(requests).toBe(5); // Expiry never submits credentials automatically.
+  await page.locator('#login-password').fill('CorrectPassword123!');
+  await page.getByRole('button', { name: 'Sign In', exact: true }).click();
+  await expect(page).toHaveURL(/#\/$/);
+  expect(requests).toBe(6);
+  expect(await page.evaluate(key => sessionStorage.getItem(key), storageKey)).toBeNull();
 });
 
 test('expired saved state is removed on page load', async ({ page }) => {
@@ -88,7 +110,7 @@ test('recovery-required warning has no countdown or persisted client block', asy
   await page.route('**/api/auth/login', route => route.fulfill({ status: 429, json: { code: 'ACCOUNT_RECOVERY_REQUIRED', message: 'Reset your password.' } }));
   await page.goto('/#/login'); await enterCredentials(page);
   await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-  const notice = page.getByRole('region', { name: 'Sign-in temporarily disabled' });
+  const notice = page.getByRole('alert', { name: 'Sign-in feedback' });
   await expect(notice).toBeVisible();
   await expect(notice).not.toContainText('Try again in');
   await expect(notice).not.toContainText('Available again at');
@@ -119,6 +141,6 @@ test('manipulating the stored timer cannot prevent a fresh authoritative lock re
   });
   await page.goto('/#/login'); await enterCredentials(page);
   await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Too many failed attempts' })).toBeVisible();
+  await expect(page.getByRole('alert', { name: 'Sign-in feedback' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Try again in 09:0[34]/ })).toBeDisabled();
 });
