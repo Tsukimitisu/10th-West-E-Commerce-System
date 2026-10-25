@@ -51,11 +51,12 @@ for (const width of [390, 1440]) test(`compact failed-attempt alert, ticking loc
   expect(await notice.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(110);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await page.screenshot({ path: testInfo.outputPath(`inline-lockout-${width}.png`), animations: 'disabled', fullPage: true });
-  await expect(page.getByRole('button', { name: 'Try again in 15:00', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeDisabled();
   await expect(notice).toHaveAttribute('aria-live', 'polite');
   await expect(notice).toHaveAttribute('aria-atomic', 'true');
   await page.clock.setFixedTime(new Date(now + 1000));
-  await expect(page.getByRole('button', { name: 'Try again in 14:59', exact: true })).toBeDisabled();
+  await expect(notice).toHaveText('Too many failed sign-in attempts. Try again in 14:59.');
+  await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeDisabled();
   const saved = await page.evaluate(key => sessionStorage.getItem(key), storageKey);
   expect(JSON.parse(saved)).toEqual({ identifier: expect.stringMatching(/^[a-f0-9]{64}$/), deadline: expect.any(Number), recovery: false });
   expect(JSON.parse(saved).deadline).toBe(now + 900000);
@@ -66,12 +67,18 @@ for (const width of [390, 1440]) test(`compact failed-attempt alert, ticking loc
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }, email);
-  await expect(page.getByRole('button', { name: 'Try again in 14:59', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeDisabled();
   await page.locator('#login-email').fill('different@example.test');
   await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeEnabled();
   await expect(notice).toHaveCount(0);
-  await page.locator('#login-email').fill(email);
-  await expect(notice).toBeVisible();
+  await page.clock.setFixedTime(new Date(now + 33000));
+  await page.locator('#login-email').fill(email.toUpperCase());
+  await expect(notice).toHaveText('Too many failed sign-in attempts. Try again in 14:27.');
+  await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeDisabled();
+  await page.locator('#login-password').fill(password);
+  await page.locator('#login-password').press('Enter');
+  expect(requests).toBe(5);
+  expect(await page.evaluate(key => sessionStorage.getItem(key), storageKey)).toBe(saved);
   await page.clock.setFixedTime(new Date(now + 900000));
   await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeEnabled();
   await expect(notice).toHaveCount(0);
@@ -102,6 +109,30 @@ test('successful login clears saved metadata for another identifier', async ({ p
   await page.goto('/#/login'); await enterCredentials(page);
   await page.getByRole('button', { name: 'Sign In', exact: true }).click();
   await expect(page).toHaveURL(/#\/$/);
+  expect(await page.evaluate(key => sessionStorage.getItem(key), storageKey)).toBeNull();
+});
+
+test('a different account can sign in immediately while the original account is locked', async ({ page }) => {
+  await staffFixture(page, { loggedOut: true, user: { role: 'customer' } });
+  const submittedEmails = [];
+  await page.route('**/api/auth/login', route => {
+    const submittedEmail = route.request().postDataJSON().email;
+    submittedEmails.push(submittedEmail);
+    if (submittedEmail !== email) return route.fallback();
+    return route.fulfill({ status: 429,
+      json: { code: 'ACCOUNT_TEMPORARILY_LOCKED', retry_after_seconds: 900, message: 'Please wait.' } });
+  });
+  await page.goto('/#/login'); await enterCredentials(page);
+  const submit = page.getByRole('button', { name: 'Sign In', exact: true });
+  await submit.click();
+  await expect(submit).toBeDisabled();
+  await expect(page.getByRole('alert', { name: 'Sign-in feedback' })).toBeVisible();
+  await page.locator('#login-email').fill('another@example.test');
+  await expect(page.getByRole('alert', { name: 'Sign-in feedback' })).toHaveCount(0);
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect(page).toHaveURL(/#\/$/);
+  expect(submittedEmails).toEqual([email, 'another@example.test']);
   expect(await page.evaluate(key => sessionStorage.getItem(key), storageKey)).toBeNull();
 });
 
@@ -141,6 +172,6 @@ test('manipulating the stored timer cannot prevent a fresh authoritative lock re
   });
   await page.goto('/#/login'); await enterCredentials(page);
   await page.getByRole('button', { name: 'Sign In', exact: true }).click();
-  await expect(page.getByRole('alert', { name: 'Sign-in feedback' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Try again in 09:0[34]/ })).toBeDisabled();
+  await expect(page.getByRole('alert', { name: 'Sign-in feedback' })).toContainText(/Try again in 09:0[34]/);
+  await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeDisabled();
 });

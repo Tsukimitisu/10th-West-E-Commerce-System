@@ -289,7 +289,8 @@ const Login = ({ onLogin }) => {
                 {inlineFeedback}
                 <button type="submit" disabled={loading || loginBlocked}
                   className="w-full py-3 bg-orange-500 hover:bg-orange-400 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
-                  {loginBlocked ? (recoveryRequired ? 'Reset password to continue' : `Try again in ${lockTime}`) : loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>Sign In <ArrowRight size={16} /></>}
+                  {loading && <span aria-hidden="true" className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  Sign In {!loading && <ArrowRight size={16} />}
                 </button>
               </form>
             </>

@@ -17,7 +17,7 @@ for (const width of [390, 1440]) {
     await page.locator('#login-password').fill('WrongPassword123!');
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
     await expect(page.getByRole('alert', { name: 'Sign-in feedback' })).toContainText('Too many failed sign-in attempts. Try again in 00:0');
-    await expect(page.getByRole('button', { name: /Try again in 00:0[123]/ })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeDisabled();
     await expect(page.getByRole('alert', { name: 'Sign-in feedback' })).not.toContainText('rider@example.test');
     await noOverflow(page);
     await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeEnabled({ timeout: 6000 });
