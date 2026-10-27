@@ -207,7 +207,7 @@ const sessionMiddleware = session({
 
 // Initialize Socket.IO after session middleware is created so sockets can use
 // the same HttpOnly session cookie as HTTP requests.
-const io = initSocket(httpServer, allowedOrigins, { sessionMiddleware });
+const io = initSocket(httpServer, allowedOrigins, { sessionMiddleware, trustProxy: sessionTransport.trustProxy ? (_address, hop) => hop < sessionTransport.trustProxy : undefined });
 
 // Middleware
 // Leave express-session's proxy option unset: it uses this same trust decision.

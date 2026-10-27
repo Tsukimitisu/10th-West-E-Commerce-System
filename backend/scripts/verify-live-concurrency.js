@@ -10,11 +10,12 @@ import { io as createSocket } from 'socket.io-client';
 import pool from '../src/config/database.js';
 
 const backendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const credentialFile = path.join(backendRoot, '.test-credentials.local');
+const credentialFile = process.env.CONCURRENCY_CREDENTIAL_FILE || path.join(backendRoot, '.test-credentials.local');
 const enabled = ['true', '1', 'yes'].includes(String(process.env.ENABLE_LIVE_DATABASE_TESTS || '').trim().toLowerCase());
 const startedAt = new Date();
 const marker = `live-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 const createdProductIds = [];
+const createdDeviceIds = [];
 const fixtureUserIds = [];
 let childProcess;
 let apiOrigin;
@@ -25,6 +26,12 @@ if (!enabled) {
 }
 if (String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production') {
   throw new Error('Live concurrency fixtures are disabled in production.');
+}
+
+// This script creates and deletes fixtures: never inherit the shared shop DB.
+const databaseTarget = new URL(pool.options.connectionString);
+if (!['localhost', '127.0.0.1', '[::1]'].includes(databaseTarget.hostname) || !/(test|disposable)/i.test(databaseTarget.pathname)) {
+  throw new Error('Concurrency verification requires a disposable local PostgreSQL test database.');
 }
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -208,13 +215,14 @@ const createProduct = async (name, stock) => {
   const result = await pool.query(
     `INSERT INTO products (
        part_number, name, description, price, buying_price, stock_quantity,
-       low_stock_threshold, sku, barcode, status, is_deleted, product_type
-     ) VALUES ($1,$2,$3,100,60,$4,1,$5,$6,'active',false,'single')
+       low_stock_threshold, sku, barcode, status, is_deleted, product_type, store_selling_price
+     ) VALUES ($1,$2,$3,100,60,$4,1,$5,$6,'active',false,'single',100)
      RETURNING id, stock_quantity, reserved_stock`,
     [identifier, `Live verification ${name} ${marker}`, `Temporary live verification product ${marker}`, stock, identifier, `${identifier}-bar`]
   );
   const product = result.rows[0];
   createdProductIds.push(Number(product.id));
+  await pool.query("INSERT INTO ecommerce_listings(inventory_item_id,visibility_status) VALUES($1,'active')", [product.id]);
   await pool.query(
     `INSERT INTO stock_movements (
        product_id, quantity_delta, stock_before, stock_after, reason, reference_type, metadata
@@ -242,17 +250,23 @@ const createAddress = async (session, suffix) => {
   return Number(response.body.address.id);
 };
 
-const createCheckout = (session, { productId, addressId, quantity = 1, key }) => session.request('POST', '/checkout', {
-  headers: { 'Idempotency-Key': key },
-  body: {
-    items: [{ product_id: productId, quantity }],
-    address_id: addressId,
-    payment_method: 'cod',
-  },
-});
+const createCheckout = async (session, { productId, addressId, quantity = 1, key }) => {
+  const quote = await session.request('POST', '/shipping/quote', { body: {
+    address_id: addressId, items: [{ product_id: productId, quantity }],
+  } });
+  assertStatus(quote, 200, 'authoritative checkout quote');
+  return session.request('POST', '/checkout', {
+    headers: { 'Idempotency-Key': key },
+    body: {
+      items: [{ product_id: productId, quantity, expected_unit_price: 115 }],
+      expected_total: Math.round((Number(quote.body.subtotal) + Number(quote.body.shipping_fee)) * (1 + Number(quote.body.tax_rate || 0) / 100) * 100) / 100,
+      address_id: addressId, payment_method: 'cod', purchase_source: 'buy_now',
+    },
+  });
+};
 
 const cancelCheckout = async (session, orderId) => {
-  const response = await session.request('POST', `/checkout/${orderId}/cancel`, { body: {} });
+  const response = await session.request('POST', `/orders/${orderId}/cancel`, { body: { reason: `Concurrency verification ${marker}` } });
   assertStatus(response, 200, `checkout cancellation for order ${orderId}`);
 };
 
@@ -379,7 +393,7 @@ const runSameStockCheckout = async ({ customer, customerAlt, addressId, alternat
   ]);
   responses.forEach((response) => assertNotServerError(response, 'same-stock checkout race'));
   assert.deepEqual(responses.map((response) => response.status).sort(), [201, 409]);
-  await assertProductInventory(productId, 1, 1);
+  await assertProductInventory(productId, 0, 0);
   const winnerIndex = responses.findIndex((response) => response.status === 201);
   await cancelCheckout(winnerIndex === 0 ? customer : customerAlt, responses[winnerIndex].body.order_id);
   await assertProductInventory(productId, 1, 0);
@@ -442,7 +456,7 @@ const runPosVersusCheckout = async ({ customer, cashier, owner, addressId, produ
   await assertProductInventory(productId, 1, 0);
 };
 
-const runInventoryConcurrency = async ({ customer, owner, addressId, productId }) => {
+const runInventoryConcurrency = async ({ owner, productId }) => {
   const additions = await Promise.all([
     owner.request('POST', '/inventory/bulk-update', {
       body: { updates: [{ product_id: productId, quantity: 2, adjustment_type: 'add', reason: marker }] },
@@ -460,17 +474,6 @@ const runInventoryConcurrency = async ({ customer, owner, addressId, productId }
     [productId, startedAt]
   );
   assert.deepEqual(records.rows[0], { movements: 2, audits: 2 });
-
-  const checkoutKey = uniqueKey('inventory-reservation');
-  const checkout = await createCheckout(customer, { productId, addressId, quantity: 5, key: checkoutKey });
-  assertStatus(checkout, 201, 'inventory reservation checkout');
-  const belowReserved = await owner.request('PUT', `/inventory/${productId}`, {
-    body: { quantity: 4, adjustment_type: 'set', reason: marker },
-  });
-  assertStatus(belowReserved, 409, 'inventory update below reserved stock');
-  await assertProductInventory(productId, 15, 5);
-  await cancelCheckout(customer, checkout.body.order_id);
-  await assertProductInventory(productId, 15, 0);
 };
 
 const waitForSocketEvent = (socket, event, timeoutMs = 2_000) => new Promise((resolve) => {
@@ -594,6 +597,8 @@ const runReturnConcurrency = async ({ customer, owner, addressId, productId, cus
   assertStatus(await owner.request('PATCH', `/returns/${returnId}/approve`, {
     body: { note: marker },
   }), 200, 'return approval');
+  assertStatus(await owner.request('PATCH', `/returns/${returnId}/received`, { body: {} }), 200, 'physical return received');
+  await assertProductInventory(productId, 0, 0); // Receiving must not restock or refund.
   const refundKey = uniqueKey('return-refund');
   const refunds = await Promise.all([
     owner.request('POST', `/returns/${returnId}/refund`, {
@@ -606,7 +611,7 @@ const runReturnConcurrency = async ({ customer, owner, addressId, productId, cus
     }),
   ]);
   refunds.forEach((response) => assertNotServerError(response, 'concurrent return refund'));
-  assert.equal(refunds.filter((response) => response.status === 200).length, 1);
+  assert.ok(refunds.some((response) => response.status === 200)); // Completed replays may also return 200.
   assert.ok(refunds.every((response) => [200, 202, 409].includes(response.status)));
 
   const replay = await owner.request('POST', `/returns/${returnId}/refund`, {
@@ -621,14 +626,14 @@ const runReturnConcurrency = async ({ customer, owner, addressId, productId, cus
        (SELECT COUNT(*)::int FROM stock_movements WHERE order_id=$2 AND reason='return') AS return_movements,
        (SELECT returned_quantity::int FROM order_items WHERE id=$3) AS returned_quantity,
        (SELECT COUNT(*)::int FROM store_credits WHERE user_id=$4 AND reference_id=$1 AND reference_type='return') AS credits,
-       (SELECT COUNT(*)::int FROM order_status_history WHERE order_id=$2 AND to_status IN ('return_requested','return_approved','refunded','partially_refunded')) AS timeline_events,
+       (SELECT COUNT(*)::int FROM order_status_history WHERE order_id=$2 AND to_status IN ('return_requested','return_approved','returned','refund_processing','refunded','partially_refunded')) AS timeline_events,
        (SELECT status::text FROM returns WHERE id=$1) AS return_status,
        (SELECT status::text FROM refunds WHERE return_id=$1) AS refund_status,
        (SELECT status::text FROM orders WHERE id=$2) AS order_status,
        (SELECT payment_status::text FROM orders WHERE id=$2) AS order_payment_status,
        (SELECT status::text FROM payments WHERE order_id=$2 ORDER BY created_at DESC LIMIT 1) AS payment_status,
        (SELECT COUNT(*)::int FROM audit_logs WHERE created_at >= $5 AND (
-          (entity_type='return' AND entity_id=$1::text AND action IN ('return.create','return.approve'))
+          (entity_type='return' AND entity_id=$1::text AND action IN ('return.create','return.approve','return.received'))
           OR (entity_type='refund' AND action IN ('refund.prepare','refund.complete') AND metadata->>'return_id'=$1::text)
        )) AS audit_events`,
     [returnId, orderId, orderItemId, customerUserId, startedAt]
@@ -638,17 +643,65 @@ const runReturnConcurrency = async ({ customer, owner, addressId, productId, cus
     return_movements: 1,
     returned_quantity: 1,
     credits: 1,
-    timeline_events: 3,
+    timeline_events: 4,
     return_status: 'refunded',
     refund_status: 'succeeded',
-    order_status: 'partially_refunded',
-    order_payment_status: 'partially_refunded',
-    payment_status: 'partially_refunded',
-    audit_events: 4,
+    order_status: Number(checkout.body.totals.total) <= 115 ? 'refunded' : 'partially_refunded',
+    order_payment_status: Number(checkout.body.totals.total) <= 115 ? 'refunded' : 'partially_refunded',
+    payment_status: Number(checkout.body.totals.total) <= 115 ? 'refunded' : 'partially_refunded',
+    audit_events: 5,
   });
   await assertProductInventory(productId, 1, 0);
   const user = await pool.query('SELECT store_credit FROM users WHERE id=$1', [customerUserId]);
-  assert.equal(Number(user.rows[0].store_credit), Number(originalStoreCredit) + 100);
+  assert.equal(Number(user.rows[0].store_credit), Number(originalStoreCredit) + 115);
+};
+
+const runOfflineSyncConcurrency = async ({ owner, productId }) => {
+  const registered = await owner.request('POST', '/pos/offline/device', { body: { device_uuid: crypto.randomUUID(), name: 'Disposable concurrency POS' } });
+  assertStatus(registered, 200, 'offline device registration');
+  const deviceId = registered.body.device.id;
+  createdDeviceIds.push(deviceId);
+  assertStatus(await owner.request('PATCH', `/pos/offline/device/${deviceId}/stock-mode`, { body: { stock_mode: 'manual' } }), 200, 'manual test device');
+  assertStatus(await owner.request('PUT', '/pos/offline/reserve', { body: { device_id: deviceId, product_id: productId, quantity: 2 } }), 200, 'protected offline allocation');
+  const belowReserve = await owner.request('PUT', `/inventory/${productId}`, { body: { quantity: 1, adjustment_type: 'set', reason: marker } });
+  assertStatus(belowReserve, 409, 'inventory adjustment below protected offline reserve');
+  await assertProductInventory(productId, 3, 2);
+  const snapshot = await owner.request('POST', '/pos/offline/snapshot', { body: { device_id: deviceId } });
+  assertStatus(snapshot, 200, 'offline catalogue snapshot');
+  const transactionId = crypto.randomUUID();
+  const submit = () => owner.request('POST', '/pos/orders', {
+    headers: { 'Idempotency-Key': transactionId }, body: {
+      items: [{ product_id: productId, quantity: 1, unit_price: 100 }], payment_method: 'cash', amount_tendered: 200,
+      offline: { device_id: deviceId, snapshot_id: snapshot.body.id, transaction_id: transactionId, created_at: saleTime },
+    },
+  });
+  const saleTime = new Date().toISOString();
+  const replies = await Promise.all([submit(), submit()]);
+  assert.deepEqual(replies.map(reply => reply.status).sort(), [200, 201]);
+  assert.equal(replies[0].body.receipt.order_id, replies[1].body.receipt.order_id);
+  assertStatus(await submit(), 200, 'offline sale retry');
+  const counts = await pool.query(`SELECT
+    (SELECT count(*)::int FROM pos_offline_sales WHERE transaction_id=$1) AS sales,
+    (SELECT count(*)::int FROM orders WHERE checkout_idempotency_key=$1::text) AS orders,
+    (SELECT count(*)::int FROM stock_movements WHERE order_id=$2 AND reason='pos_sale') AS deductions,
+    (SELECT count(*)::int FROM payments WHERE order_id=$2) AS payments,
+    (SELECT remaining::int FROM pos_offline_reserves WHERE device_id=$3 AND product_id=$4) AS remaining`,
+  [transactionId,replies[0].body.receipt.order_id,deviceId,productId]);
+  assert.deepEqual(counts.rows[0], { sales: 1, orders: 1, deductions: 1, payments: 1, remaining: 1 });
+  await assertProductInventory(productId, 2, 1);
+};
+
+const assertDatabaseInvariants = async () => {
+  const result = await pool.query(`SELECT
+    (SELECT count(*)::int FROM products WHERE stock_quantity<0 OR reserved_stock<0 OR reserved_stock>stock_quantity) AS invalid_products,
+    (SELECT count(*)::int FROM product_variants WHERE stock_quantity<0 OR reserved_stock<0 OR reserved_stock>stock_quantity) AS invalid_variants,
+    (SELECT count(*)::int FROM (SELECT checkout_idempotency_key FROM orders WHERE checkout_idempotency_key IS NOT NULL GROUP BY checkout_idempotency_key HAVING count(*)>1) d) AS duplicate_orders,
+    (SELECT count(*)::int FROM (SELECT order_id FROM payments GROUP BY order_id HAVING count(*)>1) d) AS duplicate_payments,
+    (SELECT count(*)::int FROM (SELECT receipt_number FROM orders WHERE receipt_number IS NOT NULL GROUP BY receipt_number HAVING count(*)>1) d) AS duplicate_receipts,
+    (SELECT count(*)::int FROM (SELECT return_id FROM refunds GROUP BY return_id HAVING count(*)>1) d) AS duplicate_refunds,
+    (SELECT count(*)::int FROM (SELECT transaction_id FROM pos_offline_sales GROUP BY transaction_id HAVING count(*)>1) d) AS duplicate_offline_sales`);
+  assert.ok(Object.values(result.rows[0]).every(value => value === 0), JSON.stringify(result.rows[0]));
+  console.log('PASS: database invariants ' + JSON.stringify(result.rows[0]));
 };
 
 const verifyFixtureUsers = async (credentials) => {
@@ -706,6 +759,13 @@ const cleanup = async ({ customerUserId, originalStoreCredit } = {}) => {
       await client.query("DELETE FROM store_credits WHERE reference_type='return' AND reference_id=ANY($1::int[])", [returnIds]);
       await client.query('DELETE FROM refunds WHERE return_id=ANY($1::int[])', [returnIds]);
       await client.query('DELETE FROM returns WHERE id=ANY($1::int[])', [returnIds]);
+    }
+    if (createdDeviceIds.length) {
+      await client.query('DELETE FROM pos_offline_sales WHERE device_id=ANY($1::uuid[])', [createdDeviceIds]);
+      await client.query('DELETE FROM pos_offline_snapshot_items WHERE snapshot_id IN (SELECT id FROM pos_offline_snapshots WHERE device_id=ANY($1::uuid[]))', [createdDeviceIds]);
+      await client.query('DELETE FROM pos_offline_snapshots WHERE device_id=ANY($1::uuid[])', [createdDeviceIds]);
+      await client.query('DELETE FROM pos_offline_reserves WHERE device_id=ANY($1::uuid[])', [createdDeviceIds]);
+      await client.query('DELETE FROM pos_offline_devices WHERE id=ANY($1::uuid[])', [createdDeviceIds]);
     }
     if (orderIds.length) {
       await client.query('DELETE FROM payments WHERE order_id=ANY($1::int[])', [orderIds]);
@@ -766,6 +826,7 @@ const main = async () => {
       inventory: await createProduct('inventory', 10),
       chat: await createProduct('chat', 1),
       returns: await createProduct('returns', 1),
+      offline: await createProduct('offline', 3),
     };
     const addressId = await createAddress(sessions.customer, 'customer');
     const alternateAddressId = await createAddress(sessions.customerAlt, 'alternate');
@@ -776,9 +837,10 @@ const main = async () => {
       ['same-stock checkout race', () => runSameStockCheckout({ customer: sessions.customer, customerAlt: sessions.customerAlt, addressId, alternateAddressId, productId: products.sameStock })],
       ['POS idempotency, receipt, stock, and void RBAC', () => runPosIdempotency({ cashier: sessions.cashier, owner: sessions.owner, productId: products.pos })],
       ['POS versus online checkout race', () => runPosVersusCheckout({ customer: sessions.customer, cashier: sessions.cashier, owner: sessions.owner, addressId, productId: products.mixed })],
-      ['inventory locking, no lost update, and reservations', () => runInventoryConcurrency({ customer: sessions.customer, owner: sessions.owner, addressId, productId: products.inventory })],
+      ['inventory locking and no lost updates', () => runInventoryConcurrency({ owner: sessions.owner, productId: products.inventory })],
       ['chat messages, ordering, CSRF, and room authorization', () => runChatConcurrency({ customer: sessions.customer, customerAlt: sessions.customerAlt, staff: sessions.staff, productId: products.chat })],
       ['return deduplication and single stock restoration', () => runReturnConcurrency({ customer: sessions.customer, owner: sessions.owner, addressId, productId: products.returns, ...state })],
+      ['offline sync deduplication and device allowance', () => runOfflineSyncConcurrency({ owner: sessions.owner, productId: products.offline })],
     ];
 
     for (const [label, check] of checks) {
@@ -786,6 +848,7 @@ const main = async () => {
       console.log(`PASS: ${label}`);
     }
 
+    await assertDatabaseInvariants();
     for (const session of Object.values(sessions)) {
       const logout = await session.request('POST', '/auth/logout', { body: {} });
       assertStatus(logout, 200, 'fixture logout');
@@ -793,7 +856,7 @@ const main = async () => {
     console.log(`Live database verification passed: ${checks.length} checks.`);
   } finally {
     await stopBackend();
-    await cleanup(state);
+    await cleanup(state).catch(error => { console.error('Local fixture cleanup failed:', error.message); process.exitCode = 1; });
     await pool.end();
   }
 };

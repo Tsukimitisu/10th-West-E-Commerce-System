@@ -2,6 +2,7 @@ import { securityPolicy, twoFactorRequirement } from './services/securityPolicy.
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { createSocketProtection } from './middleware/socketRateLimiter.js';
 import pool from './config/database.js';
 import { PRODUCT_PUBLISHER_ROLE_SET } from './constants/schemaEnums.js';
 
@@ -128,7 +129,7 @@ const hydrateSocketUserFromBearer = async (token) => {
   return hydrateSocketUserFromSession({ userId: decoded.id, tokenHash, twoFactorVerified: decoded.mfa_verified === true });
 };
 
-export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = {}) {
+export function initSocket(httpServer, frontendOrigins, { sessionMiddleware, trustProxy } = {}) {
   io = new Server(httpServer, {
     cors: {
       origin: frontendOrigins,
@@ -141,6 +142,8 @@ export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = 
     pingInterval: 25000,
   });
 
+  const protection = createSocketProtection({ trustProxy, existingSession: id => Object.hasOwn(io.engine.clients, id) });
+  io.engine.use(protection.connection);
   if (sessionMiddleware) {
     io.engine.use(sessionMiddleware);
   }
@@ -167,6 +170,7 @@ export function initSocket(httpServer, frontendOrigins, { sessionMiddleware } = 
   });
 
   io.on('connection', (socket) => {
+    socket.use(protection.events(socket));
     const revalidate = async () => {
       const user = await hydrateSocketUserFromSession(socket.request?.session?.auth)
         || await hydrateSocketUserFromBearer(String(socket.handshake.auth?.token || '').trim());
