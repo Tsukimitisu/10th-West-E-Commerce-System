@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Shield, Settings, Activity,
@@ -71,7 +71,7 @@ const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
                   ${collapsed && !mobile ? 'justify-center px-2' : ''}`}
                 title={collapsed && !mobile ? item.label : undefined}
               >
-                <Icon size={18} className={`flex-shrink-0 ${isActive ? 'text-red-400' : 'text-gray-500'}`} />
+                <Icon size={18} className={`flex-shrink-0 ${isActive ? 'text-red-400' : 'text-gray-400'}`} />
                 {(!collapsed || mobile) && <span className="flex-1 text-left">{item.label}</span>}
               </button>
             </React.Fragment>
@@ -91,10 +91,10 @@ const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
           {(!collapsed || mobile) && (
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-white truncate">{user?.name || 'Super Admin'}</p>
-              <p className="text-[10px] text-gray-500 capitalize">{user?.role?.replace('_', ' ')}</p>
+              <p className="text-[10px] text-gray-400 capitalize">{user?.role?.replace('_', ' ')}</p>
             </div>
           )}
-          <button onClick={() => setShowLogoutConfirm(true)} className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0" title="Sign out">
+          <button onClick={() => setShowLogoutConfirm(true)} className="text-gray-400 hover:text-red-400 transition-colors flex-shrink-0" title="Sign out">
             <LogOut size={16} />
           </button>
         </div>
@@ -168,3 +168,5 @@ const SuperAdminLayout = ({ activeView, onNavigate, children }) => {
 };
 
 export default SuperAdminLayout;
+
+

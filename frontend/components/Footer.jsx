@@ -1,144 +1,40 @@
-﻿import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, Mail, MapPin, Facebook, Instagram, Youtube, Send, CreditCard, Shield, Truck } from 'lucide-react';
+import { Facebook, Instagram, Mail, MessageCircle, Music2, Youtube } from 'lucide-react';
+import BrandMark from './ui/BrandMark';
+
+const normalizeExternalUrl = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed.replace(/^\/+/, '')}`;
+};
 
 const Footer = () => {
-  const [email, setEmail] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
-  const [newsletterConsent, setNewsletterConsent] = useState(false);
-
-  const handleSubscribe = (e) => {
-    e.preventDefault();
-    if (email.trim() && newsletterConsent) { setSubscribed(true); setEmail(''); setNewsletterConsent(false); }
-  };
+  const supportEmail = String(import.meta.env.VITE_SUPPORT_EMAIL || '').trim();
+  const socialLinks = [
+    { label: 'Facebook', href: import.meta.env.VITE_SOCIAL_FACEBOOK, icon: Facebook },
+    { label: 'Instagram', href: import.meta.env.VITE_SOCIAL_INSTAGRAM, icon: Instagram },
+    { label: 'YouTube', href: import.meta.env.VITE_SOCIAL_YOUTUBE, icon: Youtube },
+    { label: 'TikTok', href: import.meta.env.VITE_SOCIAL_TIKTOK, icon: Music2 },
+  ]
+    .map((item) => ({ ...item, href: normalizeExternalUrl(item.href) }))
+    .filter((item) => item.href);
 
   return (
-    <footer className="bg-gray-900 text-gray-300">
-      {/* Newsletter */}
-      <div className="border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 py-10">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div>
-              <h3 className="text-white font-display font-bold text-xl mb-1">Stay in the Loop</h3>
-              <p className="text-gray-400 text-sm">Subscribe for exclusive deals, new arrivals, and riding tips.</p>
-            </div>
-            {subscribed ? (
-              <div className="flex items-center gap-2 text-green-400 font-medium">
-                <Shield size={18} /> Thanks for subscribing!
-              </div>
-            ) : (
-              <form onSubmit={handleSubscribe} className="w-full md:w-auto">
-                <div className="flex">
-                  <input
-                    type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                    placeholder="Enter your email"
-                    className="flex-1 md:w-72 px-4 py-3 bg-gray-800 border border-gray-700 rounded-l-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
-                  />
-                  <button type="submit" disabled={!newsletterConsent} className="px-5 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-r-lg transition-colors flex items-center gap-2">
-                    <Send size={16} /> Subscribe
-                  </button>
-                </div>
-                <label className="flex items-start gap-2 mt-2 cursor-pointer">
-                  <input type="checkbox" checked={newsletterConsent} onChange={e => setNewsletterConsent(e.target.checked)}
-                    className="mt-0.5 text-orange-500 focus:ring-orange-500 rounded" />
-                  <span className="text-[11px] text-gray-500">I consent to receive marketing emails and agree to the <Link to="/privacy" className="text-gray-400 hover:text-white">Privacy Policy</Link> per RA 10173.</span>
-                </label>
-              </form>
-            )}
-          </div>
+    <footer className="storefront-footer text-slate-300">
+      <div className="mx-auto max-w-[1500px] px-4 py-10 sm:px-6 lg:px-8">
+        <div className="mb-10 flex flex-col items-start justify-between gap-5 border-b border-white/10 pb-8 md:flex-row md:items-center">
+          <BrandMark dark link />
+          <p className="max-w-sm text-sm leading-6 text-slate-300">Motorcycle Parts & Accessories.<br />Dependable parts. Practical shop support.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8 lg:grid-cols-4">
+          <div><h2 className="text-white">Shop</h2><ul className="mt-4 space-y-3 text-sm"><li><Link to="/shop">All parts</Link></li><li><Link to="/shop?sort=newest">New arrivals</Link></li><li><Link to="/shop?sort=best-selling">Best sellers</Link></li><li><Link to="/wishlist">Wishlist</Link></li></ul></div>
+          <div><h2 className="text-white">Customer support</h2><ul className="mt-4 space-y-3 text-sm"><li><Link to="/orders">Orders & tracking</Link></li><li><Link to="/my-returns">Returns & refunds</Link></li><li><Link to="/faq">Help & FAQ</Link></li><li><Link to="/messages">Buyer messages</Link></li></ul></div>
+          <div><h2 className="text-white">Policies</h2><ul className="mt-4 space-y-3 text-sm"><li><Link to="/return-policy">Return policy</Link></li><li><Link to="/privacy">Privacy policy</Link></li><li><Link to="/terms">Terms & conditions</Link></li></ul><p className="mt-5 text-sm text-slate-300">COD · GCash</p><p className="mt-1 text-xs text-slate-400">Available methods appear at checkout.</p></div>
+          <div><h2 className="text-white">Contact</h2><div className="mt-4 space-y-3 text-sm"><Link to="/contact" className="flex items-center gap-2"><MessageCircle size={16} aria-hidden="true" />Talk to the shop</Link>{supportEmail && <a href={`mailto:${supportEmail}`} className="flex items-center gap-2 break-all"><Mail size={16} aria-hidden="true" />{supportEmail}</a>}</div>{socialLinks.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{socialLinks.map(({label,href,icon:Icon}) => <a key={label} href={href} target="_blank" rel="noopener noreferrer" aria-label={`10th West Moto on ${label}`} className="grid h-11 w-11 place-items-center rounded-md border border-white/20 hover:text-orange-300"><Icon size={18} aria-hidden="true" /></a>)}</div>}</div>
         </div>
       </div>
-
-      {/* Main footer */}
-      <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {/* Brand */}
-          <div>
-            <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm font-display">10</span>
-              </div>
-              <div>
-                <span className="font-display font-bold text-white text-lg leading-none">10TH WEST</span>
-                <span className="block text-[10px] font-semibold tracking-[0.2em] text-orange-500 uppercase">Moto Parts</span>
-              </div>
-            </Link>
-            <p className="text-sm text-gray-400 mb-4 leading-relaxed">
-              Your trusted source for quality motorcycle parts, accessories, and gear. Ride with confidence.
-            </p>
-            <div className="space-y-2 text-sm">
-              <a href="tel:0288881234" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"><Phone size={14} /> (02) 8888-1234</a>
-              <a href="mailto:support@10thwestmoto.com" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"><Mail size={14} /> support@10thwestmoto.com</a>
-              <span className="flex items-center gap-2 text-gray-400"><MapPin size={14} /> Manila, Philippines</span>
-            </div>
-          </div>
-
-          {/* Quick Links */}
-          <div>
-            <h4 className="font-display font-semibold text-white mb-4">Quick Links</h4>
-            <ul className="space-y-2.5 text-sm">
-              <li><Link to="/shop" className="text-gray-400 hover:text-white transition-colors">Shop All</Link></li>
-              <li><Link to="/shop?sort=newest" className="text-gray-400 hover:text-white transition-colors">New Arrivals</Link></li>
-              <li><Link to="/shop?sort=best-selling" className="text-gray-400 hover:text-white transition-colors">Best Sellers</Link></li>
-              <li><Link to="/shop?sale=true" className="text-gray-400 hover:text-white transition-colors">Sale Items</Link></li>
-              <li><Link to="/faq" className="text-gray-400 hover:text-white transition-colors">FAQ</Link></li>
-              <li><Link to="/contact" className="text-gray-400 hover:text-white transition-colors">Contact Us</Link></li>
-            </ul>
-          </div>
-
-          {/* Customer Support */}
-          <div>
-            <h4 className="font-display font-semibold text-white mb-4">Customer Support</h4>
-            <ul className="space-y-2.5 text-sm">
-              <li><Link to="/orders" className="text-gray-400 hover:text-white transition-colors">Track My Order</Link></li>
-              <li><Link to="/my-returns" className="text-gray-400 hover:text-white transition-colors">Returns & Refunds</Link></li>
-              <li><Link to="/faq" className="text-gray-400 hover:text-white transition-colors">Shipping Info</Link></li>
-              <li><Link to="/faq" className="text-gray-400 hover:text-white transition-colors">Warranty Info</Link></li>
-              <li><Link to="/faq" className="text-gray-400 hover:text-white transition-colors">Size Guide</Link></li>
-              <li><Link to="/contact" className="text-gray-400 hover:text-white transition-colors">Live Chat</Link></li>
-            </ul>
-          </div>
-
-          {/* Connect */}
-          <div>
-            <h4 className="font-display font-semibold text-white mb-4">Connect With Us</h4>
-            <div className="flex gap-3 mb-6">
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-orange-500 rounded-lg flex items-center justify-center transition-colors"><Facebook size={18} /></a>
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-orange-500 rounded-lg flex items-center justify-center transition-colors"><Instagram size={18} /></a>
-              <a href="#" className="w-10 h-10 bg-gray-800 hover:bg-orange-500 rounded-lg flex items-center justify-center transition-colors"><Youtube size={18} /></a>
-            </div>
-            <h4 className="font-display font-semibold text-white mb-3">We Accept</h4>
-            <div className="flex flex-wrap gap-2">
-              <span className="px-3 py-1.5 bg-gray-800 rounded text-xs font-medium flex items-center gap-1"><CreditCard size={14} /> Visa</span>
-              <span className="px-3 py-1.5 bg-gray-800 rounded text-xs font-medium">Mastercard</span>
-              <span className="px-3 py-1.5 bg-gray-800 rounded text-xs font-medium">GCash</span>
-              <span className="px-3 py-1.5 bg-gray-800 rounded text-xs font-medium">COD</span>
-            </div>
-            <div className="flex items-center gap-2 mt-4 text-xs text-gray-500">
-              <Shield size={14} /> <Truck size={14} /> Secure checkout & fast shipping
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Legal / Business Info */}
-      <div className="border-t border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 py-4 space-y-3">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-500">
-            <p>&copy; {new Date().getFullYear()} 10th West Moto Parts. All rights reserved.</p>
-            <div className="flex gap-4">
-              <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-              <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
-              <Link to="/return-policy" className="hover:text-white transition-colors">Return Policy</Link>
-            </div>
-          </div>
-          <div className="text-center text-[10px] text-gray-600 leading-relaxed">
-            <p>10th West Moto Parts | DTI Business Name Registration No. 3217456 | BIR TIN: 123-456-789-000</p>
-            <p>Registered Address: Unit 10, West Avenue Commercial Center, Quezon City, Metro Manila 1104, Philippines</p>
-            <p className="mt-1">Data Protection Officer: <a href="mailto:dpo@10thwestmoto.com" className="text-gray-400 hover:text-white">dpo@10thwestmoto.com</a> | NPC Registration No. PIC-001-2025-0001</p>
-          </div>
-        </div>
-      </div>
+      <div className="border-t border-white/10"><div className="mx-auto flex max-w-[1500px] flex-col gap-3 px-4 py-5 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8"><p>© {new Date().getFullYear()} 10th West Motorcycle Parts & Accessories</p><div className="flex gap-5"><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/return-policy">Returns</Link></div></div></div>
     </footer>
   );
 };

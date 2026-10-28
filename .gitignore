@@ -8,10 +8,29 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.agents/
 dist
 dist-ssr
 *.local
 .env
+.env.local
+.env.*.local
+.env.*
+!.env.example
+*.dump
+*.dump.enc
+*.sql.gz
+*.backup.sql
+*.bak
+*.pem
+*.key
+*.p12
+*.pfx
+backups/
+credentials*.json
+frontend/playwright-report/
+frontend/test-results/
+backend/.test-credentials.local
 
 # Editor directories and files
 .vscode/*
@@ -23,3 +42,21 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local visual rebrand QA artifacts
+qa/rebrand/
+
+# Premium redesign screenshots and local QA
+qa/premium-redesign/
+
+# Role workspace QA screenshots and read-only capture reports
+qa/operations-premium/
+
+# Customer-only QA captures and isolated fixture reports
+qa/customer-fix/
+
+# Staff-only visual QA screenshots and read-only reports
+qa/staff-phase/
+
+# Owner-only isolated visual QA captures and reports
+qa/owner-phase/

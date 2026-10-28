@@ -1,0 +1,13 @@
+Implementation commits (oldest first; local only, not pushed):
+
+2a0ce08 feat(brand): establish 10th west visual identity
+834c8b1 refactor(ui): apply branded application shells and accessible drawers
+29e94c1 feat(storefront): redesign motorcycle shopping experience
+a5d5b6a feat(checkout): redesign cart checkout and customer account experience
+7412ade feat(auth): apply 10th west authentication and email branding
+7c95021 feat(owner): redesign owner and staff operations interfaces
+348a0ff feat(pos): redesign motorcycle parts sales workspace
+9ca2e12 feat(superadmin): redesign system administration workspace
+dbefeb6 test(ui): cover branded responsive application experience
+
+The subsequent docs(rebrand) commit records this report, manifest and review.
