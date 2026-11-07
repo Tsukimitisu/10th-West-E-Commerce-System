@@ -1,12 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { getPhoneVerification, sendPhoneVerification, verifyPhoneCode } from '../../services/api';
+import useCountdown from '../../hooks/useCountdown';
+
+const resendDeadlineFor = seconds => Date.now() + Math.max(0, Number(seconds) || 0) * 1000;
 
 export default function PhoneVerification({ savedPhone, currentPhone }) {
   const [state, setState] = useState(null);
   const [code, setCode] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
+  const [sendState, setSendState] = useState('');
+  const [resendDeadline, setResendDeadline] = useState(null);
+  const { seconds: cooldown } = useCountdown(resendDeadline);
   const pending = useRef(false);
   const revision = useRef(0);
   useEffect(() => {
@@ -15,8 +20,9 @@ export default function PhoneVerification({ savedPhone, currentPhone }) {
     setState(null);
     setCode('');
     setMessage('');
-    setCooldown(0);
-    getPhoneVerification().then((result) => { if (!cancelled) setState(result); })
+    setResendDeadline(null);
+    setSendState('');
+    getPhoneVerification().then((result) => { if (!cancelled) { setState(result); setResendDeadline(resendDeadlineFor(result.resend_after)); } })
       .catch(() => {
         if (!cancelled) {
           setState({ available: false, verified: false });
@@ -25,27 +31,24 @@ export default function PhoneVerification({ savedPhone, currentPhone }) {
       });
     return () => { cancelled = true; };
   }, [savedPhone]);
-  useEffect(() => {
-    if (!cooldown) return undefined;
-    const timer = window.setTimeout(() => setCooldown((value) => Math.max(0, value - 1)), 1000);
-    return () => window.clearTimeout(timer);
-  }, [cooldown]);
   const act = async (verify) => {
-    if (pending.current) return;
+    if (pending.current || (!verify && cooldown > 0)) return;
     pending.current = true;
     const requestRevision = revision.current;
     setBusy(true);
     setMessage('');
+    setSendState(verify ? '' : 'sending');
     try {
       const result = verify ? await verifyPhoneCode(code) : await sendPhoneVerification();
       if (requestRevision !== revision.current) return;
       setMessage(result.message);
       if (verify) { setState((value) => ({ ...value, verified: true })); setCode(''); }
-      else setCooldown(result.resend_after);
+      else { setResendDeadline(resendDeadlineFor(result.resend_after)); setSendState('sent'); }
     } catch (error) {
       if (requestRevision === revision.current) {
+        if (!verify) setSendState('failed');
         setMessage(error.message || 'Phone verification failed.');
-        if (!verify && Number(error.resend_after) > 0) setCooldown(Number(error.resend_after));
+        if (!verify && Number(error.resend_after) > 0) setResendDeadline(resendDeadlineFor(error.resend_after));
       }
     }
     finally { pending.current = false; setBusy(false); }
@@ -56,7 +59,7 @@ export default function PhoneVerification({ savedPhone, currentPhone }) {
     {state?.available && (!state.verified || unsaved) && <>
       {unsaved && <p className="text-gray-500">Save your phone number before verifying it.</p>}
       <button type="button" disabled={busy || unsaved || cooldown > 0} onClick={() => act(false)} className="rounded-lg border px-3 py-2 disabled:opacity-50">
-        {cooldown > 0 ? `Resend in ${cooldown}s` : 'Send verification code'}
+        {sendState === 'sending' ? 'Sending…' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Send verification code'}
       </button>
       <div className="flex gap-2">
         <input aria-label="SMS verification code" inputMode="numeric" autoComplete="one-time-code" maxLength={8}
@@ -64,6 +67,6 @@ export default function PhoneVerification({ savedPhone, currentPhone }) {
         <button type="button" disabled={busy || unsaved || code.length < 6} onClick={() => act(true)} className="rounded-lg bg-orange-600 px-3 py-2 text-slate-950 disabled:opacity-50">{busy ? 'Please wait...' : 'Verify'}</button>
       </div>
     </>}
-    {message && <p role="status">{message}</p>}
+    {(message || sendState === 'sending') && <p role="status" aria-live="polite">{sendState === 'sending' ? 'Sending verification code…' : `${sendState === 'failed' ? 'Failed: ' : sendState === 'sent' ? 'Sent: ' : ''}${message}`}</p>}
   </div>;
 }

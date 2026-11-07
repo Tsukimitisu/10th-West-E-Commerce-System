@@ -19,6 +19,7 @@ import {
 import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl } from '../utils/productImages.js';
 import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
+import { availableStock, variantAvailabilitySql } from '../services/inventory.js';
 import { shouldReturnEmptyProductSearch } from '../utils/productSearchSafety.js';
 import { hasSetListingSchema, storefrontVisibilitySql } from '../services/setListings.js';
 
@@ -723,7 +724,8 @@ const loadProductRelations = async (productIds = []) => {
 
 const computePurchasableStock = (product, bundleComponents = []) => {
   if (String(product.product_type || 'single') !== 'bundle') {
-    return Math.max(0, Number(product.stock_quantity || 0));
+    return product.has_variants && product.variant_available_stock != null
+      ? Math.max(0, Number(product.variant_available_stock)) : availableStock(product);
   }
 
   if (!bundleComponents.length) return 0;
@@ -759,8 +761,8 @@ const mapProductResponse = (product, { includeInternal = false, relations = null
     shipping_option: toNullableShippingOption(product.shipping_option) || 'standard',
     weight_kg: parseFloat(product.weight_kg ?? product.shipping_weight_kg ?? 1),
     shipping_weight_kg: parseFloat(product.weight_kg ?? product.shipping_weight_kg ?? 1),
-    stock_quantity: purchasableStock,
-    available_stock: parseInt(product.stock_quantity ?? purchasableStock, 10),
+    stock_quantity: includeInternal && product.product_type !== 'bundle' ? Number(product.stock_quantity || 0) : purchasableStock,
+    available_stock: purchasableStock,
     reserved_stock: parseInt(product.reserved_stock ?? 0, 10),
     damaged_stock: parseInt(product.damaged_stock ?? 0, 10),
     total_sold: parseInt(product.total_sold ?? 0, 10),
@@ -897,7 +899,7 @@ export const getProducts = async (req, res) => {
     }
     
     let selectClause = `
-      SELECT p.*, c.name as category_name, COALESCE(mm.model_name, p.motorcycle_model) AS motorcycle_model,
+      SELECT p.*, ${variantAvailabilitySql('p')}, c.name as category_name, COALESCE(mm.model_name, p.motorcycle_model) AS motorcycle_model,
       COALESCE((
         SELECT SUM(oi.quantity)
         FROM order_items oi
@@ -1123,7 +1125,7 @@ export const getTopSellers = async (req, res) => {
     // We MUST manually list columns instead of p.* because PostgreSQL strict GROUP BY
     const result = await pool.query(`
       SELECT 
-        p.id, p.name, p.brand, p.part_number, p.image, p.description, p.product_type,
+        p.id, ${variantAvailabilitySql('p')}, p.name, p.brand, p.part_number, p.image, p.description, p.product_type,
         p.price, p.store_selling_price, p.sale_price, p.is_on_sale, p.stock_quantity, p.reserved_stock, p.damaged_stock,
         p.low_stock_threshold, p.rating, p.created_at, p.status, p.shipping_option, p.weight_kg, p.shipping_weight_kg,
         el.ecommerce_description, el.visibility_status, el.is_featured, el.is_best_seller, el.is_new_arrival,
@@ -1207,7 +1209,7 @@ export const getProductById = async (req, res) => {
     
     const withSets = await hasSetListingSchema(pool);
     const result = await pool.query(
-      `SELECT p.*, c.name as category_name,
+      `SELECT p.*, ${variantAvailabilitySql('p')}, c.name as category_name,
               el.ecommerce_description, ${storefrontVisibilitySql('p', withSets)} AS visibility_status,
               el.is_featured, el.is_best_seller, el.is_new_arrival,
               (SELECT m.url FROM ecommerce_listing_media m WHERE m.listing_id=el.id ORDER BY m.sort_order LIMIT 1) AS listing_primary_media,
@@ -1317,7 +1319,8 @@ export const getProductById = async (req, res) => {
           option_combination: normalizedCombination,
           combination_key: variantRow.combination_key || buildVariantCombinationKey(normalizedCombination, normalizedOrder),
           price: Number.isFinite(resolvedPrice) ? resolvedPrice : (includeUnpublished ? baseStorePrice : calculateEcommercePrice(baseStorePrice)),
-          stock_quantity: Math.max(0, Number(variantRow.stock_quantity || 0) - Number(variantRow.reserved_stock || 0)),
+          stock_quantity: availableStock(variantRow),
+          available_stock: availableStock(variantRow),
           image_url: String(variantRow.image_url || '').trim() || null,
           sku: String(variantRow.sku || '').trim() || null,
         };

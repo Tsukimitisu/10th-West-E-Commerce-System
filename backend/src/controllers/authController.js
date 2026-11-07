@@ -1878,6 +1878,20 @@ export const deleteAccountHandler = async (req, res) => {
       }
     }
 
+    const unfinished = await client.query(`SELECT o.id FROM orders o WHERE o.user_id=$1 AND (
+      COALESCE(o.status::text,'') <> ALL($2::text[])
+      OR COALESCE(o.payment_status::text,'') <> ALL(CASE WHEN o.status::text IN ('cancelled','failed') THEN $4::text[] ELSE $3::text[] END)
+      OR EXISTS (SELECT 1 FROM payments p WHERE p.order_id=o.id AND COALESCE(p.status::text,'') <> ALL($5::text[]))
+    ) LIMIT 1`, [userId,
+      ['delivered', 'cancelled', 'failed', 'refunded', 'partially_refunded', 'return_rejected'],
+      ['paid', 'refunded', 'partially_refunded'],
+      ['cancelled', 'failed', 'refunded'],
+      ['paid', 'cancelled', 'failed', 'refunded', 'partially_refunded']]);
+    if (unfinished.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ code: 'ACCOUNT_HAS_UNFINISHED_ORDERS', message: 'You cannot delete your account while you have unfinished orders. Complete all orders and payments before deleting your account.' });
+    }
+
     // Anonymize account data while retaining records covered by the approved
     // transaction-retention policy.
     // Remove non-transactional personal/authentication data while retaining

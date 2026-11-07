@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { availableStock, variantAvailabilitySql } from '../services/inventory.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 export const getWishlist = async (req, res) => {
@@ -40,7 +41,7 @@ export const getWishlist = async (req, res) => {
 
     const result = await pool.query(`
       SELECT w.id as wishlist_id, w.user_id, w.product_id, w.created_at,
-             p.*, 
+             p.*, ${variantAvailabilitySql('p')},
              (SELECT name FROM categories c WHERE c.id = p.category_id) as category_name
       FROM wishlists w
       JOIN products p ON w.product_id = p.id
@@ -48,7 +49,10 @@ export const getWishlist = async (req, res) => {
       ORDER BY w.created_at DESC
     `, [req.user.id]);
     
-    res.json(result.rows);
+    res.json(result.rows.map(product => {
+      const stock = product.has_variants ? Number(product.variant_available_stock) : availableStock(product);
+      return { ...product, stock_quantity: stock, available_stock: stock };
+    }));
   } catch (error) {
     console.error('Get wishlist error:', error);
     if (isDatabaseConnectivityError(error)) {

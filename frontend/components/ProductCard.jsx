@@ -1,3 +1,4 @@
+import { availableStock } from '../utils/cartProduct.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Check, Heart, Layers, Loader2, ShoppingCart, Star } from 'lucide-react';
@@ -45,12 +46,12 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
     return () => window.clearTimeout(timer);
   }, [added]);
 
-  const stock = Math.max(0, Number(product.stock_quantity ?? 0));
-  const outOfStock = stock <= 0 || product.status === 'out_of_stock';
+  const stock = availableStock(product);
+  const outOfStock = stock <= 0;
   const lowStock = !outOfStock && stock <= Number(product.low_stock_threshold || 5);
   const onSale = Boolean(product.is_on_sale && Number(product.sale_price) > 0 && Number(product.sale_price) < Number(product.price));
   const discount = onSale ? Math.round((1 - Number(product.sale_price) / Number(product.price)) * 100) : 0;
-  const hasVariants = Array.isArray(product.variants) && product.variants.length > 0;
+  const hasVariants = product.has_variants || (Array.isArray(product.variants) && product.variants.length > 0);
   const productUrl = isSet ? `/sets/${product.id}` : `/products/${product.id}`;
   const image = resolveProductImageUrl(product.image || product.image_url);
 

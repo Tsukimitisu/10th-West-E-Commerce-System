@@ -4,6 +4,7 @@ import { isDatabaseConnectivityError } from '../services/supabaseRest.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
 import { calculateEcommercePrice } from '../services/catalogPricing.js';
 import { hasSetListingSchema, storefrontVisibilitySql } from '../services/setListings.js';
+import { availableStock } from '../services/inventory.js';
 
 const toPositiveInt = (value) => {
   const parsed = Number(value);
@@ -406,7 +407,7 @@ export const addToCart = async (req, res) => {
         variantError.statusCode = 400;
         throw variantError;
       }
-      let availableStock = Number(product.stock_quantity) - Number(product.reserved_stock || 0);
+      let sellableStock = availableStock(product);
       if (variantId) {
         const variantResult = await client.query(
           `SELECT stock_quantity, reserved_stock FROM product_variants WHERE id = $1 AND product_id = $2 FOR UPDATE`,
@@ -417,9 +418,9 @@ export const addToCart = async (req, res) => {
           variantError.statusCode = 400;
           throw variantError;
         }
-        availableStock = Number(variantResult.rows[0].stock_quantity) - Number(variantResult.rows[0].reserved_stock || 0);
+        sellableStock = availableStock(variantResult.rows[0]);
       }
-      if (availableStock < quantity) {
+      if (sellableStock < quantity) {
         const stockError = new Error('Insufficient stock');
         stockError.statusCode = 400;
         throw stockError;
@@ -438,7 +439,7 @@ export const addToCart = async (req, res) => {
         const existingItem = existingResult.rows[0];
         const nextQuantity = Number(existingItem.quantity) + quantity;
 
-        if (nextQuantity > availableStock) {
+        if (nextQuantity > sellableStock) {
           const stockError = new Error('Insufficient stock');
           stockError.statusCode = 400;
           throw stockError;

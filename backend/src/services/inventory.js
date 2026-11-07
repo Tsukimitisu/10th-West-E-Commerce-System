@@ -1,3 +1,12 @@
+export const availableStock = (item) => Math.max(0, Number(item?.stock_quantity || 0) - Number(item?.reserved_stock || 0));
+
+// Catalogue/wishlist parents must advertise their variants' actual allowance,
+// while cart/checkout still validate the specifically selected variant.
+export const variantAvailabilitySql = (alias = 'p') => `
+  EXISTS (SELECT 1 FROM product_variants av WHERE av.product_id=${alias}.id) AS has_variants,
+  (SELECT COALESCE(SUM(GREATEST(0,av.stock_quantity-COALESCE(av.reserved_stock,0))),0)::int
+   FROM product_variants av WHERE av.product_id=${alias}.id) AS variant_available_stock`;
+
 const integer = (value, field) => {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {

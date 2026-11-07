@@ -1,4 +1,5 @@
-﻿import React, { createContext, useContext, useState, useEffect } from 'react';
+import { availableStock, cartProductId, cartAddPayload } from '../utils/cartProduct.js';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { validateDiscountCode, ensureCsrfToken } from '../services/api';
 import { supabase } from '../services/supabase.js';
 import { getCurrentAuthUser } from '../services/authSession.js';
@@ -509,11 +510,7 @@ export const CartProvider = ({ children }) => {
     }
   }, [selectedItemIds, initialized, hasLoadedSelection, cartScopeKey]);
 
-  const resolveMaxStock = (product) => {
-    const rawStock = Number(product?.stock_quantity);
-    if (!Number.isFinite(rawStock)) return Infinity;
-    return Math.max(0, rawStock);
-  };
+  const resolveMaxStock = availableStock;
 
   const mergeGuestCartIntoSupabaseCart = async () => {
     const currentUser = getCurrentUserFromToken();
@@ -586,6 +583,7 @@ export const CartProvider = ({ children }) => {
   const isCartKeyPending = (key) => pendingCartKeys.has(key);
 
   const performAddToCart = async (product, quantity = 1, options = {}) => {
+    product = { ...product, id: cartProductId(product) };
     const requestedQty = Number(quantity);
     if (!Number.isInteger(requestedQty) || requestedQty < 1) {
       setError('Invalid quantity.');
@@ -593,7 +591,7 @@ export const CartProvider = ({ children }) => {
     }
 
     const variantId = product?.selected_variant?.id ?? product?.variant_id ?? null;
-    const existingItem = items.find((item) => item.productId === product.id && Number(item.variantId || 0) === Number(variantId || 0));
+    const existingItem = items.find((item) => Number(item.productId) === Number(product.id) && Number(item.variantId || 0) === Number(variantId || 0));
     const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
     const currentQty = existingItem?.quantity || 0;
     const nextQty = currentQty + requestedQty;
@@ -667,12 +665,7 @@ export const CartProvider = ({ children }) => {
       try {
         const response = await fetchCartWithCsrfRetry(`${API_URL}/cart/add`, {
           method: 'POST',
-          body: JSON.stringify({
-            product_id: product.id,
-            variant_id: variantId,
-            quantity: requestedQty,
-            ...(options.listingId ? { listing_id: options.listingId } : {}),
-          })
+          body: JSON.stringify(cartAddPayload(product, requestedQty, options))
         }, { includeJson: true });
 
         if (response.ok) {
@@ -728,7 +721,7 @@ export const CartProvider = ({ children }) => {
     }
 
     const variantId = product?.selected_variant?.id ?? product?.variant_id ?? null;
-    const existingItem = items.find(item => item.productId === product.id && Number(item.variantId || 0) === Number(variantId || 0));
+    const existingItem = items.find(item => Number(item.productId) === Number(product.id) && Number(item.variantId || 0) === Number(variantId || 0));
     const maxStock = resolveMaxStock(product?.stock_quantity != null ? product : existingItem?.product);
 
     if (requestedQty > MAX_ITEM_QUANTITY || (existingItem?.quantity || 0) + requestedQty > MAX_ITEM_QUANTITY) {
@@ -755,10 +748,10 @@ export const CartProvider = ({ children }) => {
     setError(null);
 
     setItems(currentItems => {
-      const existing = currentItems.find(item => item.productId === product.id && Number(item.variantId || 0) === Number(variantId || 0));
+      const existing = currentItems.find(item => Number(item.productId) === Number(product.id) && Number(item.variantId || 0) === Number(variantId || 0));
       if (existing) {
         return currentItems.map(item =>
-          item.productId === product.id && Number(item.variantId || 0) === Number(variantId || 0)
+          Number(item.productId) === Number(product.id) && Number(item.variantId || 0) === Number(variantId || 0)
             ? { ...item, quantity: item.quantity + requestedQty }
             : item
         );

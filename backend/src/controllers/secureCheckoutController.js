@@ -301,6 +301,10 @@ export const createCheckout = async (req, res) => {
     requestHash = hashRequest(requestIdentity);
     client = await pool.connect();
     await client.query('BEGIN');
+    // Serialize new purchases with account deletion, including requests whose
+    // authentication completed before another transaction deleted the account.
+    const purchaser = await client.query('SELECT is_active,is_deleted FROM users WHERE id=$1 FOR KEY SHARE', [req.user.id]);
+    if (!purchaser.rows[0]?.is_active || purchaser.rows[0].is_deleted) throw fail(403, 'This account is no longer available.');
     const paymentSettings = await getRuntimeSettings(client, 'payment', { cash_enabled: true, gcash_enabled: false });
     if (paymentMethod === 'cod' && !paymentSettings.cash_enabled) throw fail(503, 'Cash on delivery is currently disabled.');
     if (paymentMethod === 'gcash' && !paymentSettings.gcash_enabled) throw fail(503, 'GCash checkout is currently disabled.');

@@ -72,9 +72,50 @@ test('SMS cooldown and daily quota prevent provider calls; provider failures nev
   const res = await call('/send');
   assert.equal(res.statusCode, 502);
   assert.equal(res.body.message, 'SMS delivery failed. Please try again.');
+  assert.ok(res.body.resend_after > 0 && res.body.resend_after <= 60);
   assert.doesNotMatch(JSON.stringify(res.body), /private|code_hash|123456|apikey/);
   assert.equal(record.send_count, 1);
   assert.equal((await call('/send')).statusCode, 429);
+});
+
+test('verification state restores cooldown after reload without sending another SMS', async () => {
+  fixture();
+  mock.method(pool, 'query', async () => ({ rows: [{ phone: '09123456789', last_sent_at: new Date(), expires_at: new Date(Date.now() + 300000) }] }));
+  const send = mock.method(globalThis, 'fetch', async () => assert.fail('GET must never send SMS'));
+  const res = await call('/');
+  assert.ok(res.body.resend_after > 0 && res.body.resend_after <= 60);
+  assert.equal(send.mock.callCount(), 0);
+});
+
+test('one accepted SMS send reserves its hashed OTP before the provider call and rejects duplicate requests', async () => {
+  const { record } = fixture(); let accept;
+  const send = mock.method(globalThis, 'fetch', async () => {
+    await new Promise(resolve => { accept = resolve; });
+    return { ok: true, json: async () => [{ message_id: 'synthetic-accepted', status: 'queued' }] };
+  });
+  const pending = call('/send');
+  while (!accept) await new Promise(resolve => setImmediate(resolve));
+  const originalHash = record.code_hash;
+  assert.match(originalHash, /^[a-f0-9]{64}$/);
+  assert.equal(record.delivery_accepted, false);
+  assert.equal((await call('/send')).statusCode, 429);
+  assert.equal(record.code_hash, originalHash);
+  accept(); const result = await pending;
+  assert.equal(result.statusCode, 200); assert.match(result.body.message, /accepted for sending/);
+  assert.equal(send.mock.callCount(), 1); assert.equal(record.send_count, 1);
+  assert.doesNotMatch(JSON.stringify(result.body), /code_hash|123456|apikey/);
+});
+
+test('provider timeout preserves resend cooldown and does not mark the OTP accepted', async () => {
+  const previous = Object.fromEntries(['PHONE_VERIFICATION_PROVIDER','TEXTBEE_API_KEY','TEXTBEE_TIMEOUT_MS'].map(key => [key, process.env[key]]));
+  Object.assign(process.env, { PHONE_VERIFICATION_PROVIDER: 'textbee', TEXTBEE_API_KEY: 'synthetic-key', TEXTBEE_TIMEOUT_MS: '5' });
+  try {
+    const { record } = fixture();
+    mock.method(globalThis, 'fetch', async (_url, options) => new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('provider timeout')), { once: true })));
+    const result = await call('/send');
+    assert.equal(result.statusCode, 502); assert.ok(result.body.resend_after > 0);
+    assert.equal(record.delivery_accepted, false); assert.equal(record.send_count, 1);
+  } finally { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } }
 });
 
 test('expired and incorrect phone codes return distinct safe messages', async () => {

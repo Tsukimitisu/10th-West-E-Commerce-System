@@ -11,10 +11,12 @@ router.get('/', async (req, res, next) => {
   const readiness = phoneOtpReadiness();
   if (!readiness.available) return res.json({ ...readiness, verified: false });
   try {
-    const { rows } = await pool.query(`SELECT u.phone, v.phone AS verified_phone, v.verified_at
+    const { rows } = await pool.query(`SELECT u.phone, v.phone AS verified_phone, v.verified_at, v.last_sent_at
       FROM users u LEFT JOIN phone_verifications v ON v.user_id = u.id WHERE u.id = $1`, [req.user.id]);
     const record = rows[0];
-    res.json({ ...readiness, verified: Boolean(record?.verified_at && canonicalPhone(record.phone) === record.verified_phone) });
+    const elapsed = record?.last_sent_at ? (Date.now() - new Date(record.last_sent_at).getTime()) / 1000 : Infinity;
+    res.json({ ...readiness, verified: Boolean(record?.verified_at && canonicalPhone(record.phone) === record.verified_phone),
+      resend_after: Math.max(0, Math.ceil(phoneOtpConfig().cooldown - elapsed)) });
   } catch (error) { next(error); }
 });
 
@@ -64,10 +66,13 @@ router.post('/send', async (req, res, next) => {
     try {
       await sendPhoneVerificationCode({ phone, code, expiry: config.expiry });
     } catch {
-      return res.status(502).json({ message: 'SMS delivery failed. Please try again.' });
+      return res.status(502).json({ message: 'SMS delivery failed. Please try again.',
+        resend_after: Math.max(0, config.cooldown - Math.floor((Date.now() - now) / 1000)) });
     }
     await pool.query('UPDATE phone_verifications SET delivery_accepted=true WHERE user_id=$1 AND code_hash=$2', [req.user.id, hash]);
-    return res.json({ message: 'Verification code sent.', expires_in: config.expiry * 60, resend_after: config.cooldown });
+    return res.json({ message: 'Verification code accepted for sending. Delivery may take a moment.',
+      expires_in: Math.max(0, config.expiry * 60 - Math.floor((Date.now() - now) / 1000)),
+      resend_after: Math.max(0, config.cooldown - Math.floor((Date.now() - now) / 1000)) });
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});
     next(error);

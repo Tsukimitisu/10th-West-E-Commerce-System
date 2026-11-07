@@ -37,7 +37,8 @@ test('cart context and product surfaces use keyed pending state, not a global lo
   const addBlock = context.split('const performAddToCart')[1].split('const addToCartLocal')[0];
   assert.doesNotMatch(addBlock, /setLoading\(/);
   assert.match(context, /runWithPendingKey\(pendingCartGuardRef\.current, key/);
-  assert.match(context, /listing_id: options\.listingId/);
+  assert.match(context, /cartAddPayload\(product, requestedQty, options\)/);
+  assert.match(await read('utils/cartProduct.js'), /listing_id: options\.listingId/);
   assert.doesNotMatch(card, /cartLoading/);
   assert.match(card, /isCartKeyPending\(cartPendingKey\(productId\)\)/);
   assert.match(card, /disabled=\{outOfStock \|\| pending\}/);

@@ -1,5 +1,6 @@
-﻿import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { availableStock } from '../../utils/cartProduct.js';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Heart, ShoppingCart, Trash2, Eye, Package, AlertTriangle } from 'lucide-react';
 import { getWishlist, removeFromWishlist, WISHLIST_SYNC_EVENT } from '../../services/api';
 import { useCart } from '../../context/CartContext';
@@ -9,6 +10,7 @@ import { handleProductImageError, resolveProductImageUrl } from '../../utils/pro
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../../constants/commerce.js';
 
 const Wishlist = () => {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState({});
@@ -72,10 +74,11 @@ const Wishlist = () => {
 
   const handleAddToCart = async (item, quantity) => {
     const productId = item.product_id ?? item.product?.id ?? item.id;
+    if (item.has_variants || item.product?.has_variants || item.variants?.length) { navigate(`/products/${productId}`); return; }
     const name = item.name || item.product_name || item.product?.name;
     const price = Number(item.sale_price ?? item.price ?? item.product?.sale_price ?? item.product?.price ?? 0);
     const image = item.image_url || item.product?.image_url || item.product?.image || '';
-    const stockQuantity = Number(item.stock_quantity ?? item.product?.stock_quantity ?? 0);
+    const stockQuantity = availableStock({ ...item.product, ...item });
     const cartQuantity = Number(cartItems.find((cartItem) => Number(cartItem.productId) === Number(productId))?.quantity || 0);
     const requestedQuantity = Number(quantity);
 
@@ -97,7 +100,8 @@ const Wishlist = () => {
 
     try {
       const added = await addToCart({
-        id: productId,
+        ...item.product, ...item,
+        id: Number(productId),
         name,
         price,
         image,
@@ -152,7 +156,7 @@ const Wishlist = () => {
               const name = item.name || item.product_name || item.product?.name || 'Unknown Product';
               const price = Number(item.price ?? item.product?.price ?? 0);
               const salePrice = item.sale_price != null ? Number(item.sale_price) : (item.product?.sale_price != null ? Number(item.product.sale_price) : null);
-              const stockQuantity = Number(item.stock_quantity ?? item.product?.stock_quantity ?? 0);
+              const stockQuantity = availableStock({ ...item.product, ...item });
               const lowStockThreshold = item.low_stock_threshold ?? item.product?.low_stock_threshold ?? 5;
               const inStock = item.in_stock !== false && stockQuantity > 0;
               const isLowStock = stockQuantity > 0 && stockQuantity <= lowStockThreshold;
@@ -248,7 +252,7 @@ const Wishlist = () => {
                         disabled={!canAdd}
                         className="flex-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 text-slate-950 text-xs font-medium rounded-lg transition-colors duration-300 ease-in-out flex items-center justify-center gap-1"
                       >
-                        <ShoppingCart size={13} /> {isAdding ? 'Adding…' : 'Add to Cart'}
+                        <ShoppingCart size={13} /> {isAdding ? 'Adding…' : item.has_variants || item.product?.has_variants || item.variants?.length ? 'Choose options' : 'Add to Cart'}
                       </button>
                       <Link to={`/products/${productId}`} className="px-3 py-2 border border-slate-300 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors duration-300 ease-in-out flex items-center justify-center">
                         <Eye size={14} />

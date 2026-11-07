@@ -768,7 +768,7 @@ const Profile = () => {
           <ul className="text-xs text-gray-400 mb-4 space-y-1 list-disc pl-4">
             <li>Your personal information (name, email, phone) will be anonymized</li>
             <li>Order history and transaction records will be retained for tax compliance (BIR requirement)</li>
-            <li>Active orders in progress will be completed before data removal</li>
+            <li>Account deletion is blocked until all orders and payments are completed.</li>
           </ul>
           <button ref={deleteTriggerRef} onClick={() => setShowDeleteModal(true)}
             className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 border border-red-300 rounded-lg transition-colors duration-300 ease-in-out flex items-center gap-2">

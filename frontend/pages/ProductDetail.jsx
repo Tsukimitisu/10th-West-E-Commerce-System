@@ -1,3 +1,4 @@
+import { availableStock } from '../utils/cartProduct.js';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Loader2, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle, Play } from 'lucide-react';
@@ -475,7 +476,7 @@ const ProductDetail = () => {
     if (!product) return;
     if (hasVariants && variantOptions.length > 0 && !selectedVariantRow) return;
 
-    const nextMaxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
+    const nextMaxStock = availableStock(selectedVariantRow || product);
     setQuantity((current) => {
       const parsed = Number(current);
       if (!Number.isFinite(parsed)) return current;
@@ -600,7 +601,7 @@ const ProductDetail = () => {
       }
     }
 
-    const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
+    const maxStock = availableStock(selectedVariantRow || product);
     if (!Number.isInteger(Number(quantity)) || Number(quantity) < 1 || Number(quantity) > MAX_ITEM_QUANTITY) { setQuantityError('Choose a valid quantity within the cart limit.'); return false; }
     if (quantity > maxStock) {
       setQuantityError(`Maximum available quantity is ${maxStock}.`);
@@ -621,7 +622,7 @@ const ProductDetail = () => {
       price: Number(selectedVariantRow.price ?? product.price),
       sale_price: null,
       is_on_sale: false,
-      stock_quantity: Number(selectedVariantRow.stock_quantity ?? product.stock_quantity ?? 0),
+      stock_quantity: availableStock(selectedVariantRow),
       selected_variant: selectedVariantRow,
       selected_options: selectedVariant,
       variant_label: selectedVariantRow.label,
@@ -654,7 +655,7 @@ const ProductDetail = () => {
     if (fromSheet !== true && variantRows.length && window.matchMedia('(max-width: 767px)').matches) { setPurchaseIntent('buy'); return; }
     if (!validateSelection()) return;
 
-    const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
+    const maxStock = availableStock(selectedVariantRow || product);
     if (quantity > maxStock) {
       setQuantityError(`Maximum available quantity is ${maxStock}.`);
       return;
@@ -937,8 +938,8 @@ const ProductDetail = () => {
 
   const mediaItems = extractProductMedia(product);
   const selectedMedia = mediaItems[Math.min(selectedImage, mediaItems.length - 1)] || mediaItems[0];
-  const maxStock = Math.max(0, Number(selectedVariantRow?.stock_quantity ?? product.stock_quantity ?? 0));
-  const isOutOfStock = (variantRows.length ? variantRows.every(row => row.stock_quantity <= 0) : maxStock <= 0) || product.status === 'out_of_stock';
+  const maxStock = availableStock(selectedVariantRow || product);
+  const isOutOfStock = variantRows.length ? variantRows.every(row => availableStock(row) <= 0) : maxStock <= 0;
   const isBundle = product.product_type === 'bundle';
   const hasDiscount = !hasVariants && product.is_on_sale && product.sale_price;
   const displayPrice = hasVariants
