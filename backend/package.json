@@ -29,6 +29,7 @@
     "backup:decrypt": "node scripts/decrypt-backup.js",
     "data:quarantine-orders": "node scripts/quarantine-order-integrity.js",
     "data:cleanup": "node scripts/cleanup-business-data.js",
+    "data:purge-media": "node scripts/purge-business-media.js",
     "security:disable-seeded-accounts": "node scripts/secure-seeded-accounts.js",
     "security:verify-rls": "node scripts/verify-rls.js",
     "lint": "eslint ."

@@ -31,6 +31,8 @@ credentials*.json
 frontend/playwright-report/
 frontend/test-results/
 backend/.test-credentials.local
+*.cleanup-media.json
+*.cleanup-media.json.*.tmp
 
 # Editor directories and files
 .vscode/*
