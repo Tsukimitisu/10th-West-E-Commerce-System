@@ -3975,28 +3975,14 @@ export const getDiscounts = async () => {
 };
 
 export const validateDiscount = async (code, amount, items = []) => {
-  if (USE_SUPABASE) {
-    const { data } = await supabase
-      .from('discounts')
-      .select('*')
-      .eq('code', code)
-      .eq('is_active', true)
-      .single();
-    if (!data) throw new Error('Invalid discount code');
-    // Only enforce min_purchase if it's set and greater than 0
-    if (data.min_purchase && parseFloat(data.min_purchase) > 0 && amount < parseFloat(data.min_purchase)) {
-      throw new Error(`Minimum purchase of ₱${parseFloat(data.min_purchase).toLocaleString()} required`);
-    }
-    if (data.max_uses && data.max_uses > 0 && data.used_count >= data.max_uses) throw new Error('Discount code usage limit reached');
-    if (data.expires_at && new Date(data.expires_at) < new Date()) throw new Error('Discount code has expired');
-    if (data.starts_at && new Date(data.starts_at) > new Date()) throw new Error('Discount code is not yet active');
-    const discountAmount = data.type === 'percentage' ? (amount * parseFloat(data.value) / 100) : parseFloat(data.value);
-    return { valid: true, discount: data, discountAmount: Math.min(discountAmount, amount) };
-  }
-  return authenticatedFetch(`${API_URL}/discounts/validate`, {
+  const result = await authenticatedFetch(`${API_URL}/discounts/validate`, {
     method: 'POST',
     body: JSON.stringify({ discount_code: code, items }),
   });
+  if (result.valid !== true || !result.discount?.code || !Number.isFinite(Number(result.discountAmount))) {
+    throw new Error('Discount code is invalid or unavailable.');
+  }
+  return result;
 };
 export const validateDiscountCode = validateDiscount;
 

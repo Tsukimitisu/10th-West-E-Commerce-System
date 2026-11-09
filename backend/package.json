@@ -28,6 +28,7 @@
     "backup:database": "node scripts/backup-database.js",
     "backup:decrypt": "node scripts/decrypt-backup.js",
     "data:quarantine-orders": "node scripts/quarantine-order-integrity.js",
+    "data:cleanup": "node scripts/cleanup-business-data.js",
     "security:disable-seeded-accounts": "node scripts/secure-seeded-accounts.js",
     "security:verify-rls": "node scripts/verify-rls.js",
     "lint": "eslint ."

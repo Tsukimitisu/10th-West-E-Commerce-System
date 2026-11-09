@@ -193,8 +193,9 @@ const loadAndReserveItems = async (client, items, expiresAt) => {
 };
 
 const calculateDiscount = async (client, userId, code, subtotal) => {
-  if (!code) return { discount: 0, promotion: null };
-  const normalized = String(code).trim().toUpperCase();
+  if (code == null || code === '') return { discount: 0, promotion: null };
+  const normalized = typeof code === 'string' ? code.trim().toUpperCase() : '';
+  if (!/^[A-Z0-9_-]{3,40}$/.test(normalized)) throw fail(400, 'Discount code is invalid or expired.');
   const result = await client.query(
     `SELECT d.*, (SELECT COUNT(*) FROM discount_usages du
        WHERE du.discount_id = d.id AND du.user_id = $2 AND du.status = 'consumed') AS user_uses
@@ -1454,6 +1455,9 @@ export const cleanupExpiredReservations = async (_req, res) => {
 };
 
 export const validateDiscount = async (req, res) => {
+  if (typeof req.body?.discount_code !== 'string' || !req.body.discount_code.trim()) {
+    return res.status(400).json({ valid: false, message: 'Enter a valid discount code.' });
+  }
   const client = await pool.connect();
   try {
     const items = normalizeItems(req.body?.items, { requireExpectedPrice: false });
@@ -1532,6 +1536,7 @@ export const startExpiredReservationCleanup = ({ run = releaseExpiredReservation
 };
 
 export const __testing = {
+  calculateDiscount,
   clearPurchasedCartItems,
   claimCheckoutIdempotencyKey,
   hashRequest,

@@ -1168,14 +1168,13 @@ export const CartProvider = ({ children }) => {
       return sum + (unitPrice * quantity);
     }, 0);
 
+  useEffect(() => {
+      setDiscount(current => current?.validatedSubtotal === subtotal ? current : null);
+  }, [subtotal]);
+
   let discountAmount = 0;
-  if (discount) {
-      if (discount.type === 'percentage') {
-          discountAmount = (subtotal * discount.value) / 100;
-      } else {
-          discountAmount = discount.value;
-      }
-      if (discountAmount > subtotal) discountAmount = subtotal;
+  if (discount?.validatedSubtotal === subtotal) {
+      discountAmount = Math.max(0, Math.min(subtotal, Number(discount.validatedAmount) || 0));
   }
 
   const total = Math.max(0, subtotal - discountAmount);
@@ -1185,7 +1184,7 @@ export const CartProvider = ({ children }) => {
       try {
           const checkoutItems = selectedItems.map((item) => ({ product_id: item.productId, variant_id: item.variantId || item.product?.selected_variant?.id || null, quantity: item.quantity }));
           const result = await validateDiscountCode(code, subtotal, checkoutItems);
-          setDiscount(result?.discount || result);
+          setDiscount({ ...result.discount, validatedAmount: result.discountAmount, validatedSubtotal: subtotal });
       } catch (e) {
           setError(e.message || "Failed to apply discount");
           setDiscount(null);

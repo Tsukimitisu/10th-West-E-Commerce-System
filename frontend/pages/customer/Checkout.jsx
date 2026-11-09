@@ -491,12 +491,13 @@ const Checkout = () => {
           variant_id: item.variantId || item.product?.selected_variant?.id || null,
           quantity: item.quantity,
         })));
-        setBuyNowDiscount(result?.discount || result);
+        setBuyNowDiscount(result.discount);
         setBuyNowDiscountAmount(Number(result?.discountAmount ?? 0));
       } else {
         await applyCartDiscount(promoCode);
       }
     } catch (e) {
+      if (isBuyNow) { setBuyNowDiscount(null); setBuyNowDiscountAmount(0); }
       setPromoError(e.message || 'Invalid promo code');
     }
   };
