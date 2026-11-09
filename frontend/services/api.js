@@ -654,6 +654,10 @@ export const logoutApi = async () => {
   clearCsrfTokenCache();
 };
 
+export const getSessionState = (options = {}) => authenticatedFetch(`${API_URL}/auth/session`, options);
+export const recordSessionActivity = (options = {}) => authenticatedFetch(`${API_URL}/auth/session/activity`, { ...options, method: 'POST' });
+export const refreshSession = (options = {}) => authenticatedFetch(`${API_URL}/auth/session/refresh`, { ...options, method: 'POST' });
+
 // Get authenticated user profile (used by OAuth callback to avoid PII in URL)
 export const getProfile = async ({ optional = false, oauthRefresh = false } = {}) => {
   return await authenticatedFetch(`${API_URL}/auth/profile${optional ? '/optional' : ''}`, {
@@ -1655,6 +1659,7 @@ export const getProducts = async (params = {}) => {
   if (params.color) queryParams.append('color', params.color);
   if (params.year) queryParams.append('year', String(params.year));
   if (params.status) queryParams.append('status', params.status);
+  if (params.include_unpublished === true) queryParams.append('include_unpublished', 'true');
   if (resultLimit) queryParams.append('limit', String(resultLimit));
   const qString = queryParams.toString() ? `?${queryParams.toString()}` : '';
 

@@ -38,9 +38,7 @@ const InventoryItemForm = ({ initialItem, initialPartNumber = '', motorcycleMode
   const [scannerOpen, setScannerOpen] = useState(false);
   const editing = Boolean(initialItem?.id);
   const set = (field, value) => setForm((current) => ({ ...current, [field]: value }));
-  const onlinePrice = Number.isFinite(Number(form.store_selling_price))
-    ? Math.round(Number(form.store_selling_price) * 1.15 * 100) / 100
-    : 0;
+  const costPrice = Math.round((Number(form.store_selling_price || 0) * 0.80 + Number.EPSILON) * 100) / 100;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -54,7 +52,7 @@ const InventoryItemForm = ({ initialItem, initialPartNumber = '', motorcycleMode
         quantity: Number(form.quantity),
         minimum_stock: Number(form.minimum_stock),
         store_selling_price: Number(form.store_selling_price),
-        cost_price: Number(form.cost_price),
+        cost_price: costPrice,
       });
     } catch (submitError) {
       setError(submitError?.message || 'Inventory item could not be saved.');
@@ -96,7 +94,8 @@ const InventoryItemForm = ({ initialItem, initialPartNumber = '', motorcycleMode
           <input required type="number" min="0" step="0.01" value={form.store_selling_price} onChange={(event) => set('store_selling_price', event.target.value)} className={fieldClass} />
         </label>
         <label className="text-xs font-semibold text-slate-700">Cost Price
-          <input required type="number" min="0" step="0.01" value={form.cost_price} onChange={(event) => set('cost_price', event.target.value)} className={fieldClass} />
+          <input readOnly type="number" min="0" step="0.01" value={costPrice.toFixed(2)} className={`${fieldClass} bg-slate-50`} />
+          <span className="mt-1 block font-normal text-slate-600">Automatically 80% of the store selling price.</span>
         </label>
         <label className="text-xs font-semibold text-slate-700">{editing ? 'Current Quantity' : 'Initial Quantity'}
           <input required type="number" min="0" step="1" disabled={editing} value={form.quantity} onChange={(event) => set('quantity', event.target.value)} className={`${fieldClass} disabled:bg-slate-100 disabled:text-slate-500`} />
@@ -114,8 +113,8 @@ const InventoryItemForm = ({ initialItem, initialPartNumber = '', motorcycleMode
         </label>
         <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">Calculated online price</p>
-          <p className="mt-1 text-lg font-bold text-slate-950">₱{onlinePrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-          <p className="text-[11px] text-slate-600">Automatically 15% above the store selling price.</p>
+          <p className="mt-1 text-sm font-semibold text-slate-950">Calculated by the server when saved.</p>
+          <p className="text-[11px] text-slate-600">15% above the store price, rounded to the nearest peso.</p>
         </div>
       </div>
       <label className="block text-xs font-semibold text-slate-700">Inventory Description

@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { emitCatalogChanged } from '../socket.js';
 import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
 import { hasSetListingSchema, mapSetOption, normalizeSetItemIds, summarizeSetOptions } from '../services/setListings.js';
 import { sanitizeHttpUrlOrPath, sanitizePlainText, sanitizeRichText } from '../utils/inputSanitizer.js';
@@ -251,6 +252,7 @@ export const createEcommerceListing = async (req, res) => {
     }
     await replaceMedia(client, listingId, input.media);
     await client.query('COMMIT');
+    emitCatalogChanged();
     return res.status(201).json({ message: 'Storefront listing created.', listing: await loadListing(listingId, withSets) });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -296,6 +298,7 @@ export const updateEcommerceListing = async (req, res) => {
     if (input.listingType === 'set') await replaceSetItems(client, listingId, input.itemIds, input.visibilityStatus);
     await replaceMedia(client, listingId, input.media);
     await client.query('COMMIT');
+    emitCatalogChanged();
     return res.json({ message: 'Storefront listing updated.', listing: await loadListing(listingId, withSets) });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});

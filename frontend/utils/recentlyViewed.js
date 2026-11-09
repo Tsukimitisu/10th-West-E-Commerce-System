@@ -27,7 +27,7 @@ function saveIds(ids, storage, notify = false) {
 
 export const isRecentlyViewedEligible = product => Boolean(product?.id) && !product.is_deleted
   && (product.inventory_status == null || product.inventory_status === 'active')
-  && (product.visibility_status == null || product.visibility_status === 'active')
+  && product.visibility_status === 'active'
   && !['archived','draft','inactive','discontinued','unpublished','disabled'].includes(product.status)
   && availableStock(product) > 0;
 

@@ -48,7 +48,7 @@ before(async () => {
       const count = (rateCounts.get(args[0]) || 0) + 1; rateCounts.set(args[0], count);
       return { rows: [{ request_count: count, retry_after_seconds: 3600 }] };
     }
-    if (sql.includes('SELECT id FROM sessions')) return { rows: [{ id: 1 }] };
+    if (sql.includes('FROM sessions WHERE token_hash')) return { rows: [{ id: 1 }] };
     if (sql.includes('FROM users WHERE id')) return { rows: [{ id: args[0], role: roles[args[0] - 1], is_active: true, email_verified: true, is_deleted: false }] };
     if (sql.includes('SELECT key, value FROM system_settings')) return { rows: [...settings].filter(([key]) => key.startsWith('security.')).map(([key, value]) => ({ key: key.split('.')[1], value })) };
     if (sql.includes('SELECT * FROM system_settings')) return { rows: [...settings].map(([key, value]) => ({ category: key.split('.')[0], key: key.split('.')[1], value })) };

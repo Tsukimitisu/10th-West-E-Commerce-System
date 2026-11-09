@@ -38,14 +38,14 @@ const fixture = async (settings = {}) => {
     queries.push({ sql, args });
     if (sql.includes('FROM system_settings')) return { rows: Object.entries(settings).map(([key, value]) => ({ key, value })) };
     if (sql.includes('JOIN sessions s')) {
-      assert.match(sql, /s.created_at > NOW\(\) - make_interval\(mins => \$3\)/);
+      assert.match(sql, /COALESCE\(s.explicitly_refreshed_at,s.created_at\) > NOW\(\)-make_interval\(mins => \$3\)/);
       const stored = sessions.get(args[1]);
       return { rows: stored?.active && stored.created > Date.now() - args[2] * 60000 ? [{ ...user }] : [] };
     }
-    if (/SELECT id\s+FROM sessions/.test(sql)) {
+    if (sql.includes('FROM sessions WHERE token_hash')) {
       const row = sessions.get(args[0]);
-      assert.match(sql, /created_at > NOW\(\) - make_interval\(mins => \$3\)/);
-      return { rows: row && row.active && row.created > Date.now() - args[2] * 60000 ? [{ id: 1 }] : [] };
+      assert.match(sql, /COALESCE\(explicitly_refreshed_at,created_at\) > NOW\(\)-make_interval\(mins => \$3\)/);
+      return { rows: row && row.active && row.created > Date.now() - args[2] * 60000 ? [{ id: 1,created_at:new Date(row.created),last_active:new Date(row.created),expires_at:new Date(row.created+args[2]*60000) }] : [] };
     }
     if (sql.includes('FROM users')) return { rows: [{ ...user }] };
     if (sql.includes('INSERT INTO sessions')) { sessions.set(args[1], { active: true, created: Date.now() }); return { rows: [], rowCount: 1 }; }

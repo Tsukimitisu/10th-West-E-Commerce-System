@@ -2,6 +2,7 @@ import { securityPolicy, policyUser, twoFactorRequirement } from '../services/se
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../config/database.js';
+import { sessionDeadline, sessionValiditySql } from '../services/sessionLifetime.js';
 import databaseConfig from '../config/databaseConfig.cjs';
 
 const { isDatabaseUnavailableError, sanitizeDatabaseError } = databaseConfig;
@@ -52,10 +53,9 @@ const policyRouteAllowed = req => /^(?:\/api)?\/auth\/(?:profile(?:\/optional)?|
 const applySecurityPolicy = async (req, user, verified = false) => {
   const policy = await securityPolicy.get();
   req.twoFactorVerified = verified;
-  // Absolute session lifetime; the existing shorter browser idle logout remains.
+  // The database grant and explicit user activity are authoritative, not polling.
   if (req.session?.cookie) {
-    const issued = req.session.auth?.authenticatedAt || Date.now();
-    const remaining = Math.max(0, issued + policy.session_timeout_minutes * 60_000 - Date.now());
+    const remaining = Math.max(0, (req.authSession ? sessionDeadline(req.authSession, policy) : (req.session.auth?.authenticatedAt || Date.now()) + policy.session_timeout_minutes * 60000) - Date.now());
     req.session.cookie.maxAge = Math.min(req.session.cookie.maxAge ?? remaining, remaining);
   }
   req.user = policyUser(user, policy, verified);
@@ -71,12 +71,12 @@ const enforceSecurityPolicy = async (req, res, next, user, verified) => {
 const findPolicySession = async (tokenHash, userId) => {
   const policy = await securityPolicy.get();
   const result = await pool.query(
-    'SELECT id FROM sessions WHERE token_hash = $1 AND user_id = $2 AND is_active = true AND expires_at > NOW() AND created_at > NOW() - make_interval(mins => $3)',
+    `SELECT id,expires_at,created_at,last_active,explicitly_refreshed_at FROM sessions WHERE token_hash = $1 AND user_id = $2 AND is_active = true AND expires_at > NOW() AND ${sessionValiditySql()}`,
     [tokenHash, userId, policy.session_timeout_minutes]);
   if (!result.rows.length) {
     // Expiry is terminal, even if a later policy extends the lifetime.
     await pool.query(`UPDATE sessions SET is_active = false WHERE token_hash = $1 AND user_id = $2
-      AND (expires_at <= NOW() OR created_at <= NOW() - make_interval(mins => $3))`,
+      AND (expires_at <= NOW() OR NOT (${sessionValiditySql()}))`,
     [tokenHash, userId, policy.session_timeout_minutes]);
   }
   return result;
@@ -91,6 +91,7 @@ const hydrateUserFromSession = async (req) => {
   if (sessionResult.rows.length === 0) {
     return null;
   }
+  req.authSession = sessionResult.rows[0];
 
   const userResult = await pool.query(
     `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified, two_factor_enabled
@@ -108,11 +109,6 @@ const hydrateUserFromSession = async (req) => {
   ) {
     return null;
   }
-
-  await pool.query(
-    'UPDATE sessions SET last_active = NOW() WHERE token_hash = $1',
-    [sessionAuth.tokenHash]
-  );
 
   return userResult.rows[0];
 };
@@ -144,6 +140,7 @@ export const authenticateOptional = async (req, res, next) => {
     const sessionResult = await findPolicySession(tokenHash, decoded.id);
 
     if (sessionResult.rows.length === 0) return next();
+    req.authSession = sessionResult.rows[0];
 
     const userResult = await pool.query(
       `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified, two_factor_enabled
@@ -248,10 +245,8 @@ export const authenticateToken = async (req, res, next) => {
         message: 'Session expired or revoked. Please log in again.',
         code: 'AUTH_SESSION_EXPIRED',
       });
-    } else {
-      // Touch last_active
-      await pool.query('UPDATE sessions SET last_active = NOW() WHERE id = $1', [sessionResult.rows[0].id]);
     }
+    req.authSession = sessionResult.rows[0];
 
     const userResult = await pool.query(
       `SELECT id, name, email, role, avatar, is_active, is_deleted, email_verified, two_factor_enabled

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   createIdleSessionController,
-  IDLE_LOGOUT_MS,
+  serverSessionDeadline,
   IDLE_WARNING_MS,
 } from '../utils/idleSession.js';
 
@@ -33,80 +33,48 @@ const createFakeClock = () => {
       current = target;
     },
     pending: () => tasks.size,
+    jump(milliseconds) { current += milliseconds; },
   };
 };
 
-test('idle controller warns before logging out exactly once', () => {
-  const clock = createFakeClock();
-  const warnings = [];
-  let logoutCount = 0;
-  const controller = createIdleSessionController({
-    warningMs: 25_000,
-    logoutMs: 30_000,
-    onWarning: (warning) => warnings.push(warning),
-    onLogout: () => { logoutCount += 1; },
-    setTimer: clock.setTimer,
-    clearTimer: clock.clearTimer,
-    now: clock.now,
-  });
-
-  assert.equal(controller.start(), true);
-  assert.equal(controller.start(), false, 'a second start must not create duplicate timers');
-  clock.advance(24_999);
-  assert.equal(warnings.length, 0);
-  clock.advance(1);
-  assert.deepEqual(warnings, [{ logoutAt: 30_000 }]);
-  clock.advance(5_000);
-  assert.equal(logoutCount, 1);
-  clock.advance(60_000);
-  assert.equal(logoutCount, 1);
-  assert.equal(clock.pending(), 0);
+test('server deadline warns at sixty seconds and logs out exactly once', () => {
+  const clock = createFakeClock(), warnings = []; let logouts = 0;
+  const controller = createIdleSessionController({ now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer,
+    onWarning: value => warnings.push(value), onLogout: () => logouts++ });
+  assert.equal(controller.start(),true); assert.equal(controller.start(),false);
+  controller.setDeadline(90000);
+  clock.advance(29999); assert.equal(warnings.length,0);
+  clock.advance(1); assert.deepEqual(warnings,[{logoutAt:90000}]);
+  clock.advance(60000); assert.equal(logouts,1);
+  clock.advance(100000); assert.equal(logouts,1); assert.equal(clock.pending(),0);
 });
 
-test('activity and Stay signed in reset the idle deadline', () => {
-  const clock = createFakeClock();
-  let warnings = 0;
-  let warningClears = 0;
-  let logouts = 0;
-  const controller = createIdleSessionController({
-    warningMs: 100,
-    logoutMs: 150,
-    onWarning: () => { warnings += 1; },
-    onWarningCleared: () => { warningClears += 1; },
-    onLogout: () => { logouts += 1; },
-    setTimer: clock.setTimer,
-    clearTimer: clock.clearTimer,
-    now: clock.now,
-  });
-
-  controller.start();
-  clock.advance(90);
-  assert.equal(controller.recordActivity(), true);
-  clock.advance(99);
-  assert.equal(warnings, 0);
-  clock.advance(1);
-  assert.equal(warnings, 1);
-  assert.equal(controller.recordActivity(), false, 'warning requires an explicit continue action');
-  assert.equal(controller.staySignedIn(), true);
-  clock.advance(100);
-  assert.equal(warnings, 2);
-  clock.advance(50);
-  assert.equal(logouts, 1);
-  assert.ok(warningClears >= 3);
+test('activity and Stay signed in never invent an expiry; only server confirmation extends it', () => {
+  const clock = createFakeClock(); let activity = 0, stays = 0, logouts = 0;
+  const controller = createIdleSessionController({ now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer,
+    onActivity: () => activity++, onStay: () => stays++, onLogout: () => logouts++ });
+  controller.start(); controller.setDeadline(90000);
+  clock.advance(10000); controller.recordActivity(); assert.equal(activity,1);
+  clock.advance(20000); assert.equal(controller.recordActivity(),false);
+  controller.staySignedIn(); assert.equal(stays,1);
+  controller.setDeadline(200000); // Response from the existing authenticated refresh endpoint.
+  clock.advance(60000); assert.equal(logouts,0);
+  clock.advance(110000); assert.equal(logouts,1);
 });
 
-test('idle guard is authenticated-only and uses the CSRF-aware logout endpoint', async () => {
-  assert.equal(IDLE_WARNING_MS, 25 * 60 * 1000);
-  assert.equal(IDLE_LOGOUT_MS, 30 * 60 * 1000);
-  const [guard, app, api] = await Promise.all([
-    readFile(new URL('../components/IdleSessionGuard.jsx', import.meta.url), 'utf8'),
-    readFile(new URL('../App.jsx', import.meta.url), 'utf8'),
-    readFile(new URL('../services/api.js', import.meta.url), 'utf8'),
-  ]);
-  assert.match(guard, /if \(!user\?\.id\)/);
-  assert.match(guard, /pointerdown.*keydown.*scroll.*touchstart.*mousemove/);
-  assert.match(guard, /Stay signed in/);
-  assert.match(guard, /You were signed out due to inactivity\./);
-  assert.match(app, /<IdleSessionGuard user=\{user\} onLogout=\{onLogout\}/);
-  assert.match(api, /authenticatedFetch\(`\$\{API_URL\}\/auth\/logout`, \{ method: 'POST' \}\)/);
+test('server clock mapping accounts for latency and background sleep cannot extend expiry', () => {
+  assert.equal(serverSessionDeadline({expires_at:'2026-01-01T00:01:00Z',server_now:'2026-01-01T00:00:00Z'},1000),61000);
+  assert.throws(() => serverSessionDeadline({}), /server/);
+  const clock = createFakeClock(); let logouts = 0;
+  const controller = createIdleSessionController({now:clock.now,setTimer:clock.setTimer,clearTimer:clock.clearTimer,onLogout:()=>logouts++});
+  controller.start();controller.setDeadline(90000);clock.jump(150000);controller.check();assert.equal(logouts,1);
+});
+
+test('guard uses server timing, secure refresh and explicit activity rather than API polling', async () => {
+  assert.equal(IDLE_WARNING_MS,60000);
+  const [guard,api] = await Promise.all([readFile(new URL('../components/IdleSessionGuard.jsx',import.meta.url),'utf8'),readFile(new URL('../services/api.js',import.meta.url),'utf8')]);
+  assert.match(guard,/Are you still there/);assert.match(guard,/Your session will expire in/);
+  assert.match(guard,/event.isTrusted/);assert.match(guard,/request\(refreshSession, true\)/);
+  assert.match(guard,/clearCurrentAuthUser\(\)/);assert.match(guard,/subscribeSessionDeadline/);
+  assert.match(api,/auth\/session\/refresh.*method: 'POST'/);
 });

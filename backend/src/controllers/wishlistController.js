@@ -1,5 +1,7 @@
 import pool from '../config/database.js';
 import { availableStock, variantAvailabilitySql } from '../services/inventory.js';
+import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
+import { hasSetListingSchema, storefrontVisibilitySql } from '../services/setListings.js';
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 
 export const getWishlist = async (req, res) => {
@@ -20,7 +22,7 @@ export const getWishlist = async (req, res) => {
 
       const products = productIds.length > 0
         ? await supabaseRestFetch('products', {
-            select: '*,categories(name)',
+            select: '*,categories(name),ecommerce_listings(visibility_status),product_variants(stock_quantity,reserved_stock)',
             id: `in.(${productIds.join(',')})`,
           }).catch(() => [])
         : [];
@@ -28,20 +30,28 @@ export const getWishlist = async (req, res) => {
 
       return res.json(rows.map((row) => {
         const product = productById.get(Number(row.product_id)) || {};
+        const listings = Array.isArray(product.ecommerce_listings) ? product.ecommerce_listings : [product.ecommerce_listings];
+        const visible = listings.some(listing => listing?.visibility_status === 'active') && product.inventory_status === 'active' && !product.is_deleted;
+        const variants = product.product_variants || [];
+        const stock = visible ? (variants.length ? variants.reduce((sum,variant) => sum + availableStock(variant),0) : availableStock(product)) : 0;
+        const publicProduct = { ...product, price: calculateEcommercePrice(resolveStoreSellingPrice(product) ?? 0), sale_price: null,
+          available_stock: stock, stock_quantity: stock, has_variants: variants.length > 0, visibility_status: visible ? 'active' : 'hidden' };
+        delete publicProduct.buying_price; delete publicProduct.cost_price; delete publicProduct.store_selling_price; delete publicProduct.product_variants;
         return {
           wishlist_id: row.id,
           user_id: row.user_id,
           product_id: row.product_id,
           created_at: row.created_at,
-          ...product,
+          ...publicProduct,
           category_name: product.categories?.name || product.category_name || null,
         };
       }));
     }
 
+    const withSets = await hasSetListingSchema(pool);
     const result = await pool.query(`
       SELECT w.id as wishlist_id, w.user_id, w.product_id, w.created_at,
-             p.*, ${variantAvailabilitySql('p')},
+             p.*, ${variantAvailabilitySql('p')}, ${storefrontVisibilitySql('p', withSets)} AS visibility_status,
              (SELECT name FROM categories c WHERE c.id = p.category_id) as category_name
       FROM wishlists w
       JOIN products p ON w.product_id = p.id
@@ -50,8 +60,11 @@ export const getWishlist = async (req, res) => {
     `, [req.user.id]);
     
     res.json(result.rows.map(product => {
-      const stock = product.has_variants ? Number(product.variant_available_stock) : availableStock(product);
-      return { ...product, stock_quantity: stock, available_stock: stock };
+      const visible = product.visibility_status === 'active' && product.inventory_status === 'active' && !product.is_deleted;
+      const stock = visible ? (product.has_variants ? Number(product.variant_available_stock) : availableStock(product)) : 0;
+      const publicProduct = { ...product, price: calculateEcommercePrice(resolveStoreSellingPrice(product) ?? 0), sale_price: null, stock_quantity: stock, available_stock: stock };
+      delete publicProduct.buying_price; delete publicProduct.cost_price; delete publicProduct.store_selling_price;
+      return publicProduct;
     }));
   } catch (error) {
     console.error('Get wishlist error:', error);

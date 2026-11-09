@@ -14,7 +14,7 @@ test('invoice route preserves authentication, customer ownership and authorized 
   mock.method(pool, 'query', async (sql, args = []) => {
     const query = String(sql);
     if (query.includes('FROM system_settings')) return { rows: [] };
-    if (query.includes('SELECT id FROM sessions')) return { rows: [{ id: 1 }] };
+    if (query.includes('FROM sessions WHERE token_hash')) return { rows: [{ id: 1 }] };
     if (query.includes('FROM users')) return { rows: [{ ...user }] };
     if (query.includes('UPDATE sessions SET last_active')) return { rows: [], rowCount: 1 };
     if (query.includes('FROM orders o LEFT JOIN users')) return { rows: [{

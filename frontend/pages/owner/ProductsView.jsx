@@ -771,7 +771,7 @@ const ProductsView = () => {
   const fetch = async () => {
     setLoading(true);
     try {
-      const [p, c, s] = await Promise.all([getProducts(), getCategories(), getSubcategories()]);
+      const [p, c, s] = await Promise.all([getProducts({ include_unpublished: true }), getCategories(), getSubcategories()]);
       setProducts(Array.isArray(p) ? p : []);
       setCategories(Array.isArray(c) ? c.filter((category) => category?.id != null) : []);
       setSubcategories(Array.isArray(s) ? s : []);

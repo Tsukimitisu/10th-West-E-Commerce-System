@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { createSocketProtection } from './middleware/socketRateLimiter.js';
 import pool from './config/database.js';
+import { sessionValiditySql } from './services/sessionLifetime.js';
 import { PRODUCT_PUBLISHER_ROLE_SET } from './constants/schemaEnums.js';
 
 let io = null;
@@ -105,7 +106,7 @@ const hydrateSocketUserFromSession = async (sessionAuth) => {
        AND s.token_hash = $2
        AND s.is_active = true
        AND s.expires_at > NOW()
-       AND s.created_at > NOW() - make_interval(mins => $3)
+       AND ${sessionValiditySql('s')}
      LIMIT 1`,
     [userId, tokenHash, policy.session_timeout_minutes]
   );
@@ -401,18 +402,23 @@ export function emitOrderStatusUpdate(orderOrId, status = null, extra = {}) {
 // Products
 export function emitProductCreated(product) {
   if (!io) return;
-  io.emit('product:created', product);
+  io.emit('product:created', { id: product.id });
+  emitCatalogChanged();
 }
 
 export function emitProductUpdated(product) {
   if (!io) return;
-  io.emit('product:updated', product);
+  io.emit('product:updated', { id: product.id });
+  emitCatalogChanged();
 }
 
 export function emitProductDeleted(productId) {
   if (!io) return;
   io.emit('product:deleted', { id: productId });
+  emitCatalogChanged();
 }
+
+export function emitCatalogChanged() { io?.emit('catalog:updated', {}); }
 
 // Inventory / Stock
 export function emitStockUpdate(data) {
@@ -420,6 +426,7 @@ export function emitStockUpdate(data) {
   io.to('staff:inventory').emit('inventory:updated', data);
   // Also broadcast to POS so product grid refreshes
   io.to('pos').emit('inventory:updated', data);
+  emitCatalogChanged();
 }
 
 export function emitLowStockAlert(product) {

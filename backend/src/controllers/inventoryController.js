@@ -1,7 +1,7 @@
 import pool from '../config/database.js';
 import { emitStockUpdate, emitLowStockAlert } from '../socket.js';
 import { mutateInventory } from '../services/inventory.js';
-import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
+import { calculateEcommercePrice, calculateCostPrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
 
 const INVENTORY_STATUSES = new Set(['active', 'inactive', 'discontinued']);
 const asOptionalText = (value, maxLength) => {
@@ -71,7 +71,7 @@ const normalizeInventoryInput = (body, { partial = false } = {}) => {
     motorcycleModelId,
     color: asOptionalText(body.color, 100),
     storeSellingPrice: asMoney(body.store_selling_price ?? body.storeSellingPrice ?? body.price, 'Store selling price'),
-    costPrice: asMoney(body.cost_price ?? body.buying_price ?? body.costPrice ?? 0, 'Cost price'),
+    costPrice: calculateCostPrice(asMoney(body.store_selling_price ?? body.storeSellingPrice ?? body.price, 'Store selling price')),
     quantity: partial ? undefined : asStock(body.quantity ?? body.stock_quantity ?? 0, 'Quantity'),
     minimumStock: asStock(body.minimum_stock ?? body.low_stock_threshold ?? 0, 'Minimum stock'),
     boxLocation: asOptionalText(body.box_location ?? body.boxNumber ?? body.box_number, 100),

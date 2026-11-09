@@ -18,7 +18,7 @@ import {
 } from '../utils/inputSanitizer.js';
 import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl } from '../utils/productImages.js';
-import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
+import { calculateEcommercePrice, calculateCostPrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
 import { availableStock, variantAvailabilitySql } from '../services/inventory.js';
 import { shouldReturnEmptyProductSearch } from '../utils/productSearchSafety.js';
 import { hasSetListingSchema, storefrontVisibilitySql } from '../services/setListings.js';
@@ -826,7 +826,7 @@ const getSupabaseRestProductsFallback = async ({ queryInput = {}, includeInterna
   }
 
   if (!includeInternal) {
-    params.status = 'in.(active,out_of_stock)';
+    params.inventory_status = 'eq.active';
     params.is_deleted = 'eq.false';
   } else if (queryInput.status) {
     const cleanStatusFilter = toNullableProductStatus(queryInput.status);
@@ -853,6 +853,24 @@ const getSupabaseRestProductsFallback = async ({ queryInput = {}, includeInterna
 
   let products = await supabaseRestFetch('products', params);
   products = Array.isArray(products) ? products : [];
+  if (!includeInternal && products.length) {
+    const listings = await supabaseRestFetch('ecommerce_listings', { select: 'id,inventory_item_id,listing_type', visibility_status: 'eq.active' });
+    const publicIds = new Set((listings || []).map(row => Number(row.inventory_item_id)).filter(Boolean));
+    const sets = (listings || []).filter(row => row.listing_type === 'set').map(row => row.id);
+    if (sets.length) {
+      const members = await supabaseRestFetch('ecommerce_listing_items', { select: 'product_item_id', listing_id: `in.(${sets.join(',')})` });
+      for (const row of members || []) publicIds.add(Number(row.product_item_id));
+    }
+    products = products.filter(row => publicIds.has(Number(row.id)) && row.inventory_status === 'active' && !row.is_deleted)
+      .map(row => ({ ...row, visibility_status: 'active' }));
+    if (products.length) {
+      const variants = await supabaseRestFetch('product_variants', { select: 'product_id,stock_quantity,reserved_stock', product_id: `in.(${products.map(row => row.id).join(',')})` });
+      products = products.map(row => {
+        const ownVariants = (variants || []).filter(variant => Number(variant.product_id) === Number(row.id));
+        return { ...row, has_variants: ownVariants.length > 0, variant_available_stock: ownVariants.reduce((sum,variant) => sum + availableStock(variant),0) };
+      });
+    }
+  }
 
   if (!singleId && (queryInput.brand || queryInput.model || queryInput.year)) {
     const fitmentParams = {
@@ -891,7 +909,7 @@ export const getProducts = async (req, res) => {
     const searchTerms = tokenizeSearchTerms(search);
     const searchPhrase = normalizeSearchPhrase(search);
     const resultLimit = parseResultLimit(limitParam, null, 80);
-    const includeUnpublished = canViewUnpublishedProducts(req.user);
+    const includeUnpublished = req.query?.include_unpublished === 'true' && canViewUnpublishedProducts(req.user);
 
     if (shouldUseDatabaseReadFallback()) {
       const fallbackProducts = await getSupabaseRestProductsFallback({ queryInput, includeInternal: includeUnpublished });
@@ -1069,7 +1087,7 @@ export const getProducts = async (req, res) => {
       try {
         const fallbackProducts = await getSupabaseRestProductsFallback({
           queryInput: { ...(req.query || {}), ...(req.validatedData || {}) },
-          includeInternal: canViewUnpublishedProducts(req.user),
+          includeInternal: req.query?.include_unpublished === 'true' && canViewUnpublishedProducts(req.user),
         });
         return res.json(fallbackProducts);
       } catch (fallbackError) {
@@ -1086,7 +1104,7 @@ export const getProducts = async (req, res) => {
 export const getTopSellers = async (req, res) => {
   try {
     const { days, limit = 8 } = req.validatedData || req.query;
-    const includeUnpublished = canViewUnpublishedProducts(req.user);
+    const includeUnpublished = req.query?.include_unpublished === 'true' && canViewUnpublishedProducts(req.user);
 
     const parsedLimit = Number.parseInt(String(limit), 10);
     const safeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 8;
@@ -1172,7 +1190,7 @@ export const getTopSellers = async (req, res) => {
         const safeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 8;
         const fallbackProducts = await getSupabaseRestProductsFallback({
           queryInput: { limit: safeLimit },
-          includeInternal: canViewUnpublishedProducts(req.user),
+          includeInternal: req.query?.include_unpublished === 'true' && canViewUnpublishedProducts(req.user),
         });
         return res.json(fallbackProducts.slice(0, safeLimit));
       } catch (fallbackError) {
@@ -1187,7 +1205,7 @@ export const getTopSellers = async (req, res) => {
 export const getProductById = async (req, res) => {
   try {
     const { id } = req.validatedData || req.params;
-    const includeUnpublished = canViewUnpublishedProducts(req.user);
+    const includeUnpublished = req.query?.include_unpublished === 'true' && canViewUnpublishedProducts(req.user);
 
     if (shouldUseDatabaseReadFallback()) {
       const fallbackProducts = await getSupabaseRestProductsFallback({
@@ -1349,7 +1367,7 @@ export const getProductById = async (req, res) => {
         const { id } = req.validatedData || req.params;
         const fallbackProducts = await getSupabaseRestProductsFallback({
           queryInput: {},
-          includeInternal: canViewUnpublishedProducts(req.user),
+          includeInternal: req.query?.include_unpublished === 'true' && canViewUnpublishedProducts(req.user),
           singleId: id,
         });
 
@@ -1467,7 +1485,7 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({ message: shippingDimensionsField.error || 'Shipping dimensions are invalid' });
     }
 
-    const buyingPriceField = parseOptionalNumberField(buying_price);
+    const buyingPriceField = { valid: true, value: calculateCostPrice(parsedPrice) };
     if (!buyingPriceField.valid) {
       return res.status(400).json({ message: 'Buying price must be a valid number' });
     }
@@ -1772,6 +1790,7 @@ export const updateProduct = async (req, res) => {
     }
 
     const resolvedPrice = hasPricePayload ? parsedPrice : Number(existingProduct.store_selling_price ?? existingProduct.price);
+    buyingPriceField.value = calculateCostPrice(resolvedPrice);
     const nextSalePrice = hasSalePricePayload
       ? salePriceField.value
       : (existingProduct.sale_price !== null ? Number(existingProduct.sale_price) : null);
@@ -1901,7 +1920,7 @@ export const updateProduct = async (req, res) => {
         patch.price = parsedPrice;
         patch.store_selling_price = parsedPrice;
       }
-      if (hasBuyingPricePayload) patch.buying_price = buyingPriceField.value;
+      if (hasPricePayload || hasBuyingPricePayload) patch.buying_price = buyingPriceField.value;
       if (hasBodyField(req.body, 'image')) patch.image = cleanImage;
       if (hasCategoryIdPayload) patch.category_id = cleanCategoryId;
       if (hasStockPayload) patch.stock_quantity = parsedStockQuantity;
@@ -1986,7 +2005,7 @@ export const updateProduct = async (req, res) => {
         hasNamePayload ? cleanName : null,
         hasBodyField(req.body, 'description') ? cleanDescription : null,
         hasPricePayload ? parsedPrice : null,
-        hasBuyingPricePayload ? buyingPriceField.value : null,
+        (hasPricePayload || hasBuyingPricePayload) ? buyingPriceField.value : null,
         hasBodyField(req.body, 'image') ? cleanImage : null,
         hasCategoryIdPayload ? cleanCategoryId : null,
         hasStockPayload ? parsedStockQuantity : null,

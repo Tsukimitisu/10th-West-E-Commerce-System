@@ -1,6 +1,8 @@
 import { forgotPasswordPhone, verifyPasswordResetPhone } from '../services/passwordRecovery.js';
 import { phoneRecoveryIpLimiter, phoneRecoveryLimiter, phoneRecoveryVerifyIpLimiter, phoneRecoveryVerifyLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
+import { getSessionState, recordSessionActivity, refreshSession } from '../controllers/sessionController.js';
+import { sessionActivityLimiter } from '../middleware/rateLimiter.js';
 import { body, matchedData, validationResult } from 'express-validator';
 import passport, {
   FACEBOOK_OAUTH_SCOPES,
@@ -411,6 +413,9 @@ router.get('/profile/optional', traceProfile, authenticateOptional, (req, res) =
 });
 router.get('/me', traceProfile, authenticateToken, getProfile);
 router.get('/profile', traceProfile, authenticateToken, getProfile);
+router.get('/session', authenticateToken, getSessionState);
+router.post('/session/activity', authenticateToken, sessionActivityLimiter, recordSessionActivity);
+router.post('/session/refresh', authenticateToken, accountMutationLimiter, refreshSession);
 router.get('/permissions', authenticateToken, getMyPermissions);
 router.put('/change-password',
   authenticateToken,

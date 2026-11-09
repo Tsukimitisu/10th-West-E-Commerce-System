@@ -1,3 +1,4 @@
+import useCatalogRevision from '../hooks/useCatalogRevision.js';
 import { openNotification, notificationReadChanged } from '../services/notificationNavigation.js';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -20,6 +21,7 @@ const customerExtraAccountNavigation = [
 ];
 
 const Navbar = ({ user, onLogout }) => {
+  const catalogRevision = useCatalogRevision();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -172,6 +174,7 @@ const Navbar = ({ user, onLogout }) => {
   }, []);
 
   useEffect(() => {
+    if (catalogRevision) searchCacheRef.current.clear();
     const query = String(globalSearch || '').trim();
 
     if (!query || query.length < 2) {
@@ -233,7 +236,7 @@ const Navbar = ({ user, onLogout }) => {
     }, 220);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [globalSearch]);
+  }, [globalSearch, catalogRevision]);
 
   const refreshNotifications = useCallback(async () => {
     if (!user) return;

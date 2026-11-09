@@ -15,6 +15,7 @@ const getAuthChannel = () => {
       if (event.data?.type === 'auth-refresh') {
         window.dispatchEvent(new Event(AUTH_REFRESH_EVENT));
       }
+      if (event.data?.type === 'session-deadline') window.dispatchEvent(new CustomEvent('auth:session-deadline', { detail: { deadline: event.data.deadline, observedAt: event.data.observedAt } }));
       if (event.data?.type === 'auth-cleared') {
         currentUser = null;
         window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT, { detail: { user: null } }));
@@ -83,4 +84,12 @@ export const subscribeAuthRefresh = (handler) => {
   window.addEventListener(AUTH_REFRESH_EVENT, handler);
   getAuthChannel();
   return () => window.removeEventListener(AUTH_REFRESH_EVENT, handler);
+};
+
+export const publishSessionDeadline = (deadline, observedAt) => { getAuthChannel()?.postMessage({ type: 'session-deadline', deadline, observedAt }); };
+export const subscribeSessionDeadline = handler => {
+  if (!canUseWindow()) return () => {};
+  const listener = event => { if (Number.isFinite(event.detail?.deadline) && Number.isFinite(event.detail?.observedAt)) handler(event.detail); };
+  window.addEventListener('auth:session-deadline', listener); getAuthChannel();
+  return () => window.removeEventListener('auth:session-deadline', listener);
 };

@@ -10,7 +10,13 @@ export const calculateEcommercePrice = (storeSellingPrice) => {
       code: 'INVALID_STORE_SELLING_PRICE',
     });
   }
-  return roundCurrency(price * (1 + ECOMMERCE_MARKUP_RATE));
+  return Math.round(roundCurrency(price * (1 + ECOMMERCE_MARKUP_RATE)));
+};
+
+export const calculateCostPrice = storeSellingPrice => {
+  const price = resolveStoreSellingPrice({ store_selling_price: storeSellingPrice });
+  if (price === null) throw Object.assign(new Error('Store selling price must be a non-negative number.'), { status: 400 });
+  return roundCurrency(price * 0.80);
 };
 
 export const resolveStoreSellingPrice = (product) => {

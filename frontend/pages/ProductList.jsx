@@ -1,4 +1,5 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import useCatalogRevision from '../hooks/useCatalogRevision.js';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Grid3X3, List, Search, SlidersHorizontal, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { getProducts, getMotorcycleModels, getStorefrontSets, getWishlist, WISHLIST_SYNC_EVENT } from '../services/api';
@@ -116,6 +117,7 @@ const ProductList = () => {
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState(false);
   const [catalogRequest, setCatalogRequest] = useState(0);
+  const catalogRevision = useCatalogRevision();
   const [wishlistedIds, setWishlistedIds] = useState([]);
   const [view, setView] = useState(searchParams.get('view') === 'list' ? 'list' : 'grid');
   const [showDesktopFilters, setShowDesktopFilters] = useState(true);
@@ -154,7 +156,7 @@ const ProductList = () => {
       });
 
     return () => { active = false; };
-  }, [catalogRequest]);
+  }, [catalogRequest, catalogRevision]);
 
   useEffect(() => {
     const loadWishlist = async () => {

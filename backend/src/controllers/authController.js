@@ -1,3 +1,4 @@
+import { getSessionTtlMs } from '../services/sessionLifetime.js';
 import { recordPasswordFailure, loginLockResponse } from '../services/loginLockout.js';
 import { securityPolicy, passwordPolicyError, policyUser } from '../services/securityPolicy.js';
 import pool from '../config/database.js';
@@ -132,33 +133,6 @@ const upsertRegistrationOtpViaSupabaseRest = async ({ email, otpHash, expiresAt 
 
   return Array.isArray(rows) ? rows[0] : rows;
 };
-
-const parseDurationMs = (value, fallbackMs) => {
-  const text = String(value || '').trim().toLowerCase();
-  if (!text) return fallbackMs;
-
-  const match = text.match(/^(\d+)(ms|s|m|h|d)?$/);
-  if (!match) return fallbackMs;
-
-  const amount = Number.parseInt(match[1], 10);
-  if (!Number.isFinite(amount) || amount <= 0) return fallbackMs;
-
-  const unit = match[2] || 's';
-  const multipliers = {
-    ms: 1,
-    s: 1000,
-    m: 60 * 1000,
-    h: 60 * 60 * 1000,
-    d: 24 * 60 * 60 * 1000,
-  };
-
-  return amount * multipliers[unit];
-};
-
-const getSessionTtlMs = () => parseDurationMs(
-  process.env.SESSION_TTL || process.env.SESSION_TTL_SECONDS,
-  Number(process.env.SESSION_TTL_MS || 7 * 24 * 60 * 60 * 1000)
-);
 
 const getSessionExpiresAt = (policy) => new Date(Date.now() + Math.min(getSessionTtlMs(), policy.session_timeout_minutes * 60_000));
 

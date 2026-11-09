@@ -144,7 +144,7 @@ test('database quote validates address ownership and ignores frontend prices and
     items: [{ product_id: 1, quantity: 2, price: 1, subtotal: 2, shipping_fee: 0, weight_kg: 0.01 }],
   });
   assert.equal(quote.shipping_fee, 180);
-  assert.equal(quote.subtotal, 2875);
+  assert.equal(quote.subtotal, 2876);
   assert.equal(quote.actual_weight_kg, 2.5);
   assert.match(calls.find((call) => call.sql.includes('FROM products p')).sql, /p\.weight_kg/);
   assert.deepEqual(calls[0].params, [10, 7]);

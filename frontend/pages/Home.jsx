@@ -1,3 +1,4 @@
+import useCatalogRevision from '../hooks/useCatalogRevision.js';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -44,6 +45,7 @@ const ProductSection = ({ title, description, products, wishlistedIds, onWishlis
 };
 
 const Home = () => {
+  const catalogRevision = useCatalogRevision();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [models, setModels] = useState([]);
@@ -93,6 +95,8 @@ const Home = () => {
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setCatalogError(false);
     Promise.allSettled([getProducts(), getCategories(), getTopSellers('all'), getMotorcycleModels()])
       .then(([productResult, categoryResult, sellerResult, modelResult]) => {
         if (!active) return;
@@ -120,7 +124,7 @@ const Home = () => {
       window.removeEventListener(WISHLIST_SYNC_EVENT, loadWishlist);
       unsubscribe();
     };
-  }, [loadWishlist]);
+  }, [loadWishlist, catalogRevision]);
 
   const toggleWishlist = (productId, selected) => {
     setWishlistedIds((current) => (

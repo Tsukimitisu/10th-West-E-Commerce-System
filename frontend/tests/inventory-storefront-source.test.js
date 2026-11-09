@@ -14,7 +14,8 @@ test('inventory form uses managed Motorcycle Model and Color without Category or
   assert.match(source, /motorcycle_model_id/);
   assert.match(source, /\+ Add Motorcycle Model/);
   assert.match(source, />Color/);
-  assert.match(source, /\* 1\.15/);
+  assert.match(source, /Calculated by the server when saved/);
+  assert.match(source, /\* 0\.80/);
 });
 
 test('receiving uses scanner-enter lookup and offers add-new inventory for unknown parts', async () => {

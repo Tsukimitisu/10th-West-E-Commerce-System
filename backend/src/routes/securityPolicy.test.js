@@ -16,7 +16,7 @@ let server, base;
 before(async () => {
   mock.method(pool, 'query', async (sql, args = []) => {
     queries.push({ sql, args });
-    if (sql.includes('SELECT id FROM sessions')) return { rows: [{ id: 1 }] };
+    if (sql.includes('FROM sessions WHERE token_hash')) return { rows: [{ id: 1 }] };
     if (sql.includes('SELECT id, email, role, login_attempts')) return { rows: [{ id: 1, email: 'private@example.test', role: 'customer', login_attempts: 5, login_lock_stage: 3, login_security_locked_at: new Date(), locked_until: null }] };
     if (sql.includes('FROM users')) return { rows: [{ id: args[0], role: roles[args[0] - 1], is_active: true, email_verified: true }] };
     if (sql.includes('FROM system_settings')) return { rows: [...settings].map(([key, value]) => ({ key, value, category: 'security' })) };

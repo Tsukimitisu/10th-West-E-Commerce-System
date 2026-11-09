@@ -84,6 +84,7 @@ export const SocketProvider = ({ children }) => {
     };
 
     socketRef.current = s;
+    s.on('catalog:updated', () => window.dispatchEvent(new Event('catalog:updated')));
 
     s.on('connect', () => {
       console.log('[Socket] connected', s.id);

@@ -1,11 +1,11 @@
+import useCatalogRevision from '../hooks/useCatalogRevision.js';
 import { availableStock } from '../utils/cartProduct.js';
 import { recordRecentlyViewed, removeRecentlyViewed, isRecentlyViewedEligible } from '../utils/recentlyViewed.js';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Loader2, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle, Play } from 'lucide-react';
 import { getProductById, getRelatedProducts, getProductReviews, getReviewEligibility, addReview, addToWishlist, removeFromWishlist, getWishlist, getShippingConfig, getAuthAvailability, recordProductView, startProductChat, WISHLIST_SYNC_EVENT } from '../services/api';
 import { cartPendingKey, useCart } from '../context/CartContext';
-import { useSocketEvent } from '../context/SocketContext';
 import ProductCard from '../components/ProductCard';
 import StarRating from '../components/StarRating';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../constants/commerce.js';
@@ -184,6 +184,8 @@ const normalizeWishlistIds = (items = []) => (
 
 const ProductDetail = () => {
   const { id } = useParams();
+  const catalogRevision = useCatalogRevision();
+  const trackedProduct = useRef(null);
   const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
@@ -299,17 +301,19 @@ const ProductDetail = () => {
           return;
         }
         setProduct(p);
-        setSelectedImage(0);
-        setShareOpen(false);
-        setShareMessage(null);
-        setReviewForm({ rating: 0, comment: '' });
-        setReviewMediaFiles([]);
-        setReviewMediaError('');
-        setReviewError('');
-        setReviewSuccess('');
-        setReviewFieldErrors({});
-        setSelectedVariant({});
-        setVariantError('');
+        if (trackedProduct.current !== id) {
+          setSelectedImage(0);
+          setShareOpen(false);
+          setShareMessage(null);
+          setReviewForm({ rating: 0, comment: '' });
+          setReviewMediaFiles([]);
+          setReviewMediaError('');
+          setReviewError('');
+          setReviewSuccess('');
+          setReviewFieldErrors({});
+          setSelectedVariant({});
+          setVariantError('');
+        }
         const [rel, rev] = await Promise.all([
           getRelatedProducts(Number(id), p.category_id || 0).catch(() => []),
           getProductReviews(Number(id)).catch(() => []),
@@ -321,14 +325,14 @@ const ProductDetail = () => {
         if (isRecentlyViewedEligible(p)) recordRecentlyViewed(p.id);
         else removeRecentlyViewed(p.id);
 
-        recordProductView(Number(id)).catch(() => {});
+        if (trackedProduct.current !== id) { trackedProduct.current = id; recordProductView(Number(id)).catch(() => {}); }
       } catch (error) {
         if (active && ([404, 410].includes(error.status) || error.message === 'Product not found')) removeRecentlyViewed(id);
       } finally { if (active) setLoading(false); }
     };
     loadProduct();
     return () => { active = false; };
-  }, [id]);
+  }, [id, catalogRevision]);
 
   const hasVariants = product && Array.isArray(product.variants) && product.variants.length > 0;
 
@@ -455,20 +459,6 @@ const ProductDetail = () => {
   }, [variantRows, variantOptions, selectedVariant, isVariantSelectionComplete]);
   const cartPending = Boolean(product?.id) && isCartKeyPending(cartPendingKey(product.id, selectedVariantRow?.id));
 
-  useSocketEvent('product:updated', (updatedProduct) => {
-    const updatedProductId = Number(updatedProduct?.id);
-    if (!updatedProductId || updatedProductId !== Number(id)) return;
-
-    setProduct((current) => {
-      const nextProduct = {
-        ...(current || {}),
-        ...updatedProduct,
-        id: updatedProductId,
-      };
-      writeRecentlyViewedProduct(nextProduct);
-      return nextProduct;
-    });
-  });
 
   useEffect(() => {
     if (!product) return;

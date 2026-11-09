@@ -210,6 +210,7 @@ export const webhookLimiter = rateLimit(60 * 1000, 50);
 const actionKey = action => req => `${action}:${req.user?.id || 'guest'}:${req.ip || req.connection?.remoteAddress || 'unknown'}`;
 const actionLimit = (action, windowMs, maximum) => rateLimit(windowMs, maximum, { storage: 'db', keyGenerator: actionKey(action) });
 export const accountMutationLimiter = actionLimit('account-security', 15 * 60 * 1000, 10);
+export const sessionActivityLimiter = actionLimit('session-activity', 60 * 1000, 30);
 export const twoFactorLimiter = actionLimit('two-factor', 5 * 60 * 1000, 10);
 export const checkoutLimiter = actionLimit('checkout', 10 * 60 * 1000, 15);
 export const paymentStatusLimiter = actionLimit('payment-status', 60 * 1000, 60);
