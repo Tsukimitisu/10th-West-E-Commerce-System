@@ -24,6 +24,7 @@ import ProductCard from '../components/ProductCard';
 import BrandButton from '../components/ui/BrandButton';
 import EmptyState from '../components/ui/EmptyState';
 import LoadingSkeleton from '../components/ui/LoadingSkeleton';
+import { reconcileRecentlyViewed, RECENTLY_VIEWED_EVENT } from '../utils/recentlyViewed.js';
 
 const ProductSection = ({ title, description, products, wishlistedIds, onWishlistToggle, light = true }) => {
   if (!products.length) return null;
@@ -53,6 +54,7 @@ const Home = () => {
   const [wishlistedIds, setWishlistedIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState(false);
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const slides = useMemo(() => managedHeroSlides(banners, announcements), [banners, announcements]);
 
   const featured = useMemo(
@@ -67,14 +69,13 @@ const Home = () => {
     [products],
   );
 
-  const recentlyViewed = useMemo(() => {
-    try {
-      const parsed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-      return Array.isArray(parsed) ? parsed.slice(0, 4) : [];
-    } catch {
-      return [];
-    }
-  }, []);
+  useEffect(() => {
+    if (loading || catalogError) return;
+    const refresh = () => setRecentlyViewed(reconcileRecentlyViewed(products));
+    refresh();
+    window.addEventListener(RECENTLY_VIEWED_EVENT, refresh);
+    return () => window.removeEventListener(RECENTLY_VIEWED_EVENT, refresh);
+  }, [products, loading, catalogError]);
 
   const loadWishlist = useCallback(async () => {
     const user = getCurrentAuthUser();
@@ -95,7 +96,7 @@ const Home = () => {
     Promise.allSettled([getProducts(), getCategories(), getTopSellers('all'), getMotorcycleModels()])
       .then(([productResult, categoryResult, sellerResult, modelResult]) => {
         if (!active) return;
-        if (productResult.status === 'fulfilled') setProducts(productResult.value || []);
+        if (productResult.status === 'fulfilled' && Array.isArray(productResult.value)) setProducts(productResult.value);
         else setCatalogError(true);
         if (categoryResult.status === 'fulfilled') setCategories(categoryResult.value || []);
         if (sellerResult.status === 'fulfilled') setBestSellers(sellerResult.value || []);

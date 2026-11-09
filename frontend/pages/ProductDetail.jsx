@@ -1,4 +1,5 @@
 import { availableStock } from '../utils/cartProduct.js';
+import { recordRecentlyViewed, removeRecentlyViewed, isRecentlyViewedEligible } from '../utils/recentlyViewed.js';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, ChevronRight, Minus, Plus, Loader2, Share2, Truck, Shield, RotateCcw, Package, Check, Info, Link as LinkIcon, MessageCircle, Play } from 'lucide-react';
@@ -181,20 +182,6 @@ const normalizeWishlistIds = (items = []) => (
     .filter(Boolean)
 );
 
-const writeRecentlyViewedProduct = (product) => {
-  if (!product?.id) return;
-
-  try {
-    const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-    const updated = [
-      product,
-      ...viewed.filter((item) => Number(item?.id) !== Number(product.id)),
-    ].slice(0, 10);
-    localStorage.setItem('recentlyViewed', JSON.stringify(updated));
-    window.dispatchEvent(new Event('recentlyViewedUpdated'));
-  } catch {}
-};
-
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -300,10 +287,17 @@ const ProductDetail = () => {
 
   useEffect(() => {
     if (!id) return;
+    let active = true;
     setLoading(true);
+    setProduct(null);
     const loadProduct = async () => {
       try {
         const p = await getProductById(Number(id));
+        if (!active) return;
+        if (!p?.id || Number(p.id) !== Number(id) || p.is_deleted) {
+          removeRecentlyViewed(id);
+          return;
+        }
         setProduct(p);
         setSelectedImage(0);
         setShareOpen(false);
@@ -320,16 +314,20 @@ const ProductDetail = () => {
           getRelatedProducts(Number(id), p.category_id || 0).catch(() => []),
           getProductReviews(Number(id)).catch(() => []),
         ]);
+        if (!active) return;
         setRelated(rel);
         setReviews(rev);
 
-        writeRecentlyViewedProduct(p);
+        if (isRecentlyViewedEligible(p)) recordRecentlyViewed(p.id);
+        else removeRecentlyViewed(p.id);
 
         recordProductView(Number(id)).catch(() => {});
-      } catch {}
-      setLoading(false);
+      } catch (error) {
+        if (active && ([404, 410].includes(error.status) || error.message === 'Product not found')) removeRecentlyViewed(id);
+      } finally { if (active) setLoading(false); }
     };
     loadProduct();
+    return () => { active = false; };
   }, [id]);
 
   const hasVariants = product && Array.isArray(product.variants) && product.variants.length > 0;
