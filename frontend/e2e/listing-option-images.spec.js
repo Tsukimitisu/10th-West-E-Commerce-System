@@ -94,7 +94,7 @@ test('mobile variant selector keeps image, quantity and exact cart identity toge
 
 test('owner edits a variant image through the existing listing save without sending inventory overrides',async({page})=>{
   const state=await fixture(page,true);
-  await page.route('**/api/ecommerce-listings',route=>route.fulfill({json:[{id:91,inventory_item_id:21,listing_type:'single',product_name:'Helmet',visibility_status:'active',visual_options:true,media:kit.media}]}));
+  await page.route(/\/api\/ecommerce-listings(?:\?.*)?$/,route=>route.fulfill({json:[{id:91,inventory_item_id:21,listing_type:'single',product_name:'Helmet',visibility_status:'active',visual_options:true,media:kit.media}]}));
   await page.goto('/#/admin/storefront');await page.getByRole('button',{name:'Edit',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'Edit Storefront Listing'});
   await dialog.getByLabel('Select gallery image for White').selectOption(cover);

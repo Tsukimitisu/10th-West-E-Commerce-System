@@ -123,7 +123,7 @@ test('owner creates a set listing from multiple existing items and links it from
   const posts = [];
   await page.route('**/api/inventory**', (route) => route.fulfill({ json: inventory }));
   await page.route('**/api/motorcycle-models**', (route) => route.fulfill({ json: { models: [{ id: 4, model_name: 'Mio 125', status: 'active' }] } }));
-  await page.route('**/api/ecommerce-listings', (route) => {
+  await page.route(/\/api\/ecommerce-listings(?:\?.*)?$/, (route) => {
     if (route.request().method() === 'POST') { posts.push(route.request().postDataJSON()); return route.fulfill({ status: 201, json: { listing: { id: 90 } } }); }
     return route.fulfill({ json: [] });
   });

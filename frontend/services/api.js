@@ -4974,13 +4974,19 @@ export const uploadProfileAvatar = async (file) => {
 
 // ==================== INVENTORY ====================
 
-export const getInventoryProductItems = async (params = {}) => {
+const inventoryParams = params => {
   const query = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && String(value).trim() !== '') query.set(key, String(value).trim());
-  });
-  return authenticatedFetch(`${API_URL}/inventory/product-items?${query.toString()}`);
+  Object.entries(params).forEach(([key,value])=>{if(value!==undefined && value!==null && String(value).trim()!=='')query.set(key,String(value).trim());});
+  return query.toString();
 };
+const inventoryChanged = (event='inventory:changed') => { if(typeof window!=='undefined')window.dispatchEvent(new Event(event)); };
+export const getInventoryProductItems = (params = {},options = {}) => authenticatedFetch(`${API_URL}/inventory/product-items?${inventoryParams(params)}`,options);
+export const getInventoryPage = async (params = {},options = {}) => {
+  const data = await authenticatedFetch(`${API_URL}/inventory?${inventoryParams({...params,paged:true})}`,options);
+  const map = p=>({...p,partNumber:p.part_number,buyingPrice:p.buying_price,boxNumber:p.box_location || p.box_number});
+  return Array.isArray(data) ? data.map(map) : {...data,items:(data.items || []).map(map)};
+};
+export const getEcommerceListingsPage = (params = {},options = {}) => authenticatedFetch(`${API_URL}/ecommerce-listings?${inventoryParams({...params,paged:true})}`,options);
 
 export const getInventory = async (search = '') => {
   if (USE_SUPABASE) {
@@ -5083,6 +5089,7 @@ export const createInventoryItem = async (item) => {
     method: 'POST',
     body: JSON.stringify(item),
   });
+  inventoryChanged();
   return data.item;
 };
 
@@ -5091,13 +5098,14 @@ export const updateInventoryItem = async (productId, item) => {
     method: 'PUT',
     body: JSON.stringify(item),
   });
+  inventoryChanged();
   return data.item;
 };
 
-export const getMotorcycleModels = async ({ includeInactive = false, manage = false } = {}) => {
+export const getMotorcycleModels = async ({ includeInactive = false, manage = false, signal } = {}) => {
   const path = manage ? '/motorcycle-models/manage' : '/motorcycle-models';
   const query = includeInactive ? '?include_inactive=true' : '';
-  const data = await authenticatedFetch(`${API_URL}${path}${query}`);
+  const data = await authenticatedFetch(`${API_URL}${path}${query}`,{signal});
   return data.models || [];
 };
 
@@ -5106,6 +5114,7 @@ export const createMotorcycleModel = async (model) => {
     method: 'POST',
     body: JSON.stringify(model),
   });
+  inventoryChanged('motorcycle-models:changed');
   return data.model;
 };
 
@@ -5114,6 +5123,7 @@ export const updateMotorcycleModel = async (modelId, model) => {
     method: 'PUT',
     body: JSON.stringify(model),
   });
+  inventoryChanged('motorcycle-models:changed');
   return data.model;
 };
 
@@ -5126,6 +5136,7 @@ export const createEcommerceListing = async (listing) => {
     method: 'POST',
     body: JSON.stringify(listing),
   });
+  inventoryChanged();
   return data.listing;
 };
 
@@ -5138,6 +5149,7 @@ export const updateEcommerceListing = async (listingId, listing) => {
     method: 'PUT',
     body: JSON.stringify(listing),
   });
+  inventoryChanged();
   return data.listing;
 };
 

@@ -55,7 +55,7 @@ test('inventory save gives success feedback, refreshes the list, and model manag
   ]);
   assert.match(view, /Inventory item added successfully/);
   assert.match(view, /Item was added but hidden by current filters/);
-  assert.match(view, /setProducts\(\(current\) => wasEditing/);
+  assert.match(view, /useInventoryBrowser\(getInventoryPage/);assert.match(view, /browser\.refresh\(\)/);
   assert.match(view, /await fetchData\(\)/);
   assert.match(manager, /Motorcycle model added successfully/);
   assert.match(manager, /value="inactive"/);

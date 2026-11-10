@@ -23,7 +23,7 @@ test('product items browser has read-only table, search, filters, sorting, pagin
   for (const label of ['Part Number', 'Item Name', 'Color', 'Price', 'Stock', 'Box / Location', 'Brand / Model', 'Category', 'Status']) {
     assert.ok(page.includes(label), label);
   }
-  assert.match(page, /getInventoryProductItems\(\{ q: debouncedSearch, \.\.\.filters, page, pageSize: PAGE_SIZE, sortBy, sortDir \}\)/);
+  assert.match(page, /useInventoryBrowser\(getInventoryProductItems/);assert.match(page, /<InventoryFilters/);
   assert.match(api, /inventory\/product-items\?/);
   assert.match(page, /Loading product items/);
   assert.match(page, /No product items found/);

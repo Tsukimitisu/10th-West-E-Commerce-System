@@ -1,3 +1,4 @@
+import { inventorySearch } from '../services/inventorySearch.js';
 import pool from '../config/database.js';
 import { normalizeOptionImages, saveListingOptionImages } from '../services/listingOptionImages.js';
 import { emitCatalogChanged } from '../socket.js';
@@ -203,20 +204,34 @@ const sendFailure = (res, error, fallback) => {
 
 export const getEcommerceListings = async (req, res) => {
   try {
-    const search = String(req.query.q || '').trim();
     const withSets = await hasSetListingSchema(pool);
-    const result = await pool.query(
-      `${listingSelect(withSets)}
-       WHERE ($1 = '' OR p.part_number ILIKE $2 OR p.name ILIKE $2 OR p.brand ILIKE $2
-              OR COALESCE(model.model_name, p.motorcycle_model) ILIKE $2 OR p.color ILIKE $2 OR p.box_location ILIKE $2
-              ${withSets ? 'OR l.title ILIKE $2' : ''})
-       ORDER BY l.updated_at DESC`,
-      [search, `%${search}%`]
-    );
-    return res.json(result.rows.map(mapListing));
+    const filters = inventorySearch({...req.query,status:undefined},{category:false,includeDeleted:true,
+      extraSearch:withSets ? ['l.title','set_model.model_name','set_model.brand'] : [],
+      modelId:withSets ? 'COALESCE(l.motorcycle_model_id,p.motorcycle_model_id)' : 'p.motorcycle_model_id'});
+    const filtering = filters.where !== 'true';
+    const children = `EXISTS(SELECT 1 FROM ecommerce_listing_items li JOIN products p ON p.id=li.product_item_id
+      LEFT JOIN motorcycle_models model ON model.id=p.motorcycle_model_id WHERE li.listing_id=l.id AND ${filters.where})`;
+    let where = withSets ? `((l.listing_type='single' AND ${filters.where}) OR (l.listing_type='set' AND ${filtering ? children : 'true'}))` : filters.where;
+    if (req.query.visibility_status) { filters.values.push(req.query.visibility_status);where += ` AND l.visibility_status=$${filters.values.length}`; }
+    const sql = `${listingSelect(withSets)} WHERE ${where}`;
+    let sort = filters.sort;
+    if (withSets) {
+      if (sort==='p.name') sort='COALESCE(l.title,p.name)';
+      if (sort==='COALESCE(p.store_selling_price, p.price)') sort=`COALESCE(p.store_selling_price,p.price,(SELECT MIN(COALESCE((item->>'store_selling_price')::numeric,(item->>'price')::numeric)) FROM jsonb_array_elements(set_items.items) item))`;
+      if (sort==='p.stock_quantity') sort=`COALESCE(p.stock_quantity,(SELECT SUM(GREATEST(0,(item->>'stock_quantity')::int-COALESCE((item->>'reserved_stock')::int,0))) FROM jsonb_array_elements(set_items.items) item WHERE item->>'inventory_status'='active'))`;
+      if (sort==='COALESCE(model.model_name,p.motorcycle_model)') sort='COALESCE(set_model.model_name,model.model_name,p.motorcycle_model)';
+    }
+    const paged = req.query.paged === 'true';
+    const count = paged ? await pool.query(`SELECT COUNT(*)::int AS total FROM (${sql}) matching`,filters.values) : null;
+    const result = await pool.query(`${sql} ORDER BY ${sort} ${filters.direction} NULLS LAST,l.id ASC
+      ${paged ? `LIMIT $${filters.values.length+1} OFFSET $${filters.values.length+2}` : ''}`,
+      paged ? [...filters.values,filters.pageSize,(filters.page-1)*filters.pageSize] : filters.values);
+    const items = result.rows.map(mapListing);
+    return res.json(paged ? {items,total:Number(count.rows[0]?.total || 0),page:filters.page,pageSize:filters.pageSize} : items);
+
   } catch (error) {
     console.error('Get ecommerce listings failed:', { code: error.code, message: error.message });
-    return res.status(500).json({ message: 'Storefront listings could not be loaded.' });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : 'Storefront listings could not be loaded.' });
   }
 };
 

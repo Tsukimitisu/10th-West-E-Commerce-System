@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { createInventoryItem, getInventory, getStockAdjustments, getLowStockProducts, getMotorcycleModels, adjustStock, updateInventoryItem, getMyPermissions } from '../../services/api';
+import { createInventoryItem, getInventoryPage, getStockAdjustments, getLowStockProducts, getMotorcycleModels, adjustStock, updateInventoryItem, getMyPermissions } from '../../services/api';
 import { Boxes, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Package, TrendingUp, History, Plus, ScanBarcode, Pencil, Bike, CheckCircle2, XCircle } from 'lucide-react';
 import Modal from '../../components/owner/Modal';
 import ReceiveStock from '../../components/owner/ReceiveStock';
 import { useSocketEvent } from '../../context/SocketContext';
 import PageHeader from '../../components/operations/PageHeader';
 import MetricCard from '../../components/operations/MetricCard';
-import { SearchField } from '../../components/operations/FilterBar';
+import InventoryFilters from '../../components/operations/InventoryFilters.jsx';
+import { useInventoryBrowser,useInventoryModels } from '../../hooks/useInventoryBrowser.js';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { Pagination } from '../../components/ui/BrandPrimitives';
 import EmptyState from '../../components/ui/EmptyState';
@@ -72,12 +73,16 @@ const InventoryView = ({ user }) => {
   const location = useLocation();
   const requestedProduct = new URLSearchParams(location.search).get('product');
   const catalogNotice = location.state?.catalogNotice || '';
-  const [products, setProducts] = useState([]);
+  const browser = useInventoryBrowser(getInventoryPage,{product_id:requestedProduct || undefined});
+  const {query,result,loading} = browser;
+  const products = result.items || [];
+  const activeModels = useInventoryModels();
+  const search = query.q,modelFilter = query.model_id,stockFilter = query.stockStatus;
+  const setSearch = value => browser.update({q:value});
+  const setPage = value => browser.update({page:value});
   const [adjustments, setAdjustments] = useState([]);
   const [lowStock, setLowStock] = useState([]);
   const [motorcycleModels, setMotorcycleModels] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [tab, setTab] = useState(location.state?.inventoryTab === 'receive' ? 'receive' : 'stock');
   useEffect(() => {
     if (isStaff && staffPermissions && tab === 'receive' && !canAdjustStock) {
@@ -85,11 +90,6 @@ const InventoryView = ({ user }) => {
       setLookupScannerOpen(true);
     }
   }, [isStaff, staffPermissions, tab, canAdjustStock]);
-  const [modelFilter, setModelFilter] = useState('');
-  const [stockFilter, setStockFilter] = useState('all');
-  const [sortField, setSortField] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
-  const [page, setPage] = useState(1);
   const [adjustModal, setAdjustModal] = useState(false);
   const [offlineReserveProduct,setOfflineReserveProduct]=useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -105,29 +105,22 @@ const InventoryView = ({ user }) => {
 
   const fetchData = async () => {
     try {
-      const [p, a, ls, modelRows] = await Promise.all([getInventory(), getStockAdjustments(), getLowStockProducts(), getMotorcycleModels({ includeInactive: true, manage: true })]);
-      setProducts(Array.isArray(p) ? p : []);
+      const [a, ls, modelRows] = await Promise.all([getStockAdjustments(), getLowStockProducts(), getMotorcycleModels({ includeInactive: true, manage: true })]);
       setAdjustments(Array.isArray(a) ? a : []);
       // getLowStockProducts returns { count, products } or an array
       setLowStock(Array.isArray(ls) ? ls : (ls?.products || []));
       setMotorcycleModels(Array.isArray(modelRows) ? modelRows : []);
     } catch (e) { console.error(e); }
-    setLoading(false);
+    browser.refresh();
   };
 
   useEffect(() => { fetchData(); }, []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      getInventory(search).then((rows) => setProducts(Array.isArray(rows) ? rows : [])).catch(() => {});
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [search]);
 
   // Real-time: refresh on stock changes
   useSocketEvent('inventory:updated', fetchData);
   useSocketEvent('inventory:low-stock', fetchData);
   useSocketEvent('product:created', fetchData);
+  useSocketEvent('product:updated', fetchData);
   useSocketEvent('product:deleted', fetchData);
 
   const openAdjust = (p) => { setSelectedProduct(p); setAdjForm({ type: 'add', quantity: '', reason: 'restocking', notes: '' }); setAdjError(''); setAdjustModal(true); };
@@ -155,40 +148,16 @@ const InventoryView = ({ user }) => {
     }
   };
 
-  const totalStock = products.reduce((s, p) => s + p.stock_quantity, 0);
-  const reservedStock = products.reduce((s, p) => s + Number(p.reserved_stock || 0), 0);
-  const damagedStock = products.reduce((s, p) => s + Number(p.damaged_stock || 0), 0);
-  const totalValue = products.reduce((s, p) => s + (p.stock_quantity * Number(p.cost_price ?? p.buying_price ?? 0)), 0);
-  const outOfStock = products.filter(p => p.stock_quantity === 0).length;
-
-  const filtered = products.filter(p => {
-    if (requestedProduct && String(p.id) !== requestedProduct) return false;
-    const term = search.toLowerCase();
-    return !term
-      || String(p.name || '').toLowerCase().includes(term)
-      || String(p.partNumber || p.part_number || '').toLowerCase().includes(term)
-      || String(p.sku || '').toLowerCase().includes(term)
-      || String(p.barcode || '').toLowerCase().includes(term)
-      || String(p.brand || '').toLowerCase().includes(term)
-      || String(p.motorcycle_model || '').toLowerCase().includes(term)
-      || String(p.color || '').toLowerCase().includes(term)
-      || String(p.box_location || '').toLowerCase().includes(term);
-  });
-
-  // Presentation-only sorting/paging; stock values and mutation handlers stay intact.
-  const stockRows = filtered.filter((item) => (stockFilter === 'all' || stockStatus(item).tone === stockFilter) && (!modelFilter || item.motorcycle_model === modelFilter));
-  const sortedRows = [...stockRows].sort((a, b) => {
-    const left = sortField === 'name' ? a.product_name || a.name : a[sortField];
-    const right = sortField === 'name' ? b.product_name || b.name : b[sortField];
-    const result = ['stock_quantity', 'store_selling_price'].includes(sortField)
-      ? Number(left || 0) - Number(right || 0)
-      : String(left || '').localeCompare(String(right || ''), 'en', { numeric: true, sensitivity: 'base' });
-    return sortDirection === 'asc' ? result : -result;
-  });
-  const pageSize = 20;
-  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
-  const visibleRows = sortedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const summary = result.summary || {};
+  const total = Number(result.total || 0);
+  const totalStock = Number(summary.units ?? products.reduce((sum,item)=>sum+item.stock_quantity,0));
+  const reservedStock = Number(summary.reserved ?? products.reduce((sum,item)=>sum+Number(item.reserved_stock || 0),0));
+  const damagedStock = Number(summary.damaged ?? products.reduce((sum,item)=>sum+Number(item.damaged_stock || 0),0));
+  const totalValue = Number(summary.value ?? products.reduce((sum,item)=>sum+item.stock_quantity*Number(item.cost_price ?? item.buying_price ?? 0),0));
+  const outOfStock = Number(summary.out_of_stock ?? products.filter(item=>item.stock_quantity===0).length);
+  const stockRows = products,visibleRows = products;
+  const pageCount = Math.max(1,Math.ceil(total/query.pageSize));
+  const currentPage = query.page;
 
   const saveInventoryItem = async (payload) => {
     const wasEditing = Boolean(editingItem);
@@ -198,10 +167,7 @@ const InventoryView = ({ user }) => {
     const term = search.trim().toLowerCase();
     const searchable = [saved.name, saved.product_name, saved.part_number, saved.brand, saved.motorcycle_model, saved.color, saved.box_location]
       .filter(Boolean).join(' ').toLowerCase();
-    const hiddenBySearch = Boolean(term && !searchable.includes(term));
-    setProducts((current) => wasEditing
-      ? current.map((item) => Number(item.id) === Number(saved.id) ? saved : item)
-      : [saved, ...current.filter((item) => Number(item.id) !== Number(saved.id))]);
+    const hiddenBySearch = Boolean((term && !searchable.includes(term)) || (modelFilter && Number(saved.motorcycle_model_id)!==Number(modelFilter)));
     setItemModal(false);
     setEditingItem(null);
     setFeedback({
@@ -223,7 +189,7 @@ const InventoryView = ({ user }) => {
   };
 
   const tabs = [
-    { id: 'stock', label: 'Stock Levels', icon: Boxes, count: products.length },
+    { id: 'stock', label: 'Stock Levels', icon: Boxes, count: total },
     { id: 'receive', label: 'Receive Items', icon: ScanBarcode },
     { id: 'adjustments', label: 'Adjustment History', icon: History, count: adjustments.length },
     { id: 'alerts', label: 'Low Stock Alerts', icon: AlertTriangle, count: lowStock.length },
@@ -248,12 +214,12 @@ const InventoryView = ({ user }) => {
       {feedback && (
         <div role="status" className={`flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${feedback.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
           <div><p className="font-semibold">{feedback.text}</p>{feedback.detail && <p className="mt-0.5 text-xs">{feedback.detail}</p>}</div>
-          {feedback.detail && <button type="button" onClick={() => setSearch('')} className="shrink-0 font-semibold underline underline-offset-2">Clear filters</button>}
+          {feedback.detail && <button type="button" onClick={() => browser.update({q:'',model_id:'',stockStatus:''})} className="shrink-0 font-semibold underline underline-offset-2">Clear filters</button>}
         </div>
       )}
 
       <div className={`ops-summary-strip ${isStaff ? 'staff-inventory-summary' : ''}`}>
-        <MetricCard icon={Boxes} label="Units on hand" value={totalStock.toLocaleString('en-PH')} detail={`${products.length.toLocaleString('en-PH')} inventory items`} tone="neutral" />
+        <MetricCard icon={Boxes} label="Units on hand" value={totalStock.toLocaleString('en-PH')} detail={`${total.toLocaleString('en-PH')} inventory items`} tone="neutral" />
         <MetricCard icon={TrendingUp} label="Inventory value" value={formatPeso(totalValue, 0)} detail="At cost price" tone="neutral" />
         <MetricCard icon={Package} label="Reserved / damaged" value={`${reservedStock} / ${damagedStock}`} detail="Units not sellable" tone="neutral" />
         <MetricCard icon={AlertTriangle} label="Low / out of stock" value={`${lowStock.length} / ${outOfStock}`} detail="Open restock list" tone={lowStock.length || outOfStock ? 'warning' : 'success'} onClick={() => setTab('alerts')} />
@@ -283,29 +249,15 @@ const InventoryView = ({ user }) => {
       {/* Stock Levels Tab */}
       {tab === 'stock' && (
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-label="Stock levels">
-          <div className="inventory-toolbar">
-            <SearchField
-              value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search part number, name, model, brand, color, or Box"
-              className="w-full sm:max-w-md"
-            />
-            <select aria-label="Filter inventory by stock" value={stockFilter} onChange={(event) => { setStockFilter(event.target.value); setPage(1); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm sm:flex-none">
-              <option value="all">All stock</option><option value="success">In stock</option><option value="warning">Low stock</option><option value="danger">Out of stock</option>
-            </select>
-            <select aria-label="Filter inventory by model" value={modelFilter} onChange={event => { setModelFilter(event.target.value); setPage(1); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm sm:flex-none"><option value="">All models</option>{[...new Set(products.map(item => item.motorcycle_model).filter(Boolean))].sort().map(model => <option key={model} value={model}>{model}</option>)}</select>
-            <select aria-label="Sort inventory" value={sortField} onChange={(event) => { setSortField(event.target.value); setPage(1); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm sm:flex-none">
-              <option value="name">Item name</option><option value="part_number">Part number</option><option value="motorcycle_model">Model</option><option value="box_location">Box location</option><option value="stock_quantity">Available stock</option><option value="store_selling_price">Store price</option>
-            </select>
-            <button type="button" onClick={() => setSortDirection((value) => value === 'asc' ? 'desc' : 'asc')} className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-medium" aria-label={`Sort ${sortDirection === 'asc' ? 'descending' : 'ascending'}`}>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</button>
+          <InventoryFilters query={query} update={browser.update} models={activeModels}>
             <button type="button" onClick={() => canAdjustStock ? setTab('receive') : setLookupScannerOpen(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold sm:ml-auto"><ScanBarcode size={17} aria-hidden="true" />Barcode Scan</button>
-          </div>
+          </InventoryFilters>
           <div className="border-b border-slate-200 px-3 py-2">
             <p className="text-xs text-slate-500">
-              <span className="font-semibold tabular-nums text-slate-700">{stockRows.length}</span> of {products.length} items · type or scan a part number or barcode
+              <span className="font-semibold tabular-nums text-slate-700">{total}</span> matching items · type or scan a part number or barcode
             </p>
           </div>
-          {loading ? (
+          {browser.error ? <p role="alert" className="p-4 text-sm text-red-700">{browser.error}<button type="button" onClick={browser.refresh} className="ml-3 underline">Try again</button></p> : loading ? (
             <div className="space-y-2 p-3" role="status" aria-label="Loading inventory">
               {Array.from({ length: 6 }).map((_, index) => <div key={index} className="skeleton h-12 w-full rounded-lg" />)}
             </div>
@@ -313,9 +265,9 @@ const InventoryView = ({ user }) => {
             <div className="p-4">
               <EmptyState
                 icon={Boxes}
-                title={products.length === 0 ? 'No inventory items yet' : 'No items match your search'}
-                description={products.length === 0 ? 'Add an inventory item or receive stock to start tracking parts.' : 'Check the part number or try a model, brand, color, or Box location.'}
-                action={search || stockFilter !== 'all' || modelFilter ? <button type="button" onClick={() => { setSearch(''); setStockFilter('all'); setModelFilter(''); setPage(1); }} className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Clear search</button> : null}
+                title={search.trim() || stockFilter || modelFilter ? 'No items match your search' : 'No inventory items yet'}
+                description={search.trim() || stockFilter || modelFilter ? 'Check the part number or try a model, brand, color, or Box location.' : 'Add an inventory item or receive stock to start tracking parts.'}
+                action={search || Boolean(stockFilter) || modelFilter ? <button type="button" onClick={() => { browser.update({q:'',stockStatus:'',model_id:''}); }} className="inline-flex min-h-10 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Clear search</button> : null}
               />
             </div>
           ) : (

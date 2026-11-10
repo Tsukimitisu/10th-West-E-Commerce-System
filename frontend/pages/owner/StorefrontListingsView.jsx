@@ -1,12 +1,14 @@
+import InventoryFilters from '../../components/operations/InventoryFilters.jsx';
+import { useInventoryBrowser,useInventoryModels } from '../../hooks/useInventoryBrowser.js';
+import { Pagination } from '../../components/ui/BrandPrimitives.jsx';
 import React, { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Eye, EyeOff, ImagePlus, Layers, Package, Pencil, Plus, Search, Trash2, Video } from 'lucide-react';
 import PageHeader from '../../components/operations/PageHeader';
 import Modal from '../../components/owner/Modal';
 import {
   createEcommerceListing,
-  getEcommerceListings,
+  getEcommerceListingsPage,
   getInventory,
-  getMotorcycleModels,
   getProductVariants,
   updateEcommerceListing,
   uploadProductImage,
@@ -83,9 +85,9 @@ const SetListingFields = ({ form, setForm, models, onAddItems, onMove, onRemove,
 
 const StorefrontListingsView = () => {
   const [inventory, setInventory] = useState([]);
-  const [listings, setListings] = useState([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const browser = useInventoryBrowser(getEcommerceListingsPage);
+  const {query,result,loading} = browser;
+  const listings = result.items || [];
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(createForm());
@@ -94,7 +96,7 @@ const StorefrontListingsView = () => {
   const [error, setError] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
-  const [models, setModels] = useState([]);
+  const models = useInventoryModels();
   const [variants,setVariants] = useState([]);
   const [variantsLoading,setVariantsLoading] = useState(false);
   const [variantsError,setVariantsError] = useState('');
@@ -110,25 +112,16 @@ const StorefrontListingsView = () => {
   },[modalOpen,form.inventory_item_id,form.listing_type]);
 
   const load = async () => {
-    setLoading(true);
-    try {
-      const [inventoryRows, listingRows] = await Promise.all([getInventory(), getEcommerceListings()]);
-      setInventory(Array.isArray(inventoryRows) ? inventoryRows : []);
-      setListings(Array.isArray(listingRows) ? listingRows : []);
-      getMotorcycleModels().then((rows) => setModels(Array.isArray(rows) ? rows : [])).catch(() => setModels([]));
-    } finally {
-      setLoading(false);
-    }
+    const rows = await getInventory();
+    setInventory(Array.isArray(rows) ? rows : []);
+    browser.refresh();
   };
   useEffect(() => { load().catch(() => {}); }, []);
 
   const isSet = form.listing_type === 'set';
-  const selectedInventory = inventory.find((item) => Number(item.id) === Number(form.inventory_item_id));
-  const filtered = listings.filter((listing) => {
-    const term = search.trim().toLowerCase();
-    return !term || [listing.part_number, listing.product_name, listing.brand, listing.motorcycle_model, listing.color, ...(listing.items || []).flatMap((item) => [item.name, item.part_number, item.color])]
-      .some((value) => String(value || '').toLowerCase().includes(term));
-  });
+  const selectedInventory = inventory.find(item=>Number(item.id)===Number(form.inventory_item_id))
+    || (editing?.inventory_item_id===Number(form.inventory_item_id) ? {...editing,id:editing.inventory_item_id,name:editing.product_name} : null);
+  const filtered = listings;
 
   const openCreate = (listingType = 'single') => {
     setEditing(null);
@@ -246,13 +239,10 @@ const StorefrontListingsView = () => {
       />
 
       <div className="rounded-xl border border-slate-200 bg-white ">
-        <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-md flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search part number, product, model, brand or color" className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/15" />
-          </div>
-          <p className="text-xs text-slate-500">Online price = Store price + 15%</p>
-        </div>
+        <InventoryFilters query={query} update={browser.update} models={models} placeholder="Search part number, product, model, brand or color">
+          <select aria-label="Listing visibility" value={query.visibility_status || ''} onChange={event=>browser.update({visibility_status:event.target.value})} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">All listing statuses</option>{['draft','active','hidden','archived'].map(status=><option key={status} value={status}>{status}</option>)}</select>
+        </InventoryFilters>
+        {browser.error && <p role="alert" className="p-4 text-sm text-red-700">{browser.error}</p>}
         {loading ? <div className="p-12 text-center text-sm text-slate-500">Loading storefront listings…</div> : filtered.length === 0 ? (
           <div className="p-12 text-center"><Package className="mx-auto text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">No storefront listings found</p><p className="mt-1 text-xs text-slate-500">Create one by selecting an existing inventory item.</p></div>
         ) : (
@@ -274,6 +264,7 @@ const StorefrontListingsView = () => {
             </table>
           </div>
         )}
+        <div className="flex flex-wrap items-center justify-between border-t border-slate-200 px-4 py-2"><span className="text-xs text-slate-600">{result.total || 0} matching listings</span><Pagination page={query.page} totalPages={Math.max(1,Math.ceil(Number(result.total || 0)/query.pageSize))} onChange={page=>browser.update({page})} /></div>
       </div>
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={isSet ? (editing ? 'Edit Set Listing' : 'Add Set Listing') : editing ? 'Edit Storefront Listing' : 'Add Storefront Listing'} size="3xl">
@@ -330,7 +321,7 @@ const StorefrontListingsView = () => {
         items={inventory}
         listings={listings}
         onClose={() => setPickerOpen(false)}
-        onSelect={(item) => { setForm((current) => ({ ...current, inventory_item_id: item.id })); setPickerOpen(false); setError(''); }}
+        onSelect={(item) => { setInventory(current=>[item,...current.filter(row=>row.id!==item.id)]);setForm((current) => ({ ...current, inventory_item_id: item.id })); setPickerOpen(false); setError(''); }}
       />
       <InventoryPickerModal
         multi

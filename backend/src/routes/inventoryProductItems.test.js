@@ -17,7 +17,7 @@ test('product items query searches inventory fields, filters, paginates, and use
   assert.match(query.itemsSql, /p\.part_number ILIKE \$1 OR p\.name ILIKE \$2/);
   assert.match(query.itemsSql, /p\.box_number ILIKE/);
   assert.match(query.itemsSql, /p\.stock_quantity > 0 AND p\.stock_quantity <= p\.low_stock_threshold/);
-  assert.match(query.itemsSql, /ORDER BY COALESCE\(p\.store_selling_price, p\.price\) DESC/);
+  assert.match(query.itemsSql, /ORDER BY CASE[\s\S]*COALESCE\(p\.store_selling_price, p\.price\) DESC/);
   assert.deepEqual(query.itemValues.slice(-2), [10, 10]);
   assert.ok(query.itemValues.includes('%BB3%'));
   assert.ok(query.itemValues.includes('%panel%'));

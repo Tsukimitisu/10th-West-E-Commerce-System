@@ -1,3 +1,4 @@
+import { emitCatalogChanged } from '../socket.js';
 import pool from '../config/database.js';
 
 const normalizeText = (value, maxLength) => {
@@ -48,6 +49,7 @@ export const createMotorcycleModel = async (req, res) => {
       [model.modelName, model.brand, model.description, model.status],
     );
     await req.logActivity?.('motorcycle_model.create', 'motorcycle_model', result.rows[0].id, { after: result.rows[0] });
+    emitCatalogChanged();
     return res.status(201).json({ message: 'Motorcycle model added successfully.', model: result.rows[0] });
   } catch (error) {
     console.error('MOTORCYCLE_MODEL_CREATE_FAILED', { code: error.code, message: error.message });
@@ -77,6 +79,7 @@ export const updateMotorcycleModel = async (req, res) => {
     await client.query('UPDATE products SET motorcycle_model=$1, updated_at=NOW() WHERE motorcycle_model_id=$2', [model.modelName, id]);
     await client.query('COMMIT');
     await req.logActivity?.('motorcycle_model.update', 'motorcycle_model', id, { before: before.rows[0], after: result.rows[0] });
+    emitCatalogChanged();
     return res.json({ message: 'Motorcycle model updated successfully.', model: result.rows[0] });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});

@@ -1,3 +1,4 @@
+import { inventorySearch, INVENTORY_SEARCH_FROM } from '../services/inventorySearch.js';
 import pool from '../config/database.js';
 import { emitStockUpdate, emitLowStockAlert } from '../socket.js';
 import { mutateInventory } from '../services/inventory.js';
@@ -103,32 +104,27 @@ const invalidReasonMessage = (type) => (
 // Get all inventory with low stock alerts
 export const getInventory = async (req, res) => {
   try {
-    const search = String(req.query.q || '').trim();
-    const result = await pool.query(`
-      SELECT 
-        p.*,
-        COALESCE(model.model_name, p.motorcycle_model) AS motorcycle_model_name,
-        CASE 
-          WHEN p.stock_quantity = 0 THEN 'out_of_stock'
-          WHEN p.stock_quantity <= p.low_stock_threshold THEN 'low_stock'
-          ELSE 'in_stock'
-        END as stock_status
-      FROM products p
-      LEFT JOIN motorcycle_models model ON p.motorcycle_model_id = model.id
-      WHERE ($1 = '' OR
-        p.part_number ILIKE $2 OR p.name ILIKE $2 OR p.brand ILIKE $2 OR
-        COALESCE(model.model_name, p.motorcycle_model) ILIKE $2 OR p.color ILIKE $2 OR p.box_location ILIKE $2 OR
-        p.barcode ILIKE $2 OR p.sku ILIKE $2)
-      ORDER BY
-        CASE WHEN $1 <> '' AND LOWER(p.part_number) LIKE LOWER($1) || '%' THEN 0 ELSE 1 END,
-        p.created_at DESC, p.id DESC
-      LIMIT 500
-    `, [search, `%${search}%`]);
+    const search = inventorySearch(req.query);
+    const from = `${INVENTORY_SEARCH_FROM} WHERE ${search.where}`;
+    const paged = req.query.paged === 'true';
+    const values = paged ? [...search.values,search.pageSize,(search.page-1)*search.pageSize] : search.values;
+    const result = await pool.query(`SELECT p.*,COALESCE(model.model_name,p.motorcycle_model) AS motorcycle_model_name,
+      ${paged ? 'EXISTS(SELECT 1 FROM ecommerce_listings listed WHERE listed.inventory_item_id=p.id) AS has_storefront_listing,' : ''}
+      CASE WHEN p.stock_quantity=0 THEN 'out_of_stock' WHEN p.stock_quantity<=p.low_stock_threshold THEN 'low_stock' ELSE 'in_stock' END AS stock_status
+      ${from} ORDER BY ${search.priority}${search.sort} ${search.direction} NULLS LAST,p.id ASC
+      ${paged ? `LIMIT $${search.values.length+1} OFFSET $${search.values.length+2}` : ''}`,values);
+    const items = result.rows.map(mapInventoryItem);
+    if (!paged) return res.json(items); // Existing callers retain their array contract.
+    const count = await pool.query(`SELECT COUNT(*)::int AS total,
+      COALESCE(SUM(p.stock_quantity),0) AS units,COALESCE(SUM(p.reserved_stock),0) AS reserved,
+      COALESCE(SUM(p.damaged_stock),0) AS damaged,COALESCE(SUM(p.stock_quantity*COALESCE(p.buying_price,0)),0) AS value,
+      COUNT(*) FILTER(WHERE p.stock_quantity=0)::int AS out_of_stock,
+      COALESCE(array_agg(DISTINCT p.brand) FILTER(WHERE NULLIF(p.brand,'') IS NOT NULL),'{}') AS brands ${from}`,search.values);
+    return res.json({items,total:Number(count.rows[0]?.total || 0),page:search.page,pageSize:search.pageSize,summary:count.rows[0] || {}});
 
-    res.json(result.rows.map(mapInventoryItem));
   } catch (error) {
     console.error('Get inventory error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Server error' });
   }
 };
 

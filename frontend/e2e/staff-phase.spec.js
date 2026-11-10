@@ -57,9 +57,9 @@ test('Staff login, permitted routes, inventory filters and scan stay available',
   await expect(page.locator('main').getByText('Front Brake Pad Set', { exact: true }).filter({ visible: true }).first()).toBeVisible();
   await expect(page.locator('main').getByText('4T Engine Oil · 1 L', { exact: true }).filter({ visible: true })).toHaveCount(0);
   await search.fill('');
-  await page.getByLabel('Filter inventory by stock').selectOption('danger');
+  await page.getByLabel('Filter inventory by stock').selectOption('out_of_stock');
   await expect(page.locator('main').getByText('Drive Belt', { exact: true }).filter({ visible: true }).first()).toBeVisible();
-  await page.getByLabel('Filter inventory by stock').selectOption('all');
+  await page.getByLabel('Filter inventory by stock').selectOption('');
   await page.getByRole('button', { name: 'Barcode Scan', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Scan with Camera', exact: true })).toBeVisible();
 });
