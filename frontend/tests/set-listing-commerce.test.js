@@ -47,19 +47,19 @@ test('cart context and product surfaces use keyed pending state, not a global lo
 });
 
 test('set listing customer page adds and buys the real child item through the set selector', async () => {
-  const [page, sheet, card, app, list] = await Promise.all([
-    read('pages/SetProductDetail.jsx'), read('components/customer/SetPurchaseSheet.jsx'), read('components/ProductCard.jsx'), read('App.jsx'), read('pages/ProductList.jsx'),
+  const [page, sheet, card, app, list, cards] = await Promise.all([
+    read('pages/SetProductDetail.jsx'), read('components/customer/SetPurchaseSheet.jsx'), read('components/ProductCard.jsx'), read('App.jsx'), read('pages/ProductList.jsx'), read('components/customer/SetOptionCards.jsx'),
   ]);
   assert.match(app, /path="\/sets\/:id" element=\{<SetProductDetail \/>\}/);
   assert.match(page, /addToCart\(toCartProduct\(set, option\), quantity, \{ listingId: set\.id \}\)/);
   assert.match(page, /item: \{ productId: option\.id, product: toCartProduct\(set, option\), quantity \}/);
   assert.match(page, /navigate\('\/checkout\?buyNow=1'/);
-  assert.match(sheet, /role="radiogroup"/);
-  assert.match(sheet, /role="radio"/);
-  assert.match(sheet, /aria-checked=\{isSelected\}/);
-  assert.match(sheet, /aria-disabled=\{!option\.is_available \|\| undefined\}/);
-  assert.match(sheet, /if \(!option\.is_available\) return;/);
-  assert.match(sheet, /<span className="sr-only">Selected<\/span>/);
+  assert.match(cards, /role="radiogroup"/);
+  assert.match(cards, /role="radio"/);
+  assert.match(cards, /aria-checked=\{isSelected\}/);
+  assert.match(cards, /aria-disabled=\{!option\.is_available \|\| undefined\}/);
+  assert.match(cards, /if \(option\.is_available\) onSelect/);
+  assert.match(cards, /<span className="sr-only">Selected<\/span>/);
   assert.match(sheet, /aria-label="Decrease quantity"/);
   assert.ok(sheet.includes("presentation={isDesktop ? 'modal' : 'sheet'}"), 'bottom sheet on mobile, modal on desktop');
   assert.doesNotMatch(sheet, /#ee4d2d|bg-red-5|text-pink/i, 'no marketplace red/pink branding');

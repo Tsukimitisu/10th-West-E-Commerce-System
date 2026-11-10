@@ -1,3 +1,4 @@
+import OptionImage from '../components/ui/OptionImage.jsx';
 import useCatalogRevision from '../hooks/useCatalogRevision.js';
 import { availableStock } from '../utils/cartProduct.js';
 import { recordRecentlyViewed, removeRecentlyViewed, isRecentlyViewedEligible } from '../utils/recentlyViewed.js';
@@ -608,6 +609,7 @@ const ProductDetail = () => {
     return {
       ...product,
       price: Number(selectedVariantRow.price ?? product.price),
+      image: selectedVariantRow.image_url || product.image,
       sale_price: null,
       is_on_sale: false,
       stock_quantity: availableStock(selectedVariantRow),
@@ -925,7 +927,8 @@ const ProductDetail = () => {
   }
 
   const mediaItems = extractProductMedia(product);
-  const selectedMedia = mediaItems[Math.min(selectedImage, mediaItems.length - 1)] || mediaItems[0];
+  const coverImage = mediaItems.find(media => media.type === 'image')?.src || product.image;
+  const selectedMedia = selectedImage === -1 ? { type: 'image',src: selectedVariantRow?.image_url || coverImage } : mediaItems[Math.min(selectedImage, mediaItems.length - 1)] || mediaItems[0];
   const maxStock = availableStock(selectedVariantRow || product);
   const isOutOfStock = variantRows.length ? variantRows.every(row => availableStock(row) <= 0) : maxStock <= 0;
   const isBundle = product.product_type === 'bundle';
@@ -937,8 +940,8 @@ const ProductDetail = () => {
   const optionCards = <fieldset className="mb-6">
     <legend className="mb-3 text-sm font-semibold text-slate-900">Choose an option</legend>
     <div className="grid grid-cols-2 gap-2">
-      {variantRows.map(variant => <button type="button" key={variant.id} disabled={variant.stock_quantity <= 0} aria-pressed={selectedVariantRow?.id === variant.id} onClick={() => { setSelectedVariant(variant.option_combination); setVariantError(''); setQuantity(1); }} className={`flex min-h-20 items-center gap-2 rounded-lg border p-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 ${selectedVariantRow?.id === variant.id ? 'border-orange-600 bg-orange-50 text-orange-900' : 'border-slate-300 bg-white text-slate-800'}`}>
-        {variant.image_url && <img src={resolveProductImageUrl(variant.image_url)} onError={handleProductImageError} alt="" width="40" height="40" className="h-10 w-10 shrink-0 rounded object-contain" />}
+      {variantRows.map(variant => <button type="button" key={variant.id} disabled={variant.stock_quantity <= 0} aria-pressed={selectedVariantRow?.id === variant.id} onClick={() => { setSelectedVariant(variant.option_combination); setSelectedImage(-1); setVariantError(''); setQuantity(1); }} className={`flex min-h-20 items-center gap-2 rounded-lg border p-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 ${selectedVariantRow?.id === variant.id ? 'border-orange-600 bg-orange-50 text-orange-900' : 'border-slate-300 bg-white text-slate-800'}`}>
+        <OptionImage src={variant.image_url} fallback={coverImage} alt="" width="40" height="40" className="h-10 w-10 shrink-0 rounded object-contain" />
         <span className="min-w-0 break-words"><span className="block font-semibold">{Object.values(variant.option_combination).join(' / ')}</span>{variant.sku && <span className="mt-1 block text-xs">{variant.sku}</span>}{variant.price !== Number(product.price) && <span className="mt-1 block">{'\u20b1'}{variant.price.toLocaleString('en-PH')}</span>}<span className="mt-1 block text-xs">{variant.stock_quantity > 0 ? `${variant.stock_quantity} available` : 'Unavailable'}</span></span>
       </button>)}
     </div>
@@ -986,7 +989,7 @@ const ProductDetail = () => {
                   controls
                 />
               ) : (
-                <img src={selectedMedia?.src || PRODUCT_IMAGE_FALLBACK} alt={product.name} onError={handleProductImageError} className="w-full h-full object-cover" />
+                <OptionImage src={selectedMedia?.src} fallback={coverImage} alt={product.name} className="w-full h-full object-cover" />
               )}
               {hasDiscount && (
                 <span className="absolute top-4 left-4 bg-red-600 text-white text-sm font-bold px-3 py-1.5 rounded-full shadow-sm">
@@ -1512,7 +1515,7 @@ const ProductDetail = () => {
       </div>
       <BottomSheet isOpen={Boolean(purchaseIntent)} onClose={() => setPurchaseIntent(null)} title={purchaseIntent === 'buy' ? 'Buy now' : 'Add to cart'}>
         <div className="mb-5 flex items-start gap-4">
-          <img src={resolveProductImageUrl(selectedVariantRow?.image_url || product.image)} onError={handleProductImageError} alt={product.name} width="80" height="80" className="h-20 w-20 shrink-0 rounded-lg border border-slate-200 object-contain" />
+          <OptionImage src={selectedVariantRow?.image_url} fallback={coverImage} alt={product.name} width="80" height="80" className="h-20 w-20 shrink-0 rounded-lg border border-slate-200 object-contain" />
           <div className="min-w-0"><p className="break-words font-semibold text-slate-900">{product.name}</p><p className="mt-1 text-xl font-bold text-slate-950">{'\u20b1'}{displayPrice.toLocaleString('en-PH')}</p><p className="mt-1 text-sm text-slate-600">{selectedVariantRow ? `${selectedVariantRow.label} - ${maxStock} available` : 'Select your option below'}</p></div>
         </div>
         {optionCards}

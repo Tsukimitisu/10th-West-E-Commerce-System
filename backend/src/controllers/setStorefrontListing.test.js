@@ -53,7 +53,7 @@ test('owner creates a set with multiple valid items by storing relationships onl
   assert.equal(res.statusCode, 201);
   assert.ok(calls.some(({ source }) => source.includes("VALUES ('set'")));
   const relation = calls.find(({ source }) => source.includes('INSERT INTO ecommerce_listing_items'));
-  assert.deepEqual(relation.params, [90, [11, 12]]);
+  assert.deepEqual(relation.params, [90, [11, 12], [null,null]]);
   assert.ok(!calls.some(({ source }) => /INSERT INTO products/i.test(source)), 'no duplicated product rows');
   assert.equal(res.body.listing.items.length, 2);
   assert.equal(res.body.listing.items[0].store_selling_price, 400);

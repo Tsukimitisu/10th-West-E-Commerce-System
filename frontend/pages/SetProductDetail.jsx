@@ -4,6 +4,8 @@ import { ChevronRight, Layers, ShoppingCart } from 'lucide-react';
 import { getStorefrontSet } from '../services/api';
 import { cartPendingKey, useCart } from '../context/CartContext';
 import { getCurrentAuthUser } from '../services/authSession.js';
+import SetOptionCards from '../components/customer/SetOptionCards.jsx';
+import OptionImage from '../components/ui/OptionImage.jsx';
 import RichText from '../components/ui/RichText';
 import EmptyState from '../components/ui/EmptyState';
 import BrandButton from '../components/ui/BrandButton';
@@ -29,6 +31,7 @@ export const toCartProduct = (set, option) => ({
 
 const SetProductDetail = () => {
   const { id } = useParams();
+  const [selectedId,setSelectedId] = useState(null);
   const navigate = useNavigate();
   const { addToCart, isCartKeyPending } = useCart();
   const [set, setSet] = useState(null);
@@ -41,6 +44,7 @@ const SetProductDetail = () => {
     let active = true;
     setStatus('loading');
     setSelectedImage(0);
+    setSelectedId(null);
     getStorefrontSet(id)
       .then((result) => { if (active) { setSet(result); setStatus('ready'); document.title = `${result.name} | 10th West Moto`; } })
       .catch(() => { if (active) { setSet(null); setStatus('missing'); } });
@@ -56,6 +60,9 @@ const SetProductDetail = () => {
 
   const images = (set.media || []).filter((entry) => entry.media_type === 'image').map((entry) => entry.url);
   const gallery = images.length ? images : [set.image].filter(Boolean);
+  const selected = set.options.find(option => option.id === selectedId && option.is_available);
+  const selectOption = value => { setSelectedId(value);setSelectedImage(-1); };
+  const displayImage = selectedImage === -1 ? selected?.image || set.image : gallery[selectedImage];
   const anyAvailable = set.available_item_count > 0;
   const priceLabel = set.max_price > set.price ? `From ${formatPeso(set.price)}` : formatPeso(set.price);
 
@@ -89,7 +96,7 @@ const SetProductDetail = () => {
       <div className="grid gap-8 md:grid-cols-2">
         <div>
           <div className="aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <img src={resolveProductImageUrl(gallery[selectedImage])} onError={handleProductImageError} alt={set.name} className="h-full w-full object-contain" width="720" height="720" />
+            <OptionImage src={displayImage} fallback={set.image} alt={set.name} className="h-full w-full object-contain" width="720" height="720" />
           </div>
           {gallery.length > 1 && <div className="mt-3 flex gap-2 overflow-x-auto" role="group" aria-label="Set images">
             {gallery.map((url, index) => <button key={url} type="button" onClick={() => setSelectedImage(index)} aria-label={`Show image ${index + 1}`} aria-pressed={index === selectedImage} className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${index === selectedImage ? 'border-orange-600' : 'border-slate-200'}`}><img src={resolveProductImageUrl(url)} onError={handleProductImageError} alt="" className="h-full w-full object-cover" /></button>)}
@@ -99,9 +106,10 @@ const SetProductDetail = () => {
           <p className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"><Layers size={13} aria-hidden="true" />Set · {set.item_count} items</p>
           <h1 className="mt-3 text-2xl font-bold text-slate-950 md:text-3xl">{set.name}</h1>
           {set.motorcycle_model && <p className="mt-2 text-sm text-slate-600">Fits <span className="font-semibold text-slate-900">{set.motorcycle_model}</span></p>}
-          <p className="mt-4 text-3xl font-bold text-slate-950">{priceLabel}</p>
+          <p className="mt-4 text-3xl font-bold text-slate-950">{selected ? formatPeso(selected.price) : priceLabel}</p>
           <p className="mt-1 text-xs text-slate-600">Price depends on the item you choose.</p>
-          <p className={`mt-3 text-sm font-semibold ${anyAvailable ? 'text-emerald-700' : 'text-red-700'}`}>{anyAvailable ? `${set.available_item_count} of ${set.item_count} items in stock` : 'Currently out of stock'}</p>
+          <p className={`mt-3 text-sm font-semibold ${anyAvailable ? 'text-emerald-700' : 'text-red-700'}`}>{selected ? `${selected.stock_quantity} available` : anyAvailable ? `${set.available_item_count} of ${set.item_count} items in stock` : 'Currently out of stock'}</p>
+          <div className="mt-6"><SetOptionCards options={set.options} selectedId={selected?.id ?? null} onSelect={selectOption} cover={set.image} /></div>
           <div className="mt-6 hidden gap-3 md:flex">
             <BrandButton size="lg" className="flex-1" disabled={!anyAvailable} onClick={() => setIntent('cart')}><ShoppingCart size={18} aria-hidden="true" />Add to Cart</BrandButton>
             <BrandButton size="lg" variant="secondary" className="flex-1" disabled={!anyAvailable} onClick={() => setIntent('buy')}>Buy Now</BrandButton>
@@ -125,6 +133,8 @@ const SetProductDetail = () => {
       </div>
       <SetPurchaseSheet
         set={set}
+        selectedId={selected?.id ?? null}
+        onSelect={selectOption}
         intent={intent}
         onClose={() => setIntent(null)}
         onAddToCart={handleAddToCart}

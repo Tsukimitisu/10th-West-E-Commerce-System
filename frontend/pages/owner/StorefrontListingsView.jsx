@@ -7,11 +7,14 @@ import {
   getEcommerceListings,
   getInventory,
   getMotorcycleModels,
+  getProductVariants,
   updateEcommerceListing,
   uploadProductImage,
   uploadProductVideo,
 } from '../../services/api';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
+import OptionImageField from '../../components/owner/OptionImageField.jsx';
+import OptionImage from '../../components/ui/OptionImage.jsx';
 import InventoryPickerModal from '../../components/owner/InventoryPickerModal';
 
 const money = (value) => (value == null ? '—' : `₱${Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
@@ -23,6 +26,7 @@ const toSetItem = (item) => ({
   part_number: item.part_number || '',
   color: item.color || '',
   image: item.image || null,
+  image_url: item.option_image_url || null,
   stock: Number(item.available_stock ?? item.stock_quantity ?? 0),
   store_price: item.store_selling_price ?? null,
   online_price: item.ecommerce_price ?? item.price ?? null,
@@ -31,6 +35,7 @@ const toSetItem = (item) => ({
 
 const createForm = (listing, listingType = listing?.listing_type || 'single') => ({
   listing_type: listingType,
+  visual_options: listing?.visual_options === true,
   title: listing?.title || '',
   motorcycle_model_id: listing?.motorcycle_model_id ?? '',
   items: listingType === 'set' && Array.isArray(listing?.items) ? listing.items.map(toSetItem) : [],
@@ -43,7 +48,7 @@ const createForm = (listing, listingType = listing?.listing_type || 'single') =>
   media: Array.isArray(listing?.media) ? listing.media.map((item) => ({ ...item })) : [],
 });
 
-const SetListingFields = ({ form, setForm, models, onAddItems, onMove, onRemove }) => (
+const SetListingFields = ({ form, setForm, models, onAddItems, onMove, onRemove, imageProps }) => (
   <div className="space-y-4">
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="text-xs font-semibold text-slate-700">Set title
@@ -63,8 +68,9 @@ const SetListingFields = ({ form, setForm, models, onAddItems, onMove, onRemove 
           {form.items.map((item, index) => {
             const unavailable = item.inventory_status !== 'active' || item.stock <= 0;
             return <li key={item.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap">
-              <img src={resolveProductImageUrl(item.image)} onError={handleProductImageError} alt="" width="44" height="44" className="h-11 w-11 shrink-0 rounded-lg border border-slate-200 object-cover" />
+              <OptionImage src={item.image_url} fallback={item.image} width="44" height="44" className="h-11 w-11 shrink-0 rounded-lg border border-slate-200 object-cover" />
               <div className="min-w-0 flex-1 basis-48"><p className="break-words text-sm font-semibold text-slate-900">{item.name}</p><p className="text-xs text-slate-500"><span className="font-mono">{item.part_number || 'No part #'}</span> · {item.color || 'No color'} · {item.stock} in stock{unavailable && <span className="ml-1 font-semibold text-red-700">· {item.inventory_status !== 'active' ? 'Inactive' : 'Out of stock'}</span>}</p></div>
+              <div className="w-full sm:w-44 sm:shrink-0"><OptionImageField showPreview={false} label={item.name} value={item.image_url} fallback={item.image} {...imageProps} onChange={value => setForm(current => ({ ...current,items: current.items.map(row => row.id === item.id ? { ...row,image_url: value } : row) }))} /></div>
               <div className="ml-14 flex w-full items-center justify-between gap-3 sm:ml-0 sm:w-auto"><div className="text-xs text-slate-600 sm:text-right"><p>Store {money(item.store_price)}</p><p className="font-semibold text-slate-900">Online {money(item.online_price)}</p></div>
               <div className="flex gap-1"><button type="button" onClick={() => onMove(index, -1)} disabled={index === 0} aria-label={`Move ${item.name} up`} className="rounded p-1.5 hover:bg-slate-100 disabled:opacity-30"><ArrowUp size={14} /></button><button type="button" onClick={() => onMove(index, 1)} disabled={index === form.items.length - 1} aria-label={`Move ${item.name} down`} className="rounded p-1.5 hover:bg-slate-100 disabled:opacity-30"><ArrowDown size={14} /></button><button type="button" onClick={() => onRemove(item)} aria-label={`Remove ${item.name} from set`} className="rounded p-1.5 text-red-600 hover:bg-red-50"><Trash2 size={14} /></button></div></div>
             </li>;
@@ -89,6 +95,19 @@ const StorefrontListingsView = () => {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [itemPickerOpen, setItemPickerOpen] = useState(false);
   const [models, setModels] = useState([]);
+  const [variants,setVariants] = useState([]);
+  const [variantsLoading,setVariantsLoading] = useState(false);
+  const [variantsError,setVariantsError] = useState('');
+  const [imageUploads,setImageUploads] = useState(0);
+  useEffect(() => {
+    let active = true;setVariants([]);setVariantsError('');
+    if (!modalOpen || form.listing_type === 'set' || !form.inventory_item_id) { setVariantsLoading(false);return; }
+    setVariantsLoading(true);
+    getProductVariants(form.inventory_item_id).then(result => { if (active) setVariants(result.variants || []); })
+      .catch(error => { if (active) setVariantsError(error.message || 'Variant images could not be loaded.'); })
+      .finally(() => { if (active) setVariantsLoading(false); });
+    return () => { active = false; };
+  },[modalOpen,form.inventory_item_id,form.listing_type]);
 
   const load = async () => {
     setLoading(true);
@@ -172,13 +191,15 @@ const StorefrontListingsView = () => {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (saving) return;
+    if (saving || imageUploads || variantsLoading) return;
+    if (!isSet && variantsError) return setError(variantsError);
     if (isSet && !form.title.trim()) return setError('Enter a set listing title.');
     if (isSet && form.items.length < 1) return setError('Add at least one inventory item to the set.');
     if (!isSet && !selectedInventory) return setError('Select an inventory item first.');
     if (form.visibility_status === 'active' && form.media.length + pendingFiles.length < 1) {
       return setError('An active listing requires at least one image or video.');
     }
+    if (form.visual_options && form.visibility_status === 'active' && (isSet ? form.items.filter(item => item.inventory_status === 'active') : variants).some(item => !item.image_url)) return setError('Every sellable visual option needs an image before this listing can be active.');
     setSaving(true);
     setError('');
     try {
@@ -190,6 +211,8 @@ const StorefrontListingsView = () => {
         uploaded.push({ url, media_type: pending.media_type, alt_text: isSet ? form.title.trim() : selectedInventory.product_name || selectedInventory.name });
       }
       const shared = {
+        visual_options: form.visual_options,
+        ...(isSet ? { option_images: form.items.map(item => ({ product_item_id: item.id,image_url: item.image_url })) } : { variant_images: variants.map(variant => ({ variant_id: variant.id,image_url: variant.image_url })) }),
         ecommerce_description: form.ecommerce_description,
         visibility_status: form.visibility_status,
         is_featured: form.is_featured,
@@ -210,6 +233,8 @@ const StorefrontListingsView = () => {
       setSaving(false);
     }
   };
+
+  const imageProps = { images: form.media.filter(item => item.media_type === 'image').map(item => item.url),disabled: saving, onError: setError, onBusy: busy => setImageUploads(count => Math.max(0,count+(busy ? 1 : -1))) };
 
   return (
     <div className="space-y-5">
@@ -253,7 +278,7 @@ const StorefrontListingsView = () => {
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={isSet ? (editing ? 'Edit Set Listing' : 'Add Set Listing') : editing ? 'Edit Storefront Listing' : 'Add Storefront Listing'} size="3xl">
         <form onSubmit={submit} className="space-y-5">
-          {isSet ? <SetListingFields form={form} setForm={setForm} models={models} onAddItems={() => setItemPickerOpen(true)} onMove={moveSetItem} onRemove={toggleSetItem} /> : <>
+          {isSet ? <SetListingFields form={form} setForm={setForm} models={models} onAddItems={() => setItemPickerOpen(true)} onMove={moveSetItem} onRemove={toggleSetItem} imageProps={imageProps} /> : <>
           <div className="rounded-xl border border-slate-200 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Inventory Item</p><p className="mt-1 text-sm font-semibold text-slate-900">{selectedInventory ? `${selectedInventory.part_number} — ${selectedInventory.product_name || selectedInventory.name}` : 'No inventory item selected'}</p><p className="mt-1 text-xs text-slate-500">Search Inventory by part number, model, brand, color or Box location.</p></div>
@@ -266,6 +291,16 @@ const StorefrontListingsView = () => {
           </div>}
           </>}
 
+          {(isSet || variants.length > 0) && <label className="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" checked={form.visual_options} onChange={event => setForm(current => ({ ...current,visual_options: event.target.checked }))} /><span>Visual options: require an image for every sellable option when active.</span></label>}
+          {!isSet && variantsLoading && <p role="status" className="text-sm text-slate-600">Loading variant images…</p>}
+          {!isSet && variantsError && <p role="alert" className="text-sm text-red-700">{variantsError}</p>}
+          {!isSet && variants.length > 0 && <section className="space-y-3 rounded-xl border border-slate-200 p-4" aria-label="Variant images">
+            <h3 className="text-sm font-semibold text-slate-900">Variant images</h3>
+            {variants.map(variant => <div key={variant.id} className="grid min-w-0 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
+              <div className="min-w-0"><p className="break-words text-sm font-semibold text-slate-900">{Object.values(variant.option_combination || {}).join(' / ') || variant.variant_value || variant.sku}</p><p className="text-xs text-slate-600">{variant.stock_quantity} in stock · {money(variant.price ?? selectedInventory?.store_selling_price)} store price</p></div>
+              <OptionImageField {...imageProps} label={Object.values(variant.option_combination || {}).join(' / ') || variant.variant_value || variant.sku} value={variant.image_url} fallback={selectedInventory?.image} onChange={value => setVariants(rows => rows.map(row => row.id === variant.id ? { ...row,image_url: value } : row))} />
+            </div>)}
+          </section>}
           <label className="block text-xs font-semibold text-slate-700">E-commerce Description
             <textarea rows={5} value={form.ecommerce_description} onChange={(event) => setForm((current) => ({ ...current, ecommerce_description: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/15" />
           </label>
@@ -286,7 +321,7 @@ const StorefrontListingsView = () => {
             <div className="flex flex-wrap items-end gap-4 pb-2">{[['is_featured', 'Featured'], ['is_best_seller', 'Best seller'], ['is_new_arrival', 'New arrival']].map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form[key]} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.checked }))} /> {label}</label>)}</div>
           </div>
           {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={() => setModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button disabled={saving} type="submit" className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">{saving ? 'Saving and uploading…' : 'Save Listing'}</button></div>
+          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={() => setModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button disabled={saving || imageUploads > 0 || variantsLoading || Boolean(variantsError)} type="submit" className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">{saving ? 'Saving and uploading…' : 'Save Listing'}</button></div>
         </form>
       </Modal>
 

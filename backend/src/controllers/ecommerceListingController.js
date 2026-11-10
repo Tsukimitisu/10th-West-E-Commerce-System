@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { normalizeOptionImages, saveListingOptionImages } from '../services/listingOptionImages.js';
 import { emitCatalogChanged } from '../socket.js';
 import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
 import { hasSetListingSchema, mapSetOption, normalizeSetItemIds, summarizeSetOptions } from '../services/setListings.js';
@@ -48,7 +49,11 @@ export const normalizeListingInput = (body) => {
   if (visibilityStatus === 'active' && media.length < 1) {
     throw fail(400, 'An active listing requires at least one image or video.', 'LISTING_MEDIA_REQUIRED');
   }
+  if (body.visual_options !== undefined && typeof body.visual_options !== 'boolean') throw fail(400, 'Visual options must be enabled or disabled.');
   const shared = {
+    visualOptions: body.visual_options,
+    optionImages: normalizeOptionImages(body.option_images, 'product_item_id'),
+    variantImages: normalizeOptionImages(body.variant_images, 'variant_id'),
     listingType,
     description: sanitizeRichText(body?.ecommerce_description, { maxLength: 10000 }) || '',
     visibilityStatus,
@@ -80,7 +85,8 @@ export const SET_ITEMS_LATERAL = `LEFT JOIN LATERAL (
     SELECT COALESCE(jsonb_agg(jsonb_build_object(
       'id', ip.id, 'name', ip.name, 'part_number', ip.part_number, 'color', ip.color,
       'motorcycle_model', COALESCE(im.model_name, ip.motorcycle_model),
-      'image', COALESCE((SELECT om.url FROM ecommerce_listing_media om JOIN ecommerce_listings ol ON ol.id = om.listing_id
+      'option_image_url', li.image_url,
+      'image', COALESCE(li.image_url,(SELECT om.url FROM ecommerce_listing_media om JOIN ecommerce_listings ol ON ol.id = om.listing_id
                           WHERE ol.inventory_item_id = ip.id AND om.media_type = 'image' ORDER BY om.sort_order LIMIT 1), ip.image),
       'store_selling_price', ip.store_selling_price, 'price', ip.price,
       'stock_quantity', ip.stock_quantity, 'reserved_stock', ip.reserved_stock,
@@ -103,7 +109,7 @@ export const LISTING_MEDIA_LATERAL = `LEFT JOIN LATERAL (
 
 const listingSelect = (withSets) => `
   SELECT l.id, l.inventory_item_id, l.ecommerce_description, l.visibility_status,
-         l.is_featured, l.is_best_seller, l.is_new_arrival, l.created_at, l.updated_at,
+         l.is_featured, l.is_best_seller, l.is_new_arrival, l.created_at, l.updated_at, l.visual_options,
          ${withSets
     ? 'l.listing_type, l.title, l.motorcycle_model_id AS set_motorcycle_model_id, set_model.model_name AS set_motorcycle_model, set_items.items,'
     : "'single'::text AS listing_type, NULL::text AS title, NULL::int AS set_motorcycle_model_id, NULL::text AS set_motorcycle_model, '[]'::jsonb AS items,"}
@@ -175,11 +181,13 @@ export const replaceSetItems = async (client, listingId, itemIds, visibilityStat
   if (visibilityStatus === 'active' && !found.rows.some((row) => row.inventory_status === 'active')) {
     throw fail(409, 'An active set needs at least one active inventory item.', 'SET_ITEMS_UNAVAILABLE');
   }
-  await client.query('DELETE FROM ecommerce_listing_items WHERE listing_id = $1', [listingId]);
+  const previous = await client.query('SELECT product_item_id,image_url FROM ecommerce_listing_items WHERE listing_id=$1', [listingId]);
+  const images = new Map(previous.rows.map(row => [Number(row.product_item_id),row.image_url]));
+  await client.query('DELETE FROM ecommerce_listing_items WHERE listing_id=$1', [listingId]);
   await client.query(
-    `INSERT INTO ecommerce_listing_items (listing_id, product_item_id, sort_order)
-     SELECT $1, item.id, item.ordinality - 1 FROM unnest($2::int[]) WITH ORDINALITY AS item(id, ordinality)`,
-    [listingId, itemIds]
+    `INSERT INTO ecommerce_listing_items (listing_id, product_item_id, sort_order, image_url)
+     SELECT $1,item.id,item.ordinality-1,($3::text[])[item.ordinality] FROM unnest($2::int[]) WITH ORDINALITY AS item(id,ordinality)`,
+    [listingId, itemIds, itemIds.map(id => images.get(id) || null)]
   );
 };
 
@@ -250,6 +258,8 @@ export const createEcommerceListing = async (req, res) => {
       );
       listingId = result.rows[0].id;
     }
+    const imageSettings = await client.query('UPDATE ecommerce_listings SET visual_options=COALESCE($2,visual_options) WHERE id=$1 RETURNING visual_options', [listingId,input.visualOptions ?? null]);
+    await saveListingOptionImages(client,listingId,input,input.visualOptions ?? imageSettings.rows[0]?.visual_options ?? false);
     await replaceMedia(client, listingId, input.media);
     await client.query('COMMIT');
     emitCatalogChanged();
@@ -296,6 +306,8 @@ export const updateEcommerceListing = async (req, res) => {
       );
     if (!result.rowCount) throw fail(404, 'Storefront listing not found or inventory item is unavailable.');
     if (input.listingType === 'set') await replaceSetItems(client, listingId, input.itemIds, input.visibilityStatus);
+    const imageSettings = await client.query('UPDATE ecommerce_listings SET visual_options=COALESCE($2,visual_options) WHERE id=$1 RETURNING visual_options', [listingId,input.visualOptions ?? null]);
+    await saveListingOptionImages(client,listingId,input,input.visualOptions ?? imageSettings.rows[0]?.visual_options ?? false);
     await replaceMedia(client, listingId, input.media);
     await client.query('COMMIT');
     emitCatalogChanged();
