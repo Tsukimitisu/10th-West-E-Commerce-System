@@ -12,24 +12,26 @@ try {
   const grants = await pool.query(
     `SELECT grantee, table_schema, table_name, privilege_type
      FROM information_schema.role_table_grants
-     WHERE table_schema = 'public'
+     WHERE table_schema IN ('public','recovery_control')
        AND grantee = ANY($1::text[])
      ORDER BY grantee, table_name, privilege_type`,
-    [browserRoles]
+    [['PUBLIC', ...browserRoles]]
   );
 
   const schemaGrants = await pool.query(
-    `SELECT role_name
-     FROM unnest($1::text[]) AS role_name
-     WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name)
-       AND has_schema_privilege(role_name, 'public', 'USAGE')`,
+    `SELECT roles.rolname AS role_name,schema_name
+     FROM pg_roles roles
+     CROSS JOIN (VALUES ('public'),('recovery_control')) schemas(schema_name)
+     WHERE roles.rolname = ANY($1::text[])
+       AND to_regnamespace(schema_name) IS NOT NULL
+       AND has_schema_privilege(roles.rolname, to_regnamespace(schema_name), 'USAGE')`,
     [browserRoles]
   );
 
   const unsafePolicies = await pool.query(`
     SELECT schemaname, tablename, policyname, qual, with_check
     FROM pg_policies
-    WHERE schemaname = 'public'
+    WHERE schemaname IN ('public','recovery_control')
       AND (
         -- Match an unconditional literal TRUE policy, not safe uses such as
         -- current_setting('role', true) where TRUE is a function argument.
@@ -48,7 +50,7 @@ try {
     SELECT n.nspname AS schema_name, c.relname AS table_name
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'public'
+    WHERE n.nspname IN ('public','recovery_control')
       AND c.relkind IN ('r', 'p')
       AND NOT c.relrowsecurity
     ORDER BY c.relname

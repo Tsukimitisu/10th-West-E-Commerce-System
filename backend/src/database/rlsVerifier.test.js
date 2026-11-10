@@ -28,4 +28,8 @@ test('RLS verifier still detects any future public table without RLS and fails v
   assert.deepEqual((await db.query(query[1])).rows, [{ schema_name: 'public', table_name: 'future_security_gap' }]);
   await db.exec('ALTER TABLE public.future_security_gap ENABLE ROW LEVEL SECURITY');
   assert.deepEqual((await db.query(query[1])).rows, []);
+  await db.exec('CREATE SCHEMA recovery_control;CREATE TABLE recovery_control.future_recovery_gap(id int)');
+  assert.deepEqual((await db.query(query[1])).rows, [{ schema_name: 'recovery_control', table_name: 'future_recovery_gap' }]);
+  await db.exec('ALTER TABLE recovery_control.future_recovery_gap ENABLE ROW LEVEL SECURITY');
+  assert.deepEqual((await db.query(query[1])).rows, []);
 });
