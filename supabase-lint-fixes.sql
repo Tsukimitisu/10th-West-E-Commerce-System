@@ -1,0 +1,9 @@
+-- DEPRECATED AND INTENTIONALLY NON-EXECUTABLE.
+-- The tracked Knex migrations in backend/migrations are the only schema authority.
+-- Use: npm --prefix backend run migrate
+DO $retired$
+BEGIN
+  RAISE EXCEPTION 'This legacy SQL entry point is deprecated; use tracked Knex migrations.';
+END
+$retired$;
+

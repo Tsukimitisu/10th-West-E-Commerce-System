@@ -4,15 +4,40 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>10th West Moto Parts</title>
+    <meta name="description" content="Shop motorcycle parts, accessories, and riding essentials from 10th West Moto." />
+    <meta name="theme-color" content="#080A0E" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="10th West Moto" />
+    <meta property="og:title" content="10th West Moto Parts" />
+    <meta property="og:description" content="Shop motorcycle parts, accessories, and riding essentials from 10th West Moto." />
+    <meta property="og:url" content="/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="10th West Moto Parts" />
+    <meta name="twitter:description" content="Shop motorcycle parts, accessories, and riding essentials from 10th West Moto." />
+    <link rel="icon" type="image/png" href="/brand/10th-west-logo.png" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preload" href="/fonts/inter-0.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/fonts/inter.css" />
+    <link rel="stylesheet" href="/fonts/barlow-condensed.css" />
     <script>
       tailwind.config = {
         theme: {
           extend: {
+            colors: {
+              gray: { 50: '#F6F7F9', 100: '#EEF0F4', 200: '#DDE1E8', 300: '#B4BDCC', 400: '#565E6B', 500: '#565E6B', 600: '#35415B', 700: '#35415B', 800: '#111C3D', 900: '#080A0E' },
+              green: { 50: '#F0FDF4', 100: '#DCFCE7', 200: '#BBF7D0', 300: '#86EFAC', 400: '#166534', 500: '#166534', 600: '#166534', 700: '#14532D', 800: '#14532D', 900: '#052E16' },
+              yellow: { 50: '#FFFBEB', 100: '#FEF3C7', 200: '#FDE68A', 300: '#FCD34D', 400: '#FBBF24', 500: '#92400E', 600: '#92400E', 700: '#78350F', 800: '#78350F', 900: '#451A03' },
+              slate: { 50: '#F6F7F9', 100: '#EEF0F4', 200: '#DDE1E8', 300: '#B4BDCC', 400: '#626B78', 500: '#626B78', 600: '#565E6B', 700: '#35415B', 800: '#192A5A', 900: '#111C3D', 950: '#080A0E' },
+              orange: { 50: '#FFF3E9', 100: '#FFE3CC', 200: '#FFC69B', 300: '#FFAC6A', 400: '#FF8A1F', 500: '#F36A21', 600: '#A34110', 700: '#A34110', 800: '#87320E', 900: '#68290F' },
+              red: { 50: '#FFF0F1', 100: '#FFE0E4', 200: '#FFBBC5', 300: '#F88E9C', 400: '#E35063', 500: '#D62232', 600: '#C01C2B', 700: '#A51726', 800: '#841C2A', 900: '#6A1B29' },
+              blue: { 50: '#F6F7F9', 100: '#EEF0F4', 200: '#DDE1E8', 300: '#B7BFCC', 400: '#565E6B', 500: '#192A5A', 600: '#192A5A', 700: '#111C3D', 800: '#111C3D', 900: '#111C3D' },
+              purple: { 50: '#F6F7F9', 100: '#EEF0F4', 200: '#DDE1E8', 300: '#B7BFCC', 400: '#565E6B', 500: '#192A5A', 600: '#192A5A', 700: '#111C3D' },
+              emerald: { 50: '#F2F7F4', 100: '#E3EEE7', 200: '#C3D8CB', 300: '#B7D3C1', 400: '#166044', 500: '#166044', 600: '#166044', 700: '#166044', 800: '#114C35', 900: '#0C3827' },
+              zinc: { 750: '#27324D', 800: '#192A5A', 850: '#172653', 900: '#111C3D', 950: '#080A0E' }
+            },
             fontFamily: {
               sans: ['Inter', 'sans-serif'],
-              display: ['Poppins', 'sans-serif'],
+              display: ['Barlow Condensed', 'sans-serif'],
             }
           }
         }
@@ -20,7 +45,7 @@
     </script>
     <style>
       body { font-family: 'Inter', sans-serif; }
-      .font-display { font-family: 'Poppins', sans-serif; }
+      .font-display { font-family: 'Barlow Condensed', sans-serif; }
       .scrollbar-hide::-webkit-scrollbar { display: none; }
       .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1; }
@@ -37,6 +62,12 @@
     <link rel="stylesheet" href="/index.css">
   </head>
   <body class="bg-white text-gray-900 antialiased">
+    <!-- THESIS: A precise motorcycle parts retailer, led by merchandise and readable tasks.
+    OWN-WORLD: Obsidian/navy framing, neutral light surfaces, orange action, Barlow headings and Inter UI.
+    STORY: Find the right part, confirm fitment and stock, purchase with confidence; teams operate quickly.
+    FIRST VIEWPORT: Compact official-logo header, 500px commerce banner, short left headline and two actions.
+    FORM: User-pinned premium automotive commerce. Concept workflow reported a Windows assertion; no seed key was retained. The explicit brief governs composition.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md -->
     <div id="root"></div>
     <script type="module" src="/index.jsx"></script>
   </body>

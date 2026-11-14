@@ -1,0 +1,31 @@
+export const PRODUCT_IMAGE_FALLBACK = '/images/product-fallback.svg';
+
+const BLOCKED_PRODUCT_IMAGE_HOSTS = new Set([
+  'images.unsplash.com',
+  'source.unsplash.com',
+  'plus.unsplash.com',
+]);
+
+export const isBlockedProductImageUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+
+  try {
+    const parsed = new URL(raw, 'http://localhost');
+    return BLOCKED_PRODUCT_IMAGE_HOSTS.has(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+};
+
+export const resolveProductImageUrl = (value, fallback = PRODUCT_IMAGE_FALLBACK) => {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  return isBlockedProductImageUrl(raw) ? fallback : raw;
+};
+
+export const normalizeProductImageUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  return resolveProductImageUrl(raw);
+};

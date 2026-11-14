@@ -1,32 +1,32 @@
 import express from 'express';
 import pool from '../config/database.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Get all suppliers
-router.get('/', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), async (req, res) => {
+router.get('/', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('suppliers.view'), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM suppliers ORDER BY name ASC');
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
 // Get supplier by ID
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner', 'store_staff'), requirePermission('suppliers.view'), async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM suppliers WHERE id = $1', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: 'Supplier not found' });
     res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
 // Create supplier
-router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner'), async (req, res) => {
+router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner'), requirePermission('suppliers.manage'), async (req, res) => {
   try {
     const { name, contact_person, email, phone, address, notes } = req.body;
     const result = await pool.query(
@@ -35,12 +35,12 @@ router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner')
     );
     res.status(201).json({ supplier: result.rows[0] });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
 // Update supplier
-router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner'), async (req, res) => {
+router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner'), requirePermission('suppliers.manage'), async (req, res) => {
   try {
     const { name, contact_person, email, phone, address, notes, is_active } = req.body;
     const result = await pool.query(
@@ -49,17 +49,17 @@ router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
     );
     res.json({ supplier: result.rows[0] });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 
 // Delete supplier
-router.delete('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner'), async (req, res) => {
+router.delete('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner'), requirePermission('suppliers.manage'), async (req, res) => {
   try {
     await pool.query('DELETE FROM suppliers WHERE id = $1', [req.params.id]);
     res.json({ message: 'Deleted' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Request could not be completed.' });
   }
 });
 

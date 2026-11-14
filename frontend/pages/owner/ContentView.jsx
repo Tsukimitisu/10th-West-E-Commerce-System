@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Newspaper, Save, Plus, Edit3, Trash2, X, FileText, HelpCircle, Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Save, Plus, Edit3, Trash2, FileText, HelpCircle, Check, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { getPolicy, updatePolicy, getFAQs, createFAQ, updateFAQ, deleteFAQ } from '../../services/api';
+import RichText from '../../components/ui/RichText';
+import RichTextEditor from '../../components/owner/RichTextEditor';
+import Modal from '../../components/owner/Modal';
+import PageHeader from '../../components/operations/PageHeader';
+import EmptyState from '../../components/ui/EmptyState';
+import StatusBadge from '../../components/ui/StatusBadge';
 
 const POLICY_TYPES = [
   { key: 'return_policy', label: 'Return Policy' },
@@ -9,13 +15,18 @@ const POLICY_TYPES = [
   { key: 'shipping_policy', label: 'Shipping Policy' },
 ];
 
-const inputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-300';
+const inputClass = 'w-full min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10';
+const labelClass = 'mb-1.5 block text-sm font-medium text-slate-700';
+const primaryButtonClass = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50';
+const secondaryButtonClass = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50';
 
 const ContentView = () => {
   const [mainTab, setMainTab] = useState('policies');
   const [policyTab, setPolicyTab] = useState('return_policy');
 
   // Policy state
+  const [previewPolicy, setPreviewPolicy] = useState(false);
+  const [policyDirty, setPolicyDirty] = useState(false);
   const [policyTitle, setPolicyTitle] = useState('');
   const [policyContent, setPolicyContent] = useState('');
   const [policyLoading, setPolicyLoading] = useState(false);
@@ -49,6 +60,7 @@ const ContentView = () => {
         const data = await getPolicy(policyTab);
         setPolicyTitle(data?.title || '');
         setPolicyContent(data?.content || '');
+        setPolicyDirty(false);
       } catch (err) {
         console.error('Failed to load policy:', err);
         setPolicyError('Failed to load policy content.');
@@ -87,6 +99,7 @@ const ContentView = () => {
     try {
       await updatePolicy(policyTab, policyTitle, policyContent);
       setPolicySaved(true);
+      setPolicyDirty(false);
       setTimeout(() => setPolicySaved(false), 3000);
     } catch (err) {
       console.error('Failed to save policy:', err);
@@ -149,48 +162,51 @@ const ContentView = () => {
   ];
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <h1 className="font-display font-bold text-xl text-gray-900 flex items-center gap-2">
-          <Newspaper size={22} /> Content Management
-        </h1>
-        <p className="text-sm text-gray-500">Manage store policies and frequently asked questions</p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Content management"
+        description="Edit store policies and the answers customers see in Help & FAQ."
+        actions={mainTab === 'faqs' && (
+          <button type="button" onClick={openAddFaq} className={primaryButtonClass}>
+            <Plus size={16} aria-hidden="true" /> Add FAQ
+          </button>
+        )}
+      />
 
-      {/* Main Tabs */}
-      <div className="border-b border-gray-200">
-        <div className="flex gap-0">
+      <div className="border-b border-slate-200" role="tablist" aria-label="Content type">
+        <div className="flex gap-1">
           {mainTabs.map((t) => (
             <button
               key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={mainTab === t.id}
               onClick={() => setMainTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
+              className={`-mb-px flex min-h-11 items-center gap-2 border-b-2 px-4 text-sm font-semibold transition-colors ${
                 mainTab === t.id
-                  ? 'text-orange-600 border-orange-500'
-                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-orange-600 text-slate-950'
+                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
               }`}
             >
-              <t.icon size={16} />
+              <t.icon size={16} aria-hidden="true" />
               {t.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Policies Tab */}
       {mainTab === 'policies' && (
         <div className="space-y-4">
-          {/* Policy Sub-Tabs */}
-          <div className="flex gap-1 bg-white rounded-lg border border-gray-100 p-1 w-fit flex-wrap">
+          <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-100 p-1 sm:w-fit" role="tablist" aria-label="Policy">
             {POLICY_TYPES.map((pt) => (
               <button
                 key={pt.key}
+                type="button"
+                role="tab"
+                aria-selected={policyTab === pt.key}
                 onClick={() => setPolicyTab(pt.key)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  policyTab === pt.key
-                    ? 'bg-orange-50 text-orange-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                className={`min-h-9 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors ${
+                  policyTab === pt.key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {pt.label}
@@ -198,290 +214,179 @@ const ContentView = () => {
             ))}
           </div>
 
-          {/* Policy Editor */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             {policyLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-2" />
-                <span className="text-sm text-gray-500">Loading policy...</span>
+              <div className="space-y-3" role="status" aria-label="Loading policy">
+                <div className="skeleton h-10 w-full rounded-lg" />
+                <div className="skeleton h-72 w-full rounded-lg" />
               </div>
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
+                  <label htmlFor="policy-title" className={labelClass}>Title</label>
                   <input
+                    id="policy-title"
                     type="text"
                     value={policyTitle}
                     onChange={(e) => {
                       setPolicyTitle(e.target.value);
+                      setPolicyDirty(true);
                       setPolicySaved(false);
                     }}
-                    placeholder="Policy title..."
+                    placeholder="e.g. Return Policy"
                     className={inputClass}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Content</label>
-                  <textarea
+                  <p className={labelClass}>Content</p>
+                  {previewPolicy ? <div className="min-h-[300px] rounded-lg border border-slate-200 bg-slate-50 p-5"><RichText value={policyContent} fallback={<p className="text-sm text-slate-600">No policy content yet.</p>} /></div> : <RichTextEditor
                     value={policyContent}
-                    onChange={(e) => {
-                      setPolicyContent(e.target.value);
+                    onChange={(html) => {
+                      setPolicyContent(html);
+                      setPolicyDirty(true);
                       setPolicySaved(false);
                     }}
-                    placeholder="Enter policy content..."
-                    className={`${inputClass} min-h-[300px] resize-y`}
-                  />
+                    placeholder="Write the policy customers will read…"
+                    minHeight="300px"
+                  />}
+                  <p className="mt-1.5 text-xs text-slate-500">Use Heading for section titles. Bold and italic are kept when you save.</p>
                 </div>
 
                 {policyError && (
-                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-                    <AlertCircle size={14} />
-                    {policyError}
-                  </div>
+                  <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{policyError}</p>
                 )}
 
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleSavePolicy}
-                    disabled={policySaving}
-                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 ${
-                      policySaved
-                        ? 'bg-green-600 text-white'
-                        : 'bg-orange-500 hover:bg-orange-600 text-white'
-                    }`}
-                  >
-                    {policySaving ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Saving...
-                      </>
-                    ) : policySaved ? (
-                      <>
-                        <Check size={14} />
-                        Saved!
-                      </>
-                    ) : (
-                      <>
-                        <Save size={14} />
-                        Save
-                      </>
-                    )}
+                <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+                  <button type="button" onClick={handleSavePolicy} disabled={policySaving} className={primaryButtonClass}>
+                    {policySaving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
+                    {policySaving ? 'Saving…' : 'Save policy'}
                   </button>
-
-                  {policySaved && (
-                    <span className="text-sm text-green-600 font-medium">Policy saved successfully!</span>
-                  )}
+                  <button type="button" onClick={() => setPreviewPolicy(current => !current)} className={secondaryButtonClass}>{previewPolicy ? 'Back to editor' : 'Preview policy'}</button>
+                  <span role="status" className="text-sm font-medium text-emerald-700">
+                    {policyDirty && <span className="text-slate-600">Unsaved changes</span>}
+                    {policySaved && <span className="inline-flex items-center gap-1.5"><Check size={16} aria-hidden="true" /> Policy saved</span>}
+                  </span>
                 </div>
               </div>
             )}
-          </div>
+          </section>
         </div>
       )}
 
-      {/* FAQs Tab */}
       {mainTab === 'faqs' && (
-        <div className="space-y-4">
-          {/* Actions */}
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">{faqs.length} FAQ{faqs.length !== 1 ? 's' : ''} total</p>
-            <button
-              onClick={openAddFaq}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-            >
-              <Plus size={14} />
-              Add New FAQ
-            </button>
-          </div>
-
-          {/* FAQ List */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            {faqLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-2" />
-                <span className="text-sm text-gray-500">Loading FAQs...</span>
-              </div>
-            ) : faqError ? (
-              <div className="flex flex-col items-center justify-center py-16">
-                <AlertCircle size={32} className="text-gray-300 mb-2" />
-                <p className="text-sm text-gray-500">{faqError}</p>
-              </div>
-            ) : faqs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16">
-                <HelpCircle size={32} className="text-gray-300 mb-2" />
-                <p className="text-sm text-gray-500">No FAQs yet. Add your first one!</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {faqs.map((faq) => (
-                  <div key={faq.id} className="p-4 hover:bg-gray-50/50 transition-colors">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="text-sm font-semibold text-gray-900">{faq.question}</p>
-                        </div>
-                        <p className="text-sm text-gray-500 line-clamp-2">{faq.answer}</p>
-                        <div className="flex items-center gap-3 mt-2">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                              faq.is_active !== false
-                                ? 'bg-green-50 text-green-700 border border-green-200'
-                                : 'bg-gray-50 text-gray-500 border border-gray-200'
-                            }`}
-                          >
-                            {faq.is_active !== false ? (
-                              <><Eye size={10} /> Active</>
-                            ) : (
-                              <><EyeOff size={10} /> Inactive</>
-                            )}
-                          </span>
-                          {faq.display_order != null && (
-                            <span className="text-xs text-gray-400">Order: {faq.display_order}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => openEditFaq(faq)}
-                          className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
-                          title="Edit"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        {deleteConfirm === faq.id ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleDeleteFaq(faq.id)}
-                              className="px-2 py-1 bg-red-500 text-white text-xs rounded-md hover:bg-red-600 transition-colors"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md hover:bg-gray-200 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setDeleteConfirm(faq.id)}
-                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-semibold text-slate-950">Frequently asked questions</h2>
+            <span className="text-xs text-slate-500">{faqs.length} {faqs.length === 1 ? 'entry' : 'entries'}</span>
+          </header>
+          {faqLoading ? (
+            <div className="space-y-3 p-4 sm:p-5" role="status" aria-label="Loading FAQs">
+              {Array.from({ length: 3 }).map((_, index) => <div key={index} className="skeleton h-16 w-full rounded-lg" />)}
+            </div>
+          ) : faqError && !faqModalOpen ? (
+            <div className="p-4 sm:p-5">
+              <EmptyState tone="error" title="FAQs could not be loaded" description={faqError} action={<button type="button" onClick={loadFaqs} className={secondaryButtonClass}>Try again</button>} />
+            </div>
+          ) : faqs.length === 0 ? (
+            <div className="p-4 sm:p-5">
+              <EmptyState icon={HelpCircle} title="No FAQs yet" description="Answer the questions customers ask most, such as fitment, shipping times, and returns." action={<button type="button" onClick={openAddFaq} className={primaryButtonClass}><Plus size={16} aria-hidden="true" /> Add FAQ</button>} />
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {faqs.map((faq) => (
+                <li key={faq.id} className="flex items-start justify-between gap-4 px-4 py-4 sm:px-5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-950">{faq.question}</p>
+                    <p className="mt-1 line-clamp-2 text-sm text-slate-600">{faq.answer}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <StatusBadge tone={faq.is_active !== false ? 'success' : 'neutral'} icon={faq.is_active !== false ? Eye : EyeOff}>
+                        {faq.is_active !== false ? 'Visible' : 'Hidden'}
+                      </StatusBadge>
+                      {faq.display_order != null && <span className="text-xs text-slate-500">Position {faq.display_order}</span>}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* FAQ Add/Edit Modal */}
-      {faqModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4">
-          <div className="fixed inset-0 bg-black/40" onClick={() => setFaqModalOpen(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col animate-fade-in">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-              <h3 className="font-display font-semibold text-gray-900">
-                {editingFaq ? 'Edit FAQ' : 'Add New FAQ'}
-              </h3>
-              <button
-                onClick={() => setFaqModalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleFaqSubmit} className="flex-1 overflow-y-auto p-5">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Question <span className="text-orange-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={faqForm.question}
-                    onChange={(e) => setFaqForm((f) => ({ ...f, question: e.target.value }))}
-                    placeholder="Enter the question..."
-                    className={inputClass}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Answer <span className="text-orange-500">*</span>
-                  </label>
-                  <textarea
-                    value={faqForm.answer}
-                    onChange={(e) => setFaqForm((f) => ({ ...f, answer: e.target.value }))}
-                    placeholder="Enter the answer..."
-                    className={`${inputClass} min-h-[150px] resize-y`}
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Display Order</label>
-                    <input
-                      type="number"
-                      value={faqForm.display_order}
-                      onChange={(e) => setFaqForm((f) => ({ ...f, display_order: parseInt(e.target.value) || 0 }))}
-                      min="0"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div className="flex items-end pb-1">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={faqForm.is_active}
-                        onChange={(e) => setFaqForm((f) => ({ ...f, is_active: e.target.checked }))}
-                        className="w-4 h-4 text-orange-500 rounded focus:ring-orange-500"
-                      />
-                      Active
-                    </label>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setFaqModalOpen(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={faqSaving}
-                    className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {faqSaving ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    {deleteConfirm === faq.id ? (
                       <>
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Saving...
+                        <button type="button" onClick={() => handleDeleteFaq(faq.id)} className="min-h-9 rounded-lg bg-red-600 px-3 text-xs font-semibold text-white hover:bg-red-700">Delete</button>
+                        <button type="button" onClick={() => setDeleteConfirm(null)} className="min-h-9 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
                       </>
                     ) : (
                       <>
-                        <Save size={14} />
-                        {editingFaq ? 'Save Changes' : 'Create FAQ'}
+                        <button type="button" onClick={() => openEditFaq(faq)} className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label={`Edit FAQ: ${faq.question}`}>
+                          <Edit3 size={16} />
+                        </button>
+                        <button type="button" onClick={() => setDeleteConfirm(faq.id)} className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-700" aria-label={`Delete FAQ: ${faq.question}`}>
+                          <Trash2 size={16} />
+                        </button>
                       </>
                     )}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
+
+      <Modal isOpen={faqModalOpen} onClose={() => setFaqModalOpen(false)} title={editingFaq ? 'Edit FAQ' : 'Add FAQ'} size="lg">
+        <form onSubmit={handleFaqSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="faq-question" className={labelClass}>Question <span className="text-red-600" aria-hidden="true">*</span></label>
+            <input
+              id="faq-question"
+              type="text"
+              value={faqForm.question}
+              onChange={(e) => setFaqForm((f) => ({ ...f, question: e.target.value }))}
+              placeholder="e.g. Do you ship outside Luzon?"
+              className={inputClass}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="faq-answer" className={labelClass}>Answer <span className="text-red-600" aria-hidden="true">*</span></label>
+            <textarea
+              id="faq-answer"
+              value={faqForm.answer}
+              onChange={(e) => setFaqForm((f) => ({ ...f, answer: e.target.value }))}
+              placeholder="Write a short, direct answer…"
+              className={`${inputClass} min-h-[140px] resize-y`}
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="faq-order" className={labelClass}>Position</label>
+              <input
+                id="faq-order"
+                type="number"
+                value={faqForm.display_order}
+                onChange={(e) => setFaqForm((f) => ({ ...f, display_order: parseInt(e.target.value) || 0 }))}
+                min="0"
+                className={inputClass}
+              />
+            </div>
+            <label className="flex min-h-10 cursor-pointer items-center gap-2 self-end text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={faqForm.is_active}
+                onChange={(e) => setFaqForm((f) => ({ ...f, is_active: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300 accent-orange-600"
+              />
+              Visible to customers
+            </label>
+          </div>
+          {faqError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{faqError}</p>}
+          <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+            <button type="button" onClick={() => setFaqModalOpen(false)} className={secondaryButtonClass}>Cancel</button>
+            <button type="submit" disabled={faqSaving} className={primaryButtonClass}>
+              {faqSaving ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
+              {faqSaving ? 'Saving…' : editingFaq ? 'Save changes' : 'Create FAQ'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

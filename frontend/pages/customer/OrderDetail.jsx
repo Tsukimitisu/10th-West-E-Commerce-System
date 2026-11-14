@@ -1,12 +1,26 @@
+import { fulfillmentSteps as stepLabels, fulfillmentStep } from '../../utils/orderProgress.js';
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Package, ArrowLeft, Truck, MapPin, CreditCard, Clock, CheckCircle2, XCircle, Download, RotateCcw, Calendar, Mail, DollarSign, Printer, AlertTriangle } from 'lucide-react';
-import { getOrderById, cancelOrder } from '../../services/api';
+import { getOrderById, getShipmentTracking, cancelOrder, confirmOrderReceipt, openOrderInvoice } from '../../services/api';
+import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 
-const stepLabels = ['Order Placed', 'Paid', 'Preparing', 'Shipped', 'Completed'];
-const stepForStatus = { pending: 0, paid: 1, preparing: 2, shipped: 3, completed: 4, delivered: 4, cancelled: -1 };
+const ORDER_VAT_RATE = 0.12;
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const toFiniteNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const roundCurrency = (value) => {
+  const parsed = toFiniteNumber(value, 0);
+  return Math.round(parsed * 100) / 100;
+};
+
+const formatCurrency = (value) => `₱${roundCurrency(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+const formatShippingLabel = (value) => String(value || 'Pending')
+  .replaceAll('_', ' ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -15,9 +29,29 @@ const OrderDetail = () => {
   const [cancelling, setCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  const [cancelReasonSelect, setCancelReasonSelect] = useState('');
+  const [cancelReasonOther, setCancelReasonOther] = useState('');
+  const [cancelReasonError, setCancelReasonError] = useState('');
+  const [confirmingReceipt, setConfirmingReceipt] = useState(false);
+  const receiptRequestInFlight = React.useRef(false);
+  const [receiptError, setReceiptError] = useState('');
+  const [invoiceError, setInvoiceError] = useState('');
+  const [tracking, setTracking] = useState(null);
+  const [trackingUnavailable, setTrackingUnavailable] = useState(false);
 
   const loadOrder = async () => {
-    try { const data = await getOrderById(Number(id)); setOrder(data); } catch {}
+    try {
+      const data = await getOrderById(Number(id));
+      setOrder(data);
+      try {
+        const trackingData = await getShipmentTracking(Number(id));
+        setTracking(trackingData);
+        setTrackingUnavailable(false);
+      } catch {
+        setTracking(null);
+        setTrackingUnavailable(true);
+      }
+    } catch {}
     setLoading(false);
   };
 
@@ -26,16 +60,42 @@ const OrderDetail = () => {
   const canCancel = order && (order.status === 'pending' || order.status === 'paid');
 
   const handleCancel = async () => {
+    const reason = cancelReasonSelect === 'Other' ? cancelReasonOther.trim() : cancelReasonSelect;
+    if (!reason) {
+      setCancelReasonError('Please provide a reason for cancellation.');
+      return;
+    }
+    setCancelReasonError('');
     setCancelling(true);
     try {
-      await cancelOrder(order.id);
+      await cancelOrder(order.id, reason);
       await loadOrder();
       setShowCancelConfirm(false);
+      setCancelReasonSelect('');
+      setCancelReasonOther('');
     } catch (err) {
       setCancelError('Failed to cancel order: ' + (err.message || 'Unknown error'));
       setTimeout(() => setCancelError(''), 5000);
     }
     setCancelling(false);
+  };
+
+  const handleConfirmReceipt = async () => {
+    if (!order || order.customer_confirmed_receipt_at || receiptRequestInFlight.current) return;
+    receiptRequestInFlight.current = true;
+    setConfirmingReceipt(true);
+    setReceiptError('');
+
+    try {
+      await confirmOrderReceipt(order.id);
+      await loadOrder();
+    } catch (err) {
+      setReceiptError(err.message || 'Failed to confirm receipt.');
+      setTimeout(() => setReceiptError(''), 5000);
+    }
+
+    setConfirmingReceipt(false);
+    receiptRequestInFlight.current = false;
   };
 
   if (loading) return (
@@ -50,34 +110,71 @@ const OrderDetail = () => {
 
   if (!order) return (
     <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-      <Package size={48} className="mx-auto text-gray-300 mb-3" />
-      <h2 className="font-display font-semibold text-xl text-gray-900 mb-2">Order not found</h2>
-      <Link to="/orders" className="text-orange-500 hover:text-orange-600 text-sm font-medium">Back to orders</Link>
+      <Package size={48} className="mx-auto text-slate-500 mb-3" />
+      <h2 className="font-display font-semibold text-xl text-slate-900 mb-2">Order not found</h2>
+      <Link to="/orders" className="text-red-500 hover:text-orange-600 text-sm font-medium">Back to orders</Link>
     </div>
   );
 
-  const step = stepForStatus[order.status] ?? 0;
+  const effectiveStatus = order.display_status || (order.customer_confirmed_receipt_at ? 'completed' : order.status);
+  const step = fulfillmentStep(effectiveStatus);
   const date = new Date(order.created_at || order.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   const items = order.items || [];
+  const itemsSubtotal = roundCurrency(items.reduce((sum, item) => {
+    const unitPrice = roundCurrency(item.price ?? item.product?.price ?? 0);
+    const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+    return sum + (unitPrice * quantity);
+  }, 0));
+  const subtotalAmount = roundCurrency(order.subtotal ?? itemsSubtotal);
+  const discountAmount = roundCurrency(order.discount ?? order.discount_amount ?? 0);
+  const shippingAmount = roundCurrency(order.shipping ?? order.shipping_fee ?? 0);
+  const fallbackVat = roundCurrency(Math.max(0, subtotalAmount - discountAmount + shippingAmount) * ORDER_VAT_RATE);
+  const vatAmount = roundCurrency(order.tax_amount ?? order.vat_amount ?? fallbackVat);
+  const fallbackTotal = roundCurrency(Math.max(0, subtotalAmount - discountAmount + shippingAmount + vatAmount));
+  const totalAmount = roundCurrency(order.total ?? order.total_amount ?? fallbackTotal);
+  const returnRequestStatus = order.return_request?.status || '';
+  const showReturnSection = ['completed', 'delivered'].includes(order.status) || Boolean(returnRequestStatus);
+  const returnDeadline = order.return_deadline_at
+    ? new Date(order.return_deadline_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+    : null;
+  const shippingSnapshot = order.shipping_address_snapshot || {};
+  const shippingAddressLines = [
+    shippingSnapshot.recipient_name,
+    shippingSnapshot.street,
+    shippingSnapshot.barangay,
+    [shippingSnapshot.city, shippingSnapshot.state, shippingSnapshot.postal_code].filter(Boolean).join(', '),
+    shippingSnapshot.country,
+  ].map((line) => (typeof line === 'string' ? line.trim() : line)).filter(Boolean);
+  const fallbackAddressLines = typeof order.shipping_address === 'string'
+    ? order.shipping_address.split(', ').map((part) => part.trim()).filter(Boolean)
+    : [];
+  const addressLines = shippingAddressLines.length > 0 ? shippingAddressLines : fallbackAddressLines;
+  const shippingPhone = shippingSnapshot.phone || order.shipping_phone || order.address?.phone || '';
+  const resolveOrderItemProductId = (item) => {
+    const candidate = Number(item?.productReferenceId ?? item?.productId ?? item?.product_id ?? item?.product?.id);
+    return Number.isInteger(candidate) && candidate > 0 ? candidate : null;
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       {/* Back */}
-      <Link to="/orders" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-orange-500 mb-6 transition-colors">
+      <Link to="/orders" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-red-500 mb-6 transition-colors">
         <ArrowLeft size={16} /> Back to Orders
       </Link>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="font-display font-bold text-xl text-gray-900">Order #{order.order_number || order.id}</h1>
-          <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5"><Calendar size={14} /> Placed on {date}</p>
+      <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5 mb-6">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Order Number</p>
+          <h1 className="break-words font-display text-xl font-bold text-slate-950">#{order.order_number || order.id}</h1>
+          <p className="mt-1 text-xs text-slate-600">Use this number when asking support about your order.</p>
+          <p className="text-sm text-slate-500 flex items-center gap-1 mt-2"><Calendar size={14} /> Placed on {date}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {/* View Invoice */}
           <button
-            onClick={() => window.open(`${API_URL}/orders/${order.id}/invoice`, '_blank')}
-            className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 transition-colors"
+            onClick={() => { setInvoiceError(''); openOrderInvoice(order.id).catch(error => setInvoiceError(error.message || 'Unable to open invoice. Please try again.')); }}
+            className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 transition-colors"
           >
             <Printer size={14} /> View Invoice
           </button>
@@ -88,13 +185,72 @@ const OrderDetail = () => {
               <XCircle size={14} /> Cancel Order
             </button>
           )}
-          {order.status === 'delivered' && (
-            <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 transition-colors">
+          {order.status === 'delivered' && !order.customer_confirmed_receipt_at && (
+            <button
+              onClick={handleConfirmReceipt}
+              disabled={confirmingReceipt}
+              className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-slate-900 rounded-lg flex items-center gap-1.5 transition-colors"
+            >
+              <CheckCircle2 size={14} />
+              {confirmingReceipt ? 'Confirming...' : 'Confirm Receipt'}
+            </button>
+          )}
+          {effectiveStatus === 'completed' && order.customer_confirmed_receipt_at && (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-4 py-2 text-sm font-medium text-green-700">
+              <CheckCircle2 size={14} /> Receipt Confirmed
+            </span>
+          )}
+          {order.return_eligible && (
+            <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 transition-colors">
               <RotateCcw size={14} /> Request Return
             </Link>
           )}
         </div>
       </div>
+
+      {invoiceError && <p role="alert" className="mb-6 text-sm text-red-700">{invoiceError}</p>}
+      {receiptError && (
+        <div className="mb-6 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
+          <AlertTriangle size={14} /> {receiptError}
+        </div>
+      )}
+      {order.status === 'delivered' && !order.customer_confirmed_receipt_at && (
+        <div className="bg-red-500/10 border border-red-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <Truck size={18} className="text-orange-600" />
+            <p className="text-sm text-orange-700 font-medium">
+              Rider confirmed delivery. Please confirm receipt to complete this order.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showReturnSection && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-slate-900">Return status</p>
+              <p className="text-sm text-slate-600 mt-1">
+                {returnRequestStatus
+                  ? `Current request: ${returnRequestStatus}.`
+                  : order.return_eligibility_message}
+              </p>
+              {order.return_eligible && returnDeadline && (
+                <p className="text-xs text-slate-600 mt-1">Request a return by {returnDeadline}.</p>
+              )}
+            </div>
+            {returnRequestStatus ? (
+              <Link to="/my-returns" className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                View My Returns
+              </Link>
+            ) : order.return_eligible ? (
+              <Link to={`/orders/${order.id}/return`} className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-500 text-slate-900 rounded-lg transition-colors">
+                Request Return
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Cancel Confirmation Modal */}
       {showCancelConfirm && (
@@ -105,11 +261,36 @@ const OrderDetail = () => {
                 <AlertTriangle size={20} className="text-red-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900">Cancel Order</h3>
-                <p className="text-sm text-gray-500">This action cannot be undone.</p>
+                <h3 className="font-semibold text-slate-900">Cancel Order</h3>
+                <p className="text-sm text-slate-600">This action cannot be undone.</p>
               </div>
             </div>
-            <p className="text-sm text-gray-600 mb-5">Are you sure you want to cancel Order #{order.order_number || order.id}?</p>
+            <p className="text-sm text-gray-600 mb-4">Are you sure you want to cancel Order #{order.order_number || order.id}?</p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Reason for cancellation <span className="text-red-500">*</span></label>
+              <select
+                value={cancelReasonSelect}
+                onChange={e => { setCancelReasonSelect(e.target.value); setCancelReasonError(''); }}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 mb-2"
+              >
+                <option value="">Select a reason...</option>
+                <option value="Changed my mind">Changed my mind</option>
+                <option value="Found a better price">Found a better price</option>
+                <option value="Ordered by mistake">Ordered by mistake</option>
+                <option value="Item no longer needed">Item no longer needed</option>
+                <option value="Other">Other</option>
+              </select>
+              {cancelReasonSelect === 'Other' && (
+                <textarea
+                  placeholder="Please describe your reason..."
+                  value={cancelReasonOther}
+                  onChange={e => { setCancelReasonOther(e.target.value); setCancelReasonError(''); }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 resize-none"
+                  rows={2}
+                />
+              )}
+              {cancelReasonError && <p className="text-xs text-red-500 mt-1">{cancelReasonError}</p>}
+            </div>
             {cancelError && (
               <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center gap-2">
                 <AlertTriangle size={14} /> {cancelError}
@@ -127,84 +308,179 @@ const OrderDetail = () => {
       )}
 
       {/* Progress tracker */}
-      {order.status !== 'cancelled' && (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 mb-6">
-          <div className="flex items-center justify-between relative">
+      {step >= 0 && order.status !== 'cancelled' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+          <p className="mb-5 text-sm font-medium text-slate-700">Payment: {order.payment_status === 'paid' ? 'Paid' : order.payment_status === 'pending' || !order.payment_status ? 'Payment Pending' : order.payment_status.replaceAll('_', ' ')}</p>
+          <div tabIndex={0} role="region" aria-label="Order progress" className="order-status-timeline flex items-center justify-between relative">
             <div className="absolute left-0 right-0 top-4 h-0.5 bg-gray-200 z-0" />
-            <div className="absolute left-0 top-4 h-0.5 bg-orange-500 z-0 transition-all duration-500" style={{ width: `${(step / 4) * 100}%` }} />
+            <div
+              className="absolute left-0 top-4 h-0.5 bg-slate-900 z-0 transition-colors duration-500"
+              style={{ width: `${(step / (stepLabels.length - 1)) * 100}%` }}
+            />
             {stepLabels.map((label, i) => (
               <div key={label} className="relative z-10 flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${i <= step ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${i <= step ? 'bg-slate-900 text-white' : 'bg-gray-200 text-slate-600'}`}>
                   {i < step ? <CheckCircle2 size={16} /> : i + 1}
                 </div>
-                <span className={`text-xs mt-2 ${i <= step ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>{label}</span>
+                <span className={`text-xs mt-2 ${i <= step ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>{label}</span>
               </div>
             ))}
           </div>
         </div>
       )}
       {order.status === 'cancelled' && (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6 flex items-center gap-3">
-          <XCircle size={20} className="text-orange-500" />
-          <p className="text-sm text-orange-600 font-medium">This order has been cancelled.</p>
+        <div className="bg-red-500/10 border border-red-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <XCircle size={20} className="text-red-500" />
+            <p className="text-sm text-orange-600 font-medium">This order has been cancelled.</p>
+          </div>
+          {order.cancellation_reason && (
+            <p className="text-sm text-orange-600 mt-2 ml-8">Reason: {order.cancellation_reason}</p>
+          )}
+        </div>
+      )}
+
+      {order.shipping_method !== 'pickup' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <div className="flex items-center gap-2">
+            <Truck size={18} className="text-slate-600" />
+            <h3 className="font-semibold text-slate-900 text-sm">Shipment tracking</h3>
+          </div>
+          {tracking?.shipment ? (
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <div><p className="text-xs text-slate-600">Courier</p><p className="font-medium text-slate-900">{tracking.shipment.courier_name || 'J&T Express'}</p></div>
+                <div><p className="text-xs text-slate-600">Waybill number</p><p className="font-medium text-slate-900">{tracking.shipment.waybill_number || 'Pending'}</p></div>
+                <div><p className="text-xs text-slate-600">Tracking number</p><p className="font-medium text-slate-900">{tracking.shipment.tracking_number || 'Pending'}</p></div>
+                <div><p className="text-xs text-slate-600">Shipping status</p><p className="font-medium text-slate-900 capitalize">{String(tracking.shipment.status || 'pending').replaceAll('_', ' ')}</p></div>
+              </div>
+              <p className="rounded-lg border border-amber-700/40 bg-amber-500/10 p-3 text-xs leading-5 text-amber-200">
+                Tracking updates are manually encoded by the store. You can also use your J&T tracking number on the official J&T tracker.
+              </p>
+              {tracking.events?.length > 0 && (
+                <ol className="space-y-3 border-l border-gray-600 pl-4">
+                  {tracking.events.map((event, index) => (
+                    <li key={`${event.event_time || event.occurred_at}-${index}`}>
+                      <p className="text-sm font-medium text-slate-900 capitalize">{String(event.status || 'update').replaceAll('_', ' ')}</p>
+                      {event.description && <p className="text-xs text-slate-500">{event.description}</p>}
+                      <p className="text-xs text-gray-500">
+                        {[event.location, (event.event_time || event.occurred_at) && new Date(event.event_time || event.occurred_at).toLocaleString('en-PH')].filter(Boolean).join(' · ')}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">
+              {trackingUnavailable ? 'Tracking updates are not available yet.' : 'Shipment tracking is pending.'}
+            </p>
+          )}
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Items */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900 text-sm">Items ({items.length})</h3>
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="p-4 border-b border-slate-200">
+            <h3 className="font-semibold text-slate-900 text-sm">Items ({items.length})</h3>
           </div>
           <div className="divide-y divide-gray-100">
-            {items.map((item, i) => (
-              <div key={i} className="flex items-center gap-4 p-4">
-                <div className="w-16 h-16 bg-gray-50 rounded-lg border border-gray-100 overflow-hidden flex-shrink-0">
-                  {item.image_url ? <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" /> :
-                    <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-gray-300" /></div>}
+            {items.map((item, i) => {
+              const productId = resolveOrderItemProductId(item);
+              const itemTitle = item.name || item.product_name || item.product?.name;
+              const itemImage = item.image_url || item.product?.image;
+              const unitPrice = roundCurrency(item.price ?? item.product?.price ?? 0);
+              const itemQuantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+              const lineTotal = roundCurrency(unitPrice * itemQuantity);
+
+              return (
+                <div key={`${productId || 'order-item'}-${i}`} className="flex items-center gap-4 p-4">
+                  {productId ? (
+                    <Link to={`/products/${productId}`} className="w-16 h-16 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden flex-shrink-0 hover:ring-2 hover:ring-red-500/40 transition-colors" title="View product">
+                      {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" /> :
+                        <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-slate-500" /></div>}
+                    </Link>
+                  ) : (
+                    <div className="w-16 h-16 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden flex-shrink-0">
+                      {itemImage ? <img src={resolveProductImageUrl(itemImage)} alt={itemTitle} onError={handleProductImageError} className="w-full h-full object-cover" /> :
+                        <div className="w-full h-full flex items-center justify-center"><Package size={20} className="text-slate-500" /></div>}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    {productId ? (
+                      <Link to={`/products/${productId}`} className="text-sm font-medium text-slate-900 truncate hover:text-red-500 transition-colors inline-block" title="View product">
+                        {itemTitle}
+                      </Link>
+                    ) : (
+                      <p className="text-sm font-medium text-slate-900 truncate">{itemTitle}</p>
+                    )}
+                    {(item.sku || item.product?.sku) && <p className="text-xs text-slate-600">SKU: {item.sku || item.product?.sku}</p>}
+                    <p className="text-xs text-slate-500">Quantity: {itemQuantity}</p>
+                    <p className="text-xs text-slate-500">Unit price: {formatCurrency(unitPrice)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-600">Line total</p>
+                    <p className="text-sm font-semibold text-slate-900">{formatCurrency(lineTotal)}</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{item.name || item.product_name}</p>
-                  {item.sku && <p className="text-xs text-gray-400">SKU: {item.sku}</p>}
-                  <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
-                </div>
-                <p className="text-sm font-semibold text-gray-900">₱{(Number(item.price) * item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* Summary sidebar */}
         <div className="space-y-4">
           {/* Order Summary */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <h3 className="font-semibold text-gray-900 text-sm mb-3">Order Summary</h3>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="font-semibold text-slate-900 text-sm mb-3">Order Summary</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>₱{Number(order.subtotal || order.total || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-              {Number(order.discount || 0) > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-₱{Number(order.discount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-              <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{Number(order.shipping || 0) === 0 ? 'Free' : `₱${Number(order.shipping).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}</span></div>
-              <div className="border-t border-gray-100 pt-2 flex justify-between font-semibold text-gray-900">
-                <span>Total</span><span>₱{Number(order.total || order.total_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+              <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{formatCurrency(subtotalAmount)}</span></div>
+              {discountAmount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatCurrency(discountAmount)}</span></div>}
+              <div className="flex justify-between text-slate-600"><span>Shipping</span><span>{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>VAT (12%)</span><span>{formatCurrency(vatAmount)}</span></div>
+              <div className="border-t border-slate-200 pt-2 flex justify-between font-semibold text-slate-900">
+                <span>Total</span><span>{formatCurrency(totalAmount)}</span>
               </div>
             </div>
           </div>
 
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="font-semibold text-slate-900 text-sm mb-3">Shipping Calculation</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-slate-600"><span>Shipping Coverage</span><span className="text-slate-900">Luzon only</span></div>
+              <div className="flex justify-between text-slate-600"><span>Courier</span><span className="text-slate-900">{order.courier_name || 'J&T Express'}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Shipping Zone</span><span className="text-slate-900">{formatShippingLabel(order.shipping_zone)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Estimated Distance</span><span className="text-slate-900">{toFiniteNumber(order.estimated_distance_km)} km</span></div>
+              <div className="flex justify-between text-slate-600"><span>Actual Weight</span><span className="text-slate-900">{toFiniteNumber(order.actual_weight_kg)} kg</span></div>
+              <div className="flex justify-between text-slate-600"><span>Base Shipping Fee</span><span className="text-slate-900">{formatCurrency(order.base_shipping_fee)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Weight Surcharge</span><span className="text-slate-900">{formatCurrency(order.weight_surcharge)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Distance Surcharge</span><span className="text-slate-900">{formatCurrency(order.distance_surcharge)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Final Shipping Fee</span><span className="text-slate-900">{shippingAmount === 0 ? 'Free' : formatCurrency(shippingAmount)}</span></div>
+              <div className="flex justify-between text-slate-600"><span>Free Shipping Applied</span><span className="text-slate-900">{order.free_shipping_applied ? 'Yes' : 'No'}</span></div>
+            </div>
+          </div>
+
           {/* Shipping Address */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <h3 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5"><MapPin size={14} /> Shipping Address</h3>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              {order.shipping_name || order.address?.name || 'â€”'}<br />
-              {order.shipping_address || order.address?.street || ''}<br />
-              {order.shipping_city || order.address?.city || ''}{order.shipping_state ? `, ${order.shipping_state}` : ''} {order.shipping_zip || order.address?.zip || ''}<br />
-              {order.shipping_phone || order.address?.phone || ''}
-            </p>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="font-semibold text-slate-900 text-sm mb-2 flex items-center gap-1.5"><MapPin size={14} /> Shipping Address</h3>
+            <div className="text-sm text-slate-700 leading-relaxed">
+              {addressLines.length > 0 ? (
+                addressLines.map((line, index) => (
+                  <div key={index}>{line}</div>
+                ))
+              ) : (
+                <div className="text-slate-400">No address provided</div>
+              )}
+              {shippingPhone && <div>{shippingPhone}</div>}
+            </div>
           </div>
 
           {/* Payment */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <h3 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-1.5"><CreditCard size={14} /> Payment</h3>
-            <p className="text-sm text-gray-600 capitalize">{order.payment_method || 'Card'}</p>
-            {order.payment_status && <p className="text-xs text-gray-400 capitalize mt-0.5">Status: {order.payment_status}</p>}
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <h3 className="font-semibold text-slate-900 text-sm mb-2 flex items-center gap-1.5"><CreditCard size={14} /> Payment</h3>
+            <p className="text-sm text-slate-700 capitalize">{order.payment_method || 'Cash on Delivery'}</p>
+            {order.payment_status && <p className="text-xs text-slate-400 capitalize mt-0.5">Status: {order.payment_status}</p>}
           </div>
         </div>
       </div>
@@ -213,3 +489,5 @@ const OrderDetail = () => {
 };
 
 export default OrderDetail;
+
+

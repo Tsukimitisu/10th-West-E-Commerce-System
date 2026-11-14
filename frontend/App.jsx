@@ -1,89 +1,203 @@
-﻿import React, { useState, useEffect } from 'react';
+import AuthHeader from './components/customer/AuthHeader';
+import MaintenanceGate from './components/customer/MaintenanceGate.jsx';
+import OfflinePosRoute from './components/staff/OfflinePosRoute.jsx';
+import { offlinePosRestricted } from './services/offlinePosScope.js';
+import { customerReturnTo } from './utils/customerReturnTo.js';
+import AuthShell from './components/AuthShell';
+import BrandLogo from './components/ui/BrandLogo';
+import React, { lazy, Suspense, useCallback, useState, useEffect, useLayoutEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import Home from './pages/Home';
-import ProductList from './pages/ProductList';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ProductDetail from './pages/ProductDetail';
-import AdminDashboard from './pages/owner/AdminDashboard';
-import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
-import Cart from './pages/customer/Cart';
-import Checkout from './pages/customer/Checkout';
-import OrderConfirmation from './pages/customer/OrderConfirmation';
-import PosTerminal from './pages/staff/PosTerminal';
-import Profile from './pages/customer/Profile';
-import OrderHistory from './pages/customer/OrderHistory';
-import OrderDetail from './pages/customer/OrderDetail';
-import AddressBook from './pages/customer/AddressBook';
-import Contact from './pages/Support/Contact';
-import FAQ from './pages/Support/FAQ';
-import PrivacyPolicy from './pages/Support/PolicyPrivacy';
-import TermsOfService from './pages/Support/TermsOfService';
-import ReturnPolicy from './pages/Support/ReturnPolicy';
 import PrivacyBanner from './components/PrivacyBanner';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
-import RequestReturn from './pages/customer/RequestReturn';
-import MyReturns from './pages/customer/MyReturns';
-import Wishlist from './pages/customer/Wishlist';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import OAuthCallback from './pages/OAuthCallback';
-import { logoutApi } from './services/api.js';
-import { supabase, onAuthStateChange } from './services/supabase.js';
+import { getProfile, logoutApi, initializeSecurityContext } from './services/api.js';
+import {
+  clearCurrentAuthUser,
+  clearLegacyAuthStorage,
+  getCurrentAuthUser,
+  setCurrentAuthUser,
+  subscribeAuthRefresh,
+} from './services/authSession.js';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { Role } from './types.js';
+import { roleLandingPath, roleRouteRedirect } from './utils/roleLanding.js';
+import AppErrorBoundary from './components/AppErrorBoundary';
+import IdleSessionGuard from './components/IdleSessionGuard.jsx';
 
-const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
+const AUTH_VERIFIED_STORAGE_KEY = 'auth_verified';
+
+const Home = lazy(() => import('./pages/Home'));
+const TwoFactorPolicyGate = lazy(() => import('./components/TwoFactorPolicyGate.jsx'));
+const ProductList = lazy(() => import('./pages/ProductList'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
+const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const SetProductDetail = lazy(() => import('./pages/SetProductDetail'));
+const Contact = lazy(() => import('./pages/Support/Contact'));
+const FAQ = lazy(() => import('./pages/Support/FAQ'));
+const PrivacyPolicy = lazy(() => import('./pages/Support/PolicyPrivacy'));
+const TermsOfService = lazy(() => import('./pages/Support/TermsOfService'));
+const ReturnPolicy = lazy(() => import('./pages/Support/ReturnPolicy'));
+const Cart = lazy(() => import('./pages/customer/Cart'));
+const Checkout = lazy(() => import('./pages/customer/Checkout'));
+const OrderConfirmation = lazy(() => import('./pages/customer/OrderConfirmation'));
+const PaymentResult = lazy(() => import('./pages/customer/PaymentResult'));
+const Profile = lazy(() => import('./pages/customer/Profile'));
+const OrderHistory = lazy(() => import('./pages/customer/OrderHistory'));
+const OrderDetail = lazy(() => import('./pages/customer/OrderDetail'));
+const RequestReturn = lazy(() => import('./pages/customer/RequestReturn'));
+const MyReturns = lazy(() => import('./pages/customer/MyReturns'));
+const AddressBook = lazy(() => import('./pages/customer/AddressBook'));
+const Wishlist = lazy(() => import('./pages/customer/Wishlist'));
+const Messages = lazy(() => import('./pages/customer/Messages'));
+const AdminDashboard = lazy(() => import('./pages/owner/AdminDashboard'));
+const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
+const RouteFallback = () => (
+  <div className="flex min-h-[50vh] items-center justify-center bg-slate-50" role="status" aria-label="Loading page">
+    <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-orange-600" />
+  </div>
+);
+
+const CustomerAuthRedirect = () => {
+  const location = useLocation();
+  return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+};
 
 const AppLayout = ({ user, onLogout, onLogin }) => {
   const location = useLocation();
-  const isSuperAdmin = user?.role === Role.SUPER_ADMIN;
-  const hideChrome = location.pathname === '/pos' || location.pathname === '/admin' || location.pathname === '/super-admin';
+  const [posRestricted,setPosRestricted]=useState(offlinePosRestricted);
+  useEffect(()=>{ const update=()=>setPosRestricted(offlinePosRestricted());window.addEventListener('offline-pos:scope',update);return()=>window.removeEventListener('offline-pos:scope',update); },[]);
+  const shouldReduceMotion = useReducedMotion();
 
-  // Super Admin can ONLY access /super-admin — redirect everything else
-  if (isSuperAdmin && location.pathname !== '/super-admin' && location.pathname !== '/login') {
-    return <Navigate to="/super-admin" replace />;
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname, location.search]);
+
+  const isSuperAdmin = user?.role === Role.SUPER_ADMIN;
+  const hideChrome = location.pathname === '/pos' || ['/admin', '/staff', '/superadmin', '/super-admin'].some((path) => location.pathname.startsWith(path));
+  const isAuthRoute = ['/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/oauth-callback', '/oauth/callback', '/auth/callback'].includes(location.pathname);
+  const hideFooter = hideChrome || isAuthRoute || location.pathname === '/messages';
+  const isAccountRoute = (
+    location.pathname === '/profile' ||
+    location.pathname === '/orders' ||
+    location.pathname.startsWith('/orders/') ||
+    location.pathname === '/my-returns' ||
+    location.pathname === '/addresses' ||
+    location.pathname === '/wishlist' ||
+    location.pathname === '/messages'
+  );
+
+  // Keep the existing authentication challenges ahead of workspace routing.
+  if (user?.requires_2fa_enrollment || user?.requires_2fa_challenge) {
+    return <Suspense fallback={<RouteFallback />}><TwoFactorPolicyGate user={user} onLogin={onLogin} onLogout={onLogout} /></Suspense>;
   }
+  const roleRedirect = roleRouteRedirect(user?.role, location.pathname);
+  if (roleRedirect) return <Navigate to={roleRedirect} replace />;
+  if (posRestricted && location.pathname !== '/pos') return <main className="mx-auto max-w-lg p-6"><p>This area requires an internet connection.</p><a href="#/pos">Return to POS</a></main>;
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      {!hideChrome && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
+    <MaintenanceGate pathname={location.pathname} enabled={!hideChrome && !isAuthRoute && !roleLandingPath(user?.role) && !/^\/(?:payment(?:[/-]|$)|order-confirmation\/)/.test(location.pathname)}>
+    <div className={`flex min-h-screen flex-col bg-slate-50 text-slate-950 ${!hideChrome && !isSuperAdmin ? 'customer-surface' : ''}`}>
+      <a href="#main-content" className="skip-link" onClick={(event) => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>Skip to main content</a>
+      <IdleSessionGuard user={user} onLogout={onLogout} />
+      {isAuthRoute && !isSuperAdmin && <AuthHeader />}
+      {!hideChrome && !isAuthRoute && !isSuperAdmin && <Navbar user={user} onLogout={onLogout} />}
       {!hideChrome && !isSuperAdmin && user && <EmailVerificationBanner user={user} />}
-      <div className="flex-1">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/shop" element={<ProductList />} />
-          <Route path="/login" element={<Login onLogin={onLogin} />} />
-          <Route path="/register" element={<Register onLogin={onLogin} />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/oauth-callback" element={<OAuthCallback onLogin={onLogin} />} />
-          <Route path="/products/:id" element={<ProductDetail />} />
-          <Route path="/cart" element={<Cart />} />
-          <Route path="/checkout" element={user ? <Checkout /> : <Navigate to="/login?redirect=/checkout" />} />
-          <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/faq" element={<FAQ />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/terms" element={<TermsOfService />} />
-          <Route path="/return-policy" element={<ReturnPolicy />} />
-          <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
-          <Route path="/orders" element={user ? <OrderHistory /> : <Navigate to="/login" />} />
-          <Route path="/orders/:id" element={user ? <OrderDetail /> : <Navigate to="/login" />} />
-          <Route path="/orders/:id/return" element={user ? <RequestReturn /> : <Navigate to="/login" />} />
-          <Route path="/my-returns" element={user ? <MyReturns /> : <Navigate to="/login" />} />
-          <Route path="/addresses" element={user ? <AddressBook /> : <Navigate to="/login" />} />
-          <Route path="/wishlist" element={user ? <Wishlist /> : <Navigate to="/login" />} />
-          <Route path="/admin" element={user?.role === Role.OWNER || user?.role === Role.STORE_STAFF ? <AdminDashboard onLogout={onLogout} /> : <Navigate to="/login" replace />} />
-          <Route path="/super-admin" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard /> : <Navigate to="/login" replace />} />
-          <Route path="/pos" element={(user?.role === Role.OWNER || user?.role === Role.STORE_STAFF) ? <PosTerminal /> : <Navigate to="/login" replace />} />
-        </Routes>
+      <div className="flex-1 min-w-0" id="main-content" tabIndex={-1}>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={`${location.pathname}${location.search}`}
+            initial={shouldReduceMotion || isAccountRoute ? false : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={shouldReduceMotion || isAccountRoute ? { opacity: 1, y: 0 } : { opacity: 0, y: -2 }}
+            transition={{ duration: shouldReduceMotion || isAccountRoute ? 0 : 0.18, ease: 'easeOut' }}
+            className="h-full bg-slate-50"
+          >
+            <AuthShell active={isAuthRoute}>
+            <AppErrorBoundary resetKey={`${location.pathname}${location.search}`}>
+              <Suspense fallback={<RouteFallback />}>
+              <Routes location={location}>
+                <Route path="/" element={roleLandingPath(user?.role)
+                  ? <Navigate to={roleLandingPath(user.role)} replace />
+                  : <Home />} />
+                <Route path="/shop" element={<ProductList />} />
+                <Route path="/login" element={user
+                  ? <Navigate to={roleLandingPath(user.role) || customerReturnTo(location.search)} replace />
+                  : <Login onLogin={onLogin} />} />
+                <Route path="/register" element={user
+                  ? <Navigate to={roleLandingPath(user.role) || customerReturnTo(location.search)} replace />
+                  : <Register onLogin={onLogin} />} />
+                <Route path="/verify-email" element={<VerifyEmail onLogin={onLogin} />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/oauth-callback" element={<OAuthCallback onLogin={onLogin} />} />
+                <Route
+                  path="/products/manage"
+                  element={
+                    user && [Role.OWNER, Role.ADMIN, Role.STORE_STAFF].includes(user.role)
+                      ? <Navigate
+                          to={user.role === Role.STORE_STAFF ? '/staff/inventory' : '/admin/inventory'}
+                          replace
+                          state={{ catalogNotice: 'Product management is now handled through Inventory. Use Storefront Listings to publish items online.' }}
+                        />
+                      : <Navigate to="/login" replace />
+                  }
+                />
+                <Route path="/products/:id" element={<ProductDetail />} />
+                <Route path="/sets/:id" element={<SetProductDetail />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route
+                  path="/checkout"
+                  element={
+                    user
+                      ? <Checkout />
+                      : <CustomerAuthRedirect />
+                  }
+                />
+                <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
+                <Route path="/payment-result" element={user ? <PaymentResult /> : <CustomerAuthRedirect />} />
+                <Route path="/payment/success" element={user ? <PaymentResult /> : <CustomerAuthRedirect />} />
+                <Route path="/payment/failed" element={user ? <PaymentResult /> : <CustomerAuthRedirect />} />
+                <Route path="/payment/cancelled" element={user ? <PaymentResult /> : <CustomerAuthRedirect />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="/faq" element={<FAQ />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/return-policy" element={<ReturnPolicy />} />
+                <Route path="/profile" element={user ? <Profile /> : <CustomerAuthRedirect />} />
+                <Route path="/orders" element={user ? <OrderHistory /> : <CustomerAuthRedirect />} />
+                <Route path="/orders/:id" element={user ? <OrderDetail /> : <CustomerAuthRedirect />} />
+                <Route path="/orders/:id/return" element={user ? <RequestReturn /> : <CustomerAuthRedirect />} />
+                <Route path="/my-returns" element={user ? <MyReturns /> : <CustomerAuthRedirect />} />
+                <Route path="/addresses" element={user ? <AddressBook /> : <CustomerAuthRedirect />} />
+                <Route path="/wishlist" element={user ? <Wishlist /> : <CustomerAuthRedirect />} />
+                <Route path="/messages" element={user ? <Messages /> : <CustomerAuthRedirect />} />
+                <Route path="/admin/*" element={user?.role === Role.OWNER || user?.role === Role.ADMIN ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
+                <Route path="/staff/*" element={user?.role === Role.STORE_STAFF ? <AdminDashboard user={user} onLogout={onLogout} /> : <Navigate to="/login" replace />} />
+                <Route path="/superadmin/*" element={user?.role === Role.SUPER_ADMIN ? <SuperAdminDashboard user={user} /> : <Navigate to="/login" replace />} />
+                <Route path="/super-admin/*" element={<Navigate to="/superadmin/dashboard" replace />} />
+                <Route path="/pos" element={<OfflinePosRoute user={user} />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+              </Suspense>
+            </AppErrorBoundary>
+            </AuthShell>
+          </motion.div>
+        </AnimatePresence>
       </div>
-      {!hideChrome && !isSuperAdmin && <Footer />}
+      {!hideFooter && !isSuperAdmin && <Footer />}
       <PrivacyBanner />
     </div>
+    </MaintenanceGate>
   );
 };
 
@@ -92,81 +206,139 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session
-    const initAuth = async () => {
-      if (USE_SUPABASE && supabase) {
-        try {
-          // Check Supabase session
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            const { data: profile } = await supabase
-              .from('users')
-              .select('*')
-              .eq('email', session.user.email)
-              .single();
-            if (profile) {
-              const userData = {
-                id: profile.id,
-                name: profile.name || session.user.email?.split('@')[0] || 'User',
-                email: session.user.email || '',
-                role: profile.role || Role.CUSTOMER,
-                phone: profile.phone,
-                avatar: profile.avatar,
-                store_credit: profile.store_credit || 0,
-                is_active: profile.is_active ?? true,
-                two_factor_enabled: profile.two_factor_enabled || false,
-                oauth_provider: session.user.app_metadata?.provider || null,
-                last_login: session.user.last_sign_in_at,
-                email_verified: session.user.email_confirmed_at != null,
-              };
-              setUser(userData);
-              localStorage.setItem('shopCoreUser', JSON.stringify(userData));
-            }
-          }
-        } catch (e) {
-          console.error('Supabase auth init error:', e);
-        }
-      }
-
-      // Restore user from localStorage as secondary fallback or standard method
-      const savedUser = localStorage.getItem('shopCoreUser');
-      if (savedUser) {
-        try {
-          const parsed = JSON.parse(savedUser);
-          if (parsed && parsed.id) {
-            setUser(parsed);
-          }
-        } catch (e) {
-          console.error('Failed to parse saved user:', e);
-        }
-      }
-      setLoading(false);
+    const disposeSecurity = initializeSecurityContext();
+    return () => {
+      disposeSecurity?.();
     };
-    initAuth();
   }, []);
 
-  const handleLogin = (userData, token) => {
-    setUser(userData);
-    localStorage.setItem('shopCoreUser', JSON.stringify(userData));
-    localStorage.setItem('shopCoreToken', token);
+  useEffect(() => {
+    let isMounted = true;
+    let crossTabSyncTimer = null;
+
+    const clearSession = () => {
+      clearCurrentAuthUser({ broadcast: false });
+      if (isMounted) setUser(null);
+    };
+
+    const applyProfile = (profile, { broadcast = false } = {}) => {
+      if (!profile?.id) {
+        clearSession();
+        return;
+      }
+      setCurrentAuthUser(profile, { broadcast });
+      if (isMounted) setUser(profile);
+    };
+
+    const syncUserWithProfileRefresh = async () => {
+      try {
+        const profile = await getProfile({ optional: true });
+        applyProfile(profile);
+      } catch {
+        clearSession();
+      }
+    };
+
+    const scheduleCrossTabAuthRefresh = () => {
+      if (crossTabSyncTimer) {
+        window.clearTimeout(crossTabSyncTimer);
+      }
+
+      crossTabSyncTimer = window.setTimeout(() => {
+        crossTabSyncTimer = null;
+        void syncUserWithProfileRefresh();
+      }, 50);
+    };
+
+    // Check for existing session
+    const initAuth = async () => {
+      clearLegacyAuthStorage();
+      await syncUserWithProfileRefresh();
+
+      // A superseded effect must not finish operations startup before the current
+      // profile check. That race briefly rendered a signed-out route guard and
+      // lost operational deep links. Customer startup stays unchanged.
+      if (!isMounted && [Role.STORE_STAFF, Role.OWNER, Role.ADMIN, Role.SUPER_ADMIN].includes(getCurrentAuthUser()?.role)) return undefined;
+
+      const handleAuthChanged = () => {
+        if (isMounted) setUser(getCurrentAuthUser());
+      };
+
+      const handleAuthVerified = () => {
+        void syncUserWithProfileRefresh();
+      };
+
+      const handleStorage = async (event) => {
+        if (!event.key) {
+          scheduleCrossTabAuthRefresh();
+          return;
+        }
+
+        if (event.key === AUTH_VERIFIED_STORAGE_KEY && event.newValue === 'true') {
+          await syncUserWithProfileRefresh();
+
+          try {
+            localStorage.removeItem(AUTH_VERIFIED_STORAGE_KEY);
+          } catch {
+            // Ignore cleanup failures for the one-shot cross-tab signal.
+          }
+        }
+      };
+
+      window.addEventListener('auth:changed', handleAuthChanged);
+      window.addEventListener('auth:verified', handleAuthVerified);
+      window.addEventListener('storage', handleStorage);
+      const unsubscribeAuthRefresh = subscribeAuthRefresh(scheduleCrossTabAuthRefresh);
+
+      setLoading(false);
+
+      return () => {
+        if (crossTabSyncTimer) {
+          window.clearTimeout(crossTabSyncTimer);
+          crossTabSyncTimer = null;
+        }
+        window.removeEventListener('auth:changed', handleAuthChanged);
+        window.removeEventListener('auth:verified', handleAuthVerified);
+        window.removeEventListener('storage', handleStorage);
+        unsubscribeAuthRefresh();
+      };
+    };
+    let cleanup = () => { };
+    initAuth().then((dispose) => {
+      cleanup = typeof dispose === 'function' ? dispose : () => { };
+    });
+
+    return () => {
+      isMounted = false;
+      if (crossTabSyncTimer) {
+        window.clearTimeout(crossTabSyncTimer);
+        crossTabSyncTimer = null;
+      }
+      cleanup();
+    };
+  }, []);
+
+  const handleLogin = (userData) => {
+    flushSync(() => setUser(userData));
+    setCurrentAuthUser(userData);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await logoutApi();
     } catch (e) {
       // Ignore logout errors
     }
     setUser(null);
-    localStorage.removeItem('shopCoreUser');
-    localStorage.removeItem('shopCoreToken');
+    clearCurrentAuthUser();
     // Navigation to /login handled by route guards (user is null)
-  };
+  }, []);
 
-  if (loading) {
+  if (loading && !window.location.hash.split('?')[0].match(/^#\/pos\/?$/)) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      <div className="min-h-screen bg-slate-950 flex flex-col gap-6 items-center justify-center" role="status" aria-label="Loading 10th West">
+        <BrandLogo dark link={false} />
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-600 border-t-orange-400" />
       </div>
     );
   }
@@ -181,4 +353,6 @@ const App = () => {
 };
 
 export default App;
+
+
 

@@ -1,23 +1,98 @@
-﻿import React from 'react';
+import React, { useContext, useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { OperationsDialogContext } from '../../context/OperationsDialogContext';
 
-const sizeMap = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl', '2xl': 'max-w-2xl' };
+const sizeMap = { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-lg', xl: 'sm:max-w-xl', '2xl': 'sm:max-w-2xl', '3xl': 'sm:max-w-5xl' };
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
 
-const Modal = ({ isOpen, onClose, title, size = 'lg', children }) => {
+// Staff can sign out from an open drawer. Release their body lock only after
+// the final dialog closes, regardless of nested-dialog unmount order.
+let staffDialogCount = 0;
+let staffPreviousOverflow = '';
+const lockStaffDialogScroll = () => {
+  if (staffDialogCount === 0) staffPreviousOverflow = document.body.style.overflow;
+  staffDialogCount += 1;
+  document.body.style.overflow = 'hidden';
+  return () => {
+    staffDialogCount -= 1;
+    if (staffDialogCount === 0) document.body.style.overflow = staffPreviousOverflow;
+  };
+};
+
+const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentation = 'modal', tone = 'default', children }) => {
+  const operations = useContext(OperationsDialogContext);
+  const panelRef = useRef(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const previouslyFocused = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    const releaseStaffScroll = operations === 'staff' || operations === 'owner' || operations === 'system' ? lockStaffDialogScroll() : null;
+    if (!releaseStaffScroll) document.body.style.overflow = 'hidden';
+    // Respect a child that already took focus (e.g. an autoFocus field); otherwise focus the dialog.
+    if (!panelRef.current?.contains(document.activeElement)) panelRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (releaseStaffScroll) releaseStaffScroll();
+      else document.body.style.overflow = previousOverflow;
+      const focusTarget = returnFocusRef?.current ?? previouslyFocused;
+      if (focusTarget instanceof HTMLElement && focusTarget.isConnected) {
+        focusTarget.focus({ preventScroll: true });
+      }
+    };
+  }, [isOpen, returnFocusRef, operations]);
+
   if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className={`relative bg-white rounded-xl shadow-2xl w-full ${sizeMap[size]} max-h-[80vh] flex flex-col animate-fade-in`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-          <h3 className="font-display font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+
+  // Handled on the dialog element (not document) so a nested dialog consumes the key first.
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      onClose?.();
+      return;
+    }
+    if (event.key !== 'Tab' || !panelRef.current) return;
+    const items = Array.from(panelRef.current.querySelectorAll(FOCUSABLE)).filter((element) => element.offsetParent !== null);
+    if (items.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  return createPortal(
+    <div
+      className={`brand-overlay brand-overlay-${presentation} brand-overlay-tone-${tone} fixed inset-0 z-[90] flex items-end justify-center sm:items-start sm:overflow-y-auto sm:px-4 sm:py-[8vh]`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onKeyDown={handleKeyDown}
+    >
+      <button type="button" tabIndex={-1} className="fixed inset-0 bg-slate-950/55" onClick={onClose} aria-label="Close dialog" />
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className={`brand-dialog-panel relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl outline-none animate-scaleIn sm:max-h-[84vh] sm:rounded-xl ${sizeMap[size] || sizeMap.lg}`}
+      >
+        <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <h2 id={titleId} className="min-w-0 truncate font-display text-2xl font-semibold text-slate-950">{title}</h2>
+          <button type="button" onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900" aria-label="Close">
             <X size={18} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+        <div className={`overscroll-contain flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] ${operations && tone === 'default' ? 'operations-dialog-content operations-content' : ''} ${operations === 'staff' && tone === 'default' ? 'staff-dialog-content' : ''} ${operations === 'owner' && tone === 'default' ? 'owner-dialog-content' : ''}`}>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

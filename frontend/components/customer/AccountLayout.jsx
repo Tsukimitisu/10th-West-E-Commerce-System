@@ -1,83 +1,34 @@
-﻿import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { User as UserIcon, Package, MapPin, Heart, RotateCcw, Wallet, ChevronRight } from 'lucide-react';
-
+import { Wallet } from 'lucide-react';
+import { getCurrentAuthUser } from '../../services/authSession.js';
 const menuItems = [
-  { path: '/profile', label: 'My Profile', icon: UserIcon },
-  { path: '/orders', label: 'My Orders', icon: Package },
-  { path: '/my-returns', label: 'Returns', icon: RotateCcw },
-  { path: '/addresses', label: 'Address Book', icon: MapPin },
-  { path: '/wishlist', label: 'Wishlist', icon: Heart },
+  { path: '/profile', label: 'Profile' }, { path: '/orders', label: 'Orders' },
+  { path: '/addresses', label: 'Addresses' },
+  { path: '/messages', label: 'Messages' },
 ];
-
 const AccountLayout = ({ children }) => {
   const location = useLocation();
-  const userData = localStorage.getItem('shopCoreUser');
-  const user = userData ? JSON.parse(userData) : null;
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-          <Link to="/" className="hover:text-orange-500 transition-colors">Home</Link>
-          <ChevronRight size={14} />
-          <span className="text-gray-900 font-medium">My Account</span>
-        </div>
-
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Sidebar */}
-          <aside className="lg:w-64 flex-shrink-0">
-            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              {/* Profile header */}
-              {user && (
-                <div className="p-5 border-b border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center font-bold text-lg font-display">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">{user.name}</p>
-                      <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                    </div>
-                  </div>
-                  {user.store_credit !== undefined && user.store_credit > 0 && (
-                    <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
-                      <Wallet size={16} className="text-green-600" />
-                      <span className="text-sm font-medium text-green-700">₱{user.store_credit.toFixed(2)} credit</span>
-                    </div>
-                  )}
-                </div>
-              )}
-              {/* Navigation */}
-              <nav className="p-2">
-                {menuItems.map(item => {
-                  const Icon = item.icon;
-                  const isActive = location.pathname === item.path;
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-0.5 ${isActive ? 'bg-orange-50 text-orange-500' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
-                    >
-                      <Icon size={18} />
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
-          </aside>
-
-          {/* Content */}
-          <main className="flex-1 min-w-0">
-            {children}
-          </main>
-        </div>
-      </div>
+  const user = getCurrentAuthUser();
+  const storeCredit = Number(user?.store_credit ?? 0);
+  const navigation = useRef(null);
+  const activePath = location.pathname.startsWith('/orders/') ? '/orders' : location.pathname;
+  useEffect(() => {
+    const nav = navigation.current;
+    const active = nav?.querySelector('[aria-current="page"]');
+    if (nav && active) nav.scrollLeft = Math.max(0, active.offsetLeft - nav.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2);
+  }, [activePath]);
+  return <div className="account-workspace min-h-screen bg-slate-50">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+      <header className="customer-account-heading">
+        <div><p className="text-sm text-slate-600">{user?.name || '10th West customer'}</p><h1>My Account</h1></div>
+        {Number.isFinite(storeCredit) && storeCredit > 0 && <p className="inline-flex items-center gap-2 text-sm text-slate-700"><Wallet size={17} aria-hidden="true" />{new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(storeCredit)} store credit</p>}
+      </header>
+      <nav ref={navigation} className="customer-account-nav" aria-label="Account navigation">
+        {menuItems.map(item => <Link key={item.path} to={item.path} aria-current={activePath === item.path ? 'page' : undefined}>{item.label}</Link>)}
+      </nav>
+      <main className="min-w-0">{children}</main>
     </div>
-  );
+  </div>;
 };
-
 export default AccountLayout;
-

@@ -1,4 +1,6 @@
 import pool from '../config/database.js';
+import databaseConfig from '../config/databaseConfig.cjs';
+import { auditOutcome } from '../utils/audit.js';
 
 /**
  * Log a user/system activity to the activity_logs table.
@@ -24,11 +26,11 @@ export const logActivity = async ({
     await pool.query(
       `INSERT INTO activity_logs (user_id, action, entity_type, entity_id, details, ip_address, user_agent)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [userId, action, entityType, entityId, details ? JSON.stringify(details) : null, ipAddress, userAgent]
+      [userId, action, entityType, entityId, JSON.stringify({ outcome: auditOutcome(action), ...details }), ipAddress, userAgent]
     );
   } catch (err) {
     // Never let logging crash the request
-    console.error('Activity log error:', err.message);
+    console.error('Activity log error:', databaseConfig.sanitizeDatabaseError(err));
   }
 };
 
@@ -37,8 +39,9 @@ export const logActivity = async ({
  * `req.logActivity(action, entityType?, entityId?, details?)` to the request.
  */
 export const activityLogger = (req, res, next) => {
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  const ua = req.headers['user-agent'] || '';
+  // Express resolves forwarding headers using the configured trusted proxy.
+  const ip = req.ip || req.socket?.remoteAddress || null;
+  const ua = String(req.headers['user-agent'] || '').slice(0, 512);
 
   req.clientIp = ip;
   req.clientUa = ua;

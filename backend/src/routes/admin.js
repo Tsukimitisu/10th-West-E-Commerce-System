@@ -1,12 +1,169 @@
+import { lockedAccountSummary, maskEmail } from '../utils/masking.js';
+import { adminMutationLimiter } from '../middleware/rateLimiter.js';
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import pool from '../config/database.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { USER_ROLES } from '../constants/schemaEnums.js';
+import { authenticateToken, requirePermission, requireRole } from '../middleware/auth.js';
+import { listSettings } from '../services/settings.js';
+import { SECURITY_RULES, securityPolicy, validatePolicyPassword } from '../services/securityPolicy.js';
+import backupRoutes from './backups.js';
+import { createMaintenanceRouter } from './maintenance.js';
+import { unifiedAuditCte } from '../utils/audit.js';
+import { presentAuditRecord } from '../utils/auditPresentation.js';
+import { getPaymongoConfigurationStatus } from '../services/paymongo.js';
+import { getShippingConfigurationStatus } from '../services/shipping/providers/index.js';
+import { getShippingOperationalReadiness } from '../services/shipping/shippingReadiness.js';
+import { getTrackingConfigurationStatus } from '../services/tracking/providers/index.js';
+import {
+  buildAdminIntegrationReadiness,
+  selectedIntegrationsReady,
+} from '../services/integrationReadiness.js';
 
 const router = express.Router();
+const systemSettingCategories = new Set(['security', 'system']);
+const booleanRule = (value) => ['true', 'false'].includes(String(value).toLowerCase());
+const numberRule = (min, max) => (value) => Number.isFinite(Number(value)) && Number(value) >= min && Number(value) <= max;
+const textRule = (max = 500) => (value) => typeof value === 'string' && value.trim().length <= max;
+const SETTING_RULES = {
+  store: { name: textRule(120), tagline: textRule(240), address: textRule(500), email: textRule(254), phone: textRule(50), logo_url: textRule(1000), currency: (v) => v === 'PHP', timezone: (v) => ['Asia/Manila', 'UTC'].includes(v) },
+  payment: { cash_enabled: booleanRule, gcash_enabled: booleanRule },
+  shipping: { enable_pickup: booleanRule, express_rate: numberRule(0, 100000), flat_rate: numberRule(0, 100000), free_threshold: numberRule(0, 1000000) },
+  returns: { return_window_days: numberRule(0, 365) },
+  tax: { enabled: booleanRule, inclusive: booleanRule, name: textRule(40), rate: numberRule(0, 100) },
+  legal: {
+    tax_id: (v) => /^[A-Za-z0-9 -]{3,40}$/.test(v),
+    business_registration: (v) => /^[A-Za-z0-9 -]{3,80}$/.test(v),
+    vat_registered: booleanRule,
+  },
+  email: { from_email: textRule(254), from_name: textRule(120), order_confirmation: booleanRule, promotions: booleanRule, return_approval: booleanRule, shipping_update: booleanRule },
+  home: { announcements_enabled: booleanRule },
+  security: SECURITY_RULES,
+  system: { maintenance_mode: booleanRule },
+};
+const SENSITIVE_SETTING_PATTERN = /(secret|password|token|api[_-]?key|private[_-]?key)/i;
+const maskSettingRows = (rows) => rows.map((row) => ({
+  ...row,
+  value: SENSITIVE_SETTING_PATTERN.test(row.key) && !SETTING_RULES[row.category]?.[row.key] ? '********' : row.value,
+}));
+const safeBeforeSettings = (category, rows) => Object.fromEntries(maskSettingRows(rows.map(row => ({ ...row, category }))).map(row => [row.key, row.value]));
+const validateSettings = (category, settings) => {
+  const rules = Object.hasOwn(SETTING_RULES, category) ? SETTING_RULES[category] : null;
+  if (!rules || !settings || typeof settings !== 'object' || Array.isArray(settings)) {
+    return { error: 'Unsupported settings category or payload.' };
+  }
+  const normalized = {};
+  for (const [key, rawValue] of Object.entries(settings)) {
+    if (!Object.hasOwn(rules, key)) {
+      return { error: `Unsupported setting: ${category}.${key}` };
+    }
+    const value = typeof rawValue === 'string' ? rawValue.trim() : String(rawValue);
+    if (!rules[key](value)) return { error: `Invalid value for ${category}.${key}` };
+    normalized[key] = value;
+  }
+  if (category === 'security' && normalized['2fa_enforcement'] === 'required'
+    && String(process.env.TWO_FACTOR_ENCRYPTION_KEY || '').length < 32) {
+    return { error: 'Configure the backend two-factor encryption key before requiring enrollment.' };
+  }
+  if (!Object.keys(normalized).length) return { error: 'At least one setting is required.' };
+  return { normalized };
+};
+
+// Customer directory is intentionally separate from super-admin user management.
+// Store staff are denied at the role check even if a legacy permission assignment exists.
+router.get(
+  '/customers',
+  authenticateToken,
+  requireRole('super_admin', 'owner', 'admin'),
+  requirePermission('customers.view'),
+  async (req, res) => {
+    try {
+      const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
+      const limit = 100;
+      const offset = (page - 1) * limit;
+      const search = String(req.query.search || '').trim();
+      const params = [];
+      const where = ["role = 'customer'"];
+      if (search) {
+        params.push(`%${search}%`);
+        where.push(`(name ILIKE $${params.length} OR email ILIKE $${params.length})`);
+      }
+      const whereClause = where.join(' AND ');
+      const countResult = await pool.query(`SELECT COUNT(*) FROM users WHERE ${whereClause}`, params);
+      params.push(limit, offset);
+      const result = await pool.query(
+        `SELECT id, name, email, phone, is_active, created_at
+         FROM users
+         WHERE ${whereClause}
+         ORDER BY created_at DESC
+         LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params
+      );
+      return res.json({
+        customers: result.rows,
+        total: Number(countResult.rows[0]?.count || 0),
+        page,
+        limit,
+      });
+    } catch (error) {
+      console.error('Get customers error:', error);
+      return res.status(500).json({ message: 'Customer directory could not be loaded.' });
+    }
+  }
+);
 
 // All admin/system routes require super_admin only
-router.use(authenticateToken, requireRole('super_admin'));
+router.use(authenticateToken, (req, res, next) => {
+  const normalizedPath = req.path.toLowerCase().replace(/\/+$/, '');
+  const securitySettings = normalizedPath.startsWith('/security/settings')
+    || systemSettingCategories.has(req.query.category) || systemSettingCategories.has(req.body?.category)
+    || ['/settings/security', '/settings/system'].includes(normalizedPath);
+  if (!securitySettings && (req.path === '/settings' || req.path.startsWith('/settings/'))) {
+    return requireRole('super_admin', 'owner', 'admin')(req, res, () => (
+      requirePermission('settings.manage')(req, res, next)
+    ));
+  }
+  return requireRole('super_admin')(req, res, next);
+});
+
+router.use((req, res, next) => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) ? adminMutationLimiter(req, res, next) : next());
+
+router.use('/backups', backupRoutes);
+router.use('/maintenance', createMaintenanceRouter());
+
+router.get('/readiness', async (_req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    const paymongo = getPaymongoConfigurationStatus();
+    const shipping = getShippingConfigurationStatus();
+    const tracking = getTrackingConfigurationStatus();
+    const activity = await getShippingOperationalReadiness(pool);
+    const integrations = buildAdminIntegrationReadiness({ paymongo, shipping, tracking });
+    return res.json({
+      status: 'available',
+      core_ready: true,
+      commerce_ready: true,
+      integrations_ready: selectedIntegrationsReady(integrations),
+      database: 'ok',
+      integrations,
+      runtime: {
+        session_store: process.env.SESSION_STORE === 'postgres' ? 'postgres' : 'memory_dev_mode',
+        environment: process.env.NODE_ENV || 'development',
+      },
+      shipping_activity: {
+        mode: 'manual_waybill',
+        external_api_required: false,
+        ...activity,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch {
+    return res.status(503).json({
+      status: 'unavailable', core_ready: false, commerce_ready: false,
+      integrations_ready: false, database: 'unavailable', timestamp: new Date().toISOString(),
+    });
+  }
+});
 
 // ==================== USER MANAGEMENT ====================
 
@@ -20,16 +177,16 @@ router.get('/users', async (req, res) => {
     const params = [];
 
     if (role) { params.push(role); where.push(`role = $${params.length}`); }
-    if (status === 'active') where.push('is_active = true AND locked_until IS NULL');
+    if (status === 'active') where.push('is_active = true AND login_security_locked_at IS NULL AND (locked_until IS NULL OR locked_until <= NOW())');
     if (status === 'inactive') where.push('is_active = false');
-    if (status === 'locked') where.push('locked_until IS NOT NULL AND locked_until > NOW()');
+    if (status === 'locked') where.push('(login_security_locked_at IS NOT NULL OR locked_until > NOW())');
     if (search) { params.push(`%${search}%`); where.push(`(name ILIKE $${params.length} OR email ILIKE $${params.length})`); }
 
     const whereClause = where.join(' AND ');
     const countResult = await pool.query(`SELECT COUNT(*) FROM users WHERE ${whereClause}`, params);
     params.push(limit, offset);
     const result = await pool.query(
-      `SELECT id, name, email, role, phone, is_active, login_attempts, locked_until, two_factor_enabled, last_login, created_at
+      `SELECT id, name, email, role, phone, is_active, login_attempts, locked_until, login_lock_stage, login_security_locked_at, two_factor_enabled, last_login, created_at
        FROM users WHERE ${whereClause} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params
     );
 
@@ -44,16 +201,16 @@ router.get('/users', async (req, res) => {
 router.patch('/users/:id/lock', async (req, res) => {
   try {
     const { id } = req.params;
-    // Lock indefinitely (far future date)
+    // Authentication protection is separate from business account deactivation.
     await pool.query(
-      `UPDATE users SET is_active = false, locked_until = NOW() + INTERVAL '100 years' WHERE id = $1`, [id]
+      `UPDATE users SET login_lock_stage = 3, login_security_locked_at = NOW(), locked_until = NULL WHERE id = $1`, [id]
     );
     // Invalidate all sessions
     await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [id]);
     // Log activity
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'admin_lock_user', JSON.stringify({ locked_user_id: parseInt(id) }), req.ip]
+      [req.user.id, 'admin_lock_user', JSON.stringify({ outcome: 'success', locked_user_id: parseInt(id) }), req.ip]
     );
     res.json({ message: 'User account locked' });
   } catch (err) {
@@ -67,11 +224,11 @@ router.patch('/users/:id/unlock', async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query(
-      'UPDATE users SET is_active = true, locked_until = NULL, login_attempts = 0 WHERE id = $1', [id]
+      'UPDATE users SET locked_until = NULL, login_attempts = 0, login_lock_stage = 0, login_security_locked_at = NULL WHERE id = $1', [id]
     );
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'admin_unlock_user', JSON.stringify({ unlocked_user_id: parseInt(id) }), req.ip]
+      [req.user.id, 'account_security_unlock', JSON.stringify({ outcome: 'success', unlocked_user_id: parseInt(id) }), req.ip]
     );
     res.json({ message: 'User account unlocked' });
   } catch (err) {
@@ -85,16 +242,15 @@ router.post('/users/:id/reset-password', async (req, res) => {
   try {
     const { id } = req.params;
     const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 8) {
-      return res.status(400).json({ message: 'Password must be at least 8 characters' });
-    }
+    try { await validatePolicyPassword(newPassword); }
+    catch (error) { return res.status(400).json({ message: error.message }); }
     const hash = await bcrypt.hash(newPassword, 12);
-    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, id]);
+    await pool.query(`WITH changed AS (UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, login_attempts = 0, locked_until = NULL, login_lock_stage = 0, login_security_locked_at = NULL WHERE id = $2 RETURNING id) UPDATE password_reset_sms_challenges SET consumed_at = NOW() WHERE user_id IN (SELECT id FROM changed)`, [hash, id]);
     // Invalidate all sessions so user must re-login
     await pool.query('UPDATE sessions SET is_active = false WHERE user_id = $1', [id]);
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'admin_reset_password', JSON.stringify({ target_user_id: parseInt(id) }), req.ip]
+      [req.user.id, 'admin_reset_password', JSON.stringify({ outcome: 'success', target_user_id: parseInt(id) }), req.ip]
     );
     res.json({ message: 'Password reset successfully' });
   } catch (err) {
@@ -108,7 +264,7 @@ router.patch('/users/:id/role', async (req, res) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
-    const validRoles = ['customer', 'admin', 'cashier', 'super_admin', 'owner', 'store_staff'];
+    const validRoles = USER_ROLES;
     if (!validRoles.includes(role)) {
       return res.status(400).json({ message: 'Invalid role' });
     }
@@ -124,7 +280,7 @@ router.patch('/users/:id/role', async (req, res) => {
     await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, id]);
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'admin_change_role', JSON.stringify({ target_user_id: parseInt(id), new_role: role }), req.ip]
+      [req.user.id, 'admin_change_role', JSON.stringify({ outcome: 'success', target_user_id: parseInt(id), new_role: role }), req.ip]
     );
     res.json({ message: 'Role updated' });
   } catch (err) {
@@ -154,7 +310,7 @@ router.delete('/users/:id', async (req, res) => {
     // Log
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'admin_delete_user', JSON.stringify({ deleted_user_id: parseInt(id), name: user.name, email: user.email, role: user.role }), req.ip]
+      [req.user.id, 'admin_delete_user', JSON.stringify({ outcome: 'success', deleted_user_id: parseInt(id), name: user.name, email: user.email, role: user.role }), req.ip]
     );
     res.json({ message: 'User deleted successfully' });
   } catch (err) {
@@ -168,14 +324,8 @@ router.delete('/users/:id', async (req, res) => {
 // Get all settings or by category
 router.get('/settings', async (req, res) => {
   try {
-    const { category } = req.query;
-    let result;
-    if (category) {
-      result = await pool.query('SELECT * FROM system_settings WHERE category = $1 ORDER BY key', [category]);
-    } else {
-      result = await pool.query('SELECT * FROM system_settings ORDER BY category, key');
-    }
-    res.json(result.rows);
+    const rows = await listSettings(pool, req.query.category || null);
+    res.json(maskSettingRows(req.user.role === 'super_admin' ? rows : rows.filter(row => !systemSettingCategories.has(row.category))));
   } catch (err) {
     console.error('Get settings error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -183,10 +333,9 @@ router.get('/settings', async (req, res) => {
 });
 
 // Get settings by category (route param)
-router.get('/settings/:category', async (req, res) => {
+router.get('/settings/:category', (req, res, next) => systemSettingCategories.has(req.params.category) ? requireRole('super_admin')(req, res, next) : next(), async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM system_settings WHERE category = $1 ORDER BY key', [req.params.category]);
-    res.json(result.rows);
+    res.json(maskSettingRows(await listSettings(pool, req.params.category)));
   } catch (err) {
     console.error('Get settings by category error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -195,28 +344,43 @@ router.get('/settings/:category', async (req, res) => {
 
 // Update settings (bulk)
 router.put('/settings', async (req, res) => {
+  const { category, settings } = req.body;
+  if (category === 'system' && settings && Object.hasOwn(settings, 'maintenance_mode')) {
+    return res.status(400).json({ message: 'Use Maintenance to change store status with fresh authentication.', code: 'MAINTENANCE_CONFIRMATION_REQUIRED' });
+  }
+  const validation = validateSettings(category, settings);
+  if (validation.error) return res.status(400).json({ message: validation.error });
+  const client = await pool.connect();
   try {
-    const { category, settings } = req.body;
-    if (!category || !settings) {
-      return res.status(400).json({ message: 'Category and settings required' });
-    }
-    for (const [key, value] of Object.entries(settings)) {
-      const val = typeof value === 'string' ? value : JSON.stringify(value);
-      await pool.query(
+    await client.query('BEGIN');
+    const beforeResult = await client.query('SELECT key, value FROM system_settings WHERE category = $1', [category]);
+    for (const [key, value] of Object.entries(validation.normalized)) {
+      await client.query(
         `INSERT INTO system_settings (category, key, value, updated_by, updated_at)
          VALUES ($1, $2, $3, $4, NOW())
          ON CONFLICT (category, key) DO UPDATE SET value = $3, updated_by = $4, updated_at = NOW()`,
-        [category, key, val, req.user.id]
+        [category, key, value, req.user.id]
       );
     }
-    await pool.query(
-      'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'update_settings', JSON.stringify({ category, keys: Object.keys(settings) }), req.ip]
+    await client.query(
+      `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, before_data, after_data, metadata)
+       VALUES ($1, 'settings.update', 'system_settings', $2, $3, $4, $5::jsonb, $6::jsonb, '{"outcome":"success"}'::jsonb)`,
+      [req.user.id, category, req.clientIp, req.clientUa,
+        JSON.stringify(safeBeforeSettings(category, beforeResult.rows)),
+        JSON.stringify(validation.normalized)]
     );
+    if (category === 'security' && validation.normalized.session_timeout_minutes) {
+      await client.query('UPDATE sessions SET expires_at = LEAST(expires_at, created_at + make_interval(mins => $1)) WHERE is_active = true', [Number(validation.normalized.session_timeout_minutes)]);
+    }
+    await client.query('COMMIT');
+    if (category === 'security') securityPolicy.invalidate();
     res.json({ message: 'Settings saved' });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Update settings error:', err);
     res.status(500).json({ message: 'Server error' });
+  } finally {
+    client.release();
   }
 });
 
@@ -227,7 +391,7 @@ router.get('/security/settings', async (req, res) => {
   try {
     const result = await pool.query("SELECT key, value FROM system_settings WHERE category = 'security'");
     const settings = {};
-    result.rows.forEach(r => { settings[r.key] = r.value; });
+    result.rows.forEach(r => { settings[r.key] = SENSITIVE_SETTING_PATTERN.test(r.key) && !SETTING_RULES.security[r.key] ? '********' : r.value; });
     res.json(settings);
   } catch (err) {
     console.error('Get security settings error:', err);
@@ -237,20 +401,39 @@ router.get('/security/settings', async (req, res) => {
 
 // Update security settings
 router.put('/security/settings', async (req, res) => {
+  const validation = validateSettings('security', req.body.settings);
+  if (validation.error) return res.status(400).json({ message: validation.error });
+  const client = await pool.connect();
   try {
-    const { settings } = req.body;
-    for (const [key, value] of Object.entries(settings)) {
-      await pool.query(
+    await client.query('BEGIN');
+    const beforeResult = await client.query("SELECT key, value FROM system_settings WHERE category = 'security'");
+    for (const [key, value] of Object.entries(validation.normalized)) {
+      await client.query(
         `INSERT INTO system_settings (category, key, value, updated_by, updated_at)
          VALUES ('security', $1, $2, $3, NOW())
          ON CONFLICT (category, key) DO UPDATE SET value = $2, updated_by = $3, updated_at = NOW()`,
-        [key, String(value), req.user.id]
+        [key, value, req.user.id]
       );
     }
+    await client.query(
+      `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, before_data, after_data, metadata)
+       VALUES ($1, 'settings.security.update', 'system_settings', 'security', $2, $3, $4::jsonb, $5::jsonb, '{"outcome":"success"}'::jsonb)`,
+      [req.user.id, req.clientIp, req.clientUa,
+        JSON.stringify(safeBeforeSettings('security', beforeResult.rows)),
+        JSON.stringify(validation.normalized)]
+    );
+    if (validation.normalized.session_timeout_minutes) {
+      await client.query('UPDATE sessions SET expires_at = LEAST(expires_at, created_at + make_interval(mins => $1)) WHERE is_active = true', [Number(validation.normalized.session_timeout_minutes)]);
+    }
+    await client.query('COMMIT');
+    securityPolicy.invalidate();
     res.json({ message: 'Security settings updated' });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Update security settings error:', err);
     res.status(500).json({ message: 'Server error' });
+  } finally {
+    client.release();
   }
 });
 
@@ -275,7 +458,7 @@ router.get('/security/login-attempts', async (req, res) => {
       FROM login_attempts
     `);
     const lockedResult = await pool.query(
-      "SELECT COUNT(*) FROM users WHERE locked_until IS NOT NULL AND locked_until > NOW()"
+      "SELECT COUNT(*) FROM users WHERE COALESCE(is_deleted, false) = false AND (login_security_locked_at IS NOT NULL OR locked_until > NOW())"
     );
     res.json({
       attempts: result.rows,
@@ -305,7 +488,7 @@ router.get('/logs/errors', async (req, res) => {
        LEFT JOIN users u ON u.id = e.user_id
        WHERE ${where.join(' AND ')} ORDER BY e.created_at DESC LIMIT $${params.length}`, params
     );
-    res.json(result.rows);
+    res.json(result.rows.map(row => presentAuditRecord(row, 'errors')));
   } catch (err) {
     console.error('Get error logs error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -317,13 +500,13 @@ router.get('/logs/transactions', async (req, res) => {
   try {
     const { limit = 100 } = req.query;
     const result = await pool.query(
-      `SELECT a.*, u.name as user_name FROM activity_logs a
-       LEFT JOIN users u ON u.id = a.user_id
-       WHERE a.action LIKE 'order%' OR a.action LIKE 'payment%' OR a.action LIKE 'checkout%'
-         OR a.action LIKE 'refund%' OR a.action LIKE 'pos%'
-       ORDER BY a.created_at DESC LIMIT $1`, [parseInt(limit)]
+      `${unifiedAuditCte} SELECT ul.unified_id AS id, ul.source, ul.actor_user_id AS user_id,
+         ul.action,ul.entity_type,ul.entity_id,ul.ip_address,ul.metadata AS details,ul.created_at,u.name AS user_name
+       FROM unified_logs ul LEFT JOIN users u ON u.id=ul.actor_user_id
+       WHERE LOWER(ul.action) ~ '^(order|payment|checkout|refund|pos|return)[._ ]|^offline_pos_sale'
+       ORDER BY ul.created_at DESC LIMIT $1`, [Math.min(100, Math.max(1, parseInt(limit) || 100))]
     );
-    res.json(result.rows);
+    res.json(result.rows.map(row => presentAuditRecord(row, 'transactions')));
   } catch (err) {
     console.error('Get transaction logs error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -344,8 +527,8 @@ router.get('/logs/suspicious', async (req, res) => {
     `);
     // Recently locked accounts
     const lockedAccounts = await pool.query(`
-      SELECT id, name, email, login_attempts, locked_until, last_login
-      FROM users WHERE locked_until IS NOT NULL AND locked_until > NOW()
+      SELECT id, email, role, login_attempts, login_lock_stage, login_security_locked_at, locked_until
+      FROM users WHERE COALESCE(is_deleted, false) = false AND (login_security_locked_at IS NOT NULL OR locked_until > NOW())
       ORDER BY locked_until DESC LIMIT 20
     `);
     // Unusual admin activity (bulk operations)
@@ -359,8 +542,9 @@ router.get('/logs/suspicious', async (req, res) => {
       ORDER BY op_count DESC LIMIT 20
     `);
     res.json({
-      failed_login_clusters: failedLogins.rows,
-      locked_accounts: lockedAccounts.rows,
+      failed_login_clusters: failedLogins.rows.map(row => ({ ...row, targeted_emails: (row.targeted_emails || []).map(maskEmail) })),
+      locked_accounts: lockedAccounts.rows.map(lockedAccountSummary),
+      server_time: new Date().toISOString(),
       bulk_operations: bulkOps.rows,
     });
   } catch (err) {
@@ -371,31 +555,28 @@ router.get('/logs/suspicious', async (req, res) => {
 
 // ==================== BACKUP & RECOVERY ====================
 
-// Create backup (exports tables as JSON)
+// A real encrypted backup provider has not been implemented. This endpoint is
+// deliberately fail-closed so the UI cannot report a recoverable backup.
 router.post('/backup', async (req, res) => {
   try {
-    const backupResult = await pool.query(
-      `INSERT INTO backup_history (backup_type, status, initiated_by, created_at)
-       VALUES ('manual', 'completed', $1, NOW()) RETURNING *`, [req.user.id]
-    );
-    // Get row counts for all tables as metadata
-    const tables = ['users', 'products', 'orders', 'order_items', 'categories', 'returns', 'activity_logs'];
-    const counts = {};
-    for (const table of tables) {
-      const r = await pool.query(`SELECT COUNT(*) FROM ${table}`);
-      counts[table] = parseInt(r.rows[0].count);
-    }
     await pool.query(
-      'UPDATE backup_history SET file_name = $1 WHERE id = $2',
-      [`backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`, backupResult.rows[0].id]
+      `INSERT INTO audit_logs
+        (actor_user_id, action, entity_type, entity_id, ip_address, user_agent, metadata)
+       VALUES ($1, 'backup.request_blocked', 'backup', 'provider', $2, $3, $4::jsonb)`,
+      [
+        req.user.id,
+        req.ip,
+        req.get('user-agent'),
+        JSON.stringify({ reason: 'BACKUP_PROVIDER_NOT_CONFIGURED' }),
+      ]
     );
-    await pool.query(
-      'INSERT INTO activity_logs (user_id, action, details, ip_address) VALUES ($1, $2, $3, $4)',
-      [req.user.id, 'create_backup', JSON.stringify({ table_counts: counts }), req.ip]
-    );
-    res.json({ message: 'Backup created successfully', backup: backupResult.rows[0], table_counts: counts });
+    return res.status(503).json({
+      message: 'Real backup provider is not configured.',
+      code: 'BACKUP_PROVIDER_NOT_CONFIGURED',
+      configured: false,
+    });
   } catch (err) {
-    console.error('Create backup error:', err);
+    console.error('Record blocked backup request error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });

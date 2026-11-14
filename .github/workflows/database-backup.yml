@@ -1,0 +1,97 @@
+name: Daily Database Backup
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "15 2 * * *"
+      timezone: "Asia/Manila"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tenth-west-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Encrypted PostgreSQL Backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      NODE_ENV: production
+
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+
+      DB_SSL_MODE: "no-verify"
+
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+
+      BACKUP_ENABLED: "true"
+      BACKUP_CRON: "0 2 * * *"
+      BACKUP_TIMEZONE: "Asia/Manila"
+      BACKUP_RETENTION_DAYS: "14"
+      BACKUP_STORAGE_BUCKET: "database-backups"
+
+      PG_DUMP_PATH: "pg_dump"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required backup secrets
+        shell: bash
+        run: |
+          required=(
+            DATABASE_URL
+            BACKUP_DATABASE_URL
+            SUPABASE_URL
+            SUPABASE_SERVICE_ROLE_KEY
+            BACKUP_ENCRYPTION_KEY
+          )
+
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is missing from GitHub Actions secrets."
+              exit 1
+            fi
+          done
+
+          echo "Required backup configuration is present."
+
+      - name: Build secure backup image
+        run: |
+          docker build \
+            -t tenth-west-database-backup \
+            ./backend
+
+      - name: Verify PostgreSQL backup client
+        run: |
+          docker run --rm \
+            tenth-west-database-backup \
+            pg_dump --version
+
+      - name: Run encrypted database backup
+        run: |
+          docker run --rm \
+            -e NODE_ENV \
+            -e DATABASE_URL \
+            -e BACKUP_DATABASE_URL \
+            -e DB_SSL_MODE \
+            -e SUPABASE_URL \
+            -e SUPABASE_SERVICE_ROLE_KEY \
+            -e BACKUP_ENCRYPTION_KEY \
+            -e BACKUP_ENABLED \
+            -e BACKUP_CRON \
+            -e BACKUP_TIMEZONE \
+            -e BACKUP_RETENTION_DAYS \
+            -e BACKUP_STORAGE_BUCKET \
+            -e PG_DUMP_PATH \
+            tenth-west-database-backup \
+            npm run backup:database

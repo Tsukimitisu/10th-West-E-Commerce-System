@@ -1,0 +1,33 @@
+/* Super Admin opt-in selectors only. Other role workspaces retain their rules. */
+.operations-sidebar.system-sidebar { background:#090b0f; color:#fff; }
+.system-sidebar :is(.operations-role,.ops-nav-label) { color:#a8adb7; font-size:11px; }
+.system-sidebar .ops-nav-item { min-height:44px; color:#fff; }
+.system-sidebar .ops-nav-item > svg { color:#a8adb7; }
+.system-sidebar .ops-nav-item:hover { background:#171a21; }
+.system-sidebar .ops-nav-item[aria-current=page] { background:#1b1e25; color:#fff; box-shadow:inset 2px 0 var(--performance-orange); }
+.system-sidebar .ops-nav-item[aria-current=page] > svg { color:#fff; }
+.system-sidebar :is(.operations-brand-header,.ops-sidebar-footer) { border-color:#262a33; }
+.system-sidebar .ops-sidebar-footer button { display:flex; width:100%; gap:11px; padding:10px 12px; color:#fff; text-align:left; }
+.system-sidebar.is-collapsed .ops-sidebar-footer button { justify-content:center; padding-inline:0; }
+.brand-overlay-tone-system .brand-dialog-panel > div { background:#090b0f; color:#fff; border-color:#262a33; }
+.brand-overlay-tone-system .brand-dialog-panel > div:first-child :is(h2,button) { color:#fff; }
+.brand-overlay-tone-system .brand-dialog-panel > div:last-child { display:flex; min-height:0; padding:0; }
+.brand-overlay-tone-system .system-sidebar { flex:1; }
+.brand-overlay-system-confirmation { align-items:center !important; padding:20px !important; }
+.brand-overlay-system-confirmation .brand-dialog-panel { max-width:384px; max-height:calc(100dvh - 40px); animation:none; }
+.system-sidebar :focus-visible,.brand-overlay-tone-system :focus-visible { outline:2px solid var(--hot-orange); outline-offset:2px; }
+.sa-tabs { display:flex; max-width:100%; gap:4px; overflow-x:auto; border:1px solid #dde1e8; border-radius:8px; padding:4px; background:#fff; }
+.sa-tabs [role=tab] { display:flex; align-items:center; flex-shrink:0; gap:8px; min-height:44px; padding:10px 14px; border:1px solid transparent; border-radius:6px; background:#fff; color:#242832; font:500 14px/1.4 Inter,sans-serif; white-space:nowrap; }
+.sa-tabs [role=tab]:hover { background:#f3f4f6; }
+.sa-tabs [role=tab][aria-selected=true] { background:#fff5ed; border-color:#f3c4a7; color:#242832; }
+.sa-tabs [role=tab][aria-selected=true] svg { color:#f36a21; }
+.sa-tabs [role=tab]:focus-visible { outline:3px solid #a34110; outline-offset:-3px; }
+.sa-backup-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 24px; padding:20px 0; border-block:1px solid #dde1e8; }
+.sa-backup-summary dt { font-size:13px; color:#565e6b; }
+.sa-backup-summary dd { margin-top:4px; font-size:14px; color:#242832; overflow-wrap:anywhere; }
+.sa-backup-table { width:100%; border-collapse:collapse; font-size:13px; }
+.sa-backup-table :is(th,td) { padding:14px 16px; border-bottom:1px solid #dde1e8; text-align:left; vertical-align:top; }
+.sa-backup-table th { font-weight:600; background:#f6f7f9; }
+.sa-backup-table caption { padding:16px; text-align:left; font-size:16px; font-weight:600; }
+.sa-backup-table code { display:block; max-width:170px; margin-top:6px; overflow-wrap:anywhere; font-size:11px; }
+@media (min-width:1024px) { .sa-backup-summary { grid-template-columns:repeat(4,minmax(0,1fr)); } }

@@ -1,69 +1,314 @@
-/* 10th West Moto - Global Styles */
+@import "./styles/brand.css";
+@import "./styles/storefront.css";
+@import "./styles/auth.css";
+@import "./styles/operations.css";
 
-/* Hide browser-native password reveal icons to avoid duplicating our custom eye toggle */
+/* 10th West Moto design system — see design-system/MASTER.md */
+:root {
+  --obsidian: #080a0e;
+  --racing-navy: #111c3d;
+  --navy-secondary: #192a5a;
+  --performance-orange: #f36a21;
+  --hot-orange: #ff8a1f;
+  --racing-red: #d62232;
+  --button-bg: var(--performance-orange);
+  --button-text: var(--obsidian);
+  --sidebar-bg: var(--racing-navy);
+  --input-border: #8b95a6;
+  color-scheme: light;
+  font-synthesis: none;
+  /* Primitives */
+  --brand-950: #080a0e;
+  --brand-900: #111c3d;
+  --brand-800: #192a5a;
+  --brand-700: #192a5a;
+  --accent-red: #d62232;
+  --accent-orange: #f36a21;
+  /* Semantic */
+  --accent: #f36a21;
+  --accent-hover: #a34110;
+  --accent-soft: #fff7ed;
+  --surface: #ffffff;
+  --surface-muted: #f6f7f9;
+  --surface-subtle: #eef0f4;
+  --border: #dde1e8;
+  --border-strong: #b4bdcc;
+  --text: #242832;
+  --text-secondary: #565e6b;
+  --text-muted: #626b78;
+  --success: #166044;
+  --warning: #855016;
+  --danger: #ac1c2b;
+  --info: #111c3d;
+  --focus-ring: #a34110;
+  --brand-gradient: var(--accent-orange);
+  /* Elevation: one soft offset shadow per level, no coloured halos */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.04);
+  --shadow-elevated: 0 12px 32px rgba(15, 23, 42, 0.12);
+  --shadow-overlay: 0 20px 48px rgba(8, 13, 25, 0.18);
+  /* Radius: controls 8px, cards 12px, dialogs 16px */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 transparent;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+:is(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+img {
+  max-width: 100%;
+}
+
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
   display: none;
 }
 
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* Focus styles */
 *:focus-visible {
-  outline: 2px solid #f97316;
-  outline-offset: 2px;
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
-/* Image zoom container */
+::selection {
+  background: rgba(243, 106, 33, 0.2);
+  color: var(--brand-950);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #94a3b8;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #697180;
+  background-clip: padding-box;
+}
+
+.font-display {
+  font-family: "Barlow Condensed", sans-serif;
+}
+
+.brand-gradient {
+  background: var(--brand-gradient);
+}
+
+/* Retained for compatibility; emphasis now uses solid accent color (no gradient text). */
+.brand-gradient-text {
+  color: var(--accent-orange);
+}
+
+.surface-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.interactive-card {
+  transition: transform 200ms ease-out, border-color 200ms ease-out, box-shadow 200ms ease-out;
+}
+
+@media (hover: hover) {
+  .interactive-card:hover {
+    transform: translateY(-2px);
+    border-color: #b4bdcc;
+    box-shadow: none;
+  }
+}
+
+.shop-filter-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #b4bdcc transparent;
+}
+
+.shop-filter-scroll::-webkit-scrollbar {
+  width: 7px;
+}
+
+.shop-filter-scroll::-webkit-scrollbar-thumb {
+  background: #b4bdcc;
+  background-clip: padding-box;
+}
+
+.skeleton,
+.animate-shimmer {
+  background: linear-gradient(90deg, #eef2f7 25%, #dfe6ee 50%, #eef2f7 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.aspect-product {
+  aspect-ratio: 1 / 1;
+}
+
 .zoom-container {
   overflow: hidden;
   cursor: zoom-in;
 }
 
 .zoom-container img {
-  transition: transform 0.3s ease;
+  transition: transform 250ms ease;
 }
 
-.zoom-container:hover img {
-  transform: scale(1.5);
+@media (hover: hover) {
+  .zoom-container:hover img {
+    transform: scale(1.08);
+  }
 }
 
-/* Skeleton loading */
-.skeleton {
-  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+.animate-fade-in,
+.animate-fadeIn {
+  animation: fade-in 220ms ease-out both;
 }
 
-/* Product image aspect ratio */
-.aspect-product {
-  aspect-ratio: 1 / 1;
+.animate-scaleIn {
+  animation: scale-in 200ms ease-out both;
 }
 
-/* Glass effect */
-.glass {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  background: rgba(255, 255, 255, 0.85);
+.animate-drawer-in {
+  animation: drawer-in 220ms ease-out both;
+}
+
+.animate-accountContentIn,
+.animate-accountContentInUp,
+.animate-accountContentInDown {
+  animation: none;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes content-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes drawer-in {
+  from { opacity: 0; transform: translateX(-14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.overscroll-contain {
+  overscroll-behavior: contain;
+}
+
+/* Rich text rendered from owner-authored HTML (product descriptions, policies). */
+.rich-text {
+  color: var(--text-secondary);
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.rich-text > * + * {
+  margin-top: 0.75em;
+}
+
+.rich-text :is(h2, h3, h4) {
+  margin-top: 1.25em;
+  color: var(--text);
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.rich-text h2 { font-size: 1.125rem; }
+.rich-text h3 { font-size: 1rem; }
+.rich-text h4 { font-size: 0.9375rem; }
+.rich-text :is(strong, b) { color: var(--text); font-weight: 600; }
+.rich-text :is(em, i) { font-style: italic; }
+.rich-text u { text-decoration: underline; text-underline-offset: 2px; }
+.rich-text ul { list-style: disc; padding-left: 1.25rem; }
+.rich-text ol { list-style: decimal; padding-left: 1.25rem; }
+.rich-text li + li { margin-top: 0.25em; }
+.rich-text blockquote { border-left: 1px solid var(--border-strong); padding-left: 1rem; color: var(--text-muted); }
+.rich-text a { color: var(--accent-hover); text-decoration: underline; text-underline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

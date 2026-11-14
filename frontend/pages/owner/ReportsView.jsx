@@ -1,8 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { getSalesReport, getSalesByChannel, getTopProducts, getDailySalesTrend, getStockLevelsReport, getProfitReport, getOrders } from '../../services/api';
+import { getSalesReport, getSalesByChannel, getTopProducts, getDailySalesTrend, getStockLevelsReport, getProfitReport, getPosSalesReport, getReturnRefundReport, getCustomerAnalytics } from '../../services/api';
 import { BarChart3, Download, Calendar, TrendingUp, Package, DollarSign, ShoppingBag, Boxes, FileText, Printer, Users } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, AreaChart } from 'recharts';
 import ChartCard from '../../components/owner/ChartCard';
+import PageHeader from '../../components/operations/PageHeader';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
+import EmptyState from '../../components/ui/EmptyState';
+import { buildOwnerReportSections, downloadCsv, openDataReportPdf } from '../../utils/reportExports.js';
+
+const formatReportDate = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value ?? '') : date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
+};
 
 const ReportsView = () => {
   const [tab, setTab] = useState('sales');
@@ -13,201 +22,177 @@ const ReportsView = () => {
   const [salesTrend, setSalesTrend] = useState([]);
   const [stockLevels, setStockLevels] = useState([]);
   const [profitReport, setProfitReport] = useState(null);
+  const [posReport, setPosReport] = useState(null);
+  const [returnReport, setReturnReport] = useState(null);
   const [customerActivity, setCustomerActivity] = useState({ total: 0, newThisMonth: 0, mostActive: [] });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
 
   const fetchData = async () => {
     setLoading(true);
+    setError('');
+    setWarning('');
     try {
-      const [sales, channels, top, trend, stock, profit, orders] = await Promise.all([
-        getSalesReport(dateRange).catch(() => null),
-        getSalesByChannel().catch(() => []),
-        getTopProducts(10).catch(() => []),
-        getDailySalesTrend(dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90).catch(() => []),
-        getStockLevelsReport().catch(() => []),
-        getProfitReport(dateRange).catch(() => null),
-        getOrders().catch(() => []),
+      const results = await Promise.allSettled([
+        getSalesReport(dateRange),
+        getSalesByChannel(dateRange),
+        getTopProducts(10, dateRange),
+        getDailySalesTrend(dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90),
+        getStockLevelsReport(),
+        getProfitReport(dateRange),
+        getPosSalesReport(dateRange),
+        getReturnRefundReport(dateRange),
+        getCustomerAnalytics(),
       ]);
-      setSalesReport(sales); setChannelData(Array.isArray(channels) ? channels : []);
+      if (results.every((result) => result.status === 'rejected')) {
+        setError('Reports could not be loaded. Please try again.');
+        return;
+      }
+      if (results.some((result) => result.status === 'rejected')) {
+        setWarning('Some report sections could not be loaded. Values shown as zero may be incomplete. Retry to refresh the full report.');
+      }
+      const [sales, channels, top, trend, stock, profit, pos, returnsAndRefunds, customers] = results.map((result, index) => (
+        result.status === 'fulfilled' ? result.value : [null, [], [], [], [], null, null, null, {}][index]
+      ));
+      setSalesReport(sales); setChannelData(Array.isArray(channels) ? channels.map((row) => ({
+        name: row.channel || 'unknown',
+        value: Number(row.total_revenue || 0),
+        order_count: Number(row.order_count || 0),
+      })) : []);
       setTopProducts(Array.isArray(top) ? top : []); setSalesTrend(Array.isArray(trend) ? trend : []);
-      setStockLevels(Array.isArray(stock) ? stock : []); setProfitReport(profit);
+      setStockLevels(Array.isArray(stock?.by_category) ? stock.by_category : []); setProfitReport(profit);
+      setPosReport(pos); setReturnReport(returnsAndRefunds);
 
-      // Build customer activity from orders
-      const allOrders = Array.isArray(orders) ? orders : [];
-      const customerMap = {};
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      let newCount = 0;
-      allOrders.forEach(order => {
-        const custId = order.user_id || order.customer_id || order.customer_email || 'unknown';
-        const custName = order.customer_name || order.user_name || order.customer_email || `Customer #${custId}`;
-        if (!customerMap[custId]) {
-          customerMap[custId] = { id: custId, name: custName, orders: 0, total: 0, firstOrder: order.created_at };
-        }
-        customerMap[custId].orders += 1;
-        customerMap[custId].total += Number(order.total || order.total_amount || 0);
-        if (order.created_at && new Date(order.created_at) >= monthStart && !customerMap[custId].countedNew) {
-          // Check if first order is this month
-          if (new Date(customerMap[custId].firstOrder) >= monthStart) {
-            customerMap[custId].countedNew = true;
-          }
-        }
+      setCustomerActivity({
+        total: Number(customers?.total || 0),
+        newThisMonth: Number(customers?.new_this_month || 0),
+        averageOrderCount: Number(customers?.average_order_count || 0),
+        mostActive: Array.isArray(customers?.most_active) ? customers.most_active : [],
       });
-      const customers = Object.values(customerMap);
-      customers.forEach(c => { if (c.countedNew) newCount++; });
-      const mostActive = [...customers].sort((a, b) => b.orders - a.orders).slice(0, 5);
-      setCustomerActivity({ total: customers.length, newThisMonth: newCount, mostActive });
-    } catch (e) { console.error(e); }
-    setLoading(false);
+    } catch (e) { console.error(e); setError('Reports could not be loaded. Please try again.'); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, [dateRange]);
 
-  const COLORS = ['#f97316', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#ec4899', '#0891b2', '#65a30d'];
+  const COLORS = ['#111c3d', '#f36a21', '#697180', '#d62232', '#b4bdcc'];
 
   const tabs = [
     { id: 'sales', label: 'Sales', icon: TrendingUp },
     { id: 'products', label: 'Products', icon: Package },
     { id: 'inventory', label: 'Inventory', icon: Boxes },
     { id: 'financial', label: 'Financial', icon: DollarSign },
+    { id: 'pos', label: 'POS', icon: ShoppingBag },
+    { id: 'returns', label: 'Returns', icon: Calendar },
     { id: 'customers', label: 'Customers', icon: Users },
   ];
 
   const handleExport = (type) => {
     const data = type === 'sales' ? salesTrend : type === 'products' ? topProducts : stockLevels;
     if (!data?.length) return;
-    const header = Object.keys(data[0]).join(',');
-    const rows = data.map((r) => Object.values(r).join(',')).join('\n');
-    const blob = new Blob([header + '\n' + rows], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `${type}-report.csv`; a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv({ filename: `${type}-report`, sections: [{ title: `${type} report`, rows: data }] });
   };
 
   const handleExportPDF = () => {
-    window.print();
+    openDataReportPdf({
+      title: '10th West Moto — Owner Report',
+      rangeLabel: dateRange,
+      sections: buildOwnerReportSections({ salesReport, salesTrend, topProducts, stockLevels, profitReport, posReport, returnReport, customerActivity }),
+    });
   };
 
-  const handleExportExcel = () => {
-    // Gather all available data into a comprehensive CSV
-    let csvContent = '';
-    // Sales summary
-    if (salesReport) {
-      csvContent += 'SALES SUMMARY\n';
-      csvContent += 'Total Sales,Orders,Avg Order Value,Items Sold\n';
-      csvContent += `${salesReport.total_sales || 0},${salesReport.total_orders || 0},${salesReport.avg_order_value || 0},${salesReport.total_items || 0}\n\n`;
-    }
-    // Sales trend
-    if (salesTrend.length > 0) {
-      csvContent += 'SALES TREND\n';
-      csvContent += Object.keys(salesTrend[0]).join(',') + '\n';
-      salesTrend.forEach(row => { csvContent += Object.values(row).join(',') + '\n'; });
-      csvContent += '\n';
-    }
-    // Top products
-    if (topProducts.length > 0) {
-      csvContent += 'TOP PRODUCTS\n';
-      csvContent += Object.keys(topProducts[0]).join(',') + '\n';
-      topProducts.forEach(row => { csvContent += Object.values(row).join(',') + '\n'; });
-      csvContent += '\n';
-    }
-    // Profit
-    if (profitReport) {
-      csvContent += 'PROFIT & LOSS\n';
-      csvContent += 'Gross Revenue,Total Cost,Net Profit,Margin\n';
-      csvContent += `${profitReport.gross_revenue || 0},${profitReport.total_cost || 0},${profitReport.net_profit || 0},${profitReport.margin || 0}%\n\n`;
-    }
-    // Customer Activity
-    if (customerActivity.mostActive.length > 0) {
-      csvContent += 'CUSTOMER ACTIVITY\n';
-      csvContent += 'Customer,Orders,Total Spent\n';
-      customerActivity.mostActive.forEach(c => { csvContent += `${c.name},${c.orders},${c.total}\n`; });
-    }
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `full-report-${dateRange}.csv`; a.click();
-    URL.revokeObjectURL(url);
+  const handleExportCsv = () => {
+    downloadCsv({
+      filename: `owner-report_${dateRange}`,
+      sections: buildOwnerReportSections({ salesReport, salesTrend, topProducts, stockLevels, profitReport, posReport, returnReport, customerActivity }),
+    });
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display font-bold text-xl text-gray-900">Reports & Analytics</h1>
-          <p className="text-sm text-gray-500">Business intelligence and performance reports</p>
+      <PageHeader
+        title="Reports & analytics"
+        description="Real sales, product, inventory, customer, and profitability reporting."
+        actions={<>
+          <button onClick={handleExportPDF} disabled={loading || Boolean(error) || Boolean(warning)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            <Printer size={16} aria-hidden="true" /> PDF
+          </button>
+          <button onClick={handleExportCsv} disabled={loading || Boolean(error) || Boolean(warning)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            <FileText size={16} aria-hidden="true" /> CSV for Excel
+          </button>
+        </>}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-2 sm:px-4">
+        <div tabIndex={0} className="flex max-w-full gap-1 overflow-x-auto" role="group" aria-label="Report type">
+          {tabs.map(t => (
+            <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)} className={`flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium ${tab === t.id ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+              <t.icon size={15} aria-hidden="true" /> {t.label}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleExportPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200 transition-all">
-            <Printer size={13} /> Export PDF
-          </button>
-          <button onClick={handleExportExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 rounded-lg text-xs font-medium text-white hover:bg-orange-600 transition-all">
-            <FileText size={13} /> Export Excel
-          </button>
-          <div className="flex bg-white rounded-lg border border-gray-100 p-0.5">
+        <div className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Date range">
             {['7d', '30d', '90d'].map(r => (
-              <button key={r} onClick={() => setDateRange(r)} className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${dateRange === r ? 'bg-orange-50 text-orange-500' : 'text-gray-500 hover:text-gray-700'}`}>{r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}</button>
+              <button key={r} aria-pressed={dateRange === r} onClick={() => setDateRange(r)} className={`min-h-9 rounded-md px-3 text-xs font-semibold ${dateRange === r ? 'bg-white text-slate-950 ' : 'text-slate-600 hover:text-slate-900'}`}>{r === '7d' ? '7 days' : r === '30d' ? '30 days' : '90 days'}</button>
             ))}
-          </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-lg border border-gray-100 p-1 w-fit">
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-orange-50 text-orange-500' : 'text-gray-500 hover:text-gray-700'}`}>
-            <t.icon size={14} /> {t.label}
-          </button>
-        ))}
-      </div>
+      {warning && !loading && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{warning} Exports are paused until the full report is available. <button type="button" onClick={fetchData} className="font-semibold underline">Retry</button></p>}
 
       {loading ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-12 text-center"><div className="w-6 h-6 border-2 border-gray-200 border-t-orange-500 rounded-full animate-spin mx-auto" /></div>
+        <div className="space-y-3" role="status" aria-label="Loading reports">{Array.from({ length: 3 }, (_, index) => <LoadingSkeleton key={index} className="h-24 w-full" />)}</div>
+      ) : error ? (
+        <EmptyState tone="error" title="Reports could not be loaded" description={error} action={<button type="button" onClick={fetchData} className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white">Retry</button>} />
       ) : (
         <>
           {/* Sales Tab */}
           {tab === 'sales' && (
             <div className="space-y-4">
               {/* Sales KPIs */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="ops-inline-kpis">
                 {[
-                  { label: 'Total Sales', value: `₱${(salesReport?.total_sales || 0).toLocaleString()}`, color: 'bg-green-50 text-green-600' },
+                  { label: 'Total Sales', value: `₱${(salesReport?.total_revenue || 0).toLocaleString()}`, color: 'bg-green-50 text-green-600' },
                   { label: 'Orders', value: (salesReport?.total_orders || 0).toString(), color: 'bg-blue-50 text-blue-600' },
-                  { label: 'Avg Order', value: `₱${(salesReport?.avg_order_value || 0).toFixed(0)}`, color: 'bg-purple-50 text-purple-600' },
-                  { label: 'Items Sold', value: (salesReport?.total_items || 0).toString(), color: 'bg-amber-50 text-amber-600' },
+                  { label: 'Avg Order', value: `₱${(salesReport?.average_order_value || 0).toFixed(0)}`, color: 'bg-slate-100 text-slate-700' },
+                  { label: 'POS Orders', value: (salesReport?.pos_orders || 0).toString(), color: 'bg-amber-50 text-amber-600' },
                 ].map((kpi, i) => (
-                  <div key={i} className="bg-white rounded-xl border border-gray-100 p-4">
-                    <p className="text-xs text-gray-500 mb-1">{kpi.label}</p>
-                    <p className="text-lg font-bold text-gray-900">{kpi.value}</p>
+                  <div key={i} className="bg-white rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
+                    <p className="text-lg font-bold text-white">{kpi.value}</p>
                   </div>
                 ))}
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="lg:col-span-2">
-                  <ChartCard title="Sales Trend" action={<button onClick={() => handleExport('sales')} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
-                    <ResponsiveContainer width="100%" height={280}>
+                  <ChartCard title="Sales Trend" action={<button onClick={() => handleExport('sales')} disabled={Boolean(warning)} className="flex items-center gap-1 text-xs text-slate-600 disabled:opacity-50"><Download size={12} /> CSV</button>}>
+                    {salesTrend.length ? <ResponsiveContainer width="100%" height={280}>
                       <AreaChart data={salesTrend}>
-                        <defs><linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.1} /><stop offset="95%" stopColor="#f97316" stopOpacity={0} /></linearGradient></defs>
+                        <defs><linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f36a21" stopOpacity={0.1} /><stop offset="95%" stopColor="#f36a21" stopOpacity={0} /></linearGradient></defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                        <XAxis dataKey="date" tickFormatter={formatReportDate} tick={{ fontSize: 10 }} stroke="#9ca3af" />
                         <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                        <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
-                        <Area type="monotone" dataKey="revenue" stroke="#f97316" fill="url(#salesGrad)" strokeWidth={2} />
+                        <Tooltip labelFormatter={formatReportDate} formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
+                        <Area type="monotone" dataKey="revenue" stroke="#f36a21" fill="url(#salesGrad)" strokeWidth={2} />
                       </AreaChart>
-                    </ResponsiveContainer>
+                    </ResponsiveContainer> : <div className="grid h-[220px] place-items-center text-sm text-slate-600">No sales trend for this period.</div>}
                   </ChartCard>
                 </div>
                 <ChartCard title="Sales by Channel">
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                      <Pie data={channelData.length > 0 ? channelData : [{ name: 'Online', value: 65 }, { name: 'POS', value: 35 }]} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3}>
-                        {(channelData.length > 0 ? channelData : [{ name: 'Online', value: 65 }, { name: 'POS', value: 35 }]).map((_, i) => (
-                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip /> <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  {channelData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <Pie data={channelData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3}>
+                          {channelData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip /> <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="grid h-[280px] place-items-center text-sm text-slate-500">No completed sales in this period.</div>
+                  )}
                 </ChartCard>
               </div>
             </div>
@@ -216,7 +201,7 @@ const ReportsView = () => {
           {/* Products Tab */}
           {tab === 'products' && (
             <div className="space-y-4">
-              <ChartCard title="Top Selling Products" action={<button onClick={() => handleExport('products')} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
+              <ChartCard title="Top Selling Products" action={<button onClick={() => handleExport('products')} disabled={Boolean(warning)} className="flex items-center gap-1 text-xs text-slate-600 disabled:opacity-50"><Download size={12} /> CSV</button>}>
                 {topProducts.length > 0 ? (
                   <ResponsiveContainer width="100%" height={350}>
                     <BarChart data={topProducts.slice(0, 10)} layout="vertical">
@@ -224,31 +209,10 @@ const ReportsView = () => {
                       <XAxis type="number" tick={{ fontSize: 10 }} stroke="#9ca3af" />
                       <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} stroke="#9ca3af" width={120} />
                       <Tooltip formatter={(v) => [v, 'Units Sold']} />
-                      <Bar dataKey="quantity_sold" fill="#f97316" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="quantity_sold" fill="#f36a21" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                ) : (
-                  <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead><tr className="bg-gray-50/80 border-b border-gray-100">
-                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">#</th>
-                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Product</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Price</th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Rating</th>
-                      </tr></thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {topProducts.map((p, i) => (
-                          <tr key={i} className="hover:bg-gray-50/50">
-                            <td className="px-4 py-3 font-bold text-gray-400">{i + 1}</td>
-                            <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
-                            <td className="px-4 py-3 text-right text-gray-900">₱{(p.price || 0).toLocaleString()}</td>
-                            <td className="px-4 py-3 text-right text-amber-600">★ {(p.rating || 0).toFixed(1)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                ) : <EmptyState title="No product sales in this period" description="Try a longer date range to see product performance." />}
               </ChartCard>
             </div>
           )}
@@ -256,20 +220,20 @@ const ReportsView = () => {
           {/* Inventory Tab */}
           {tab === 'inventory' && (
             <div className="space-y-4">
-              <ChartCard title="Stock Level Distribution" action={<button onClick={() => handleExport('inventory')} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"><Download size={12} /> CSV</button>}>
+              <ChartCard title="Stock Level Distribution" action={<button onClick={() => handleExport('inventory')} disabled={Boolean(warning)} className="flex items-center gap-1 text-xs text-slate-600 disabled:opacity-50"><Download size={12} /> CSV</button>}>
                 {stockLevels.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={stockLevels.slice(0, 20)}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                      <XAxis dataKey="name" tick={{ fontSize: 9 }} stroke="#9ca3af" angle={-45} textAnchor="end" height={80} />
+                      <XAxis dataKey="category" tick={{ fontSize: 9 }} stroke="#9ca3af" angle={-45} textAnchor="end" height={80} />
                       <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
                       <Tooltip />
-                      <Bar dataKey="stock_quantity" fill="#2563eb" radius={[4, 4, 0, 0]} name="Stock" />
-                      <Bar dataKey="low_stock_threshold" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Threshold" />
+                      <Bar dataKey="total_stock" fill="#111c3d" radius={[4, 4, 0, 0]} name="Stock" />
+                      <Bar dataKey="low_stock_items" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Low-stock items" />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="p-8 text-center text-sm text-gray-500">No stock data available</div>
+                  <div className="p-8 text-center text-sm text-gray-400">No stock data available</div>
                 )}
               </ChartCard>
             </div>
@@ -278,62 +242,97 @@ const ReportsView = () => {
           {/* Financial Tab */}
           {tab === 'financial' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="ops-inline-kpis">
                 {[
-                  { label: 'Gross Revenue', value: `₱${(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}` },
-                  { label: 'Total Cost', value: `₱${(profitReport?.total_cost || 0).toLocaleString()}` },
-                  { label: 'Net Profit', value: `₱${(profitReport?.net_profit || 0).toLocaleString()}` },
-                  { label: 'Margin', value: `${(profitReport?.margin || 0).toFixed(1)}%` },
+                  { label: 'Gross Revenue', value: `₱${(profitReport?.total_revenue || salesReport?.total_revenue || 0).toLocaleString()}` },
+                  { label: profitReport?.profit_exact ? 'Total Cost' : 'Total Cost (incomplete)', value: profitReport?.profit_exact ? `₱${Number(profitReport.total_cost).toLocaleString()}` : 'Not computable' },
+                  { label: profitReport?.profit_exact ? 'Net Profit' : 'Net Profit (incomplete)', value: profitReport?.profit_exact ? `₱${Number(profitReport.net_profit).toLocaleString()}` : 'Not computable' },
+                  { label: 'Margin', value: profitReport?.profit_exact ? `${Number(profitReport.profit_margin).toFixed(1)}%` : 'Not computable' },
                 ].map((kpi, i) => (
-                  <div key={i} className="bg-white rounded-xl border border-gray-100 p-4">
-                    <p className="text-xs text-gray-500 mb-1">{kpi.label}</p>
-                    <p className="text-lg font-bold text-gray-900">{kpi.value}</p>
+                  <div key={i} className="bg-white rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
+                    <p className="text-lg font-bold text-white">{kpi.value}</p>
                   </div>
                 ))}
               </div>
 
               {/* Profit & Loss Breakdown */}
-              <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <div className="flex items-center gap-2 mb-4">
-                  <DollarSign size={16} className="text-orange-500" />
-                  <h3 className="font-semibold text-sm text-gray-900">Profit & Loss Statement</h3>
+                  <DollarSign size={16} className="text-red-500" />
+                  <h3 className="font-semibold text-sm text-white">Profit & Loss Statement</h3>
                 </div>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <div className="flex items-center justify-between py-2 border-b border-slate-200">
                     <span className="text-sm text-gray-600">Gross Revenue (Sales)</span>
-                    <span className="text-sm font-semibold text-gray-900">₱{(profitReport?.gross_revenue || salesReport?.total_sales || 0).toLocaleString()}</span>
+                    <span className="text-sm font-semibold text-white">₱{(profitReport?.total_revenue || salesReport?.total_revenue || 0).toLocaleString()}</span>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <div className="flex items-center justify-between py-2 border-b border-slate-200">
                     <span className="text-sm text-gray-600">Cost of Goods Sold (Buying Price)</span>
-                    <span className="text-sm font-semibold text-red-500">- ₱{(profitReport?.total_cost || 0).toLocaleString()}</span>
+                    <span className="text-sm font-semibold text-red-500">{profitReport?.profit_exact ? `- ₱${Number(profitReport.total_cost).toLocaleString()}` : 'Historical COGS missing'}</span>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-dashed border-gray-200">
+                  <div className="flex items-center justify-between py-2 border-b border-dashed border-slate-200">
                     <span className="text-sm font-medium text-gray-700">Gross Profit</span>
-                    <span className="text-sm font-bold text-gray-900">₱{((profitReport?.gross_revenue || salesReport?.total_sales || 0) - (profitReport?.total_cost || 0)).toLocaleString()}</span>
+                    <span className="text-sm font-bold text-white">{profitReport?.profit_exact ? `₱${Number(profitReport.gross_profit).toLocaleString()}` : 'Not computable'}</span>
                   </div>
-                  <div className="flex items-center justify-between py-3 bg-orange-50 rounded-lg px-3 -mx-1">
+                  <div className="flex items-center justify-between py-3 bg-red-500/10 rounded-lg px-3 -mx-1">
                     <span className="text-sm font-bold text-orange-700">Net Profit</span>
-                    <span className="text-lg font-bold text-orange-600">₱{(profitReport?.net_profit || 0).toLocaleString()}</span>
+                    <span className="text-lg font-bold text-orange-600">{profitReport?.profit_exact ? `₱${Number(profitReport.net_profit).toLocaleString()}` : 'Not computable'}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-gray-600">Profit Margin</span>
-                    <span className={`text-sm font-bold ${(profitReport?.margin || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{(profitReport?.margin || 0).toFixed(1)}%</span>
+                    <span className={`text-sm font-bold ${Number(profitReport?.profit_margin || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{profitReport?.profit_exact ? `${Number(profitReport.profit_margin).toFixed(1)}%` : 'Not computable'}</span>
                   </div>
                 </div>
               </div>
 
-              <ChartCard title="Revenue vs Cost">
+              <ChartCard title="Daily revenue">
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={salesTrend.map(d => ({ ...d, cost: d.cost || (d.revenue || 0) * 0.6 }))}>
+                  <BarChart data={salesTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                    <XAxis dataKey="date" tickFormatter={formatReportDate} tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <YAxis tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                    <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
-                    <Legend />
-                    <Bar dataKey="revenue" fill="#f97316" name="Revenue" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="cost" fill="#9ca3af" name="Cost" radius={[4, 4, 0, 0]} />
+                    <Tooltip labelFormatter={formatReportDate} formatter={(v) => [`₱${Number(v).toLocaleString()}`, '']} />
+                    <Bar dataKey="revenue" fill="#f36a21" name="Revenue" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+              </ChartCard>
+            </div>
+          )}
+
+          {tab === 'pos' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  ['Completed sales', posReport?.total_sales || 0],
+                  ['POS revenue', `₱${Number(posReport?.total_revenue || 0).toLocaleString()}`],
+                  ['Voided sales', posReport?.voided_sales || 0],
+                ].map(([label, value]) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p></div>)}
+              </div>
+              <ChartCard title="POS transactions">
+                <div tabIndex={0} className="overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b border-slate-200 text-left text-xs text-gray-400"><th className="p-3">Receipt</th><th className="p-3">Status</th><th className="p-3">Payment</th><th className="p-3">Date</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{(posReport?.sales || []).map((sale) => <tr key={sale.id} className="border-b border-slate-200/60"><td className="p-3 text-white">{sale.receipt_number}</td><td className="p-3 text-gray-300">{sale.voided_at ? 'voided' : sale.status}</td><td className="p-3 text-gray-300">{sale.payment_status}</td><td className="p-3 text-gray-300">{new Date(sale.created_at).toLocaleDateString()}</td><td className="p-3 text-right font-semibold text-white">₱{Number(sale.total_amount).toLocaleString()}</td></tr>)}</tbody></table>
+                  {!posReport?.sales?.length && <p className="p-8 text-center text-sm text-gray-400">No valid POS transactions in this period.</p>}
+                </div>
+              </ChartCard>
+            </div>
+          )}
+
+          {tab === 'returns' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {[
+                  ['Returns', returnReport?.total_returns || 0],
+                  ['Pending', returnReport?.pending_returns || 0],
+                  ['Refunds processed', returnReport?.processed_refunds || 0],
+                  ['Refunded amount', `₱${Number(returnReport?.refunded_amount || 0).toLocaleString()}`],
+                ].map(([label, value]) => <div key={label} className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-white">{value}</p></div>)}
+              </div>
+              <ChartCard title="Return and refund activity">
+                <div tabIndex={0} className="overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b border-slate-200 text-left text-xs text-gray-400"><th className="p-3">Return</th><th className="p-3">Order</th><th className="p-3">Return status</th><th className="p-3">Refund status</th><th className="p-3 text-right">Amount</th></tr></thead><tbody>{(returnReport?.returns || []).map((item) => <tr key={item.id} className="border-b border-slate-200/60"><td className="p-3 text-white">#{item.id}</td><td className="p-3 text-gray-300">#{item.order_id}</td><td className="p-3 text-gray-300">{item.status}</td><td className="p-3 text-gray-300">{item.refund_status || 'Not processed'}</td><td className="p-3 text-right font-semibold text-white">₱{Number(item.processed_refund || item.refund_amount || 0).toLocaleString()}</td></tr>)}</tbody></table>
+                  {!returnReport?.returns?.length && <p className="p-8 text-center text-sm text-gray-400">No return or refund activity in this period.</p>}
+                </div>
               </ChartCard>
             </div>
           )}
@@ -342,56 +341,56 @@ const ReportsView = () => {
           {tab === 'customers' && (
             <div className="space-y-4">
               {/* Customer KPIs */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="ops-inline-kpis">
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center">
-                      <Users size={16} className="text-orange-500" />
+                    <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center">
+                      <Users size={16} className="text-red-500" />
                     </div>
-                    <span className="text-xs text-gray-500">Total Customers</span>
+                    <span className="text-xs text-gray-400">Total Customers</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{customerActivity.total}</p>
+                  <p className="text-2xl font-bold text-white">{customerActivity.total}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-100 p-5">
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
                       <TrendingUp size={16} className="text-green-500" />
                     </div>
-                    <span className="text-xs text-gray-500">New This Month</span>
+                    <span className="text-xs text-gray-400">New This Month</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{customerActivity.newThisMonth}</p>
+                  <p className="text-2xl font-bold text-white">{customerActivity.newThisMonth}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-100 p-5">
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
                       <ShoppingBag size={16} className="text-blue-500" />
                     </div>
-                    <span className="text-xs text-gray-500">Avg Orders per Customer</span>
+                    <span className="text-xs text-gray-400">Avg Orders per Customer</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{customerActivity.total > 0 ? (customerActivity.mostActive.reduce((sum, c) => sum + c.orders, 0) / Math.min(customerActivity.total, customerActivity.mostActive.length) || 0).toFixed(1) : '0'}</p>
+                  <p className="text-2xl font-bold text-white">{Number(customerActivity.averageOrderCount || 0).toFixed(1)}</p>
                 </div>
               </div>
 
               {/* Most Active Customers */}
-              <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                  <Users size={16} className="text-orange-500" />
-                  <h3 className="font-semibold text-sm text-gray-900">Most Active Customers</h3>
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+                  <Users size={16} className="text-red-500" />
+                  <h3 className="font-semibold text-sm text-white">Most Active Customers</h3>
                 </div>
                 {customerActivity.mostActive.length === 0 ? (
                   <div className="p-12 text-center">
                     <Users size={40} className="mx-auto text-gray-300 mb-3" />
-                    <p className="text-sm text-gray-500">No customer data available</p>
+                    <p className="text-sm text-gray-400">No customer data available</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div tabIndex={0} className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-gray-50/80 border-b border-gray-100">
-                          <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">#</th>
-                          <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Customer</th>
-                          <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Orders</th>
-                          <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Total Spent</th>
+                        <tr className="bg-gray-50/80 border-b border-slate-200">
+                          <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">#</th>
+                          <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">Customer</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Orders</th>
+                          <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">Total Spent</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -400,16 +399,16 @@ const ReportsView = () => {
                             <td className="px-4 py-3 font-bold text-gray-400">{i + 1}</td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                                  <span className="text-xs font-bold text-orange-500">{(customer.name || '?')[0].toUpperCase()}</span>
+                                <div className="w-7 h-7 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-xs font-bold text-red-500">{(customer.name || '?')[0].toUpperCase()}</span>
                                 </div>
-                                <span className="font-medium text-gray-900">{customer.name}</span>
+                                <span className="font-medium text-white">{customer.name}</span>
                               </div>
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <span className="px-2 py-0.5 bg-orange-50 text-orange-600 text-xs font-semibold rounded-full">{customer.orders}</span>
+                              <span className="px-2 py-0.5 bg-orange-50 text-orange-800 text-xs font-semibold rounded-full">{customer.orders}</span>
                             </td>
-                            <td className="px-4 py-3 text-right font-semibold text-gray-900">₱{customer.total.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-white">₱{customer.total.toLocaleString()}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -426,3 +425,5 @@ const ReportsView = () => {
 };
 
 export default ReportsView;
+
+
