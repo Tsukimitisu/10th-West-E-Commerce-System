@@ -1,7 +1,7 @@
 import InventoryFilters from '../../components/operations/InventoryFilters.jsx';
 import { useInventoryBrowser,useInventoryModels } from '../../hooks/useInventoryBrowser.js';
 import { Pagination } from '../../components/ui/BrandPrimitives.jsx';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Eye, EyeOff, ImagePlus, Layers, Package, Pencil, Plus, Search, Trash2, Video } from 'lucide-react';
 import PageHeader from '../../components/operations/PageHeader';
 import Modal from '../../components/owner/Modal';
@@ -101,6 +101,16 @@ const StorefrontListingsView = () => {
   const [variantsLoading,setVariantsLoading] = useState(false);
   const [variantsError,setVariantsError] = useState('');
   const [imageUploads,setImageUploads] = useState(0);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current=true;return () => { mounted.current=false; }; },[]);
+  const previews = useRef([]);
+  useEffect(() => {
+    const next = pendingFiles.map(file=>file.preview);
+    previews.current.filter(url=>!next.includes(url)).forEach(url=>URL.revokeObjectURL(url));
+    previews.current = next;
+  },[pendingFiles]);
+  useEffect(() => () => previews.current.forEach(url=>URL.revokeObjectURL(url)),[]);
+  const closeEditor = () => { setModalOpen(false);setPendingFiles([]); };
   useEffect(() => {
     let active = true;setVariants([]);setVariantsError('');
     if (!modalOpen || form.listing_type === 'set' || !form.inventory_item_id) { setVariantsLoading(false);return; }
@@ -218,7 +228,7 @@ const StorefrontListingsView = () => {
         : { ...shared, inventory_item_id: Number(form.inventory_item_id) };
       if (editing) await updateEcommerceListing(editing.id, payload);
       else await createEcommerceListing(payload);
-      setModalOpen(false);
+      closeEditor();
       await load();
     } catch (saveError) {
       setError(saveError?.message || 'Storefront listing could not be saved.');
@@ -227,7 +237,7 @@ const StorefrontListingsView = () => {
     }
   };
 
-  const imageProps = { images: form.media.filter(item => item.media_type === 'image').map(item => item.url),disabled: saving, onError: setError, onBusy: busy => setImageUploads(count => Math.max(0,count+(busy ? 1 : -1))) };
+  const imageProps = { images: form.media.filter(item => item.media_type === 'image').map(item => item.url),disabled: saving, onError: setError, onBusy: busy => { if (mounted.current) setImageUploads(count => Math.max(0,count+(busy ? 1 : -1))); } };
 
   return (
     <div className="space-y-5">
@@ -267,7 +277,7 @@ const StorefrontListingsView = () => {
         <div className="flex flex-wrap items-center justify-between border-t border-slate-200 px-4 py-2"><span className="text-xs text-slate-600">{result.total || 0} matching listings</span><Pagination page={query.page} totalPages={Math.max(1,Math.ceil(Number(result.total || 0)/query.pageSize))} onChange={page=>browser.update({page})} /></div>
       </div>
 
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={isSet ? (editing ? 'Edit Set Listing' : 'Add Set Listing') : editing ? 'Edit Storefront Listing' : 'Add Storefront Listing'} size="3xl">
+      <Modal isOpen={modalOpen} onClose={closeEditor} title={isSet ? (editing ? 'Edit Set Listing' : 'Add Set Listing') : editing ? 'Edit Storefront Listing' : 'Add Storefront Listing'} size="3xl">
         <form onSubmit={submit} className="space-y-5">
           {isSet ? <SetListingFields form={form} setForm={setForm} models={models} onAddItems={() => setItemPickerOpen(true)} onMove={moveSetItem} onRemove={toggleSetItem} imageProps={imageProps} /> : <>
           <div className="rounded-xl border border-slate-200 p-4">
@@ -311,8 +321,8 @@ const StorefrontListingsView = () => {
             </label>
             <div className="flex flex-wrap items-end gap-4 pb-2">{[['is_featured', 'Featured'], ['is_best_seller', 'Best seller'], ['is_new_arrival', 'New arrival']].map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form[key]} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.checked }))} /> {label}</label>)}</div>
           </div>
-          {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={() => setModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button disabled={saving || imageUploads > 0 || variantsLoading || Boolean(variantsError)} type="submit" className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">{saving ? 'Saving and uploading…' : 'Save Listing'}</button></div>
+          {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={closeEditor} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button disabled={saving || imageUploads > 0 || variantsLoading || Boolean(variantsError)} type="submit" className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">{saving ? 'Saving and uploading…' : 'Save Listing'}</button></div>
         </form>
       </Modal>
 

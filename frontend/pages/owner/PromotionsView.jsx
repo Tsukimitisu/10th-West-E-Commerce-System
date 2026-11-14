@@ -43,6 +43,7 @@ const PromotionsView = () => {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
 
   const fetchDiscounts = async () => {
     try {
@@ -64,6 +65,7 @@ const PromotionsView = () => {
   const totalRedemptions = discounts.reduce((sum, d) => sum + (d.used_count || 0), 0);
 
   const openCreate = () => {
+    setFormError('');
     setEditing(null);
     setForm({
       code: '',
@@ -79,6 +81,7 @@ const PromotionsView = () => {
   };
 
   const openEdit = (discount) => {
+    setFormError('');
     setEditing(discount);
     setForm({
       code: discount.code || '',
@@ -95,25 +98,33 @@ const PromotionsView = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSaving(true);
+    if (saving) return;
     const payload = {
       code: form.code.toUpperCase().trim(),
       type: form.type,
-      value: parseFloat(form.value),
-      min_purchase: form.min_purchase ? parseFloat(form.min_purchase) : 0,
-      max_uses: form.max_uses && Number(form.max_uses) > 0 ? parseInt(form.max_uses, 10) : null,
+      value: Number(form.value),
+      min_purchase: Number(form.min_purchase || 0),
+      max_uses: form.max_uses.trim() && Number(form.max_uses) !== 0 ? Number(form.max_uses) : null,
       starts_at: form.starts_at || null,
       expires_at: form.expires_at || null,
       is_active: form.is_active,
     };
+    const invalid = !/^[A-Z0-9_-]{3,40}$/.test(payload.code) ? 'Code must be 3 to 40 letters, numbers, underscores, or hyphens.'
+      : !Number.isFinite(payload.value) || payload.value <= 0 ? 'Value must be positive.'
+      : payload.type === 'percentage' && payload.value > 100 ? 'Value must not exceed 100 for a percentage promotion.'
+      : !Number.isFinite(payload.min_purchase) || payload.min_purchase < 0 ? 'Minimum purchase must be a non-negative amount.'
+      : payload.max_uses !== null && (!Number.isInteger(payload.max_uses) || payload.max_uses < 1 || payload.max_uses > 2147483647) ? 'Maximum uses must be a positive whole number, or 0 for unlimited.'
+      : payload.starts_at && payload.expires_at && new Date(payload.starts_at) >= new Date(payload.expires_at) ? 'End date must be after start date.' : '';
+    if (invalid) return setFormError(invalid);
+    setFormError('');
+    setSaving(true);
     try {
       if (editing) await updateDiscount(editing.id, payload);
       else await createDiscount(payload);
       await fetchDiscounts();
       setModalOpen(false);
     } catch (e) {
-      console.error(e);
-      setError(`Promotion could not be ${editing ? 'updated' : 'created'}. Check the details and try again.`);
+      setFormError(e.message || `Promotion could not be ${editing ? 'updated' : 'created'}. Please try again.`);
     } finally {
       setSaving(false);
     }
@@ -247,6 +258,7 @@ const PromotionsView = () => {
 
             {/* Modal Body */}
             <form onSubmit={handleSubmit} className="space-y-5">
+              {formError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{formError}</p>}
               {/* Code */}
               <InputField label="Discount code" htmlFor="promotion-code" required>
                 <input

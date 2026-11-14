@@ -2011,15 +2011,20 @@ export const getSellerChatUnreadCount = async () => {
   return data.count || 0;
 };
 
-export const uploadProductImage = async (file) => {
+export const uploadProductImage = async (file, options = {}) => {
   if (!file) throw new Error('Image file is required');
 
   if (!getCurrentAuthUser()) throw new Error('You must be logged in to upload images');
 
+  const { productImageType } = await import('../utils/imageUpload.js');
+  const contentType = await productImageType(file);
+
   const data = await authenticatedFetch(`${API_URL}/products/upload-image`, {
+    ...options,
+    timeoutMs: 60000,
     method: 'POST',
     headers: {
-      'Content-Type': file.type || 'application/octet-stream',
+      'Content-Type': contentType,
     },
     body: file,
   });
