@@ -17,5 +17,16 @@ export async function productImageType(file) {
     if (['GIF87a','GIF89a'].includes(text(0,6))) return 'image/gif';
     if (text(0,4)==='RIFF' && text(8,12)==='WEBP') return 'image/webp';
   }
-  throw new Error('Unsupported image. Use a JPG, PNG, WebP or GIF photo.');
+  throw new Error('This image format is not supported. Please choose JPG, PNG or WebP.');
+}
+
+export function uploadedImageUrl(value, origin) {
+  const invalid = () => new Error('The image upload returned an invalid image address. Please try again.');
+  if (typeof value !== 'string' || !value.trim() || value.length > 500) throw invalid();
+  const raw = value.trim();
+  if (raw.startsWith('//')) throw invalid();
+  let url;
+  try { url = raw.startsWith('/') ? new URL(raw,origin) : new URL(raw); } catch { throw invalid(); }
+  if (!['https:','http:'].includes(url.protocol) || url.username || url.password) throw invalid();
+  return url.href;
 }

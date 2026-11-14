@@ -77,7 +77,7 @@ for(const [role,width,single] of [['owner',1440,false],['store_staff',1440,false
 test('odd gallery MIME is normalized from content, with no provider call for unsupported/oversized files',async({page})=>{
   const {state,dialog}=await listingFixture(page);const input=dialog.getByLabel('Upload image for Black panel',{exact:true});
   await input.setInputFiles({name:'fake.png',mimeType:'image/png',buffer:Buffer.from('<script>not an image</script>')});
-  await expect(dialog.getByRole('alert').first()).toContainText('Unsupported image');expect(state.uploads).toHaveLength(0);
+  await expect(dialog.getByRole('alert').first()).toContainText('not supported');expect(state.uploads).toHaveLength(0);
   await input.evaluate(node=>{const files=new DataTransfer();files.items.add(new File([new Uint8Array(5*1024*1024+1)],'large.png',{type:'image/png'}));node.files=files.files;node.dispatchEvent(new Event('change',{bubbles:true}));});
   await expect(dialog.getByRole('alert').first()).toContainText('5MB');expect(state.uploads).toHaveLength(0);
   await selectWithMetadata(input,'application/octet-stream');await expect.poll(()=>state.uploads.length).toBe(1);

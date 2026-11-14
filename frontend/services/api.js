@@ -2016,7 +2016,7 @@ export const uploadProductImage = async (file, options = {}) => {
 
   if (!getCurrentAuthUser()) throw new Error('You must be logged in to upload images');
 
-  const { productImageType } = await import('../utils/imageUpload.js');
+  const { productImageType, uploadedImageUrl } = await import('../utils/imageUpload.js');
   const contentType = await productImageType(file);
 
   const data = await authenticatedFetch(`${API_URL}/products/upload-image`, {
@@ -2029,14 +2029,7 @@ export const uploadProductImage = async (file, options = {}) => {
     body: file,
   });
 
-  const imageUrl = data.imageUrl || '';
-  if (!imageUrl) throw new Error('Image upload failed');
-
-  if (imageUrl.startsWith('/')) {
-    return `${API_ORIGIN}${imageUrl}`;
-  }
-
-  return imageUrl;
+  return uploadedImageUrl(data?.imageUrl,API_ORIGIN);
 };
 
 export const uploadProductVideo = async (file) => {

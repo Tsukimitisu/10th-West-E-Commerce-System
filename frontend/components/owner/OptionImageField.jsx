@@ -3,7 +3,7 @@ import { uploadProductImage } from '../../services/api.js';
 import OptionImage from '../ui/OptionImage.jsx';
 import { PRODUCT_IMAGE_ACCEPT } from '../../utils/imageUpload.js';
 
-export default function OptionImageField({ label, value, fallback, images = [], disabled, onChange, onError, onBusy, showPreview = true }) {
+export default function OptionImageField({ uploadKey, label, value, fallback, images = [], disabled, onChange, onError, onBusy, showPreview = true }) {
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState('');
   const active = useRef(true);
@@ -21,15 +21,17 @@ export default function OptionImageField({ label, value, fallback, images = [], 
     const file = input.files?.[0];input.value = '';
     if (!file || disabled || pending.current) return;
     let finished = false;
-    const operation = { controller:new AbortController(),finish:()=>{if (!finished) {finished=true;onBusy?.(false);}} };
+    const token = Symbol(uploadKey);
+    const operation = { controller:new AbortController(),finish:()=>{if (!finished) {finished=true;onBusy?.(uploadKey,token,false);}} };
     pending.current = operation;
-    setBusy(true);setError('');onBusy?.(true);
+    setBusy(true);setError('');onBusy?.(uploadKey,token,true);
     try {
       const url = await uploadProductImage(file,{signal:operation.controller.signal});
       if (active.current && pending.current===operation) { onChange(url);onError?.(''); }
     } catch (failure) {
       if (active.current && pending.current===operation) {
-        const message=failure.message || 'Option image could not be uploaded. Please try again.';
+        const message=typeof failure?.message === 'string' && failure.message.trim()
+          ? failure.message : 'Option image could not be uploaded. Please try again.';
         setError(message);onError?.(message);
       }
     } finally {

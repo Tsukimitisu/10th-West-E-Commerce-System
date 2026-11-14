@@ -18,6 +18,7 @@ import { handleProductImageError, resolveProductImageUrl } from '../../utils/pro
 import OptionImageField from '../../components/owner/OptionImageField.jsx';
 import OptionImage from '../../components/ui/OptionImage.jsx';
 import InventoryPickerModal from '../../components/owner/InventoryPickerModal';
+import ListingEditorBoundary, { ListingEditorBody } from '../../components/owner/ListingEditorBoundary.jsx';
 
 const money = (value) => (value == null ? '—' : `₱${Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
 
@@ -69,10 +70,10 @@ const SetListingFields = ({ form, setForm, models, onAddItems, onMove, onRemove,
         <ol className="divide-y divide-slate-100" aria-label="Selected set items">
           {form.items.map((item, index) => {
             const unavailable = item.inventory_status !== 'active' || item.stock <= 0;
-            return <li key={item.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap">
+            return <li key={item.id} data-product-item-id={item.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap">
               <OptionImage src={item.image_url} fallback={item.image} width="44" height="44" className="h-11 w-11 shrink-0 rounded-lg border border-slate-200 object-cover" />
               <div className="min-w-0 flex-1 basis-48"><p className="break-words text-sm font-semibold text-slate-900">{item.name}</p><p className="text-xs text-slate-500"><span className="font-mono">{item.part_number || 'No part #'}</span> · {item.color || 'No color'} · {item.stock} in stock{unavailable && <span className="ml-1 font-semibold text-red-700">· {item.inventory_status !== 'active' ? 'Inactive' : 'Out of stock'}</span>}</p></div>
-              <div className="w-full sm:w-44 sm:shrink-0"><OptionImageField showPreview={false} label={item.name} value={item.image_url} fallback={item.image} {...imageProps} onChange={value => setForm(current => ({ ...current,items: current.items.map(row => row.id === item.id ? { ...row,image_url: value } : row) }))} /></div>
+              <div className="w-full sm:w-44 sm:shrink-0"><OptionImageField uploadKey={`item:${item.id}`} showPreview={false} label={item.name} value={item.image_url} fallback={item.image} {...imageProps} onChange={value => setForm(current => ({ ...current,items: current.items.map(row => row.id === item.id ? { ...row,image_url: value } : row) }))} /></div>
               <div className="ml-14 flex w-full items-center justify-between gap-3 sm:ml-0 sm:w-auto"><div className="text-xs text-slate-600 sm:text-right"><p>Store {money(item.store_price)}</p><p className="font-semibold text-slate-900">Online {money(item.online_price)}</p></div>
               <div className="flex gap-1"><button type="button" onClick={() => onMove(index, -1)} disabled={index === 0} aria-label={`Move ${item.name} up`} className="rounded p-1.5 hover:bg-slate-100 disabled:opacity-30"><ArrowUp size={14} /></button><button type="button" onClick={() => onMove(index, 1)} disabled={index === form.items.length - 1} aria-label={`Move ${item.name} down`} className="rounded p-1.5 hover:bg-slate-100 disabled:opacity-30"><ArrowDown size={14} /></button><button type="button" onClick={() => onRemove(item)} aria-label={`Remove ${item.name} from set`} className="rounded p-1.5 text-red-600 hover:bg-red-50"><Trash2 size={14} /></button></div></div>
             </li>;
@@ -100,7 +101,9 @@ const StorefrontListingsView = () => {
   const [variants,setVariants] = useState([]);
   const [variantsLoading,setVariantsLoading] = useState(false);
   const [variantsError,setVariantsError] = useState('');
-  const [imageUploads,setImageUploads] = useState(0);
+  const [imageUploads,setImageUploads] = useState({});
+  const [editorRevision,setEditorRevision] = useState(0);
+  const imagesBusy = Object.keys(imageUploads).length > 0;
   const mounted = useRef(true);
   useEffect(() => { mounted.current=true;return () => { mounted.current=false; }; },[]);
   const previews = useRef([]);
@@ -110,7 +113,7 @@ const StorefrontListingsView = () => {
     previews.current = next;
   },[pendingFiles]);
   useEffect(() => () => previews.current.forEach(url=>URL.revokeObjectURL(url)),[]);
-  const closeEditor = () => { setModalOpen(false);setPendingFiles([]); };
+  const closeEditor = () => { setModalOpen(false);setPendingFiles([]);setImageUploads({}); };
   useEffect(() => {
     let active = true;setVariants([]);setVariantsError('');
     if (!modalOpen || form.listing_type === 'set' || !form.inventory_item_id) { setVariantsLoading(false);return; }
@@ -134,6 +137,7 @@ const StorefrontListingsView = () => {
   const filtered = listings;
 
   const openCreate = (listingType = 'single') => {
+    setEditorRevision(value=>value+1);
     setEditing(null);
     setForm(createForm(null, listingType));
     setPendingFiles([]);
@@ -141,6 +145,7 @@ const StorefrontListingsView = () => {
     setModalOpen(true);
   };
   const openEdit = (listing) => {
+    setEditorRevision(value=>value+1);
     setEditing(listing);
     setForm(createForm(listing));
     setPendingFiles([]);
@@ -194,7 +199,7 @@ const StorefrontListingsView = () => {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (saving || imageUploads || variantsLoading) return;
+    if (saving || imagesBusy || variantsLoading) return;
     if (!isSet && variantsError) return setError(variantsError);
     if (isSet && !form.title.trim()) return setError('Enter a set listing title.');
     if (isSet && form.items.length < 1) return setError('Add at least one inventory item to the set.');
@@ -231,13 +236,19 @@ const StorefrontListingsView = () => {
       closeEditor();
       await load();
     } catch (saveError) {
-      setError(saveError?.message || 'Storefront listing could not be saved.');
+      setError(typeof saveError?.message==='string' ? saveError.message : 'Storefront listing could not be saved. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  const imageProps = { images: form.media.filter(item => item.media_type === 'image').map(item => item.url),disabled: saving, onError: setError, onBusy: busy => { if (mounted.current) setImageUploads(count => Math.max(0,count+(busy ? 1 : -1))); } };
+  const imageProps = { images: form.media.filter(item => item.media_type === 'image').map(item => item.url),disabled: saving, onError: setError, onBusy: (key,token,busy) => {
+    if (mounted.current) setImageUploads(current=>{
+      if (busy) return {...current,[key]:token};
+      if (current[key]!==token) return current;
+      const next={...current};delete next[key];return next;
+    });
+  } };
 
   return (
     <div className="space-y-5">
@@ -278,6 +289,7 @@ const StorefrontListingsView = () => {
       </div>
 
       <Modal isOpen={modalOpen} onClose={closeEditor} title={isSet ? (editing ? 'Edit Set Listing' : 'Add Set Listing') : editing ? 'Edit Storefront Listing' : 'Add Storefront Listing'} size="3xl">
+        <ListingEditorBoundary resetKey={editorRevision} onClose={closeEditor}><ListingEditorBody>{()=> (
         <form onSubmit={submit} className="space-y-5">
           {isSet ? <SetListingFields form={form} setForm={setForm} models={models} onAddItems={() => setItemPickerOpen(true)} onMove={moveSetItem} onRemove={toggleSetItem} imageProps={imageProps} /> : <>
           <div className="rounded-xl border border-slate-200 p-4">
@@ -299,7 +311,7 @@ const StorefrontListingsView = () => {
             <h3 className="text-sm font-semibold text-slate-900">Variant images</h3>
             {variants.map(variant => <div key={variant.id} className="grid min-w-0 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
               <div className="min-w-0"><p className="break-words text-sm font-semibold text-slate-900">{Object.values(variant.option_combination || {}).join(' / ') || variant.variant_value || variant.sku}</p><p className="text-xs text-slate-600">{variant.stock_quantity} in stock · {money(variant.price ?? selectedInventory?.store_selling_price)} store price</p></div>
-              <OptionImageField {...imageProps} label={Object.values(variant.option_combination || {}).join(' / ') || variant.variant_value || variant.sku} value={variant.image_url} fallback={selectedInventory?.image} onChange={value => setVariants(rows => rows.map(row => row.id === variant.id ? { ...row,image_url: value } : row))} />
+              <OptionImageField {...imageProps} uploadKey={`variant:${variant.id}`} label={Object.values(variant.option_combination || {}).join(' / ') || variant.variant_value || variant.sku} value={variant.image_url} fallback={selectedInventory?.image} onChange={value => setVariants(rows => rows.map(row => row.id === variant.id ? { ...row,image_url: value } : row))} />
             </div>)}
           </section>}
           <label className="block text-xs font-semibold text-slate-700">E-commerce Description
@@ -322,8 +334,9 @@ const StorefrontListingsView = () => {
             <div className="flex flex-wrap items-end gap-4 pb-2">{[['is_featured', 'Featured'], ['is_best_seller', 'Best seller'], ['is_new_arrival', 'New arrival']].map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={form[key]} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.checked }))} /> {label}</label>)}</div>
           </div>
           {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={closeEditor} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button disabled={saving || imageUploads > 0 || variantsLoading || Boolean(variantsError)} type="submit" className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">{saving ? 'Saving and uploading…' : 'Save Listing'}</button></div>
+          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4"><button type="button" onClick={closeEditor} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button disabled={saving || imagesBusy || variantsLoading || Boolean(variantsError)} type="submit" className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50">{saving ? 'Saving and uploading…' : 'Save Listing'}</button></div>
         </form>
+        )}</ListingEditorBody></ListingEditorBoundary>
       </Modal>
 
       <InventoryPickerModal
