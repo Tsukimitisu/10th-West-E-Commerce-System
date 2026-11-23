@@ -138,7 +138,7 @@ async function editor(page,request,role='owner',width=1440,id=1,itemCount=3){
   await page.addInitScript(()=>{window.uploadRejections=[];addEventListener('unhandledrejection',event=>window.uploadRejections.push(String(event.reason)));});
   await page.route(/\/api\/(?:ecommerce-listings(?:\/\d+)?|products\/upload-image|inventory|motorcycle-models|variants\/product\/\d+)(?:\?.*)?$/,async route=>{
     const incoming=route.request(),url=new URL(incoming.url());
-    const response=await route.fetch({url:`${api}${url.pathname}${url.search}`,headers:{...incoming.headers(),cookie,'x-csrf-token':csrfToken}});
+    const response=await route.fetch({url:`${api}${url.pathname}${url.search}`,maxRetries:incoming.method()==='GET'?2:0,headers:{...incoming.headers(),cookie,'x-csrf-token':csrfToken}});
     if(url.pathname.endsWith('/upload-image'))evidence.responses.push({status:response.status(),body:await response.json()});
     if(incoming.method()==='PUT')evidence.saves.push({status:response.status(),body:incoming.postDataJSON()});
     await route.fulfill({response});
@@ -165,23 +165,24 @@ for(const [role,width,id] of [['owner',390,1],['owner',768,1],['owner',1440,1],[
       evidence.operations.push(operation);
       const item=row(productId),input=item.locator('input[type=file]');
       await item.getByText(`Panel ${number}`,{exact:true}).scrollIntoViewIfNeeded();
-      // setInputFiles alone skips the native focus that previously scrolled
-      // the hidden modal panel and left its header and body clipped/blank.
-      await input.focus();
-      await expect(input).toBeFocused();
+      // The visible trigger owns focus; the native input has no layout/focus
+      // box for a returning mobile picker to scroll into a clipped panel.
+      const trigger=item.getByRole('button',{name:`Choose image for Panel ${number}`,exact:true});
+      await trigger.focus();
+      await expect(trigger).toBeFocused();
       operation.layout=await item.evaluate(node=>{
-        const input=node.querySelector('input[type=file]'),label=input.closest('label'),rect=label.getBoundingClientRect(),ancestors=[];
-        for(let parent=label.parentElement;parent;parent=parent.parentElement){const style=getComputedStyle(parent);if(/auto|scroll|hidden/.test(style.overflowY))ancestors.push({tag:parent.tagName,className:parent.className,clientHeight:parent.clientHeight,scrollHeight:parent.scrollHeight,scrollTop:parent.scrollTop});}
+        const input=node.querySelector('input[type=file]'),label=node.querySelector('[data-upload-key] button'),rect=label.getBoundingClientRect(),ancestors=[];
+        for(let parent=label.parentElement;parent;parent=parent.parentElement){const style=getComputedStyle(parent);if(/auto|scroll|hidden|clip/.test(style.overflowY))ancestors.push({tag:parent.tagName,className:parent.className,clientHeight:parent.clientHeight,scrollHeight:parent.scrollHeight,scrollTop:parent.scrollTop});}
         const hit=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);
         const header=node.closest('[role=dialog]').querySelector('h2'),headerRect=header.getBoundingClientRect();
-        return {rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},reachable:label.contains(hit),inputAnchoredToLabel:input.offsetParent===label,headerVisible:headerRect.y>=0 && headerRect.bottom<=innerHeight && header.contains(document.elementFromPoint(headerRect.x+headerRect.width/2,headerRect.y+headerRect.height/2)),ancestors};
+        return {rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},reachable:label.contains(hit),inputNotRendered:input.getClientRects().length===0,headerVisible:headerRect.y>=0 && headerRect.bottom<=innerHeight && header.contains(document.elementFromPoint(headerRect.x+headerRect.width/2,headerRect.y+headerRect.height/2)),ancestors};
       });
       expect(operation.layout.reachable,`Panel ${number} upload is reachable`).toBe(true);
-      expect(operation.layout.inputAnchoredToLabel).toBe(true);
+      expect(operation.layout.inputNotRendered).toBe(true);
       expect(operation.layout.headerVisible).toBe(true);
       expect(operation.layout.ancestors.find(parent=>parent.className.includes('brand-dialog-panel')).scrollTop).toBe(0);
       if(number===4 || number===15){
-        const choosing=page.waitForEvent('filechooser');await item.locator('label').click();
+        const choosing=page.waitForEvent('filechooser');await trigger.click();
         const chooser=await choosing;await chooser.setFiles([]);
         operation.states.push({state:'native-chooser-canceled'});
       }

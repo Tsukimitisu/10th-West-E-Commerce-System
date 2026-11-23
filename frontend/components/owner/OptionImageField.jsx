@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { uploadProductImage } from '../../services/api.js';
 import OptionImage from '../ui/OptionImage.jsx';
 import { PRODUCT_IMAGE_ACCEPT } from '../../utils/imageUpload.js';
+import useFilePickerReturn from '../../hooks/useFilePickerReturn.js';
 
 export default function OptionImageField({ uploadKey, label, value, fallback, images = [], disabled, onChange, onError, onBusy, showPreview = true }) {
   const [busy,setBusy] = useState(false);
@@ -11,6 +12,9 @@ export default function OptionImageField({ uploadKey, label, value, fallback, im
   const sequence = useRef(0);
   const active = useRef(true);
   const pending = useRef(null);
+  const triggerRef = useRef(null);
+  const inputRef = useRef(null);
+  const picker = useFilePickerReturn(triggerRef, inputRef);
   useEffect(() => { active.current = true;return () => {
     active.current = false;
     const operation = pending.current;
@@ -21,6 +25,7 @@ export default function OptionImageField({ uploadKey, label, value, fallback, im
   const upload = async event => {
     // Capture the input before awaiting; gallery Done/change events may repeat.
     const input = event.currentTarget;
+    picker.restore();
     const file = input.files?.[0];input.value = '';
     if (!file || disabled || pending.current) return;
     let finished = false;
@@ -48,12 +53,12 @@ export default function OptionImageField({ uploadKey, label, value, fallback, im
   return <div data-upload-key={uploadKey} data-upload-operation={uploadState.id || undefined} data-upload-state={uploadState.status} className="flex min-w-0 flex-wrap items-center gap-2">
     {showPreview && <OptionImage src={value} fallback={fallback} width="48" height="48" className="h-12 w-12 shrink-0 rounded-lg border border-slate-200 object-contain" />}
     <div className="min-w-0 flex-1 space-y-1">
-      {/* Anchor the focusable hidden input inside the row, so browser focus
-          scrolls the editor body rather than its clipped modal panel. */}
-      <label className="relative inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800">
+      <button ref={triggerRef} type="button" disabled={disabled} aria-disabled={busy || undefined} aria-label={`${value ? 'Replace' : 'Choose'} image for ${label}`} onClick={() => { if (!busy && !disabled) picker.open(); }} className="relative inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800">
         {busy ? 'Uploading…' : value ? 'Replace image' : 'Upload image'}
-        <input aria-label={`Upload image for ${label}`} className="sr-only" type="file" accept={PRODUCT_IMAGE_ACCEPT} disabled={disabled || busy} onChange={upload} />
-      </label>
+      </button>
+      {/* display:none keeps the native return target out of layout and the
+          focus trap. Focus belongs to the visible button, even while busy. */}
+      <input ref={inputRef} aria-label={`Upload image for ${label}`} hidden tabIndex={-1} type="file" accept={PRODUCT_IMAGE_ACCEPT} disabled={disabled || busy} onChange={upload} onCancel={picker.restore} />
       {busy && <p role="status" aria-live="polite" className="text-xs text-slate-700">Uploading image. Please wait…</p>}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       {images.length > 0 && <select aria-label={`Select gallery image for ${label}`} disabled={disabled || busy} value={images.includes(value) ? value : ''} onChange={event => { if (event.target.value) onChange(event.target.value); }} className="block min-h-11 w-full max-w-full rounded-lg border border-slate-300 bg-white px-2 text-xs">

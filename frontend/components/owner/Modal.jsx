@@ -20,7 +20,7 @@ const lockStaffDialogScroll = () => {
   };
 };
 
-const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentation = 'modal', tone = 'default', children }) => {
+const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentation = 'modal', tone = 'default', mobileSheet = false, children }) => {
   const operations = useContext(OperationsDialogContext);
   const panelRef = useRef(null);
   const titleId = useId();
@@ -71,7 +71,7 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentati
 
   return createPortal(
     <div
-      className={`brand-overlay brand-overlay-${presentation} brand-overlay-tone-${tone} fixed inset-0 z-[90] flex items-end justify-center sm:items-start sm:overflow-y-auto sm:px-4 sm:py-[8vh]`}
+      className={`brand-overlay brand-overlay-${presentation} brand-overlay-tone-${tone} ${mobileSheet ? 'brand-overlay-mobile-sheet' : ''} fixed inset-0 z-[90] flex items-end justify-center sm:items-start sm:overflow-y-auto sm:px-4 sm:py-[8vh]`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -83,13 +83,13 @@ const Modal = ({ isOpen, onClose, title, size = 'lg', returnFocusRef, presentati
         tabIndex={-1}
         className={`brand-dialog-panel relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl outline-none animate-scaleIn sm:max-h-[84vh] sm:rounded-xl ${sizeMap[size] || sizeMap.lg}`}
       >
-        <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+        <div className="brand-dialog-header flex flex-shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <h2 id={titleId} className="min-w-0 truncate font-display text-2xl font-semibold text-slate-950">{title}</h2>
           <button type="button" onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900" aria-label="Close">
             <X size={18} />
           </button>
         </div>
-        <div className={`overscroll-contain flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] ${operations && tone === 'default' ? 'operations-dialog-content operations-content' : ''} ${operations === 'staff' && tone === 'default' ? 'staff-dialog-content' : ''} ${operations === 'owner' && tone === 'default' ? 'owner-dialog-content' : ''}`}>{children}</div>
+        <div data-modal-scroll className={`overscroll-contain min-h-0 flex-1 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] ${operations && tone === 'default' ? 'operations-dialog-content operations-content' : ''} ${operations === 'staff' && tone === 'default' ? 'staff-dialog-content' : ''} ${operations === 'owner' && tone === 'default' ? 'owner-dialog-content' : ''}`}>{children}</div>
       </div>
     </div>,
     document.body

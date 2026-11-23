@@ -44,6 +44,9 @@ export async function staffFixture(page, options = {}) {
     }
     if (path === '/auth/permissions') return reply({ permissions: state.permissions });
     if (path === '/auth/providers') return reply({ google: { available: false }, facebook: { available: false }, two_factor: { available: true } });
+    // Longer browser regressions can reach the real session activity timer.
+    // This is fixture auth activity, not a shop/business mutation.
+    if (/^\/auth\/session(?:\/(?:activity|refresh))?$/.test(path)) return reply({ expires_at: new Date(Date.now() + 1800000).toISOString(), server_now: new Date().toISOString(), warning_seconds: 60 });
     if (path === '/users/profile' && method === 'PUT') { state.user = { ...state.user, ...request.postDataJSON() }; return reply({ user: state.user }); }
     if (path === '/auth/change-password' && method === 'PUT') return reply({ message: 'Password changed' });
     if (/^\/orders\/\d+\/status$/.test(path) && method === 'PUT') {

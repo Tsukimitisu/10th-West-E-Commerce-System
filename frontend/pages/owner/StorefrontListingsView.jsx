@@ -288,7 +288,7 @@ const StorefrontListingsView = () => {
         <div className="flex flex-wrap items-center justify-between border-t border-slate-200 px-4 py-2"><span className="text-xs text-slate-600">{result.total || 0} matching listings</span><Pagination page={query.page} totalPages={Math.max(1,Math.ceil(Number(result.total || 0)/query.pageSize))} onChange={page=>browser.update({page})} /></div>
       </div>
 
-      <Modal isOpen={modalOpen} onClose={closeEditor} title={isSet ? (editing ? 'Edit Set Listing' : 'Add Set Listing') : editing ? 'Edit Storefront Listing' : 'Add Storefront Listing'} size="3xl">
+      <Modal mobileSheet isOpen={modalOpen} onClose={closeEditor} title={isSet ? (editing ? 'Edit Set Listing' : 'Add Set Listing') : editing ? 'Edit Storefront Listing' : 'Add Storefront Listing'} size="3xl">
         <ListingEditorBoundary resetKey={editorRevision} onClose={closeEditor}><ListingEditorBody>{()=> (
         <form onSubmit={submit} className="space-y-5">
           {isSet ? <SetListingFields form={form} setForm={setForm} models={models} onAddItems={() => setItemPickerOpen(true)} onMove={moveSetItem} onRemove={toggleSetItem} imageProps={imageProps} /> : <>

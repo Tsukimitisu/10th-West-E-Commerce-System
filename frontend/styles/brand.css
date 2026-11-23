@@ -39,6 +39,14 @@
 .brand-tabs button { min-height:44px; padding:8px 16px; white-space:nowrap; color:var(--text-secondary); border-bottom:2px solid transparent; }
 .brand-tabs [aria-current=page] { color:var(--accent-hover); border-bottom-color:var(--performance-orange); }
 .brand-dialog-panel { border-radius:14px; }
+/* The listing editor has one scroll owner. Unlike hidden, clip cannot acquire
+   a second scroll offset when a browser restores focus after a native picker. */
+.brand-overlay-mobile-sheet .brand-dialog-panel { overflow:clip; }
+@media (max-width:639px) {
+  .brand-overlay-mobile-sheet { align-items:stretch; height:100vh; height:100dvh; overflow:hidden; padding:0; }
+  .brand-overlay-mobile-sheet .brand-dialog-panel { height:100vh; max-height:100vh; height:100dvh; max-height:100dvh; min-height:0; border-radius:0; }
+  .brand-overlay-mobile-sheet .brand-dialog-header { padding-top:max(1rem,env(safe-area-inset-top)); }
+}
 .brand-overlay-drawer { justify-content:flex-start !important; align-items:stretch !important; padding:0 !important; }
 .brand-overlay-drawer .brand-dialog-panel { width:min(360px,100vw); max-height:100dvh; height:100dvh; border-radius:0 14px 14px 0; }
 .brand-overlay-drawer .brand-dialog-panel > div:last-child { min-height:0; }
