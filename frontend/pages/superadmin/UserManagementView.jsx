@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import {
   Users, Search, Plus, Lock, Unlock, Key, Shield, UserCog,
   ChevronDown, ChevronUp, MoreVertical, AlertTriangle, CheckCircle2,
@@ -9,12 +9,18 @@ import {
   adminResetUserPassword, adminUpdateUserRole,
   addStaff, editStaff, adminDeleteUser
 } from '../../services/api';
+import { getCurrentAuthUser } from '../../services/authSession';
+import PageHeader from '../../components/operations/PageHeader';
+import Modal from '../../components/owner/Modal';
+import { ConfirmationDialog } from '../../components/ui/BrandPrimitives';
+import DataToolbar, { FilterSelect } from '../../components/operations/DataToolbar';
+import ActionDropdown from '../../components/operations/ActionDropdown';
 
 const ROLES = [
-  { value: 'super_admin', label: 'Super Admin', color: 'bg-red-50 text-red-600 border-red-200' },
-  { value: 'owner', label: 'Owner', color: 'bg-purple-50 text-purple-600 border-purple-200' },
-  { value: 'store_staff', label: 'Store Staff', color: 'bg-blue-50 text-blue-600 border-blue-200' },
-  { value: 'customer', label: 'Customer', color: 'bg-green-50 text-green-600 border-green-200' },
+  { value: 'super_admin', label: 'Super Admin', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+  { value: 'owner', label: 'Owner', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+  { value: 'store_staff', label: 'Store Staff', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+  { value: 'customer', label: 'Customer', color: 'bg-slate-100 text-slate-700 border-slate-200' },
 ];
 
 const UserManagementView = () => {
@@ -33,8 +39,9 @@ const UserManagementView = () => {
   const [form, setForm] = useState({ name: '', email: '', phone: '', role: 'store_staff', password: '' });
   const [resetPwForm, setResetPwForm] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [roleChange, setRoleChange] = useState(null);
 
-  const currentUser = JSON.parse(localStorage.getItem('shopCoreUser') || '{}');
+  const currentUser = getCurrentAuthUser() || {};
 
   const loadUsers = async () => {
     setLoading(true);
@@ -113,7 +120,7 @@ const UserManagementView = () => {
     if (!form.name || !form.email) return showMessage('error', 'Name and email are required');
     setActionLoading('edit');
     try {
-      await editStaff(selectedUser.id, { name: form.name, email: form.email, phone: form.phone, role: form.role });
+      await editStaff(selectedUser.id, { name: form.name, phone: form.phone, role: form.role });
       showMessage('success', 'User updated');
       setShowModal(null);
       loadUsers();
@@ -156,11 +163,20 @@ const UserManagementView = () => {
   };
 
   const getRoleBadge = (role) => {
-    const r = ROLES.find(r => r.value === role) || { label: role, color: 'bg-gray-100 text-gray-600 border-gray-200' };
+    const r = ROLES.find(r => r.value === role) || { label: role, color: 'bg-gray-100 text-gray-600 border-slate-200' };
     return <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${r.color}`}>{r.label}</span>;
   };
 
-  const isLocked = (user) => user.locked_until && new Date(user.locked_until) > new Date();
+  const isLocked = (user) => Boolean(user.login_security_locked_at || user.login_lock_stage >= 3 || (user.locked_until && new Date(user.locked_until) > new Date()));
+  const userActions = (user) => [
+    { label: 'View account', icon: Eye, onClick: () => openView(user) },
+    { label: 'Edit user', icon: Edit3, onClick: () => openEdit(user) },
+    { label: 'Reset password', icon: Key, onClick: () => openResetPw(user) },
+    isLocked(user)
+      ? { label: 'Unlock account', icon: Unlock, onClick: () => handleUnlock(user), disabled: actionLoading === `unlock-${user.id}` }
+      : { label: 'Lock account', icon: Lock, onClick: () => handleLock(user), disabled: user.id === currentUser.id || actionLoading === `lock-${user.id}` },
+    { label: 'Delete user', icon: Trash2, onClick: () => handleDeleteUser(user), disabled: user.id === currentUser.id || actionLoading === `del-${user.id}`, destructive: true },
+  ];
 
   const totalPages = Math.ceil(total / 20);
 
@@ -178,60 +194,47 @@ const UserManagementView = () => {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Users size={22} className="text-orange-500" /> User Management</h1>
-          <p className="text-sm text-gray-500 mt-1">Create, edit, and manage all user accounts</p>
-        </div>
-        <button onClick={() => { setForm({ name: '', email: '', phone: '', role: 'store_staff', password: '' }); setShowModal('add'); }}
-          className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
-          <Plus size={16} /> Add User
-        </button>
-      </div>
+      <PageHeader
+        title="Users & roles"
+        description="Create and maintain accounts, role assignments, security state, and access recovery."
+        actions={<button onClick={() => { setForm({ name: '', email: '', phone: '', role: 'store_staff', password: '' }); setShowModal('add'); }} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-orange-600 px-4 text-sm font-semibold text-slate-950 hover:bg-orange-700"><Plus size={16} /> Add user</button>}
+      />
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search by name or email..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400" />
-        </div>
-        <select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
-          className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/30">
-          <option value="">All Roles</option>
-          {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-        </select>
-        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/30">
-          <option value="">All Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="locked">Locked</option>
-        </select>
-        <button onClick={loadUsers} className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-lg transition-colors"><RefreshCw size={16} /></button>
-      </div>
-
+      <DataToolbar search={search} onSearchChange={event => { setSearch(event.target.value); setPage(1); }} searchPlaceholder="Search by name or email…" label="User directory filters" actions={<button type="button" onClick={loadUsers} aria-label="Refresh users" className="min-h-11 min-w-11 rounded-lg border border-slate-300 p-3"><RefreshCw size={16} aria-hidden="true" /></button>}>
+        <FilterSelect label="Role" value={roleFilter} onChange={event => { setRoleFilter(event.target.value); setPage(1); }}><option value="">All roles</option>{ROLES.map(role => <option key={role.value} value={role.value}>{role.label}</option>)}</FilterSelect>
+        <FilterSelect label="Status" value={statusFilter} onChange={event => { setStatusFilter(event.target.value); setPage(1); }}><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="locked">Locked</option></FilterSelect>
+      </DataToolbar>
       {/* Users Table */}
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
         {loading ? (
-          <div className="flex items-center justify-center py-20"><Loader2 size={24} className="text-orange-500 animate-spin" /></div>
+          <div className="flex items-center justify-center py-20"><Loader2 size={24} className="text-red-500 animate-spin" /></div>
         ) : users.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-400">
             <Users size={40} className="mb-3 opacity-30" />
             <p className="text-sm">No users found</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50">
+          <div tabIndex={0} className="overflow-x-auto">
+            <div className="divide-y divide-slate-200 md:hidden">
+              {users.map((user) => <article key={user.id} className="flex items-start justify-between gap-3 p-4">
+                <div className="min-w-0 space-y-1">
+                  <p className="truncate text-sm font-semibold text-slate-950">{user.name}</p>
+                  <p className="break-all text-xs text-slate-600">{user.email}</p>
+                  <div className="flex flex-wrap items-center gap-2">{getRoleBadge(user.role)}<span className={`text-xs font-medium ${isLocked(user) ? 'text-red-700' : user.is_active ? 'text-emerald-700' : 'text-slate-600'}`}>{isLocked(user) ? 'Locked' : user.is_active ? 'Active' : 'Inactive'}</span></div>
+                  <p className="text-xs text-slate-600">Last login: {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'} · 2FA {user.two_factor_enabled ? 'on' : 'off'}</p>
+                </div>
+                <ActionDropdown label={`Actions for ${user.name}`} items={userActions(user)} />
+              </article>)}
+            </div>
+            <table className="hidden w-full text-left md:table">
+              <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500">User</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500">Role</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Status</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Last Login</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">2FA</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500 text-right">Actions</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-400">User</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-400">Role</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden md:table-cell">Status</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden lg:table-cell">Last Login</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-400 hidden lg:table-cell">2FA</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-gray-400 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -239,11 +242,11 @@ const UserManagementView = () => {
                   <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        <div className="w-8 h-8 bg-orange-100 text-orange-800 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
                           {user.name?.charAt(0)?.toUpperCase() || '?'}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                          <p className="text-sm font-medium text-slate-950">{user.name}</p>
                           <p className="text-[11px] text-gray-400">{user.email}</p>
                         </div>
                       </div>
@@ -271,25 +274,11 @@ const UserManagementView = () => {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openView(user)} title="View" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"><Eye size={14} /></button>
-                        <button onClick={() => openEdit(user)} title="Edit" className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"><Edit3 size={14} /></button>
-                        <button onClick={() => openResetPw(user)} title="Reset Password" className="p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"><Key size={14} /></button>
-                        {isLocked(user) ? (
-                          <button onClick={() => handleUnlock(user)} title="Unlock" disabled={actionLoading === `unlock-${user.id}`}
-                            className="p-1.5 text-red-400 hover:text-green-500 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50">
-                            {actionLoading === `unlock-${user.id}` ? <Loader2 size={14} className="animate-spin" /> : <Unlock size={14} />}
-                          </button>
-                        ) : (
-                          <button onClick={() => handleLock(user)} title="Lock" disabled={user.id === currentUser.id || actionLoading === `lock-${user.id}`}
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30">
-                            {actionLoading === `lock-${user.id}` ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
-                          </button>
-                        )}
-                        <button onClick={() => handleDeleteUser(user)} title="Delete" disabled={user.id === currentUser.id || actionLoading === `del-${user.id}`}
-                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30">
-                          {actionLoading === `del-${user.id}` ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                        </button>
+                      <div className="flex justify-end">
+                        <ActionDropdown
+                          label={`Actions for ${user.name}`}
+                          items={userActions(user)}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -301,12 +290,12 @@ const UserManagementView = () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
             <span className="text-xs text-gray-400">{total} users total</span>
             <div className="flex gap-1">
               {Array.from({ length: totalPages }, (_, i) => (
                 <button key={i} onClick={() => setPage(i + 1)}
-                  className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${page === i + 1 ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                  className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${page === i + 1 ? 'bg-orange-600 text-slate-950' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}>
                   {i + 1}
                 </button>
               ))}
@@ -317,23 +306,23 @@ const UserManagementView = () => {
 
       {/* Modals */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg border border-gray-100 max-h-[90vh] overflow-y-auto">
+        <Modal isOpen={Boolean(showModal)} onClose={() => setShowModal(null)} title={showModal === 'view' ? 'Account details' : showModal === 'add' ? 'Add user' : showModal === 'resetPw' ? 'Reset password' : 'Edit user'}>
+          <div className="operations-content w-full">
             {/* View User */}
             {showModal === 'view' && selectedUser && (
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-gray-900">User Details</h3>
-                  <button onClick={() => setShowModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+                  <h3 className="text-lg font-bold text-slate-950">User Details</h3>
+                  <button aria-label="Close account dialog" onClick={() => setShowModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
                 </div>
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4 pb-4 border-b border-gray-100">
-                    <div className="w-14 h-14 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-xl font-bold">
+                  <div className="flex items-center gap-4 pb-4 border-b border-slate-200">
+                    <div className="w-14 h-14 bg-orange-100 text-orange-800 rounded-full flex items-center justify-center text-xl font-bold">
                       {selectedUser.name?.charAt(0)?.toUpperCase()}
                     </div>
                     <div>
-                      <h4 className="text-gray-900 font-semibold">{selectedUser.name}</h4>
-                      <p className="text-sm text-gray-500">{selectedUser.email}</p>
+                      <h4 className="text-slate-950 font-semibold">{selectedUser.name}</h4>
+                      <p className="text-sm text-gray-400">{selectedUser.email}</p>
                       <div className="mt-1">{getRoleBadge(selectedUser.role)}</div>
                     </div>
                   </div>
@@ -345,15 +334,15 @@ const UserManagementView = () => {
                     <div><span className="text-gray-400 text-xs">Last Login</span><p className="text-gray-700">{selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleString() : 'Never'}</p></div>
                     <div><span className="text-gray-400 text-xs">Created</span><p className="text-gray-700">{new Date(selectedUser.created_at).toLocaleString()}</p></div>
                   </div>
-                  <div className="pt-4 border-t border-gray-100">
-                    <label className="text-xs text-gray-500 mb-1 block">Change Role</label>
+                  <div className="pt-4 border-t border-slate-200">
+                    <label htmlFor="managed-role-change" className="text-xs text-gray-400 mb-1 block">Change Role</label>
                     <div className="flex gap-2">
-                      <select value={selectedUser.role} onChange={(e) => handleChangeRole(selectedUser.id, e.target.value)}
+                      <select id="managed-role-change" value={selectedUser.role} onChange={(e) => setRoleChange({ mode: 'role', userId: selectedUser.id, name: selectedUser.name, previous: selectedUser.role, role: e.target.value })}
                         disabled={selectedUser.id === currentUser.id || actionLoading === `role-${selectedUser.id}`}
-                        className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/30 disabled:opacity-50">
+                        className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 focus:outline-none focus:ring-2 focus:ring-orange-500/30 disabled:opacity-50">
                         {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                       </select>
-                      {actionLoading === `role-${selectedUser.id}` && <Loader2 size={18} className="text-orange-500 animate-spin self-center" />}
+                      {actionLoading === `role-${selectedUser.id}` && <Loader2 size={18} className="text-red-500 animate-spin self-center" />}
                     </div>
                   </div>
                 </div>
@@ -364,44 +353,46 @@ const UserManagementView = () => {
             {(showModal === 'add' || showModal === 'edit') && (
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-gray-900">{showModal === 'add' ? 'Add New User' : 'Edit User'}</h3>
-                  <button onClick={() => setShowModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+                  <h3 className="text-lg font-bold text-slate-950">{showModal === 'add' ? 'Add New User' : 'Edit User'}</h3>
+                  <button aria-label="Close account dialog" onClick={() => setShowModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Full Name *</label>
-                    <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="John Doe"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                    <label htmlFor="managed-user-name" className="text-xs text-gray-400 mb-1 block">Full Name *</label>
+                    <input type="text" id="managed-user-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="John Doe"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Email *</label>
-                    <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@10thwest.com"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                    {showModal === 'edit' ? <><p className="text-xs text-gray-400 mb-1">Email</p><p className="break-all text-sm text-slate-950">{form.email}</p><p className="mt-1 text-xs text-slate-500">Verified account identifier</p></> : <>
+                    <label htmlFor="managed-user-email" className="text-xs text-gray-400 mb-1 block">Email *</label>
+                    <input type="email" id="managed-user-email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@10thwest.com"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                    </>}
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Phone</label>
-                    <input type="text" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="555-0001"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                    <label htmlFor="managed-user-phone" className="text-xs text-gray-400 mb-1 block">Phone</label>
+                    <input type="text" id="managed-user-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="555-0001"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Role</label>
-                    <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500/30">
+                    <label htmlFor="managed-user-role" className="text-xs text-gray-400 mb-1 block">Role</label>
+                    <select id="managed-user-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 focus:outline-none focus:ring-2 focus:ring-orange-500/30">
                       {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
                   {showModal === 'add' && (
                     <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Password *</label>
-                      <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Min 8 characters"
-                        className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                      <label htmlFor="managed-user-password" className="text-xs text-gray-400 mb-1 block">Password *</label>
+                      <input type="password" id="managed-user-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Min 8 characters"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
                     </div>
                   )}
                   <div className="flex gap-3 pt-2">
                     <button onClick={() => setShowModal(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl transition-colors">Cancel</button>
-                    <button onClick={showModal === 'add' ? handleAddUser : handleEditUser}
+                    <button onClick={showModal === 'add' ? handleAddUser : () => form.role !== selectedUser.role ? setRoleChange({ mode: 'edit', userId: selectedUser.id, name: selectedUser.name, previous: selectedUser.role, role: form.role }) : handleEditUser()}
                       disabled={actionLoading === 'add' || actionLoading === 'edit'}
-                      className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
+                      className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-200 disabled:text-gray-400 text-slate-950 text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
                       {(actionLoading === 'add' || actionLoading === 'edit') && <Loader2 size={14} className="animate-spin" />}
                       {showModal === 'add' ? 'Create User' : 'Save Changes'}
                     </button>
@@ -414,26 +405,31 @@ const UserManagementView = () => {
             {showModal === 'resetPw' && selectedUser && (
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-gray-900">Reset Password</h3>
-                  <button onClick={() => setShowModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+                  <h3 className="text-lg font-bold text-slate-950">Reset Password</h3>
+                  <button aria-label="Close account dialog" onClick={() => setShowModal(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
                 </div>
                 <div className="space-y-4">
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                    <p className="text-sm text-gray-600">Resetting password for: <span className="text-gray-900 font-semibold">{selectedUser.name}</span></p>
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                    <p className="text-sm text-gray-600">Resetting password for: <span className="text-slate-950 font-semibold">{selectedUser.name}</span></p>
                     <p className="text-xs text-gray-400">{selectedUser.email}</p>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">New Password *</label>
-                    <input type="password" value={resetPwForm} onChange={(e) => setResetPwForm(e.target.value)} placeholder="Min 8 characters"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                    <label htmlFor="managed-reset-password" className="text-xs text-gray-400 mb-1 block">New Password *</label>
+                      <div className="relative">
+                        <input id="managed-reset-password" type={showResetPassword ? "text" : "password"} value={resetPwForm} onChange={(e) => setResetPwForm(e.target.value)} placeholder="Min 8 characters"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-950 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                        <button type="button" onClick={() => setShowResetPassword(!showResetPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300">
+                          {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                   </div>
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                  <div className="bg-red-500/10 border border-red-200 rounded-lg p-3">
                     <p className="text-xs text-orange-600 flex items-center gap-1"><AlertTriangle size={12} /> This will log the user out of all sessions</p>
                   </div>
                   <div className="flex gap-3">
                     <button onClick={() => setShowModal(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
                     <button onClick={handleResetPassword} disabled={actionLoading === 'resetPw'}
-                      className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2">
+                      className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-200 disabled:text-gray-400 text-slate-950 text-sm font-medium rounded-xl flex items-center justify-center gap-2">
                       {actionLoading === 'resetPw' && <Loader2 size={14} className="animate-spin" />}
                       Reset Password
                     </button>
@@ -442,41 +438,15 @@ const UserManagementView = () => {
               </div>
             )}
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Delete User Confirmation Modal */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertTriangle size={20} className="text-red-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">Delete User</h3>
-            </div>
-            <p className="text-sm text-gray-600 mb-1">Are you sure you want to delete:</p>
-            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 mb-4">
-              <p className="text-sm font-semibold text-gray-900">{deleteTarget.name}</p>
-              <p className="text-xs text-gray-400">{deleteTarget.email}</p>
-              <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-600">{deleteTarget.role}</span>
-            </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-              <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle size={12} /> This action cannot be undone. All user data will be permanently removed.</p>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl">Cancel</button>
-              <button onClick={confirmDeleteUser} disabled={actionLoading === `del-${deleteTarget.id}`}
-                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl flex items-center justify-center gap-2">
-                {actionLoading === `del-${deleteTarget.id}` && <Loader2 size={14} className="animate-spin" />}
-                Delete User
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationDialog isOpen={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} onConfirm={confirmDeleteUser} title="Delete user?" description={`Permanently delete ${deleteTarget?.name || 'this account'}? This action cannot be undone.`} busy={actionLoading?.startsWith('del-')} confirmLabel={actionLoading?.startsWith('del-') ? 'Deleting…' : 'Delete user'} danger />
+      <ConfirmationDialog isOpen={Boolean(roleChange)} onClose={() => setRoleChange(null)} onConfirm={async () => { if (!roleChange) return; const change = roleChange; setRoleChange(null); if (change.mode === 'edit') await handleEditUser(); else await handleChangeRole(change.userId, change.role); }} title="Confirm role change" description={`Change ${roleChange?.name || 'this user'} from ${String(roleChange?.previous || '').replaceAll('_', ' ')} to ${String(roleChange?.role || '').replaceAll('_', ' ')}? Their available tools and permissions will change.`} confirmLabel="Confirm role change" />
     </div>
   );
 };
 
 export default UserManagementView;
+
+

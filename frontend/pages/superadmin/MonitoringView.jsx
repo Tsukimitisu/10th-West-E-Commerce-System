@@ -1,257 +1,122 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Activity, FileText, AlertTriangle, Search, RefreshCw,
-  Loader2, CheckCircle2, XCircle, Filter, Download,
-  Clock, Globe, User, Server, Database
-} from 'lucide-react';
-import {
-  getActivityLogs, getErrorLogs, getTransactionLogs, getSuspiciousActivity
-} from '../../services/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { RefreshCw, ShieldCheck } from 'lucide-react';
+import { getActivityLogs, getErrorLogs, getTransactionLogs, getSystemHealth } from '../../services/api';
+import { getCurrentAuthUser } from '../../services/authSession';
+import PageHeader from '../../components/operations/PageHeader';
+import SectionCard from '../../components/operations/SectionCard';
+import ServiceHealth from '../../components/operations/ServiceHealth';
+import DataToolbar, { FilterSelect, MobileDataCard } from '../../components/operations/DataToolbar';
+import StatusBadge from '../../components/ui/StatusBadge';
+import BrandButton from '../../components/ui/BrandButton';
+import { Pagination } from '../../components/ui/BrandPrimitives';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
+import Modal from '../../components/owner/Modal';
+import { actionLabel, auditOutcome, actorLabel, auditTime, entityType, affectedItem, areaLabel, auditRecordLink, errorDescription, errorSeverity, errorStatus, advancedAuditDetails, repeatedErrors, missingDataHelp } from '../../utils/auditPresentation.js';
 
-const MonitoringView = () => {
-  const [tab, setTab] = useState('activity');
+const tabs = [
+  ['activity', 'Activity', 'Who signed in, changed settings or performed administrative actions.'],
+  ['errors', 'Errors', 'Problems detected by the system that may need attention.'],
+  ['transactions', 'Transactions', 'Important business actions such as POS sales, orders, returns and refunds.'],
+];
+const filterNames = { actor: 'Performed by', action: 'Event type', entity: 'Affected area', result: 'Outcome' };
+const Missing = ({ children }) => <span title={missingDataHelp[children]}>{children}</span>;
+
+export default function MonitoringView({ initialTab = 'activity', title = 'Monitoring & logs' }) {
+  const isAudit = title === 'Audit trail';
+  const role = getCurrentAuthUser()?.role;
+  const [tab, setTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
-  const [activityLogs, setActivityLogs] = useState([]);
-  const [errorLogs, setErrorLogs] = useState([]);
-  const [transactionLogs, setTransactionLogs] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
+  const [data, setData] = useState({ activity: [], errors: [], transactions: [], health: null });
+  const [unavailable, setUnavailable] = useState([]);
+  const [error, setError] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [feedback, setFeedback] = useState('');
+  const [activityPaging, setActivityPaging] = useState({ page: 1, total: 0, busy: false });
+  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState({ actor: '', action: '', entity: '', result: '', from: '', to: '' });
+  const [page, setPage] = useState(1);
   const loadData = async () => {
     setLoading(true);
-    try {
-      const [activity, errors, transactions] = await Promise.all([
-        getActivityLogs().catch(() => []),
-        getErrorLogs().catch(() => []),
-        getTransactionLogs().catch(() => []),
-      ]);
-      setActivityLogs(Array.isArray(activity) ? activity : []);
-      setErrorLogs(Array.isArray(errors) ? errors : []);
-      setTransactionLogs(Array.isArray(transactions) ? transactions : []);
-    } catch (e) { console.error(e); }
+    const results = await Promise.allSettled([getActivityLogs({ limit: 100 }), getErrorLogs(), getTransactionLogs(), ...(!isAudit ? [getSystemHealth()] : [])]);
+    const value = (index, fallback) => results[index]?.status === 'fulfilled' ? results[index].value : fallback;
+    const asRows = value => Array.isArray(value) ? value : Array.isArray(value?.logs) ? value.logs : [];
+    const activityResponse = value(0, []);
+    setActivityPaging({ page: 1, total: Number(activityResponse?.total || asRows(activityResponse).length), busy: false });
+    setData({ activity: asRows(value(0, [])), errors: asRows(value(1, [])), transactions: asRows(value(2, [])), health: value(3, null) });
+    setUnavailable(tabs.filter((_, i) => results[i].status === 'rejected').map(([id]) => id));
+    setError(results.some(item => item.status === 'rejected') ? 'Some information is unavailable. Refresh before relying on this view.' : '');
     setLoading(false);
   };
-
-  const tabs = [
-    { id: 'activity', label: 'Activity Logs', icon: Activity, count: activityLogs.length },
-    { id: 'errors', label: 'Error Logs', icon: AlertTriangle, count: errorLogs.length },
-    { id: 'transactions', label: 'Transaction Logs', icon: FileText, count: transactionLogs.length },
-  ];
-
-  const filterLogs = (logs) => {
-    if (!searchQuery) return logs;
-    const q = searchQuery.toLowerCase();
-    return logs.filter(l =>
-      (l.action || '').toLowerCase().includes(q) ||
-      (l.user_name || '').toLowerCase().includes(q) ||
-      (l.email || '').toLowerCase().includes(q) ||
-      (l.message || '').toLowerCase().includes(q) ||
-      (l.error_type || '').toLowerCase().includes(q) ||
-      (l.endpoint || '').toLowerCase().includes(q) ||
-      (l.ip_address || '').toLowerCase().includes(q)
-    );
+  useEffect(() => { void loadData(); }, []);
+  const loadMoreActivity = async () => {
+    setActivityPaging(current => ({ ...current, busy: true }));
+    try {
+      const next = await getActivityLogs({ limit: 100, page: activityPaging.page + 1 });
+      const rows = Array.isArray(next) ? next : next?.logs || [];
+      setData(current => ({ ...current, activity: [...new Map([...current.activity, ...rows].map(row => [row.id, row])).values()] }));
+      setActivityPaging(current => ({ page: current.page + 1, total: Number(next?.total || current.total), busy: false }));
+    } catch { setError('Older activity is unavailable. Please try again.'); setActivityPaging(current => ({ ...current, busy: false })); }
   };
-
-  const formatAction = (action) => (action || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  const timeAgo = (date) => {
-    if (!date) return '';
-    const diff = Date.now() - new Date(date).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+  const logs = data[tab] || [];
+  const options = useMemo(() => ({
+    actor: [...new Set(logs.map(actorLabel))].sort(),
+    action: [...new Set(logs.map(log => actionLabel(log, tab)))].sort(),
+    entity: [...new Set(logs.map(log => entityType(log) ? areaLabel(entityType(log)) : affectedItem(log)))].sort(),
+    result: [...new Set(logs.map(log => auditOutcome(log, tab).label))].sort(),
+  }), [logs, tab]);
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return logs.filter(log => {
+      const day = log.created_at ? new Date(log.created_at).toLocaleDateString('en-CA') : '';
+      return (!term || [actionLabel(log, tab), actorLabel(log), affectedItem(log), log.action, log.error_type, log.id].some(value => String(value || '').toLowerCase().includes(term)))
+        && (!filters.actor || actorLabel(log) === filters.actor)
+        && (!filters.action || actionLabel(log, tab) === filters.action)
+        && (!filters.entity || (entityType(log) ? areaLabel(entityType(log)) : affectedItem(log)) === filters.entity)
+        && (!filters.result || auditOutcome(log, tab).label === filters.result)
+        && (!filters.from || Boolean(day && day >= filters.from)) && (!filters.to || Boolean(day && day <= filters.to));
+    });
+  }, [logs, tab, query, filters]);
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / 20)));
+  const rows = filtered.slice((currentPage - 1) * 20, currentPage * 20);
+  const repeats = tab === 'errors' ? repeatedErrors(filtered) : [];
+  const updateFilter = (key, value) => { setFilters(current => ({ ...current, [key]: value })); setPage(1); };
+  const changeTab = id => { setTab(id); setSelected(null); setPage(1); setFilters({ actor: '', action: '', entity: '', result: '', from: '', to: '' }); setQuery(''); };
+  const resultBadge = log => { const result = auditOutcome(log, tab); return <span title={missingDataHelp[result.label]}><StatusBadge tone={result.tone}>{result.label}</StatusBadge></span>; };
+  const record = log => { const path = auditRecordLink(log, role); return path ? <Link to={path} className="font-medium text-orange-800 underline underline-offset-2">{affectedItem(log)}</Link> : <Missing>{affectedItem(log)}</Missing>; };
+  const copyReference = async log => {
+    try { await navigator.clipboard.writeText(JSON.stringify({ reference: advancedAuditDetails(log).reference, event: actionLabel(log, tab), timestamp: log.created_at || null })); setFeedback('Diagnostic reference copied. You can share it with support.'); }
+    catch { setFeedback('The reference could not be copied. Check clipboard access and try again.'); }
   };
-
-  const getActionColor = (action) => {
-    if (!action) return 'text-gray-500';
-    if (action.includes('delete') || action.includes('lock') || action.includes('reject')) return 'text-red-500';
-    if (action.includes('create') || action.includes('add') || action.includes('approve') || action.includes('unlock')) return 'text-green-500';
-    if (action.includes('update') || action.includes('edit') || action.includes('change') || action.includes('reset')) return 'text-blue-500';
-    if (action.includes('login') || action.includes('logout')) return 'text-purple-500';
-    if (action.includes('order') || action.includes('checkout') || action.includes('payment')) return 'text-orange-500';
-    return 'text-gray-500';
-  };
-
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={24} className="text-orange-500 animate-spin" /></div>;
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Activity size={22} className="text-orange-500" /> Monitoring & Logs</h1>
-          <p className="text-sm text-gray-500 mt-1">View system activity, error logs, and transaction history</p>
-        </div>
-        <button onClick={loadData} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
-          <RefreshCw size={14} /> Refresh
-        </button>
-      </div>
-
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 shadow-sm">
-          <div className="p-2 bg-blue-50 rounded-lg"><Activity size={18} className="text-blue-500" /></div>
-          <div><p className="text-xs text-gray-500">Activity Logs</p><p className="text-lg font-bold text-gray-900">{activityLogs.length}</p></div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 shadow-sm">
-          <div className="p-2 bg-red-50 rounded-lg"><AlertTriangle size={18} className="text-red-500" /></div>
-          <div><p className="text-xs text-gray-500">Error Logs</p><p className="text-lg font-bold text-gray-900">{errorLogs.length}</p></div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 shadow-sm">
-          <div className="p-2 bg-orange-50 rounded-lg"><FileText size={18} className="text-orange-500" /></div>
-          <div><p className="text-xs text-gray-500">Transaction Logs</p><p className="text-lg font-bold text-gray-900">{transactionLogs.length}</p></div>
-        </div>
-      </div>
-
-      {/* Tabs + Search */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-1 bg-white border border-gray-100 p-1 rounded-xl flex-1 overflow-x-auto shadow-sm">
-          {tabs.map(t => {
-            const Icon = t.icon;
-            return (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                  tab === t.id ? 'bg-orange-50 text-orange-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                }`}>
-                <Icon size={14} /> {t.label}
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${tab === t.id ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>{t.count}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search logs..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 w-full sm:w-56" />
-        </div>
-      </div>
-
-      {/* Activity Logs */}
-      {tab === 'activity' && (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
-          <div className="max-h-[520px] overflow-y-auto">
-            {filterLogs(activityLogs).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <Activity size={36} className="mb-3 opacity-30" />
-                <p className="text-sm">No activity logs found</p>
-              </div>
-            ) : (
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500">Action</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">User</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">IP Address</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Details</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 text-right">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filterLogs(activityLogs).map((log, idx) => (
-                    <tr key={log.id || idx} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <span className={`text-xs font-medium ${getActionColor(log.action)}`}>{formatAction(log.action)}</span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">{log.user_name || 'System'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell font-mono">{log.ip_address || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell max-w-xs truncate">
-                        {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)).slice(0, 60) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Error Logs */}
-      {tab === 'errors' && (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
-          <div className="max-h-[520px] overflow-y-auto">
-            {filterLogs(errorLogs).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-green-500">
-                <CheckCircle2 size={36} className="mb-3 opacity-50" />
-                <p className="text-sm">No errors logged</p>
-              </div>
-            ) : (
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500">Type</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500">Message</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">Endpoint</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">User</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 text-right">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filterLogs(errorLogs).map((log, idx) => (
-                    <tr key={log.id || idx} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-0.5 bg-red-50 text-red-500 border border-red-100 rounded-full text-[10px] font-bold">{log.error_type || 'Error'}</span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-700 max-w-xs truncate">{log.message}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden md:table-cell font-mono">{log.endpoint || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell">{log.user_name || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Transaction Logs */}
-      {tab === 'transactions' && (
-        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
-          <div className="max-h-[520px] overflow-y-auto">
-            {filterLogs(transactionLogs).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <FileText size={36} className="mb-3 opacity-30" />
-                <p className="text-sm">No transaction logs found</p>
-              </div>
-            ) : (
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500">Action</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden md:table-cell">User</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 hidden lg:table-cell">Details</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-500 text-right">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filterLogs(transactionLogs).map((log, idx) => (
-                    <tr key={log.id || idx} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <span className={`text-xs font-medium ${getActionColor(log.action)}`}>{formatAction(log.action)}</span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">{log.user_name || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400 hidden lg:table-cell max-w-xs truncate">
-                        {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)).slice(0, 60) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-gray-400 text-right whitespace-nowrap">{timeAgo(log.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default MonitoringView;
+  return <div className="space-y-5">
+    <PageHeader title={title} description={isAudit ? 'Understand who acted, what changed and whether anything needs attention. History is read only.' : 'Check availability and review problems that may need attention.'} actions={<BrandButton variant="secondary" onClick={loadData} disabled={loading}><RefreshCw size={16} className={loading ? 'animate-spin' : ''} aria-hidden="true" />Refresh</BrandButton>} />
+    {error && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{error}</p>}
+    {feedback && !selected && <p role="status" className="text-sm text-slate-700">{feedback}</p>}
+    {!isAudit && <SectionCard title="System health" description={data.health?.timestamp ? `Last checked ${auditTime(data.health.timestamp)}. Availability and configuration checks do not send emails or create payments.` : 'Refresh to check availability and configuration.'} padded={false}>{loading ? <LoadingSkeleton className="h-48 w-full" /> : <ServiceHealth health={data.health} />}</SectionCard>}
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200"><div className="flex min-w-0 max-w-full gap-1 overflow-x-auto" role="group" aria-label="Log category">{tabs.map(([id, label, help]) => <button type="button" key={id} title={help} onClick={() => changeTab(id)} aria-pressed={tab === id} className={`min-h-11 shrink-0 border-b-2 px-3 text-sm font-semibold ${tab === id ? 'border-orange-600 text-slate-950' : 'border-transparent text-slate-600 hover:text-slate-950'}`}>{label} <span className="ml-1 text-xs font-normal">{data[id].length}</span></button>)}</div><p className="ops-readonly-note pb-2"><ShieldCheck size={15} aria-hidden="true" />Read only</p></div>
+    <p className="text-sm text-slate-600">{tabs.find(([id]) => id === tab)?.[2]}</p>
+    <DataToolbar search={query} onSearchChange={event => { setQuery(event.target.value); setPage(1); }} searchPlaceholder="Search people, events or affected items…" label="Log filters">
+      {Object.entries(filterNames).map(([key, label]) => <FilterSelect label={label} key={key} value={filters[key]} onChange={event => updateFilter(key, event.target.value)}><option value="">All</option>{options[key].map(value => <option key={value} value={value}>{value}</option>)}</FilterSelect>)}
+      <label className="ops-filter-select"><span>Date from</span><input type="date" value={filters.from} onChange={event => updateFilter('from', event.target.value)} /></label><label className="ops-filter-select"><span>Date to</span><input type="date" min={filters.from || undefined} value={filters.to} onChange={event => updateFilter('to', event.target.value)} /></label>
+    </DataToolbar>
+    <details className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600"><summary className="cursor-pointer font-semibold">What missing information means</summary><dl className="mt-3 space-y-2">{Object.entries(missingDataHelp).map(([term, help]) => <div key={term}><dt className="font-medium text-slate-900">{term}</dt><dd>{help}</dd></div>)}</dl></details>
+    {repeats.length > 0 && <SectionCard title="Repeated problems" description="Similar errors are grouped here. Every individual event remains in the list below.">{repeats.map(group => <div key={group[0].id} className="border-b border-slate-200 py-3 text-sm last:border-0"><p className="font-semibold">{actionLabel(group[0], 'errors')}</p><p className="mt-1 text-slate-600">Occurred {group.length} times between {auditTime(group.at(-1).created_at)} and {auditTime(group[0].created_at)}.</p><BrandButton variant="ghost" onClick={() => { setQuery(group[0].error_type || group[0].action); setPage(1); }}>View individual events</BrandButton></div>)}</SectionCard>}
+    <SectionCard title={tabs.find(([id]) => id === tab)?.[1]} description={`${filtered.length} matching records in the loaded history.`} padded={false}>
+      {loading ? <div className="space-y-2 p-4" role="status" aria-label="Loading audit events">{Array.from({ length: 5 }, (_, index) => <LoadingSkeleton key={index} className="h-12 w-full" />)}</div> : !rows.length ? <div className="p-6 text-sm text-slate-600"><p className="font-semibold text-slate-950">{unavailable.includes(tab) ? 'Records unavailable' : tab === 'errors' ? 'No errors found for this period.' : 'No matching activity found.'}</p><p className="mt-2">{unavailable.includes(tab) ? 'Refresh to retrieve this information.' : tab === 'errors' ? 'Your system has not recorded any matching problems.' : 'Try a different event type, person or date range.'}</p></div> : <>
+        <div className="md:hidden">{rows.map((log, index) => <MobileDataCard key={log.id || index} title={actionLabel(log, tab)} reference={auditTime(log.created_at)} status={resultBadge(log)}><p className="mt-2 text-sm text-slate-700"><Missing>{actorLabel(log)}</Missing></p><p className="mt-2 break-words text-sm">{record(log)}</p>{tab === 'errors' && <p className="mt-2 text-sm text-slate-700">Severity: {errorSeverity(log)} · {errorStatus(log)}</p>}<BrandButton variant="ghost" onClick={() => setSelected(log)}>View details</BrandButton></MobileDataCard>)}</div>
+        <div tabIndex={0} role="region" aria-label="Audit log table" className="hidden max-h-[620px] overflow-auto md:block"><table className="ops-audit-table w-full text-left"><thead><tr>{['When', 'Who', 'What happened', 'Affected item', 'Result', 'Details'].map(heading => <th scope="col" key={heading}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map((log, index) => <tr key={log.id || index}><td className="whitespace-nowrap text-xs"><Missing>{auditTime(log.created_at)}</Missing></td><td><Missing>{actorLabel(log)}</Missing></td><td className="font-medium">{actionLabel(log, tab)}{tab === 'errors' && <p className="mt-1 text-xs font-normal text-slate-600">Severity: {errorSeverity(log)} · {errorStatus(log)}</p>}</td><td className="break-words">{record(log)}</td><td>{resultBadge(log)}</td><td><BrandButton variant="ghost" onClick={() => setSelected(log)}>View details</BrandButton></td></tr>)}</tbody></table></div>
+      </>}
+      {tab === 'activity' && data.activity.length < activityPaging.total && <div className="border-t border-slate-200 px-4 py-3"><BrandButton variant="secondary" disabled={activityPaging.busy} onClick={loadMoreActivity}>{activityPaging.busy ? 'Loading older activity…' : `Load older activity (${data.activity.length} of ${activityPaging.total} loaded)`}</BrandButton></div>}
+      <div className="px-4"><Pagination page={currentPage} totalPages={Math.max(1, Math.ceil(filtered.length / 20))} onChange={setPage} /></div>
+    </SectionCard>
+    <Modal isOpen={Boolean(selected)} onClose={() => setSelected(null)} title="Event details" size="2xl">
+      {selected && <div className="space-y-5 text-sm">
+        {feedback && <p role="status" className="text-slate-700">{feedback}</p>}
+        <div><p className="font-semibold">What happened</p><p className="mt-2 leading-6 text-slate-700">{tab === 'errors' ? errorDescription(selected) : `${actorLabel(selected)} — ${actionLabel(selected, tab)}${!missingDataHelp[affectedItem(selected)] ? `. ${affectedItem(selected)}.` : '.'}`}</p></div>
+        <dl className="grid gap-4 sm:grid-cols-2"><div><dt className="text-slate-600">When</dt><dd className="mt-1">{auditTime(selected.created_at)}</dd></div><div><dt className="text-slate-600">Result</dt><dd className="mt-1">{resultBadge(selected)}</dd></div><div><dt className="text-slate-600">Affected record</dt><dd className="mt-1 break-words">{record(selected)}</dd></div><div><dt className="text-slate-600">Performed by</dt><dd className="mt-1">{actorLabel(selected)}</dd></div><div><dt className="text-slate-600">Source</dt><dd className="mt-1">{selected.source ? 'Application' : 'Not captured'}</dd></div></dl>
+        {tab === 'errors' && <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4"><p>Severity: {errorSeverity(selected)} · Status: {errorStatus(selected)}</p><p>No automatic resolution is assumed. Check system health if this problem continues.</p><div className="flex flex-wrap gap-2"><BrandButton to="/superadmin/maintenance" variant="secondary">Check system health</BrandButton><BrandButton variant="secondary" onClick={() => { const day = selected.created_at ? new Date(selected.created_at).toLocaleDateString('en-CA') : ''; changeTab('activity'); setFilters(current => ({ ...current, from: day, to: day })); }}>View related events</BrandButton><BrandButton variant="ghost" onClick={loadData}>Refresh</BrandButton><BrandButton variant="ghost" onClick={() => copyReference(selected)}>Copy diagnostic reference</BrandButton></div></div>}
+        <details className="rounded-lg border border-slate-200 p-3"><summary className="min-h-11 cursor-pointer py-2 font-semibold">Advanced technical details</summary><p className="mb-3 text-xs text-slate-600">For system support. Credential values and private request bodies are excluded.</p><pre className="max-w-full whitespace-pre-wrap break-words text-xs leading-6 [overflow-wrap:anywhere]">{JSON.stringify(advancedAuditDetails(selected), null, 2)}</pre></details>
+      </div>}
+    </Modal>
+  </div>;
+}

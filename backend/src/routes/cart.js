@@ -6,12 +6,12 @@ import {
   removeFromCart,
   clearCart
 } from '../controllers/cartController.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// All cart routes require authentication
-router.use(authenticateToken);
+// Allow guests with sessions, or authenticated users
+router.use(optionalAuth);
 
 router.get('/', getCart);
 router.post('/add', addToCart);

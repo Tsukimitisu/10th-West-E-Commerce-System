@@ -1,13 +1,23 @@
 import pool from '../config/database.js';
+import { sanitizePolicyContent, sanitizePolicyRow } from '../utils/sanitizePolicy.js';
+
+const VALID_POLICY_TYPES = ['return_policy', 'privacy_policy', 'terms_of_service', 'shipping_policy'];
+const POLICY_TYPE_ALIASES = {
+  privacy: 'privacy_policy',
+};
+
+export const normalizePolicyType = (type) => {
+  const normalized = String(type || '').trim().toLowerCase();
+  const canonical = POLICY_TYPE_ALIASES[normalized] || normalized;
+  return VALID_POLICY_TYPES.includes(canonical) ? canonical : null;
+};
 
 // Get policy by type (public)
 export const getPolicyByType = async (req, res) => {
   try {
-    const { type } = req.params;
+    const type = normalizePolicyType(req.params.type);
 
-    const validTypes = ['return_policy', 'privacy_policy', 'terms_of_service', 'shipping_policy'];
-
-    if (!validTypes.includes(type)) {
+    if (!type) {
       return res.status(400).json({ message: 'Invalid policy type' });
     }
 
@@ -20,7 +30,7 @@ export const getPolicyByType = async (req, res) => {
       return res.status(404).json({ message: 'Policy not found' });
     }
 
-    res.json(result.rows[0]);
+    res.json(sanitizePolicyRow(result.rows[0]));
   } catch (error) {
     console.error('Get policy error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -34,7 +44,7 @@ export const getAllPolicies = async (req, res) => {
       'SELECT * FROM policies ORDER BY type ASC'
     );
 
-    res.json(result.rows);
+    res.json(result.rows.map(sanitizePolicyRow));
   } catch (error) {
     console.error('Get all policies error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -43,12 +53,10 @@ export const getAllPolicies = async (req, res) => {
 
 // Create or update policy (admin)
 export const upsertPolicy = async (req, res) => {
-  const { type } = req.params;
+  const type = normalizePolicyType(req.params.type);
   const { title, content } = req.body;
 
-  const validTypes = ['return_policy', 'privacy_policy', 'terms_of_service', 'shipping_policy'];
-
-  if (!validTypes.includes(type)) {
+  if (!type) {
     return res.status(400).json({ message: 'Invalid policy type' });
   }
 
@@ -66,12 +74,12 @@ export const upsertPolicy = async (req, res) => {
          content = EXCLUDED.content,
          updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
-      [type, title, content]
+      [type, String(title).trim(), sanitizePolicyContent(content)]
     );
 
     res.json({
       message: 'Policy saved successfully',
-      policy: result.rows[0]
+      policy: sanitizePolicyRow(result.rows[0])
     });
   } catch (error) {
     console.error('Upsert policy error:', error);
@@ -81,7 +89,11 @@ export const upsertPolicy = async (req, res) => {
 
 // Delete policy (admin)
 export const deletePolicy = async (req, res) => {
-  const { type } = req.params;
+  const type = normalizePolicyType(req.params.type);
+
+  if (!type) {
+    return res.status(400).json({ message: 'Invalid policy type' });
+  }
 
   try {
     const result = await pool.query(
@@ -94,7 +106,7 @@ export const deletePolicy = async (req, res) => {
     }
 
     res.json({ message: 'Policy deleted successfully' });
-  } catch (error) {
+  } catch (error) { 
     console.error('Delete policy error:', error);
     res.status(500).json({ message: 'Failed to delete policy' });
   }

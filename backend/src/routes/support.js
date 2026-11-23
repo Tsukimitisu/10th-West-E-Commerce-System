@@ -7,12 +7,13 @@ import {
   updateTicketStatus,
   deleteTicket
 } from '../controllers/supportController.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, optionalAuth, requireRole } from '../middleware/auth.js';
+import { supportLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
 // Public/Customer routes
-router.post('/', createTicket); // Allow both authenticated and guest submissions
+router.post('/', supportLimiter, optionalAuth, createTicket); // Allow both authenticated and guest submissions
 
 // Customer routes (authenticated)
 router.get('/my-tickets', authenticateToken, getUserTickets);
