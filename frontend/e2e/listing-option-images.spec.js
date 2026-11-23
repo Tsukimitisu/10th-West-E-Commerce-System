@@ -74,10 +74,16 @@ test('variant selection switches main image and sends the exact variant; missing
 });
 
 test('simple listing keeps its cover without option controls',async({page})=>{
+  await page.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.copiedProductLink=text;}}}));
   await fixture(page);await page.route('**/api/products/21',route=>route.fulfill({json:{...product,variants:[],variant_options:[]}}));
   await page.route('**/api/variants/product/21',route=>route.fulfill({json:{variants:[],options:[]}}));
   await page.goto('/#/products/21');await expect(page.locator('.zoom-container img')).toHaveAttribute('src',cover);
   await expect(page.getByRole('button',{name:/^Red/})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Add to wishlist',exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Chat seller',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Share product',exact:true}).click();
+  await page.getByRole('button',{name:'Copy product link',exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>window.copiedProductLink)).toContain('/products/21');
 });
 
 test('mobile variant selector keeps image, quantity and exact cart identity together',async({page})=>{

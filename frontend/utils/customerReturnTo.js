@@ -1,5 +1,5 @@
 const CUSTOMER_PATH =
-  /^\/(?:$|shop(?:[/?#]|$)|products\/[^/]+(?:[/?#]|$)|cart(?:[/?#]|$)|checkout(?:[/?#]|$)|profile(?:[/?#]|$)|orders(?:[/?#]|$)|order-confirmation\/|my-returns(?:[/?#]|$)|addresses(?:[/?#]|$)|wishlist(?:[/?#]|$)|messages(?:[/?#]|$)|payment(?:[/?#-]|$)|payment-result(?:[/?#]|$)|contact(?:[/?#]|$)|faq(?:[/?#]|$)|privacy(?:[/?#]|$)|terms(?:[/?#]|$)|return-policy(?:[/?#]|$))/;
+  /^\/(?:$|shop(?:[/?#]|$)|sets\/[1-9]\d*\/?(?:[?#]|$)|products\/[^/]+(?:[/?#]|$)|cart(?:[/?#]|$)|checkout(?:[/?#]|$)|profile(?:[/?#]|$)|orders(?:[/?#]|$)|order-confirmation\/|my-returns(?:[/?#]|$)|addresses(?:[/?#]|$)|wishlist(?:[/?#]|$)|messages(?:[/?#]|$)|payment(?:[/?#-]|$)|payment-result(?:[/?#]|$)|contact(?:[/?#]|$)|faq(?:[/?#]|$)|privacy(?:[/?#]|$)|terms(?:[/?#]|$)|return-policy(?:[/?#]|$))/;
 export function safeCustomerReturnTo(value) {
   const path = String(value || "");
   if (!path.startsWith("/") || path.startsWith("//") || /[\\\r\n]/.test(path))

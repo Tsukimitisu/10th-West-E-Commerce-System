@@ -4,6 +4,9 @@ import App from './App';
 import { registerPosPwa } from './services/posPwa.js';
 import { CartProvider } from './context/CartContext';
 import AppErrorBoundary from './components/AppErrorBoundary';
+import { bridgePublicSetRoute } from './utils/publicSetRoute.js';
+
+bridgePublicSetRoute(window.location, window.history);
 
 // Render immediately.
 const rootElement = document.getElementById('root');

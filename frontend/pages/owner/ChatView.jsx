@@ -143,6 +143,8 @@ const ProductPanel = ({ conversation }) => {
           </div>
           <div className="space-y-2 p-3">
             <p className="line-clamp-2 text-sm font-semibold text-slate-950">{product.name || conversation.subject || 'Product'}</p>
+            {product.reference_type === 'storefront_set' && <a href={product.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-sm font-semibold text-orange-700">View set #{product.listing_id}</a>}
+            {product.selected_product_item_name && <p className="text-xs text-slate-600">{[product.selected_product_item_name, product.selected_product_item_part_number, product.selected_product_item_color].filter(Boolean).join(' · ')}</p>}
             <p className="text-sm font-bold text-orange-700">{formatCurrency(variant?.price ?? product.price)}</p>
             {variant?.label && (
               <p className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">{variant.label}</p>
@@ -538,6 +540,10 @@ const ChatView = () => {
 
                 {error && <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>}
 
+                {selectedConversation.product_snapshot?.reference_type === 'storefront_set' && <div className="border-b border-slate-200 bg-white px-4 py-2 text-sm 2xl:hidden">
+                  <a href={selectedConversation.product_snapshot.url} target="_blank" rel="noreferrer" className="font-semibold text-orange-700">{selectedConversation.product_snapshot.name}</a>
+                  {selectedConversation.product_snapshot.selected_product_item_name && <p className="text-xs text-slate-600">{[selectedConversation.product_snapshot.selected_product_item_name, selectedConversation.product_snapshot.selected_product_item_part_number, selectedConversation.product_snapshot.selected_product_item_color].filter(Boolean).join(' · ')}</p>}
+                </div>}
                 <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-5 sm:py-5">
                   {loadingMessages ? (
                     <div className="grid h-48 place-items-center text-sm text-slate-500">Loading messages...</div>

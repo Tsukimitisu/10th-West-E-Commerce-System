@@ -5,6 +5,7 @@ import { getStorefrontSet } from '../services/api';
 import { cartPendingKey, useCart } from '../context/CartContext';
 import { getCurrentAuthUser } from '../services/authSession.js';
 import SetOptionCards from '../components/customer/SetOptionCards.jsx';
+import SetCustomerActions from '../components/customer/SetCustomerActions.jsx';
 import OptionImage from '../components/ui/OptionImage.jsx';
 import RichText from '../components/ui/RichText';
 import EmptyState from '../components/ui/EmptyState';
@@ -115,6 +116,7 @@ const SetProductDetail = () => {
             <BrandButton size="lg" variant="secondary" className="flex-1" disabled={!anyAvailable} onClick={() => setIntent('buy')}>Buy Now</BrandButton>
           </div>
           {cartError && <p role="alert" className="mt-3 text-sm text-red-700">{cartError}</p>}
+          <SetCustomerActions set={set} selected={selected} />
           <section className="mt-8 border-t border-slate-200 pt-6" aria-labelledby="set-description-heading">
             <h2 id="set-description-heading" className="text-lg font-bold text-slate-950">Description</h2>
             <RichText value={set.description} fallback={<p className="text-sm text-slate-600">Choose the exact part you need from this set.</p>} className="mt-3 text-sm leading-6 text-slate-700" />

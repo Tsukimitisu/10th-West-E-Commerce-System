@@ -363,7 +363,7 @@ export const toPublicSet = (row) => {
   };
 };
 
-const publicSetSql = (where) => `
+export const publicSetSql = (where) => `
   SELECT l.id, l.title, l.ecommerce_description, l.is_featured, l.is_best_seller, l.is_new_arrival, l.created_at,
          set_model.model_name AS set_motorcycle_model, set_items.items, listing_media.media
     FROM ecommerce_listings l

@@ -61,7 +61,9 @@ const getFixturePassword = async () => {
 };
 
 const writeLocalCredentialMapping = async (password) => {
-  const localFile = path.resolve(__dirname, '..', '.test-credentials.local');
+  const localFile = process.env.TEST_CREDENTIAL_FILE
+    ? path.resolve(process.env.TEST_CREDENTIAL_FILE)
+    : path.resolve(__dirname, '..', '.test-credentials.local');
   const content = [
     '# Generated local-only test fixture credentials. Do not commit this file.',
     `TEST_FIXTURE_PASSWORD=${JSON.stringify(password)}`,

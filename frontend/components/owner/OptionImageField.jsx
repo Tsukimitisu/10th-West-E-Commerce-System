@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { uploadProductImage } from '../../services/api.js';
 import OptionImage from '../ui/OptionImage.jsx';
 import { PRODUCT_IMAGE_ACCEPT } from '../../utils/imageUpload.js';
@@ -6,6 +6,9 @@ import { PRODUCT_IMAGE_ACCEPT } from '../../utils/imageUpload.js';
 export default function OptionImageField({ uploadKey, label, value, fallback, images = [], disabled, onChange, onError, onBusy, showPreview = true }) {
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState('');
+  const [uploadState,setUploadState] = useState({id:'',status:'idle'});
+  const fieldId = useId();
+  const sequence = useRef(0);
   const active = useRef(true);
   const pending = useRef(null);
   useEffect(() => { active.current = true;return () => {
@@ -21,28 +24,33 @@ export default function OptionImageField({ uploadKey, label, value, fallback, im
     const file = input.files?.[0];input.value = '';
     if (!file || disabled || pending.current) return;
     let finished = false;
-    const token = Symbol(uploadKey);
+    // A serializable, per-mount operation identity makes failures inspectable
+    // without exposing file data, provider responses or authentication details.
+    const token = `${uploadKey}:${fieldId}:${++sequence.current}`;
     const operation = { controller:new AbortController(),finish:()=>{if (!finished) {finished=true;onBusy?.(uploadKey,token,false);}} };
     pending.current = operation;
-    setBusy(true);setError('');onBusy?.(uploadKey,token,true);
+    setBusy(true);setError('');setUploadState({id:token,status:'uploading'});onBusy?.(uploadKey,token,true);
     try {
       const url = await uploadProductImage(file,{signal:operation.controller.signal});
-      if (active.current && pending.current===operation) { onChange(url);onError?.(''); }
+      if (active.current && pending.current===operation) { onChange(url);onError?.('');setUploadState({id:token,status:'completed'}); }
     } catch (failure) {
       if (active.current && pending.current===operation) {
         const message=typeof failure?.message === 'string' && failure.message.trim()
           ? failure.message : 'Option image could not be uploaded. Please try again.';
         setError(message);onError?.(message);
+        setUploadState({id:token,status:'failed'});
       }
     } finally {
       if (pending.current===operation) { pending.current=null;if (active.current) setBusy(false); }
       operation.finish();
     }
   };
-  return <div className="flex min-w-0 flex-wrap items-center gap-2">
+  return <div data-upload-key={uploadKey} data-upload-operation={uploadState.id || undefined} data-upload-state={uploadState.status} className="flex min-w-0 flex-wrap items-center gap-2">
     {showPreview && <OptionImage src={value} fallback={fallback} width="48" height="48" className="h-12 w-12 shrink-0 rounded-lg border border-slate-200 object-contain" />}
     <div className="min-w-0 flex-1 space-y-1">
-      <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800">
+      {/* Anchor the focusable hidden input inside the row, so browser focus
+          scrolls the editor body rather than its clipped modal panel. */}
+      <label className="relative inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-800">
         {busy ? 'Uploading…' : value ? 'Replace image' : 'Upload image'}
         <input aria-label={`Upload image for ${label}`} className="sr-only" type="file" accept={PRODUCT_IMAGE_ACCEPT} disabled={disabled || busy} onChange={upload} />
       </label>

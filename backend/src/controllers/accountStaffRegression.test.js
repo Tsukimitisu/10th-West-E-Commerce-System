@@ -127,7 +127,9 @@ test('barcode behavior is lookup/search only and backend POS search includes bar
     read('../../migrations/202608290001_stock_adjustment_reason_rules.cjs'),
   ]);
   assert.match(products, /cleanBarcode = sanitizePlainText\(barcode/);
-  assert.match(pos, /p\.barcode ILIKE \$1/);
+  const { posProductSearch } = await import('../services/posProductSearch.js');
+  assert.match(pos, /posProductSearch\(req\.query\)/);
+  assert.match(posProductSearch({ search: 'SCAN' }).from, /p\.barcode ILIKE \$\d+/);
   assert.match(migration, /correction_add/);
   assert.match(migration, /correction_remove/);
 });

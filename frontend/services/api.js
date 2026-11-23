@@ -2790,12 +2790,13 @@ export const createOrder = async (order) => {
 
 // ==================== POINT OF SALE ====================
 
-export const getPosProducts = async ({ search = '', categoryId = '', limit = 60 } = {}) => {
-  const params = new URLSearchParams({ limit: String(limit) });
+export const getPosProducts = async ({ search = '', categoryId = '', modelId = '', stockStatus = 'all', sortBy = 'name', sortDir = 'asc', page = 1, limit = 30, paged = false, signal } = {}) => {
+  const params = new URLSearchParams({ limit: String(limit), page: String(page), stockStatus, sortBy, sortDir });
   if (search.trim()) params.set('search', search.trim());
   if (categoryId) params.set('category_id', String(categoryId));
-  const data = await authenticatedFetch(`${API_URL}/pos/products?${params}`);
-  return data.products || [];
+  if (modelId) params.set('model_id', String(modelId));
+  const data = await authenticatedFetch(`${API_URL}/pos/products?${params}`, { signal });
+  return paged ? data : data.products || [];
 };
 
 export const getPosCapabilities = async () => {
@@ -3654,6 +3655,17 @@ export const updatePolicy = async (type, title, content) => {
 
 export const getWishlist = async (userId) => {
   const normalizeWishlistItem = (item) => {
+    if (item.reference_type === 'storefront_set') {
+      const listingId = Number(item.listing_id ?? item.id);
+      const stock = Number(item.available_stock ?? item.stock_quantity ?? 0);
+      return {
+        ...item, id: listingId, listing_id: listingId, product_id: null,
+        name: item.name || item.product_name || 'Set listing',
+        product_name: item.product_name || item.name || 'Set listing',
+        price: Number(item.price ?? 0), sale_price: null,
+        image_url: item.image_url || item.image || '', stock_quantity: stock, available_stock: stock, in_stock: stock > 0,
+      };
+    }
     const product = item.product || item.products || {};
     const productId = item.product_id ?? product.id ?? item.id;
     const price = Number(item.price ?? product.price ?? 0);
@@ -3691,18 +3703,19 @@ export const getWishlist = async (userId) => {
 
 export const WISHLIST_SYNC_EVENT = 'shopcore:wishlist-changed';
 
-const emitWishlistChange = ({ userId, productId, isWishlisted }) => {
+const emitWishlistChange = ({ userId, productId, listingId, referenceType, isWishlisted }) => {
+  const detail = referenceType === 'storefront_set'
+    ? { userId, listingId, referenceType, isWishlisted }
+    : { userId, productId, isWishlisted };
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(WISHLIST_SYNC_EVENT, {
-      detail: { userId, productId, isWishlisted }
+      detail
     }));
   }
 
   try {
     localStorage.setItem('shopCoreWishlistSync', JSON.stringify({
-      userId,
-      productId,
-      isWishlisted,
+      ...detail,
       timestamp: new Date().toISOString(),
     }));
   } catch {}
@@ -3739,6 +3752,20 @@ export const removeFromWishlist = async (userId, productId) => {
   }
   const result = await authenticatedFetch(`${API_URL}/wishlist/${productId}`, { method: 'DELETE' });
   emitWishlistChange({ userId, productId, isWishlisted: false });
+  return result;
+};
+
+export const addSetToWishlist = async (userId, listingId) => {
+  const result = await authenticatedFetch(`${API_URL}/wishlist`, {
+    method: 'POST', body: JSON.stringify({ reference_type: 'storefront_set', listing_id: Number(listingId) }),
+  });
+  emitWishlistChange({ userId, listingId: Number(listingId), referenceType: 'storefront_set', isWishlisted: true });
+  return result;
+};
+
+export const removeSetFromWishlist = async (userId, listingId) => {
+  const result = await authenticatedFetch(`${API_URL}/wishlist/sets/${encodeURIComponent(listingId)}`, { method: 'DELETE' });
+  emitWishlistChange({ userId, listingId: Number(listingId), referenceType: 'storefront_set', isWishlisted: false });
   return result;
 };
 

@@ -1,3 +1,4 @@
+import { getWishlistProductIds } from '../utils/wishlistIdentity.js';
 import { availableStock } from '../utils/cartProduct.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -32,7 +33,7 @@ const ProductCard = ({ product, wishlistedIds, onWishlistToggle, view = 'grid' }
       if (!userId) return;
       try {
         const items = await getWishlist(userId);
-        setWishlisted(items.some((item) => Number(item.product_id ?? item.product?.id ?? item.id) === productId));
+        setWishlisted(getWishlistProductIds(items).includes(productId));
       } catch {
         setWishlisted(false);
       }

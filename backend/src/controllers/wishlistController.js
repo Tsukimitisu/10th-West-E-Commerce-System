@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { readPublicSet, readSetWishlist, setListingId, setSnapshot } from '../services/setCustomerActions.js';
 import { availableStock, variantAvailabilitySql } from '../services/inventory.js';
 import { calculateEcommercePrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
 import { hasSetListingSchema, storefrontVisibilitySql } from '../services/setListings.js';
@@ -14,7 +15,7 @@ export const getWishlist = async (req, res) => {
       });
 
       const rows = Array.isArray(wishlistRows) ? wishlistRows : [];
-      if (rows.length === 0) return res.json([]);
+      if (rows.length === 0) return res.json(await readSetWishlist(pool, req.user.id));
 
       const productIds = rows
         .map((row) => Number(row.product_id))
@@ -28,7 +29,8 @@ export const getWishlist = async (req, res) => {
         : [];
       const productById = new Map((Array.isArray(products) ? products : []).map((product) => [Number(product.id), product]));
 
-      return res.json(rows.map((row) => {
+      const setRows = await readSetWishlist(pool, req.user.id);
+      return res.json([...rows.map((row) => {
         const product = productById.get(Number(row.product_id)) || {};
         const listings = Array.isArray(product.ecommerce_listings) ? product.ecommerce_listings : [product.ecommerce_listings];
         const visible = listings.some(listing => listing?.visibility_status === 'active') && product.inventory_status === 'active' && !product.is_deleted;
@@ -45,7 +47,7 @@ export const getWishlist = async (req, res) => {
           ...publicProduct,
           category_name: product.categories?.name || product.category_name || null,
         };
-      }));
+      }), ...setRows]);
     }
 
     const withSets = await hasSetListingSchema(pool);
@@ -59,13 +61,14 @@ export const getWishlist = async (req, res) => {
       ORDER BY w.created_at DESC
     `, [req.user.id]);
     
-    res.json(result.rows.map(product => {
+    const setRows = await readSetWishlist(pool, req.user.id);
+    res.json([...result.rows.map(product => {
       const visible = product.visibility_status === 'active' && product.inventory_status === 'active' && !product.is_deleted;
       const stock = visible ? (product.has_variants ? Number(product.variant_available_stock) : availableStock(product)) : 0;
       const publicProduct = { ...product, price: calculateEcommercePrice(resolveStoreSellingPrice(product) ?? 0), sale_price: null, stock_quantity: stock, available_stock: stock };
       delete publicProduct.buying_price; delete publicProduct.cost_price; delete publicProduct.store_selling_price;
       return publicProduct;
-    }));
+    }), ...setRows]);
   } catch (error) {
     console.error('Get wishlist error:', error);
     if (isDatabaseConnectivityError(error)) {
@@ -76,6 +79,21 @@ export const getWishlist = async (req, res) => {
 };
 
 export const addToWishlist = async (req, res) => {
+  if (req.body?.reference_type === 'storefront_set') {
+    const listingId = setListingId(req.body.listing_id);
+    if (!listingId || req.body.product_id != null) return res.status(400).json({ message: 'A valid set listing_id is required.' });
+    try {
+      const set = await readPublicSet(pool, listingId);
+      if (!set) return res.status(404).json({ message: 'This set is not available.' });
+      const result = await pool.query(`INSERT INTO storefront_set_wishlists(user_id,listing_id,snapshot)
+        VALUES($1,$2,$3::jsonb) ON CONFLICT(user_id,listing_id) DO NOTHING RETURNING *`,
+      [req.user.id, listingId, JSON.stringify(setSnapshot(set))]);
+      return res.status(result.rows.length ? 201 : 200).json(result.rows[0] || { message: 'Already in wishlist' });
+    } catch (error) {
+      console.error('Add set to wishlist error:', error);
+      return res.status(503).json({ message: 'Set favorites are temporarily unavailable.' });
+    }
+  }
   const { product_id } = req.body;
   
   if (!product_id) return res.status(400).json({ message: 'Product ID is required' });
@@ -97,6 +115,17 @@ export const addToWishlist = async (req, res) => {
   } catch (error) {
     console.error('Add to wishlist error:', error);
     res.status(500).json({ message: 'Failed to add to wishlist' });
+  }
+};
+
+export const removeSetFromWishlist = async (req, res) => {
+  const listingId = setListingId(req.params.listingId);
+  if (!listingId) return res.status(400).json({ message: 'A valid set listing_id is required.' });
+  try {
+    await pool.query('DELETE FROM storefront_set_wishlists WHERE user_id=$1 AND listing_id=$2', [req.user.id, listingId]);
+    return res.json({ message: 'Removed from wishlist' });
+  } catch {
+    return res.status(503).json({ message: 'Set favorites are temporarily unavailable.' });
   }
 };
 

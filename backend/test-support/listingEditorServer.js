@@ -52,10 +52,11 @@ const { getInventory }=await import('../src/controllers/inventoryController.js')
 const { getMotorcycleModels }=await import('../src/controllers/motorcycleModelController.js');
 const { authenticateToken,requirePermission }=await import('../src/middleware/auth.js');
 const { validateCsrf,generateCsrfToken }=await import('../src/middleware/csrf.js');
-const app=express();const files=new Map();let port;const uploads=[];let storageFailure=null,storageDelay=0,storageUrl;
+const app=express();const files=new Map();let port;const uploads=[];let storageFailure=null,storageDelay=0,storageUrl,storageHeld=false;const storageWaiters=[];
 cloudinary.uploader.upload_stream=(_options,callback)=>{const chunks=[];return new Writable({write(chunk,_enc,done){chunks.push(chunk);done();},async final(done){
   const buffer=Buffer.concat(chunks),id=randomUUID();uploads.push({id,bytes:buffer.length});
   if(storageDelay)await new Promise(resolve=>setTimeout(resolve,storageDelay));
+  if(storageHeld)await new Promise(resolve=>storageWaiters.push(resolve));
   if(storageFailure){callback(storageFailure);done();return;}
   files.set(id,buffer);
   callback(null,{secure_url:storageUrl ?? `http://localhost:${port}/fixture-media/${id}`,bytes:buffer.length});done();
@@ -63,12 +64,24 @@ cloudinary.uploader.upload_stream=(_options,callback)=>{const chunks=[];return n
 app.use(session({secret:process.env.SESSION_SECRET,resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:'lax'}}));
 app.use(express.json());
 app.post('/fixture/login',(req,res)=>{const id=Number(req.body.id);if(![1,2,3,4].includes(id))return res.sendStatus(400);req.session.auth={userId:id,tokenHash:`fixture-${id}`,authenticatedAt:Date.now()};res.json({ok:true});});
-app.post('/fixture/storage',(req,res)=>{storageFailure=req.body.failure || null;storageDelay=req.body.delay || 0;storageUrl=req.body.url;res.json({ok:true});});
+app.post('/fixture/storage',(req,res)=>{storageFailure=req.body.failure || null;storageDelay=req.body.delay || 0;storageUrl=req.body.url;storageHeld=req.body.hold===true;if(!storageHeld)storageWaiters.splice(0).forEach(release=>release());res.json({ok:true});});
 app.post('/fixture/reset',async(_req,res)=>{
-  storageFailure=null;storageDelay=0;storageUrl=undefined;uploads.length=0;
+  storageFailure=null;storageDelay=0;storageUrl=undefined;storageHeld=false;storageWaiters.splice(0).forEach(release=>release());uploads.length=0;
   await db.exec(`UPDATE ecommerce_listing_items SET image_url=NULL;UPDATE product_variants SET image_url=NULL;
     UPDATE ecommerce_listings SET visual_options=false,title=CASE WHEN id=90 THEN 'Fixture panel set' ELSE NULL END,ecommerce_description='Keep this description',visibility_status=CASE WHEN id=90 THEN 'active' ELSE 'draft' END;
     DELETE FROM ecommerce_listing_items;INSERT INTO ecommerce_listing_items VALUES(90,11,0,NULL),(90,12,1,NULL),(90,13,2,NULL);`);
+  res.json({ok:true});
+});
+app.post('/fixture/many-items',async(req,res)=>{
+  const count=Number(req.body.count);
+  if(!Number.isInteger(count) || count<12 || count>15)return res.sendStatus(400);
+  await query('DELETE FROM ecommerce_listing_items WHERE listing_id=90');
+  for(let index=0;index<count;index++){
+    const id=101+index;
+    await query(`INSERT INTO products(id,name,part_number,motorcycle_model_id,store_selling_price,price,stock_quantity,inventory_status)
+      VALUES($1,$2,$3,1,$4,$4,5,'active') ON CONFLICT(id) DO NOTHING`,[id,`Panel ${index+1}`,`P-${id}`,150+index]);
+    await query('INSERT INTO ecommerce_listing_items VALUES(90,$1,$2,NULL)',[id,index]);
+  }
   res.json({ok:true});
 });
 app.get('/api/csrf-token',generateCsrfToken,(req,res)=>res.json({csrfToken:req.csrfToken}));

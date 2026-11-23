@@ -23,7 +23,6 @@ import {
 } from 'lucide-react';
 import {
   createPosOrder,
-  getCategories,
   getPosCapabilities,
   getPosDailySummary,
   getPosOrders,
@@ -45,6 +44,7 @@ import ReceiptModal from './ReceiptModal';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import CameraScannerModal from '../../components/staff/CameraScannerModal.jsx';
 import { roleLandingPath } from '../../utils/roleLanding.js';
+import { createLatestRequest } from '../../utils/latestRequest.js';
 
 const DESKTOP_QUERY = '(min-width: 1024px)';
 
@@ -66,14 +66,24 @@ const PosTerminal = ({ userOverride, connection }) => {
   const uncertainOnlineSale=useRef(false);
   const searchRef = useRef(null);
   const idempotencyKeyRef = useRef(null);
+  const catalogRequests = useRef(createLatestRequest());
+  const pendingScan = useRef(null);
+  const resolveScan = useRef(null);
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [capabilities, setCapabilities] = useState(null);
   const [dailySummary, setDailySummary] = useState(null);
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState({ term:'' });
   const [categoryId, setCategoryId] = useState('');
+  const [models, setModels] = useState([]);
+  const [modelId, setModelId] = useState('');
+  const [stockStatus, setStockStatus] = useState('all');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total:0, page:1, pageSize:30, totalPages:1 });
   const [loading, setLoading] = useState(true);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
@@ -118,19 +128,48 @@ const PosTerminal = ({ userOverride, connection }) => {
     window.setTimeout(() => setToast(null), 3200);
   };
 
-  const loadCatalog = useCallback(async (term = debouncedSearch, selectedCategory = categoryId) => {
-    try {
-      setCatalogLoading(true);
-      setPageError('');
-      const rows = await (online ? getPosProducts({ search: term, categoryId: selectedCategory }) : searchOfflineProducts({ search:term,categoryId:selectedCategory }));
-      setProducts(rows);
-    } catch (error) {
-      if (error.status === 403) setAccessDenied(true);
-      else setPageError(error.message || 'Products could not be loaded.');
-    } finally {
-      setCatalogLoading(false);
-    }
-  }, [categoryId, debouncedSearch,online]);
+  const loadCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    setPageError('');
+    await catalogRequests.current.run(
+      signal => online
+        ? getPosProducts({ search:debouncedSearch.term, categoryId, modelId, stockStatus, sortBy, sortDir, page, limit:30, paged:true, signal })
+        : searchOfflineProducts({ search:debouncedSearch.term, categoryId }),
+      {
+        onSuccess: result => {
+          const rows = online ? result.products : result;
+          setProducts(rows || []);
+          if (online) {
+            setPagination({ total:Number(result.total ?? rows?.length ?? 0), page:result.page || 1, pageSize:result.pageSize || 30, totalPages:result.totalPages || 1 });
+            setPage(result.page || 1);
+            setCategories(result.filters?.categories || []);
+            setModels(result.filters?.models || []);
+          }
+          if (pendingScan.current === debouncedSearch.term) {
+            pendingScan.current = null;
+            resolveScan.current?.(rows || [], debouncedSearch.term);
+          }
+        },
+        onError: error => {
+          if (error.status === 403) setAccessDenied(true);
+          else setPageError(error.message || 'Products could not be loaded.');
+        },
+        onSettled: () => setCatalogLoading(false),
+      },
+    );
+  }, [categoryId, debouncedSearch, modelId, online, page, sortBy, sortDir, stockStatus]);
+
+  useEffect(() => {
+    const requests = catalogRequests.current;
+    return () => requests.cancel();
+  }, []);
+
+  const changeCatalogFilter = (setter, value) => {
+    catalogRequests.current.cancel();
+    setCatalogLoading(false);
+    setPage(1);
+    setter(value);
+  };
 
   const loadSummary = useCallback(async () => {
     if (!online) return;
@@ -143,16 +182,11 @@ const PosTerminal = ({ userOverride, connection }) => {
 
   useEffect(() => {
     let active = true;
-    (online ? Promise.all([getCategories(), getPosCapabilities(), getPosDailySummary()]) : Promise.resolve([[],{can_access:true,can_discount:false,can_void:false},null]))
-      .then(([categoryRows, access, summary]) => {
+    (online ? Promise.all([getPosCapabilities(), getPosDailySummary()]) : Promise.resolve([{can_access:true,can_discount:false,can_void:false},null]))
+      .then(([access, summary]) => {
         if (!active) return;
-        setCategories(categoryRows || []);
         setCapabilities(access);
         setDailySummary(summary);
-        return online ? getPosProducts() : searchOfflineProducts();
-      })
-      .then((rows) => {
-        if (active && rows) setProducts(rows);
       })
       .catch((error) => {
         if (!active) return;
@@ -166,7 +200,12 @@ const PosTerminal = ({ userOverride, connection }) => {
   }, [online]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 220);
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      // A new query identity also replaces cancelled requests when trimming
+      // produces the same term, such as adding spaces during a pending lookup.
+      setDebouncedSearch({ term:search.trim() });
+    }, 220);
     return () => window.clearTimeout(timer);
   }, [search]);
 
@@ -179,20 +218,23 @@ const PosTerminal = ({ userOverride, connection }) => {
 
   useEffect(() => {
     if (loading || accessDenied) return;
-    void loadCatalog(debouncedSearch, categoryId);
-  }, [accessDenied, categoryId, debouncedSearch, loadCatalog, loading]);
+    void loadCatalog();
+    return () => catalogRequests.current.cancel();
+  }, [accessDenied, loadCatalog, loading]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30000);
     return () => window.clearInterval(timer);
   }, []);
 
-  useSocketEvent('inventory:updated', () => {
-    void loadCatalog();
-  });
-  useSocketEvent('product:updated', () => {
-    void loadCatalog();
-  });
+  const refreshCatalog = useCallback(() => {
+    if (!loading && !accessDenied && online) void loadCatalog();
+  }, [accessDenied, loadCatalog, loading, online]);
+  useSocketEvent('inventory:updated', refreshCatalog);
+  useSocketEvent('product:created', refreshCatalog);
+  useSocketEvent('product:updated', refreshCatalog);
+  useSocketEvent('product:deleted', refreshCatalog);
+  useSocketEvent('catalog:updated', refreshCatalog);
 
   const addLine = (product, variant = null) => {
     const available = Number(variant?.available_stock ?? product.available_stock ?? 0);
@@ -233,44 +275,37 @@ const PosTerminal = ({ userOverride, connection }) => {
     else addLine(product);
   };
 
-  const handleCameraScan = async (rawValue) => {
+  resolveScan.current = (rows, value) => {
+    const normalized = value.toLowerCase();
+    let exactProduct = null;
+    let exactVariant = null;
+    for (const product of rows) {
+      const productMatch = [product.barcode, product.sku, product.part_number]
+        .some(candidate => String(candidate || '').trim().toLowerCase() === normalized);
+      const variant = product.variants?.find(candidate => [candidate.barcode, candidate.sku, candidate.part_number]
+        .some(field => String(field || '').trim().toLowerCase() === normalized));
+      if (variant) { exactProduct = product; exactVariant = variant; break; }
+      if (productMatch) exactProduct = product;
+    }
+    if (exactProduct) {
+      if (exactVariant) addLine(exactProduct, exactVariant);
+      else chooseProduct(exactProduct);
+      showToast('success', `${exactProduct.name} scanned.`);
+    } else if (rows.length) showToast('success', 'Matching items found. Select the correct item.');
+    else showToast('error', 'Item not found in inventory.');
+  };
+
+  const handleCameraScan = (rawValue) => {
     const value = String(rawValue || '').trim();
     if (!value) return;
+    pendingScan.current = value;
+    catalogRequests.current.cancel();
     setSearch(value);
-    setCatalogLoading(true);
-    try {
-      const rows = await (online ? getPosProducts({ search: value }) : searchOfflineProducts({ search:value }));
-      const normalized = value.toLowerCase();
-      let exactProduct = null;
-      let exactVariant = null;
-
-      for (const product of rows) {
-        const productMatch = [product.barcode, product.sku, product.part_number]
-          .some((candidate) => String(candidate || '').trim().toLowerCase() === normalized);
-        const variant = product.variants?.find((candidate) => [candidate.barcode, candidate.sku, candidate.part_number]
-          .some((field) => String(field || '').trim().toLowerCase() === normalized));
-        if (variant) {
-          exactProduct = product;
-          exactVariant = variant;
-          break;
-        }
-        if (productMatch) exactProduct = product;
-      }
-
-      if (exactProduct) {
-        if (exactVariant) addLine(exactProduct, exactVariant);
-        else chooseProduct(exactProduct);
-        showToast('success', `${exactProduct.name} scanned.`);
-        return;
-      }
-      setProducts(rows || []);
-      if (rows?.length) showToast('success', 'Matching items found. Select the correct item.');
-      else showToast('error', 'Item not found in inventory.');
-    } catch (error) {
-      showToast('error', error.message || 'Scanned item lookup failed.');
-    } finally {
-      setCatalogLoading(false);
-    }
+    setDebouncedSearch({ term:value });
+    setCategoryId('');
+    setModelId('');
+    setStockStatus('all');
+    setPage(1);
   };
 
   const updateQuantity = (key, nextQuantity) => {
@@ -514,7 +549,12 @@ const PosTerminal = ({ userOverride, connection }) => {
                   type="search"
                   autoComplete="off"
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => {
+                    pendingScan.current = null;
+                    catalogRequests.current.cancel();
+                    setCatalogLoading(false);
+                    setSearch(event.target.value);
+                  }}
                   placeholder="Search name, SKU, barcode, part number…"
                   className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm focus:border-orange-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10"
                   autoFocus
@@ -524,11 +564,26 @@ const PosTerminal = ({ userOverride, connection }) => {
               <button type="button" onClick={() => setScannerOpen(true)} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-orange-400 bg-orange-50 px-3 text-sm font-bold text-orange-800 hover:bg-orange-100 sm:px-4">
                 <ScanLine size={18} aria-hidden="true" /> <span className="sm:hidden">Scan</span><span className="hidden sm:inline">Scan with Camera</span>
               </button>
-              <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} aria-label="Filter by category" className="h-12 min-w-0 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold focus:border-orange-500 focus:outline-none">
+              <select value={categoryId} onChange={(event) => changeCatalogFilter(setCategoryId, event.target.value)} aria-label="Filter by category" className="h-12 min-w-0 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold focus:border-orange-500 focus:outline-none">
                 <option value="">All categories</option>
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </select>
             </div>
+            {online && <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <select value={modelId} onChange={event => changeCatalogFilter(setModelId, event.target.value)} aria-label="Filter by motorcycle model" className="h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-sm">
+                <option value="">All motorcycle models</option>
+                {models.map(model => <option key={model.id} value={model.id}>{model.model_name}{model.brand ? ` · ${model.brand}` : ''}</option>)}
+              </select>
+              <select value={stockStatus} onChange={event => changeCatalogFilter(setStockStatus, event.target.value)} aria-label="Filter by stock availability" className="h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-sm">
+                <option value="all">All stock</option><option value="in_stock">In stock</option><option value="low_stock">Low stock</option><option value="out_of_stock">Out of stock</option>
+              </select>
+              <select value={sortBy} onChange={event => changeCatalogFilter(setSortBy, event.target.value)} aria-label="Sort products by" className="h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-sm">
+                <option value="name">Name</option><option value="part_number">Part number</option><option value="available_stock">Available quantity</option><option value="store_selling_price">Store price</option>
+              </select>
+              <select value={sortDir} onChange={event => changeCatalogFilter(setSortDir, event.target.value)} aria-label="Sort direction" className="h-11 min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-sm">
+                <option value="asc">Ascending</option><option value="desc">Descending</option>
+              </select>
+            </div>}
             <p className="mt-2 hidden text-xs text-slate-500 sm:block">Use the phone camera, type manually, or keep using a physical barcode scanner.</p>
             {dailySummary && (
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
@@ -549,6 +604,13 @@ const PosTerminal = ({ userOverride, connection }) => {
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{productGrid}</div>
             )}
           </div>
+          {online && <nav aria-label="Product catalogue pages" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 py-2 text-xs sm:px-5">
+            <p role="status" aria-live="polite">{pagination.total.toLocaleString()} {pagination.total === 1 ? 'product' : 'products'} · Page {pagination.page} of {pagination.totalPages}</p>
+            <div className="flex gap-2">
+              <button type="button" disabled={catalogLoading || pagination.page <= 1} onClick={() => setPage(pagination.page-1)} className="min-h-11 rounded-lg border border-slate-300 px-3 font-semibold disabled:opacity-40">Previous</button>
+              <button type="button" disabled={catalogLoading || pagination.page >= pagination.totalPages} onClick={() => setPage(pagination.page+1)} className="min-h-11 rounded-lg border border-slate-300 px-3 font-semibold disabled:opacity-40">Next</button>
+            </div>
+          </nav>}
         </section>
 
         <aside className={`flex min-h-0 flex-col border-t border-slate-200 bg-white lg:border-l lg:border-t-0 lg:shadow-none ${saleExpanded && !isDesktop ? 'max-h-[78dvh]' : ''}`} aria-label="Current sale">

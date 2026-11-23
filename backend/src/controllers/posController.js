@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import pool from '../config/database.js';
+import { posProductSearch } from '../services/posProductSearch.js';
 import { emitNewOrder, emitOrderStatusUpdate, emitStockUpdate } from '../socket.js';
 import { writeAuditLog } from '../utils/audit.js';
 import { normalizeProductImageUrl, PRODUCT_IMAGE_FALLBACK } from '../utils/productImages.js';
@@ -277,35 +278,32 @@ const logActivity = (client, req, action, entityId, details = {}) => client.quer
 
 export const getPosProducts = async (req, res) => {
   try {
-    const search = String(req.query.search || '').trim();
-    const categoryId = Number(req.query.category_id);
-    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 60));
-    const values = [`%${search}%`, Number.isInteger(categoryId) && categoryId > 0 ? categoryId : null, limit];
+    const search = posProductSearch(req.query);
+    const count = await pool.query(`SELECT COUNT(*)::int AS total ${search.from}`, search.values);
+    const total = Number(count.rows[0]?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / search.pageSize));
+    const page = Math.min(search.page, totalPages);
     const productsResult = await pool.query(
-      `SELECT DISTINCT p.id, p.name, p.sku, p.barcode, p.part_number,
+      `SELECT p.id, p.name, p.sku, p.barcode, p.part_number, p.brand,
               COALESCE(p.store_selling_price, p.price) AS store_selling_price,
               p.image, p.category_id, c.name AS category_name, COALESCE(model.model_name, p.motorcycle_model) AS motorcycle_model,
-              p.motorcycle_model_id, p.color, p.box_location,
-              p.stock_quantity, p.reserved_stock, p.inventory_status, p.low_stock_threshold
-       FROM products p
-       LEFT JOIN categories c ON c.id = p.category_id
-       LEFT JOIN motorcycle_models model ON model.id = p.motorcycle_model_id
-       LEFT JOIN product_variants pv ON pv.product_id = p.id
-       WHERE p.inventory_status = 'active'
-         AND COALESCE(p.is_deleted, false) = false
-         AND ($2::int IS NULL OR p.category_id = $2)
-         AND ($1 = '%%' OR p.name ILIKE $1 OR p.sku ILIKE $1 OR p.barcode ILIKE $1
-              OR p.part_number ILIKE $1 OR COALESCE(model.model_name, p.motorcycle_model) ILIKE $1
-              OR p.color ILIKE $1 OR p.box_location ILIKE $1 OR c.name ILIKE $1 OR pv.sku ILIKE $1)
-       ORDER BY p.name
-       LIMIT $3`,
-      values,
+              p.motorcycle_model_id, p.color, p.box_location, p.box_number,
+              p.stock_quantity, p.reserved_stock, p.inventory_status, p.low_stock_threshold,
+              ${search.available} AS available_stock
+       ${search.from} ORDER BY ${search.order}
+       LIMIT $${search.values.length+1} OFFSET $${search.values.length+2}`,
+      [...search.values, search.pageSize, (page-1)*search.pageSize],
     );
+    const [modelsResult, categoriesResult] = await Promise.all([
+      pool.query("SELECT id, model_name, brand FROM motorcycle_models WHERE status='active' ORDER BY model_name,id"),
+      pool.query('SELECT id, name FROM categories ORDER BY name,id'),
+    ]);
     const ids = productsResult.rows.map((product) => product.id);
     const variantsResult = ids.length
       ? await pool.query(
         `SELECT id, product_id, variant_type, variant_value, option_combination, price,
-                price_adjustment, sku, image_url, stock_quantity, reserved_stock
+                price_adjustment, sku, image_url, stock_quantity, reserved_stock,
+                to_jsonb(product_variants)->>'barcode' AS barcode, to_jsonb(product_variants)->>'part_number' AS part_number
          FROM product_variants WHERE product_id = ANY($1::int[]) ORDER BY product_id, id`,
         [ids],
       )
@@ -322,20 +320,22 @@ export const getPosProducts = async (req, res) => {
       });
     }
     return res.json({
+      total, page, pageSize:search.pageSize, totalPages,
+      filters:{ models:modelsResult.rows, categories:categoriesResult.rows },
       products: productsResult.rows.map((product) => ({
         ...product,
         price: money(product.store_selling_price),
         store_selling_price: money(product.store_selling_price),
         sale_price: null,
         stock_quantity: Number(product.stock_quantity || 0),
-        available_stock: Math.max(0, Number(product.stock_quantity || 0) - Number(product.reserved_stock || 0)),
+        available_stock: Number(product.available_stock || 0),
         image: normalizeProductImageUrl(product.image) || PRODUCT_IMAGE_FALLBACK,
         variants: variants.get(product.id) || [],
       })),
     });
   } catch (error) {
     console.error('POS product search failed:', error);
-    return res.status(500).json({ message: 'POS products could not be loaded.', code: 'POS_PRODUCTS_FAILED' });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : 'POS products could not be loaded.', code: 'POS_PRODUCTS_FAILED' });
   }
 };
 

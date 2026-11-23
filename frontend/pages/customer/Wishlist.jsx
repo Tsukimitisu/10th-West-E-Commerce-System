@@ -2,12 +2,28 @@ import { availableStock } from '../../utils/cartProduct.js';
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart, ShoppingCart, Trash2, Eye, Package, AlertTriangle } from 'lucide-react';
-import { getWishlist, removeFromWishlist, WISHLIST_SYNC_EVENT } from '../../services/api';
+import { getWishlist, removeFromWishlist, removeSetFromWishlist, WISHLIST_SYNC_EVENT } from '../../services/api';
+import { isSetWishlistItem, wishlistKey } from '../../utils/wishlistIdentity.js';
 import { useCart } from '../../context/CartContext';
 import AccountLayout from '../../components/customer/AccountLayout';
 import { getCurrentAuthUser, subscribeAuthChanges } from '../../services/authSession';
 import { handleProductImageError, resolveProductImageUrl } from '../../utils/productImages.js';
 import { MAX_ITEM_QUANTITY, MAX_ITEM_QUANTITY_MESSAGE } from '../../constants/commerce.js';
+
+const SetWishlistCard = ({ item, onRemove }) => <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+  <Link to={`/sets/${item.listing_id}`}><img src={resolveProductImageUrl(item.image_url || item.image)} onError={handleProductImageError} alt={item.name} width="480" height="480" className="aspect-square w-full object-contain" /></Link>
+  <div className="space-y-2 p-3">
+    <p className="text-xs font-semibold text-slate-500">Set</p>
+    <Link to={`/sets/${item.listing_id}`} className="block text-sm font-semibold text-slate-900">{item.name}</Link>
+    {item.motorcycle_model && <p className="text-sm text-slate-600">Fits {item.motorcycle_model}</p>}
+    <p className="font-semibold text-slate-900">From PHP {Number(item.price || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+    <p className="text-sm text-slate-600">{item.is_available === false ? 'Currently unavailable' : item.in_stock ? `${item.available_item_count} items available` : 'Currently out of stock'}</p>
+    <div className="flex gap-2">
+      <Link to={`/sets/${item.listing_id}`} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-slate-950">Choose an item</Link>
+      <button type="button" onClick={onRemove} aria-label={`Remove ${item.name} from wishlist`} className="grid min-h-11 min-w-11 place-items-center rounded-lg border border-slate-300 text-slate-600 hover:bg-red-50"><Trash2 size={18} aria-hidden="true" /></button>
+    </div>
+  </div>
+</article>;
 
 const Wishlist = () => {
   const navigate = useNavigate();
@@ -45,11 +61,14 @@ const Wishlist = () => {
     window.addEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
     const unsubscribeAuth = subscribeAuthChanges(syncWishlist);
     window.addEventListener('focus', syncWishlist);
+    const syncStorage = event => { if (event.key === 'shopCoreWishlistSync') syncWishlist(); };
+    window.addEventListener('storage', syncStorage);
 
     return () => {
       window.removeEventListener(WISHLIST_SYNC_EVENT, syncWishlist);
       unsubscribeAuth();
       window.removeEventListener('focus', syncWishlist);
+      window.removeEventListener('storage', syncStorage);
     };
   }, []);
 
@@ -58,7 +77,7 @@ const Wishlist = () => {
       const user = getCurrentAuthUser();
       if (!user) return;
       await removeFromWishlist(user.id, productId);
-      setItems((prev) => prev.filter((item) => Number(item.product_id ?? item.product?.id ?? item.id) !== Number(productId)));
+      setItems((prev) => prev.filter((item) => isSetWishlistItem(item) || Number(item.product_id ?? item.product?.id ?? item.id) !== Number(productId)));
       setQuantities((prev) => {
         const next = { ...prev };
         delete next[productId];
@@ -70,6 +89,15 @@ const Wishlist = () => {
         return next;
       });
     } catch {}
+  };
+
+  const handleRemoveSet = async item => {
+    const user = getCurrentAuthUser();
+    if (!user) return;
+    try {
+      await removeSetFromWishlist(user.id, item.listing_id);
+      setItems(current => current.filter(row => wishlistKey(row) !== wishlistKey(item)));
+    } catch { /* Preserve the saved row when the server rejects removal. */ }
   };
 
   const handleAddToCart = async (item, quantity) => {
@@ -152,6 +180,7 @@ const Wishlist = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {items.map((item) => {
+              if (isSetWishlistItem(item)) return <SetWishlistCard key={wishlistKey(item)} item={item} onRemove={() => handleRemoveSet(item)} />;
               const productId = item.product_id ?? item.product?.id ?? item.id;
               const name = item.name || item.product_name || item.product?.name || 'Unknown Product';
               const price = Number(item.price ?? item.product?.price ?? 0);
@@ -171,7 +200,7 @@ const Wishlist = () => {
               const canAdd = inStock && !hasQtyError && selectedQty <= availableQty && !isAdding;
 
               return (
-                <div key={productId} className="bg-white rounded-xl border border-slate-200 overflow-hidden group hover:shadow-md transition-colors">
+                <div key={wishlistKey(item)} className="bg-white rounded-xl border border-slate-200 overflow-hidden group hover:shadow-md transition-colors">
                   <div className="relative aspect-square bg-gray-100 overflow-hidden">
                     {imageUrl ? (
                       <img src={resolveProductImageUrl(imageUrl)} alt={name} onError={handleProductImageError} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />

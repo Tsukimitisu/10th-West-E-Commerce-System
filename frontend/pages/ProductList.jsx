@@ -1,3 +1,4 @@
+import { getWishlistProductIds } from '../utils/wishlistIdentity.js';
 import useCatalogRevision from '../hooks/useCatalogRevision.js';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -167,7 +168,7 @@ const ProductList = () => {
           return;
         }
         const wishlist = await getWishlist(user.id);
-        setWishlistedIds(wishlist.map(item => Number(item.product_id ?? item.product?.id ?? item.id)).filter(Boolean));
+        setWishlistedIds(getWishlistProductIds(wishlist));
       } catch {
         setWishlistedIds([]);
       }

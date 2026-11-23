@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { readPublicSet, setListingId, setSnapshot } from '../services/setCustomerActions.js';
 import { STAFF_ROLE_SET } from '../constants/schemaEnums.js';
 import {
   emitChatMessage,
@@ -232,7 +233,7 @@ const mapConversation = (row, user) => {
   const viewerIsStaff = isStaffUser(user);
   const snapshot = parseJsonValue(row.product_snapshot, {});
   const productImage = row.product_image || firstImageFromJson(row.product_image_urls);
-  const product = snapshot?.id
+  const product = snapshot?.id || snapshot?.reference_type === 'storefront_set'
     ? snapshot
     : {
         id: row.product_id,
@@ -261,6 +262,8 @@ const mapConversation = (row, user) => {
     assigned_staff_id: row.assigned_staff_id || null,
     assigned_staff_name: row.assigned_staff_name || null,
     product_id: row.product_id,
+    reference_type: row.reference_type || snapshot.reference_type || 'product',
+    listing_id: row.listing_id || snapshot.listing_id || null,
     variant_id: row.variant_id,
     order_id: row.order_id,
     subject: row.subject || product?.name || 'Product chat',
@@ -491,6 +494,9 @@ const notifyRecipient = async (db, conversation, sender, message) => {
 };
 
 export const startProductConversation = async (req, res) => {
+  const isSet = req.body?.reference_type === 'storefront_set';
+  const listingId = isSet ? setListingId(req.body?.listing_id) : null;
+  const selectedItemId = req.body?.selected_product_item_id == null ? null : setListingId(req.body.selected_product_item_id);
   const productId = toPositiveInt(req.body?.product_id);
   const variantId = toPositiveInt(req.body?.variant_id);
   const initialMessage = sanitizePlainText(
@@ -498,7 +504,10 @@ export const startProductConversation = async (req, res) => {
     { maxLength: 5000, allowNewlines: true }
   ) || null;
 
-  if (!productId) {
+  if (isSet && (!listingId || req.body.product_id != null || req.body.variant_id != null || (req.body.selected_product_item_id != null && !selectedItemId))) {
+    return res.status(400).json({ message: 'A valid set listing and optional selected item are required.' });
+  }
+  if (!isSet && !productId) {
     return res.status(400).json({ message: 'A valid product_id is required.' });
   }
 
@@ -507,14 +516,34 @@ export const startProductConversation = async (req, res) => {
     client = await pool.connect();
     await client.query('BEGIN');
 
-    const productSnapshot = await fetchProductSnapshot(client, productId, variantId);
+    let productSnapshot;
+    if (isSet) {
+      const set = await readPublicSet(client, listingId);
+      if (!set) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'This set is not available.' });
+      }
+      const selected = selectedItemId ? set.options.find(option => option.id === selectedItemId) : null;
+      if (selectedItemId && !selected) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Selected item does not belong to this set.' });
+      }
+      productSnapshot = setSnapshot(set, selected);
+      // Serialize starts across processes, then re-read the existing thread.
+      // The partial unique index also guards against duplicate active threads.
+      await client.query('SELECT pg_advisory_xact_lock($1::integer,$2::integer)', [req.user.id, listingId]);
+    } else productSnapshot = await fetchProductSnapshot(client, productId, variantId);
     if (!productSnapshot) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Product not found' });
     }
 
     const sellerId = await fetchDefaultSellerId(client);
-    const existing = await client.query(
+    const existing = isSet ? await client.query(
+      `SELECT id FROM chat_threads WHERE customer_id=$1 AND listing_id=$2
+        AND reference_type='storefront_set' AND status NOT IN ('closed','blocked')
+        ORDER BY updated_at DESC LIMIT 1`, [req.user.id, listingId]
+    ) : await client.query(
       `SELECT id
        FROM chat_threads
        WHERE customer_id = $1
@@ -530,7 +559,12 @@ export const startProductConversation = async (req, res) => {
     let created = false;
 
     if (!conversationId) {
-      const inserted = await client.query(
+      const inserted = isSet ? await client.query(
+        `INSERT INTO chat_threads(customer_id,seller_id,listing_id,reference_type,subject,status,
+          conversation_type,product_snapshot,last_message_at,created_at,updated_at)
+          VALUES($1,$2,$3,'storefront_set',$4,'open','product',$5::jsonb,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+          RETURNING id`, [req.user.id,sellerId,listingId,productSnapshot.name,JSON.stringify(productSnapshot)]
+      ) : await client.query(
         `INSERT INTO chat_threads (
            customer_id, seller_id, product_id, variant_id, subject, status,
            conversation_type, product_snapshot, last_message_at, created_at, updated_at

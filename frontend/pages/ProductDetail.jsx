@@ -1,3 +1,5 @@
+import { applyPageMetadata, writeTextToClipboard } from '../utils/storefrontShare.js';
+import { getWishlistProductIds } from '../utils/wishlistIdentity.js';
 import OptionImage from '../components/ui/OptionImage.jsx';
 import useCatalogRevision from '../hooks/useCatalogRevision.js';
 import { availableStock } from '../utils/cartProduct.js';
@@ -125,64 +127,6 @@ const extractProductMedia = (product) => {
   return media;
 };
 
-const setMetaTag = (attribute, key, content) => {
-  if (typeof document === 'undefined') return;
-
-  let tag = document.querySelector(`meta[${attribute}="${key}"]`);
-  if (!tag) {
-    tag = document.createElement('meta');
-    tag.setAttribute(attribute, key);
-    document.head.appendChild(tag);
-  }
-  tag.setAttribute('content', content);
-};
-
-const applyPageMetadata = ({ title, description, image, url, type = 'website' }) => {
-  if (typeof document === 'undefined') return;
-
-  document.title = title;
-  setMetaTag('name', 'description', description);
-  setMetaTag('property', 'og:type', type);
-  setMetaTag('property', 'og:site_name', '10th West Moto');
-  setMetaTag('property', 'og:title', title);
-  setMetaTag('property', 'og:description', description);
-  setMetaTag('property', 'og:image', image);
-  setMetaTag('property', 'og:url', url);
-  setMetaTag('name', 'twitter:card', 'summary_large_image');
-  setMetaTag('name', 'twitter:title', title);
-  setMetaTag('name', 'twitter:description', description);
-  setMetaTag('name', 'twitter:image', image);
-};
-
-const writeTextToClipboard = async (value) => {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
-  }
-
-  const textArea = document.createElement('textarea');
-  textArea.value = value;
-  textArea.setAttribute('readonly', '');
-  textArea.style.position = 'absolute';
-  textArea.style.left = '-9999px';
-  document.body.appendChild(textArea);
-  textArea.select();
-
-  try {
-    const copied = document.execCommand('copy');
-    if (!copied) {
-      throw new Error('Copy command was rejected.');
-    }
-  } finally {
-    document.body.removeChild(textArea);
-  }
-};
-const normalizeWishlistIds = (items = []) => (
-  items
-    .map((item) => Number(item.product_id ?? item.product?.id ?? item.id))
-    .filter(Boolean)
-);
-
 const ProductDetail = () => {
   const { id } = useParams();
   const catalogRevision = useCatalogRevision();
@@ -266,7 +210,7 @@ const ProductDetail = () => {
 
       try {
         const items = await getWishlist(storedUser.id);
-        setWishlistedIds(normalizeWishlistIds(items));
+        setWishlistedIds(getWishlistProductIds(items));
       } catch {
         setWishlistedIds([]);
       }

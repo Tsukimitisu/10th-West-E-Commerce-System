@@ -4,6 +4,7 @@ import { authenticateToken, requirePermission, requireRole } from '../middleware
 import { isDatabaseConnectivityError, shouldUseDatabaseReadFallback, supabaseRestFetch } from '../services/supabaseRest.js';
 import { sanitizeHttpUrlOrPath } from '../utils/inputSanitizer.js';
 import { normalizeProductImageUrl } from '../utils/productImages.js';
+import { emitProductUpdated } from '../socket.js';
 
 const router = express.Router();
 
@@ -536,6 +537,7 @@ router.put('/product/:productId', authenticateToken, requireRole('admin', 'super
     }
 
     await client.query('COMMIT');
+    emitProductUpdated({ id:productId });
 
     const optionOrder = options.map((option) => option.name);
     const variants = insertedRows.map((row) => mapDbRowToVariant(row, optionOrder, Number(product.price)));
@@ -646,6 +648,7 @@ router.post('/', authenticateToken, requireRole('admin', 'super_admin', 'owner',
       ]
     );
     await req.logActivity?.('variant.create', 'product_variant', result.rows[0].id, { after: result.rows[0] });
+    emitProductUpdated({ id:productId });
 
     res.status(201).json({
       variant: mapDbRowToVariant(result.rows[0], normalizedOrder, basePrice),
@@ -751,6 +754,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'super_admin', 'owner
       ]
     );
     await req.logActivity?.('variant.update', 'product_variant', variantId, { before: existingResult.rows[0], after: result.rows[0] });
+    emitProductUpdated({ id:productId });
 
     res.json({
       variant: mapDbRowToVariant(result.rows[0], optionOrder, basePrice),
@@ -766,6 +770,7 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'super_admin', 'ow
     const deleted = await pool.query('DELETE FROM product_variants WHERE id = $1 RETURNING *', [req.params.id]);
     if (!deleted.rows.length) return res.status(404).json({ message: 'Variant not found' });
     await req.logActivity?.('variant.delete', 'product_variant', Number(req.params.id), { before: deleted.rows[0] });
+    emitProductUpdated({ id:deleted.rows[0].product_id });
     res.json({ message: 'Deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Request could not be completed.' });

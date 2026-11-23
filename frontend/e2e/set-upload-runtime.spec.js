@@ -7,12 +7,19 @@ import path from 'node:path';
 import { staffFixture } from './staffPhaseFixture.js';
 
 let api,worker,fixtureImage;
+const uniqueImages=[];
 test.beforeAll(async({browser})=>{
   const folder=await mkdir(path.join(os.tmpdir(),'10thwest-set-upload-runtime'),{recursive:true});
   fixtureImage=path.join(folder || path.join(os.tmpdir(),'10thwest-set-upload-runtime'),'photo.png');
   const fixturePage=await browser.newPage();
   const encoded=await fixturePage.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=96;canvas.height=72;const ctx=canvas.getContext('2d');ctx.fillStyle='#ef7319';ctx.fillRect(0,0,96,72);return canvas.toDataURL('image/png').split(',')[1];});
   await fixturePage.close();await writeFile(fixtureImage,Buffer.from(encoded,'base64'));
+  const imagePage=await browser.newPage();
+  for(let index=0;index<15;index++){
+    const encoded=await imagePage.evaluate(index=>{const canvas=document.createElement('canvas');canvas.width=96+index;canvas.height=72;const ctx=canvas.getContext('2d');ctx.fillStyle=`hsl(${index*23},80%,50%)`;ctx.fillRect(0,0,canvas.width,72);ctx.fillStyle='#000';ctx.fillText(`Panel ${index+1}`,8,30);return canvas.toDataURL('image/png').split(',')[1];},index);
+    const file=path.join(path.dirname(fixtureImage),`panel-${index+1}.png`);await writeFile(file,Buffer.from(encoded,'base64'));uniqueImages.push(file);
+  }
+  await imagePage.close();
   worker=fork(fileURLToPath(new URL('../../backend/test-support/listingEditorServer.js',import.meta.url)),[],{env:{...process.env,NODE_ENV:'test'},stdio:['ignore','pipe','pipe','ipc']});
   let output='';worker.stdout.on('data',chunk=>{output+=chunk;});worker.stderr.on('data',chunk=>{output+=chunk;});
   api=await new Promise((resolve,reject)=>{worker.once('message',message=>resolve(`http://localhost:${message.port}`));worker.once('exit',()=>reject(new Error(output)));});
@@ -23,6 +30,7 @@ test('object-valued upload error stays inline instead of crashing React',async({
   await request.post(`${api}/fixture/storage`,{data:{failure:{status:400,message:{error:'Storage rejected the image'}}}});
   await row(12).locator('input[type=file]').setInputFiles(fixtureImage);
   await expect(row(12).getByRole('alert')).toContainText('could not be uploaded');
+  await expect(row(12).locator('[data-upload-key]')).toHaveAttribute('data-upload-state','failed');
   await expect(dialog.getByRole('textbox',{name:'Set title',exact:true})).toBeVisible();
   expect(evidence.responses[0]).toMatchObject({status:400,body:{message:{error:'Storage rejected the image'}}});
   await healthy(page,evidence,{expectedHttpFailure:true});
@@ -114,8 +122,9 @@ test('Visual Options still requires images for every sellable item before Save',
 });
 test.afterAll(async()=>{if(worker?.connected)await new Promise(resolve=>{const timer=setTimeout(()=>worker.kill(),5000);worker.once('exit',()=>{clearTimeout(timer);resolve();});worker.send('stop');});});
 
-async function editor(page,request,role='owner',width=1440,id=1){
+async function editor(page,request,role='owner',width=1440,id=1,itemCount=3){
   await request.post(`${api}/fixture/reset`);
+  if(itemCount>3)await request.post(`${api}/fixture/many-items`,{data:{count:itemCount}});
   await page.setViewportSize({width,height:950});await staffFixture(page,{user:{role},permissions:['inventory.view','products.view','products.manage']});
   await page.routeWebSocket('**/socket.io/**',socket=>{
     socket.send('0{"sid":"fixture","upgrades":[],"pingInterval":25000,"pingTimeout":20000}');
@@ -141,6 +150,86 @@ async function editor(page,request,role='owner',width=1440,id=1){
   evidence.before=await snapshot();
   return {dialog,evidence,snapshot,cookie,csrfToken,row:productId=>dialog.locator(`[data-product-item-id="${productId}"]`)};
 }
+
+for(const [role,width,id] of [['owner',390,1],['owner',768,1],['owner',1440,1],['store_staff',390,2],['store_staff',1440,2]])test(`15 unique set items retain upload associations and reachable controls at ${width}px (${role})`,async({page,request},testInfo)=>{
+  test.setTimeout(90000);
+  const {dialog,evidence,snapshot,row}=await editor(page,request,role,width,id,15);
+  evidence.role=role;evidence.viewportWidth=width;
+  evidence.operations=[];
+  const imageById=new Map();
+  try{
+    await dialog.getByRole('textbox',{name:'Set title',exact:true}).fill(`15 panels at ${width}`);
+    await dialog.getByRole('textbox',{name:'E-commerce Description',exact:true}).fill('Preserve all fifteen items and their unique images');
+    for(const number of [1,2,3,4,5,6,10,15]){
+      const productId=100+number,operation={productItemId:productId,states:[]};
+      evidence.operations.push(operation);
+      const item=row(productId),input=item.locator('input[type=file]');
+      await item.getByText(`Panel ${number}`,{exact:true}).scrollIntoViewIfNeeded();
+      // setInputFiles alone skips the native focus that previously scrolled
+      // the hidden modal panel and left its header and body clipped/blank.
+      await input.focus();
+      await expect(input).toBeFocused();
+      operation.layout=await item.evaluate(node=>{
+        const input=node.querySelector('input[type=file]'),label=input.closest('label'),rect=label.getBoundingClientRect(),ancestors=[];
+        for(let parent=label.parentElement;parent;parent=parent.parentElement){const style=getComputedStyle(parent);if(/auto|scroll|hidden/.test(style.overflowY))ancestors.push({tag:parent.tagName,className:parent.className,clientHeight:parent.clientHeight,scrollHeight:parent.scrollHeight,scrollTop:parent.scrollTop});}
+        const hit=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);
+        const header=node.closest('[role=dialog]').querySelector('h2'),headerRect=header.getBoundingClientRect();
+        return {rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},reachable:label.contains(hit),inputAnchoredToLabel:input.offsetParent===label,headerVisible:headerRect.y>=0 && headerRect.bottom<=innerHeight && header.contains(document.elementFromPoint(headerRect.x+headerRect.width/2,headerRect.y+headerRect.height/2)),ancestors};
+      });
+      expect(operation.layout.reachable,`Panel ${number} upload is reachable`).toBe(true);
+      expect(operation.layout.inputAnchoredToLabel).toBe(true);
+      expect(operation.layout.headerVisible).toBe(true);
+      expect(operation.layout.ancestors.find(parent=>parent.className.includes('brand-dialog-panel')).scrollTop).toBe(0);
+      if(number===4 || number===15){
+        const choosing=page.waitForEvent('filechooser');await item.locator('label').click();
+        const chooser=await choosing;await chooser.setFiles([]);
+        operation.states.push({state:'native-chooser-canceled'});
+      }
+      await request.post(`${api}/fixture/storage`,{data:{hold:true}});
+      operation.states.push({state:'selected',itemCount:await dialog.locator('ol > li').count()});
+      const before=evidence.responses.length;
+      await input.setInputFiles(uniqueImages[number-1]);
+      await expect(item.getByRole('status')).toBeVisible();await expect(input).toBeDisabled();
+      const field=item.locator('[data-upload-key]');
+      await expect(field).toHaveAttribute('data-upload-key',`item:${productId}`);
+      await expect(field).toHaveAttribute('data-upload-state','uploading');
+      operation.operationId=await field.getAttribute('data-upload-operation');expect(operation.operationId).toBeTruthy();
+      await expect(dialog.getByRole('button',{name:'Save Listing',exact:true})).toBeDisabled();
+      operation.states.push({state:'uploading',inputDisabled:true,saveDisabled:true});
+      await request.post(`${api}/fixture/storage`,{data:{hold:false}});
+      await expect.poll(()=>evidence.responses.length).toBe(before+1);
+      const response=evidence.responses[before];operation.response=response;expect(response.status).toBe(201);
+      imageById.set(productId,response.body.imageUrl);
+      await expect(item.locator('img')).toHaveAttribute('src',response.body.imageUrl);
+      await expect.poll(()=>item.locator('img').evaluate(img=>img.naturalWidth)).toBe(95+number);
+      await expect(input).toBeEnabled();await expect(dialog.getByRole('button',{name:'Save Listing',exact:true})).toBeEnabled();
+      await expect(field).toHaveAttribute('data-upload-state','completed');
+      await expect(field).toHaveAttribute('data-upload-operation',operation.operationId);
+      operation.states.push({state:'completed',itemCount:await dialog.locator('ol > li').count(),inputDisabled:false,saveDisabled:false});
+      for(const [id,image] of imageById)await expect(row(id).locator('img')).toHaveAttribute('src',image);
+      expect(await dialog.locator('ol > li').count()).toBe(15);
+      await expect(dialog.getByRole('heading',{name:'Edit Set Listing',exact:true})).toBeVisible();
+      if(number===4)await page.screenshot({path:path.join(os.tmpdir(),`10thwest-set-upload-focus-after-${role}-${width}-item4.png`)});
+      await healthy(page,evidence);
+    }
+    expect(new Set(evidence.operations.map(operation=>operation.operationId)).size).toBe(8);
+    evidence.after=await snapshot();
+    await dialog.getByRole('button',{name:'Save Listing',exact:true}).click();await expect(dialog).toHaveCount(0);
+    const stored=await(await request.get(`${api}/fixture/state`)).json();
+    expect(stored.items).toHaveLength(15);
+    expect(stored.uploads).toHaveLength(8);
+    for(const item of stored.items)expect(item.image_url).toBe(imageById.get(item.product_item_id) ?? null);
+    await page.getByRole('row').filter({hasText:`15 panels at ${width}`}).getByRole('button',{name:'Edit',exact:true}).click();
+    await expect(dialog.getByRole('textbox',{name:'Set title',exact:true})).toHaveValue(`15 panels at ${width}`);
+    await expect(dialog.getByRole('textbox',{name:'E-commerce Description',exact:true})).toHaveValue('Preserve all fifteen items and their unique images');
+    expect(await dialog.locator('ol > li').count()).toBe(15);
+    for(const [id,image] of imageById)await expect(row(id).locator('img')).toHaveAttribute('src',image);
+    await healthy(page,evidence);
+  }finally{
+    await writeFile(path.join(os.tmpdir(),`10thwest-set-runtime-15-items-${role}-${width}.json`),JSON.stringify(evidence,null,2));
+    await testInfo.attach('runtime-evidence',{body:JSON.stringify(evidence,null,2),contentType:'application/json'});
+  }
+});
 async function healthy(page,evidence,{expectedHttpFailure=false}={}){
   expect(evidence.pageerrors).toEqual([]);expect(await page.evaluate(()=>window.uploadRejections)).toEqual([]);
   expect(evidence.console.filter(message=>!expectedHttpFailure || !/^Failed to load resource:.*status of (400|403|503)/.test(message))).toEqual([]);

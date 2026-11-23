@@ -1,6 +1,6 @@
 import { inventorySearch, INVENTORY_SEARCH_FROM } from '../services/inventorySearch.js';
 import pool from '../config/database.js';
-import { emitStockUpdate, emitLowStockAlert } from '../socket.js';
+import { emitStockUpdate, emitLowStockAlert, emitProductUpdated } from '../socket.js';
 import { mutateInventory } from '../services/inventory.js';
 import { calculateEcommercePrice, calculateCostPrice, resolveStoreSellingPrice } from '../services/catalogPricing.js';
 
@@ -410,6 +410,7 @@ export const updateInventoryItem = async (req, res) => {
         message: exists.rowCount ? 'Part number already exists.' : 'Inventory item not found.',
       });
     }
+    emitProductUpdated(result.rows[0]);
     return res.json({ message: 'Inventory item updated.', item: mapInventoryItem({ ...result.rows[0], motorcycle_model_name: model.rows[0].model_name }) });
   } catch (error) {
     console.error('Update inventory item failed:', { code: error.code, message: error.message });

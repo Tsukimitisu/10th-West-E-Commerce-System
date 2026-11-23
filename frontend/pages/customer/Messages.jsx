@@ -122,11 +122,12 @@ const ProductContext = ({ conversation }) => {
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <Link to={product.id ? `/products/${product.id}` : '/shop'} className="line-clamp-1 text-sm font-semibold text-slate-950 hover:text-orange-600">
+          <Link to={product.reference_type === 'storefront_set' ? `/sets/${product.listing_id}` : product.id ? `/products/${product.id}` : '/shop'} className="line-clamp-1 text-sm font-semibold text-slate-950 hover:text-orange-600">
             {product.name || conversation.subject || 'Product chat'}
           </Link>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             {variant?.label && <span className="rounded-full border border-slate-200 px-2 py-0.5">{variant.label}</span>}
+            {product.selected_product_item_name && <span>{[product.selected_product_item_name, product.selected_product_item_part_number, product.selected_product_item_color].filter(Boolean).join(' · ')}</span>}
             <span>{formatCurrency(variant?.price ?? product.price)}</span>
             {product.status && <span className="capitalize">{String(product.status).replace(/_/g, ' ')}</span>}
           </div>
